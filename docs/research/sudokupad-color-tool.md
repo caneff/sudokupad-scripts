@@ -82,3 +82,23 @@ alone, and still not a live check of ours.
 
 The same site's `sp_colors.user.js` draws its own panel and uses `Framework` only
 to read `Framework.app.sourcePuzzle`, so it is not a pattern for native settings.
+
+## Read for color-by-digit (2026-11-02, served source, not run live)
+
+Read from `https://sudokupad.app/` `framework.js`, `script.js`, `tool-color.js`
+and `feature-cellpaste.js`. Still no live page.
+
+- `Puzzle.ToolToAction.colour` is `'colour'`, so `app.act({type: 'colour', arg: key})`
+  colors the selected cells. `app.select(cells)`, `app.deselect()` and
+  `app.puzzle.selectedCells` are the selection surface.
+- `Cell.toggleColour` clears the cell first when `multicolour` is off and the cell
+  holds more than one color or not that key; with it off, toggling a key the cell
+  holds alone removes it. This is why a cell already holding its key is skipped.
+- `Framework.getData` and `setData` JSON-encode objects into `localStorage` under
+  a per-profile key; a missing key reads `null`.
+- `Framework.addSetting({tag: 'button', ...})` renders a settings button; `showDialog`
+  returns without opening when a dialog is already visible, so a settings button
+  must close the Settings dialog first. `parts` go through `createElem`, so a
+  `{tag: 'text', innerHTML}` part is the way to put custom markup in a dialog.
+- The palette's current colors are the CSS variables `--cell-color-<key>` on
+  `document.documentElement` (`tool-color.js` `getCssVar`).
