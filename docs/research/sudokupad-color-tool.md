@@ -1,0 +1,84 @@
+# SudokuPad's color tool, for a script that colors cells
+
+Read 2026-11-02 from SudokuPad 0.611.0's served source: `tool-color.js`,
+`script.js`, `feature-cellpaste.js`, `tool-color.css`, `style.css`. Nothing here
+was run in a live page.
+
+## What a cell stores
+
+- A cell's `colours` array holds palette keys, never color values
+  (`script.js`, `renderPropColor`). Each key renders as the class `color-<key>`.
+- More than one key in a cell draws as wedges. `toggleColour` clears the cell's
+  other colors first unless the `multicolour` setting is on.
+- The `colour` tool has the action short name `co`, so a color is an ordinary
+  action that takes part in undo and replay.
+- `feature-cellpaste.js` shows the batching pattern: `app.act({type: 'groupstart'})`,
+  select cells, `app.act(...)`, then `app.act({type: 'groupend'})`.
+- `Framework.app.tools.colour` is not confirmed as the lookup path. A third-party
+  script reads `app.tools.color`, while the tool's own name is `colour`.
+
+## The palette accepts custom colors natively
+
+- `ToolColor_tool.DefaultPalette` has 30 keys on 3 pages of 10: `0-9`, `a-j`, `k-t`.
+  Keys `0`, `a` and `k` are transparent, so each page has 9 visible colors.
+- `P.setColor(key, color)` sets the CSS variable `--cell-color-<key>` and saves
+  the palette. The color picker passes it `rgb(r, g, b)`, converted from hex.
+- `P.setPalette(palette)` and `P.savePalette(palette)` replace the whole palette.
+  `validatePaletteData` checks only that `colors` is an object and that every
+  page entry is a key of `colors`.
+- The palette is saved through `Framework.setData('ToolColor_palette', ...)`,
+  once per browser profile and not per puzzle.
+- Settings has "Import/Export Color Palette", which reads and writes the same JSON.
+- `tool-color.css` sets `--cell-color-opacity: 0.6`. A chosen hex may therefore
+  show blended with the board. Not checked live.
+- A key outside the default 30 was not tested. `style.css` has `.color-<key>`
+  rules, so an unknown key may need its own CSS.
+
+## Extension points
+
+- `app.puzzle.addEventListener('act', ...)` fires on each action (seen in the
+  third-party SudokuPad Tools script on Greasy Fork, not in SudokuPad's docs).
+- `Framework.addSettings([...])` and `Framework.showDialog({...})` are the
+  native settings and dialog surfaces. Both are used by `tool-color.js`.
+
+## Existing scripts searched
+
+- mj6robinson/SudokuPad-Extra-Tools: a browser extension whose README offers
+  auto-color from a right click on the color menu, with odd/even and high/low
+  choices. Only the README was read. It lists no custom groups or hex.
+- thatcomputerguy0101/SudokuPad_Extensions: copy-paste, select by digit and
+  similar. No auto-color.
+- sudokucolors.netlify.app color picker: recolors the puzzle's own art, not
+  cells.
+- mjaschen's palette cycle gist: only cycles palette pages.
+- SudokuPad Tools (Greasy Fork): auto singles and pencil marks. No color by digit.
+
+## Extended Checks: a working script with its own settings
+
+gdc's [SudokuPad Extended Checks](https://sudokucolors.netlify.app/extendedchecks/)
+v0.9, read from `user-script/extended-checks.user.js`. Not run here. These are
+what a shipped script does, which is stronger evidence than the SudokuPad source
+alone, and still not a live check of ours.
+
+- Header: `@grant none`, `@run-at document-idle`, and `@match` on both
+  `sudokupad.app` and `crackingthecryptic.com`, each with subdomains.
+- Start: `if (typeof Framework !== "undefined" && Framework.getApp)`, then
+  `Framework.getApp().then(app => init(app, Framework))`.
+- Button: `Framework.addAuxButton({name, title, content, onClick})` adds it to
+  `.controls-aux`. `framework.js` routes `addAppButton` through the same
+  `addControlButton`, with `.controls-app` as the parent.
+- Settings panel: `Framework.addSetting({tag: 'toggle', group, name, content})`,
+  read back with `Framework.getSetting(name)`.
+- Dialog: `Framework.showDialog({parts, centerOverBoard: true})`. Parts include
+  `{tag: 'text', innerHTML}`, which carries a raw `<select>`, plus `{tag: 'hr'}`
+  and `{tag: 'options', options: [{tag: 'button', content, action: 'close', handler}]}`.
+- It saves only the panel toggle. Its chosen color mode is in memory only, so it
+  sets no precedent for saving a list of groups.
+- Reads cells through `app.puzzle.cells`, with `x.given || x.value` and
+  `cell.colours`.
+- Digit groupings it names: `polarity` 1234/5/6789, `parity` 13579/2468,
+  `entropy` 123/456/789, `modularity` 147/258/369, `clones` one per digit. Its
+  check skips a cell whose `colours.length` is not 1.
+
+The same site's `sp_colors.user.js` draws its own panel and uses `Framework` only
+to read `Framework.app.sourcePuzzle`, so it is not a pattern for native settings.
