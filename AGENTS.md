@@ -19,6 +19,10 @@ The six default roles, each label string equal to its role: `needs-triage`, `nee
 
 Single-context: a root `GLOSSARY.md`, plus `docs/adr/` once one is needed. See `docs/agents/domain.md`.
 
+## Coding standards
+
+Before you write or review code: read `CODING_STANDARDS.md`.
+
 ## End-to-end seam
 
 - **Seam**: `npm test` (`node --test`), against each script's pure functions
