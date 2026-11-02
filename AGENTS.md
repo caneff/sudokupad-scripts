@@ -34,6 +34,5 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   `land.testcmd`; run it when a change touches a `Framework` call, rendering or
   undo. It does not cover a real Tampermonkey install or `crackingthecryptic.com`:
   a PR names those as still owed
-- **Narrowed**: none; the suite is small enough to run whole
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`.
