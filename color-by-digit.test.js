@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js');
+const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js');
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }];
 const plan = (cells, g = groups) => planColoring(cells, g);
@@ -105,4 +105,48 @@ test('normalizeGroups keeps a digit in only its first group', () => {
     normalizeGroups([{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['2', '3'] }]),
     [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }],
   );
+});
+
+test('installButton: adds an icon button titled "Color by digit", then refreshControls so the click handler binds', () => {
+  const calls = [];
+  const click = () => {};
+  const framework = { addAppButton: (spec) => calls.push(['add', spec]) };
+  const app = { refreshControls: () => calls.push(['refresh']) };
+  installButton(framework, app, click);
+  assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh']);
+  const spec = calls[0][1];
+  assert.equal(spec.name, 'colorbydigit');
+  assert.equal(spec.title, 'Color by digit');
+  assert.match(spec.content, /^<div class="icon">[\s\S]*<svg[\s\S]*<\/svg><\/div>$/);
+  assert.equal(spec.onClick, click);
+});
+
+test('entry point: wires the settings entry, the button, refreshControls, and routes a click to coloring', async () => {
+  const path = require.resolve('./color-by-digit.user.js');
+  const saved = require.cache[path];
+  delete require.cache[path];
+  const calls = [];
+  const app = {
+    puzzle: { cells: [{ given: '1', colours: [] }], selectedCells: [] },
+    act: (a) => calls.push(['act', a.type]),
+    deselect: () => {}, select: () => {},
+    refreshControls: () => calls.push(['refresh']),
+  };
+  global.Framework = {
+    getApp: () => Promise.resolve(app),
+    getData: () => null, setData: () => {},
+    addAppButton: (spec) => { calls.push(['button']); global.click = spec.onClick; },
+    addSetting: () => calls.push(['setting']),
+  };
+  try {
+    require(path);
+    await new Promise((r) => setImmediate(r));
+    assert.deepEqual(calls.map((c) => c[0]), ['setting', 'button', 'refresh']);
+    global.click();
+    assert.ok(calls.some((c) => c[0] === 'act' && c[1] === 'colour'));
+  } finally {
+    delete global.Framework; delete global.click;
+    delete require.cache[path];
+    if (saved) require.cache[path] = saved;
+  }
 });

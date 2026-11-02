@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  Adds a button that colors every cell holding a digit, using groups of palette colors set in a settings dialog.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -96,8 +96,27 @@
     return true;
   }
 
+  // Two cells colored and numbered: reads as "color by digit". SudokuPad's own app
+  // buttons put their icon in <div class="icon">.
+  const ICON =
+    '<div class="icon"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect x="5" y="5" width="43" height="43" fill="#e5484d"/>' +
+    '<rect x="52" y="5" width="43" height="43" fill="#3e63dd"/>' +
+    '<rect x="5" y="52" width="43" height="43" fill="#3e63dd"/>' +
+    '<rect x="52" y="52" width="43" height="43" fill="#e5484d"/>' +
+    '<g fill="#fff" font-family="sans-serif" font-size="34" font-weight="bold" text-anchor="middle">' +
+    '<text x="26.5" y="39">1</text><text x="73.5" y="86">1</text>' +
+    '<text x="73.5" y="39">2</text><text x="26.5" y="86">2</text></g></svg></div>';
+
+  // SudokuPad binds button handlers only to buttons present when the controls were
+  // built, so a button added later needs refreshControls to get its onClick.
+  function installButton(framework, app, onClick) {
+    framework.addAppButton({ name: 'colorbydigit', title: 'Color by digit', content: ICON, onClick });
+    app.refreshControls();
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS };
+    module.exports = { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS };
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return;
 
@@ -209,12 +228,7 @@
   }
 
   Framework.getApp().then((app) => {
-    Framework.addAppButton({
-      name: 'colorbydigit',
-      title: 'Color by digit',
-      content: 'Color',
-      onClick: () => colorCells(app),
-    });
+    // The settings entry goes first: a failure installing the button must not cost the editor.
     Framework.addSetting({
       tag: 'button',
       name: 'colorbydigit',
@@ -224,5 +238,6 @@
         setTimeout(openDialog, 0);
       },
     });
+    installButton(Framework, app, () => colorCells(app));
   });
 })();

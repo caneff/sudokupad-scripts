@@ -117,3 +117,16 @@ into the page, not installed through Tampermonkey.
   restored digits.
 - Not tested: givens, dark mode, `outlinesondigits`, digits on colored cells, and
   moving to another puzzle without a reload.
+
+## Adding an app button after load
+
+Found 2026-11-02 running the merged script on sudokupad.app in headless Chromium.
+
+- `Application.attachButtonHandlers` binds handlers to the buttons present when it
+  runs. A button added later with `Framework.addAppButton` renders but its `onClick`
+  never fires; a real click on `#control-colorbydigit` produced no `app.act` calls.
+- `app.refreshControls()` after `Framework.addAppButton` fixes it. With that one line
+  on a scratch copy, the live checks of ticket #1 passed.
+- `content: 'Color'` showed as a blank grey box in `.controls-app.controls-small`.
+  SudokuPad's own app buttons use `<div class="icon">...</div>`, so a button needs an
+  icon in that shape.
