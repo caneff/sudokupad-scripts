@@ -102,3 +102,18 @@ and `feature-cellpaste.js`. Still no live page.
   `{tag: 'text', innerHTML}` part is the way to put custom markup in a dialog.
 - The palette's current colors are the CSS variables `--cell-color-<key>` on
   `document.documentElement` (`tool-color.js` `getCssVar`).
+
+## Coloring the digits themselves
+
+Tested 2026-11-02 on sudokupad.app in headless Chromium, with a prototype injected
+into the page, not installed through Tampermonkey.
+
+- `renderPropDefault` sets `elem.textContent` on a `.cell-value` SVG text element,
+  and that element carries no digit class.
+- Setting `el.style.fill` wins over SudokuPad's own `fill` of `rgb(29, 106, 229)`.
+  A `MutationObserver` on `#svgrenderer` (`subtree`, `childList`, `characterData`)
+  that repaints every `#cell-values .cell-value` kept the colors right through
+  entry, undo and a changed digit, and re-running it after a reload repainted the
+  restored digits.
+- Not tested: givens, dark mode, `outlinesondigits`, digits on colored cells, and
+  moving to another puzzle without a reload.
