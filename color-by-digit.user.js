@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  Adds a button that colors every cell holding a digit, using groups of palette colors set in a settings dialog.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -108,17 +108,15 @@
     '<text x="26.5" y="39">1</text><text x="73.5" y="86">1</text>' +
     '<text x="73.5" y="39">2</text><text x="26.5" y="86">2</text></g></svg></div>';
 
-  const buttonSpec = (onClick) => ({ name: 'colorbydigit', title: 'Color by digit', content: ICON, onClick });
-
   // SudokuPad binds button handlers only to buttons present when the controls were
   // built, so a button added later needs refreshControls to get its onClick.
   function installButton(framework, app, onClick) {
-    framework.addAppButton(buttonSpec(onClick));
+    framework.addAppButton({ name: 'colorbydigit', title: 'Color by digit', content: ICON, onClick });
     app.refreshControls();
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { buttonSpec, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS };
+    module.exports = { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS };
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return;
 
@@ -230,7 +228,7 @@
   }
 
   Framework.getApp().then((app) => {
-    installButton(Framework, app, () => colorCells(app));
+    // The settings entry goes first: a failure installing the button must not cost the editor.
     Framework.addSetting({
       tag: 'button',
       name: 'colorbydigit',
@@ -240,5 +238,6 @@
         setTimeout(openDialog, 0);
       },
     });
+    installButton(Framework, app, () => colorCells(app));
   });
 })();
