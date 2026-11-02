@@ -82,3 +82,18 @@ alone, and still not a live check of ours.
 
 The same site's `sp_colors.user.js` draws its own panel and uses `Framework` only
 to read `Framework.app.sourcePuzzle`, so it is not a pattern for native settings.
+
+## Coloring the digits themselves
+
+Tested 2026-11-02 on sudokupad.app in headless Chromium, with a prototype injected
+into the page, not installed through Tampermonkey.
+
+- `renderPropDefault` sets `elem.textContent` on a `.cell-value` SVG text element,
+  and that element carries no digit class.
+- Setting `el.style.fill` wins over SudokuPad's own `fill` of `rgb(29, 106, 229)`.
+  A `MutationObserver` on `#svgrenderer` (`subtree`, `childList`, `characterData`)
+  that repaints every `#cell-values .cell-value` kept the colors right through
+  entry, undo and a changed digit, and re-running it after a reload repainted the
+  restored digits.
+- Not tested: givens, dark mode, `outlinesondigits`, digits on colored cells, and
+  moving to another puzzle without a reload.
