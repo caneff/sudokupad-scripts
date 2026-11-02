@@ -26,6 +26,14 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 ## End-to-end seam
 
 - **Seam**: `npm test` (`node --test`), against each script's pure functions
-- **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. A PR names
-  those checks as owed, because only a live page can make them
+- **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run
+  test:live` covers them on sudokupad.app in headless Chromium, with the script
+  injected at three times (at `DOMContentLoaded`, after load before Start Puzzle,
+  after Start Puzzle). It needs the network and a Playwright Chromium
+  (`npx playwright install chromium`), so it stays out of `npm test` and
+  `land.testcmd`; run it when a change touches a `Framework` call, rendering or
+  undo. It does not cover a real Tampermonkey install or `crackingthecryptic.com`:
+  a PR names those as still owed
 - **Narrowed**: none; the suite is small enough to run whole
+
+`npm run lint` runs StandardJS over the repo, excluding `docs/research/`.
