@@ -7,10 +7,17 @@ the vocabulary.
 
 ## Agent skills
 
-- **Issue tracker:** GitHub issues at `caneff/sudokupad-scripts`, through `gh`.
-- **Triage labels:** `needs-triage`, `needs-info`, `ready-for-agent`,
-  `ready-for-human`, `wontfix`, `spec`, each label string equal to its role.
-- **Domain docs:** a root `GLOSSARY.md`, plus `docs/adr/` once one is needed.
+### Issue tracker
+
+GitHub issues at `caneff/sudokupad-scripts`, through `gh`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The six default roles, each label string equal to its role: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `backlog`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: a root `GLOSSARY.md`, plus `docs/adr/` once one is needed. See `docs/agents/domain.md`.
 
 ## End-to-end seam
 
