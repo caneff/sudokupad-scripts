@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js');
+const { buttonSpec, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js');
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }];
 const plan = (cells, g = groups) => planColoring(cells, g);
@@ -105,4 +105,21 @@ test('normalizeGroups keeps a digit in only its first group', () => {
     normalizeGroups([{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['2', '3'] }]),
     [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }],
   );
+});
+
+test('buttonSpec: icon in the shape of SudokuPad app buttons, title kept', () => {
+  const click = () => {};
+  const spec = buttonSpec(click);
+  assert.equal(spec.name, 'colorbydigit');
+  assert.equal(spec.title, 'Color by digit');
+  assert.match(spec.content, /^<div class="icon">[\s\S]*<svg[\s\S]*<\/svg><\/div>$/);
+  assert.equal(spec.onClick, click);
+});
+
+test('installButton: refreshControls runs after addAppButton so the click handler binds', () => {
+  const calls = [];
+  const framework = { addAppButton: (spec) => calls.push(['add', spec.name]) };
+  const app = { refreshControls: () => calls.push(['refresh']) };
+  installButton(framework, app, () => {});
+  assert.deepEqual(calls, [['add', 'colorbydigit'], ['refresh']]);
 });
