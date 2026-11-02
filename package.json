@@ -1,0 +1,7 @@
+{
+  "name": "sudokupad-scripts",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
