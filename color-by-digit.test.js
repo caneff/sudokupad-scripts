@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { planColoring, assignDigit, normalizeGroups, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js');
+const { planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js');
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }];
 const plan = (cells, g = groups) => planColoring(cells, g);
@@ -22,9 +22,13 @@ test('digits in no group are skipped', () => {
   assert.deepEqual(plan([{ value: '7' }, { given: '9' }]), []);
 });
 
-test('values other than digits 0 to 9 are ignored', () => {
-  const g = [{ key: 'a', digits: ['1', '2'] }];
-  assert.deepEqual(plan([{ value: '12' }, { value: 'x' }, { value: '-1' }], g), []);
+test('values other than digits 0 to 9 are ignored even when a group lists them', () => {
+  const g = [{ key: 'a', digits: ['1', '2', '12', 'x', '-1'] }];
+  assert.deepEqual(plan([{ value: '12' }, { value: 'x' }, { value: '-1' }, { value: 12 }], g), []);
+});
+
+test('a numeric value that is a single digit counts as that digit', () => {
+  assert.deepEqual(plan([{ value: 1 }]), [{ index: 0, key: 'a' }]);
 });
 
 test('a cell already holding its key is skipped', () => {
@@ -50,8 +54,23 @@ test('Odd/Even maps odd to slot 6, even and 0 to slot 9', () => {
   assert.equal(byDigit(PRELOADS['Odd/Even']), '9696969696');
 });
 
-test('a fresh install starts with Odd/Even', () => {
-  assert.deepEqual(DEFAULT_GROUPS, PRELOADS['Odd/Even']);
+test('nothing saved yet starts with Odd/Even', () => {
+  assert.deepEqual(groupsFromStored(null), PRELOADS['Odd/Even']);
+  assert.notEqual(groupsFromStored(null), DEFAULT_GROUPS);
+});
+
+test('a saved empty list stays empty, not reset to the default', () => {
+  assert.deepEqual(groupsFromStored([]), []);
+});
+
+test('malformed saved data falls back to Odd/Even', () => {
+  assert.deepEqual(groupsFromStored({ key: 'a' }), PRELOADS['Odd/Even']);
+});
+
+test('isVisibleColor rejects every transparent spelling and accepts real colors', () => {
+  ['', 'transparent', 'rgba(0, 0, 0, 0)', 'rgba(10,20,30,0)', '#0000', '#00000000', 'hsla(0, 0%, 0%, 0)']
+    .forEach((c) => assert.equal(isVisibleColor(c), false, c));
+  ['rgb(214, 214, 214)', 'rgba(1,2,3,0.5)', '#fff', '#ffffff', 'red'].forEach((c) => assert.equal(isVisibleColor(c), true, c));
 });
 
 test('assigning a digit to a group takes it out of the other group', () => {
@@ -79,4 +98,11 @@ test('normalizeGroups rejects malformed saved data and keeps an empty list', () 
   assert.equal(normalizeGroups([{ key: 1, digits: [] }]), null);
   assert.deepEqual(normalizeGroups([]), []);
   assert.deepEqual(normalizeGroups([{ key: 'a', digits: ['1', '1', 'x', '2'] }]), [{ key: 'a', digits: ['1', '2'] }]);
+});
+
+test('normalizeGroups keeps a digit in only its first group', () => {
+  assert.deepEqual(
+    normalizeGroups([{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['2', '3'] }]),
+    [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }],
+  );
 });

@@ -42,8 +42,8 @@
     groups.forEach((g) => g.digits.forEach((d) => { keyOfDigit[d] = g.key; }));
     const plan = [];
     cells.forEach((cell, index) => {
-      const digit = cell.given || cell.value;
-      if (typeof digit !== 'string' || !/^[0-9]$/.test(digit)) return;
+      const digit = String(cell.given || cell.value || '');
+      if (!DIGITS.includes(digit)) return;
       const key = keyOfDigit[digit];
       if (key === undefined) return;
       if ((cell.colours || []).includes(key)) return;
@@ -67,20 +67,42 @@
   function normalizeGroups(data) {
     if (!Array.isArray(data)) return null;
     const out = [];
+    const seen = new Set();
     for (const g of data) {
       if (!g || typeof g.key !== 'string' || !Array.isArray(g.digits)) return null;
-      const digits = [...new Set(g.digits.filter((d) => DIGITS.includes(d)))].sort();
+      const digits = [...new Set(g.digits.filter((d) => DIGITS.includes(d) && !seen.has(d)))].sort();
+      digits.forEach((d) => seen.add(d));
       out.push({ key: g.key, digits });
     }
     return out;
   }
 
+  // What the list starts as: the saved groups, or Odd/Even when nothing usable is saved.
+  function groupsFromStored(data) {
+    return normalizeGroups(data) || cloneGroups(DEFAULT_GROUPS);
+  }
+
+  // A CSS color the user can see: not empty, not `transparent`, not an alpha-0 spelling.
+  function isVisibleColor(value) {
+    const v = String(value).trim().toLowerCase();
+    if (v === '' || v === 'transparent') return false;
+    if (/^#[0-9a-f]{4}$/.test(v)) return v[3] !== '0';
+    if (/^#[0-9a-f]{8}$/.test(v)) return v.slice(7) !== '00';
+    const fn = /^(?:rgba|hsla)\(([^)]*)\)$/.exec(v);
+    if (fn) {
+      const parts = fn[1].split(/[,/\s]+/).filter(Boolean);
+      if (parts.length === 4 && Number(parts[3]) === 0) return false;
+    }
+    return true;
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { planColoring, assignDigit, normalizeGroups, PRELOADS, DEFAULT_GROUPS };
+    module.exports = { planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS };
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return;
 
-  const PALETTE_KEYS = 'abcdefghijklmnopqrstuvwxyz0123456789'.split('');
+  // SudokuPad's default palette keys, in its page order. Keys outside them are not read.
+  const PALETTE_KEYS = '0123456789abcdefghijklmnopqrst'.split('');
 
   // The visible colors of the user's current palette, read from the CSS variables
   // SudokuPad sets for each key. Transparent and unset slots are skipped.
@@ -89,17 +111,16 @@
     const colors = [];
     PALETTE_KEYS.forEach((key) => {
       const value = style.getPropertyValue(`--cell-color-${key}`).trim();
-      if (value && value !== 'transparent') colors.push({ key, value });
+      if (isVisibleColor(value)) colors.push({ key, value });
     });
     return colors;
   }
 
-  const loadGroups = () => normalizeGroups(Framework.getData(DATA_KEY)) || cloneGroups(DEFAULT_GROUPS);
+  const loadGroups = () => groupsFromStored(Framework.getData(DATA_KEY));
   const saveGroups = (groups) => Framework.setData(DATA_KEY, groups);
 
-  function press(app) {
+  function colorCells(app) {
     const groups = loadGroups();
-    if (groups.length === 0) return;
     const puzzle = app.puzzle;
     const cells = [].concat(puzzle.cells).flat(Infinity);
     const plan = planColoring(cells, groups);
@@ -108,14 +129,17 @@
     plan.forEach(({ index, key }) => (byKey[key] = byKey[key] || []).push(cells[index]));
     const savedSelection = [...puzzle.selectedCells];
     app.act({ type: 'groupstart' });
-    Object.entries(byKey).forEach(([key, keyCells]) => {
+    try {
+      Object.entries(byKey).forEach(([key, keyCells]) => {
+        app.deselect();
+        app.select(keyCells);
+        app.act({ type: 'colour', arg: key });
+      });
+    } finally {
       app.deselect();
-      app.select(keyCells);
-      app.act({ type: 'colour', arg: key });
-    });
-    app.deselect();
-    if (savedSelection.length > 0) app.select(savedSelection);
-    app.act({ type: 'groupend' });
+      if (savedSelection.length > 0) app.select(savedSelection);
+      app.act({ type: 'groupend' });
+    }
   }
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -136,17 +160,14 @@
     }).join('');
     const preloads = Object.keys(PRELOADS)
       .map((n) => `<button type="button" data-act="preload" data-name="${esc(n)}">${esc(n)}</button>`).join(' ');
-    return `<div>Preload: ${preloads}</div>${rows || '<div style="margin:6px 0">No groups.</div>'}` +
+    const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : '';
+    return `<div>Preload: ${preloads}</div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
       `<button type="button" data-act="add">Add group</button>`;
   }
 
   function openDialog() {
     const colors = paletteColors();
     let groups = loadGroups();
-    const draw = () => {
-      const box = document.getElementById('color-by-digit-editor');
-      if (box) box.innerHTML = renderEditor(groups, colors);
-    };
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
@@ -155,15 +176,16 @@
         {
           tag: 'options',
           options: [
-            { tag: 'button', content: 'Save', action: 'close', handler: () => { saveGroups(groups); Framework.closeDialog(); } },
+            { tag: 'button', content: 'Save', handler: () => { saveGroups(groups); Framework.closeDialog(); } },
             { tag: 'button', content: 'Cancel', action: 'close' },
           ],
         },
       ],
     });
-    draw();
     const box = document.getElementById('color-by-digit-editor');
     if (!box) return;
+    const draw = () => { box.innerHTML = renderEditor(groups, colors); };
+    draw();
     box.addEventListener('click', (event) => {
       const el = event.target.closest('button[data-act]');
       if (!el) return;
@@ -171,14 +193,14 @@
       event.stopPropagation();
       const i = Number(el.dataset.group);
       switch (el.dataset.act) {
-        case 'color': groups[i].key = el.dataset.key; break;
+        case 'color': groups = groups.map((g, j) => (j === i ? { key: el.dataset.key, digits: g.digits } : g)); break;
         case 'digit': groups = assignDigit(groups, i, el.dataset.digit); break;
-        case 'remove': groups.splice(i, 1); break;
+        case 'remove': groups = groups.filter((_, j) => j !== i); break;
         case 'preload': groups = cloneGroups(PRELOADS[el.dataset.name]); break;
         case 'add': {
           const used = groups.map((g) => g.key);
           const free = colors.find((c) => !used.includes(c.key)) || colors[0];
-          if (free) groups.push({ key: free.key, digits: [] });
+          if (free) groups = [...groups, { key: free.key, digits: [] }];
           break;
         }
       }
@@ -191,7 +213,7 @@
       name: 'colorbydigit',
       title: 'Color by digit',
       content: 'Color',
-      onClick: () => press(app),
+      onClick: () => colorCells(app),
     });
     Framework.addSetting({
       tag: 'button',
