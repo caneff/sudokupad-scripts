@@ -2,6 +2,21 @@
   "name": "sudokupad-scripts",
   "private": true,
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "test:live": "node --test live/color-by-digit.live.mjs",
+    "lint": "standard"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1",
+    "standard": "^17.1.2"
+  },
+  "standard": {
+    "//": "Framework is the global SudokuPad gives a userscript. docs/research/ holds frozen scratch scripts from closed investigations; the gate never reads them.",
+    "globals": [
+      "Framework"
+    ],
+    "ignore": [
+      "docs/research/**"
+    ]
   }
 }
