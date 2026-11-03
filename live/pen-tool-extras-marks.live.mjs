@@ -24,7 +24,7 @@ const DATA_KEY = 'EdgeMarks_marks'
 const { SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
 const { CORNER_RADIUS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const MARK_BOXES = ['x', 'directions', 'dot', 'cornerX', 'cornerDot']
-const ALL_TICKED = { x: true, directions: true, dot: true, cornerX: true, cornerDot: true }
+const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const POLL_MS = 50
 const SETTLE_MS = 10000
 const SIZE = 9
@@ -350,6 +350,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(() => penValues(2, 2), ['x']), ['x'])
       await clickCorner(3, 3, 'left', 0.1, -0.1)
       assert.deepEqual(await settle(() => penValues(2, 2), []), [])
+      await clickCorner(3, 3, 'left', -0.1, -0.1)
+      assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
       for (const [r, c] of [[2, 3], [3, 2], [3, 3]]) assert.deepEqual(await penValues(r, c), [])
       await clearMarks()
     })
@@ -365,10 +367,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it(`the corner zone is ${CORNER_RADIUS} of a cell: just inside is a corner mark, just outside along an edge is the edge mark`, async () => {
-      // 0.15 of a cell up the side from the corner is inside; 0.3 is in the edge zone
-      await clickCorner(3, 4, 'left', -0.02, -0.15)
+      // 0.17 of a cell up the side from the corner is inside; 0.23 is in the edge zone
+      await clickCorner(3, 4, 'left', -0.02, -0.17)
       assert.deepEqual(await settle(() => penValues(2, 3), ['u']), ['u'], 'inside the zone')
-      await clickCorner(3, 4, 'left', -0.02, -0.3)
+      await clickCorner(3, 4, 'left', -0.02, -0.23)
       assert.deepEqual(await settle(() => penValues(2, 3), ['3', 'u']), ['3', 'u'], 'outside the zone: the edge mark')
       await clearMarks()
     })
@@ -381,14 +383,24 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clearMarks()
     })
 
+    it('a right click inside the corner zone where SudokuPad sees neither an edge nor a cell keeps the browser menu closed', async () => {
+      const before = (await menuLog()).length
+      // 0.14 of a cell along each axis is 0.198 from the corner: inside the zone, yet by SudokuPad's own
+      // arithmetic too far from the cell middle to be a cell mark and not near enough an edge midpoint
+      await clickCorner(3, 3, 'right', 0.14, 0.14)
+      assert.deepEqual(await settle(async () => (await menuLog()).slice(before), [true]), [true])
+      assert.deepEqual(await settle(() => penValues(2, 2), ['x']), ['x'], 'the corner mark, stepped backwards from empty')
+      await clearMarks()
+    })
+
     it('a corner mark survives a replay: it is in getReplay(), and loading that replay draws it again', async () => {
       await clickCorner(3, 3)
       await clickCorner(0, SIZE)
       await clickCorner(0, SIZE)
       const replay = await read(() => Framework.app.getReplay())
       const actions = await read((r) => Replay.decode(r).actions, replay)
-      assert.equal(actions.includes('pe:u/0'), true)
-      assert.equal(actions.includes('pe:v/0') && actions.includes('pe:y/0'), true, 'the far corner X, then the circle')
+      assert.equal(actions.includes('pe:u/0'), true, JSON.stringify(actions))
+      assert.equal(actions.includes('pe:v/0') && actions.includes('pe:y/0'), true, `the far corner X, then the circle: ${JSON.stringify(actions)}`)
       await clearMarks()
       assert.deepEqual(await penValues(2, 2), [])
       await read((r) => Framework.app.loadReplay(r), replay)
@@ -413,7 +425,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clearMarks()
     })
 
-    it('an X on any outer corner reaches no farther past the cells than Dark Page keeps (SOLVER_REACH)', async () => {
+    it('an X on any outer corner, stroke included, reaches no farther past the cells than Dark Page keeps (SOLVER_REACH), at the default thickness', async () => {
       for (const corner of [[0, 0], [0, SIZE], [SIZE, 0], [SIZE, SIZE]]) {
         await clickCorner(...corner)
         const reach = () => read(() => {
@@ -425,7 +437,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           const top = Math.min(...cells.map((r) => r.top))
           const right = Math.max(...cells.map((r) => r.right))
           const bottom = Math.max(...cells.map((r) => r.bottom))
-          return Math.max(left - m.left, top - m.top, m.right - right, m.bottom - bottom)
+          // the box leaves the stroke out: half its width, in page pixels, lies beyond it
+          const half = parseFloat(window.getComputedStyle(mark).strokeWidth) / 2 * document.querySelector('#svgrenderer').getScreenCTM().a
+          return Math.max(left - m.left, top - m.top, m.right - right, m.bottom - bottom) + half
         })
         await settle(async () => (await reach()) !== null, true)
         const past = await reach()
@@ -475,7 +489,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clearMarks()
     })
 
-    it('the dialog shows a small picture beside each edge mark box, and the circle is labelled Circle', async () => {
+    it('the dialog shows a small picture beside each edge and corner mark box, and each circle is labelled Circle', async () => {
       await openEditor()
       const rows = editor().locator('div:has(> input[data-mark])')
       assert.equal(await rows.count(), 5)
@@ -519,7 +533,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clearMarks()
     })
 
-    it('The dialog has three edge mark boxes, all ticked on a fresh install', async () => {
+    it('The dialog has five mark boxes (three for edges, two for corners), all ticked on a fresh install', async () => {
       assert.equal(await saved(), null)
       await openEditor()
       for (const mark of MARK_BOXES) assert.equal(await box(mark).isChecked(), true, mark)
@@ -706,6 +720,34 @@ describe('without the script', { concurrency: false }, () => {
 })
 
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
+  // Each is read by the corner click or its hit test; with one gone the wrap would throw on every pen click.
+  const REMOVALS = {
+    'ToolPen.tool.actStart': () => { ToolPen.tool.actStart = undefined },
+    'ToolPen.tool.getInputRc': () => { ToolPen.tool.getInputRc = undefined },
+    'Framework.app.grid.getCell': () => { Framework.app.grid.getCell = undefined },
+    'Framework.app.grid.rows': () => { Framework.app.grid.rows = undefined },
+    'Framework.app.grid.cols': () => { Framework.app.grid.cols = undefined }
+  }
+  for (const [member, remove] of Object.entries(REMOVALS)) {
+    it(`${member} gone: one warning, and the click wrap is not installed`, async () => {
+      const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+      const warnings = []
+      try {
+        const p = await newPage(context, [])
+        p.on('console', (m) => { if (m.type() === 'warning' && m.text().includes('pen-tool-extras')) warnings.push(m.text()) })
+        await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+        await startPuzzle(p)
+        await p.evaluate(`window.__clickCell = ToolPen.tool.clickCell; (${remove})()`)
+        await p.addScriptTag({ content: script })
+        await settle(async () => warnings.length, 1)
+        assert.equal(warnings.length, 1, JSON.stringify(warnings))
+        assert.equal(await p.evaluate(() => ToolPen.tool.clickCell === window.__clickCell), true, 'clickCell was wrapped')
+      } finally {
+        await context.close()
+      }
+    })
+  }
+
   it('logs one warning, installs no edge marks, and the pen tool still works', async () => {
     const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
     const errors = []

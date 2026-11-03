@@ -2,7 +2,7 @@
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      1.2.0
-// @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines, circles, crosses and edge marks are with one slider, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge marks, so an update can break them.
+// @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines, circles, crosses, edge marks and corner marks are with one slider, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -167,7 +167,7 @@
   // The type of mark `direction` steps (1 forward, -1 backward) from `current` ('empty' or a
   // type of `cycle`) round the cycle, skipping unticked types. 'empty' is always allowed. A
   // `current` whose type is unticked still moves on.
-  function stepType (current, settings, direction, cycle = EDGE_CYCLE) {
+  function stepType (current, settings, direction, cycle) {
     const order = [...cycle.types, 'empty']
     const from = order.indexOf(current)
     for (let step = 1; step <= order.length; step++) {
@@ -175,16 +175,6 @@
       if (type === 'empty' || settings[cycle.setting[type]]) return type
     }
     throw new Error('pen-tool-extras: the cycle has no empty step')
-  }
-
-  // The type of edge mark a left click moves to from `current`.
-  function nextType (current, settings) {
-    return stepType(current, settings, 1)
-  }
-
-  // The type of edge mark a right click moves to from `current`: the same cycle, backwards.
-  function previousType (current, settings) {
-    return stepType(current, settings, -1)
   }
 
   // What one click does to a cell that holds the pen values `present`, on a mark whose types
@@ -228,8 +218,8 @@
   }
 
   // The grid corner, as [row, col] in cell units, that a corner mark of `kind` on the cell at
-  // (row, col) sits on: the inverse of cornerStorage.
-  function cornerPoint (kind, row, col, rows, cols) {
+  // (row, col) sits on: the inverse of cornerStorage. `cols` tells the `far` kind's two cells apart.
+  function cornerPoint (kind, row, col, cols) {
     switch (kind) {
       case 'br': return [row + 1, col + 1]
       case 'tl': return [row, col]
@@ -438,8 +428,7 @@
       normalizeThickness,
       buildThicknessCss,
       normalizeMarkSettings,
-      nextType,
-      previousType,
+      stepType,
       planClick,
       planCornerClick,
       cornerAt,
@@ -448,6 +437,7 @@
       cornerMarkOf,
       shapeOf,
       shapePath,
+      EDGE_CYCLE,
       CORNER_RADIUS,
       CORNER_VALUES,
       DEFAULT_COLORS,
@@ -535,8 +525,8 @@
     if (shape !== null) return { point: edgeMidpoint(edgeOf(value), row, col), shape }
     const corner = cornerMarkOf(value)
     if (corner === null) return null
-    const { rows, cols } = Framework.app.grid
-    return { point: cornerPoint(corner.kind, row, col, rows, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
+    const { cols } = Framework.app.grid
+    return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
   }
 
   // Draws the values this script adds. SudokuPad's own `renderPen` has no case for them and
@@ -594,17 +584,29 @@
     return cornerAt(r, c, rows, cols)
   }
 
+  // The pen values a cell holds, without their colors.
+  function penValuesOf (cell) {
+    return (cell.pen || []).map((valueColor) => valueColor[0])
+  }
+
+  // The actions of one click that applies `plan` to `cell`: select it, toggle off what the plan
+  // removes, toggle on what it adds.
+  function planActs (cell, plan) {
+    return [
+      { type: 'select', arg: [cell] },
+      ...plan.remove.map((arg) => ({ type: 'pen', arg })),
+      ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])
+    ]
+  }
+
   // A click on a grid corner: this script's corner cycle (backwards after a right click) on the
   // cell that stores the corner, sent as one group like any pen click.
   function clickCorner (tool, corner) {
     const { rows, cols } = Framework.app.grid
     const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
     const cell = Framework.app.grid.getCell(row, col)
-    const plan = planCornerClick(kind, (cell.pen || []).map((valueColor) => valueColor[0]), markSettings, lastButton === RIGHT_BUTTON)
     tool.actStart()
-    tool.actAdd({ type: 'select', arg: [cell] })
-    plan.remove.forEach((arg) => tool.actAdd({ type: 'pen', arg }))
-    if (plan.add !== null) tool.actAdd({ type: 'pen', arg: plan.add })
+    planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, lastButton === RIGHT_BUTTON)).forEach((act) => tool.actAdd(act))
     tool.actSend()
   }
 
@@ -622,11 +624,10 @@
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {
-        const [select, pen] = queued
-        const cell = select.arg[0]
-        const plan = planClick(pen.arg, (cell.pen || []).map((valueColor) => valueColor[0]), markSettings, lastButton === RIGHT_BUTTON)
+        const cell = queued[0].arg[0]
+        const plan = planClick(queued[1].arg, penValuesOf(cell), markSettings, lastButton === RIGHT_BUTTON)
         if (plan === null) return
-        acts = [select, ...plan.remove.map((arg) => ({ type: 'pen', arg })), ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])]
+        acts = planActs(cell, plan)
       }
       acts.forEach((act) => this.actAdd(act))
       this.actSend()
@@ -667,7 +668,7 @@
       proto && typeof proto.renderPen === 'function' &&
       typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
     if (!found) {
-      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge marks are not installed')
+      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge and corner marks are not installed')
       return
     }
     wrapRenderPen(proto, renderer)

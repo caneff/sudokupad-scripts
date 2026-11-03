@@ -7,9 +7,13 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
   HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
-  nextType, previousType, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
+  stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick
 } = require('./pen-tool-extras.user.js')
+
+// The edge cycle, a step forward and a step back.
+const nextType = (current, settings) => stepType(current, settings, 1, EDGE_CYCLE)
+const previousType = (current, settings) => stepType(current, settings, -1, EDGE_CYCLE)
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -550,7 +554,8 @@ test('the corner zone is 0.2 of a cell from a grid corner', () => {
 test('cornerAt finds the grid corner within the radius, inner and outer, and nothing farther', () => {
   assert.deepEqual(cornerAt(3, 3, 9, 9), { row: 3, col: 3 })
   assert.deepEqual(cornerAt(3.19, 3, 9, 9), { row: 3, col: 3 })
-  assert.equal(cornerAt(3.2, 3, 9, 9), null, 'exactly the radius is outside')
+  assert.equal(cornerAt(0.2, 0, 9, 9), null, 'exactly the radius is outside')
+  assert.deepEqual(cornerAt(0.19, 0, 9, 9), { row: 0, col: 0 })
 })
 
 test('cornerAt measures distance, so a point in the square around a corner but outside the circle is not a corner', () => {
@@ -605,7 +610,7 @@ test('the stored cell and kind give the corner back: cornerPoint undoes cornerSt
   for (const [rows, cols] of [[9, 9], [4, 6], [6, 4], [2, 2], [1, 5], [5, 1]]) {
     for (const corner of allCorners(rows, cols)) {
       const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
-      assert.deepEqual(cornerPoint(kind, row, col, rows, cols), [corner.row, corner.col], JSON.stringify({ corner, kind, rows, cols }))
+      assert.deepEqual(cornerPoint(kind, row, col, cols), [corner.row, corner.col], JSON.stringify({ corner, kind, rows, cols }))
     }
   }
 })
@@ -678,12 +683,12 @@ test('the edge cycle ignores the corner boxes, and the corner cycle ignores the 
   assert.equal(planCornerClick('br', [], { ...NONE, x: true, directions: true, dot: true }), null)
 })
 
-test('corner marks are half the thickness, like edge marks, and share no width rule with another value', () => {
+test('corner marks are half the thickness, like edge marks', () => {
   const widths = widthsOf(buildThicknessCss(5))
   for (const kind of ['tl', 'br', 'far']) for (const value of CORNER_VALUES[kind]) assert.equal(widths[value], '2.5', value)
 })
 
-test('the corner X is SudokuPad\'s edge X shape: two crossing diagonals of half-size s, drawn from the corner', () => {
+test('the corner X is two crossing diagonals of half-size s, drawn from the point it is centred on', () => {
   assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
 })
 
