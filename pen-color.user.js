@@ -369,7 +369,74 @@
     })
   }
 
+  // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
+  // from then on the set no longer follows the cell color page.
+  function savePenColor (pen, value) {
+    const colors = editedColors(active, pen, value)
+    Framework.setData(DATA_KEY, colors)
+    active = colors
+    activeMissing = []
+    applyColors(colors)
+  }
+
+  // Holding a pen color button for HOLD_TO_EDIT_MS, with either mouse button or a finger, puts
+  // a color picker over each of the nine colors; a second hold, or leaving the pen tool, takes
+  // them away. SudokuPad keeps one panel element and swaps its `tool-pen` class for the next
+  // tool's, so the pickers would stay behind on their own: a class watcher ends edit mode when
+  // the panel stops being the pen's.
+  let leaveWatch = null
+
+  function exitEditMode (panel) {
+    if (leaveWatch) leaveWatch.disconnect()
+    leaveWatch = null
+    panel.classList.remove(EDITING)
+    panel.querySelectorAll('.pen-color-picker').forEach((el) => el.remove())
+  }
+
+  function enterEditMode (panel) {
+    panel.classList.add(EDITING)
+    PEN_COLORS.forEach((n) => {
+      const button = panel.querySelector(`button[data-value="${n}"]`)
+      if (!button) return
+      button.insertAdjacentHTML('beforebegin',
+        `<div class="pen-color-picker"><input type="color" data-pen="${n}" value="${active[n]}"></div>`)
+    })
+    leaveWatch = new window.MutationObserver(() => {
+      if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
+    })
+    leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
+  }
+
+  function toggleEditMode (panel) {
+    if (panel.classList.contains(EDITING)) exitEditMode(panel)
+    else enterEditMode(panel)
+  }
+
+  function installHoldToEdit () {
+    let timer
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    document.addEventListener('pointerdown', (event) => {
+      const target = event.target.closest && event.target.closest(HOLD_TARGETS)
+      if (!target) return
+      cancel()
+      const panel = target.closest('.tool-pen')
+      timer = setTimeout(() => toggleEditMode(panel), HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // A right-click hold or a long touch would open the browser's menu over the picker.
+    document.addEventListener('contextmenu', (event) => {
+      if (event.target.closest && event.target.closest(HOLD_TARGETS)) event.preventDefault()
+    }, true)
+    // `input` fires as the picker moves, so the color changes live.
+    document.addEventListener('input', (event) => {
+      const el = event.target
+      if (el.matches && el.matches('.pen-color-picker input')) savePenColor(el.dataset.pen, el.value)
+    })
+  }
+
   Framework.getApp().then(async () => {
+    installHoldToEdit()
     Framework.addSetting({
       tag: 'button',
       name: 'pencolor',
