@@ -31,6 +31,8 @@
   const STYLE_ID = 'pen-tool-extras-style'
   // The element SudokuPad draws the grid in.
   const GRID_SELECTOR = '#svgrenderer'
+  // `MouseEvent.button` of the right mouse button.
+  const RIGHT_BUTTON = 2
   const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad's own pen colors (tool-pen.css), as #rrggbb. Pen color 9 is written there as
   // rgb(-36, -36, -36), which clamps to black.
@@ -488,7 +490,6 @@
   // The mouse button of the latest press or release. SudokuPad calls `clickCell` on the
   // release, with no event, so the button is read from the pointer events before it.
   let lastButton = 0
-  const RIGHT_BUTTON = 2
 
   function trackButton () {
     const remember = (event) => { lastButton = event.button }
@@ -500,11 +501,8 @@
   // edge-versus-cell hit test decides what was clicked; its `actSend` is held back to see
   // the actions it queued. An edge click is replaced by this script's cycle (backwards after a
   // right click), and everything else is sent as it was. The actions still go out through
-  // `actSend`, one group per click, so one undo reverses one click. Returns a function that
-  // says whether a click at the pointer's current position would be an edge click, without
-  // doing it.
-  function wrapClickCell (tool) {
-    const original = tool.clickCell
+  // `actSend`, one group per click, so one undo reverses one click.
+  function wrapClickCell (tool, original) {
     tool.clickCell = function () {
       const queued = queuedActs(this, original, arguments)
       if (queued === null) return
@@ -519,7 +517,12 @@
       acts.forEach((act) => this.actAdd(act))
       this.actSend()
     }
-    return () => isEdgeActs(queuedActs(tool, original, []))
+  }
+
+  // Whether a click at the pointer's current position would be an edge click, found by running
+  // the original `clickCell` without sending what it queues.
+  function edgeUnderPointer (tool, original) {
+    return isEdgeActs(queuedActs(tool, original, []))
   }
 
   // The pen tool steps an edge backwards on a right click, so the browser's menu must not open
@@ -551,9 +554,10 @@
       return
     }
     wrapRenderPen(proto, renderer)
-    const isEdgeClick = wrapClickCell(tool)
+    const original = tool.clickCell
+    wrapClickCell(tool, original)
     trackButton()
-    suppressEdgeMenu(app, isEdgeClick)
+    suppressEdgeMenu(app, () => edgeUnderPointer(tool, original))
     redrawAddedMarks(app)
   }
 

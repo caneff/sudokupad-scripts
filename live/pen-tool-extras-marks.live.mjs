@@ -9,7 +9,7 @@
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
 // Every click is a real mouse click on the page at an edge's pixel position.
-/* global Replay, Framework, ToolPen */
+/* global Replay, Framework, ToolPen, MouseEvent */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -248,14 +248,24 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // a right click in a cell middle stays as SudokuPad has it: a cell mark, and the menu opens
       const [cx, cy] = await cellCentre(p, ...CELL_MARK)
       await p.mouse.click(cx, cy, { button: 'right' })
+      assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'], 'a right click in a cell middle makes the cell mark')
       // a right click off the grid
       await p.mouse.click(5, 5, { button: 'right' })
       assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false])), [true, true, false, false], 'cell middle, then off the grid')
+      // the pointer last pressed on an edge, but the menu is asked for by something outside the grid
+      await clickEdge(3, 3, 'right', 'right')
+      const outside = await read(() => {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+        document.body.dispatchEvent(event)
+        return event.defaultPrevented
+      })
+      assert.equal(outside, false, 'a menu asked for outside the grid')
+      await clearMarks()
       // another tool: turn the pen tool off, then right click the same edge point
       await p.click('#control-normal')
       assert.equal(await settle(() => read(() => Framework.app.tool), 'normal'), 'normal')
       await clickEdge(3, 3, 'right', 'right')
-      assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false, false])), [true, true, false, false, false], 'other tool')
+      assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false, true, false, false])), [true, true, false, false, true, false, false], 'other tool')
       await selectPen()
       await clearMarks()
     })
