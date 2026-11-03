@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.4
-// @description  Adds a button that colors every cell holding a digit, using groups of palette colors set in a settings dialog.
+// @version      0.2.0
+// @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using groups of palette colors set in a settings dialog.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.1.4'
+  const VERSION = '0.2.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'ColorByDigit_groups'
@@ -40,20 +40,34 @@
 
   const cloneGroups = (groups) => groups.map((g) => ({ key: g.key, digits: [...g.digits] }))
 
-  // Which cells get which key. Pure: cells in, [{index, key}] out.
+  // The key every mark shares, or undefined when there are no marks, a mark is not a digit or
+  // has no group, or the marks span two groups.
+  function sharedKey (marks, keyOfDigit) {
+    const keys = new Set(marks.map((m) => keyOfDigit[String(m)]))
+    return keys.size === 1 ? [...keys][0] : undefined
+  }
+
+  // Which cells get which key. Pure: cells in, [{index, key}] out. A placed or given digit
+  // decides the key; a cell with neither takes the key its `centre` marks (digit strings) all share.
   function planColoring (cells, groups) {
-    const keyOfDigit = {}
-    groups.forEach((g) => g.digits.forEach((d) => { keyOfDigit[d] = g.key }))
+    const keyOfDigit = Object.create(null)
+    groups.forEach((g) => g.digits.filter((d) => DIGITS.includes(d)).forEach((d) => { keyOfDigit[d] = g.key }))
     const plan = []
     cells.forEach((cell, index) => {
-      const digit = String(cell.given || cell.value || '')
-      if (!DIGITS.includes(digit)) return
-      const key = keyOfDigit[digit]
+      const placed = String(cell.given || cell.value || '')
+      const key = placed === '' ? sharedKey(cell.centre || [], keyOfDigit) : keyOfDigit[placed]
       if (key === undefined) return
       if ((cell.colours || []).includes(key)) return
       plan.push({ index, key })
     })
     return plan
+  }
+
+  // The centre marks SudokuPad shows on a cell, read as its own solver does
+  // (SolverTool.getCellOptions): none when the cell hides them, as a given does.
+  function readCentreMarks (cell) {
+    if (typeof cell.propVisible !== 'function' || !cell.propVisible('centre')) return []
+    return cell.propGet('centre') || []
   }
 
   // Puts a digit in one group, or takes it out if that group already holds it.
@@ -217,7 +231,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { VERSION, installButton, planColoring, readCentreMarks, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -238,7 +252,7 @@
     const groups = loadGroups()
     const puzzle = app.puzzle
     const cells = [].concat(puzzle.cells).flat(Infinity)
-    const plan = planColoring(cells, groups)
+    const plan = planColoring(cells.map((c) => ({ given: c.given, value: c.value, colours: c.colours, centre: readCentreMarks(c) })), groups)
     if (plan.length === 0) return
     const byKey = {}
     plan.forEach(({ index, key }) => (byKey[key] = byKey[key] || []).push(cells[index]))

@@ -342,6 +342,24 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(coloredCount, 0), 0)
       })
 
+      // Saved groups are Low/5/High here, so centre marks 6, 7 and 9 all belong to key 6.
+      it('a press also colors an empty cell whose centre marks fit one group, leaves one spanning two groups, and one undo removes it', async () => {
+        await select(8, 0); await p.click('#control-centre')
+        for (const k of ['6', '7', '9']) await p.keyboard.press(k)
+        await select(8, 1)
+        for (const k of ['1', '7']) await p.keyboard.press(k)
+        await p.click('#control-normal')
+        const marks = () => read(() => [[8, 0], [8, 1]].map(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join('')))
+        assert.deepEqual(await settle(marks, ['679', '17']), ['679', '17'])
+        assert.equal(await pressUntil(coloredCount, DIGIT_CELLS + 1), DIGIT_CELLS + 1)
+        const s = await cellsState()
+        assert.deepEqual(at(s, 8, 0).colours, ['6'])
+        assert.deepEqual(at(s, 8, 1).colours, [])
+        assert.equal(await wrongCount((x) => (x.r === 8 && x.c === 0 ? ['6'] : lowFiveHigh(x))), 0)
+        await undo()
+        assert.equal(await settle(coloredCount, 0), 0)
+      })
+
       it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a press does nothing', async () => {
         await openEditor()
         const groupCount = () => p.locator('#color-by-digit-editor button[data-act=remove]').count()
