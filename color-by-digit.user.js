@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.2.0
+// @version      0.2.1
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using groups of palette colors set in a settings dialog.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.2.0'
+  const VERSION = '0.2.1'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'ColorByDigit_groups'
@@ -130,10 +130,12 @@
     '<text x="26.5" y="39">1</text><text x="73.5" y="86">1</text>' +
     '<text x="73.5" y="39">2</text><text x="26.5" y="86">2</text></g></svg></div>'
 
-  // SudokuPad binds button handlers only to buttons present when the controls were
-  // built, so a button added later needs refreshControls to get its onClick.
+  // The button goes in the bottom row (.controls-aux) beside Undo, Redo, Check and Select, where
+  // SudokuPad lays it out and wraps it like theirs. SudokuPad binds button handlers only to
+  // buttons present when the controls were built, so a button added later needs refreshControls
+  // to get its onClick.
   function installButton (framework, app, onClick) {
-    framework.addAppButton({ name: 'colorbydigit', title: 'Color by digit', content: ICON, onClick })
+    framework.addAuxButton({ name: 'colorbydigit', title: 'Color by digit', content: ICON, onClick })
     app.refreshControls()
   }
 

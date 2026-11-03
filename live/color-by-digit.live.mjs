@@ -35,6 +35,12 @@ const QUIET_MS = 500
 const CLICK_TAKES_MS = 300
 const CLICK_DEADLINE_MS = 3000
 
+// How often settledLayout re-reads the controls, and how far a bottom edge may overlap the footer's top.
+const LAYOUT_POLL_MS = 250
+const FIT_SLACK_PX = 1
+// How many stand-in buttons another script's row gets in the wrap test; enough to fill a second row.
+const OTHER_BUTTONS = 8
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Reads until it equals `expected` (compared as JSON) or SETTLE_MS passes, and
@@ -179,8 +185,53 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(board, GIVENS)
     })
 
-    it('the app button is present and visible', async () => {
+    it('the button is present and visible', async () => {
       await p.locator(BUTTON).waitFor({ state: 'visible' })
+    })
+
+    // Rects of the button, Undo, the bottom row, the footer and the viewport, from the page.
+    const layout = () => read(() => {
+      const box = (e) => e.getBoundingClientRect().toJSON()
+      // SudokuPad's footer is a bare element with no id or class; find it by its credit line.
+      const footer = [...document.querySelectorAll('*')].find((e) => e.children.length < 4 && /Created by/.test(e.textContent) && e.textContent.length < 200)
+      return {
+        button: box(document.querySelector('#control-colorbydigit')),
+        undo: box(document.querySelector('#control-undo')),
+        row: box(document.querySelector('.controls-aux')),
+        footer: box(footer),
+        neighbours: [...document.querySelector('.controls-aux').children].map((e) => e.id),
+        view: { width: window.innerWidth, height: window.innerHeight }
+      }
+    })
+    // SudokuPad re-fits its controls after a throttled delay: waits until two readings agree, and
+    // fails if the row is still moving after SETTLE_MS, rather than asserting on a layout in motion.
+    const settledLayout = async () => {
+      let last = JSON.stringify(await layout())
+      const deadline = Date.now() + SETTLE_MS
+      while (Date.now() < deadline) {
+        await sleep(LAYOUT_POLL_MS)
+        const now = JSON.stringify(await layout())
+        if (now === last) return JSON.parse(now)
+        last = now
+      }
+      throw new Error(`the controls were still moving after ${SETTLE_MS} ms: ${last}`)
+    }
+    // The button and its row lie inside the viewport, and the footer starts below the button.
+    // FIT_SLACK_PX absorbs sub-pixel rounding between the row's bottom edge and the footer's top.
+    const fits = (l) => [l.button, l.row].every((r) => r.left >= 0 && r.top >= 0 && r.right <= l.view.width && r.bottom <= l.view.height) &&
+      l.footer.top >= l.button.bottom - FIT_SLACK_PX && l.footer.top >= l.row.bottom - FIT_SLACK_PX
+
+    it('the button sits in the bottom row with Undo, Redo, Check and Select, the same size as Undo', async () => {
+      const l = await settledLayout()
+      assert.deepEqual(l.neighbours.slice(0, 5), ['control-undo', 'control-redo', 'control-check', 'control-select', 'control-colorbydigit'])
+      assert.equal(Math.round(l.button.width), Math.round(l.undo.width))
+      assert.equal(Math.round(l.button.height), Math.round(l.undo.height))
+      assert.equal(Math.round(l.button.y), Math.round(l.undo.y))
+    })
+
+    it('the button and the controls still fit the viewport and clear the footer', async () => {
+      const l = await settledLayout()
+      assert.equal(fits(l), true, JSON.stringify(l))
     })
 
     it('the button shows an icon or readable text', async () => {
@@ -493,6 +544,32 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Color by digit')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
       await closeWith('Cancel')
+    })
+
+    // Runs after the press tests: it calls refreshControls itself, which would bind this script's
+    // button and hide whether installButton's own call does. Five buttons fit one row at 1200x900,
+    // so the row wraps only once the stand-ins push it past SudokuPad's width limit.
+    it('with another script\'s button in the row, the row still fits and the footer stays clear, and with enough more the row wraps to a second row', async () => {
+      const own = (await settledLayout()).neighbours.length
+      const add = (from, to) => read(([from, to]) => {
+        for (let i = from; i < to; i++) Framework.addAuxButton({ name: `other${i}`, title: `Other ${i}`, content: '<div class="icon"><svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg></div>', onClick () {} })
+        Framework.app.refreshControls()
+      }, [from, to])
+      const clear = () => read((count) => { for (let i = 0; i < count; i++) Framework.removeControlButton(`other${i}`) }, OTHER_BUTTONS)
+      try {
+        await add(0, 1)
+        const one = await settledLayout()
+        assert.equal(one.neighbours.length, own + 1)
+        assert.equal(fits(one), true, JSON.stringify(one))
+        await add(1, OTHER_BUTTONS)
+        const many = await settledLayout()
+        assert.equal(many.neighbours.length, own + OTHER_BUTTONS)
+        assert.equal(many.row.height > many.undo.height * 1.5, true, JSON.stringify(many))
+        assert.equal(fits(many), true, JSON.stringify(many))
+      } finally {
+        await clear()
+      }
+      assert.equal(await settle(async () => (await layout()).neighbours.length, own), own)
     })
 
     it('no uncaught page errors', () => {
