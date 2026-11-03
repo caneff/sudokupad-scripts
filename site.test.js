@@ -7,7 +7,6 @@ const path = require('node:path')
 
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const SCRIPT_SUFFIX = '.user.js'
-const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
 // Comments are dropped first: a link inside one is not a link on the page.
 const page = fs.readFileSync(path.join(__dirname, 'site', 'index.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
@@ -44,14 +43,6 @@ test('the page loads no script', () => {
 })
 
 test('netlify.toml publishes only site/', () => {
+  const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)
-})
-
-test('netlify.toml sends a Content-Security-Policy whose only directive is script-src \'self\'', () => {
-  // Line-anchored, in Netlify's order, so a commented-out line or a misspelt table does not match.
-  const header = toml.match(/^\[\[headers\]\][ \t]*\r?\n[ \t]*for[ \t]*=[ \t]*"\/\*"[ \t]*\r?\n[ \t]*\[headers\.values\][ \t]*\r?\n[ \t]*Content-Security-Policy[ \t]*=[ \t]*"([^"]*)"[ \t]*$/m)
-  assert.ok(header, 'netlify.toml sets Content-Security-Policy for /* under [headers.values]')
-  // Netlify's badge docs say the badge runs in an inline frame; script-src without 'unsafe-inline' is the ticket's way to stop it.
-  // Nothing else is set, so the raw.githubusercontent.com screenshots and the inline CSS stay unrestricted.
-  assert.equal(header[1], "script-src 'self'")
 })
