@@ -90,10 +90,14 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
     after(async () => { await context.close() })
 
-    it('Tab leaves the number pad on digits, saves nothing, and keeps its default', async () => {
+    const focused = () => p.evaluate(() => { const a = document.activeElement; return `${a.tagName}#${a.id}.${a.className}|${a.textContent.slice(0, 30)}` })
+
+    it('Tab in play leaves the number pad on digits, saves nothing, and leaves focus where it is', async () => {
       assert.equal(await pad(), DIGITS, 'before')
       assert.equal(await saved(), null, 'saved before')
-      assert.deepEqual(await press('Tab'), [false], 'Tab was not prevented')
+      const focus = await focused()
+      assert.deepEqual(await press('Tab'), [true], 'Tab was prevented, as with SudokuPad\'s own toggle')
+      assert.equal(await focused(), focus, 'focus did not move')
       assert.equal(await pad(), DIGITS, 'after')
       assert.equal(await saved(), null, 'saved after')
     })
@@ -111,7 +115,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await pad(), DIGITS, 'after "/" again')
     })
 
-    it('Tab leaves letter mode on while it is on', async () => {
+    it('Tab in play leaves letter mode on while it is on', async () => {
       await press('/')
       assert.equal(await pad(), LETTERS, 'on')
       await press('Tab')
@@ -121,10 +125,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await pad(), DIGITS, 'off')
     })
 
-    it('Tab still moves focus in a dialog', async () => {
+    it('Tab still moves focus in a dialog, and is not prevented there', async () => {
       await p.click('#control-settings')
       await p.locator('.dialog').waitFor({ state: 'visible' })
-      const focused = () => p.evaluate(() => { const a = document.activeElement; return `${a.tagName}#${a.id}.${a.className}|${a.textContent.slice(0, 30)}` })
       const before = await focused()
       assert.deepEqual(await press('Tab'), [false], 'Tab was not prevented')
       assert.notEqual(await focused(), before, 'focus moved')

@@ -39,8 +39,11 @@ Read 2026-11-03 from `tool-letter.js` and `script.js` of v0.611.0, and run live.
   removes that same `ToolLetter.tool` object. A list set on it holds across switching the tool off
   and on, and across a reload of the setting.
 - `handleToggleKey` calls `preventDefault` on the keydown, which is why a Tab that toggles also does
-  not move focus. With the Tab entry gone, nothing in the letter tool touches a Tab keydown.
+  not move focus in play. A Tab with the entry dropped would move focus to the app menu button; the
+  script keeps the entry and swaps its handler for one that only calls `preventDefault`. In a dialog Tab moved
+  focus with the script off (live run), so the toggle does not act there and the swap leaves it alone.
 - `Framework.getApp()` resolves after `tool-letter.js` has loaded, so `ToolLetter` exists by then at
   each of the three injection times.
 
-`no-tab-letters.user.js` sets `ToolLetter.tool.keyHandlers` to the list without the Tab entry.
+`no-tab-letters.user.js` sets `ToolLetter.tool.keyHandlers` to the list with the Tab entry's handler
+replaced by one that only calls `preventDefault`.

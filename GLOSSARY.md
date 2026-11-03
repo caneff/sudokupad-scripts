@@ -46,4 +46,4 @@
 - **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
-  browser under `ToolLetter_letterMode`. The button and `/` toggle it; No Tab Letters takes Tab away from that list.
+  browser under `ToolLetter_letterMode`. The button and `/` toggle it; No Tab Letters makes Tab do nothing in play instead.
