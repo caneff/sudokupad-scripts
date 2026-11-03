@@ -23,3 +23,17 @@ on the page.
 Search for an existing script: one Exa search (five results), plus the sudokupad
 scripts already seen in `docs/research/sudokupad-color-tool.md`. None describes extra
 edge marks. Only the result text was read.
+
+## Run on the page, 2026-11-03 (v0.611.0, `live/edge-marks.live.mjs`)
+
+- `renderPen` is a method on `SvgRenderer`'s prototype, reached as
+  `Framework.app.svgRenderer`; `ToolPen.tool` is the same object as `app.tools.pen`.
+  `renderPen` copies every option onto the path, so passing `d` is enough to draw a
+  new value.
+- `clickCell` queues its actions on the tool (`actAdd`) and `actSend` wraps them in one
+  group. An edge click queues one `select` and one `pen` with `3`, `4`, `b` or `c`.
+- Confirmed: a replay holding `h` to `s` loads in a page without the script with no page
+  error; the values are stored and drawn as paths with no `d`.
+- `.cell-pen` sets the stroke width to 5 and loads after a script's own style, so a
+  width rule needs `.cell-pen.pen-X`. A bare `.pen-X` lost to it.
+- Screenshot of every mark in nine colors: `edge-marks-all-colors.png`.
