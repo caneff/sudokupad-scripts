@@ -183,6 +183,69 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.locator(BUTTON).waitFor({ state: 'visible' })
     })
 
+    // Rects of the button, a neighbour, the row, the footer and the viewport, from the page.
+    const layout = () => read(() => {
+      const box = (e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height, right: r.right, bottom: r.bottom } }
+      const footer = [...document.querySelectorAll('*')].find((e) => e.children.length < 4 && /Created by/.test(e.textContent) && e.textContent.length < 200)
+      return {
+        button: box(document.querySelector('#control-colorbydigit')),
+        undo: box(document.querySelector('#control-undo')),
+        row: box(document.querySelector('.controls-aux')),
+        footer: box(footer),
+        buttonRow: document.querySelector('#control-colorbydigit').parentElement.className,
+        neighbours: [...document.querySelector('.controls-aux').children].map((e) => e.id),
+        view: { w: window.innerWidth, h: window.innerHeight }
+      }
+    })
+    // SudokuPad re-fits its controls after a throttled delay, so wait until the row stops moving.
+    const settledLayout = async () => {
+      let last = JSON.stringify(await layout())
+      const deadline = Date.now() + SETTLE_MS
+      for (;;) {
+        await sleep(CLICK_TAKES_MS)
+        const now = JSON.stringify(await layout())
+        if (now === last || Date.now() > deadline) return JSON.parse(now)
+        last = now
+      }
+    }
+    const fits = (l) => l.row.right <= l.view.w && l.row.bottom <= l.view.h && l.row.x >= 0 && l.row.y >= 0 && l.footer.y >= l.row.bottom - 1
+
+    it('the button sits in the bottom row with Undo, Redo, Check and Select, the size of its neighbours', async () => {
+      const l = await settledLayout()
+      assert.equal(l.buttonRow, 'controls-aux')
+      assert.deepEqual(l.neighbours.slice(0, 5), ['control-undo', 'control-redo', 'control-check', 'control-select', 'control-colorbydigit'])
+      assert.equal(Math.round(l.button.w), Math.round(l.undo.w))
+      assert.equal(Math.round(l.button.h), Math.round(l.undo.h))
+      assert.equal(Math.round(l.button.y), Math.round(l.undo.y))
+    })
+
+    it('the controls still fit the viewport and clear the footer', async () => {
+      const l = await settledLayout()
+      assert.equal(fits(l), true, JSON.stringify(l))
+    })
+
+    it('with another script\'s button in the row, the row still fits and the footer stays clear, and with enough more the row wraps to a second row', async () => {
+      const add = (from, to) => read(([from, to]) => {
+        for (let i = from; i < to; i++) Framework.addAuxButton({ name: `other${i}`, title: `Other ${i}`, content: '<div class="icon"><svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg></div>', onClick () {} })
+        Framework.app.refreshControls()
+      }, [from, to])
+      const clear = () => read(() => { for (let i = 0; i < 8; i++) Framework.removeControlButton(`other${i}`) })
+      try {
+        await add(0, 1)
+        const one = await settledLayout()
+        assert.equal(one.neighbours.length, 6)
+        assert.equal(fits(one), true, JSON.stringify(one))
+        await add(1, 8)
+        const many = await settledLayout()
+        assert.equal(many.neighbours.length, 13)
+        assert.equal(many.row.h > many.undo.h * 1.5, true, JSON.stringify(many))
+        assert.equal(fits(many), true, JSON.stringify(many))
+      } finally {
+        await clear()
+      }
+      assert.equal(await settle(async () => (await layout()).neighbours.length, 5), 5)
+    })
+
     it('the button shows an icon or readable text', async () => {
       const look = await p.locator(BUTTON).evaluate((e) => {
         const svg = e.querySelector('.icon svg')

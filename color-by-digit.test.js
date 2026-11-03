@@ -164,10 +164,13 @@ test('normalizeGroups keeps a digit in only its first group', () => {
   )
 })
 
-test('installButton: adds an icon button titled "Color by digit", then refreshControls so the click handler binds', () => {
+test('installButton: adds an aux-row icon button titled "Color by digit", then refreshControls so the click handler binds', () => {
   const calls = []
   const click = () => {}
-  const framework = { addAppButton: (spec) => calls.push(['add', spec]) }
+  const framework = {
+    addAuxButton: (spec) => calls.push(['add', spec]),
+    addAppButton: () => calls.push(['wrong row'])
+  }
   const app = { refreshControls: () => calls.push(['refresh']) }
   installButton(framework, app, click)
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
@@ -194,7 +197,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
     getApp: () => Promise.resolve(app),
     getData: () => null,
     setData: () => {},
-    addAppButton: (spec) => { calls.push(['button']); global.click = spec.onClick },
+    addAuxButton: (spec) => { calls.push(['button']); global.click = spec.onClick },
     addSetting: () => calls.push(['setting'])
   }
   try {
