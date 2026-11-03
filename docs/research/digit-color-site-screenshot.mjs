@@ -1,18 +1,18 @@
-// Takes docs/research/site-digit-color.png, the homepage's Digit Color picture: a close crop of the
-// sample puzzle with four entered digits in different colors, corner and centre marks in their
-// digit colors, and one conflicting corner 3 (a given 3 shares its box) with its red circle, the
-// mascot hidden. Run from the repo root: node docs/research/digit-color-site-screenshot.mjs
+// Takes docs/research/site-digit-color.png, the homepage's Digit Color picture: a close crop of a
+// blank grid, so no givens, with entered digits in different colors, corner and centre marks in
+// their digit colors, and one conflicting corner 3 (an entered 3 shares its box) with its red
+// circle, the mascot hidden. Run from the repo root: node docs/research/digit-color-site-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 
-const url = readFileSync(new URL('../../live/puzzle-url.txt', import.meta.url), 'utf8').trim()
+const url = 'https://sudokupad.app/blank'
 const script = readFileSync(new URL('../../digit-color.user.js', import.meta.url), 'utf8')
 const out = new URL('./site-digit-color.png', import.meta.url).pathname
 
 // [row, column, digits entered there in the current mode], 0-based. None but the corner 3 at
 // (1, 2) shares a row, column or box with the same digit.
-const DIGITS = [[0, 2, '4'], [0, 3, '6'], [1, 1, '2'], [3, 1, '1']]
-const CORNER = [[1, 2, '73'], [2, 4, '4']]
+const DIGITS = [[0, 1, '3'], [0, 2, '4'], [0, 3, '6'], [0, 4, '7'], [1, 1, '2'], [1, 4, '1'], [2, 1, '8'], [2, 2, '9']]
+const CORNER = [[1, 2, '53'], [2, 4, '5']]
 const CENTRE = [[2, 3, '23']]
 
 const browser = await chromium.launch()
@@ -21,7 +21,7 @@ const page = await (await browser.newContext({ viewport: { width: 2200, height: 
 await page.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
 await page.goto(url, { waitUntil: 'load' })
 await page.waitForFunction(() => Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length)
-await page.getByRole('button', { name: /Start Puzzle|Continue|Resume/i }).first().click()
+await page.getByRole('button', { name: /Start Puzzle|Continue|Resume/i }).first().click({ timeout: 3000 }).catch(() => {}) // a blank grid may start at once
 await page.locator('#control-undo').waitFor()
 await page.addStyleTag({ content: '#svenpeek { display: none !important }' })
 await page.addScriptTag({ content: script })
