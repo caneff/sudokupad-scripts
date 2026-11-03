@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR } = require('./digit-color.user.js')
+const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR } = require('./digit-color.user.js')
 
 // Chris's table from issue #7, typed out here as the independent source for the constant.
 const TABLE = {
@@ -94,6 +94,26 @@ test('circleFor centres on the mark\'s middle and is sized by its width', () => 
   assert.equal(c.cy, 35.8)
   assert.ok(c.r >= 7 && c.r <= 10, `r ${c.r}`)
   assert.equal(circleFor({ x: 352, y: 35.8, width: 20 }).r, 2 * c.r)
+})
+
+test('inkMiddle centres on the digit\'s ink, not on its advance box or its font\'s em box', () => {
+  // A character whose advance box starts at x 100 and whose em box starts at y 20, with a font
+  // ascent of 10: the baseline is at y 30. The ink reaches 1 left and 5 right of the origin, and 7
+  // above and 0 below the baseline.
+  const middle = inkMiddle({ x: 100, y: 20 }, { left: -1, right: 5, ascent: 7, descent: 0, fontAscent: 10 })
+  assert.equal(middle.x, 103)
+  assert.equal(middle.y, 26.5)
+  // Ink that dips below the baseline, like a descender or an overshoot, moves the middle down.
+  assert.equal(inkMiddle({ x: 100, y: 20 }, { left: -1, right: 5, ascent: 7, descent: 1, fontAscent: 10 }).y, 27)
+  // Ink reaching left of the origin moves the middle left.
+  assert.equal(inkMiddle({ x: 100, y: 20 }, { left: 1, right: 5, ascent: 7, descent: 0, fontAscent: 10 }).x, 102)
+})
+
+test('inkMiddle throws when the browser lacks a measure, instead of giving NaN', () => {
+  const whole = { left: -1, right: 5, ascent: 7, descent: 0, fontAscent: 10 }
+  for (const key of Object.keys(whole)) {
+    assert.throws(() => inkMiddle({ x: 100, y: 20 }, { ...whole, [key]: undefined }), new RegExp(`no ${key} measure`), key)
+  }
 })
 
 test('digitOfText reads a single digit and nothing else', () => {

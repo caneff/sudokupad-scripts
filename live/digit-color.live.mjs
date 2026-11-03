@@ -22,8 +22,24 @@ const GIVEN_FILL = 'rgb(0, 0, 0)'
 const DEFAULT_FILL = 'rgb(29, 106, 229)'
 // SudokuPad's red for a mark in the conflict state, which a digit on SudokuPad's own color keeps.
 const CONFLICT_RED = 'rgb(179, 58, 58)'
-// How far from the digit's middle, in screen pixels, a circle may sit and still read as centred.
-const CENTRE_TOLERANCE = 2.5
+// How far from a mark's box, in screen pixels, a circle may sit and still be that mark's circle. This
+// tells which circle belongs to which mark; INK_TOLERANCE is what judges the centring.
+const NEAR = 6
+// How far, in screen pixels, a circle's centre may be from the centre of its digit's ink.
+const INK_TOLERANCE = 1
+// The screenshot clip around a mark's box: this many pixels more on the top and left, and on the
+// bottom and right, so antialiasing at the digit's edge is inside it.
+const CLIP_BEFORE = 3
+const CLIP_AFTER = 5
+// A pixel is ink when it differs between the two screenshots by at least this fraction of the largest difference.
+const INK_FRACTION = 0.5
+// Hides every mark and the circles, then shows only the mark carrying the probe attribute.
+const INK_PROBE_CSS = '#cell-pencilmarks text, #cell-candidates text, #cell-candidates tspan { visibility: hidden !important } #digit-color-circles { display: none !important } #cell-pencilmarks [data-ink-probe], #cell-candidates [data-ink-probe] { visibility: visible !important }'
+// Per digit, a row with that digit given and two empty cells in it that no other check here fills with a digit, so a mark of the digit
+// in either cell is in SudokuPad's conflict state: [row, corner mark's column, centre mark's column].
+const CONFLICT_CELLS = {
+  1: [1, 1, 2], 2: [5, 1, 2], 3: [4, 6, 7], 4: [4, 1, 2], 5: [7, 0, 1], 6: [2, 0, 3], 7: [8, 5, 6], 8: [3, 1, 2], 9: [1, 7, 8]
+}
 const CIRCLES = '#digit-color-circles'
 // A mark in SudokuPad's conflict state, per place on the board.
 const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
@@ -64,7 +80,7 @@ after(async () => { await browser?.close() })
 
 for (const mode of ['document-idle', 'before-start', 'after-start']) {
   describe(`injected ${mode}`, { concurrency: false }, () => {
-    let context, p, errors
+    let context, p, decoder, errors
 
     const read = (fn, arg) => p.evaluate(fn, arg)
     const editor = () => p.locator('#digit-color-editor')
@@ -97,8 +113,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     // Circles drawn beyond one per conflicting mark on the board: zero when each mark has its own and no other stands.
     const extraCircles = () => read(([circles, conflicting]) => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length, [CIRCLES, Object.values(CONFLICTING).join(',')])
     // The middle of each conflicting mark of `digit` in `place` and the middle of every circle, both
-    // in screen pixels so the board's own transforms are the page's to apply. A mark's middle is the
-    // middle of the box the browser reports for it.
+    // in screen pixels so the board's own transforms are the page's to apply. A mark's middle here is
+    // the middle of the box the browser reports for it: close enough to tell which circle is whose,
+    // not to judge the centring, which `inkCentring` does from pixels.
     const middles = (place, digit) => read(([sel, digit]) => {
       return [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit).map((e) => {
         const box = e.getBoundingClientRect()
@@ -106,14 +123,59 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
     }, [CONFLICTING[place], digit])
     // How many conflicting marks of `digit` in `place` there are, how many of them have a shown circle
-    // centred on them, and how many circles are drawn beyond one per conflicting mark on the board.
+    // beside them, and how many circles are drawn beyond one per conflicting mark on the board.
     const circleState = (place, digit) => async () => {
       const marks = await middles(place, digit)
       const drawn = await circles()
-      const centred = marks.filter((m) => drawn.some((c) => c.shown && Math.hypot(c.cx - m.cx, c.cy - m.cy) <= CENTRE_TOLERANCE))
-      return { marks: marks.length, centred: centred.length, extra: await extraCircles() }
+      const withCircle = marks.filter((m) => drawn.some((c) => c.shown && Math.hypot(c.cx - m.cx, c.cy - m.cy) <= NEAR))
+      return { marks: marks.length, withCircle: withCircle.length, extra: await extraCircles() }
     }
-    const circled = (marks) => ({ marks, centred: marks, extra: 0 })
+    const circled = (marks) => ({ marks, withCircle: marks, extra: 0 })
+
+    // The centre, in screen pixels, of the ink of the conflicting `digit` mark in `place`, and of the
+    // circle nearest it. The ink is the box of pixels that differ between two screenshots at real size
+    // taken with every mark and circle hidden, one with this mark shown: grid lines and neighbouring
+    // marks cancel out. A pixel counts as ink when it differs by at least half the largest difference.
+    const inkCentring = async (place, digit, index) => {
+      const box = await read(([sel, digit, index]) => {
+        const mark = [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit)[index]
+        mark.setAttribute('data-ink-probe', '')
+        const { x, y, width, height } = mark.getBoundingClientRect()
+        return { x, y, width, height }
+      }, [CONFLICTING[place], digit, index])
+      const clip = { x: Math.floor(box.x) - CLIP_BEFORE, y: Math.floor(box.y) - CLIP_BEFORE, width: Math.ceil(box.width) + CLIP_BEFORE + CLIP_AFTER, height: Math.ceil(box.height) + CLIP_BEFORE + CLIP_AFTER }
+      const drawn = (await circles()).filter((c) => c.shown)
+      const probeStyle = await p.addStyleTag({ content: INK_PROBE_CSS })
+      let shown, hidden
+      try {
+        shown = (await p.screenshot({ clip })).toString('base64')
+        await read(() => document.querySelector('[data-ink-probe]').removeAttribute('data-ink-probe'))
+        hidden = (await p.screenshot({ clip })).toString('base64')
+      } finally {
+        await read(() => document.querySelectorAll('[data-ink-probe]').forEach((e) => e.removeAttribute('data-ink-probe')))
+        await probeStyle.evaluate((e) => e.remove())
+      }
+      const ink = await decoder.evaluate(async ([a, b, fraction]) => {
+        const pixels = async (base64) => {
+          const bitmap = await window.createImageBitmap(await (await fetch('data:image/png;base64,' + base64)).blob())
+          const ctx = new window.OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
+          ctx.drawImage(bitmap, 0, 0)
+          return ctx.getImageData(0, 0, bitmap.width, bitmap.height)
+        }
+        const [one, two] = [await pixels(a), await pixels(b)]
+        const diff = []
+        for (let i = 0; i < one.data.length; i += 4) diff.push(Math.max(...[0, 1, 2].map((k) => Math.abs(one.data[i + k] - two.data[i + k]))))
+        const top = Math.max(...diff)
+        const inked = diff.map((d, i) => [d, i]).filter(([d]) => d >= fraction * top).map(([, i]) => [i % one.width, Math.floor(i / one.width)])
+        const xs = inked.map(([x]) => x)
+        const ys = inked.map(([, y]) => y)
+        return { top, left: Math.min(...xs), right: Math.max(...xs) + 1, up: Math.min(...ys), down: Math.max(...ys) + 1 }
+      }, [shown, hidden, INK_FRACTION])
+      assert.ok(ink.top > 0, `${place} ${digit}: the screenshots with and without the mark are identical`)
+      const cx = clip.x + (ink.left + ink.right) / 2
+      const cy = clip.y + (ink.up + ink.down) / 2
+      return drawn.map((c) => ({ dx: c.cx - cx, dy: c.cy - cy })).sort((m, n) => Math.hypot(m.dx, m.dy) - Math.hypot(n.dx, n.dy))[0]
+    }
 
     const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
     const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
@@ -148,6 +210,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
       errors = []
       p = await context.newPage()
+      // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
+      decoder = await context.newPage()
       p.on('pageerror', (e) => errors.push(String(e)))
       await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
       if (mode === 'document-idle') {
@@ -223,13 +287,45 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(allFills('centre', '7'), [DEFAULT_FILL]), [DEFAULT_FILL])
     })
 
-    it('conflicting marks keep the digit color and get a red circle centred on them', async () => {
+    it('conflicting marks keep the digit color and get a red circle beside them', async () => {
       await markMode('#control-corner', async () => { await enter(0, 5, '5') })
       await markMode('#control-centre', async () => { await enter(1, 6, '5') })
       // 5 conflicts with the given 5 in row 1, so both marks are in the conflict state.
       for (const place of ['corner', 'centre']) {
         assert.deepEqual(await settle(allFills(place, '5', true), [DEFAULT_RGB[5]]), [DEFAULT_RGB[5]], place)
         assert.deepEqual(await settle(circleState(place, '5'), circled(1)), circled(1), place)
+      }
+    })
+
+    it('every digit 1-9, as a corner mark and a centre mark, has its circle centred on the ink of the digit', async () => {
+      const marksOnBoard = () => read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark, #cell-candidates tspan').length)
+      const before = await marksOnBoard()
+      let entries = 0
+      try {
+        for (const [digit, [row, cornerColumn, centreColumn]] of Object.entries(CONFLICT_CELLS)) {
+          await markMode('#control-corner', async () => { await enter(row, cornerColumn, digit); entries++ })
+          await markMode('#control-centre', async () => { await enter(row, centreColumn, digit); entries++ })
+        }
+        // No deselect here: it is an undo step of its own, so the undos below would stop one short.
+        for (const place of ['corner', 'centre']) {
+          for (const digit of Object.keys(CONFLICT_CELLS)) {
+            // Earlier checks leave their own conflicting marks of some digits, which count too.
+            const marks = (await middles(place, digit)).length
+            assert.equal(marks >= 1, true, `${place} ${digit}: a conflicting mark was entered`)
+            assert.deepEqual(await settle(circleState(place, digit), circled(marks)), circled(marks), `${place} ${digit}`)
+            for (let index = 0; index < marks; index++) {
+              const { dx, dy } = await inkCentring(place, digit, index)
+              const distance = Math.hypot(dx, dy)
+              assert.equal(distance <= INK_TOLERANCE, true, `${place} ${digit} #${index}: the circle's centre is (${dx.toFixed(2)}, ${dy.toFixed(2)}) px, ${distance.toFixed(2)} px, from the ink's`)
+            }
+          }
+        }
+      } finally {
+        // Each undo waits for its mark to go, so a click is never lost to the one before it.
+        for (let i = entries - 1; i >= 0; i--) {
+          await undo()
+          assert.equal(await settle(marksOnBoard, before + i), before + i, 'undo removes the mark')
+        }
       }
     })
 
@@ -279,7 +375,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('a mark that does not conflict has no circle, and a corner mark entering and leaving the conflict state, through undo and redo, gets and loses its circle', async () => {
-      assert.deepEqual(await circleState('corner', '8')(), { marks: 0, centred: 0, extra: 0 })
+      assert.deepEqual(await circleState('corner', '8')(), { marks: 0, withCircle: 0, extra: 0 })
       // (0,6) is in row 1 with the given 5.
       await markMode('#control-corner', async () => { await enter(0, 6, '5') })
       assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
