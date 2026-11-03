@@ -1,4 +1,4 @@
-// Live check of edge-marks.user.js on sudokupad.app, in headless Chromium.
+// Live check of pen-tool-extras.user.js's edge marks on sudokupad.app, in headless Chromium.
 // Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
@@ -17,7 +17,7 @@ import { chromium } from 'playwright'
 import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
-const script = readFileSync(new URL('../edge-marks.user.js', import.meta.url), 'utf8')
+const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'EdgeMarks_marks'
 const POLL_MS = 50
@@ -25,8 +25,8 @@ const SETTLE_MS = 10000
 const SIZE = 9
 // The cell the cell-mark checks click.
 const CELL_MARK = [5, 5]
-// SudokuPad's own pen color 4, with no Pen Color script installed.
-const RED = 'rgb(245, 58, 55)'
+// Pen color 4 with nothing saved: the default first cell color page's color 4, darkened.
+const PEN_4 = 'rgb(113, 159, 23)'
 
 // Each edge a click can reach: the cell a click lands in, the side of it, and the cell and
 // pen values that store it. The cycle on an edge is its X, two directions, a dot, then empty.
@@ -92,7 +92,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const read = (fn, arg) => p.evaluate(fn, arg)
     const saved = () => read((k) => Framework.getData(k), DATA_KEY)
     const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-    const editor = () => p.locator('#edge-marks-editor')
+    const editor = () => p.locator('#pen-tool-extras-editor')
 
     // The pen values on the cell at [row, col], without their colors.
     const penValues = (row, col) => read(([r, c]) => Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c).pen.map((v) => v[0]).sort(), [row, col])
@@ -143,7 +143,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     const openEditor = async () => {
       await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Edge marks' }).first().click()
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
       await editor().waitFor({ state: 'visible' })
     }
     const closeWith = async (text) => {
@@ -160,7 +160,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // The pen tool is off until its own setting turns it on.
       await read(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
-      await p.locator('style#edge-marks-style').waitFor({ state: 'attached' })
+      await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await selectPen()
     }
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
@@ -226,10 +226,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
       const stroke = () => read(() => [...document.querySelectorAll('.cell-pen.pen-h')].map((e) => ({ cls: e.getAttribute('class'), stroke: window.getComputedStyle(e).stroke })))
-      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-h pencolor-4', stroke: RED }]), [{ cls: 'cell-pen pen-h pencolor-4', stroke: RED }])
+      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }]), [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }])
       await p.click('#control-undo')
       await p.click('#control-redo')
-      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-h pencolor-4', stroke: RED }]), [{ cls: 'cell-pen pen-h pencolor-4', stroke: RED }])
+      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }]), [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }])
       await clearMarks()
       await pickColor(1)
     })
@@ -276,7 +276,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clearMarks()
     })
 
-    it('Edge marks in settings has three boxes, all ticked on a fresh install', async () => {
+    it('The dialog has three edge mark boxes, all ticked on a fresh install', async () => {
       assert.equal(await saved(), null)
       await openEditor()
       for (const mark of ['x', 'directions', 'dot']) assert.equal(await box(mark).isChecked(), true, mark)
@@ -375,11 +375,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
       const group = await openSettings(p)
-      const entry = group.locator('button').filter({ hasText: 'Edge marks' })
-      assert.equal((await entry.textContent()).trim(), 'Edge marks')
+      const entry = group.locator('button').filter({ hasText: 'Pen tool extras' })
+      assert.equal((await entry.textContent()).trim(), 'Pen tool extras')
       await entry.click()
       await editor().waitFor({ state: 'visible' })
-      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Edge marks')
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen tool extras')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
       await closeWith('Cancel')
     })
@@ -441,7 +441,7 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
     const warnings = []
     try {
       const p = await newPage(context, errors)
-      p.on('console', (m) => { if (m.type() === 'warning' && m.text().includes('edge-marks')) warnings.push(m.text()) })
+      p.on('console', (m) => { if (m.type() === 'warning' && m.text().includes('pen-tool-extras')) warnings.push(m.text()) })
       await p.goto(url, { waitUntil: 'load', timeout: 60000 })
       await startPuzzle(p)
       // `_actList` is the field the click wrap reads; SudokuPad's own `actStart` recreates it
@@ -452,7 +452,6 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       await settle(async () => warnings.length, 1)
       assert.equal(warnings.length, 1)
-      assert.equal(await p.locator('style#edge-marks-style').count(), 0)
       const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
       const deadline = Date.now() + SETTLE_MS
       while (!(await shown()) && Date.now() < deadline) {

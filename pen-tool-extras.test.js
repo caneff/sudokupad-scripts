@@ -4,7 +4,11 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors, HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, DEFAULT_THICKNESS, MIN_THICKNESS, MAX_THICKNESS, LINE_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION } = require('./pen-color.user.js')
+const {
+  normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, LINE_THICKNESS, MARK_THICKNESS, LINE_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  nextType, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS
+} = require('./pen-tool-extras.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -290,44 +294,195 @@ test('editedColors refuses a pen color or a value it cannot save, rather than sa
   assert.throws(() => editedColors(TABLE, '4', '#abc'), RangeError)
 })
 
-test('the thickness range is 1 to 12 with SudokuPad\'s own 5 as the default', () => {
-  assert.deepEqual([MIN_THICKNESS, MAX_THICKNESS, DEFAULT_THICKNESS], [1, 12, 5])
+test('the thickness ranges: lines 1 to 12 from SudokuPad\'s own 5, edge marks 1 to 6 in halves from its 2.5', () => {
+  assert.deepEqual(LINE_THICKNESS, { min: 1, max: 12, step: 1, fallback: 5 })
+  assert.deepEqual(MARK_THICKNESS, { min: 1, max: 6, step: 0.5, fallback: 2.5 })
 })
 
-test('normalizeThickness keeps a saved whole number from 1 to 12', () => {
-  assert.equal(normalizeThickness(1), 1)
-  assert.equal(normalizeThickness(8), 8)
-  assert.equal(normalizeThickness(12), 12)
+test('normalizeThickness keeps a saved value on its range\'s steps', () => {
+  for (const ok of [1, 8, 12]) assert.equal(normalizeThickness(ok, LINE_THICKNESS), ok)
+  for (const ok of [1, 2.5, 3.5, 6]) assert.equal(normalizeThickness(ok, MARK_THICKNESS), ok)
 })
 
-test('normalizeThickness falls back to 5 for nothing saved and for anything untrusted', () => {
+test('normalizeThickness falls back to the range\'s default for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 13, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
-    assert.equal(normalizeThickness(bad), 5, String(bad))
+    assert.equal(normalizeThickness(bad, LINE_THICKNESS), 5, String(bad))
+  }
+  for (const bad of [null, undefined, 0, 0.5, 6.5, 12, 2.3, NaN, '3', [3], true]) {
+    assert.equal(normalizeThickness(bad, MARK_THICKNESS), 2.5, String(bad))
   }
 })
 
-test('buildThicknessCss sets the width of the line values only, under :root:root', () => {
-  const css = buildThicknessCss(9)
-  const [selector, body] = css.split(' { ')
+test('buildThicknessCss sets the line width on the line values only, under :root:root', () => {
+  const [lines] = buildThicknessCss(9, 2.5).split('\n')
+  const [selector, body] = lines.split(' { ')
   assert.equal(body, 'stroke-width: 9; }')
-  const wanted = LINE_VALUES.map((v) => `:root:root .cell-pen.pen-${v}`)
-  assert.deepEqual(selector.split(', '), wanted)
+  assert.deepEqual(selector.split(', '), LINE_VALUES.map((v) => `:root:root .cell-pen.pen-${v}`))
 })
 
-test('the line values leave out the edge X marks, the cell circle and cross, and Edge Marks\' values', () => {
+test('the line values leave out the edge X marks, the cell circle and cross, and the arrows and dots', () => {
   assert.deepEqual(LINE_VALUES, ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
 })
 
+test('buildThicknessCss at the defaults gives the widths the pen had before: lines 5, X and arrows 2.5, dots 7', () => {
+  const rules = buildThicknessCss(5, 2.5).split('\n').map((rule) => rule.split(' { '))
+  const width = (value) => {
+    const rule = rules.find(([selector]) => selector.split(', ').includes(`:root:root .cell-pen.pen-${value}`))
+    return rule[1]
+  }
+  for (const v of ['1', 'g']) assert.equal(width(v), 'stroke-width: 5; }', v)
+  for (const v of ['3', '4', 'b', 'c', 'h', 'i', 'k', 'l', 'n', 'o', 'q', 'r']) assert.equal(width(v), 'stroke-width: 2.5; }', v)
+  for (const v of ['j', 'm', 'p', 's']) assert.equal(width(v), 'stroke-width: 7; }', v)
+})
+
+test('the edge mark slider sets the X and arrow width, and the dot keeps its 7 to 2.5 proportion', () => {
+  const css = buildThicknessCss(5, 4)
+  assert.match(css, /pen-3[^{]*\{ stroke-width: 4; \}/)
+  assert.match(css, /pen-j[^{]*\{ stroke-width: 11.2; \}/)
+})
+
+test('no value gets two width rules, so none depends on which rule is last', () => {
+  const selectors = buildThicknessCss(5, 2.5).split('\n').flatMap((rule) => rule.split(' { ')[0].split(', '))
+  assert.equal(new Set(selectors).size, selectors.length)
+})
+
 test('buildThicknessCss refuses a thickness it cannot save', () => {
-  assert.throws(() => buildThicknessCss(0), RangeError)
-  assert.throws(() => buildThicknessCss(13), RangeError)
-  assert.throws(() => buildThicknessCss('5'), RangeError)
+  assert.throws(() => buildThicknessCss(0, 2.5), RangeError)
+  assert.throws(() => buildThicknessCss(13, 2.5), RangeError)
+  assert.throws(() => buildThicknessCss('5', 2.5), RangeError)
+  assert.throws(() => buildThicknessCss(5, 7), RangeError)
+  assert.throws(() => buildThicknessCss(5, 2.3), RangeError)
 })
 
 test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
   assert.equal(HOLD_TO_EDIT_MS, 1000)
 })
 
+const ALL = { x: true, directions: true, dot: true }
+const NONE = { x: false, directions: false, dot: false }
+
+test('fresh install has every mark ticked', () => {
+  assert.deepEqual(DEFAULT_MARK_SETTINGS, ALL)
+  assert.deepEqual(normalizeMarkSettings(null), ALL)
+  assert.deepEqual(normalizeMarkSettings(undefined), ALL)
+})
+
+test('corrupt saved settings fall back to every mark ticked', () => {
+  for (const bad of ['x', 7, true, [], [false], '{"x":false}']) {
+    assert.deepEqual(normalizeMarkSettings(bad), ALL, JSON.stringify(bad))
+  }
+})
+
+test('a saved boolean is kept and a non-boolean entry takes its default', () => {
+  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', dot: false }), { x: false, directions: true, dot: false })
+})
+
+test('with everything ticked the cycle is X, direction, other direction, dot, empty', () => {
+  const seen = []
+  let type = 'empty'
+  for (let i = 0; i < 5; i++) {
+    type = nextType(type, ALL)
+    seen.push(type)
+  }
+  assert.deepEqual(seen, ['x', 'dirA', 'dirB', 'dot', 'empty'])
+})
+
+test('an unticked type is skipped', () => {
+  assert.equal(nextType('empty', { x: false, directions: true, dot: true }), 'dirA')
+  assert.equal(nextType('dirB', { x: true, directions: true, dot: false }), 'empty')
+  assert.equal(nextType('x', { x: true, directions: false, dot: true }), 'dot')
+  assert.equal(nextType('empty', { x: false, directions: false, dot: true }), 'dot')
+  assert.equal(nextType('dot', { x: false, directions: false, dot: true }), 'empty')
+})
+
+test('Directions is one box: both directions or neither', () => {
+  const only = { x: false, directions: true, dot: false }
+  assert.equal(nextType('empty', only), 'dirA')
+  assert.equal(nextType('dirA', only), 'dirB')
+  assert.equal(nextType('dirB', only), 'empty')
+})
+
+test('a mark whose type is unticked moves to the next ticked mark, or to empty', () => {
+  assert.equal(nextType('x', { x: false, directions: false, dot: true }), 'dot')
+  assert.equal(nextType('x', { x: false, directions: false, dot: false }), 'empty')
+  assert.equal(nextType('dot', { x: true, directions: false, dot: false }), 'empty')
+})
+
+test('a click on an empty right edge adds the X, which is the character 3', () => {
+  assert.deepEqual(planClick('3', [], ALL), { remove: [], add: '3' })
+})
+
+test('the cycle on a right edge uses 3, h, i, j then clears', () => {
+  assert.deepEqual(planClick('3', ['3'], ALL), { remove: ['3'], add: 'h' })
+  assert.deepEqual(planClick('3', ['h'], ALL), { remove: ['h'], add: 'i' })
+  assert.deepEqual(planClick('3', ['i'], ALL), { remove: ['i'], add: 'j' })
+  assert.deepEqual(planClick('3', ['j'], ALL), { remove: ['j'], add: null })
+})
+
+test('each edge has its own characters, none shared with another edge or with SudokuPad\'s lines', () => {
+  const used = new Set()
+  for (const edge of ['3', '4', 'b', 'c']) {
+    let present = []
+    for (let i = 0; i < 4; i++) {
+      const plan = planClick(edge, present, ALL)
+      assert.notEqual(plan.add, null)
+      assert.equal(used.has(plan.add), false, plan.add)
+      used.add(plan.add)
+      present = [plan.add]
+    }
+  }
+  assert.deepEqual([...used].sort(), ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's'])
+})
+
+test('a mark on another edge of the same cell is left alone', () => {
+  // the cell has the right-edge X and the bottom-edge dot; a click on the right edge sees only its own
+  assert.deepEqual(planClick('3', ['3', 'm', '5'], ALL), { remove: ['3'], add: 'h' })
+})
+
+test('with nothing ticked the click does nothing, and an existing mark stays', () => {
+  assert.equal(planClick('3', [], NONE), null)
+  assert.equal(planClick('3', ['3'], NONE), null)
+  assert.equal(planClick('4', ['k'], NONE), null)
+})
+
+test('an unticked mark already on the grid moves to the next ticked mark', () => {
+  assert.deepEqual(planClick('3', ['3'], { x: false, directions: false, dot: true }), { remove: ['3'], add: 'j' })
+})
+
+test('two marks on one edge, as a replay can hold, both go on the next click', () => {
+  assert.deepEqual(planClick('3', ['3', 'j'], ALL), { remove: ['3', 'j'], add: 'h' })
+})
+
+test('shapeOf names the arrow each character draws, per edge', () => {
+  assert.deepEqual(['h', 'i', 'j'].map(shapeOf), ['>', '<', '.'])
+  assert.deepEqual(['k', 'l', 'm'].map(shapeOf), ['^', 'v', '.'])
+  assert.deepEqual(['n', 'o', 'p'].map(shapeOf), ['>', '<', '.'])
+  assert.deepEqual(['q', 'r', 's'].map(shapeOf), ['^', 'v', '.'])
+  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 't', 'z']) {
+    assert.equal(shapeOf(other), null, other)
+  }
+})
+
+test('the dot is a zero-length segment', () => {
+  assert.match(shapePath('.', 8), /^ l0 0$/)
+})
+
+test('an arrow is a two-segment chevron pointing the way it names', () => {
+  // relative to the edge midpoint: the tip is the middle vertex
+  const tip = (d) => {
+    const [, mx, my, l1x, l1y] = d.match(/m ?(-?[\d.]+),(-?[\d.]+) l ?(-?[\d.]+),(-?[\d.]+)/)
+    return [Number(mx) + Number(l1x), Number(my) + Number(l1y)]
+  }
+  const [rx] = tip(shapePath('>', 8))
+  const [lx] = tip(shapePath('<', 8))
+  const [, uy] = tip(shapePath('^', 8))
+  const [, dy] = tip(shapePath('v', 8))
+  assert.equal(rx > 0, true)
+  assert.equal(lx < 0, true)
+  assert.equal(uy < 0, true)
+  assert.equal(dy > 0, true)
+})
+
 test('VERSION is the @version in the script header', () => {
-  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'pen-color.user.js'), 'utf8')))
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8')))
 })

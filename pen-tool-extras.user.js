@@ -1,29 +1,34 @@
 // ==UserScript==
-// @name         SudokuPad Pen Color
+// @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.0
-// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors, saved in a settings dialog or by holding a pen color button, replace them, and the dialog sets how thick the pen's lines are. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
+// @version      1.0.0
+// @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines and edge marks are, and adds direction arrows and a dot to the marks a click on a cell edge cycles through. Relies on SudokuPad internals for the edge marks, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
 // @run-at       document-idle
-// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-color.user.js
-// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-color.user.js
+// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js
+// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js
 // ==/UserScript==
+
+/* global ToolPen */
 
 (function () {
   'use strict'
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.5.0'
+  const VERSION = '1.0.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
-  const DATA_KEY = 'PenColor_colors'
-  const THICKNESS_KEY = 'PenColor_thickness'
-  const STYLE_ID = 'pen-color-style'
+  // The saved-data keys keep the names the two scripts this one replaced saved under.
+  const COLORS_KEY = 'PenColor_colors'
+  const LINE_THICKNESS_KEY = 'PenColor_thickness'
+  const MARKS_KEY = 'EdgeMarks_marks'
+  const MARK_THICKNESS_KEY = 'EdgeMarks_thickness'
+  const STYLE_ID = 'pen-tool-extras-style'
   const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad's own pen colors (tool-pen.css), as #rrggbb. Pen color 9 is written there as
   // rgb(-36, -36, -36), which clamps to black.
@@ -47,15 +52,30 @@
   // a tinted dark grey such as rgb(10, 20, 30) is about 0.024; the least saturated hued colors
   // of the default pages, darkened, are above 0.08.
   const GREY_CHROMA = 0.04
-  // SudokuPad's own `.cell-pen` stroke width, and the range the dialog's slider offers.
-  const DEFAULT_THICKNESS = 5
-  const MIN_THICKNESS = 1
-  const MAX_THICKNESS = 12
+  // The two sliders: SudokuPad's own `.cell-pen` stroke width is 5 and its edge X is 2.5 (in
+  // SudokuPad's cell units, a cell being 64). The dot keeps the proportion it had: 7 against 2.5.
+  const LINE_THICKNESS = { min: 1, max: 12, step: 1, fallback: 5 }
+  const MARK_THICKNESS = { min: 1, max: 6, step: 0.5, fallback: 2.5 }
+  const DOT_PER_MARK = 7 / 2.5
   // The pen values (the `pen-<value>` class of a stroke) drawn as free lines, from
   // `docs/research/sudokupad-pen-edge-marks.md`. Left out on purpose: 3, 4, b and c (the edge X
   // marks, 2.5 wide in SudokuPad), 5 and 6 (the cell circle and cross), and every value Edge
   // Marks draws, which sets its own width.
   const LINE_VALUES = ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
+  // The pen value of SudokuPad's own edge X on the right, bottom, left and top edge of a cell.
+  // An edge between two cells is stored on one of them, so a click on it is always one of
+  // these four values.
+  const EDGE_X = ['3', '4', 'b', 'c']
+  // The values this script adds, per edge: the first direction, the second direction, the dot.
+  // SudokuPad's own pen values stop at `g`, so `h` onward are free.
+  const ADDED = { 3: ['h', 'i', 'j'], 4: ['k', 'l', 'm'], b: ['n', 'o', 'p'], c: ['q', 'r', 's'] }
+  // The two directions of a vertical edge, then of a horizontal one.
+  const SHAPES = { 3: ['>', '<'], 4: ['^', 'v'], b: ['>', '<'], c: ['^', 'v'] }
+  // The types of mark in cycle order. `directions` is the one checkbox for dirA and dirB.
+  const CYCLE = ['x', 'dirA', 'dirB', 'dot']
+  const MARK_SETTING_OF = { x: 'x', dirA: 'directions', dirB: 'directions', dot: 'dot' }
+  const DEFAULT_MARK_SETTINGS = { x: true, directions: true, dot: true }
+  const DOT = '.'
   const COLOR_TOOL_WAIT_MS = 10000
   const COLOR_TOOL_POLL_MS = 100
   // How long a pen color button is held to open the pickers: SudokuPad's color tool uses the
@@ -88,16 +108,85 @@
   // The set is what gets saved, so a pen color or value that is not valid throws rather than
   // saving a set with a wrong entry.
   function editedColors (colors, pen, value) {
-    if (!PEN_COLORS.includes(pen)) throw new RangeError(`pen-color: ${pen} is not a pen color`)
-    if (typeof value !== 'string' || !HEX_COLOR.test(value)) throw new RangeError(`pen-color: ${value} is not a #rrggbb color`)
+    if (!PEN_COLORS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
+    if (typeof value !== 'string' || !HEX_COLOR.test(value)) throw new RangeError(`pen-tool-extras: ${value} is not a #rrggbb color`)
     return { ...colors, [pen]: value.toLowerCase() }
   }
 
-  // Saved data is untrusted: the saved thickness when it is a whole number from MIN_THICKNESS
-  // to MAX_THICKNESS, else DEFAULT_THICKNESS.
-  function normalizeThickness (data) {
-    const ok = Number.isInteger(data) && data >= MIN_THICKNESS && data <= MAX_THICKNESS
-    return ok ? data : DEFAULT_THICKNESS
+  // Saved data is untrusted: the saved thickness when it is a number on `range`'s steps from
+  // its min to its max, else the range's fallback.
+  function normalizeThickness (data, range) {
+    const ok = typeof data === 'number' && data >= range.min && data <= range.max &&
+      Number.isInteger((data - range.min) / range.step)
+    return ok ? data : range.fallback
+  }
+
+  // Saved data is untrusted: returns { x, directions, dot } with the default (ticked) for any
+  // entry that is not a boolean.
+  function normalizeMarkSettings (data) {
+    const saved = data && typeof data === 'object' && !Array.isArray(data) ? data : {}
+    const out = {}
+    Object.keys(DEFAULT_MARK_SETTINGS).forEach((key) => {
+      out[key] = typeof saved[key] === 'boolean' ? saved[key] : DEFAULT_MARK_SETTINGS[key]
+    })
+    return out
+  }
+
+  // The pen value of each type on the edge whose X value is `edge`.
+  function valueOfType (edge, type) {
+    return type === 'x' ? edge : ADDED[edge][CYCLE.indexOf(type) - 1]
+  }
+
+  // The type of mark after `current` ('empty' or a type), skipping unticked types. 'empty' is
+  // always allowed. A `current` whose type is unticked still moves on.
+  function nextType (current, settings) {
+    const order = [...CYCLE, 'empty']
+    const from = order.indexOf(current)
+    for (let step = 1; step <= order.length; step++) {
+      const type = order[(from + step) % order.length]
+      if (type === 'empty' || settings[MARK_SETTING_OF[type]]) return type
+    }
+    throw new Error('pen-tool-extras: the cycle has no empty step')
+  }
+
+  // What one click on the edge whose X value is `edge` does to a cell that holds the pen
+  // values `present`: { remove, add }, the values to toggle off and the one to toggle on (or
+  // null). Null when nothing is ticked, so the click does nothing.
+  function planClick (edge, present, settings) {
+    if (!Object.keys(DEFAULT_MARK_SETTINGS).some((key) => settings[key])) return null
+    const held = CYCLE.filter((type) => present.includes(valueOfType(edge, type)))
+    const next = nextType(held.length ? held[0] : 'empty', settings)
+    return {
+      remove: held.map((type) => valueOfType(edge, type)),
+      add: next === 'empty' ? null : valueOfType(edge, next)
+    }
+  }
+
+  // The X value of the edge a value this script adds belongs to, or null for any other value.
+  function edgeOf (value) {
+    return EDGE_X.find((edge) => ADDED[edge].includes(value)) || null
+  }
+
+  // The shape a value this script adds draws: '>', '<', '^', 'v' or '.', else null.
+  function shapeOf (value) {
+    const edge = edgeOf(value)
+    if (edge === null) return null
+    const index = ADDED[edge].indexOf(value)
+    return index === 2 ? DOT : SHAPES[edge][index]
+  }
+
+  // SVG path data, relative to the edge's midpoint, for a shape. `s` is the half-size in
+  // SudokuPad's units. An arrow is a chevron whose tip points the way it names; the dot is a
+  // zero-length segment, which a round cap draws even with `fill: none`.
+  function shapePath (shape, s) {
+    switch (shape) {
+      case '>': return ` m ${-0.6 * s},${-s} l${1.2 * s},${s} l${-1.2 * s},${s}`
+      case '<': return ` m ${0.6 * s},${-s} l${-1.2 * s},${s} l${1.2 * s},${s}`
+      case '^': return ` m ${-s},${0.6 * s} l${s},${-1.2 * s} l${s},${1.2 * s}`
+      case 'v': return ` m ${-s},${-0.6 * s} l${s},${1.2 * s} l${s},${-1.2 * s}`
+      case DOT: return ' l0 0'
+      default: throw new Error(`pen-tool-extras: no shape named ${shape}`)
+    }
   }
 
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
@@ -221,19 +310,29 @@
     return [':root:root {', ...lines, '}'].join('\n')
   }
 
-  // Sets the stroke width of the free lines, drawn already or not. `.cell-pen.pen-X` is what Edge
-  // Marks' own width rules use, so these selectors name only LINE_VALUES (never an edge X mark or
-  // an Edge Marks value), and `:root:root` outranks SudokuPad's `.cell-pen` whichever loads last.
-  function buildThicknessCss (thickness) {
-    if (normalizeThickness(thickness) !== thickness) throw new RangeError(`pen-color: ${thickness} is not a thickness from ${MIN_THICKNESS} to ${MAX_THICKNESS}`)
-    return `${LINE_VALUES.map((v) => `:root:root .cell-pen.pen-${v}`).join(', ')} { stroke-width: ${thickness}; }`
+  // Sets the stroke widths, for strokes drawn already and new ones: the free lines at
+  // `lineThickness`; SudokuPad's edge X marks and this script's arrows at `markThickness`; the
+  // dots at the same proportion of it as before. `:root:root` outranks SudokuPad's `.cell-pen`
+  // and `.pen-3` width rules whichever stylesheet loads last. The line selectors name only
+  // LINE_VALUES, so an edge mark is never also a line.
+  function buildThicknessCss (lineThickness, markThickness) {
+    if (normalizeThickness(lineThickness, LINE_THICKNESS) !== lineThickness) throw new RangeError(`pen-tool-extras: ${lineThickness} is not a line thickness from ${LINE_THICKNESS.min} to ${LINE_THICKNESS.max}`)
+    if (normalizeThickness(markThickness, MARK_THICKNESS) !== markThickness) throw new RangeError(`pen-tool-extras: ${markThickness} is not an edge mark thickness from ${MARK_THICKNESS.min} to ${MARK_THICKNESS.max}`)
+    const rule = (values, width) => `${values.map((v) => `:root:root .cell-pen.pen-${v}`).join(', ')} { stroke-width: ${width}; }`
+    const arrows = EDGE_X.flatMap((edge) => ADDED[edge].slice(0, 2))
+    const dots = EDGE_X.map((edge) => ADDED[edge][2])
+    return [
+      rule(LINE_VALUES, lineThickness),
+      rule([...EDGE_X, ...arrows], markThickness),
+      rule(dots, Number((markThickness * DOT_PER_MARK).toFixed(2)))
+    ].join('\n')
   }
 
   // Edit mode (the class is on the pen tool's panel): each color picker sits over its button
   // and the button's swatch is hidden under it. The sizes are those SudokuPad's color tool
   // uses for the same job.
-  const EDITING = 'pen-color-editing'
-  const PICKER = 'pen-color-picker'
+  const EDITING = 'pen-tool-extras-editing'
+  const PICKER = 'pen-tool-extras-picker'
   const EDIT_CSS = [
     `.${EDITING} button[data-value]::after { opacity: 0; }`,
     `.${EDITING} .${PICKER} { width: 0; height: 0; overflow: visible; }`,
@@ -245,7 +344,33 @@
   const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, normalizeThickness, buildThicknessCss, DEFAULT_COLORS, DEFAULT_THICKNESS, MIN_THICKNESS, MAX_THICKNESS, LINE_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS }
+    module.exports = {
+      VERSION,
+      normalizeColors,
+      savedColors,
+      editedColors,
+      parseColor,
+      isTransparent,
+      darkenColor,
+      penColorsFromPage,
+      buildCss,
+      normalizeThickness,
+      buildThicknessCss,
+      normalizeMarkSettings,
+      nextType,
+      planClick,
+      shapeOf,
+      shapePath,
+      DEFAULT_COLORS,
+      DEFAULT_MARK_SETTINGS,
+      LINE_THICKNESS,
+      MARK_THICKNESS,
+      LINE_VALUES,
+      LIGHTNESS_FACTOR,
+      GREY_CHROMA,
+      COLOR_TOOL_WAIT_MS,
+      HOLD_TO_EDIT_MS
+    }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -254,8 +379,11 @@
   // SudokuPad's own, which is what the page shows with no override.
   let active = { ...DEFAULT_COLORS }
   let activeMissing = []
-  // The line thickness in force; the dialog previews another without changing it.
-  let activeThickness = DEFAULT_THICKNESS
+  // The line and edge mark thicknesses in force; the dialog previews others without changing them.
+  let activeLineThickness = LINE_THICKNESS.fallback
+  let activeMarkThickness = MARK_THICKNESS.fallback
+  // The edge mark types ticked in the dialog, which the edge click cycles through.
+  let markSettings = normalizeMarkSettings(null)
 
   // SudokuPad's color tool, once it holds the palette and current page it read at startup;
   // null before then. `init` assigns the page and sets the `--cell-color-<key>` variables in
@@ -303,14 +431,97 @@
     }
   }
 
-  function applyStyle (colors, thickness) {
+  // The midpoint of an edge, as [row, col] in cell units, for the cell that stores it.
+  function edgeMidpoint (edge, row, col) {
+    switch (edge) {
+      case '3': return [row + 0.5, col + 1]
+      case '4': return [row + 1, col + 0.5]
+      case 'b': return [row + 0.5, col]
+      default: return [row, col + 0.5]
+    }
+  }
+
+  // Draws the values this script adds. SudokuPad's own `renderPen` has no case for them and
+  // gives the path no `d`; it copies every option onto the path, so passing `d` is enough.
+  function wrapRenderPen (proto, renderer) {
+    const original = proto.renderPen
+    const size = renderer.constructor.CellSize
+    proto.renderPen = function (opts = {}) {
+      const shape = shapeOf(opts.value)
+      if (shape === null) return original.call(this, opts)
+      const [r, c] = edgeMidpoint(edgeOf(opts.value), opts.row, opts.col)
+      const d = this.constructor.rcToPathData([[r, c]]) + shapePath(shape, size * 0.125)
+      return original.call(this, Object.assign({}, opts, { d }))
+    }
+  }
+
+  // Chooses the mark for an edge click. The original `clickCell` runs unchanged, so its
+  // edge-versus-cell hit test decides what was clicked; its `actSend` is held back to see
+  // the actions it queued. An edge click has a select action and one pen action with an
+  // edge X value; those are replaced by this script's cycle, and everything else is sent as
+  // it was. The actions still go out through `actSend`, one group per click, so one undo
+  // reverses one click.
+  function wrapClickCell (tool) {
+    const original = tool.clickCell
+    tool.clickCell = function () {
+      const hadOwn = Object.prototype.hasOwnProperty.call(this, 'actSend')
+      const ownSend = this.actSend
+      let queued = null
+      this.actSend = function () { queued = this._actList.slice() }
+      try {
+        original.apply(this, arguments)
+      } finally {
+        if (hadOwn) this.actSend = ownSend
+        else delete this.actSend
+      }
+      if (queued === null) return
+      const [select, pen] = queued
+      const isEdgeClick = queued.length === 2 && select.type === 'select' && pen.type === 'pen' && EDGE_X.includes(pen.arg)
+      let acts = queued
+      if (isEdgeClick) {
+        const cell = select.arg[0]
+        const plan = planClick(pen.arg, (cell.pen || []).map((valueColor) => valueColor[0]), markSettings)
+        if (plan === null) return
+        acts = [select, ...plan.remove.map((arg) => ({ type: 'pen', arg })), ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])]
+      }
+      this._actList.length = 0
+      acts.forEach((act) => this.actAdd(act))
+      this.actSend()
+    }
+  }
+
+  // Cells drawn before the wrap hold values the old `renderPen` drew as nothing.
+  function redrawAddedMarks (app) {
+    app.puzzle.cells.forEach((cell) => {
+      if ((cell.pen || []).some((valueColor) => shapeOf(valueColor[0]) !== null)) cell.renderContent(true)
+    })
+  }
+
+  function installEdgeMarks (app) {
+    const tool = typeof ToolPen !== 'undefined' ? ToolPen.tool : undefined
+    const renderer = app.svgRenderer
+    const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
+    const found = tool && ['clickCell', 'actSend', 'actAdd'].every((name) => typeof tool[name] === 'function') &&
+      Array.isArray(tool._actList) &&
+      proto && typeof proto.renderPen === 'function' &&
+      typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
+    if (!found) {
+      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the pen tool is left unchanged')
+      return
+    }
+    wrapRenderPen(proto, renderer)
+    wrapClickCell(tool)
+    redrawAddedMarks(app)
+  }
+
+  function applyStyle (colors, lineThickness, markThickness) {
     let style = document.getElementById(STYLE_ID)
     if (!style) {
       style = document.createElement('style')
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = [buildCss(colors), buildThicknessCss(thickness), EDIT_CSS].join('\n')
+    style.textContent = [buildCss(colors), buildThicknessCss(lineThickness, markThickness), EDIT_CSS].join('\n')
   }
 
   function missingNote (missing) {
@@ -319,18 +530,38 @@
     return `<div style="margin:6px 0;max-width:20em">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
-  function renderEditor (colors, missing, thickness) {
+  function sliderRow (name, label, range, value) {
+    const id = `pen-tool-extras-${name}`
+    return '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
+      `<label for="${id}">${label}</label>` +
+      `<input type="range" id="${id}" data-slider="${name}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}">` +
+      `<output for="${id}">${value}</output></div>`
+  }
+
+  function renderEditor (state) {
     const rows = PEN_COLORS.map((n) =>
       '<div style="margin:3px 0;display:flex;align-items:center;gap:8px">' +
       `<b style="width:1.2em;text-align:right">${n}</b>` +
-      `<input type="color" data-pen="${n}" value="${colors[n]}"></div>`
+      `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
     ).join('')
-    const slider = '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
-      '<label for="pen-color-thickness">Line thickness</label>' +
-      `<input type="range" id="pen-color-thickness" min="${MIN_THICKNESS}" max="${MAX_THICKNESS}" step="1" value="${thickness}">` +
-      `<output for="pen-color-thickness">${thickness}</output></div>`
-    return rows + slider + missingNote(missing) +
+    const box = (key, label) =>
+      '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
+      `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}"${state.marks[key] ? ' checked' : ''}>` +
+      `<label for="pen-tool-extras-mark-${key}" style="width:auto;text-align:left">${label}</label></div>`
+    return '<div style="font-weight:600">Pen colors</div>' + rows +
+      missingNote(state.missing) +
+      sliderRow('line', 'Line thickness', LINE_THICKNESS, state.lineThickness) +
+      '<div style="font-weight:600;margin-top:10px">Edge marks a click cycles through</div>' +
+      box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Dot') +
+      sliderRow('mark', 'Edge mark thickness', MARK_THICKNESS, state.markThickness) +
       '<button type="button" data-act="defaults" style="margin-top:6px">Restore defaults</button>'
+  }
+
+  // Saves a thickness the dialog set: Restore defaults (and no slider move since) clears the
+  // saved value; a value other than the one in force is saved; the same value saves nothing.
+  function commitThickness (key, value, wasReset, inForce) {
+    if (wasReset) Framework.removeData(key)
+    else if (value !== inForce) Framework.setData(key, value)
   }
 
   function openDialog () {
@@ -341,16 +572,19 @@
     // The pen colors picked by hand since the dialog opened or Restore defaults. Save with none
     // changes nothing, so a derived set is never saved by accident.
     const edited = new Set()
-    // The thickness shown in the slider, and whether Restore defaults set it and no slider move
-    // since: Save then clears the saved thickness.
-    let thickness = activeThickness
-    let thicknessReset = false
+    // The thicknesses shown by the sliders, and whether Restore defaults set each one and no
+    // slider move since.
+    let lineThickness = activeLineThickness
+    let markThickness = activeMarkThickness
+    let lineReset = false
+    let markReset = false
+    let marks = markSettings
     let committed = false
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Pen color</b> <small style="opacity:.6">v${VERSION}</small>` },
-        { tag: 'text', innerHTML: '<div id="pen-color-editor"></div>' },
+        { tag: 'text', innerHTML: `<b>Pen tool extras</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: '<div id="pen-tool-extras-editor"></div>' },
         {
           tag: 'options',
           options: [
@@ -360,13 +594,15 @@
               handler: () => {
                 committed = true
                 if (reset || edited.size) {
-                  if (reset) Framework.removeData(DATA_KEY)
-                  else Framework.setData(DATA_KEY, colors)
+                  if (reset) Framework.removeData(COLORS_KEY)
+                  else Framework.setData(COLORS_KEY, colors)
                   adoptColors(colors, edited.size ? [] : missing)
                 }
-                if (thicknessReset) Framework.removeData(THICKNESS_KEY)
-                else if (thickness !== activeThickness) Framework.setData(THICKNESS_KEY, thickness)
-                adoptThickness(thickness)
+                commitThickness(LINE_THICKNESS_KEY, lineThickness, lineReset, activeLineThickness)
+                commitThickness(MARK_THICKNESS_KEY, markThickness, markReset, activeMarkThickness)
+                adoptThickness(lineThickness, markThickness)
+                if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
+                markSettings = marks
                 Framework.closeDialog()
               }
             },
@@ -375,15 +611,17 @@
         }
       ]
     })
-    const box = document.getElementById('pen-color-editor')
-    if (!box) throw new Error('pen-color: the dialog has no editor element')
-    const draw = () => { box.innerHTML = renderEditor(colors, missing.filter((n) => !edited.has(String(n))), thickness) }
+    const box = document.getElementById('pen-tool-extras-editor')
+    if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
+    const draw = () => {
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), lineThickness, markThickness, marks })
+    }
     draw()
-    // Any way of closing the dialog but Save ends the preview: the thickness in force comes back.
+    // Any way of closing the dialog but Save ends the thickness preview: the ones in force come back.
     const closeWatch = new window.MutationObserver(() => {
       if (box.isConnected) return
       closeWatch.disconnect()
-      if (!committed) applyStyle(active, activeThickness)
+      if (!committed) applyStyle(active, activeLineThickness, activeMarkThickness)
     })
     closeWatch.observe(document.body, { childList: true, subtree: true })
     box.addEventListener('click', (event) => {
@@ -398,22 +636,35 @@
       missing = derived.missing
       edited.clear()
       reset = true
-      thickness = DEFAULT_THICKNESS
-      thicknessReset = true
-      applyStyle(active, thickness)
+      lineThickness = LINE_THICKNESS.fallback
+      markThickness = MARK_THICKNESS.fallback
+      lineReset = true
+      markReset = true
+      applyStyle(active, lineThickness, markThickness)
       draw()
     })
-    // `input` fires as the slider moves: the lines change live, and Cancel undoes it.
+    // `input` fires as a slider moves: the strokes change live, and Cancel undoes it.
     box.addEventListener('input', (event) => {
       const el = event.target.closest('input[type="range"]')
       if (!el) return
-      thickness = Number(el.value)
-      thicknessReset = false
-      applyStyle(active, thickness)
-      el.nextElementSibling.textContent = thickness
+      if (el.dataset.slider === 'line') {
+        lineThickness = Number(el.value)
+        lineReset = false
+      } else {
+        markThickness = Number(el.value)
+        markReset = false
+      }
+      applyStyle(active, lineThickness, markThickness)
+      el.nextElementSibling.textContent = el.value
     })
-    // `change` fires when the picker closes; the swatch the user sees is already the new color.
+    // `change` fires when a color picker closes (the swatch the user sees is already the new
+    // color) and when a mark box is ticked.
     box.addEventListener('change', (event) => {
+      const mark = event.target.closest('input[type="checkbox"]')
+      if (mark) {
+        marks = { ...marks, [mark.dataset.mark]: mark.checked }
+        return
+      }
       const el = event.target.closest('input[type="color"]')
       if (!el) return
       colors = editedColors(colors, el.dataset.pen, el.value)
@@ -428,21 +679,22 @@
   function adoptColors (colors, missing) {
     active = colors
     activeMissing = missing
-    applyStyle(colors, activeThickness)
+    applyStyle(colors, activeLineThickness, activeMarkThickness)
     document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
   }
 
-  // Makes `thickness` the line thickness in force.
-  function adoptThickness (thickness) {
-    activeThickness = thickness
-    applyStyle(active, thickness)
+  // Makes the two thicknesses the ones in force.
+  function adoptThickness (lineThickness, markThickness) {
+    activeLineThickness = lineThickness
+    activeMarkThickness = markThickness
+    applyStyle(active, lineThickness, markThickness)
   }
 
   // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
   // from then on the set no longer follows the cell color page.
   function savePenColor (pen, value) {
     const colors = editedColors(active, pen, value)
-    Framework.setData(DATA_KEY, colors)
+    Framework.setData(COLORS_KEY, colors)
     adoptColors(colors, [])
   }
 
@@ -464,7 +716,7 @@
     // Every button is found before anything changes, so a missing one leaves no half edit mode.
     const buttons = PEN_COLORS.map((n) => {
       const button = panel.querySelector(`button[data-value="${n}"]`)
-      if (!button) throw new Error(`pen-color: the pen tool has no button for pen color ${n}`)
+      if (!button) throw new Error(`pen-tool-extras: the pen tool has no button for pen color ${n}`)
       return button
     })
     panel.classList.add(EDITING)
@@ -515,18 +767,23 @@
 
   Framework.getApp().then(async () => {
     installHoldToEdit()
-    adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
+    markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
+    adoptThickness(
+      normalizeThickness(Framework.getData(LINE_THICKNESS_KEY), LINE_THICKNESS),
+      normalizeThickness(Framework.getData(MARK_THICKNESS_KEY), MARK_THICKNESS)
+    )
     Framework.addSetting({
       tag: 'button',
-      name: 'pencolor',
+      name: 'pentoolextras',
       group: SETTINGS_GROUP,
-      content: 'Pen color',
+      content: 'Pen tool extras',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)
       }
     })
-    const saved = savedColors(Framework.getData(DATA_KEY))
+    installEdgeMarks(Framework.app)
+    const saved = savedColors(Framework.getData(COLORS_KEY))
     if (saved) {
       adoptColors(saved, [])
       return
@@ -535,7 +792,7 @@
     // the color tool never becomes ready, SudokuPad's own pen colors stay in force.
     const tool = await waitForColorTool()
     // A save made in the dialog while waiting outranks the derived colors.
-    if (!tool || savedColors(Framework.getData(DATA_KEY))) return
+    if (!tool || savedColors(Framework.getData(COLORS_KEY))) return
     const derived = deriveFromTool(tool)
     adoptColors(derived.colors, derived.missing)
   })

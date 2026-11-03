@@ -1,4 +1,4 @@
-// Live check of pen-color.user.js on sudokupad.app, in headless Chromium.
+// Live check of pen-tool-extras.user.js's pen colors and thickness on sudokupad.app, in headless Chromium.
 // Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
@@ -16,12 +16,13 @@ import { chromium } from 'playwright'
 import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
-const script = readFileSync(new URL('../pen-color.user.js', import.meta.url), 'utf8')
+const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
-const { COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-color.user.js')
+const { COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 
 const DATA_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
+const MARK_THICKNESS_KEY = 'EdgeMarks_thickness'
 // What the pen colors are with nothing saved: SudokuPad's cell color pages, darkened. Typed out
 // here from the script's own darkening of SudokuPad's default palette (tool-color.js) as the
 // expected result; the three entries are the default pages 0-2, pen colors 1-9 in order.
@@ -62,7 +63,7 @@ async function settle (read, expected, timeoutMs = SETTLE_MS) {
 }
 
 const START = /Start Puzzle|Continue|Resume/i
-const STYLE = '#pen-color-style'
+const STYLE = '#pen-tool-extras-style'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -73,7 +74,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     let context, p, errors
 
     const read = (fn, arg) => p.evaluate(fn, arg)
-    const editor = () => p.locator('#pen-color-editor')
+    const editor = () => p.locator('#pen-tool-extras-editor')
     const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
     const startButton = () => p.getByRole('button', { name: START }).first()
     const saved = () => read((k) => Framework.getData(k), DATA_KEY)
@@ -142,7 +143,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
     const openEditor = async () => {
       await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
       await editor().waitFor({ state: 'visible' })
     }
     const closeWith = async (text) => {
@@ -191,7 +192,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await cellVars(), CELL_VARS)
     })
 
-    it('the dialog has a Pen color entry in settings with a picker for each of the nine pen colors, set to the derived colors', async () => {
+    it('the dialog has a Pen tool extras entry in settings with a picker for each of the nine pen colors, set to the derived colors', async () => {
       await openEditor()
       assert.deepEqual(await pickerValues(), PAGE_PENS[0])
       await closeWith('Cancel')
@@ -411,11 +412,12 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     describe('line thickness', { concurrency: false }, () => {
-      const slider = () => editor().locator('input[type=range]')
+      const slider = () => editor().locator('input[data-slider=line]')
       const setSlider = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
       const savedThickness = () => read((k) => Framework.getData(k), THICKNESS_KEY)
-      // The computed stroke width of every drawn line of pen color `n`, as numbers.
-      const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
+      // The computed stroke width of every drawn line of pen color `n`, as numbers. A drag also
+      // draws a cell circle (pen value 5) where it ends, which is not a line and keeps its width.
+      const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}:not(.pen-5):not(.pen-6)`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
       // Adds a stroke element of pen value `value` to the drawing, as SudokuPad draws it, and returns its computed width.
       const probeWidth = (value) => read((value) => {
         const ns = 'http://www.w3.org/2000/svg'
@@ -429,11 +431,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
       before(async () => {
         await read((k) => Framework.removeData(k), THICKNESS_KEY)
+        await read((k) => Framework.removeData(k), MARK_THICKNESS_KEY)
         await read((k) => Framework.removeData(k), DATA_KEY)
         await reload()
         await draw(1, 7)
       })
-      after(async () => { await read((k) => Framework.removeData(k), THICKNESS_KEY) })
+      after(async () => {
+        await read((k) => Framework.removeData(k), THICKNESS_KEY)
+        await read((k) => Framework.removeData(k), MARK_THICKNESS_KEY)
+      })
 
       it('with nothing saved a line is SudokuPad\'s own 5 wide, and the dialog\'s slider runs 1 to 12 at 5 with its value shown', async () => {
         assert.deepEqual(await widths(1)(), [5])
@@ -478,31 +484,70 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.deepEqual(await settle(widths(3), [9]), [9])
       })
 
-      it('SudokuPad\'s edge X marks and a mark with its own width rule keep their widths, whichever stylesheet loads last', async () => {
-        // The tool's own stylesheet is added again after the script's, and a rule shaped like
-        // Edge Marks' (`.cell-pen.pen-X`) sets an arrow's width.
+      it('with nothing saved the edge X marks and arrows are 2.5 wide and the dots 7, as before, whichever stylesheet loads last', async () => {
+        // The tool's own stylesheet is added again after the script's.
         await read(() => {
           const css = document.createElement('style')
-          css.textContent = '.cell-pen { stroke-width: 5 } .pen-3, .pen-4, .pen-b, .pen-c { stroke-width: 2.5 } .cell-pen.pen-h { stroke-width: 3.5 }'
+          css.textContent = '.cell-pen { stroke-width: 5 } .pen-3, .pen-4, .pen-b, .pen-c { stroke-width: 2.5 }'
           document.head.appendChild(css)
         })
         assert.equal(await probeWidth('1'), 9)
-        for (const v of ['3', '4', 'b', 'c']) assert.equal(await probeWidth(v), 2.5, v)
-        assert.equal(await probeWidth('h'), 3.5)
+        for (const v of ['3', '4', 'b', 'c', 'h', 'i', 'k', 'l', 'n', 'o', 'q', 'r']) assert.equal(await probeWidth(v), 2.5, v)
+        for (const v of ['j', 'm', 'p', 's']) assert.equal(await probeWidth(v), 7, v)
+      })
+
+      it('the edge mark slider runs 1 to 6 in halves at 2.5; moving it changes X, arrows and dots live, never the lines, and Cancel undoes it', async () => {
+        await openEditor()
+        const markSlider = editor().locator('input[data-slider=mark]')
+        assert.deepEqual(await markSlider.evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '6', '0.5', '2.5'])
+        await markSlider.evaluate((el) => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+        assert.equal(await settle(() => probeWidth('3'), 4), 4)
+        assert.equal(await probeWidth('h'), 4)
+        assert.equal(await probeWidth('j'), 11.2)
+        assert.equal(await probeWidth('1'), 9)
+        assert.match(await editor().innerText(), /Edge mark thickness\s*4/)
+        await closeWith('Cancel')
+        assert.equal(await settle(() => probeWidth('3'), 2.5), 2.5)
+        assert.equal(await probeWidth('j'), 7)
+        assert.equal(await read((k) => Framework.getData(k), MARK_THICKNESS_KEY), null)
+      })
+
+      it('Save keeps the edge mark thickness under its own key without saving the colors, and it survives a reload', async () => {
+        await openEditor()
+        await editor().locator('input[data-slider=mark]').evaluate((el) => { el.value = '3.5'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+        await closeWith('Save')
+        assert.equal(await read((k) => Framework.getData(k), MARK_THICKNESS_KEY), 3.5)
+        assert.equal(await saved(), null)
+        await reload()
+        assert.equal(await settle(() => probeWidth('4'), 3.5), 3.5)
+        assert.equal(await probeWidth('1'), 9)
+      })
+
+      it('Restore defaults sets both sliders back, and Save clears both saved thicknesses', async () => {
+        await openEditor()
+        await restoreDefaults()
+        assert.deepEqual(await editor().locator('input[type=range]').evaluateAll((es) => es.map((e) => e.value)), ['5', '2.5'])
+        await closeWith('Save')
+        assert.equal(await savedThickness(), null)
+        assert.equal(await read((k) => Framework.getData(k), MARK_THICKNESS_KEY), null)
+        assert.equal(await probeWidth('1'), 5)
+        assert.equal(await probeWidth('3'), 2.5)
+      })
+
+      it('Restore defaults sets both sliders back, and Save clears both saved thicknesses', async () => {
+        await openEditor()
+        await restoreDefaults()
+        assert.deepEqual(await editor().locator('input[type=range]').evaluateAll((es) => es.map((e) => e.value)), ['5', '2.5'])
+        await closeWith('Save')
+        assert.equal(await savedThickness(), null)
+        assert.equal(await read((k) => Framework.getData(k), MARK_THICKNESS_KEY), null)
+        assert.equal(await probeWidth('1'), 5)
+        assert.equal(await probeWidth('3'), 2.5)
       })
 
       it('holding a pen button to edit colors still saves the colors, and leaves the thickness alone', async () => {
         await read(() => Framework.setSetting('toolpen', true))
         assert.equal(await savedThickness(), 9)
-      })
-
-      it('Restore defaults sets the slider to 5, and Save then clears the saved thickness without touching the lines\' colors', async () => {
-        await openEditor()
-        await restoreDefaults()
-        assert.equal(await slider().inputValue(), '5')
-        await closeWith('Save')
-        assert.equal(await savedThickness(), null)
-        assert.deepEqual(await settle(widths(1), [5]), [5])
       })
 
       it('Restore defaults then Cancel keeps a saved thickness', async () => {
@@ -529,7 +574,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     describe('holding a pen color button', { concurrency: false }, () => {
-      const pickers = () => p.locator('.tool-pen .pen-color-picker input')
+      const pickers = () => p.locator('.tool-pen .pen-tool-extras-picker input')
       const pickerCount = () => pickers().count()
       const penPickerValues = () => pickers().evaluateAll((es) => es.map((e) => e.value))
       const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
@@ -614,7 +659,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         // opens the menu: it is suppressed there, and no longer once a later press starts elsewhere.
         assert.equal(await settle(pickerCount, 9, HOLD_TO_EDIT_MS + 5000), 9)
         await p.mouse.up({ button: 'right' })
-        assert.equal(await menuAllowed('.tool-pen .pen-color-picker input'), false)
+        assert.equal(await menuAllowed('.tool-pen .pen-tool-extras-picker input'), false)
         await leaveEditMode()
         await p.mouse.click(1, 1)
         assert.equal(await menuAllowed(button4), true)
@@ -645,13 +690,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const depth = await undoDepth()
         // Only an `input` event, no `change`: the color must apply while the picker is still open.
         await read((hex) => {
-          const el = document.querySelector('.tool-pen .pen-color-picker input[data-pen="4"]')
+          const el = document.querySelector('.tool-pen .pen-tool-extras-picker input[data-pen="4"]')
           el.value = hex
           el.dispatchEvent(new window.Event('input', { bubbles: true }))
         }, FOUR.hex)
         assert.equal(await settle(() => swatch(4), FOUR.rgb), FOUR.rgb)
         assert.deepEqual(await settle(allStrokes(4), [FOUR.rgb]), [FOUR.rgb])
         assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 4: FOUR.hex })
+        // The edit saves the colors only: no thickness is written, and the lines keep SudokuPad's 5.
+        assert.equal(await read((k) => Framework.getData(k), THICKNESS_KEY), null)
+        assert.equal(await read((k) => Framework.getData(k), MARK_THICKNESS_KEY), null)
+        assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pencolor-4:not(.pen-5)')).strokeWidth), '5px')
         assert.equal(await undoDepth(), depth)
         await leaveEditMode()
         await openEditor()
@@ -683,12 +732,12 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await press(4, 'left')
         assert.equal(await settle(pickerCount, 0, HOLD_TO_EDIT_MS + 5000), 0)
         await p.mouse.up()
-        assert.equal(await p.locator('.tool-pen.pen-color-editing').count(), 0)
+        assert.equal(await p.locator('.tool-pen.pen-tool-extras-editing').count(), 0)
         await holdToOpen(4)
         await p.click('#control-colour')
         await selectPen()
         assert.equal(await pickerCount(), 0)
-        assert.equal(await p.locator('.tool-pen.pen-color-editing').count(), 0)
+        assert.equal(await p.locator('.tool-pen.pen-tool-extras-editing').count(), 0)
       })
 
       it('edit mode, screenshot', async () => {
@@ -704,11 +753,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
       const group = await openSettings(p)
-      const entry = group.locator('button').filter({ hasText: 'Pen color' })
-      assert.equal((await entry.textContent()).trim(), 'Pen color')
+      const entry = group.locator('button').filter({ hasText: 'Pen tool extras' })
+      assert.equal((await entry.textContent()).trim(), 'Pen tool extras')
       await entry.click()
       await editor().waitFor({ state: 'visible' })
-      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen color')
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen tool extras')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
       await closeWith('Cancel')
     })
@@ -738,9 +787,9 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await sleep(COLOR_TOOL_WAIT_MS + 2000)
       assert.equal(await p.locator(STYLE).count(), 0)
       await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
-      await p.locator('#pen-color-editor').waitFor({ state: 'visible' })
-      const values = await p.locator('#pen-color-editor input[type=color]').evaluateAll((es) => es.map((e) => e.value))
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
+      await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+      const values = await p.locator('#pen-tool-extras-editor input[type=color]').evaluateAll((es) => es.map((e) => e.value))
       assert.deepEqual(values, OWN_PEN_HEX)
       assert.deepEqual(errors, [])
     } finally {
@@ -760,11 +809,11 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await p.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
       await p.addScriptTag({ content: script })
       await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
-      await p.locator('#pen-color-editor').waitFor({ state: 'visible' })
-      await p.locator('#pen-color-editor input[data-pen="4"]').fill(FOUR.hex)
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
+      await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+      await p.locator('#pen-tool-extras-editor input[data-pen="4"]').fill(FOUR.hex)
       await p.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).first().click()
-      await p.locator('#pen-color-editor').waitFor({ state: 'detached' })
+      await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
       await p.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
       // The script polls every 100ms, so by 1.5s it has seen the tool and decided; the check is
       // that nothing then replaced the saved colors.
