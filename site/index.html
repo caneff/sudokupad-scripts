@@ -5,112 +5,61 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SudokuPad scripts</title>
 <style>
-  :root {
-    color-scheme: light dark;
-    --bg: #f4f1ea; --card: #fffdf8; --ink: #1d2433; --muted: #5b6475; --line: #cfc8b8; --grid: #1d2433;
-    --accent: #1f5fd0; --accent-ink: #fff; --accent-hover: #1749a3; --hero: #e9e3d3; --pic: 150px; --rule: 3px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #12151c; --card: #1b202b; --ink: #e8eaf0; --muted: #a2abbd; --line: #343c4d; --grid: #e8eaf0;
-      --accent: #6aa4ff; --accent-ink: #0b1220; --accent-hover: #93bcff; --hero: #181d28;
-    }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); }
-  a { color: var(--accent); }
-  .wrap { max-width: 64rem; margin: 0 auto; padding: 0 1.25rem; }
-  header { background: var(--hero); border-bottom: 3px solid var(--grid); }
-  header .wrap { display: flex; align-items: center; gap: 2rem; padding-top: 2.25rem; padding-bottom: 2.25rem; }
-  .logo { flex: none; width: 96px; height: 96px; border: var(--rule) solid var(--grid); background:
-    linear-gradient(var(--grid), var(--grid)) calc(100% / 3 - var(--rule) / 2) 0 / var(--rule) 100% no-repeat,
-    linear-gradient(var(--grid), var(--grid)) calc(200% / 3 - var(--rule) / 2) 0 / var(--rule) 100% no-repeat,
-    linear-gradient(var(--grid), var(--grid)) 0 calc(100% / 3 - var(--rule) / 2) / 100% var(--rule) no-repeat,
-    linear-gradient(var(--grid), var(--grid)) 0 calc(200% / 3 - var(--rule) / 2) / 100% var(--rule) no-repeat,
-    repeating-linear-gradient(90deg, transparent 0 calc(100% / 9 - 1px), var(--line) calc(100% / 9 - 1px) calc(100% / 9)),
-    repeating-linear-gradient(0deg, transparent 0 calc(100% / 9 - 1px), var(--line) calc(100% / 9 - 1px) calc(100% / 9)); }
-  h1 { margin: 0 0 .4rem; font: 800 clamp(1.9rem, 5vw, 2.75rem)/1.1 Georgia, "Times New Roman", serif; letter-spacing: -.01em; }
-  header p { margin: 0; max-width: 40rem; color: var(--muted); font-size: 1.05rem; }
-  main.wrap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; padding-top: 2rem; padding-bottom: 2rem; }
-  article { display: flex; gap: 1rem; background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 6px; padding: 1rem; min-width: 0; }
-  .pic { flex: none; width: var(--pic); }
-  .pic img, .swatch { width: var(--pic); height: var(--pic); border: 2px solid var(--grid); border-radius: 3px; }
-  .pic img { display: block; object-fit: contain; background: var(--line); }
-  .swatch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; background: var(--grid); }
-  .text { display: flex; flex-direction: column; min-width: 0; }
-  h2 { margin: 0 0 .35rem; font: 700 1.3rem/1.2 Georgia, "Times New Roman", serif; }
-  .text p { margin: 0 0 .8rem; font-size: .95rem; color: var(--muted); }
-  .text p:last-child { margin: auto 0 0; }
-  .install { display: inline-block; padding: .55rem 1.1rem; background: var(--accent); color: var(--accent-ink); border-radius: 5px; font-weight: 700; text-decoration: none; }
-  .install:hover, .install:focus-visible { background: var(--accent-hover); }
-  footer.wrap { border-top: 1px solid var(--line); padding-top: 1rem; padding-bottom: 2rem; color: var(--muted); font-size: .9rem; }
-  footer p { margin: 0; }
-  @media (max-width: 52rem) {
-    main.wrap { grid-template-columns: minmax(0, 1fr); }
-  }
-  @media (max-width: 34rem) {
-    header .wrap { flex-direction: column; align-items: flex-start; gap: 1rem; }
-    .logo { width: 64px; height: 64px; }
-    article { flex-direction: column; }
-    .pic, .pic img, .swatch { width: 100%; max-width: 220px; }
-    .pic img, .swatch { height: auto; aspect-ratio: 1; }
+  :root { color-scheme: light dark; }
+  body { max-width: 44rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
+  section { display: flex; gap: 1.25rem; align-items: flex-start; margin: 2rem 0; }
+  section img { flex: none; max-width: 100%; height: auto; }
+  h1, h2 { margin: 0 0 .5rem; }
+  h2 { font-size: 1.2rem; }
+  p { margin: 0 0 .5rem; }
+  @media (max-width: 36rem) {
+    section { flex-direction: column; gap: .75rem; }
   }
 </style>
 </head>
 <body>
-  <header>
-    <div class="wrap">
-      <div class="logo" aria-hidden="true"></div>
-      <div>
-        <h1>SudokuPad scripts</h1>
-        <p>Tampermonkey userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, then open a script's install link; Tampermonkey offers to install it.</p>
-      </div>
+  <h1>SudokuPad scripts</h1>
+  <p>A few small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's install link, and Tampermonkey asks if you want it.</p>
+  <section>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-grid.png" alt="A sudoku grid with cells colored by digit" width="220" height="220">
+    <div>
+      <h2>Color by Digit</h2>
+      <p>A button that colors cells by their digit, in groups you set in a dialog. Empty cells whose centre marks all fall in one group get colored too.</p>
+      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
     </div>
-  </header>
-  <main class="wrap">
-    <article>
-      <div class="pic"><div class="swatch" role="img" aria-label="A grid of colored cells"><i style="background:#e8453c"></i><i style="background:#f29b2f"></i><i style="background:#f5d63d"></i><i style="background:#4fb06d"></i><i style="background:#3a9bd9"></i><i style="background:#7b5cc4"></i><i style="background:#d9589c"></i><i style="background:#8a8f98"></i><i style="background:#2b2f36"></i></div></div>
-      <div class="text">
-        <h2>Color by Digit</h2>
-        <p>Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using groups of palette colors you set in a settings dialog.</p>
-        <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
-      </div>
-    </article>
-    <article>
-      <div class="pic"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/digit-color-centred-circles.png" alt="Digit Color in SudokuPad" loading="lazy" width="150" height="150"></div>
-      <div class="text">
-        <h2>Digit Color</h2>
-        <p>Colors the digits themselves, one color per digit, in entered digits, corner marks and centre marks. A conflicting mark gets a small red circle behind it.</p>
-        <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/digit-color.user.js">Install Digit Color</a></p>
-      </div>
-    </article>
-    <article>
-      <div class="pic"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-color-match.png" alt="Pen Color in SudokuPad" loading="lazy" width="150" height="150"></div>
-      <div class="text">
-        <h2>Pen Color</h2>
-        <p>Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color and the darkest grey black, until you save your own in a settings dialog or by holding a pen color button. Turn the pen tool on in settings first.</p>
-        <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-color.user.js">Install Pen Color</a></p>
-      </div>
-    </article>
-    <article>
-      <div class="pic"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/edge-marks-all-colors.png" alt="Edge Marks in SudokuPad" loading="lazy" width="150" height="150"></div>
-      <div class="text">
-        <h2>Edge Marks</h2>
-        <p>Adds direction arrows and a dot to the pen tool's marks on a cell edge. Relies on SudokuPad internals, so an update can break it. Turn the pen tool on in settings first.</p>
-        <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/edge-marks.user.js">Install Edge Marks</a></p>
-      </div>
-    </article>
-    <article>
-      <div class="pic"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/dark-page.png" alt="Dark Page in SudokuPad" loading="lazy" width="150" height="150"></div>
-      <div class="text">
-        <h2>Dark Page</h2>
-        <p>Makes the page black around the puzzle, or another color you pick in a settings dialog. A rectangle bounding everything the puzzle draws, and the cells you write in, stays as SudokuPad renders it. Not SudokuPad's dark mode.</p>
-        <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install Dark Page</a></p>
-      </div>
-    </article>
-  </main>
-  <footer class="wrap">
-    <p><a href="https://github.com/caneff/sudokupad-scripts#readme">README</a> · <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
-  </footer>
+  </section>
+  <section>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/digit-color-centred-circles.png" alt="Sudoku marks in different colors, some with a red circle" width="200" height="200">
+    <div>
+      <h2>Digit Color</h2>
+      <p>Gives each digit its own color, in entered digits and in corner and centre marks. A mark that conflicts gets a small red circle behind it.</p>
+      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/digit-color.user.js">Install Digit Color</a></p>
+    </div>
+  </section>
+  <section>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-color-match.png" alt="Pen strokes beside cells in matching colors" width="260" height="260">
+    <div>
+      <h2>Pen Color</h2>
+      <p>Makes the pen's nine colors match your cell colors, a little darker. Hold a pen color button to change it. Turn the pen tool on in SudokuPad's settings first.</p>
+      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-color.user.js">Install Pen Color</a></p>
+    </div>
+  </section>
+  <section>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/edge-marks-all-colors.png" alt="Arrows, dots and crosses on cell edges" width="180" height="180">
+    <div>
+      <h2>Edge Marks</h2>
+      <p>Click a cell edge with the pen to cycle an X, two arrows and a dot. It leans on SudokuPad internals, so an update can break it. Turn the pen tool on in settings first.</p>
+      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/edge-marks.user.js">Install Edge Marks</a></p>
+    </div>
+  </section>
+  <section>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/dark-page.png" alt="A puzzle on a black page" width="360" height="270">
+    <div>
+      <h2>Dark Page</h2>
+      <p>Turns the page black around the puzzle, or any color you pick. The puzzle and the cells you write in stay as SudokuPad draws them. It is not SudokuPad's dark mode.</p>
+      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install Dark Page</a></p>
+    </div>
+  </section>
+  <p><a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
 </body>
 </html>
