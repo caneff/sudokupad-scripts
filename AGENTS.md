@@ -2,7 +2,7 @@
 
 Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
 script is one `*.user.js` file with no build step and no ties to any other repo.
-`docs/research/` holds what was read from SudokuPad's source; `GLOSSARY.md` holds
+`site/` is the static homepage Netlify serves (`netlify.toml`); `docs/research/` holds what was read from SudokuPad's source; `GLOSSARY.md` holds
 the vocabulary.
 
 ## Agent skills
@@ -25,7 +25,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 
 ## End-to-end seam
 
-- **Seam**: `npm test` (`node --test`), against each script's pure functions
+- **Seam**: `npm test` (`node --test`), against each script's pure functions and
+  against `site/index.html` (`site.test.js`: every script has an install link)
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run
   test:live` (every `live/*.live.mjs`) covers them on sudokupad.app in headless Chromium, with the script
   injected at three times (at `DOMContentLoaded`, after load before Start Puzzle,
