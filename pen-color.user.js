@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.0
-// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors, saved in a settings dialog or by holding a pen color button, replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
+// @version      0.5.0
+// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors, saved in a settings dialog or by holding a pen color button, replace them, and the dialog sets how thick the pen's lines are. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,10 +18,11 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.4.0'
+  const VERSION = '0.5.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'PenColor_colors'
+  const THICKNESS_KEY = 'PenColor_thickness'
   const STYLE_ID = 'pen-color-style'
   const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad's own pen colors (tool-pen.css), as #rrggbb. Pen color 9 is written there as
@@ -46,6 +47,15 @@
   // a tinted dark grey such as rgb(10, 20, 30) is about 0.024; the least saturated hued colors
   // of the default pages, darkened, are above 0.08.
   const GREY_CHROMA = 0.04
+  // SudokuPad's own `.cell-pen` stroke width, and the range the dialog's slider offers.
+  const DEFAULT_THICKNESS = 5
+  const MIN_THICKNESS = 1
+  const MAX_THICKNESS = 12
+  // The pen values (the `pen-<value>` class of a stroke) drawn as free lines, from
+  // `docs/research/sudokupad-pen-edge-marks.md`. Left out on purpose: 3, 4, b and c (the edge X
+  // marks, 2.5 wide in SudokuPad), 5 and 6 (the cell circle and cross), and every value Edge
+  // Marks draws, which sets its own width.
+  const LINE_VALUES = ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
   const COLOR_TOOL_WAIT_MS = 10000
   const COLOR_TOOL_POLL_MS = 100
   // How long a pen color button is held to open the pickers: SudokuPad's color tool uses the
@@ -81,6 +91,13 @@
     if (!PEN_COLORS.includes(pen)) throw new RangeError(`pen-color: ${pen} is not a pen color`)
     if (typeof value !== 'string' || !HEX_COLOR.test(value)) throw new RangeError(`pen-color: ${value} is not a #rrggbb color`)
     return { ...colors, [pen]: value.toLowerCase() }
+  }
+
+  // Saved data is untrusted: the saved thickness when it is a whole number from MIN_THICKNESS
+  // to MAX_THICKNESS, else DEFAULT_THICKNESS.
+  function normalizeThickness (data) {
+    const ok = Number.isInteger(data) && data >= MIN_THICKNESS && data <= MAX_THICKNESS
+    return ok ? data : DEFAULT_THICKNESS
   }
 
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
@@ -204,6 +221,14 @@
     return [':root:root {', ...lines, '}'].join('\n')
   }
 
+  // Sets the stroke width of the free lines, drawn already or not. `.cell-pen.pen-X` is what Edge
+  // Marks' own width rules use, so these selectors name only LINE_VALUES (never an edge X mark or
+  // an Edge Marks value), and `:root:root` outranks SudokuPad's `.cell-pen` whichever loads last.
+  function buildThicknessCss (thickness) {
+    if (normalizeThickness(thickness) !== thickness) throw new RangeError(`pen-color: ${thickness} is not a thickness from ${MIN_THICKNESS} to ${MAX_THICKNESS}`)
+    return `${LINE_VALUES.map((v) => `:root:root .cell-pen.pen-${v}`).join(', ')} { stroke-width: ${thickness}; }`
+  }
+
   // Edit mode (the class is on the pen tool's panel): each color picker sits over its button
   // and the button's swatch is hidden under it. The sizes are those SudokuPad's color tool
   // uses for the same job.
@@ -220,7 +245,7 @@
   const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, normalizeThickness, buildThicknessCss, DEFAULT_COLORS, DEFAULT_THICKNESS, MIN_THICKNESS, MAX_THICKNESS, LINE_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -229,6 +254,8 @@
   // SudokuPad's own, which is what the page shows with no override.
   let active = { ...DEFAULT_COLORS }
   let activeMissing = []
+  // The line thickness in force; the dialog previews another without changing it.
+  let activeThickness = DEFAULT_THICKNESS
 
   // SudokuPad's color tool, once it holds the palette and current page it read at startup;
   // null before then. `init` assigns the page and sets the `--cell-color-<key>` variables in
@@ -276,14 +303,14 @@
     }
   }
 
-  function applyColors (colors) {
+  function applyStyle (colors, thickness) {
     let style = document.getElementById(STYLE_ID)
     if (!style) {
       style = document.createElement('style')
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = buildCss(colors) + '\n' + EDIT_CSS
+    style.textContent = [buildCss(colors), buildThicknessCss(thickness), EDIT_CSS].join('\n')
   }
 
   function missingNote (missing) {
@@ -292,13 +319,17 @@
     return `<div style="margin:6px 0;max-width:20em">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
-  function renderEditor (colors, missing) {
+  function renderEditor (colors, missing, thickness) {
     const rows = PEN_COLORS.map((n) =>
       '<div style="margin:3px 0;display:flex;align-items:center;gap:8px">' +
       `<b style="width:1.2em;text-align:right">${n}</b>` +
       `<input type="color" data-pen="${n}" value="${colors[n]}"></div>`
     ).join('')
-    return rows + missingNote(missing) +
+    const slider = '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
+      '<label for="pen-color-thickness">Line thickness</label>' +
+      `<input type="range" id="pen-color-thickness" min="${MIN_THICKNESS}" max="${MAX_THICKNESS}" step="1" value="${thickness}">` +
+      `<output for="pen-color-thickness">${thickness}</output></div>`
+    return rows + slider + missingNote(missing) +
       '<button type="button" data-act="defaults" style="margin-top:6px">Restore defaults</button>'
   }
 
@@ -310,6 +341,11 @@
     // The pen colors picked by hand since the dialog opened or Restore defaults. Save with none
     // changes nothing, so a derived set is never saved by accident.
     const edited = new Set()
+    // The thickness shown in the slider, and whether Restore defaults set it and no slider move
+    // since: Save then clears the saved thickness.
+    let thickness = activeThickness
+    let thicknessReset = false
+    let committed = false
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
@@ -322,15 +358,15 @@
               tag: 'button',
               content: 'Save',
               handler: () => {
-                if (reset) {
-                  Framework.removeData(DATA_KEY)
-                } else if (edited.size) {
-                  Framework.setData(DATA_KEY, colors)
-                } else {
-                  Framework.closeDialog()
-                  return
+                committed = true
+                if (reset || edited.size) {
+                  if (reset) Framework.removeData(DATA_KEY)
+                  else Framework.setData(DATA_KEY, colors)
+                  adoptColors(colors, edited.size ? [] : missing)
                 }
-                adoptColors(colors, edited.size ? [] : missing)
+                if (thicknessReset) Framework.removeData(THICKNESS_KEY)
+                else if (thickness !== activeThickness) Framework.setData(THICKNESS_KEY, thickness)
+                adoptThickness(thickness)
                 Framework.closeDialog()
               }
             },
@@ -341,8 +377,15 @@
     })
     const box = document.getElementById('pen-color-editor')
     if (!box) throw new Error('pen-color: the dialog has no editor element')
-    const draw = () => { box.innerHTML = renderEditor(colors, missing.filter((n) => !edited.has(String(n)))) }
+    const draw = () => { box.innerHTML = renderEditor(colors, missing.filter((n) => !edited.has(String(n))), thickness) }
     draw()
+    // Any way of closing the dialog but Save ends the preview: the thickness in force comes back.
+    const closeWatch = new window.MutationObserver(() => {
+      if (box.isConnected) return
+      closeWatch.disconnect()
+      if (!committed) applyStyle(active, activeThickness)
+    })
+    closeWatch.observe(document.body, { childList: true, subtree: true })
     box.addEventListener('click', (event) => {
       const el = event.target.closest('button[data-act]')
       if (!el) return
@@ -355,7 +398,19 @@
       missing = derived.missing
       edited.clear()
       reset = true
+      thickness = DEFAULT_THICKNESS
+      thicknessReset = true
+      applyStyle(active, thickness)
       draw()
+    })
+    // `input` fires as the slider moves: the lines change live, and Cancel undoes it.
+    box.addEventListener('input', (event) => {
+      const el = event.target.closest('input[type="range"]')
+      if (!el) return
+      thickness = Number(el.value)
+      thicknessReset = false
+      applyStyle(active, thickness)
+      el.nextElementSibling.textContent = thickness
     })
     // `change` fires when the picker closes; the swatch the user sees is already the new color.
     box.addEventListener('change', (event) => {
@@ -373,8 +428,14 @@
   function adoptColors (colors, missing) {
     active = colors
     activeMissing = missing
-    applyColors(colors)
+    applyStyle(colors, activeThickness)
     document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
+  }
+
+  // Makes `thickness` the line thickness in force.
+  function adoptThickness (thickness) {
+    activeThickness = thickness
+    applyStyle(active, thickness)
   }
 
   // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
@@ -454,6 +515,7 @@
 
   Framework.getApp().then(async () => {
     installHoldToEdit()
+    adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
     Framework.addSetting({
       tag: 'button',
       name: 'pencolor',

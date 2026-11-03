@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors, HOLD_TO_EDIT_MS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION } = require('./pen-color.user.js')
+const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors, HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, DEFAULT_THICKNESS, MIN_THICKNESS, MAX_THICKNESS, LINE_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION } = require('./pen-color.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -288,6 +288,40 @@ test('editedColors refuses a pen color or a value it cannot save, rather than sa
   assert.throws(() => editedColors(TABLE, '10', '#aabbcc'), RangeError)
   assert.throws(() => editedColors(TABLE, '4', 'red'), RangeError)
   assert.throws(() => editedColors(TABLE, '4', '#abc'), RangeError)
+})
+
+test('the thickness range is 1 to 12 with SudokuPad\'s own 5 as the default', () => {
+  assert.deepEqual([MIN_THICKNESS, MAX_THICKNESS, DEFAULT_THICKNESS], [1, 12, 5])
+})
+
+test('normalizeThickness keeps a saved whole number from 1 to 12', () => {
+  assert.equal(normalizeThickness(1), 1)
+  assert.equal(normalizeThickness(8), 8)
+  assert.equal(normalizeThickness(12), 12)
+})
+
+test('normalizeThickness falls back to 5 for nothing saved and for anything untrusted', () => {
+  for (const bad of [null, undefined, 0, 13, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
+    assert.equal(normalizeThickness(bad), 5, String(bad))
+  }
+})
+
+test('buildThicknessCss sets the width of the line values only, under :root:root', () => {
+  const css = buildThicknessCss(9)
+  const [selector, body] = css.split(' { ')
+  assert.equal(body, 'stroke-width: 9; }')
+  const wanted = LINE_VALUES.map((v) => `:root:root .cell-pen.pen-${v}`)
+  assert.deepEqual(selector.split(', '), wanted)
+})
+
+test('the line values leave out the edge X marks, the cell circle and cross, and Edge Marks\' values', () => {
+  assert.deepEqual(LINE_VALUES, ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
+})
+
+test('buildThicknessCss refuses a thickness it cannot save', () => {
+  assert.throws(() => buildThicknessCss(0), RangeError)
+  assert.throws(() => buildThicknessCss(13), RangeError)
+  assert.throws(() => buildThicknessCss('5'), RangeError)
 })
 
 test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
