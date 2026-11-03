@@ -7,8 +7,8 @@ const path = require('node:path')
 
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const SCRIPT_SUFFIX = '.user.js'
-// Comments are dropped first: a link inside one is not a link on the page.
 const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
+// Comments are dropped first: a link inside one is not a link on the page.
 const page = fs.readFileSync(path.join(__dirname, 'site', 'index.html'), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
 // Every href and src on the page, whatever its form.
