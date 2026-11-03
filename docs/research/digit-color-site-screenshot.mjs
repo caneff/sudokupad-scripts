@@ -12,12 +12,12 @@ const out = new URL('./site-digit-color.png', import.meta.url).pathname
 // [row, column, digits entered there in the current mode], 0-based. None but the corner 3 at
 // (1, 2) shares a row, column or box with the same digit.
 const DIGITS = [[0, 2, '4'], [0, 3, '6'], [1, 1, '2'], [3, 1, '1']]
-const CORNER = [[1, 2, '73'], [0, 5, '28']]
-const CENTRE = [[2, 3, '23'], [2, 5, '4']]
+const CORNER = [[1, 2, '73'], [2, 4, '4']]
+const CENTRE = [[2, 3, '23']]
 
 const browser = await chromium.launch()
 // A large viewport makes the cells, and so the marks, bigger in the crop.
-const page = await (await browser.newContext({ viewport: { width: 1800, height: 1400 } })).newPage()
+const page = await (await browser.newContext({ viewport: { width: 2200, height: 1700 } })).newPage()
 await page.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
 await page.goto(url, { waitUntil: 'load' })
 await page.waitForFunction(() => Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length)
@@ -52,11 +52,11 @@ const circles = await page.evaluate(() => document.querySelectorAll('#digit-colo
 if (conflicts !== 1 || circles !== 1) throw new Error(`want one conflicting mark and one circle, got ${conflicts} and ${circles}`)
 const gone = await page.evaluate(() => getComputedStyle(document.querySelector('#svenpeek')).display)
 if (gone !== 'none') throw new Error(`mascot still shown: ${gone}`)
-// Rows 0-2, columns 1-5.
+// Rows 0-2, columns 1-4.
 const box = await page.evaluate(() => {
   const rect = (r, c) => Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c).elem.getBoundingClientRect()
   const a = rect(0, 1)
-  const b = rect(2, 5)
+  const b = rect(2, 4)
   return { x: a.x, y: a.y, width: b.right - a.x, height: b.bottom - a.y }
 })
 await page.screenshot({ path: out, clip: box })
