@@ -1,7 +1,10 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, renderEditor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js')
+const fs = require('node:fs')
+const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
+const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, renderEditor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -239,4 +242,8 @@ test('the Preload row lists only real presets, and a Clear all button sits besid
   assert.equal(count(html, /data-act="preload"/g), 2)
   assert.doesNotMatch(html, /data-name="Custom"/)
   assert.equal(count(html, /data-act="clear"[^>]*>Clear all</g), 1)
+})
+
+test('VERSION is the @version in the script header', () => {
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'color-by-digit.user.js'), 'utf8')))
 })

@@ -1,7 +1,10 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS } = require('./pen-color.user.js')
+const fs = require('node:fs')
+const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
+const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION } = require('./pen-color.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -271,4 +274,8 @@ test('savedColors does not read an array by index', () => {
 
 test('the wait for the color tool is a positive number of milliseconds', () => {
   assert.ok(COLOR_TOOL_WAIT_MS > 0)
+})
+
+test('VERSION is the @version in the script header', () => {
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'pen-color.user.js'), 'utf8')))
 })

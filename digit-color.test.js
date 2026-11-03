@@ -1,7 +1,10 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR } = require('./digit-color.user.js')
+const fs = require('node:fs')
+const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
+const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION } = require('./digit-color.user.js')
 
 // Chris's table from issue #7, typed out here as the independent source for the constant.
 const TABLE = {
@@ -120,4 +123,8 @@ test('digitOfText reads a single digit and nothing else', () => {
   assert.equal(digitOfText('5'), '5')
   assert.equal(digitOfText(' 5 '), '5')
   for (const bad of ['', '12', 'x', '-1', null, undefined]) assert.equal(digitOfText(bad), null, String(bad))
+})
+
+test('VERSION is the @version in the script header', () => {
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'digit-color.user.js'), 'utf8')))
 })
