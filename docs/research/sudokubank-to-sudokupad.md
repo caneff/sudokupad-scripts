@@ -65,3 +65,19 @@ Two Exa searches: none is described as reading SudokuBank. The closest are
   not read.
 - A fiddle is only the page's host. It still needs a proxy of ours for a pasted URL, or
   the pasted page source without one.
+
+## SudokuBank's terms
+
+`sudokubank.com/legal` holds the terms and copyright policy on one page (keyword pass
+over its 11 KB of text on 2026-11-03, not a full read), which says:
+
+- "No bots or scrapers, no bulk-copying the puzzle library, no malware, and no poking at
+  data that isn't yours".
+- "A specific puzzle is different: its grid, clues, and solution belong to whoever made
+  them."
+
+The 17-page sample above was a scripted fetch, made before this page was read. It is
+not repeated. A translator's fit with these terms is Chris's ruling.
+
+`puzzleRuleset` holds structured rules only, with no prose in the one page checked; the
+prose appears to be generated in the browser.
