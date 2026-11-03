@@ -19,11 +19,13 @@ await page.addScriptTag({ content: script })
 await page.locator('#control-colorbydigit').waitFor({ state: 'visible' })
 // SudokuPad re-fits the controls on a throttle; wait for the row to stop moving.
 let last = ''
-for (let i = 0; i < 40; i++) {
+let settled = false
+for (let i = 0; i < 40 && !settled; i++) {
   await page.waitForTimeout(250)
   const now = JSON.stringify(await page.locator('.controls-aux').boundingBox())
-  if (now === last) break
+  settled = now === last
   last = now
 }
+if (!settled) throw new Error('the controls were still moving after 10 s: ' + last)
 writeFileSync(out, await page.locator('.controls').screenshot())
 await browser.close()
