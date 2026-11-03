@@ -12,7 +12,7 @@ Install [Tampermonkey](https://www.tampermonkey.net/), then open a script's link
 - [Edge Marks](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/edge-marks.user.js): adds direction arrows (`>` `<` on a vertical edge, `^` `v` on a horizontal one) and a dot to the pen tool's marks on a cell edge. Clicking an edge cycles through the marks ticked in a settings dialog; the pen tool's own X is one of them. It wraps SudokuPad's pen tool and renderer, which are internals, so a SudokuPad update can break it, and it then leaves the pen tool unchanged. Turn the pen tool on in settings first.
 - [Dark Page](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js): makes the page black around the puzzle. A rectangle bounding everything the puzzle draws, and the cells you write in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 
-Each script adds an entry to SudokuPad's settings, under the Experimental group (collapsed until you open it). The entry shows the script's name and version, so you can tell which one is installed; Dark Page's entry shows only that.
+Each script adds an entry to SudokuPad's settings, under the Experimental group (collapsed until you open it). The entry shows the script's name; its dialog shows the version in small text beside the heading, so you can tell which one is installed. Dark Page has no dialog, so its entry shows the name and version.
 
 ## License
 

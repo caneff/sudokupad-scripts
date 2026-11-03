@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  // Shown in the settings, and the same as @version above. The script cannot read its own header
+  // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
   const VERSION = '0.4.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
@@ -312,7 +312,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Pen color v${VERSION}</b>` },
+        { tag: 'text', innerHTML: `<b>Pen color</b> <small style="opacity:.6">v${VERSION}</small>` },
         { tag: 'text', innerHTML: '<div id="pen-color-editor"></div>' },
         {
           tag: 'options',
@@ -374,7 +374,7 @@
       tag: 'button',
       name: 'pencolor',
       group: SETTINGS_GROUP,
-      content: `Pen color v${VERSION}`,
+      content: 'Pen color',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

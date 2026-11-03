@@ -373,14 +373,14 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(errors.slice(errorsBefore), [])
     })
 
-    it('the settings entry sits in the Experimental group and, like the dialog heading, shows the version from the script header', async () => {
-      const shown = `Edge marks v${headerVersion(script)}`
+    it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
       const group = await openSettings(p)
       const entry = group.locator('button').filter({ hasText: 'Edge marks' })
-      assert.equal((await entry.textContent()).trim(), shown)
+      assert.equal((await entry.textContent()).trim(), 'Edge marks')
       await entry.click()
       await editor().waitFor({ state: 'visible' })
-      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), shown)
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Edge marks')
+      assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
       await closeWith('Cancel')
     })
 
