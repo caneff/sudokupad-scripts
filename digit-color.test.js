@@ -84,7 +84,9 @@ test('a mark in the conflict state keeps the digit color and gets a red outline;
   fillRules.forEach((r) => assert.doesNotMatch(r, /conflict/))
   outlineRules.forEach((r) => {
     assert.match(r, /\.conflict/)
-    assert.match(r, /stroke:\s*#b33a3a/)
+    assert.match(r, /stroke:\s*var\(--puzzle-pencilmarkerror/)
+    assert.match(r, /stroke-width:\s*[1-9]/)
+    assert.match(r, /\.setting-checkpencilmarks /)
     assert.match(r, /paint-order:\s*stroke/)
   })
   assert.doesNotMatch(css, /cell-given/)

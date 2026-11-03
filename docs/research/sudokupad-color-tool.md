@@ -166,7 +166,8 @@ three injection times, by `live/digit-color.live.mjs`. Not run through Tampermon
 `crackingthecryptic.com`.
 
 - A stylesheet rule colors corner marks and centre marks from `data-val`, with
-  `:not(.conflict)` so a conflicting mark keeps `rgb(179, 58, 58)`. Entered digits have no
+  `:not(.conflict)` so a conflicting mark keeps `rgb(179, 58, 58)` (superseded by "Conflicting
+  marks keep the digit color" below). Entered digits have no
   `data-val`, so a `MutationObserver` on `document.body` (`childList`, `characterData`) stamps
   a `data-digit-color` attribute on each `#cell-values .cell-value`, and the same stylesheet
   colors that. Stamping an attribute does not retrigger the observer.
@@ -227,5 +228,7 @@ marks in conflict with a given 5, in the corner at row 1 and the centre at row 2
   color; at `2px` both read. The script uses 2px.
 - Every mark has a white halo stroke, `rgba(255, 255, 255, 0.7)`, with no script. The conflict
   rule's `stroke` replaces it on a conflicting mark only.
+- The red only shows with `.setting-checkpencilmarks` on the page; marks keep the `conflict`
+  class with it off. The outline rules carry that class, so the setting off means no outline.
 - A conflicting mark of a digit on SudokuPad's own color keeps the red fill and gets the same
   red stroke, so it looks as before, a little bolder.

@@ -2,7 +2,7 @@
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      0.2.0
-// @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark keeps its digit color and gets a red outline.
+// @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark gets a red outline over its digit color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -36,8 +36,11 @@
   }
   // SudokuPad's own fill for entered digits and marks, shown by the dialog for a digit set to it.
   const SUDOKUPAD_BLUE = '#1d6ae5'
-  // SudokuPad's own fill for a mark in the `conflict` state, reused as the outline.
-  const CONFLICT_RED = '#b33a3a'
+  // SudokuPad's own fill for a mark in the `conflict` state, reused as the outline. The variable
+  // follows SudokuPad's value; the fallback is its value in 0.611.0.
+  const CONFLICT_RED = 'var(--puzzle-pencilmarkerror, #b33a3a)'
+  // SudokuPad adds this class to the page while it shows conflicting marks in red.
+  const CHECK_MARKS_CLASS = '.setting-checkpencilmarks'
   // The outline's width in the board's units; paint-order puts the stroke behind the fill, so half shows.
   const OUTLINE_WIDTH = '2px'
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
@@ -67,10 +70,12 @@
     return DIGITS.includes(t) ? t : null
   }
 
-  // One fill rule per target per colored digit. Marks read their digit from `data-val`. A mark
-  // in the `conflict` state keeps its digit color and gets a red outline, for every digit, a
-  // digit on SudokuPad's own color included. The `#svgrenderer` prefix outranks SudokuPad's own
-  // conflict rule, `.setting-checkpencilmarks #cell-candidates .conflict`. Givens sit in `#cell-givens`, which no rule names.
+  // One fill rule per target per colored digit. Marks read their digit from `data-val`. While
+  // SudokuPad shows conflicts, a mark in the `conflict` state keeps its digit color and gets a red
+  // outline; a digit on SudokuPad's own color keeps SudokuPad's red fill and gets the outline too.
+  // The `#svgrenderer` prefix outranks SudokuPad's own conflict rule,
+  // `.setting-checkpencilmarks #cell-candidates .conflict`. Givens sit in `#cell-givens`, which no
+  // rule names.
   function buildCss (colors) {
     return Object.entries(colors).map(([digit, color]) => {
       const marks = [
@@ -78,7 +83,7 @@
         `#svgrenderer #cell-candidates tspan[data-val="${digit}"]`
       ]
       const fill = color === null ? [] : [`#cell-values [${DIGIT_ATTR}="${digit}"] { fill: ${color} }`, ...marks.map((m) => `${m} { fill: ${color} }`)]
-      const outline = marks.map((m) => `${m}.conflict { stroke: ${CONFLICT_RED}; stroke-width: ${OUTLINE_WIDTH}; paint-order: stroke }`)
+      const outline = marks.map((m) => `${CHECK_MARKS_CLASS} ${m}.conflict { stroke: ${CONFLICT_RED}; stroke-width: ${OUTLINE_WIDTH}; paint-order: stroke }`)
       return [...fill, ...outline].join('\n')
     }).join('\n')
   }
