@@ -281,3 +281,8 @@ Not run through Tampermonkey or on `crackingthecryptic.com`.
   cells in the matching cell colors (col 7), default first page, 1200x900 viewport. The cells
   show lighter than their raw colors because of `--cell-color-opacity: 0.6`; the pen is darkened
   from the raw value. Made by `docs/research/pen-color-screenshot.mjs`.
+- The cell color buttons are laid out by index: `updateButtonPad` (`tool-color.js`) sets the
+  button with `data-key` K to `pages[currentPage][K]`, for K 0-9, so a page whose index 0 holds a
+  color shows it on button 0 and every other color stays on its own number. A button's
+  `data-value` is the color key it shows, and `--cell-color-<data-value>` is its color. Read live
+  on sudokupad.app, 2026-11-03.

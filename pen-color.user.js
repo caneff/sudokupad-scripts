@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.2.0
-// @description  Sets the pen tool's nine colors to your current cell color page, darkened, until you save your own in a settings dialog. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
+// @version      0.3.0
+// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors saved in a settings dialog replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -37,6 +37,10 @@
   // pen reads clearly against the cell colors drawn at 60% opacity, high enough that the
   // lightest cell colors still show as 5px lines on white and the nine stay apart.
   const LIGHTNESS_FACTOR = 0.75
+  // The OKLCH chroma under which a darkened color counts as grey. SudokuPad's own greys are 0;
+  // a tinted dark grey such as rgb(10, 20, 30) is about 0.024; the least saturated hued colors
+  // of the default pages, darkened, are above 0.08.
+  const GREY_CHROMA = 0.04
   const COLOR_TOOL_WAIT_MS = 10000
   const COLOR_TOOL_POLL_MS = 100
 
@@ -140,28 +144,37 @@
       .toString(16).padStart(2, '0')).join('')
   }
 
-  // The pen colors a cell color page gives: its colors in order, the transparent ones left out
-  // (`isTransparent`), become pen colors 1-9, darkened. A color `parseColor` cannot read keeps
-  // its place, so the colors after it do not shift up. A pen color with no color to take, from
-  // a page too short or an unreadable entry, keeps SudokuPad's own and is listed in `missing`,
-  // by number.
+  // The pen colors a cell color page gives: pen color N is the color at index N of the page
+  // (SudokuPad shows index K on the cell color button with data-key K, so the pen buttons line
+  // up with the cell buttons), darkened, for N 1-9; index 0 is never used. A transparent or
+  // unreadable entry, or an index past the page's end, keeps SudokuPad's own pen color in that
+  // same place and is listed in `missing`, by number, with nothing moving up. Of the darkened
+  // colors, the darkest one whose OKLCH chroma is under GREY_CHROMA becomes #000000; a page with
+  // no such color changes nothing, and a kept SudokuPad color is not considered.
   function penColorsFromPage (keys, readColor) {
-    const slots = []
-    for (const key of keys) {
-      const text = readColor(key)
-      if (!isTransparent(text)) slots.push(parseColor(text))
-      if (slots.length === PEN_COLORS.length) break
-    }
     const colors = {}
     const missing = []
-    PEN_COLORS.forEach((n, i) => {
-      if (slots[i]) {
-        colors[n] = darkenColor(slots[i])
+    const derived = []
+    PEN_COLORS.forEach((n) => {
+      const rgb = n < keys.length ? parseColor(readColor(keys[n])) : null
+      if (rgb) {
+        colors[n] = darkenColor(rgb)
+        derived.push(n)
       } else {
         colors[n] = DEFAULT_COLORS[n]
         missing.push(Number(n))
       }
     })
+    let darkest = null
+    let darkestLightness = Infinity
+    for (const n of derived) {
+      const [lightness, a, b] = toOklab(parseColor(colors[n]))
+      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
+        darkest = n
+        darkestLightness = lightness
+      }
+    }
+    if (darkest) colors[darkest] = '#000000'
     return { colors, missing }
   }
 
@@ -175,12 +188,12 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeColors, savedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, COLOR_TOOL_WAIT_MS }
+    module.exports = { normalizeColors, savedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
   // The pen colors in force and the pen colors (by number) that kept SudokuPad's own because
-  // the color page had too few usable colors. Until the color tool is read they are
+  // the color page had no usable color at their index. Until the color tool is read they are
   // SudokuPad's own, which is what the page shows with no override.
   let active = { ...DEFAULT_COLORS }
   let activeMissing = []
@@ -244,7 +257,7 @@
   function missingNote (missing) {
     if (!missing.length) return ''
     const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
-    return `<div style="margin:6px 0;max-width:20em">The current cell color page has too few usable colors, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
+    return `<div style="margin:6px 0;max-width:20em">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
   function renderEditor (colors, missing) {
