@@ -51,3 +51,34 @@ edge marks. Only the result text was read.
   `#control-normal` button; the grid is drawn in `#svgrenderer`.
 - Not run: Windows, where `contextmenu` follows the release (after `clickCell`). The same
   `inputPos` is still the point hit-tested, so the code should hold there.
+
+## Grid-corner marks, 2026-11-03 (v0.611.0, `tool-pen.js`, `script.js`; run on the page in `live/pen-tool-extras-marks.live.mjs`)
+
+- `clickCell` has no corner case. It floors `getInputRc()` (the pointer in cell units from the
+  grid's top left) to a cell, picks the nearer side by `|dx| >= |dy|`, and takes an edge mark when the
+  distance to that side's midpoint is under 0.75 of the distance to the cell middle and at most 1.0.
+  At a corner the first is 0.5 against 0.707 × 0.75 = 0.53, so a click exactly on a corner is an edge
+  mark, and the edge zone reaches 0.57 along a side from the midpoint, past the corner.
+- Pen values are lowercased on undo and replay: `propSet` and `propUnset` do `val.toLowerCase()`, and
+  `Replay.actC2A` lowercases the whole action. So an added value has to be a lowercase letter or digit;
+  uppercase would come back as another value. SudokuPad's own stop at `g`, the edge marks use `h` to `s`,
+  and `0` clears, which leaves `t` to `z`: seven values.
+- A mark on one of the grid's 100 corners (9 x 9) is stored on one cell. Four kinds of cell position would
+  need eight values, so three kinds are used, two characters each (X, circle): `u`/`x` the bottom right
+  of a cell (every corner with a cell up and left of it, so inner corners and the right and bottom outer
+  corners are stored once), `t`/`w` the top left (the top row and left column), and `v`/`y` for the two
+  corners left, the top right (on the cell in the top row's last column) and the bottom left (on the cell in
+  the bottom row's first column). `z` is unused.
+- Corner zone: 0.2 of a cell by distance, checked before SudokuPad's test. Edge midpoints (0.5 away) and
+  cell middles (0.71) are outside it; an edge click 0.3 or more from a corner is still the edge mark.
+  A point just outside the grid counts too, so the outer corners can be clicked.
+- Run on the page: clicks at the pixel of each inner and outer corner cycle X, circle, empty and back, one
+  undo per click; `getReplay()` holds `pe:u/0` and a replay loads them again; a reload of the page keeps
+  them; the mark's centre is within 1 px of the corner.
+- Dark Page's kept rectangle: an X centred on an outer corner reaches 8 units (plus half the stroke) past the
+  cell box on two sides, the same as an edge X reaches past an outer edge, so it is inside `SOLVER_REACH`
+  (checked on all four outer corners at the default thickness).
+- A click on a dialog button that lands over the grid with the pen tool on can leave a pen mark under it
+  (seen in the live test: a click on a checkbox left a cell circle). Not fixed here.
+- Pictures: `pen-tool-extras-corners-grid.png`, `pen-tool-extras-corners-dialog.png`
+  (`pen-tool-extras-corners-screenshot.mjs`).
