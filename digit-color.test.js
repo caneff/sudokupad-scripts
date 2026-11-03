@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { normalizeColors, setDigitColor, buildCss, digitOfText, DEFAULT_COLORS, DIGIT_ATTR } = require('./digit-color.user.js')
+const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR } = require('./digit-color.user.js')
 
 // Chris's table from issue #7, typed out here as the independent source for the constant.
 const TABLE = {
@@ -56,11 +56,8 @@ test('setDigitColor does not change the object it is given', () => {
   assert.deepEqual(colors, { 1: '#ff0000' })
 })
 
-test('a digit set to SudokuPad\'s own color gets no fill rule, only the conflict outline', () => {
-  const css = buildCss({ 7: null })
-  assert.doesNotMatch(css, /fill/)
-  assert.match(css, /#cell-pencilmarks [^{]*\[data-val="7"\][^{]*\.conflict[^{]*{[^}]*stroke:/)
-  assert.match(css, /#cell-candidates [^{]*\[data-val="7"\][^{]*\.conflict[^{]*{[^}]*stroke:/)
+test('a digit set to SudokuPad\'s own color gets no rule at all', () => {
+  assert.equal(buildCss({ 7: null }), '')
 })
 
 test('no colors builds no CSS', () => {
@@ -74,22 +71,29 @@ test('a digit with a color gets a rule for entered digits, corner marks and cent
   assert.match(css, /#cell-candidates [^{]*\[data-val="7"\][^{]*{[^}]*fill:\s*#123456/)
 })
 
-test('a mark in the conflict state keeps the digit color and gets a red outline; no rule names the givens', () => {
+test('a mark in the conflict state keeps the digit color: no rule outlines it or names the conflict state or the givens', () => {
   const css = buildCss({ 7: '#123456' })
   const rules = css.split('}').filter((r) => r.includes('data-val'))
-  const fillRules = rules.filter((r) => r.includes('fill:'))
-  const outlineRules = rules.filter((r) => r.includes('stroke:'))
-  assert.equal(fillRules.length, 2)
-  assert.equal(outlineRules.length, 2)
-  fillRules.forEach((r) => assert.doesNotMatch(r, /conflict/))
-  outlineRules.forEach((r) => {
-    assert.match(r, /\.conflict/)
-    assert.match(r, /stroke:\s*var\(--puzzle-pencilmarkerror/)
-    assert.match(r, /stroke-width:\s*[1-9]/)
-    assert.match(r, /\.setting-checkpencilmarks /)
-    assert.match(r, /paint-order:\s*stroke/)
-  })
-  assert.doesNotMatch(css, /cell-given/)
+  assert.equal(rules.length, 2)
+  rules.forEach((r) => assert.match(r, /fill:\s*#123456/))
+  assert.doesNotMatch(css, /stroke|conflict|cell-given/)
+})
+
+test('the circle CSS shows the circles only while SudokuPad shows conflicts, never takes a pointer event, and fills with a translucent color', () => {
+  assert.match(CIRCLE_CSS, /#digit-color-circles\s*{[^}]*display:\s*none/)
+  assert.match(CIRCLE_CSS, /\.setting-checkpencilmarks #digit-color-circles\s*{[^}]*display:\s*inline/)
+  assert.match(CIRCLE_CSS, /#digit-color-circles\s*{[^}]*pointer-events:\s*none/)
+  assert.match(CIRCLE_CSS, /#digit-color-circles circle\s*{[^}]*fill:\s*#[0-9a-f]{6}/i)
+  assert.match(CIRCLE_CSS, /#digit-color-circles circle\s*{[^}]*fill-opacity:\s*0?\.\d/)
+})
+
+test('circleFor centres on the mark\'s middle and is sized by its width', () => {
+  // A corner mark measured on sudokupad.app: a digit 10 units wide, middle at (352, 35.8).
+  const c = circleFor({ x: 352, y: 35.8, width: 10 })
+  assert.equal(c.cx, 352)
+  assert.equal(c.cy, 35.8)
+  assert.ok(c.r >= 7 && c.r <= 10, `r ${c.r}`)
+  assert.equal(circleFor({ x: 352, y: 35.8, width: 20 }).r, 2 * c.r)
 })
 
 test('digitOfText reads a single digit and nothing else', () => {
