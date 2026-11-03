@@ -155,7 +155,7 @@
     const selected = slot.key === selectedKey
     return `<button type="button" data-act="color" data-group="${groupIndex}" data-key="${esc(slot.key)}" ` +
       `title="${esc(slot.key)}" aria-pressed="${selected}" ` +
-      `style="box-sizing:border-box;display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE};min-width:0;min-height:0;margin:0;padding:0;border-radius:3px;` +
+      `style="box-sizing:border-box;display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE};margin:0;padding:0;border-radius:3px;` +
       `background:${esc(slot.value)};` +
       (selected ? 'border:2px solid #fff;outline:3px solid #000' : 'border:1px solid #888') + '"></button>'
   }

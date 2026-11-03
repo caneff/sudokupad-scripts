@@ -295,7 +295,8 @@ Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshots from
 
 - `tools.colour.setPalette(p)` with a fourth page and new keys (`u`, `v`, `w` in `colors`) shows
   them at once: the dialog reads `tool.palette.pages` and `--cell-color-<key>` when it opens.
-- SudokuPad's dialog styles `button` with a taller minimum height and `em` sizes that follow its
-  large font, so a swatch given only `width` and `height` came out 45x57 px and overflowed a
-  flex item. `px` sizes with `min-width: 0; min-height: 0` and `flex: none` on the page fix it.
+- A swatch sized in `em` came out 45x57 px in SudokuPad's dialog, whose font is large and whose
+  buttons carry their own styles, and overflowed its page. A `44px` width and height gives 44x44
+  at 1200 px wide. Removing `min-width: 0; min-height: 0` or `flex: none` from the swatch style
+  changed nothing at that width in the live run, so neither is in the script.
 - At 1200 px wide the dialog holds three 3x3 pages per row; at 390 px it holds one.
