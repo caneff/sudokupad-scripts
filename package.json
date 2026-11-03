@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --test",
-    "test:live": "node --test live/color-by-digit.live.mjs",
+    "test:live": "node --test \"live/*.live.mjs\"",
     "lint": "standard"
   },
   "devDependencies": {
