@@ -29,8 +29,7 @@
     'Odd/Even': [
       { key: '6', digits: ['1', '3', '5', '7', '9'] },
       { key: '9', digits: ['0', '2', '4', '6', '8'] }
-    ],
-    Custom: []
+    ]
   }
   const DEFAULT_GROUPS = PRELOADS['Odd/Even']
 
@@ -115,24 +114,92 @@
     app.refreshControls()
   }
 
+  // SudokuPad's color keypad has ten buttons: index 0, then indices 1-9 in rows of three.
+  const PAGE_COLUMNS = 3
+  const PAGE_BUTTONS = 10
+
+  // Each page of the color tool as the keypad shows it: `rows` holds indices 1-9, three to a
+  // row, and `zero` index 0. A slot is { key, value }, or null where the key is missing,
+  // transparent or unreadable, so the empty space keeps every other color where it is.
+  // `readColor(key)` gives the key's CSS color.
+  function layoutPages (pages, currentPage, readColor) {
+    return pages.map((keys, page) => {
+      const list = Array.isArray(keys) ? keys.slice(0, PAGE_BUTTONS) : []
+      const slot = (index) => {
+        if (list[index] === undefined) return null
+        const key = String(list[index])
+        const value = String(readColor(key)).trim()
+        return isVisibleColor(value) ? { key, value } : null
+      }
+      const rows = []
+      for (let index = 1; index < PAGE_BUTTONS; index += PAGE_COLUMNS) {
+        rows.push(Array.from({ length: PAGE_COLUMNS }, (_, c) => slot(index + c)))
+      }
+      return { page, current: page === currentPage, rows, zero: slot(0) }
+    })
+  }
+
+  // Every visible color of the laid-out pages, page by page, index 0 first.
+  function layoutColors (pages) {
+    return pages.flatMap((p) => [p.zero, ...p.rows.flat()]).filter(Boolean)
+  }
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  const SWATCH_SIZE = '44px'
+
+  // One color of a page: a square button, ringed twice (white inside, black outside) when it
+  // is the group's color so it shows on any swatch color. An empty slot is a spacer of the same size.
+  function renderSwatch (slot, groupIndex, selectedKey) {
+    if (!slot) return `<span data-empty="slot" style="display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE}"></span>`
+    const selected = slot.key === selectedKey
+    return `<button type="button" data-act="color" data-group="${groupIndex}" data-key="${esc(slot.key)}" ` +
+      `title="${esc(slot.key)}" aria-pressed="${selected}" ` +
+      `style="box-sizing:border-box;display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE};min-width:0;min-height:0;margin:0;padding:0;border-radius:3px;` +
+      `background:${esc(slot.value)};` +
+      (selected ? 'border:2px solid #fff;outline:3px solid #000;position:relative' : 'border:1px solid #888') + '"></button>'
+  }
+
+  function renderPage (page, groupIndex, selectedKey) {
+    const grid = 'display:grid;gap:6px;grid-template-columns:repeat(' + PAGE_COLUMNS + ',' + SWATCH_SIZE + ')'
+    const swatches = (slots) => slots.map((s) => renderSwatch(s, groupIndex, selectedKey)).join('')
+    const zero = page.zero ? `<div style="${grid};margin-top:4px">${renderSwatch(page.zero, groupIndex, selectedKey)}</div>` : ''
+    return `<div data-page="${page.page}" style="flex:none;margin:2px 10px 8px 0;padding:6px;border:1px solid #ccc;border-radius:4px">` +
+      `<div style="font-size:0.85em;margin-bottom:5px">Page ${page.page + 1}${page.current ? ' (current)' : ''}</div>` +
+      `<div style="${grid}">${swatches(page.rows.flat())}</div>${zero}</div>`
+  }
+
+  function renderEditor (groups, pages) {
+    const rows = groups.map((g, i) => {
+      const swatches = pages.map((p) => renderPage(p, i, g.key)).join('')
+      const digits = DIGITS.map((d) =>
+        `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
+        `style="width:1.8em;margin:1px;font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
+        `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
+      return '<div style="margin:6px 0;padding:4px;border:1px solid #888;border-radius:4px">' +
+        `<div style="display:flex;flex-wrap:wrap;align-items:flex-start">${swatches}</div><div>${digits} ` +
+        `<button type="button" data-act="remove" data-group="${i}">Remove</button></div></div>`
+    }).join('')
+    const preloads = Object.keys(PRELOADS)
+      .map((n) => `<button type="button" data-act="preload" data-name="${esc(n)}">${esc(n)}</button>`).join(' ')
+    const note = layoutColors(pages).length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
+    return `<div>Preload: ${preloads} <button type="button" data-act="clear">Clear all</button></div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
+      '<button type="button" data-act="add">Add group</button>'
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, renderEditor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
-  // SudokuPad's default palette keys, in its page order. Keys outside them are not read.
-  const PALETTE_KEYS = '0123456789abcdefghijklmnopqrst'.split('')
-
-  // The visible colors of the user's current palette, read from the CSS variables
-  // SudokuPad sets for each key. Transparent and unset slots are skipped.
-  function paletteColors () {
+  // The color tool's pages laid out as SudokuPad's buttons are, read now from the tool and
+  // the raw `--cell-color-<key>` values; [] until the tool holds a palette.
+  function readPages () {
+    const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
+    const palette = tool && tool.palette
+    if (!palette || !Array.isArray(palette.pages)) return []
     const style = window.getComputedStyle(document.documentElement)
-    const colors = []
-    PALETTE_KEYS.forEach((key) => {
-      const value = style.getPropertyValue(`--cell-color-${key}`).trim()
-      if (isVisibleColor(value)) colors.push({ key, value })
-    })
-    return colors
+    return layoutPages(palette.pages, tool.currentPage, (key) => style.getPropertyValue(`--cell-color-${key}`))
   }
 
   const loadGroups = () => groupsFromStored(Framework.getData(DATA_KEY))
@@ -161,31 +228,9 @@
     }
   }
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-
-  function renderEditor (groups, colors) {
-    const rows = groups.map((g, i) => {
-      const swatches = colors.map((c) =>
-        `<button type="button" data-act="color" data-group="${i}" data-key="${esc(c.key)}" title="${esc(c.key)}" ` +
-        `style="width:1.4em;height:1.4em;margin:1px;border-radius:50%;background:${esc(c.value)};` +
-        `border:${c.key === g.key ? '3px solid #000' : '1px solid #888'}"></button>`).join('')
-      const digits = DIGITS.map((d) =>
-        `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
-        `style="width:1.8em;margin:1px;font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
-        `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
-      return '<div style="margin:6px 0;padding:4px;border:1px solid #888;border-radius:4px">' +
-        `<div>${swatches}</div><div>${digits} ` +
-        `<button type="button" data-act="remove" data-group="${i}">Remove</button></div></div>`
-    }).join('')
-    const preloads = Object.keys(PRELOADS)
-      .map((n) => `<button type="button" data-act="preload" data-name="${esc(n)}">${esc(n)}</button>`).join(' ')
-    const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
-    return `<div>Preload: ${preloads}</div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
-      '<button type="button" data-act="add">Add group</button>'
-  }
-
   function openDialog () {
-    const colors = paletteColors()
+    const pages = readPages()
+    const colors = layoutColors(pages)
     let groups = loadGroups()
     Framework.showDialog({
       centerOverBoard: true,
@@ -203,7 +248,7 @@
     })
     const box = document.getElementById('color-by-digit-editor')
     if (!box) return
-    const draw = () => { box.innerHTML = renderEditor(groups, colors) }
+    const draw = () => { box.innerHTML = renderEditor(groups, pages) }
     draw()
     box.addEventListener('click', (event) => {
       const el = event.target.closest('button[data-act]')
@@ -215,6 +260,7 @@
         case 'color': groups = groups.map((g, j) => (j === i ? { key: el.dataset.key, digits: g.digits } : g)); break
         case 'digit': groups = assignDigit(groups, i, el.dataset.digit); break
         case 'remove': groups = groups.filter((_, j) => j !== i); break
+        case 'clear': groups = []; break
         case 'preload': groups = cloneGroups(PRELOADS[el.dataset.name]); break
         case 'add': {
           const used = groups.map((g) => g.key)

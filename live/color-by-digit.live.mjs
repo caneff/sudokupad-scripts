@@ -336,14 +336,88 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(coloredCount, 0), 0)
       })
 
-      it('Custom saves an empty list and a press does nothing', async () => {
+      it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a press does nothing', async () => {
         await openEditor()
-        await dialogButton('Custom').click()
+        const groupCount = () => p.locator('#color-by-digit-editor button[data-act=remove]').count()
+        assert.equal(await groupCount(), 3)
+        assert.equal(await p.locator('#color-by-digit-editor button[data-act=preload]').count(), 2)
+        await p.click('#color-by-digit-editor button[data-act=clear]')
+        assert.equal(await groupCount(), 0)
+        await closeWith('Cancel')
+        assert.equal((await getData()).length, 3)
+        await openEditor()
+        assert.equal(await groupCount(), 3)
+        await p.click('#color-by-digit-editor button[data-act=clear]')
         await closeWith('Save')
         assert.deepEqual(await settle(getData, []), [])
         await press()
         // "Nothing happened": no cell gets a color.
         assert.deepEqual(await watch(coloredCount), [0])
+      })
+    })
+
+    // A custom palette: page 1 has a color at index 0 and a transparent slot at index 4, and
+    // there is a fourth page of four colors, two of them on keys the default palette lacks.
+    describe('custom palette', { concurrency: false }, () => {
+      // Group 0's four page labels; every group draws its own set.
+      const labels = () => p.$$eval('#color-by-digit-editor [data-page] > div:first-child', (es) => es.map((e) => e.textContent).slice(0, 4))
+      const swatchKeys = (page) => p.$$eval('#color-by-digit-editor [data-group="0"][data-act="color"]', (es, page) => es.filter((e) => e.closest('[data-page]').dataset.page === String(page)).map((e) => e.dataset.key), page)
+      const boxOf = (key) => p.locator(`#color-by-digit-editor button[data-group="0"][data-key="${key}"]`).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) } })
+      let original
+
+      before(async () => {
+        original = await read(() => JSON.parse(JSON.stringify(Framework.app.tools.colour.palette)))
+        await read((original) => {
+          const palette = JSON.parse(JSON.stringify(original))
+          palette.colors.u = 'rgb(10, 20, 30)'
+          palette.colors.v = 'rgb(40, 50, 60)'
+          palette.colors.w = 'rgb(70, 80, 90)'
+          palette.pages[0] = ['4', '1', '2', '3', '0', '5', '6', '7', '8', '9']
+          palette.pages.push(['u', 'v', 'w', '8'])
+          Framework.app.tools.colour.setPalette(palette)
+          Framework.app.tools.colour.setPage(1)
+        }, original)
+        await openEditor()
+        await dialogButton('Odd/Even').click()
+      })
+      after(async () => {
+        await read((original) => {
+          Framework.app.tools.colour.setPalette(original)
+          Framework.app.tools.colour.setPage(0)
+          Framework.removeData('ToolColor_palette')
+          Framework.removeData('ToolColor_page')
+        }, original)
+        if (await editor().count()) await closeWith('Cancel')
+      })
+
+      it('labels four pages and marks SudokuPad\'s current page', async () => {
+        assert.deepEqual(await labels(), ['Page 1', 'Page 2 (current)', 'Page 3', 'Page 4'])
+      })
+
+      it('lays page 1 out by index, with the empty slot kept and index 0 on its own row below', async () => {
+        assert.deepEqual(await swatchKeys(0), ['1', '2', '3', '5', '6', '7', '8', '9', '4'])
+        const [one, two, five, nine, zero] = await Promise.all(['1', '2', '5', '9', '4'].map(boxOf))
+        // Index 4 is empty, so index 5 stays under index 2 in the third column of row 2.
+        assert.equal(five.x, two.x)
+        assert.equal(five.y > two.y, true)
+        assert.equal(zero.x, one.x)
+        assert.equal(zero.y > nine.y, true)
+        assert.equal(zero.w, zero.h)
+        assert.equal(zero.w >= 24, true, JSON.stringify(zero))
+      })
+
+      it('shows the fourth page, and pages fit side by side at this width', async () => {
+        assert.deepEqual(await swatchKeys(3), ['v', 'w', '8', 'u'])
+        const [first, second] = await Promise.all(['1', 'b'].map(boxOf))
+        assert.equal(first.y, second.y)
+      })
+
+      it('the group\'s own color is the only one marked selected', async () => {
+        const pressed = await p.$$eval('#color-by-digit-editor [data-group="0"][aria-pressed="true"]', (es) => es.map((e) => e.dataset.key))
+        assert.deepEqual(pressed, ['6'])
+        await p.click('#color-by-digit-editor button[data-group="0"][data-key="u"]')
+        const after = await p.$$eval('#color-by-digit-editor [data-group="0"][aria-pressed="true"]', (es) => es.map((e) => e.dataset.key))
+        assert.deepEqual(after, ['u'])
       })
     })
 

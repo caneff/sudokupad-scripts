@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js')
+const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, renderEditor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -151,4 +151,92 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
     delete require.cache[path]
     if (saved) require.cache[path] = saved
   }
+})
+
+// A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
+const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
+const keys = (names) => names.split(' ')
+const slotKeys = (slots) => slots.map((s) => (s ? s.key : null))
+
+test('layoutPages puts indices 1-9 in rows of three, in the order of SudokuPad\'s buttons', () => {
+  const [page] = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  assert.deepEqual(page.rows.map(slotKeys), [['a1', 'a2', 'a3'], ['a4', 'a5', 'a6'], ['a7', 'a8', 'a9']])
+})
+
+test('layoutPages keeps a visible color at index 0 on its own, and null when index 0 is transparent', () => {
+  const [lit, dark] = layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9'), keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  assert.deepEqual(lit.zero, { key: 'z', value: '#z' })
+  assert.equal(lit.rows[0][0].key, 'a1')
+  assert.equal(dark.zero, null)
+})
+
+test('layoutPages leaves a transparent slot empty and every other color where it was', () => {
+  const [page] = layoutPages([keys('clear a1 clear a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  assert.deepEqual(slotKeys(page.rows[0]), ['a1', null, 'a3'])
+  assert.deepEqual(slotKeys(page.rows[1]), ['a4', 'a5', 'a6'])
+})
+
+test('layoutPages leaves a slot empty when the page is short or the key is unreadable', () => {
+  const unreadable = (key) => (key === 'bad' ? '' : `#${key}`)
+  const [page] = layoutPages([keys('a0 a1 bad')], 0, unreadable)
+  assert.deepEqual(page.rows.map(slotKeys), [['a1', null, null], [null, null, null], [null, null, null]])
+  assert.deepEqual(page.zero, { key: 'a0', value: '#a0' })
+})
+
+test('layoutPages reads any number of pages, numbering them from 0 and marking the current one', () => {
+  const pages = [0, 1, 2, 3].map((p) => keys(`p${p}z p${p}a p${p}b p${p}c p${p}d p${p}e p${p}f p${p}g p${p}h p${p}i`))
+  const out = layoutPages(pages, 2, colorOf)
+  assert.deepEqual(out.map((p) => p.page), [0, 1, 2, 3])
+  assert.deepEqual(out.map((p) => p.current), [false, false, true, false])
+  assert.equal(out[3].rows[2][2].key, 'p3i')
+})
+
+test('layoutPages of no pages is empty', () => {
+  assert.deepEqual(layoutPages([], 0, colorOf), [])
+})
+
+test('layoutColors lists the visible colors page by page, index 0 first', () => {
+  const pages = layoutPages([keys('z a1 clear a3 a4 a5 a6 a7 a8 a9'), keys('clear b1 b2')], 0, colorOf)
+  assert.deepEqual(layoutColors(pages).map((c) => c.key), ['z', 'a1', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'b1', 'b2'])
+})
+
+const count = (html, re) => (html.match(re) || []).length
+
+test('renderEditor labels each page, marks the current one, and keeps data-act and data-key on every swatch', () => {
+  const pages = layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9'), keys('clear b1 b2 b3 b4 b5 b6 b7 b8 b9')], 1, colorOf)
+  const html = renderEditor([{ key: 'b2', digits: [] }], pages)
+  assert.equal(count(html, /Page 1(?! \()/g), 1)
+  assert.equal(count(html, /Page 2 \(current\)/g), 1)
+  assert.equal(count(html, /data-act="color"[^>]*data-key="z"/g), 1)
+  assert.equal(count(html, /data-act="color"/g), 19)
+})
+
+test('renderEditor draws an empty slot as a spacer with no button, so nothing shifts', () => {
+  const pages = layoutPages([keys('clear a1 clear a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  const html = renderEditor([{ key: 'a1', digits: [] }], pages)
+  assert.equal(count(html, /data-act="color"/g), 8)
+  assert.equal(count(html, /data-empty="slot"/g), 1)
+})
+
+test('renderEditor marks only the group\'s own color as selected', () => {
+  const pages = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  const html = renderEditor([{ key: 'a2', digits: [] }], pages)
+  assert.equal(count(html, /aria-pressed="true"/g), 1)
+  assert.match(html, /data-key="a2"[^>]*aria-pressed="true"/)
+})
+
+test('renderEditor keeps the "No palette colors found" note when no page has a color', () => {
+  const html = renderEditor([], layoutPages([], 0, colorOf))
+  assert.match(html, /No palette colors found/)
+  assert.equal(count(html, /data-act="color"/g), 0)
+  assert.equal(count(renderEditor([], layoutPages([keys('a b')], 0, colorOf)), /No palette colors found/g), 0)
+})
+
+test('the Preload row lists only real presets, and a Clear all button sits beside it', () => {
+  assert.deepEqual(Object.keys(PRELOADS), ['Low/5/High', 'Odd/Even'])
+  assert.ok(Object.values(PRELOADS).every((groups) => groups.length > 0))
+  const html = renderEditor([], layoutPages([], 0, colorOf))
+  assert.equal(count(html, /data-act="preload"/g), 2)
+  assert.doesNotMatch(html, /data-name="Custom"/)
+  assert.equal(count(html, /data-act="clear"[^>]*>Clear all</g), 1)
 })
