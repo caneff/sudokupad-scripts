@@ -579,14 +579,14 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(errors.slice(errorsBefore), [])
     })
 
-    it('the settings entry sits in the Experimental group and, like the dialog heading, shows the version from the script header', async () => {
-      const shown = `Digit color v${headerVersion(script)}`
+    it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
       const group = await openSettings(p)
       const entry = group.locator('button').filter({ hasText: 'Digit color' })
-      assert.equal((await entry.textContent()).trim(), shown)
+      assert.equal((await entry.textContent()).trim(), 'Digit color')
       await entry.click()
       await editor().waitFor({ state: 'visible' })
-      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), shown)
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit color')
+      assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
       await closeWith('Cancel')
     })
 
