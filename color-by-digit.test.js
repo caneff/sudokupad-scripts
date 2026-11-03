@@ -234,7 +234,7 @@ test('renderEditor keeps the "No palette colors found" note when no page has a c
 
 test('the Preload row lists only real presets, and a Clear all button sits beside it', () => {
   assert.deepEqual(Object.keys(PRELOADS), ['Low/5/High', 'Odd/Even'])
-  assert.ok(Object.values(PRELOADS).every((groups) => groups.length > 0))
+  assert.deepEqual(Object.keys(PRELOADS).filter((name) => PRELOADS[name].length === 0), [])
   const html = renderEditor([], layoutPages([], 0, colorOf))
   assert.equal(count(html, /data-act="preload"/g), 2)
   assert.doesNotMatch(html, /data-name="Custom"/)

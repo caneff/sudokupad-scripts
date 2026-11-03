@@ -114,13 +114,13 @@
     app.refreshControls()
   }
 
-  // SudokuPad's color keypad has ten buttons: index 0, then indices 1-9 in rows of three.
+  // A cell color page has ten colors, one per SudokuPad color button: index 0, then indices 1-9 in rows of three.
   const PAGE_COLUMNS = 3
   const PAGE_BUTTONS = 10
 
-  // Each page of the color tool as the keypad shows it: `rows` holds indices 1-9, three to a
-  // row, and `zero` index 0. A slot is { key, value }, or null where the key is missing,
-  // transparent or unreadable, so the empty space keeps every other color where it is.
+  // Each cell color page as SudokuPad's color buttons show it: `rows` holds indices 1-9, three to a
+  // row, and `zero` index 0. An entry is { key, value }, or null where the key is missing,
+  // transparent or unreadable, so the empty space keeps every other color on its index.
   // `readColor(key)` gives the key's CSS color.
   function layoutPages (pages, currentPage, readColor) {
     return pages.map((keys, page) => {
@@ -149,7 +149,7 @@
   const SWATCH_SIZE = '44px'
 
   // One color of a page: a square button, ringed twice (white inside, black outside) when it
-  // is the group's color so it shows on any swatch color. An empty slot is a spacer of the same size.
+  // is the group's color so it shows on any swatch color. An index with no visible color is a spacer of the same size.
   function renderSwatch (slot, groupIndex, selectedKey) {
     if (!slot) return `<span data-empty="slot" style="display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE}"></span>`
     const selected = slot.key === selectedKey
@@ -157,7 +157,7 @@
       `title="${esc(slot.key)}" aria-pressed="${selected}" ` +
       `style="box-sizing:border-box;display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE};min-width:0;min-height:0;margin:0;padding:0;border-radius:3px;` +
       `background:${esc(slot.value)};` +
-      (selected ? 'border:2px solid #fff;outline:3px solid #000;position:relative' : 'border:1px solid #888') + '"></button>'
+      (selected ? 'border:2px solid #fff;outline:3px solid #000' : 'border:1px solid #888') + '"></button>'
   }
 
   function renderPage (page, groupIndex, selectedKey) {

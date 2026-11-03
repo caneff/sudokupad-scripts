@@ -357,7 +357,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     // A custom palette: page 1 has a color at index 0 and a transparent slot at index 4, and
-    // there is a fourth page of four colors, two of them on keys the default palette lacks.
+    // there is a fourth page of four colors, three of them on keys the default palette lacks.
     describe('custom palette', { concurrency: false }, () => {
       // Group 0's four page labels; every group draws its own set.
       const labels = () => p.$$eval('#color-by-digit-editor [data-page] > div:first-child', (es) => es.map((e) => e.textContent).slice(0, 4))
@@ -397,13 +397,14 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       it('lays page 1 out by index, with the empty slot kept and index 0 on its own row below', async () => {
         assert.deepEqual(await swatchKeys(0), ['1', '2', '3', '5', '6', '7', '8', '9', '4'])
         const [one, two, five, nine, zero] = await Promise.all(['1', '2', '5', '9', '4'].map(boxOf))
-        // Index 4 is empty, so index 5 stays under index 2 in the third column of row 2.
+        // Index 4 is empty, so index 5 stays under index 2 in the second column of row 2.
         assert.equal(five.x, two.x)
         assert.equal(five.y > two.y, true)
         assert.equal(zero.x, one.x)
         assert.equal(zero.y > nine.y, true)
-        assert.equal(zero.w, zero.h)
-        assert.equal(zero.w >= 24, true, JSON.stringify(zero))
+        // Every swatch is the same square, whatever height SudokuPad's own button styles ask for.
+        const sizes = await p.$$eval('#color-by-digit-editor [data-group="0"][data-act="color"]', (es) => [...new Set(es.map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}` }))])
+        assert.deepEqual(sizes, ['44x44'])
       })
 
       it('shows the fourth page, and pages fit side by side at this width', async () => {
