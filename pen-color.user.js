@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.2
-// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors saved in a settings dialog replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
+// @version      0.4.0
+// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors, saved in a settings dialog or by holding a pen color button, replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.2'
+  const VERSION = '0.4.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'PenColor_colors'
@@ -48,6 +48,9 @@
   const GREY_CHROMA = 0.04
   const COLOR_TOOL_WAIT_MS = 10000
   const COLOR_TOOL_POLL_MS = 100
+  // How long a pen color button is held to open the pickers: SudokuPad's color tool uses the
+  // same 1000 ms (HoldToEditDelayMs) for its cell color buttons.
+  const HOLD_TO_EDIT_MS = 1000
 
   // Saved data is untrusted: returns { penColor: '#rrggbb' } for every pen color, with the
   // default for any entry that is missing or not a #rrggbb string.
@@ -69,6 +72,15 @@
     const usable = data && typeof data === 'object' && !Array.isArray(data) &&
       PEN_COLORS.some((n) => typeof data[n] === 'string' && HEX_COLOR.test(data[n]))
     return usable ? set : null
+  }
+
+  // The whole current set with pen color `pen` set to `value` (a #rrggbb string), lowercased.
+  // The set is what gets saved, so a pen color or value that is not valid throws rather than
+  // saving a set with a wrong entry.
+  function editedColors (colors, pen, value) {
+    if (!PEN_COLORS.includes(pen)) throw new RangeError(`pen-color: ${pen} is not a pen color`)
+    if (typeof value !== 'string' || !HEX_COLOR.test(value)) throw new RangeError(`pen-color: ${value} is not a #rrggbb color`)
+    return { ...colors, [pen]: value.toLowerCase() }
   }
 
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
@@ -192,8 +204,23 @@
     return [':root:root {', ...lines, '}'].join('\n')
   }
 
+  // Edit mode (the class is on the pen tool's panel): each color picker sits over its button
+  // and the button's swatch is hidden under it. The sizes are those SudokuPad's color tool
+  // uses for the same job.
+  const EDITING = 'pen-color-editing'
+  const PICKER = 'pen-color-picker'
+  const EDIT_CSS = [
+    `.${EDITING} button[data-value]::after { opacity: 0; }`,
+    `.${EDITING} .${PICKER} { width: 0; height: 0; overflow: visible; }`,
+    `.${EDITING} .${PICKER} input { position: absolute; width: 2.4rem; height: 2.4rem; margin-left: 0.95rem; margin-top: 0.95rem; z-index: 10; pointer-events: all; }`
+  ].join('\n')
+  // The elements a hold starts on, and the ones the context menu is suppressed over: the pen
+  // tool's color buttons and, in edit mode, the pickers standing in for them (a right-click
+  // hold ends over a picker, and Windows opens the menu on release).
+  const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, normalizeColors, savedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS }
+    module.exports = { VERSION, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -256,7 +283,7 @@
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = buildCss(colors)
+    style.textContent = buildCss(colors) + '\n' + EDIT_CSS
   }
 
   function missingNote (missing) {
@@ -303,9 +330,7 @@
                   Framework.closeDialog()
                   return
                 }
-                active = colors
-                activeMissing = edited.size ? [] : missing
-                applyColors(colors)
+                adoptColors(colors, edited.size ? [] : missing)
                 Framework.closeDialog()
               }
             },
@@ -336,14 +361,99 @@
     box.addEventListener('change', (event) => {
       const el = event.target.closest('input[type="color"]')
       if (!el) return
-      colors = { ...colors, [el.dataset.pen]: el.value.toLowerCase() }
+      colors = editedColors(colors, el.dataset.pen, el.value)
       edited.add(el.dataset.pen)
       reset = false
       draw()
     })
   }
 
+  // Makes `colors` the set in force: the style, the dialog's starting point and any pickers
+  // already open, so every place that shows a pen color shows the same one.
+  function adoptColors (colors, missing) {
+    active = colors
+    activeMissing = missing
+    applyColors(colors)
+    document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
+  }
+
+  // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
+  // from then on the set no longer follows the cell color page.
+  function savePenColor (pen, value) {
+    const colors = editedColors(active, pen, value)
+    Framework.setData(DATA_KEY, colors)
+    adoptColors(colors, [])
+  }
+
+  // Holding a pen color button for HOLD_TO_EDIT_MS, with either mouse button or a finger, puts
+  // a color picker over each of the nine colors; a second hold, or leaving the pen tool, takes
+  // them away. SudokuPad keeps one panel element and swaps its `tool-pen` class for the next
+  // tool's, so the pickers would stay behind on their own: a class watcher ends edit mode when
+  // the panel stops being the pen's.
+  let leaveWatch = null
+
+  function exitEditMode (panel) {
+    if (leaveWatch) leaveWatch.disconnect()
+    leaveWatch = null
+    panel.classList.remove(EDITING)
+    panel.querySelectorAll(`.${PICKER}`).forEach((el) => el.remove())
+  }
+
+  function enterEditMode (panel) {
+    // Every button is found before anything changes, so a missing one leaves no half edit mode.
+    const buttons = PEN_COLORS.map((n) => {
+      const button = panel.querySelector(`button[data-value="${n}"]`)
+      if (!button) throw new Error(`pen-color: the pen tool has no button for pen color ${n}`)
+      return button
+    })
+    panel.classList.add(EDITING)
+    buttons.forEach((button, i) => {
+      button.insertAdjacentHTML('beforebegin',
+        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLORS[i]}" value="${active[PEN_COLORS[i]]}"></div>`)
+    })
+    leaveWatch = new window.MutationObserver(() => {
+      if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
+    })
+    leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
+  }
+
+  function toggleEditMode (panel) {
+    if (panel.classList.contains(EDITING)) exitEditMode(panel)
+    else enterEditMode(panel)
+  }
+
+  function installHoldToEdit () {
+    let timer
+    // True from the moment a hold opens or closes edit mode until the next press anywhere.
+    let holdDone = false
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    // Pointer events carry a mouse button of either kind, and touch too (touch is not tested).
+    document.addEventListener('pointerdown', (event) => {
+      cancel()
+      holdDone = false
+      const target = event.target.closest(HOLD_TARGETS)
+      if (!target) return
+      const panel = target.closest('.tool-pen')
+      timer = setTimeout(() => { holdDone = true; toggleEditMode(panel) }, HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // The browser's menu would open over the picker during a right-click hold or a long touch:
+    // when the press is still going (Linux opens it on press), or after the hold has run its
+    // course (Windows opens it on release, over the picker that appeared under the pointer).
+    // A quick right-click on a button, released before the delay, keeps its menu on Windows.
+    document.addEventListener('contextmenu', (event) => {
+      if ((timer !== undefined || holdDone) && event.target.closest(HOLD_TARGETS)) event.preventDefault()
+    }, true)
+    // `input` fires as the picker moves, so the color changes live.
+    document.addEventListener('input', (event) => {
+      const el = event.target
+      if (el.matches(`.${PICKER} input`)) savePenColor(el.dataset.pen, el.value)
+    })
+  }
+
   Framework.getApp().then(async () => {
+    installHoldToEdit()
     Framework.addSetting({
       tag: 'button',
       name: 'pencolor',
@@ -356,8 +466,7 @@
     })
     const saved = savedColors(Framework.getData(DATA_KEY))
     if (saved) {
-      active = saved
-      applyColors(saved)
+      adoptColors(saved, [])
       return
     }
     // Nothing saved: the pen takes the darkened current color page, read once at load. When
@@ -366,8 +475,6 @@
     // A save made in the dialog while waiting outranks the derived colors.
     if (!tool || savedColors(Framework.getData(DATA_KEY))) return
     const derived = deriveFromTool(tool)
-    active = derived.colors
-    activeMissing = derived.missing
-    applyColors(active)
+    adoptColors(derived.colors, derived.missing)
   })
 })()

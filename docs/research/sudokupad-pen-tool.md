@@ -36,3 +36,20 @@ Read 2026-11-03 from SudokuPad 0.611.0's `tool-color.js`. Nothing here was run l
   browser's native picker. A second hold, or changing color page, leaves edit mode.
 - An `input` event on a picker calls `setColor` with the value, so the color changes live.
 - `tool-pen.js` has no equivalent. Its buttons are `.tool-pen button[data-value="<color>"]`.
+
+## What the hold-to-edit build found, run live 2026-11-03 (SudokuPad 0.611.0, headless Chromium)
+
+- SudokuPad keeps one `.controls-main` element and swaps its class (`tool-pen`, `tool-colour`),
+  rebuilding the buttons inside it. A picker `div` inserted into it survives leaving the tool and
+  comes back when the pen tool returns, so a script's edit mode has to end itself when the
+  element stops being `.tool-pen`. `pen-color.user.js` watches the class.
+- The color tool binds `mousedown`/`touchstart`; the script uses `pointerdown`, which both a
+  mouse button (left or right) and a finger raise.
+- A right-click hold on Windows opens the context menu on release, over the picker that
+  appeared under the pointer during the hold, so the menu is suppressed over the pickers too.
+- `input.showPicker()` called from the 1000 ms timer raises no error, since the `pointerdown`
+  that started the hold still counts as user activation. Headless Chromium draws no popup, so
+  whether the native picker would stay open through the release is not checked, and the script
+  keeps SudokuPad's extra click.
+- Screenshot of edit mode: `pen-color-edit-mode.png`.
+

@@ -18,7 +18,7 @@ import { headerVersion, openSettings } from './settings.mjs'
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-color.user.js', import.meta.url), 'utf8')
 
-const { COLOR_TOOL_WAIT_MS } = createRequire(import.meta.url)('../pen-color.user.js')
+const { COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-color.user.js')
 
 const DATA_KEY = 'PenColor_colors'
 // What the pen colors are with nothing saved: SudokuPad's cell color pages, darkened. Typed out
@@ -407,6 +407,180 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(() => swatch(4), rgbOf(PAGE_PENS[2][3])), rgbOf(PAGE_PENS[2][3]), bad)
       }
       assert.deepEqual(errors.slice(errorsBefore), [])
+    })
+
+    describe('holding a pen color button', { concurrency: false }, () => {
+      const pickers = () => p.locator('.tool-pen .pen-color-picker input')
+      const pickerCount = () => pickers().count()
+      const penPickerValues = () => pickers().evaluateAll((es) => es.map((e) => e.value))
+      const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
+      const button = (n) => p.locator(`.tool-pen button[data-value="${n}"]`)
+      const centre = async (locator) => {
+        const box = await locator.boundingBox()
+        return [box.x + box.width / 2, box.y + box.height / 2]
+      }
+      // Presses `which` over pen button `n` and leaves it down; the caller releases it.
+      const press = async (n, which) => {
+        await selectPen()
+        const [x, y] = await centre(button(n))
+        await p.mouse.move(x, y)
+        await p.mouse.down({ button: which })
+      }
+      // Holds pen button `n` until the pickers show, then releases.
+      const holdToOpen = async (n, which = 'left') => {
+        await press(n, which)
+        assert.equal(await settle(pickerCount, 9, HOLD_TO_EDIT_MS + 5000), 9)
+        await p.mouse.up({ button: which })
+      }
+      const leaveEditMode = async () => {
+        if (await pickerCount() === 0) return
+        await press(4, 'left')
+        assert.equal(await settle(pickerCount, 0, HOLD_TO_EDIT_MS + 5000), 0)
+        await p.mouse.up()
+      }
+      // Dispatches a cancelable contextmenu on the first element matching `selector` and says
+      // whether the page left it alone (dispatchEvent returns false when preventDefault ran).
+      const menuAllowed = (selector) => read((sel) => document.querySelector(sel).dispatchEvent(new window.MouseEvent('contextmenu', { bubbles: true, cancelable: true })), selector)
+
+      before(async () => {
+        await read((k) => Framework.removeData(k), DATA_KEY)
+        await setCellColorPage(2)
+        await reload()
+      })
+
+      for (const which of ['left', 'right']) {
+        it(`a ${which}-button hold shows a picker over each of the nine buttons, in the swatch colors, and adds no undo entry or stroke`, async () => {
+          const depth = await undoDepth()
+          const drawn = await strokeCount()
+          await press(4, which)
+          // A "nothing happened yet" check, so it is a sleep: well before the hold ends, no picker.
+          await sleep(HOLD_TO_EDIT_MS / 3)
+          assert.equal(await pickerCount(), 0)
+          assert.equal(await settle(pickerCount, 9, HOLD_TO_EDIT_MS + 5000), 9)
+          await p.mouse.up({ button: which })
+          assert.deepEqual(await pickers().evaluateAll((es) => es.map((e) => e.dataset.pen)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+          assert.deepEqual(await penPickerValues(), PAGE_PENS[2])
+          assert.equal(await undoDepth(), depth)
+          assert.equal(await strokeCount(), drawn)
+          await leaveEditMode()
+        })
+      }
+
+      it('a click, or a hold released early, selects the pen color and opens nothing', async () => {
+        await press(5, 'left')
+        await p.mouse.up()
+        assert.equal(await settle(() => read(() => document.querySelector('.tool-pen button.current').dataset.value), '5'), '5')
+        await press(6, 'left')
+        await sleep(HOLD_TO_EDIT_MS / 2)
+        await p.mouse.up()
+        // A "nothing happened" check: the full delay passes after the release with no picker.
+        await sleep(HOLD_TO_EDIT_MS)
+        assert.equal(await pickerCount(), 0)
+        assert.equal(await read(() => document.querySelector('.tool-pen button.current').dataset.value), '6')
+      })
+
+      it('the context menu is suppressed during a hold on a pen color button, and not over the undo button or a quick press', async () => {
+        const button4 = '.tool-pen button[data-value="4"]'
+        // A quick press (released before the delay) keeps its menu, here and on a button
+        // outside the pen tool.
+        await press(4, 'right')
+        await p.mouse.up({ button: 'right' })
+        assert.equal(await menuAllowed(button4), true)
+        // Press still going: the menu is suppressed over the held button, and only there.
+        await press(4, 'right')
+        assert.equal(await menuAllowed(button4), false)
+        assert.equal(await menuAllowed('#control-undo'), true)
+        assert.equal(await menuAllowed('.tool-pen button[data-control="delete"]'), true)
+        // The hold has run its course and the button is released over a picker, where Windows
+        // opens the menu: it is suppressed there, and no longer once a later press starts elsewhere.
+        assert.equal(await settle(pickerCount, 9, HOLD_TO_EDIT_MS + 5000), 9)
+        await p.mouse.up({ button: 'right' })
+        assert.equal(await menuAllowed('.tool-pen .pen-color-picker input'), false)
+        await leaveEditMode()
+        await p.mouse.click(1, 1)
+        assert.equal(await menuAllowed(button4), true)
+      })
+
+      it('a real right-click hold raises the page\'s contextmenu event with its default prevented', async () => {
+        const menus = []
+        await p.exposeFunction('__recordMenu', (prevented) => menus.push(prevented))
+        await read(() => {
+          window.__menuListener = (e) => window.__recordMenu(e.defaultPrevented)
+          window.addEventListener('contextmenu', window.__menuListener)
+        })
+        try {
+          await holdToOpen(4, 'right')
+          // Chromium raises the event on press on Linux and on release on Windows; either way
+          // at least one must have come, and none may have been left to open the menu.
+          assert.equal(await settle(() => menus.length > 0, true), true)
+          assert.deepEqual(menus.filter((prevented) => !prevented), [])
+        } finally {
+          await read(() => window.removeEventListener('contextmenu', window.__menuListener))
+        }
+        await leaveEditMode()
+      })
+
+      it('a picker input event alone recolors the swatch and strokes live and saves the whole set; the dialog shows it', async () => {
+        await draw(4, 7)
+        await holdToOpen(4)
+        const depth = await undoDepth()
+        // Only an `input` event, no `change`: the color must apply while the picker is still open.
+        await read((hex) => {
+          const el = document.querySelector('.tool-pen .pen-color-picker input[data-pen="4"]')
+          el.value = hex
+          el.dispatchEvent(new window.Event('input', { bubbles: true }))
+        }, FOUR.hex)
+        assert.equal(await settle(() => swatch(4), FOUR.rgb), FOUR.rgb)
+        assert.deepEqual(await settle(allStrokes(4), [FOUR.rgb]), [FOUR.rgb])
+        assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 4: FOUR.hex })
+        assert.equal(await undoDepth(), depth)
+        await leaveEditMode()
+        await openEditor()
+        assert.deepEqual(await pickerValues(), Object.values({ ...toObject(PAGE_PENS[2]), 4: FOUR.hex }))
+        await closeWith('Cancel')
+      })
+
+      it('the edit is kept after a reload, and the set no longer follows the color page', async () => {
+        await reload()
+        assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 4: FOUR.hex })
+        await swatchesAre(Object.values({ ...toObject(PAGE_PENS[2]), 4: FOUR.hex }))
+        await setCellColorPage(0)
+        assert.equal(await swatch(4), FOUR.rgb)
+        await setCellColorPage(2)
+      })
+
+      it('open pickers follow a Restore defaults and Save made in the dialog', async () => {
+        await holdToOpen(4)
+        await openEditor()
+        await restoreDefaults()
+        await closeWith('Save')
+        assert.equal(await saved(), null)
+        assert.deepEqual(await settle(penPickerValues, PAGE_PENS[2]), PAGE_PENS[2])
+        await leaveEditMode()
+      })
+
+      it('a second hold leaves edit mode, and so does leaving the pen tool', async () => {
+        await holdToOpen(4)
+        await press(4, 'left')
+        assert.equal(await settle(pickerCount, 0, HOLD_TO_EDIT_MS + 5000), 0)
+        await p.mouse.up()
+        assert.equal(await p.locator('.tool-pen.pen-color-editing').count(), 0)
+        await holdToOpen(4)
+        await p.click('#control-colour')
+        await selectPen()
+        assert.equal(await pickerCount(), 0)
+        assert.equal(await p.locator('.tool-pen.pen-color-editing').count(), 0)
+      })
+
+      it('edit mode, screenshot', async () => {
+        await holdToOpen(4)
+        // Set PEN_COLOR_SHOT to a path to save the screenshot kept in docs/research/.
+        if (process.env.PEN_COLOR_SHOT) await p.locator('.tool-pen').first().screenshot({ path: process.env.PEN_COLOR_SHOT })
+        await leaveEditMode()
+        // Put back the derived colors for the checks below.
+        await read((k) => Framework.removeData(k), DATA_KEY)
+        await reload()
+      })
     })
 
     it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION } = require('./pen-color.user.js')
+const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors, HOLD_TO_EDIT_MS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION } = require('./pen-color.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -274,6 +274,24 @@ test('savedColors does not read an array by index', () => {
 
 test('the wait for the color tool is a positive number of milliseconds', () => {
   assert.ok(COLOR_TOOL_WAIT_MS > 0)
+})
+
+test('editedColors gives the whole current set with one pen color changed, lowercased, leaving the input alone', () => {
+  const current = { ...TABLE }
+  const out = editedColors(current, '4', '#AABBCC')
+  assert.deepEqual(out, { ...TABLE, 4: '#aabbcc' })
+  assert.deepEqual(current, TABLE)
+})
+
+test('editedColors refuses a pen color or a value it cannot save, rather than saving a wrong set', () => {
+  assert.throws(() => editedColors(TABLE, '0', '#aabbcc'), RangeError)
+  assert.throws(() => editedColors(TABLE, '10', '#aabbcc'), RangeError)
+  assert.throws(() => editedColors(TABLE, '4', 'red'), RangeError)
+  assert.throws(() => editedColors(TABLE, '4', '#abc'), RangeError)
+})
+
+test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
+  assert.equal(HOLD_TO_EDIT_MS, 1000)
 })
 
 test('VERSION is the @version in the script header', () => {
