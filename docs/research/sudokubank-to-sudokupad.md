@@ -52,3 +52,16 @@ Two Exa searches: none is described as reading SudokuBank. The closest are
 - A page of ours needs the same: a small proxy limited to `sudokubank.com/puzzles/`.
   Whether SudokuBank answers a request from a proxy host was not tested; this box's
   curl got a 200.
+
+## Could it be a fiddle?
+
+- `jsfiddle.net/uhecb8yf` ("SudokuMaker Resize Test", read through Exa as a truncated
+  extract because Cloudflare blocked curl and headless Chromium) loads lz-string and
+  takes a SudokuMaker URL. That URL holds the compressed puzzle, so the fiddle needs no
+  network call. A SudokuBank URL holds only a UUID, so the data has to be fetched.
+- Three public CORS proxies, one try each from curl with `Origin: https://jsfiddle.net`,
+  returned no puzzle: `api.allorigins.win` 522, `api.codetabs.com` 522, `corsproxy.io`
+  401. The 522s may be temporary; the 401 looks like a paid-plan limit, but the body was
+  not read.
+- A fiddle is only the page's host. It still needs a proxy of ours for a pasted URL, or
+  the pasted page source without one.
