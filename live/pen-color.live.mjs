@@ -198,15 +198,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(allStrokes(1), [DEFAULT_RGB[1]]), [DEFAULT_RGB[1]])
     })
 
-    it('undo removes the last stroke and redo brings it back in the edited color', async () => {
+    it('undo removes strokes and redo brings them back, each in its pen color\'s current color', async () => {
       const before = await strokeCount()
       await p.click('#control-undo')
       assert.equal(await settle(strokeCount, before - 1), before - 1)
       await p.click('#control-redo')
       assert.equal(await settle(strokeCount, before), before)
       assert.deepEqual(await settle(allStrokes(1), [DEFAULT_RGB[1]]), [DEFAULT_RGB[1]])
-      // Undo twice more takes the pen color 9 stroke and the second pen color 4 stroke... in
-      // reverse order; what remains is still in the edited colors.
+      // Three more undos take the strokes drawn last (pen colors 1, 9 and 4); what remains is
+      // the pen color 4 stroke drawn before the edit, still in the edited color.
       await p.click('#control-undo')
       await p.click('#control-undo')
       await p.click('#control-undo')

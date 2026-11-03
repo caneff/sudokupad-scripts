@@ -46,11 +46,6 @@
     return out
   }
 
-  // Sets one pen color.
-  function setPenColor (colors, penColor, color) {
-    return { ...colors, [penColor]: color }
-  }
-
   // Overrides SudokuPad's nine pen color variables. Strokes (`.pencolor-N`) and the tool's
   // button swatches both read them; the eraser has its own fixed color and no variable.
   // SudokuPad's `tool-pen.css` loads when the pen tool is enabled, so a plain `:root` rule
@@ -61,7 +56,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeColors, setPenColor, buildCss, DEFAULT_COLORS }
+    module.exports = { normalizeColors, buildCss, DEFAULT_COLORS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -128,7 +123,7 @@
     box.addEventListener('change', (event) => {
       const el = event.target.closest('input[type="color"]')
       if (!el) return
-      colors = setPenColor(colors, el.dataset.pen, el.value.toLowerCase())
+      colors = { ...colors, [el.dataset.pen]: el.value.toLowerCase() }
       draw()
     })
   }

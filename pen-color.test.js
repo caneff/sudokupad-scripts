@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { normalizeColors, setPenColor, buildCss, DEFAULT_COLORS } = require('./pen-color.user.js')
+const { normalizeColors, buildCss, DEFAULT_COLORS } = require('./pen-color.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -33,6 +33,15 @@ test('a saved entry that is not a #rrggbb color falls back to that pen color\'s 
   assert.deepEqual(normalizeColors(saved), TABLE)
 })
 
+test('a saved color with junk before it, or a non-string entry, falls back to that pen color\'s default', () => {
+  const saved = { 1: 'x;}body{display:none}#ff0000', 2: ['#ff0000'], 3: { toLowerCase: () => '#ff0000' } }
+  assert.deepEqual(normalizeColors(saved), TABLE)
+})
+
+test('saved data that is an array is not read by index', () => {
+  assert.deepEqual(normalizeColors(['x', '#ff0000']), TABLE)
+})
+
 test('the result has exactly nine keys, whatever was saved', () => {
   assert.deepEqual(Object.keys(normalizeColors({ 10: '#ff0000', 0: '#ff0000' })), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
 })
@@ -43,11 +52,7 @@ test('normalizeColors returns a copy, never the saved object or the defaults', (
   assert.notEqual(normalizeColors(null), DEFAULT_COLORS)
 })
 
-test('setPenColor sets one pen color and leaves the others', () => {
-  assert.deepEqual(setPenColor({ 1: '#ff0000' }, '2', '#00ff00'), { 1: '#ff0000', 2: '#00ff00' })
-})
-
-test('buildCss overrides the nine variables on :root:root, which outranks any plain :root rule whichever loads last', () => {
+test('buildCss writes the nine variables under :root:root, not plain :root', () => {
   const css = buildCss({ ...TABLE, 4: '#112233' })
   const lines = css.split('\n')
   assert.equal(lines[0], ':root:root {')
