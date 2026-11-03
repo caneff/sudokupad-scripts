@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.1.0
-// @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines, circles, crosses and edge marks are with one slider, and adds direction arrows and a circle to the marks a click on a cell edge cycles through. Relies on SudokuPad internals for the edge marks, so an update can break them.
+// @version      1.2.0
+// @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines, circles, crosses, edge marks and corner marks are with one slider, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.1.0'
+  const VERSION = '1.2.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -63,22 +63,43 @@
   const MARK_PER_THICKNESS = 0.5
   // The pen values (the `pen-<value>` class of a stroke) SudokuPad draws at the full width, from
   // `docs/research/sudokupad-pen-edge-marks.md`: the free lines, and 5 and 6 (the cell circle and
-  // cross). Left out on purpose: 3, 4, b and c (the edge X marks, half the width), and h to s (the
-  // arrows and circles this script adds, also half).
+  // cross). Left out on purpose: 3, 4, b and c (the edge X marks, half the width), and h to y (the
+  // arrows, circles and grid-corner marks this script adds, also half).
   const FULL_WIDTH_VALUES = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
   // The pen value of SudokuPad's own edge X on the right, bottom, left and top edge of a cell.
   // An edge between two cells is stored on one of them, so a click on it is always one of
   // these four values.
   const EDGE_X = ['3', '4', 'b', 'c']
   // The values this script adds, per edge: the first direction, the second direction, the circle.
-  // SudokuPad's own pen values stop at `g`, so `h` onward are free.
+  // SudokuPad's own pen values stop at `g`, so `h` onward are free. They stay lowercase letters:
+  // SudokuPad lowercases a pen value when it undoes or replays one.
   const ADDED = { 3: ['h', 'i', 'j'], 4: ['k', 'l', 'm'], b: ['n', 'o', 'p'], c: ['q', 'r', 's'] }
   // The two directions of a vertical edge, then of a horizontal one.
   const SHAPES = { 3: ['>', '<'], 4: ['^', 'v'], b: ['>', '<'], c: ['^', 'v'] }
-  // The types of mark in cycle order. `directions` is the one checkbox for dirA and dirB.
-  const CYCLE = ['x', 'dirA', 'dirB', 'dot']
-  const MARK_SETTING_OF = { x: 'x', dirA: 'directions', dirB: 'directions', dot: 'dot' }
-  const DEFAULT_MARK_SETTINGS = { x: true, directions: true, dot: true }
+  // The types of mark in cycle order, and the setting that ticks each. `directions` is the one
+  // checkbox for dirA and dirB.
+  const EDGE_CYCLE = {
+    types: ['x', 'dirA', 'dirB', 'dot'],
+    setting: { x: 'x', dirA: 'directions', dirB: 'directions', dot: 'dot' }
+  }
+  // A grid corner has no edge direction for an arrow to name, so it cycles an X and a circle.
+  const CORNER_CYCLE = {
+    types: ['x', 'dot'],
+    setting: { x: 'cornerX', dot: 'cornerDot' }
+  }
+  const DEFAULT_MARK_SETTINGS = { x: true, directions: true, dot: true, cornerX: true, cornerDot: true }
+  // How far from a grid corner, in cells, a click still counts as on the corner. An edge's midpoint
+  // is 0.5 from its corners and a cell's middle 0.71, so neither comes near it; the 0.2 is a circle
+  // about 12 px across the radius at a cell 60 px wide, and it takes the corner-end of an edge
+  // click (SudokuPad's edge zone reaches 0.57 along the side from the midpoint).
+  const CORNER_RADIUS = 0.2
+  // A grid corner is stored as a mark on one cell. `br` is the bottom right corner of the cell, which
+  // is every corner with a cell up and to the left of it, so a corner shared by four cells is stored
+  // once; `tl` is the top left corner, for the top and left edge of the grid; `far` is the top right
+  // corner of the cell in the top row's last column, or the bottom left corner of the cell in the
+  // bottom row's first column, the two grid corners the other kinds cannot reach. Per kind: the X,
+  // then the circle, in the order of CORNER_CYCLE.types.
+  const CORNER_VALUES = { tl: ['t', 'w'], br: ['u', 'x'], far: ['v', 'y'] }
   // The shape of the third mark per edge. Its checkbox is the `dot` field of the saved settings.
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
@@ -126,8 +147,9 @@
     return ok ? data : THICKNESS.fallback
   }
 
-  // Saved data is untrusted: returns { x, directions, dot } with the default (ticked) for any
-  // entry that is not a boolean.
+  // Saved data is untrusted: returns { x, directions, dot, cornerX, cornerDot } with the default
+  // (ticked) for any entry that is not a boolean. Data saved before the corner boxes existed has no
+  // corner entry, so both read as ticked.
   function normalizeMarkSettings (data) {
     const saved = data && typeof data === 'object' && !Array.isArray(data) ? data : {}
     const out = {}
@@ -139,44 +161,80 @@
 
   // The pen value of each type on the edge whose X value is `edge`.
   function valueOfType (edge, type) {
-    return type === 'x' ? edge : ADDED[edge][CYCLE.indexOf(type) - 1]
+    return type === 'x' ? edge : ADDED[edge][EDGE_CYCLE.types.indexOf(type) - 1]
   }
 
   // The type of mark `direction` steps (1 forward, -1 backward) from `current` ('empty' or a
-  // type) round the cycle, skipping unticked types. 'empty' is always allowed. A `current`
-  // whose type is unticked still moves on.
-  function stepType (current, settings, direction) {
-    const order = [...CYCLE, 'empty']
+  // type of `cycle`) round the cycle, skipping unticked types. 'empty' is always allowed. A
+  // `current` whose type is unticked still moves on.
+  function stepType (current, settings, direction, cycle) {
+    const order = [...cycle.types, 'empty']
     const from = order.indexOf(current)
     for (let step = 1; step <= order.length; step++) {
       const type = order[(((from + direction * step) % order.length) + order.length) % order.length]
-      if (type === 'empty' || settings[MARK_SETTING_OF[type]]) return type
+      if (type === 'empty' || settings[cycle.setting[type]]) return type
     }
     throw new Error('pen-tool-extras: the cycle has no empty step')
   }
 
-  // The type of mark a left click moves to from `current`.
-  function nextType (current, settings) {
-    return stepType(current, settings, 1)
-  }
-
-  // The type of mark a right click moves to from `current`: the same cycle, backwards.
-  function previousType (current, settings) {
-    return stepType(current, settings, -1)
-  }
-
-  // What one click on the edge whose X value is `edge` does to a cell that holds the pen
-  // values `present`: { remove, add }, the values to toggle off and the one to toggle on (or
-  // null). Null when nothing is ticked, so the click does nothing. `backwards` steps the cycle
-  // the other way.
-  function planClick (edge, present, settings, backwards = false) {
-    if (!Object.keys(DEFAULT_MARK_SETTINGS).some((key) => settings[key])) return null
-    const held = CYCLE.filter((type) => present.includes(valueOfType(edge, type)))
-    const next = (backwards ? previousType : nextType)(held.length ? held[0] : 'empty', settings)
+  // What one click does to a cell that holds the pen values `present`, on a mark whose types
+  // have the pen values `valueOf(type)`: { remove, add }, the values to toggle off and the one to
+  // toggle on (or null). Null when nothing in `cycle` is ticked, so the click does nothing.
+  // `backwards` steps the cycle the other way.
+  function planCycleClick (cycle, valueOf, present, settings, backwards) {
+    if (!cycle.types.some((type) => settings[cycle.setting[type]])) return null
+    const held = cycle.types.filter((type) => present.includes(valueOf(type)))
+    const next = stepType(held.length ? held[0] : 'empty', settings, backwards ? -1 : 1, cycle)
     return {
-      remove: held.map((type) => valueOfType(edge, type)),
-      add: next === 'empty' ? null : valueOfType(edge, next)
+      remove: held.map(valueOf),
+      add: next === 'empty' ? null : valueOf(next)
     }
+  }
+
+  // What one click on the edge whose X value is `edge` does to a cell that holds `present`.
+  function planClick (edge, present, settings, backwards = false) {
+    return planCycleClick(EDGE_CYCLE, (type) => valueOfType(edge, type), present, settings, backwards)
+  }
+
+  // What one click on a grid corner stored as `kind` does to a cell that holds `present`.
+  function planCornerClick (kind, present, settings, backwards = false) {
+    return planCycleClick(CORNER_CYCLE, (type) => CORNER_VALUES[kind][CORNER_CYCLE.types.indexOf(type)], present, settings, backwards)
+  }
+
+  // The grid corner (as { row, col } of the corner, 0 to rows and 0 to cols) within CORNER_RADIUS
+  // of the point (r, c), in cell units from the grid's top left; null when none is. A point just
+  // outside the grid is measured too, so the outer corners can be clicked.
+  function cornerAt (r, c, rows, cols) {
+    const row = Math.max(0, Math.min(rows, Math.round(r)))
+    const col = Math.max(0, Math.min(cols, Math.round(c)))
+    return Math.hypot(r - row, c - col) < CORNER_RADIUS ? { row, col } : null
+  }
+
+  // The cell and kind that store the grid corner (row, col): see CORNER_VALUES.
+  function cornerStorage (row, col, rows, cols) {
+    if (row >= 1 && col >= 1) return { kind: 'br', row: row - 1, col: col - 1 }
+    if (row < rows && col < cols) return { kind: 'tl', row, col }
+    return { kind: 'far', row: row === 0 ? 0 : rows - 1, col: row === 0 ? cols - 1 : 0 }
+  }
+
+  // The grid corner, as [row, col] in cell units, that a corner mark of `kind` on the cell at
+  // (row, col) sits on: the inverse of cornerStorage. `cols` tells the `far` kind's two cells apart.
+  function cornerPoint (kind, row, col, cols) {
+    switch (kind) {
+      case 'br': return [row + 1, col + 1]
+      case 'tl': return [row, col]
+      default: return row === 0 && col === cols - 1 ? [row, col + 1] : [row + 1, col]
+    }
+  }
+
+  // The kind and type ('x' or 'dot') of a value this script adds on a grid corner, or null for any
+  // other value.
+  function cornerMarkOf (value) {
+    for (const kind of Object.keys(CORNER_VALUES)) {
+      const index = CORNER_VALUES[kind].indexOf(value)
+      if (index !== -1) return { kind, type: CORNER_CYCLE.types[index] }
+    }
+    return null
   }
 
   // The X value of the edge a value this script adds belongs to, or null for any other value.
@@ -192,9 +250,10 @@
     return index === 2 ? CIRCLE : SHAPES[edge][index]
   }
 
-  // SVG path data, relative to the edge's midpoint, for a shape. `s` is the half-size in
-  // SudokuPad's units. An arrow is a chevron whose tip points the way it names; the circle is an
-  // open ring, two arcs from the left point round and back.
+  // SVG path data, relative to the point the mark is centred on (an edge's midpoint or a grid
+  // corner), for a shape. `s` is the half-size in SudokuPad's units. An arrow is a chevron whose
+  // tip points the way it names; the circle is an open ring, two arcs from the left point round
+  // and back; 'x' is SudokuPad's own edge X.
   function shapePath (shape, s) {
     const r = CIRCLE_RADIUS_PER_HALF_SIZE * s
     switch (shape) {
@@ -202,6 +261,7 @@
       case '<': return ` m ${0.6 * s},${-s} l${-1.2 * s},${s} l${1.2 * s},${s}`
       case '^': return ` m ${-s},${0.6 * s} l${s},${-1.2 * s} l${s},${1.2 * s}`
       case 'v': return ` m ${-s},${-0.6 * s} l${s},${1.2 * s} l${s},${-1.2 * s}`
+      case 'x': return ` m ${-s},${-s} l${2 * s},${2 * s} m ${-2 * s},0 l${2 * s},${-2 * s}`
       case CIRCLE: return ` m ${-r},0 a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0`
       default: throw new Error(`pen-tool-extras: no shape named ${shape}`)
     }
@@ -335,7 +395,7 @@
   function buildThicknessCss (thickness) {
     if (normalizeThickness(thickness) !== thickness) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
     const rule = (values, width) => `${values.map((v) => `:root:root .cell-pen.pen-${v}`).join(', ')} { stroke-width: ${width}; }`
-    const marks = EDGE_X.flatMap((edge) => [edge, ...ADDED[edge]])
+    const marks = [...EDGE_X.flatMap((edge) => [edge, ...ADDED[edge]]), ...Object.values(CORNER_VALUES).flat()]
     return [rule(FULL_WIDTH_VALUES, thickness), rule(marks, thickness * MARK_PER_THICKNESS)].join('\n')
   }
 
@@ -368,11 +428,18 @@
       normalizeThickness,
       buildThicknessCss,
       normalizeMarkSettings,
-      nextType,
-      previousType,
+      stepType,
       planClick,
+      planCornerClick,
+      cornerAt,
+      cornerStorage,
+      cornerPoint,
+      cornerMarkOf,
       shapeOf,
       shapePath,
+      EDGE_CYCLE,
+      CORNER_RADIUS,
+      CORNER_VALUES,
       DEFAULT_COLORS,
       DEFAULT_MARK_SETTINGS,
       THICKNESS,
@@ -451,16 +518,26 @@
     }
   }
 
+  // The point (as [row, col] in cell units) and shape that the value this script adds draws at, on
+  // the cell at (row, col); null for any other value.
+  function addedMark (value, row, col) {
+    const shape = shapeOf(value)
+    if (shape !== null) return { point: edgeMidpoint(edgeOf(value), row, col), shape }
+    const corner = cornerMarkOf(value)
+    if (corner === null) return null
+    const { cols } = Framework.app.grid
+    return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
+  }
+
   // Draws the values this script adds. SudokuPad's own `renderPen` has no case for them and
   // gives the path no `d`; it copies every option onto the path, so passing `d` is enough.
   function wrapRenderPen (proto, renderer) {
     const original = proto.renderPen
     const size = renderer.constructor.CellSize
     proto.renderPen = function (opts = {}) {
-      const shape = shapeOf(opts.value)
-      if (shape === null) return original.call(this, opts)
-      const [r, c] = edgeMidpoint(edgeOf(opts.value), opts.row, opts.col)
-      const d = this.constructor.rcToPathData([[r, c]]) + shapePath(shape, size * 0.125)
+      const mark = addedMark(opts.value, opts.row, opts.col)
+      if (mark === null) return original.call(this, opts)
+      const d = this.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125)
       return original.call(this, Object.assign({}, opts, { d }))
     }
   }
@@ -497,47 +574,86 @@
     window.addEventListener('pointerup', remember, true)
   }
 
-  // Chooses the mark for an edge click. The original `clickCell` runs unchanged, so its
+  // The grid corner under the pointer, as cornerAt names it, or null: also null while both corner
+  // boxes are unticked, so the original hit test handles every click as it did before. SudokuPad's
+  // `clickCell` hit-tests `getInputRc()`, the pointer in cell units, and so does this.
+  function cornerUnderPointer (tool) {
+    if (!markSettings.cornerX && !markSettings.cornerDot) return null
+    const { r, c } = tool.getInputRc()
+    const { rows, cols } = Framework.app.grid
+    return cornerAt(r, c, rows, cols)
+  }
+
+  // The pen values a cell holds, without their colors.
+  function penValuesOf (cell) {
+    return (cell.pen || []).map((valueColor) => valueColor[0])
+  }
+
+  // The actions of one click that applies `plan` to `cell`: select it, toggle off what the plan
+  // removes, toggle on what it adds.
+  function planActs (cell, plan) {
+    return [
+      { type: 'select', arg: [cell] },
+      ...plan.remove.map((arg) => ({ type: 'pen', arg })),
+      ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])
+    ]
+  }
+
+  // A click on a grid corner: this script's corner cycle (backwards after a right click) on the
+  // cell that stores the corner, sent as one group like any pen click.
+  function clickCorner (tool, corner) {
+    const { rows, cols } = Framework.app.grid
+    const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
+    const cell = Framework.app.grid.getCell(row, col)
+    tool.actStart()
+    planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, lastButton === RIGHT_BUTTON)).forEach((act) => tool.actAdd(act))
+    tool.actSend()
+  }
+
+  // Chooses the mark for a click. A click within CORNER_RADIUS of a grid corner is a corner
+  // click, checked first. Otherwise the original `clickCell` runs unchanged, so its
   // edge-versus-cell hit test decides what was clicked; its `actSend` is held back to see
   // the actions it queued. An edge click is replaced by this script's cycle (backwards after a
   // right click), and everything else is sent as it was. The actions still go out through
   // `actSend`, one group per click, so one undo reverses one click.
   function wrapClickCell (tool, original) {
     tool.clickCell = function () {
+      const corner = cornerUnderPointer(this)
+      if (corner !== null) return clickCorner(this, corner)
       const queued = queuedActs(this, original, arguments)
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {
-        const [select, pen] = queued
-        const cell = select.arg[0]
-        const plan = planClick(pen.arg, (cell.pen || []).map((valueColor) => valueColor[0]), markSettings, lastButton === RIGHT_BUTTON)
+        const cell = queued[0].arg[0]
+        const plan = planClick(queued[1].arg, penValuesOf(cell), markSettings, lastButton === RIGHT_BUTTON)
         if (plan === null) return
-        acts = [select, ...plan.remove.map((arg) => ({ type: 'pen', arg })), ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])]
+        acts = planActs(cell, plan)
       }
       acts.forEach((act) => this.actAdd(act))
       this.actSend()
     }
   }
 
-  // Whether a click at the pointer's current position would be an edge click, found by running
-  // the original `clickCell` without sending what it queues.
-  function edgeUnderPointer (tool, original) {
-    return isEdgeActs(queuedActs(tool, original, []))
+  // Whether a click at the pointer's current position would be a corner click or an edge click,
+  // the edge found by running the original `clickCell` without sending what it queues.
+  function markUnderPointer (tool, original) {
+    return cornerUnderPointer(tool) !== null || isEdgeActs(queuedActs(tool, original, []))
   }
 
-  // The pen tool steps an edge backwards on a right click, so the browser's menu must not open
-  // over it. The check runs the pen tool's own hit test at the pointer, so only an edge counts:
-  // a right click in a cell's middle, with another tool, or off the grid keeps its menu.
-  function suppressEdgeMenu (app, isEdgeClick) {
+  // The pen tool steps a corner or an edge backwards on a right click, so the browser's menu must
+  // not open over one. The check runs the same hit test as the click at the pointer, so only a
+  // corner or an edge counts: a right click in a cell's middle, with another tool, or off the grid
+  // keeps its menu.
+  function suppressMarkMenu (app, isMarkClick) {
     document.addEventListener('contextmenu', (event) => {
-      if (app.tool === 'pen' && event.target.closest(GRID_SELECTOR) && isEdgeClick()) event.preventDefault()
+      if (app.tool === 'pen' && event.target.closest(GRID_SELECTOR) && isMarkClick()) event.preventDefault()
     }, true)
   }
 
   // Cells drawn before the wrap hold values the old `renderPen` drew as nothing.
   function redrawAddedMarks (app) {
     app.puzzle.cells.forEach((cell) => {
-      if ((cell.pen || []).some((valueColor) => shapeOf(valueColor[0]) !== null)) cell.renderContent(true)
+      if ((cell.pen || []).some((valueColor) => addedMark(valueColor[0], cell.row, cell.col) !== null)) cell.renderContent(true)
     })
   }
 
@@ -545,19 +661,21 @@
     const tool = typeof ToolPen !== 'undefined' ? ToolPen.tool : undefined
     const renderer = app.svgRenderer
     const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
-    const found = tool && ['clickCell', 'actSend', 'actAdd'].every((name) => typeof tool[name] === 'function') &&
+    const grid = app.grid
+    const found = tool && ['clickCell', 'actStart', 'actSend', 'actAdd', 'getInputRc'].every((name) => typeof tool[name] === 'function') &&
       Array.isArray(tool._actList) &&
+      grid && typeof grid.getCell === 'function' && Number.isInteger(grid.rows) && Number.isInteger(grid.cols) &&
       proto && typeof proto.renderPen === 'function' &&
       typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
     if (!found) {
-      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge marks are not installed')
+      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge and corner marks are not installed')
       return
     }
     wrapRenderPen(proto, renderer)
     const original = tool.clickCell
     wrapClickCell(tool, original)
     trackButton()
-    suppressEdgeMenu(app, () => edgeUnderPointer(tool, original))
+    suppressMarkMenu(app, () => markUnderPointer(tool, original))
     redrawAddedMarks(app)
   }
 
@@ -596,10 +714,10 @@
       `<b style="width:1.2em;text-align:right">${n}</b>` +
       `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
     ).join('')
-    const box = (key, label) =>
+    const box = (key, label, picture = key) =>
       '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
       `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}"${state.marks[key] ? ' checked' : ''}>` +
-      `${markPicture(key)}<label for="pen-tool-extras-mark-${key}" style="width:auto;text-align:left">${label}</label></div>`
+      `${markPicture(picture)}<label for="pen-tool-extras-mark-${key}" style="width:auto;text-align:left">${label}</label></div>`
     return '<div style="font-weight:600">Pen colors</div>' + rows +
       missingNote(state.missing) +
       '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
@@ -607,7 +725,9 @@
       `<input type="range" id="pen-tool-extras-thickness" min="${THICKNESS.min}" max="${THICKNESS.max}" step="${THICKNESS.step}" value="${state.thickness}">` +
       `<output for="pen-tool-extras-thickness">${state.thickness}</output></div>` +
       '<div style="font-weight:600;margin-top:10px">Edge marks a click cycles through</div>' +
-      box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle')
+      box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle') +
+      '<div style="font-weight:600;margin-top:10px">Corner marks a click near a grid corner cycles through</div>' +
+      box('cornerX', 'X', 'x') + box('cornerDot', 'Circle', 'dot')
   }
 
   function openDialog () {

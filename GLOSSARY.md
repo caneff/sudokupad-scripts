@@ -32,9 +32,20 @@
 - **edge cycle** — the order a left click on an edge steps through its marks: X,
   first direction, second direction, circle, empty, skipping any type unticked in
   the settings dialog. A right click steps the same cycle backwards.
+- **grid-corner mark** — a pen mark Pen Tool Extras draws centred on a corner of the grid, inner or outer: an
+  X or a circle, the same shapes as the edge marks. The dialog calls the group "Corner marks"; SudokuPad's own
+  "corner marks" are the small digits in a cell's corners, which this is not. Stored as one character in the pen
+  value of one cell: a corner with a cell up and left of it is the bottom right of that cell, so a shared corner
+  is stored once; the rest are stored on the top left of the cell they touch, except the grid's top right and
+  bottom left corners.
+- **corner zone** — the part of a cell within 0.2 of a cell (by distance) of a grid corner. A click there is a
+  grid-corner mark click, decided before SudokuPad's own edge-or-cell test; with both Corner marks boxes unticked
+  there is no corner zone.
+- **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
+  type. A right click steps it backwards.
 - **thickness** — the one slider setting the stroke width of the pen's free lines, the cell circle and
-  cross (pen values 5 and 6) and every edge mark, from 1 to 12, saved under `PenColor_thickness`.
-  SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle)
+  cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 12, saved under `PenColor_thickness`.
+  SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
   is always half of it, so every width scales by one factor.
 - **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
   another in the Dark page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
