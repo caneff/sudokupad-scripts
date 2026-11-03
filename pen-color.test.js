@@ -207,7 +207,7 @@ test('the darkest low-chroma pen color becomes #000000, wherever it sits on the 
   assert.equal(colors[3], '#000000')
   assert.equal(colors[5], darkenColor([200, 200, 200]))
   assert.equal(colors[1], darkenColor([204, 51, 17]))
-  assert.equal(chromaOf(darkenColor([90, 90, 90])) < GREY_CHROMA, true)
+  assert.ok(chromaOf(darkenColor([90, 90, 90])) < GREY_CHROMA, String(chromaOf(darkenColor([90, 90, 90]))))
 })
 
 test('a near-grey with a slight tint counts as low chroma and goes black when it is the darkest', () => {
@@ -216,22 +216,22 @@ test('a near-grey with a slight tint counts as low chroma and goes black when it
 })
 
 test('a page with no low-chroma color changes nothing: no pen color becomes black', () => {
-  const six = [hueful[0], hueful[1], hueful[2], hueful[3], 'rgb(120, 80, 200)', 'rgb(0, 153, 136)', 'rgb(170, 51, 170)', 'rgb(136, 136, 34)', 'rgb(238, 153, 170)']
-  const colors = penColors(six)
-  six.forEach((rgb, i) => assert.equal(colors[i + 1], darkenColor(parseColor(rgb))))
-  assert.equal(Object.values(colors).includes('#000000'), false)
+  const nine = [hueful[0], hueful[1], hueful[2], hueful[3], 'rgb(120, 80, 200)', 'rgb(0, 153, 136)', 'rgb(170, 51, 170)', 'rgb(136, 136, 34)', 'rgb(238, 153, 170)']
+  const colors = penColors(nine)
+  nine.forEach((rgb, i) => assert.equal(colors[i + 1], darkenColor(parseColor(rgb))))
+  assert.deepEqual(PEN_NUMBERS.filter((n) => colors[n] === '#000000'), [])
 })
 
-test('a pen color kept from SudokuPad is outside the black rule', () => {
-  // Pens 7-9 have no page entry and keep SudokuPad's own, which include greys; the rule looks
-  // only at derived colors, and none of pens 1-6 is a grey, so nothing turns black.
-  const page = ['t', 'a', 'b', 'c', 'd', 'e', 'f']
-  const read = (k) => ({ t: 'transparent', a: hueful[0], b: hueful[1], c: hueful[2], d: hueful[3], e: 'rgb(120, 80, 200)', f: 'rgb(0, 153, 136)' })[k]
+test('a pen color kept from SudokuPad is outside the black rule: the derived grey turns black, not the kept black pen 9', () => {
+  // Pens 4-9 have no page entry and keep SudokuPad's own, pen 9 being #000000. Counted in, pen 9
+  // would be the darkest grey and the derived grey (pen 2) would stay grey.
+  const page = ['t', 'a', 'b', 'c']
+  const read = (k) => ({ t: 'transparent', a: hueful[0], b: 'rgb(90, 90, 90)', c: hueful[1] })[k]
   const r = penColorsFromPage(page, read)
-  assert.equal(r.colors[7], DEFAULT_COLORS[7])
-  assert.equal(r.colors[8], DEFAULT_COLORS[8])
-  assert.deepEqual(r.missing, [7, 8, 9])
-  for (const n of [1, 2, 3, 4, 5, 6]) assert.notEqual(r.colors[n], '#000000')
+  assert.equal(r.colors[1], darkenColor([204, 51, 17]))
+  assert.equal(r.colors[2], '#000000')
+  assert.equal(r.colors[3], darkenColor([17, 119, 51]))
+  for (const n of [4, 5, 6, 7, 8, 9]) assert.equal(r.colors[n], DEFAULT_COLORS[n])
 })
 
 test('SudokuPad\'s default first page keeps its result: index 3 is already black and stays the darkest', () => {
