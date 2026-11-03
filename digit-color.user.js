@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.0
-// @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens and conflicting marks keep their color.
+// @version      0.2.0
+// @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark keeps its digit color and gets a red outline.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -36,6 +36,10 @@
   }
   // SudokuPad's own fill for entered digits and marks, shown by the dialog for a digit set to it.
   const SUDOKUPAD_BLUE = '#1d6ae5'
+  // SudokuPad's own fill for a mark in the `conflict` state, reused as the outline.
+  const CONFLICT_RED = '#b33a3a'
+  // The outline's width in the board's units; paint-order puts the stroke behind the fill, so half shows.
+  const OUTLINE_WIDTH = '2px'
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
   // Saved data is untrusted: returns { digit: '#rrggbb' | null } for every digit. A saved null
@@ -63,15 +67,20 @@
     return DIGITS.includes(t) ? t : null
   }
 
-  // One rule per target per colored digit. Marks read their digit from `data-val`; a mark
-  // in the `conflict` state keeps SudokuPad's red. Givens sit in `#cell-givens`, which no
-  // rule names.
+  // One fill rule per target per colored digit. Marks read their digit from `data-val`. A mark
+  // in the `conflict` state keeps its digit color and gets a red outline, for every digit, a
+  // digit on SudokuPad's own color included. The `#svgrenderer` prefix outranks SudokuPad's own
+  // conflict rule, `.setting-checkpencilmarks #cell-candidates .conflict`. Givens sit in `#cell-givens`, which no rule names.
   function buildCss (colors) {
-    return Object.entries(colors).filter(([, color]) => color !== null).map(([digit, color]) => [
-      `#cell-values [${DIGIT_ATTR}="${digit}"] { fill: ${color} }`,
-      `#cell-pencilmarks .cell-pencilmark[data-val="${digit}"]:not(.conflict) { fill: ${color} }`,
-      `#cell-candidates tspan[data-val="${digit}"]:not(.conflict) { fill: ${color} }`
-    ].join('\n')).join('\n')
+    return Object.entries(colors).map(([digit, color]) => {
+      const marks = [
+        `#svgrenderer #cell-pencilmarks .cell-pencilmark[data-val="${digit}"]`,
+        `#svgrenderer #cell-candidates tspan[data-val="${digit}"]`
+      ]
+      const fill = color === null ? [] : [`#cell-values [${DIGIT_ATTR}="${digit}"] { fill: ${color} }`, ...marks.map((m) => `${m} { fill: ${color} }`)]
+      const outline = marks.map((m) => `${m}.conflict { stroke: ${CONFLICT_RED}; stroke-width: ${OUTLINE_WIDTH}; paint-order: stroke }`)
+      return [...fill, ...outline].join('\n')
+    }).join('\n')
   }
 
   if (typeof module !== 'undefined' && module.exports) {
