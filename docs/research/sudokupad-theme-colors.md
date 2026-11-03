@@ -77,3 +77,12 @@ Run for Dark Page (`dark-page.user.js`, issue #14); the notes above were read fr
   disabled), so a page of a matched site that is not a puzzle keeps its white.
 - Screenshots at real size: `dark-page.png` (the sample puzzle as it opens, retaken with
   `dark-page-screenshot.mjs`) and `dark-page-outside-text.png` (a 6x6 with clue text outside the grid).
+- Control buttons on a dark page (Dark Page 0.3.0, checked live on 2026-11-03): SudokuPad's
+  own are `#eee` with `#ccc` borders. The script's rules apply only when `textColorFor` gives
+  light text, set `#2a2a2a` / `#d2a8f0` / `#4a4a4a` on `.controls-app`, `.controls-tool`
+  (not `.selected`) and `.controls-aux` buttons, and the softer border on `.button-row button`.
+  Hover on undo changes nothing with the script on or off; hover on a digit or mode button is
+  `filter: brightness(1.25)`, which the rules do not touch. Color swatches, the pen tool's
+  white swatches and its mode select, and the svg-painted icons keep their own colors; a
+  button added to `.controls-aux` (Color by Digit) goes dark with the rest. `dark-page.png`
+  was retaken with the buttons dark.
