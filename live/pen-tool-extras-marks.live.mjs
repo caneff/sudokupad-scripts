@@ -435,7 +435,7 @@ describe('without the script', { concurrency: false }, () => {
 })
 
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
-  it('logs one warning and leaves the pen tool unchanged', async () => {
+  it('logs one warning, installs no edge marks, and the pen tool still works', async () => {
     const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
     const errors = []
     const warnings = []

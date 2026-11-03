@@ -23,7 +23,8 @@
   const VERSION = '1.0.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
-  // The saved-data keys keep the names the two scripts this one replaced saved under.
+  // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
+  // the two thickness keys are new.
   const COLORS_KEY = 'PenColor_colors'
   const LINE_THICKNESS_KEY = 'PenColor_thickness'
   const MARKS_KEY = 'EdgeMarks_marks'
@@ -56,11 +57,12 @@
   // SudokuPad's cell units, a cell being 64). The dot keeps the proportion it had: 7 against 2.5.
   const LINE_THICKNESS = { min: 1, max: 12, step: 1, fallback: 5 }
   const MARK_THICKNESS = { min: 1, max: 6, step: 0.5, fallback: 2.5 }
-  const DOT_PER_MARK = 7 / 2.5
+  const DOT_THICKNESS = 7
+  const DOT_PER_MARK = DOT_THICKNESS / MARK_THICKNESS.fallback
   // The pen values (the `pen-<value>` class of a stroke) drawn as free lines, from
   // `docs/research/sudokupad-pen-edge-marks.md`. Left out on purpose: 3, 4, b and c (the edge X
-  // marks, 2.5 wide in SudokuPad), 5 and 6 (the cell circle and cross), and every value Edge
-  // Marks draws, which sets its own width.
+  // marks, 2.5 wide in SudokuPad), 5 and 6 (the cell circle and cross), and h to s (the arrows
+  // and dots this script adds); the edge mark thickness sets the width of those.
   const LINE_VALUES = ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
   // The pen value of SudokuPad's own edge X on the right, bottom, left and top edge of a cell.
   // An edge between two cells is stored on one of them, so a click on it is always one of
@@ -506,7 +508,7 @@
       proto && typeof proto.renderPen === 'function' &&
       typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
     if (!found) {
-      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the pen tool is left unchanged')
+      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge marks are not installed')
       return
     }
     wrapRenderPen(proto, renderer)
@@ -514,7 +516,12 @@
     redrawAddedMarks(app)
   }
 
+  // The thicknesses the style shows now: the ones in force, or the ones a dialog is previewing.
+  const shown = { line: LINE_THICKNESS.fallback, mark: MARK_THICKNESS.fallback }
+
   function applyStyle (colors, lineThickness, markThickness) {
+    shown.line = lineThickness
+    shown.mark = markThickness
     let style = document.getElementById(STYLE_ID)
     if (!style) {
       style = document.createElement('style')
@@ -679,7 +686,8 @@
   function adoptColors (colors, missing) {
     active = colors
     activeMissing = missing
-    applyStyle(colors, activeLineThickness, activeMarkThickness)
+    // New colors keep whatever thickness the style shows, so a dialog's preview survives them.
+    applyStyle(colors, shown.line, shown.mark)
     document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
   }
 
