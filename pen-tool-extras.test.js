@@ -7,7 +7,8 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
   HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
-  nextType, previousType, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS
+  nextType, previousType, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
+  CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick
 } = require('./pen-tool-extras.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
@@ -352,8 +353,8 @@ test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s colo
   assert.equal(HOLD_TO_EDIT_MS, 1000)
 })
 
-const ALL = { x: true, directions: true, dot: true }
-const NONE = { x: false, directions: false, dot: false }
+const ALL = { x: true, directions: true, dot: true, cornerX: true, cornerDot: true }
+const NONE = { x: false, directions: false, dot: false, cornerX: false, cornerDot: false }
 
 test('fresh install has every mark ticked', () => {
   assert.deepEqual(DEFAULT_MARK_SETTINGS, ALL)
@@ -368,7 +369,7 @@ test('corrupt saved settings fall back to every mark ticked', () => {
 })
 
 test('a saved boolean is kept and a non-boolean entry takes its default', () => {
-  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', dot: false }), { x: false, directions: true, dot: false })
+  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', dot: false, cornerX: 'no', cornerDot: false }), { x: false, directions: true, dot: false, cornerX: true, cornerDot: false })
 })
 
 test('with everything ticked the cycle is X, direction, other direction, circle, empty', () => {
@@ -481,7 +482,7 @@ test('with nothing ticked the click does nothing, and an existing mark stays', (
 })
 
 test('an unticked mark already on the grid moves to the next ticked mark', () => {
-  assert.deepEqual(planClick('3', ['3'], { x: false, directions: false, dot: true }), { remove: ['3'], add: 'j' })
+  assert.deepEqual(planClick('3', ['3'], { ...NONE, dot: true }), { remove: ['3'], add: 'j' })
 })
 
 test('two marks on one edge, as a replay can hold, both go on the next click', () => {
@@ -536,6 +537,154 @@ test('an arrow is a two-segment chevron pointing the way it names', () => {
   assert.equal(lx < 0, true)
   assert.equal(uy < 0, true)
   assert.equal(dy > 0, true)
+})
+
+test('settings saved before corner marks existed read back with both corner marks ticked', () => {
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: false, dot: true }), { ...ALL, directions: false })
+})
+
+test('the corner zone is 0.2 of a cell from a grid corner', () => {
+  assert.equal(CORNER_RADIUS, 0.2)
+})
+
+test('cornerAt finds the grid corner within the radius, inner and outer, and nothing farther', () => {
+  assert.deepEqual(cornerAt(3, 3, 9, 9), { row: 3, col: 3 })
+  assert.deepEqual(cornerAt(3.19, 3, 9, 9), { row: 3, col: 3 })
+  assert.equal(cornerAt(3.2, 3, 9, 9), null, 'exactly the radius is outside')
+})
+
+test('cornerAt measures distance, so a point in the square around a corner but outside the circle is not a corner', () => {
+  assert.equal(cornerAt(3.15, 3.15, 9, 9), null)
+  assert.deepEqual(cornerAt(3.14, 3.14, 9, 9), { row: 3, col: 3 })
+})
+
+test('cornerAt leaves an edge midpoint and a cell middle to the edge and cell marks', () => {
+  assert.equal(cornerAt(3.5, 3, 9, 9), null)
+  assert.equal(cornerAt(3, 3.5, 9, 9), null)
+  assert.equal(cornerAt(3.5, 3.5, 9, 9), null)
+  assert.equal(cornerAt(3.3, 3, 9, 9), null)
+})
+
+test('cornerAt counts the four outer corners, also for a point just outside the grid', () => {
+  assert.deepEqual(cornerAt(0, 0, 9, 9), { row: 0, col: 0 })
+  assert.deepEqual(cornerAt(9, 9, 9, 9), { row: 9, col: 9 })
+  assert.deepEqual(cornerAt(0, 9, 9, 9), { row: 0, col: 9 })
+  assert.deepEqual(cornerAt(9, 0, 9, 9), { row: 9, col: 0 })
+  assert.deepEqual(cornerAt(-0.1, -0.1, 9, 9), { row: 0, col: 0 })
+  assert.deepEqual(cornerAt(9.1, 8.95, 9, 9), { row: 9, col: 9 })
+  assert.equal(cornerAt(-0.5, -0.5, 9, 9), null, 'far outside the grid')
+  assert.equal(cornerAt(-1, 4, 9, 9), null)
+})
+
+test('cornerAt reads a non-square grid by its own rows and columns', () => {
+  assert.deepEqual(cornerAt(4, 6, 4, 6), { row: 4, col: 6 })
+  assert.equal(cornerAt(4, 7, 4, 6), null)
+})
+
+// Every grid corner of a rows x cols grid.
+function allCorners (rows, cols) {
+  const corners = []
+  for (let row = 0; row <= rows; row++) for (let col = 0; col <= cols; col++) corners.push({ row, col })
+  return corners
+}
+
+test('every grid corner is stored on one cell inside the grid, and no two corners share a cell and kind', () => {
+  for (const [rows, cols] of [[9, 9], [4, 6], [6, 4], [1, 5], [5, 1]]) {
+    const seen = new Set()
+    for (const corner of allCorners(rows, cols)) {
+      const where = cornerStorage(corner.row, corner.col, rows, cols)
+      assert.equal(where.row >= 0 && where.row < rows && where.col >= 0 && where.col < cols, true, JSON.stringify({ corner, where }))
+      const key = JSON.stringify(where)
+      assert.equal(seen.has(key), false, `${key} holds two corners`)
+      seen.add(key)
+    }
+  }
+})
+
+test('the stored cell and kind give the corner back: cornerPoint undoes cornerStorage on every grid', () => {
+  for (const [rows, cols] of [[9, 9], [4, 6], [6, 4], [2, 2], [1, 5], [5, 1]]) {
+    for (const corner of allCorners(rows, cols)) {
+      const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
+      assert.deepEqual(cornerPoint(kind, row, col, rows, cols), [corner.row, corner.col], JSON.stringify({ corner, kind, rows, cols }))
+    }
+  }
+})
+
+test('an inner corner is the bottom right of the cell up and left of it, so a shared corner is stored once', () => {
+  assert.deepEqual(cornerStorage(3, 3, 9, 9), { kind: 'br', row: 2, col: 2 })
+  assert.deepEqual(cornerStorage(9, 9, 9, 9), { kind: 'br', row: 8, col: 8 })
+  assert.deepEqual(cornerStorage(9, 4, 9, 9), { kind: 'br', row: 8, col: 3 })
+  assert.deepEqual(cornerStorage(4, 9, 9, 9), { kind: 'br', row: 3, col: 8 })
+})
+
+test('the outer corners on the top and left are the top left of the cell they touch; the other two have their own kind', () => {
+  assert.deepEqual(cornerStorage(0, 0, 9, 9), { kind: 'tl', row: 0, col: 0 })
+  assert.deepEqual(cornerStorage(0, 4, 9, 9), { kind: 'tl', row: 0, col: 4 })
+  assert.deepEqual(cornerStorage(4, 0, 9, 9), { kind: 'tl', row: 4, col: 0 })
+  assert.deepEqual(cornerStorage(0, 9, 9, 9), { kind: 'far', row: 0, col: 8 })
+  assert.deepEqual(cornerStorage(9, 0, 9, 9), { kind: 'far', row: 8, col: 0 })
+})
+
+test('the corner characters are lowercase letters SudokuPad does not use and the edge marks do not use, two per kind', () => {
+  const used = new Set()
+  for (const kind of ['tl', 'br', 'far']) {
+    assert.equal(CORNER_VALUES[kind].length, 2)
+    for (const value of CORNER_VALUES[kind]) {
+      assert.match(value, /^[h-z]$/)
+      assert.equal(shapeOf(value), null, `${value} is an edge character`)
+      assert.equal(used.has(value), false, value)
+      used.add(value)
+    }
+  }
+  assert.equal(used.size, 6)
+})
+
+test('cornerMarkOf names the kind and type a corner character draws, and nothing for another character', () => {
+  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[0]), { kind: 'br', type: 'x' })
+  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[1]), { kind: 'br', type: 'dot' })
+  assert.deepEqual(cornerMarkOf(CORNER_VALUES.far[1]), { kind: 'far', type: 'dot' })
+  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'h', 's', 'z']) assert.equal(cornerMarkOf(other), null, other)
+})
+
+test('the corner cycle is X, circle, empty, and a click on an empty corner adds the X', () => {
+  const [x, dot] = CORNER_VALUES.br
+  assert.deepEqual(planCornerClick('br', [], ALL), { remove: [], add: x })
+  assert.deepEqual(planCornerClick('br', [x], ALL), { remove: [x], add: dot })
+  assert.deepEqual(planCornerClick('br', [dot], ALL), { remove: [dot], add: null })
+})
+
+test('the corner cycle backwards is circle, X, empty', () => {
+  const [x, dot] = CORNER_VALUES.tl
+  assert.deepEqual(planCornerClick('tl', [], ALL, true), { remove: [], add: dot })
+  assert.deepEqual(planCornerClick('tl', [dot], ALL, true), { remove: [dot], add: x })
+  assert.deepEqual(planCornerClick('tl', [x], ALL, true), { remove: [x], add: null })
+})
+
+test('an unticked corner type is skipped, and with both unticked the corner click does nothing', () => {
+  const [x, dot] = CORNER_VALUES.far
+  assert.deepEqual(planCornerClick('far', [], { ...ALL, cornerX: false }), { remove: [], add: dot })
+  assert.deepEqual(planCornerClick('far', [dot], { ...ALL, cornerX: false }), { remove: [dot], add: null })
+  assert.deepEqual(planCornerClick('far', [x], { ...ALL, cornerDot: false }), { remove: [x], add: null })
+  assert.equal(planCornerClick('far', [x], { ...ALL, cornerX: false, cornerDot: false }), null)
+})
+
+test('a corner click sees only its own kind: another kind, an edge mark or a cell mark on the cell stays', () => {
+  const [x] = CORNER_VALUES.br
+  assert.deepEqual(planCornerClick('br', [CORNER_VALUES.tl[0], '3', 'h', '5'], ALL), { remove: [], add: x })
+})
+
+test('the edge cycle ignores the corner boxes, and the corner cycle ignores the edge boxes', () => {
+  assert.deepEqual(planClick('3', [], { ...NONE, cornerX: true }), null)
+  assert.equal(planCornerClick('br', [], { ...NONE, x: true, directions: true, dot: true }), null)
+})
+
+test('corner marks are half the thickness, like edge marks, and share no width rule with another value', () => {
+  const widths = widthsOf(buildThicknessCss(5))
+  for (const kind of ['tl', 'br', 'far']) for (const value of CORNER_VALUES[kind]) assert.equal(widths[value], '2.5', value)
+})
+
+test('the corner X is SudokuPad\'s edge X shape: two crossing diagonals of half-size s, drawn from the corner', () => {
+  assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
 })
 
 test('VERSION is the @version in the script header', () => {
