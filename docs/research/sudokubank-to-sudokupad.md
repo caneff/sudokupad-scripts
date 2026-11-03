@@ -2,13 +2,16 @@
 
 Read on 2026-11-03. No translator was built and no converted puzzle was loaded.
 
+Dropped: Chris ruled on 2026-11-03 not to build this, after reading SudokuBank's terms
+(below). Reopening it starts from those terms.
+
 ## SudokuBank's data
 
 - Sampled 17 fetches of `sudokubank.com/puzzles/<uuid>` with no login: one first probe
   and the 16 puzzle links on the home page. The sample is what the home page showed,
   so it is not random.
 - Each page embeds the whole puzzle as JSON in its `self.__next_f.push` chunks:
-  `givenCells`, `solutionData` (`symbols-v1`, the solution in plain text),
+  `givenCells`,
   `constraints` (`[{id, type, data}]`), `puzzleName` and `puzzleRuleset`.
 - `puzzleRuleset` is structured (categories and types). Whether the page also holds
   the rule text as prose was not checked.
@@ -65,3 +68,19 @@ Two Exa searches: none is described as reading SudokuBank. The closest are
   not read.
 - A fiddle is only the page's host. It still needs a proxy of ours for a pasted URL, or
   the pasted page source without one.
+
+## SudokuBank's terms
+
+`sudokubank.com/legal` holds the terms and copyright policy on one page (keyword pass
+over its 11 KB of text on 2026-11-03, not a full read), which says:
+
+- "No bots or scrapers, no bulk-copying the puzzle library, no malware, and no poking at
+  data that isn't yours".
+- "A specific puzzle is different: its grid, clues, and solution belong to whoever made
+  them."
+
+The 17-page sample above was a scripted fetch, made before this page was read. It is
+not repeated. A translator's fit with these terms is Chris's ruling.
+
+`puzzleRuleset` holds structured rules only, with no prose in the one page checked; the
+prose appears to be generated in the browser.
