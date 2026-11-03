@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION } = require('./dark-page.user.js')
+const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor } = require('./dark-page.user.js')
 
 // The rules buildCss returns, one per line, as { selector, declarations }.
 function rules () {
@@ -17,16 +17,39 @@ function rules () {
 
 const rule = (selector) => rules().find((r) => r.selector === selector)
 
-test('the page background is black', () => {
+test('the page background is black by default', () => {
+  assert.equal(DEFAULT_COLOR, '#000000')
   assert.deepEqual(rule('body'), { selector: 'body', declarations: 'background-color: #000000 !important' })
+})
+
+test('the page background is the color given', () => {
+  const given = buildCss('#336699').split('\n').find((line) => line.startsWith('body '))
+  assert.equal(given, 'body { background-color: #336699 !important }')
+})
+
+test('textColorFor gives light text on a dark page and dark text on a light one, switching on the color\'s lightness', () => {
+  assert.equal(textColorFor('#000000'), '#dddddd')
+  assert.equal(textColorFor('#333333'), '#dddddd')
+  assert.equal(textColorFor('#0000ff'), '#dddddd')
+  assert.equal(textColorFor('#ffffff'), '#222222')
+  assert.equal(textColorFor('#cccccc'), '#222222')
+  assert.equal(textColorFor('#ffff00'), '#222222')
+})
+
+test('the credit line takes the text color for the page color given', () => {
+  const credit = (color) => buildCss(color).split('\n').find((line) => line.startsWith('.controls-footer'))
+  assert.equal(credit('#ffffff'), '.controls-footer, .controls-footer a { color: #222222 !important }')
+  assert.equal(credit('#000000'), '.controls-footer, .controls-footer a { color: #dddddd !important }')
+})
+
+test('savedColor reads a saved #rrggbb string as lowercase, and anything else as nothing saved', () => {
+  assert.equal(savedColor('#336699'), '#336699')
+  assert.equal(savedColor('#ABCDEF'), '#abcdef')
+  for (const bad of [null, undefined, '', 'red', '#fff', '#12345g', 5, {}, ['#000000']]) assert.equal(savedColor(bad), null, String(bad))
 })
 
 test('the rectangle takes SudokuPad\'s own page background, so it follows SudokuPad\'s dark mode', () => {
   assert.deepEqual(rule(`#${RECT_ID}`), { selector: `#${RECT_ID}`, declarations: 'background-color: var(--body-bg) !important' })
-})
-
-test('the credit line gets a readable color', () => {
-  assert.deepEqual(rule('.controls-footer, .controls-footer a'), { selector: '.controls-footer, .controls-footer a', declarations: 'color: #dddddd !important' })
 })
 
 test('every declaration is !important, so SudokuPad\'s own rules, dark mode included, lose', () => {

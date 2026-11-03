@@ -29,6 +29,9 @@
 - **edge cycle** — the order a click on an edge steps through its marks: X,
   first direction, second direction, dot, empty, skipping any type unticked in
   the settings dialog.
+- **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
+  another in the Dark page dialog, saved under `DarkPage_color`. The page's own text switches between light and
+  dark on the color's lightness.
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
-  rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is black outside it.
+  rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is the chosen page color (black by default) outside it.

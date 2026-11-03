@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.1
-// @description  Makes the page black around the puzzle. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
+// @version      0.2.0
+// @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,14 +18,17 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.1.1'
+  const VERSION = '0.2.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
   const RECT_ID = 'dark-page-rect'
-  const PAGE_COLOR = '#000000'
-  // Page text that sits straight on the page background, which the black would hide.
-  const TEXT_COLOR = '#dddddd'
+  const DATA_KEY = 'DarkPage_color'
+  const DEFAULT_COLOR = '#000000'
+  const HEX_COLOR = /^#[0-9a-f]{6}$/i
+  // Page text that sits straight on the page background: light on a dark page, dark on a light one.
+  const LIGHT_TEXT = '#dddddd'
+  const DARK_TEXT = '#222222'
   // White kept beyond the tightest box, in page pixels, before it is rounded outward: covers the
   // antialiasing and a text outline filter, which the elements' boxes leave out.
   const PAD = 1
@@ -37,21 +40,43 @@
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
   const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']
 
+  // A saved #rrggbb page color, lowercase; null for anything else, which leaves the default.
+  function savedColor (data) {
+    return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
+  }
+
+  // The WCAG relative luminance of a #rrggbb color, 0 (black) to 1 (white).
+  function luminance (color) {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const c = parseInt(color.slice(i, i + 2), 16) / 255
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+
+  // Whichever of the two text colors contrasts more with the page color, so the text stays readable
+  // from black to white. The switch falls where the two contrasts are equal.
+  function textColorFor (pageColor) {
+    const page = luminance(pageColor) + 0.05
+    const contrast = (text) => { const t = luminance(text) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+  }
+
   // The rules never name anything inside the board or declare a variable: SudokuPad's theme
   // variables sit on `:root` and color the grid too, so overriding one would reach it. Each
   // declaration is `!important` so it outranks SudokuPad's own rules, `.setting-darkmode`'s included.
-  // The page is black, and the rectangle is a div behind the board that takes `--body-bg`, the value
+  // The page is the page color, and the rectangle is a div behind the board that takes `--body-bg`, the value
   // SudokuPad gives `body` itself: the puzzle has no background of its own and shows `body` through
   // it, so the rectangle keeps what the board showed, SudokuPad's dark mode included. Painting the
   // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
   // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
   // that changes nothing.
-  function buildCss () {
+  function buildCss (pageColor = DEFAULT_COLOR) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     return [
-      rule('body', `background-color: ${PAGE_COLOR}`),
+      rule('body', `background-color: ${pageColor}`),
       rule(`#${RECT_ID}`, 'background-color: var(--body-bg)'),
-      rule('.controls-footer, .controls-footer a', `color: ${TEXT_COLOR}`)
+      rule('.controls-footer, .controls-footer a', `color: ${textColorFor(pageColor)}`)
     ].join('\n')
   }
 
@@ -121,7 +146,7 @@
   const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
+    module.exports = { VERSION, DEFAULT_COLOR, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
   if (typeof document === 'undefined') return
 
@@ -164,9 +189,14 @@
     return drawn && clampBox(snapOutward(drawn, PAD), snapOutward(svgBox, 0))
   }
 
+  // The saved color is read before the first paint of the style, so a saved color never shows the
+  // default first. Framework.getData works as soon as Framework exists, before the app is ready.
+  const hasData = typeof Framework !== 'undefined' && typeof Framework.getData === 'function'
+  let pageColor = (hasData && savedColor(Framework.getData(DATA_KEY))) || DEFAULT_COLOR
+
   const style = document.createElement('style')
   style.id = STYLE_ID
-  style.textContent = buildCss()
+  style.textContent = buildCss(pageColor)
   document.head.appendChild(style)
 
   const rect = document.createElement('div')
@@ -177,7 +207,7 @@
   document.body.appendChild(rect)
 
   // With no board on the page (before a puzzle loads, or on a page of the site that is not a
-  // puzzle) the page is left as it is: the black would otherwise hide white the board has not drawn.
+  // puzzle) the page is left as it is: the page color would otherwise hide white the board has not drawn.
   function updateRect () {
     const box = measure()
     style.disabled = !box
@@ -210,16 +240,64 @@
   // Text boxes change size when the page's fonts arrive.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleUpdate)
 
-  // The script has no dialog, so its settings entry only shows the version. The page may not be
-  // SudokuPad's (the match covers other pages of crackingthecryptic.com), and the darkening above
-  // needs no Framework.
+  function openDialog () {
+    let picked = pageColor
+    Framework.showDialog({
+      centerOverBoard: true,
+      parts: [
+        { tag: 'text', innerHTML: `<b>Dark page</b> <small style="opacity:0.6">v${VERSION}</small>` },
+        {
+          tag: 'text',
+          innerHTML: '<div id="dark-page-editor" style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+            `<input type="color" id="dark-page-input" value="${picked}">` +
+            '<button type="button" id="dark-page-reset">Black</button></div>'
+        },
+        {
+          tag: 'options',
+          options: [
+            {
+              tag: 'button',
+              content: 'Save',
+              handler: () => {
+                // The default is kept as nothing saved, so it follows any later change of the default.
+                if (picked === DEFAULT_COLOR) Framework.removeData(DATA_KEY)
+                else Framework.setData(DATA_KEY, picked)
+                pageColor = picked
+                style.textContent = buildCss(pageColor)
+                Framework.closeDialog()
+              }
+            },
+            { tag: 'button', content: 'Cancel', action: 'close' }
+          ]
+        }
+      ]
+    })
+    const input = document.getElementById('dark-page-input')
+    const reset = document.getElementById('dark-page-reset')
+    if (!input || !reset) throw new Error('dark-page: the dialog has no color input')
+    // `input` fires while the picker moves; the swatch the user sees is the color Save keeps.
+    input.addEventListener('input', () => { picked = input.value.toLowerCase() })
+    reset.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      picked = DEFAULT_COLOR
+      input.value = DEFAULT_COLOR
+    })
+  }
+
+  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), and
+  // the darkening above needs no Framework; without it the page keeps the default.
   if (typeof Framework !== 'undefined' && Framework.getApp) {
     Framework.getApp().then(() => {
       Framework.addSetting({
-        tag: 'text',
+        tag: 'button',
         name: 'darkpage',
         group: SETTINGS_GROUP,
-        content: `Dark page v${VERSION}`
+        content: 'Dark page',
+        handler: () => {
+          Framework.closeDialog()
+          setTimeout(openDialog, 0)
+        }
       })
     })
   }
