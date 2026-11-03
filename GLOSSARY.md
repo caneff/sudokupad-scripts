@@ -43,3 +43,7 @@
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
   rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is the chosen page color (black by default) outside it.
 - **swatch** — one square button in the Color by Digit dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
+- **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
+  button before the delete button and lets the number pad type letters.
+- **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
+  browser under `ToolLetter_letterMode`. The button and `/` toggle it; No Tab Letters takes Tab away from that list.

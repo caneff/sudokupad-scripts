@@ -36,8 +36,14 @@
   }
   if (typeof document === 'undefined') return
 
-  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com).
-  if (typeof Framework === 'undefined' || !Framework.getApp) return
+  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
+  // has no Framework and is left alone. A Framework without `getApp` is a SudokuPad this script
+  // cannot hook, which is reported.
+  if (typeof Framework === 'undefined') return
+  if (!Framework.getApp) {
+    console.warn('no-tab-letters: SudokuPad\'s Framework has no getApp, so nothing was changed')
+    return
+  }
 
   // `ToolLetter` is the global tool-letter.js declares; its one `tool` object is what the
   // "Enable Letter Tool" setting adds to and removes from the app, so a list set on it holds
@@ -45,9 +51,13 @@
   // prototype's list from it without editing that list.
   Framework.getApp().then(() => {
     const tool = typeof ToolLetter === 'undefined' ? null : ToolLetter.tool
-    const kept = tool && withoutTabToggle(tool.keyHandlers)
+    if (!tool) {
+      console.warn('no-tab-letters: SudokuPad has no ToolLetter.tool, so nothing was changed')
+      return
+    }
+    const kept = withoutTabToggle(tool.keyHandlers)
     if (!kept) {
-      console.warn('no-tab-letters: SudokuPad\'s letter tool has no Tab binding, so nothing was changed')
+      console.warn('no-tab-letters: the letter tool has no Tab binding to drop, so nothing was changed')
       return
     }
     tool.keyHandlers = kept

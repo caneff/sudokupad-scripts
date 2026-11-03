@@ -50,6 +50,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
   describe(`injected ${mode}`, { concurrency: false }, () => {
     let context, p, errors
 
+    // The tests below are one ordered sequence on one page: each starts from the letter mode the one
+    // before left (digits, with the saved mode null, then false once a toggle has saved it).
     // The number pad's keys as typed on the page, and the letter mode SudokuPad saved.
     const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
     const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
