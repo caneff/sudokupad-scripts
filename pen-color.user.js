@@ -2,7 +2,7 @@
 // @name         SudokuPad Pen Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      0.2.0
-// @description  Sets the pen tool's nine colors to your current color page, darkened, until you save your own in a settings dialog. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
+// @description  Sets the pen tool's nine colors to your current cell color page, darkened, until you save your own in a settings dialog. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -62,17 +62,28 @@
     return usable ? set : null
   }
 
-  // A CSS color (an `rgb(r, g, b)` or `#rrggbb` string) as [r, g, b] whole numbers clamped
-  // to 0-255, or null for transparent or anything unreadable. SudokuPad's own cell color 3
-  // is `rgb(-36, -36, -36)`, which clamps to black.
-  function parseColor (text) {
-    if (typeof text !== 'string') return null
+  const clamp255 = (x) => Math.max(0, Math.min(255, x))
+  const RGB_TEXT = /^rgba?\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+)\s*)?\)$/
+
+  // True for `transparent` and an `rgba()` with alpha 0, the colors a page lists to leave a
+  // slot empty (key 0 of each default page). Anything else, readable or not, is false.
+  function isTransparent (text) {
+    if (typeof text !== 'string') return false
     const value = text.trim().toLowerCase()
-    const clamp = (x) => Math.max(0, Math.min(255, Math.round(x)))
+    const rgba = RGB_TEXT.exec(value)
+    return value === 'transparent' || Boolean(rgba && rgba[4] !== undefined && Number(rgba[4]) <= 0)
+  }
+
+  // A color as `#rrggbb` or `rgb(r, g, b)` / `rgba(r, g, b, a)` text -> [r, g, b] whole numbers
+  // clamped to 0-255, ignoring alpha; null for a fully transparent or unreadable value.
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
+  function parseColor (text) {
+    if (typeof text !== 'string' || isTransparent(text)) return null
+    const value = text.trim().toLowerCase()
     const hex = /^#([0-9a-f]{6})$/.exec(value)
     if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
-    const rgb = /^rgb\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)$/.exec(value)
-    return rgb ? rgb.slice(1).map((x) => clamp(Number(x))) : null
+    const rgb = RGB_TEXT.exec(value)
+    return rgb ? rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x)))) : null
   }
 
   const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
@@ -111,7 +122,7 @@
   // far enough to fit (a bisection), which keeps the hue. Channels are clamped to 0-255
   // first, so any number gives a valid color.
   function darkenColor (rgb) {
-    const [L, a, b] = toOklab(rgb.map((c) => Math.max(0, Math.min(255, c))))
+    const [L, a, b] = toOklab(rgb.map(clamp255))
     const target = L * LIGHTNESS_FACTOR
     let low = 0
     let high = 1
@@ -125,25 +136,27 @@
       low = 1
     }
     const out = fromOklabLinear([target, a * low, b * low])
-    return '#' + out.map((x) => Math.max(0, Math.min(255, Math.round(fromLinear(Math.max(0, Math.min(1, x))))))
+    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
       .toString(16).padStart(2, '0')).join('')
   }
 
-  // The pen colors a color page gives: its visible colors (those `readColor(key)` parses to a
-  // color, so not transparent) in order become pen colors 1-9, darkened. A pen color the page
-  // has no color for keeps SudokuPad's own and is listed in `missing`, by number.
+  // The pen colors a cell color page gives: its colors in order, the transparent ones left out
+  // (`isTransparent`), become pen colors 1-9, darkened. A color `parseColor` cannot read keeps
+  // its place, so the colors after it do not shift up. A pen color with no color to take, from
+  // a page too short or an unreadable entry, keeps SudokuPad's own and is listed in `missing`,
+  // by number.
   function penColorsFromPage (keys, readColor) {
-    const visible = []
+    const slots = []
     for (const key of keys) {
-      const rgb = parseColor(readColor(key))
-      if (rgb) visible.push(rgb)
-      if (visible.length === PEN_COLORS.length) break
+      const text = readColor(key)
+      if (!isTransparent(text)) slots.push(parseColor(text))
+      if (slots.length === PEN_COLORS.length) break
     }
     const colors = {}
     const missing = []
     PEN_COLORS.forEach((n, i) => {
-      if (visible[i]) {
-        colors[n] = darkenColor(visible[i])
+      if (slots[i]) {
+        colors[n] = darkenColor(slots[i])
       } else {
         colors[n] = DEFAULT_COLORS[n]
         missing.push(Number(n))
@@ -162,7 +175,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeColors, savedColors, parseColor, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR }
+    module.exports = { normalizeColors, savedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, COLOR_TOOL_WAIT_MS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -197,10 +210,25 @@
   }
 
   // The darkened colors of the color tool's current page, read now from the raw
-  // `--cell-color-<key>` values (not the 60% opacity they show with on the grid).
+  // `--cell-color-<key>` values (not the 60% opacity they show with on the grid). A custom
+  // palette can hold any CSS color (`#f00`, `red`, `hsl()`), and the variable reads back as
+  // written, so each value goes through the browser to become `rgb()` text first. A value the
+  // browser rejects stays as written, and `penColorsFromPage` treats it as unreadable.
   function deriveFromTool (tool) {
-    const style = window.getComputedStyle(document.documentElement)
-    return penColorsFromPage(tool.palette.pages[tool.currentPage], (key) => style.getPropertyValue(`--cell-color-${key}`))
+    const root = document.documentElement
+    const rootStyle = window.getComputedStyle(root)
+    const probe = document.createElement('span')
+    root.appendChild(probe)
+    try {
+      return penColorsFromPage(tool.palette.pages[tool.currentPage], (key) => {
+        const value = rootStyle.getPropertyValue(`--cell-color-${key}`).trim()
+        probe.style.color = ''
+        probe.style.color = value
+        return probe.style.color ? window.getComputedStyle(probe).color : value
+      })
+    } finally {
+      probe.remove()
+    }
   }
 
   function applyColors (colors) {
@@ -215,8 +243,8 @@
 
   function missingNote (missing) {
     if (!missing.length) return ''
-    const list = missing.length === 1 ? `pen color ${missing[0]}` : `pen colors ${missing[0]}-${missing[missing.length - 1]}`
-    return `<div style="margin:6px 0;max-width:20em">The current color page has too few colors, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
+    const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
+    return `<div style="margin:6px 0;max-width:20em">The current cell color page has too few usable colors, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
   function renderEditor (colors, missing) {
@@ -234,6 +262,9 @@
     let missing = activeMissing
     // True after Restore defaults until a color is edited: Save then clears the saved set.
     let reset = false
+    // The pen colors picked by hand since the dialog opened or Restore defaults. Save with none
+    // changes nothing, so a derived set is never saved by accident.
+    const edited = new Set()
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
@@ -246,10 +277,16 @@
               tag: 'button',
               content: 'Save',
               handler: () => {
-                if (reset) Framework.removeData(DATA_KEY)
-                else Framework.setData(DATA_KEY, colors)
+                if (reset) {
+                  Framework.removeData(DATA_KEY)
+                } else if (edited.size) {
+                  Framework.setData(DATA_KEY, colors)
+                } else {
+                  Framework.closeDialog()
+                  return
+                }
                 active = colors
-                activeMissing = missing
+                activeMissing = edited.size ? [] : missing
                 applyColors(colors)
                 Framework.closeDialog()
               }
@@ -261,7 +298,7 @@
     })
     const box = document.getElementById('pen-color-editor')
     if (!box) throw new Error('pen-color: the dialog has no editor element')
-    const draw = () => { box.innerHTML = renderEditor(colors, missing) }
+    const draw = () => { box.innerHTML = renderEditor(colors, missing.filter((n) => !edited.has(String(n)))) }
     draw()
     box.addEventListener('click', (event) => {
       const el = event.target.closest('button[data-act]')
@@ -273,6 +310,7 @@
       const derived = tool ? deriveFromTool(tool) : { colors: { ...DEFAULT_COLORS }, missing: [] }
       colors = derived.colors
       missing = derived.missing
+      edited.clear()
       reset = true
       draw()
     })
@@ -281,7 +319,7 @@
       const el = event.target.closest('input[type="color"]')
       if (!el) return
       colors = { ...colors, [el.dataset.pen]: el.value.toLowerCase() }
-      missing = []
+      edited.add(el.dataset.pen)
       reset = false
       draw()
     })

@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, darkenColor, penColorsFromPage, savedColors, LIGHTNESS_FACTOR } = require('./pen-color.user.js')
+const { normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, LIGHTNESS_FACTOR, COLOR_TOOL_WAIT_MS } = require('./pen-color.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -89,9 +89,16 @@ test('parseColor reads rgb() and #rrggbb, clamping out-of-range channels', () =>
 })
 
 test('parseColor gives null for transparent, empty and unreadable values', () => {
-  for (const bad of ['transparent', '', '  ', 'banana', 'rgb(1, 2)', undefined, null, 'rgba(0, 0, 0, 0)']) {
+  for (const bad of ['transparent', '', '  ', 'banana', 'rgb(1, 2)', undefined, null, 'rgba(0, 0, 0, 0)', '#abc', 'red', 'hsl(0, 100%, 50%)']) {
     assert.equal(parseColor(bad), null, String(bad))
   }
+})
+
+test('parseColor reads a partly transparent rgba() by its color, and isTransparent names only the fully transparent', () => {
+  assert.deepEqual(parseColor('rgba(0, 0, 255, 0.5)'), [0, 0, 255])
+  assert.deepEqual(parseColor('rgba(0, 0, 255, 1)'), [0, 0, 255])
+  for (const clear of ['transparent', ' TRANSPARENT ', 'rgba(0, 0, 0, 0)', 'rgba(9, 9, 9, 0)']) assert.equal(isTransparent(clear), true, clear)
+  for (const seen of ['rgb(0, 0, 0)', 'rgba(0, 0, 0, 0.1)', '#abc', 'red', '', undefined, null, 'banana']) assert.equal(isTransparent(seen), false, String(seen))
 })
 
 test('darkenColor keeps the hue, lowers lightness by the named factor, and gives #rrggbb', () => {
@@ -118,17 +125,11 @@ test('darkenColor gives a valid hex for near-black, white and out-of-range input
   }
 })
 
-test('a darkened light color is still visible as a line on white', () => {
+test('a darkened light color has OKLCH lightness under 0.8, the bar for a 5px line on white', () => {
   // Light yellow and light gray, the lightest of the default cell colors.
   for (const rgb of [[252, 235, 63], [214, 214, 214], [255, 255, 255]]) {
     assert.ok(oklch(darkenColor(rgb)).L < 0.8, JSON.stringify(rgb))
   }
-})
-
-test('the darkened default first page keeps the nine apart', () => {
-  const page = ['rgb(214, 214, 214)', 'rgb(124, 124, 124)', 'rgb(-36, -36, -36)', 'rgb(179, 229, 106)', 'rgb(232, 124, 241)', 'rgb(228, 150, 50)', 'rgb(245, 58, 55)', 'rgb(252, 235, 63)', 'rgb(61, 153, 245)']
-  const out = page.map((c) => darkenColor(parseColor(c)))
-  assert.equal(new Set(out).size, 9)
 })
 
 const PAGE_KEYS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -145,6 +146,11 @@ const CELL = {
   9: 'rgb(61, 153, 245)'
 }
 
+test('the darkened default first page gives nine different #rrggbb values', () => {
+  const out = PAGE_KEYS.slice(1).map((k) => darkenColor(parseColor(CELL[k])))
+  assert.equal(new Set(out).size, 9)
+})
+
 test('penColorsFromPage maps the page\'s visible colors in order to pen colors 1-9, darkened', () => {
   const r = penColorsFromPage(PAGE_KEYS, (k) => CELL[k])
   assert.deepEqual(r.missing, [])
@@ -155,13 +161,22 @@ test('penColorsFromPage maps the page\'s visible colors in order to pen colors 1
 })
 
 test('penColorsFromPage skips transparent keys wherever they sit, and keeps SudokuPad\'s pen color where the page runs short', () => {
-  const read = (k) => ({ a: 'transparent', b: 'rgb(204, 51, 17)', c: 'rgb(17, 119, 51)', d: 'garbage', e: 'rgb(238, 153, 170)' })[k]
+  const read = (k) => ({ a: 'transparent', b: 'rgb(204, 51, 17)', c: 'rgb(17, 119, 51)', d: 'rgba(5, 5, 5, 0)', e: 'rgb(238, 153, 170)' })[k]
   const r = penColorsFromPage(['a', 'b', 'c', 'd', 'e'], read)
   assert.deepEqual(r.missing, [4, 5, 6, 7, 8, 9])
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
   assert.equal(r.colors[2], darkenColor([17, 119, 51]))
   assert.equal(r.colors[3], darkenColor([238, 153, 170]))
   for (const n of [4, 5, 6, 7, 8, 9]) assert.equal(r.colors[n], DEFAULT_COLORS[n])
+})
+
+test('penColorsFromPage keeps an unreadable color\'s place: its pen color keeps SudokuPad\'s own, and later colors do not shift up', () => {
+  const read = (k) => ({ a: 'transparent', b: 'rgb(204, 51, 17)', c: 'unparseable', d: 'rgb(238, 153, 170)' })[k]
+  const r = penColorsFromPage(['a', 'b', 'c', 'd'], read)
+  assert.equal(r.colors[1], darkenColor([204, 51, 17]))
+  assert.equal(r.colors[2], DEFAULT_COLORS[2])
+  assert.equal(r.colors[3], darkenColor([238, 153, 170]))
+  assert.deepEqual(r.missing, [2, 4, 5, 6, 7, 8, 9])
 })
 
 test('penColorsFromPage ignores colors past the ninth visible one', () => {
@@ -185,4 +200,13 @@ test('savedColors is null when nothing usable was saved, so the derived colors a
 
 test('savedColors keeps a saved set whole, filling a bad entry with the default', () => {
   assert.deepEqual(savedColors({ 4: '#FF0000', 5: 'nope' }), { ...TABLE, 4: '#ff0000' })
+})
+
+test('savedColors does not read an array by index', () => {
+  // Index 1 holds a usable color: only the array guard stops it counting as pen color 1.
+  assert.equal(savedColors(['x', '#ff0000', '#00ff00']), null)
+})
+
+test('the wait for the color tool is a positive number of milliseconds', () => {
+  assert.ok(COLOR_TOOL_WAIT_MS > 0)
 })

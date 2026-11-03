@@ -11,10 +11,13 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-color.user.js', import.meta.url), 'utf8')
+
+const { COLOR_TOOL_WAIT_MS } = createRequire(import.meta.url)('../pen-color.user.js')
 
 const DATA_KEY = 'PenColor_colors'
 // What the pen colors are with nothing saved: SudokuPad's cell color pages, darkened. Typed out
@@ -321,7 +324,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       const values = await pickerValues()
       assert.deepEqual(values.slice(3), OWN_PEN_HEX.slice(3))
       assert.equal(values.slice(0, 3).filter((v, i) => OWN_PEN_HEX[i] !== v).length, 3)
-      assert.match(await editor().innerText(), /pen colors 4-9 keep SudokuPad's own/)
+      assert.match(await editor().innerText(), /pen colors 4, 5, 6, 7, 8, 9 keep SudokuPad's own/)
+      // Picking a pen color by hand takes it off the list; the others stay on it.
+      await pick('4', FOUR.hex)
+      assert.match(await editor().innerText(), /pen colors 5, 6, 7, 8, 9 keep SudokuPad's own/)
       await closeWith('Cancel')
       // setPalette clamped and saved the current page; put the stored palette and page 2 back.
       await read(() => {
@@ -329,6 +335,32 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         t.setPalette(Framework.getData('ToolColor_palette'))
         t.setPage(2)
       })
+    })
+
+    it('a custom page of shorthand hex, named, rgba() and hsl() colors keeps all nine in order, with transparent entries skipped', async () => {
+      await read(() => {
+        const t = Framework.app.tools.colour
+        const colors = { t: 'transparent', a: '#f00', b: 'blue', c: 'rgba(0, 200, 0, 1)', u: 'rgba(0, 0, 0, 0)', d: 'hsl(60, 100%, 50%)', e: 'rgb(10 20 30)', f: '#0ff', g: 'magenta', h: 'orange', i: 'purple' }
+        t.setPalette({ colors, pages: [Object.keys(colors)] })
+      })
+      await openEditor()
+      await restoreDefaults()
+      assert.deepEqual(await pickerValues(), ['#ae0000', '#0000ae', '#008700', '#aeae00', '#030a13', '#00aeae', '#ae00ae', '#ae6f00', '#550055'])
+      assert.doesNotMatch(await editor().innerText(), /keep/)
+      await closeWith('Cancel')
+      await read(() => {
+        const t = Framework.app.tools.colour
+        t.setPalette(Framework.getData('ToolColor_palette'))
+        t.setPage(2)
+      })
+    })
+
+    it('Save with no edit saves nothing, so the pen keeps following the cell color page at load', async () => {
+      await read((k) => Framework.removeData(k), DATA_KEY)
+      await reload()
+      await openEditor()
+      await closeWith('Save')
+      assert.equal(await saved(), null)
     })
 
     it('corrupt saved settings fall back to the derived colors with no thrown error', async () => {
@@ -364,8 +396,8 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await p.evaluate(() => { Framework.app.tools.colour.palette = undefined })
       await p.addScriptTag({ content: script })
       // Nothing may happen for the script's whole wait, so this one is a sleep: the check is
-      // that no override appeared in the 12 seconds after a 10 second wait began.
-      await sleep(12000)
+      // that no override appeared in the two seconds after its wait ran out.
+      await sleep(COLOR_TOOL_WAIT_MS + 2000)
       assert.equal(await p.locator(STYLE).count(), 0)
       await p.click('#control-settings')
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
@@ -373,6 +405,34 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       const values = await p.locator('#pen-color-editor input[type=color]').evaluateAll((es) => es.map((e) => e.value))
       assert.deepEqual(values, OWN_PEN_HEX)
       assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
+  })
+
+  it('a save made while the script waits for the color tool outranks the derived colors', async () => {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    try {
+      const p = await context.newPage()
+      await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+      await p.getByRole('button', { name: START }).first().click()
+      await p.locator('#control-undo').waitFor({ state: 'visible' })
+      await p.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
+      await p.addScriptTag({ content: script })
+      await p.click('#control-settings')
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
+      await p.locator('#pen-color-editor').waitFor({ state: 'visible' })
+      await p.locator('#pen-color-editor input[data-pen="4"]').fill(FOUR.hex)
+      await p.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).first().click()
+      await p.locator('#pen-color-editor').waitFor({ state: 'detached' })
+      await p.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
+      // The script polls every 100ms, so by 1.5s it has seen the tool and decided; the check is
+      // that nothing then replaced the saved colors.
+      await sleep(1500)
+      const pens = await p.evaluate(() => [1, 4].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
+      assert.deepEqual(pens, [OWN_PEN_HEX[0], FOUR.hex])
     } finally {
       await context.close()
     }
