@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, readCentreMarks, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -16,8 +16,8 @@ test('givens and entered digits both get their group key', () => {
   ])
 })
 
-test('corner marks and empty cells are never touched', () => {
-  const cells = [{ pencilmarks: ['1', '2'] }, {}, { value: '' }, { value: '', centre: [] }]
+test('empty cells are never touched', () => {
+  const cells = [{}, { value: '' }, { value: '', centre: [] }]
   assert.deepEqual(plan(cells), [])
 })
 
@@ -47,7 +47,7 @@ test('a non-digit centre mark leaves the cell alone', () => {
   assert.deepEqual(plan([{ centre: ['1', 'x'] }, { centre: ['1', '12'] }], g), [])
 })
 
-test('a placed or given digit decides the color and its centre marks are ignored', () => {
+test('a given or entered digit decides the color and its centre marks are ignored', () => {
   assert.deepEqual(centre(['1', '2'], { value: '3' }), [{ index: 0, key: 'b' }])
   assert.deepEqual(centre(['3'], { given: '1' }), [{ index: 0, key: 'a' }])
   assert.deepEqual(centre(['1'], { given: '7' }), [])
@@ -62,7 +62,17 @@ test('readCentreMarks gives the visible centre marks, and none for a cell whose 
   const cell = (visible, marks) => ({ propVisible: (p) => p === 'centre' && visible, propGet: (p) => (p === 'centre' ? marks : []) })
   assert.deepEqual(readCentreMarks(cell(true, ['6', '7', '9'])), ['6', '7', '9'])
   assert.deepEqual(readCentreMarks(cell(false, ['6'])), [])
-  assert.deepEqual(readCentreMarks({}), [])
+})
+
+test('toPlanCell keeps the digit, colors and visible centre marks, and drops corner marks', () => {
+  const cell = { given: null, value: '', colours: ['a'], pencilmarks: ['1', '2'], propVisible: () => true, propGet: () => ['3'] }
+  assert.deepEqual(toPlanCell(cell), { given: null, value: '', colours: ['a'], centre: ['3'] })
+  assert.deepEqual(plan([toPlanCell({ ...cell, colours: [], propGet: () => [] })]), [])
+})
+
+test('toPlanCell gives no centre marks for a cell that hides them, so its hidden marks color nothing', () => {
+  const hidden = { value: '', colours: [], propVisible: () => false, propGet: () => ['1'] }
+  assert.deepEqual(plan([toPlanCell(hidden)], centreGroups), [])
 })
 
 test('digits in no group are skipped', () => {
@@ -174,7 +184,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
   delete require.cache[path]
   const calls = []
   const app = {
-    puzzle: { cells: [{ given: '1', colours: [] }], selectedCells: [] },
+    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [] },
     act: (a) => calls.push(['act', a.type]),
     deselect: () => {},
     select: () => {},

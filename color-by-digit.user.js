@@ -47,7 +47,7 @@
     return keys.size === 1 ? [...keys][0] : undefined
   }
 
-  // Which cells get which key. Pure: cells in, [{index, key}] out. A placed or given digit
+  // Which cells get which key. Pure: cells in, [{index, key}] out. A given or entered digit
   // decides the key; a cell with neither takes the key its `centre` marks (digit strings) all share.
   function planColoring (cells, groups) {
     const keyOfDigit = Object.create(null)
@@ -66,8 +66,12 @@
   // The centre marks SudokuPad shows on a cell, read as its own solver does
   // (SolverTool.getCellOptions): none when the cell hides them, as a given does.
   function readCentreMarks (cell) {
-    if (typeof cell.propVisible !== 'function' || !cell.propVisible('centre')) return []
-    return cell.propGet('centre') || []
+    return cell.propVisible('centre') ? cell.propGet('centre') : []
+  }
+
+  // The fields of a SudokuPad cell that planColoring reads, and only those: corner marks stay out.
+  function toPlanCell (cell) {
+    return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
   // Puts a digit in one group, or takes it out if that group already holds it.
@@ -231,7 +235,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, planColoring, readCentreMarks, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { VERSION, installButton, planColoring, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -252,7 +256,7 @@
     const groups = loadGroups()
     const puzzle = app.puzzle
     const cells = [].concat(puzzle.cells).flat(Infinity)
-    const plan = planColoring(cells.map((c) => ({ given: c.given, value: c.value, colours: c.colours, centre: readCentreMarks(c) })), groups)
+    const plan = planColoring(cells.map(toPlanCell), groups)
     if (plan.length === 0) return
     const byKey = {}
     plan.forEach(({ index, key }) => (byKey[key] = byKey[key] || []).push(cells[index]))
