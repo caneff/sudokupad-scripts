@@ -35,10 +35,10 @@ const CLIP_AFTER = 5
 const INK_FRACTION = 0.5
 // Hides every mark and the circles, then shows only the mark carrying the probe attribute.
 const INK_PROBE_CSS = '#cell-pencilmarks text, #cell-candidates text, #cell-candidates tspan { visibility: hidden !important } #digit-color-circles { display: none !important } #cell-pencilmarks [data-ink-probe], #cell-candidates [data-ink-probe] { visibility: visible !important }'
-// Per digit, a row with that digit given and two empty cells in it, so a mark of the digit
+// Per digit, a row with that digit given and two empty cells in it that no other check here fills with a digit, so a mark of the digit
 // in either cell is in SudokuPad's conflict state: [row, corner mark's column, centre mark's column].
 const CONFLICT_CELLS = {
-  1: [1, 1, 2], 2: [5, 1, 2], 3: [0, 2, 3], 4: [4, 1, 2], 5: [7, 0, 1], 6: [2, 0, 3], 7: [8, 0, 1], 8: [3, 1, 2], 9: [1, 6, 7]
+  1: [1, 1, 2], 2: [5, 1, 2], 3: [4, 6, 7], 4: [4, 1, 2], 5: [7, 0, 1], 6: [2, 0, 3], 7: [8, 5, 6], 8: [3, 1, 2], 9: [1, 7, 8]
 }
 const CIRCLES = '#digit-color-circles'
 // A mark in SudokuPad's conflict state, per place on the board.
@@ -136,13 +136,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     // circle nearest it. The ink is the box of pixels that differ between two screenshots at real size
     // taken with every mark and circle hidden, one with this mark shown: grid lines and neighbouring
     // marks cancel out. A pixel counts as ink when it differs by at least half the largest difference.
-    const inkCentring = async (place, digit) => {
-      const box = await read(([sel, digit]) => {
-        const mark = [...document.querySelectorAll(sel)].find((e) => e.dataset.val === digit)
+    const inkCentring = async (place, digit, index) => {
+      const box = await read(([sel, digit, index]) => {
+        const mark = [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit)[index]
         mark.setAttribute('data-ink-probe', '')
         const { x, y, width, height } = mark.getBoundingClientRect()
         return { x, y, width, height }
-      }, [CONFLICTING[place], digit])
+      }, [CONFLICTING[place], digit, index])
       const clip = { x: Math.floor(box.x) - CLIP_BEFORE, y: Math.floor(box.y) - CLIP_BEFORE, width: Math.ceil(box.width) + CLIP_BEFORE + CLIP_AFTER, height: Math.ceil(box.height) + CLIP_BEFORE + CLIP_AFTER }
       const drawn = (await circles()).filter((c) => c.shown)
       const probeStyle = await p.addStyleTag({ content: INK_PROBE_CSS })
@@ -298,23 +298,34 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('every digit 1-9, as a corner mark and a centre mark, has its circle centred on the ink of the digit', async () => {
+      const marksOnBoard = () => read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark, #cell-candidates tspan').length)
+      const before = await marksOnBoard()
       let entries = 0
       try {
         for (const [digit, [row, cornerColumn, centreColumn]] of Object.entries(CONFLICT_CELLS)) {
           await markMode('#control-corner', async () => { await enter(row, cornerColumn, digit); entries++ })
           await markMode('#control-centre', async () => { await enter(row, centreColumn, digit); entries++ })
         }
-        await read(() => Framework.app.deselect())
+        // No deselect here: it is an undo step of its own, so the undos below would stop one short.
         for (const place of ['corner', 'centre']) {
           for (const digit of Object.keys(CONFLICT_CELLS)) {
-            assert.deepEqual(await settle(circleState(place, digit), circled(1)), circled(1), `${place} ${digit}`)
-            const { dx, dy } = await inkCentring(place, digit)
-            const distance = Math.hypot(dx, dy)
-            assert.equal(distance <= INK_TOLERANCE, true, `${place} ${digit}: the circle's centre is (${dx.toFixed(2)}, ${dy.toFixed(2)}) px, ${distance.toFixed(2)} px, from the ink's`)
+            // Earlier checks leave their own conflicting marks of some digits, which count too.
+            const marks = (await middles(place, digit)).length
+            assert.equal(marks >= 1, true, `${place} ${digit}: a conflicting mark was entered`)
+            assert.deepEqual(await settle(circleState(place, digit), circled(marks)), circled(marks), `${place} ${digit}`)
+            for (let index = 0; index < marks; index++) {
+              const { dx, dy } = await inkCentring(place, digit, index)
+              const distance = Math.hypot(dx, dy)
+              assert.equal(distance <= INK_TOLERANCE, true, `${place} ${digit} #${index}: the circle's centre is (${dx.toFixed(2)}, ${dy.toFixed(2)}) px, ${distance.toFixed(2)} px, from the ink's`)
+            }
           }
         }
       } finally {
-        for (let i = 0; i < entries; i++) await undo()
+        // Each undo waits for its mark to go, so a click is never lost to the one before it.
+        for (let i = entries - 1; i >= 0; i--) {
+          await undo()
+          assert.equal(await settle(marksOnBoard, before + i), before + i, 'undo removes the mark')
+        }
       }
     })
 

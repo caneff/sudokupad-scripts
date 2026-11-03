@@ -25,4 +25,5 @@ Not covered: a real Tampermonkey install, `crackingthecryptic.com`, and Windows
 Tahoma, whose metrics differ from the fallback font above.
 
 Pictures: `digit-color-centred-circles.png` (board at real size) and
-`digit-color-centred-circles-zoom.png` (4x crop of corner and centre marks).
+`digit-color-centred-circles-zoom.png` (4x crop of corner and centre marks, after the fix) and
+`digit-color-centred-circles-before-zoom.png` (the same crop and marks with `main`'s script, digits sitting high in their circles).
