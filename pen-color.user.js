@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.1
-// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors saved in a settings dialog replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
+// @version      0.4.0
+// @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors, saved in a settings dialog or by holding a pen color button, replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,7 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.1'
+  const VERSION = '0.4.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'PenColor_colors'
@@ -48,6 +48,9 @@
   const GREY_CHROMA = 0.04
   const COLOR_TOOL_WAIT_MS = 10000
   const COLOR_TOOL_POLL_MS = 100
+  // How long a pen color button is held to open the pickers: SudokuPad's color tool uses the
+  // same 1000 ms (HoldToEditDelayMs) for its cell color buttons.
+  const HOLD_TO_EDIT_MS = 1000
 
   // Saved data is untrusted: returns { penColor: '#rrggbb' } for every pen color, with the
   // default for any entry that is missing or not a #rrggbb string.
@@ -69,6 +72,15 @@
     const usable = data && typeof data === 'object' && !Array.isArray(data) &&
       PEN_COLORS.some((n) => typeof data[n] === 'string' && HEX_COLOR.test(data[n]))
     return usable ? set : null
+  }
+
+  // The whole current set with pen color `pen` set to `value` (a #rrggbb string), lowercased.
+  // The set is what gets saved, so a pen color or value that is not valid throws rather than
+  // saving a set with a wrong entry.
+  function editedColors (colors, pen, value) {
+    if (!PEN_COLORS.includes(pen)) throw new RangeError(`pen-color: ${pen} is not a pen color`)
+    if (typeof value !== 'string' || !HEX_COLOR.test(value)) throw new RangeError(`pen-color: ${value} is not a #rrggbb color`)
+    return { ...colors, [pen]: value.toLowerCase() }
   }
 
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
@@ -192,8 +204,22 @@
     return [':root:root {', ...lines, '}'].join('\n')
   }
 
+  // Edit mode (the class is on the pen tool's panel): each color picker sits over its button
+  // and the button's swatch is hidden under it. The sizes are those SudokuPad's color tool
+  // uses for the same job.
+  const EDITING = 'pen-color-editing'
+  const EDIT_CSS = [
+    `.${EDITING} button[data-value]::after { opacity: 0; }`,
+    `.${EDITING} .pen-color-picker { width: 0; height: 0; overflow: visible; }`,
+    `.${EDITING} .pen-color-picker input { position: absolute; width: 2.4rem; height: 2.4rem; margin-left: 0.95rem; margin-top: 0.95rem; z-index: 10; pointer-events: all; }`
+  ].join('\n')
+  // The elements a hold starts on, and the ones the context menu is suppressed over: the pen
+  // tool's color buttons and, in edit mode, the pickers standing in for them (a right-click
+  // hold ends over a picker, and Windows opens the menu on release).
+  const HOLD_TARGETS = '.tool-pen button[data-value], .tool-pen .pen-color-picker input'
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, normalizeColors, savedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS }
+    module.exports = { VERSION, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -256,7 +282,7 @@
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = buildCss(colors)
+    style.textContent = buildCss(colors) + '\n' + EDIT_CSS
   }
 
   function missingNote (missing) {
