@@ -3,6 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
 const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION } = require('./dark-page.user.js')
 
 // The rules buildCss returns, one per line, as { selector, declarations }.
@@ -120,7 +121,5 @@ test('halfStroke is half the stroke width in page pixels, and 0 when there is no
 })
 
 test('VERSION is the @version in the script header', () => {
-  const header = /^\/\/ @version\s+(\S+)\s*$/m.exec(fs.readFileSync(path.join(__dirname, 'dark-page.user.js'), 'utf8'))
-  assert.notEqual(header, null, 'the script has no @version header')
-  assert.equal(VERSION, header[1])
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'dark-page.user.js'), 'utf8')))
 })

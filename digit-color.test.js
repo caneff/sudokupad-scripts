@@ -3,6 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
 const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION } = require('./digit-color.user.js')
 
 // Chris's table from issue #7, typed out here as the independent source for the constant.
@@ -125,7 +126,5 @@ test('digitOfText reads a single digit and nothing else', () => {
 })
 
 test('VERSION is the @version in the script header', () => {
-  const header = /^\/\/ @version\s+(\S+)\s*$/m.exec(fs.readFileSync(path.join(__dirname, 'digit-color.user.js'), 'utf8'))
-  assert.notEqual(header, null, 'the script has no @version header')
-  assert.equal(VERSION, header[1])
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'digit-color.user.js'), 'utf8')))
 })

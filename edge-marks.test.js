@@ -3,6 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
 const { nextType, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS, VERSION } = require('./edge-marks.user.js')
 
 const ALL = { x: true, directions: true, dot: true }
@@ -131,7 +132,5 @@ test('an arrow is a two-segment chevron pointing the way it names', () => {
 })
 
 test('VERSION is the @version in the script header', () => {
-  const header = /^\/\/ @version\s+(\S+)\s*$/m.exec(fs.readFileSync(path.join(__dirname, 'edge-marks.user.js'), 'utf8'))
-  assert.notEqual(header, null, 'the script has no @version header')
-  assert.equal(VERSION, header[1])
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'edge-marks.user.js'), 'utf8')))
 })

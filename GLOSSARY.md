@@ -2,6 +2,8 @@
 
 - **group** — one palette color plus the digits that get it. A digit is in at
   most one group.
+- **settings group** — one of SudokuPad's collapsible sections of its settings dialog. Every
+  script's settings entry goes in the Experimental one, which starts collapsed.
 - **digit color** — the fill of one digit, in entered digits, corner marks and
   centre marks. It is a `#rrggbb` value, or SudokuPad's own color. Givens never take it. A mark in the
   `conflict` state keeps it and gets a conflict circle; for a digit on SudokuPad's own color the

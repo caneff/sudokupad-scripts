@@ -16,8 +16,8 @@
 (function () {
   'use strict'
 
-  // Shown in the settings, and the same as @version above: the live checks inject the script without
-  // Tampermonkey, so there is no GM_info to read it from.
+  // Shown in the settings, and the same as @version above. The script cannot read its own header
+  // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
   const VERSION = '0.1.1'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
@@ -210,16 +210,17 @@
   // Text boxes change size when the page's fonts arrive.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleUpdate)
 
-  // The script has no dialog, so its settings entry only shows the version. SudokuPad's default
-  // handler for a settings entry saves a setting under its name, so a handler that does nothing
-  // keeps a click on the text from writing one.
-  Framework.getApp().then(() => {
-    Framework.addSetting({
-      tag: 'text',
-      name: 'darkpage',
-      group: SETTINGS_GROUP,
-      content: `Dark page v${VERSION}`,
-      handler: () => {}
+  // The script has no dialog, so its settings entry only shows the version. The page may not be
+  // SudokuPad's (the match covers other pages of crackingthecryptic.com), and the darkening above
+  // needs no Framework.
+  if (typeof Framework !== 'undefined' && Framework.getApp) {
+    Framework.getApp().then(() => {
+      Framework.addSetting({
+        tag: 'text',
+        name: 'darkpage',
+        group: SETTINGS_GROUP,
+        content: `Dark page v${VERSION}`
+      })
     })
-  })
+  }
 })()

@@ -16,8 +16,8 @@
 (function () {
   'use strict'
 
-  // Shown in the settings, and the same as @version above: the live checks inject the script without
-  // Tampermonkey, so there is no GM_info to read it from.
+  // Shown in the settings, and the same as @version above. The script cannot read its own header
+  // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
   const VERSION = '0.3.2'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
