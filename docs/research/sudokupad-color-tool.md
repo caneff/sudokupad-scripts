@@ -233,6 +233,32 @@ marks in conflict with a given 5, in the corner at row 1 and the centre at row 2
 - A conflicting mark of a digit on SudokuPad's own color keeps the red fill and gets the same
   red stroke, so it looks as before, a little bolder.
 
+## Conflicting marks get a circle, not an outline (2026-11-03)
+
+Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #13, which replaces #10's
+outline. Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshot at real size,
+1200x900 viewport, same puzzle: `docs/research/digit-color-conflict-circle.png` (conflicting
+corner 5s, 4 and a centre 1 and 5), to be read beside `digit-color-conflict-outline.png`.
+
+- Chris ruled the 2px outline a muddy fringe at real size. SVG text has no background, so the
+  script draws `circle` elements in its own `g#digit-color-circles`, inserted just before
+  `#cell-pencilmarks`: behind every mark, above the cell colors.
+- Measuring: a `text` has `dominant-baseline: middle` and `text-anchor: middle`, so its `x` and `y`
+  are the middle of its digit. A corner mark also has a CSS `transform: translate(-15px, -15px)`
+  that `getBBox` and the attributes leave out, so the point goes through `getCTM()`. A centre mark's
+  `tspan` is not a graphics element (no `getCTM`, no `getBBox`): `getExtentOfChar(0)` gives its
+  x, and its parent `text` gives the y and the transform. An early version centred on a guessed
+  baseline offset and drew the circles 4 units off; the check now compares against the box the
+  browser reports (`getBoundingClientRect`).
+- Fill `#ff6b6b` at `fill-opacity: 0.4` over white is a pale pink: digit 1's `#b0125b` and every
+  other default color stay readable on it. Radius is 0.8 of the mark's width, about 8 units for a
+  corner mark; it covers the digit and a little more.
+- Showing and hiding: the group is `display: none` unless `.setting-checkpencilmarks` is on the
+  page, so the setting alone toggles it; no observer watches the body's class.
+- The observer now also watches `class` attribute changes (`attributeFilter: ['class']`), which is
+  how a mark enters or leaves `conflict`, through entry, undo, redo and loading. It ignores changes
+  inside the circles' group and `class` changes on anything but a mark, so redrawing the circles
+  and stamping `data-digit-color` do not retrigger it. The circles are rebuilt on each board change.
 ## Reading the palette for Pen Color (2026-11-03)
 
 Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #16, by `live/pen-color.live.mjs`.
