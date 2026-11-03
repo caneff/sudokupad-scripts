@@ -16,9 +16,11 @@
   `#rrggbb` value kept in SudokuPad's `--puzzle-pencolor-N` variable, which
   strokes and the tool's color buttons both read. The eraser has no pen color. With
   nothing saved, the nine are the **derived colors**: the colors of the current
-  **cell color page** (one of the color tool's pages of ten **cell colors**, the
-  transparent ones left out), in order, each darkened in OKLCH. A saved set wins, and
-  "Restore defaults" clears it.
+  **cell color page** (one of the color tool's pages of ten **cell colors**): pen
+  color N is the page's color at index N, darkened in OKLCH, so each pen sits on the
+  same button number as its cell color and index 0 is never used. A transparent or
+  unreadable entry keeps SudokuPad's own pen color there. The darkest derived color
+  with low chroma becomes black. A saved set wins, and "Restore defaults" clears it.
 - **edge mark** — a pen mark on a cell edge: SudokuPad's own X, or one of the
   marks this script adds (a direction arrow or a dot). Each one is a single
   character in the pen value of the cell that stores the edge.

@@ -337,7 +337,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
     })
 
-    it('a custom page of shorthand hex, named, rgba() and hsl() colors keeps all nine in order, with transparent entries skipped', async () => {
+    it('a custom page of shorthand hex, named, rgba() and hsl() colors gives pen N the color at index N, a transparent entry keeping SudokuPad\'s own pen color', async () => {
       await read(() => {
         const t = Framework.app.tools.colour
         const colors = { t: 'transparent', a: '#f00', b: 'blue', c: 'rgba(0, 200, 0, 1)', u: 'rgba(0, 0, 0, 0)', d: 'hsl(60, 100%, 50%)', e: 'rgb(10 20 30)', f: '#0ff', g: 'magenta', h: 'orange', i: 'purple' }
@@ -345,9 +345,42 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
       await openEditor()
       await restoreDefaults()
-      assert.deepEqual(await pickerValues(), ['#ae0000', '#0000ae', '#008700', '#aeae00', '#030a13', '#00aeae', '#ae00ae', '#ae6f00', '#550055'])
-      assert.doesNotMatch(await editor().innerText(), /keep/)
+      // Index 4 is the transparent `u`, so pen 4 keeps SudokuPad's own; index 6 is the dark
+      // blue-grey rgb(10 20 30), the darkest grey, so pen 6 is black.
+      assert.deepEqual(await pickerValues(), ['#ae0000', '#0000ae', '#008700', OWN_PEN_HEX[3], '#aeae00', '#000000', '#00aeae', '#ae00ae', '#ae6f00'])
+      assert.match(await editor().innerText(), /pen color 4 keeps SudokuPad's own/)
       await closeWith('Cancel')
+      await read(() => {
+        const t = Framework.app.tools.colour
+        t.setPalette(Framework.getData('ToolColor_palette'))
+        t.setPage(2)
+      })
+    })
+
+    it('pen buttons line up with the cell color page\'s buttons: a colored index 0 shifts nothing, and the darkest grey is black', async () => {
+      // Index 0 holds a near-white color; pen N must take index N, whatever index 0 holds.
+      const cells = ['rgb(250, 250, 250)', 'rgb(204, 51, 17)', 'rgb(17, 119, 51)', 'rgb(0, 68, 136)', 'rgb(187, 85, 0)', 'rgb(0, 153, 136)', 'rgb(100, 100, 100)', 'rgb(136, 136, 34)', 'rgb(238, 153, 170)', 'rgb(120, 80, 200)']
+      // The pens for indexes 1-9: each cell color darkened (the grey at index 6 is the only
+      // grey, so it is black), typed out as the expected result.
+      const pens = ['#8d1a00', '#004f1d', '#002b5b', '#7e3700', '#00675b', '#000000', '#5b5b00', '#ad5f70', '#54249c']
+      await read((cells) => {
+        const t = Framework.app.tools.colour
+        const colors = Object.fromEntries(cells.map((c, i) => ['k' + i, c]))
+        t.setPalette({ colors, pages: [Object.keys(colors)] })
+        t.setPage(0)
+      }, cells)
+      await openEditor()
+      await restoreDefaults()
+      await closeWith('Save')
+      await p.click('#control-colour')
+      // A cell button shows the page's color at its data-key: its data-value names the color key,
+      // and that key's `--cell-color-<key>` variable is the color it shows.
+      const cellButtons = () => read(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
+        const key = document.querySelector(`.tool-colour button[data-key="${n}"]`).dataset.value
+        return window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
+      }))
+      assert.deepEqual(await settle(cellButtons, cells.slice(1)), cells.slice(1))
+      await swatchesAre(pens)
       await read(() => {
         const t = Framework.app.tools.colour
         t.setPalette(Framework.getData('ToolColor_palette'))
