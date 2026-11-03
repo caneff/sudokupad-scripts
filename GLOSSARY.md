@@ -23,15 +23,19 @@
   same button number as its cell color and index 0 is never used. A transparent or
   unreadable entry keeps SudokuPad's own pen color there. The darkest derived color
   with low chroma becomes black. A saved set wins, and "Restore defaults" clears it.
-- **edit mode** — Pen Color's state after a hold on a pen color button: a color picker sits over
+- **edit mode** — Pen Tool Extras' state after a hold on a pen color button: a color picker sits over
   each of the nine pen buttons. A second hold, or leaving the pen tool, ends it. SudokuPad's color
   tool has the same state for its cell color buttons.
 - **edge mark** — a pen mark on a cell edge: SudokuPad's own X, or one of the
-  marks this script adds (a direction arrow or a dot). Each one is a single
+  marks Pen Tool Extras adds (a direction arrow or the edge circle). Each one is a single
   character in the pen value of the cell that stores the edge.
 - **edge cycle** — the order a click on an edge steps through its marks: X,
-  first direction, second direction, dot, empty, skipping any type unticked in
+  first direction, second direction, circle, empty, skipping any type unticked in
   the settings dialog.
+- **thickness** — the one slider setting the stroke width of the pen's free lines, the cell circle and
+  cross (pen values 5 and 6) and every edge mark, from 1 to 12, saved under `PenColor_thickness`.
+  SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle)
+  is always half of it, so every width scales by one factor.
 - **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
   another in the Dark page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
   with the color.
