@@ -78,6 +78,35 @@ gave remaining 127 and 136, and eliminated 145 and 235.
   worked with the panel detached, and `killerCages` gives every cage by index. The
   union of the remaining sets gave digits 1, 2, 3, 6 and 7.
 
+## Replacing the options, for example a rellik cage
+
+`showCage` calls `C.getKillerCombinations`, a property of the class, so assigning
+`KillerCalculator.getKillerCombinations` changes what the panel lists. The function
+receives only `{size, sum, maxVal, maxSum}`, not the cage, so a script that treats
+cages differently also wraps `killerCalculator.showCage(id, cage)` to note which cage
+is being drawn. `update` calls `this.showCage`, so an instance wrap is reached.
+
+Run live with a rellik override on r1c1-r1c3 (clue 10) and a normal killer cage on
+r2c1-r2c3 (clue 10):
+
+- The rellik cage listed 80 sets, none summing to 10, and the summary read
+  `sum: 6 - 24 (80/80)`. Rows showed their sums, as they do for a cage without a clue.
+- Crossing out 123 crossed out that row and the summary became `sum: 7 - 24 (79/80)`.
+- The normal cage still read `sum: 10 (4/4)`.
+
+Limits:
+
+- `filterCombinations` inside `showCage` is the closure's own binding, so assigning
+  `KillerCalculator.filterCombinations` does not change the panel. Custom elimination
+  rules need sets removed in the override, or `showCage` replaced outright.
+- `getPuzzleCages` keeps only `style === 'killer'` cages and is called as
+  `C.getPuzzleCages()`, so from the source a script could add other cages by
+  replacing it. That has not been run.
+- A puzzle does not mark a cage as rellik in anything read here. The test named the
+  cage by hand, so a real script needs the player or the puzzle's rules to say which.
+- `getKillerCombinations` also feeds `getCagesFromSelection`, which `update` does not
+  call today.
+
 The cage was pushed straight onto `Framework.app.puzzle.currentPuzzle.cages` after a
 `loadCTCPuzzle`. The minimal hand-built puzzle object lost its killer cage in that
 load, so loading a real killer puzzle through this path has not been shown. The
