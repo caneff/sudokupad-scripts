@@ -9,7 +9,7 @@
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
 // Every click is a real mouse click on the page at an edge's pixel position.
-/* global Replay, Framework */
+/* global Replay, Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -18,10 +18,12 @@ import { chromium } from 'playwright'
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../edge-marks.user.js', import.meta.url), 'utf8')
 
-const DATA_KEY = 'EdgeMarks_enabled'
+const DATA_KEY = 'EdgeMarks_marks'
 const POLL_MS = 50
 const SETTLE_MS = 10000
 const SIZE = 9
+// The cell the cell-mark checks click.
+const CELL_MARK = [5, 5]
 // SudokuPad's own pen color 4, with no Pen Color script installed.
 const RED = 'rgb(245, 58, 55)'
 
@@ -64,14 +66,24 @@ async function newPage (context, errors) {
   return p
 }
 
-async function startPuzzle (p) {
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+const waitForFramework = (p) => p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+
+// Clicks Start Puzzle; `beforeStart` runs while the button is still showing.
+async function startPuzzle (p, beforeStart) {
+  await waitForFramework(p)
   const start = p.getByRole('button', { name: START }).first()
   await start.waitFor({ state: 'visible' })
+  if (beforeStart) await beforeStart()
   await start.click()
   await start.waitFor({ state: 'hidden' })
   await p.locator('#control-undo').waitFor({ state: 'visible' })
 }
+
+// The page point at the centre of the cell at [row, col].
+const cellCentre = (p, row, col) => p.evaluate(([r, c]) => {
+  const e = Framework.app.puzzle.cells.find((v) => v.row === r && v.col === c).elem.getBoundingClientRect()
+  return [e.x + e.width / 2, e.y + e.height / 2]
+}, [row, col])
 
 for (const mode of ['document-idle', 'before-start', 'after-start']) {
   describe(`injected ${mode}`, { concurrency: false }, () => {
@@ -112,15 +124,12 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.mouse.click(x, y)
     }
     const clickCellCentre = async (row, col) => {
-      const [x, y] = await read(([r, c]) => {
-        const e = Framework.app.puzzle.cells.find((v) => v.row === r && v.col === c).elem.getBoundingClientRect()
-        return [e.x + e.width / 2, e.y + e.height / 2]
-      }, [row, col])
+      const [x, y] = await cellCentre(p, row, col)
       await p.mouse.click(x, y)
     }
     const pickColor = async (n) => p.locator(`.tool-pen button[data-key="${n}"]`).click()
     const clearMarks = async () => {
-      for (const [row, col] of [[3, 3], [3, 0], [0, 3], [3, SIZE - 1], [SIZE - 1, 3], [5, 5]]) {
+      for (const [row, col] of [...Object.values(EDGES).map((edge) => edge.stored), CELL_MARK]) {
         // pen value 0 clears the cell, through an act so that the page redraws it
         await read(([r, c]) => {
           const cell = Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c)
@@ -143,13 +152,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const box = (mark) => editor().locator(`input[data-mark="${mark}"]`)
 
     const boot = async () => {
-      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-      const start = p.getByRole('button', { name: START }).first()
-      await start.waitFor({ state: 'visible' })
-      if (mode === 'before-start') await p.addScriptTag({ content: script })
-      await start.click()
-      await start.waitFor({ state: 'hidden' })
-      await p.locator('#control-undo').waitFor({ state: 'visible' })
+      await startPuzzle(p, async () => {
+        if (mode === 'before-start') await p.addScriptTag({ content: script })
+      })
       if (mode === 'after-start') await p.addScriptTag({ content: script })
       // The pen tool is off until its own setting turns it on.
       await read(() => Framework.setSetting('toolpen', true))
@@ -241,18 +246,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('cell marks and drawn lines still work', async () => {
-      await clickCellCentre(5, 5)
-      assert.deepEqual(await settle(() => penValues(5, 5), ['5']), ['5'])
-      await clickCellCentre(5, 5)
-      assert.deepEqual(await settle(() => penValues(5, 5), ['6']), ['6'])
-      await clickCellCentre(5, 5)
-      assert.deepEqual(await settle(() => penValues(5, 5), []), [])
+      await clickCellCentre(...CELL_MARK)
+      assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'])
+      await clickCellCentre(...CELL_MARK)
+      assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['6']), ['6'])
+      await clickCellCentre(...CELL_MARK)
+      assert.deepEqual(await settle(() => penValues(...CELL_MARK), []), [])
       // a drag draws a line, not an edge mark
       const before = await penCount()
-      const [x, y] = await read(() => {
-        const e = Framework.app.puzzle.cells.find((c) => c.row === 6 && c.col === 1).elem.getBoundingClientRect()
-        return [e.x + e.width / 2, e.y + e.height / 2]
-      })
+      const [x, y] = await cellCentre(p, 6, 1)
       await p.mouse.move(x, y)
       await p.mouse.down()
       await p.mouse.move(x + 70, y + 5, { steps: 8 })
@@ -341,8 +343,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await sleep(500)
       assert.deepEqual(await penValues(3, 3), ['3'])
       assert.equal(await read(() => Framework.app.puzzle.undoStack.length), undoable)
-      await clickCellCentre(5, 5)
-      assert.deepEqual(await settle(() => penValues(5, 5), ['5']), ['5'])
+      await clickCellCentre(...CELL_MARK)
+      assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'])
       await openEditor()
       for (const mark of ['x', 'directions', 'dot']) await box(mark).check()
       await closeWith('Save')
@@ -362,6 +364,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await clickEdge(3, 3, 'right')
         assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'], bad)
         await clearMarks()
+        // the dialog shows the defaults too, so Save cannot store the corrupt value
+        await openEditor()
+        for (const mark of ['x', 'directions', 'dot']) assert.equal(await box(mark).isChecked(), true, `${bad}: ${mark}`)
+        await closeWith('Cancel')
       }
       assert.deepEqual(errors.slice(errorsBefore), [])
     })
@@ -373,7 +379,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 }
 
 describe('without the script', { concurrency: false }, () => {
-  it('a replay and a saved state holding these values load with no page error, and the page does not crash', async () => {
+  it('a replay holding these values loads with no page error, and the values draw nothing', async () => {
     // First page: the script, to record a replay with every kind of added mark.
     const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
     const errors = []
@@ -395,7 +401,7 @@ describe('without the script', { concurrency: false }, () => {
       })
       await withScript.close()
 
-      // Second page: no script. Load the replay and a saved state with those values.
+      // Second page: no script. Load the replay.
       const bare = await newPage(context, errors)
       await bare.goto(url, { waitUntil: 'load', timeout: 60000 })
       await startPuzzle(bare)
@@ -409,6 +415,47 @@ describe('without the script', { concurrency: false }, () => {
       assert.equal(pen.held, 'hijklmnopqrs')
       // the unknown values draw as paths with no data, so nothing is visible
       assert.equal(await bare.evaluate(() => [...document.querySelectorAll('.cell-pen')].filter((e) => e.getAttribute('d')).length), 0)
+      assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
+  })
+})
+
+describe('with a SudokuPad internal missing', { concurrency: false }, () => {
+  it('logs one warning and leaves the pen tool unchanged', async () => {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    const errors = []
+    const warnings = []
+    try {
+      const p = await newPage(context, errors)
+      p.on('console', (m) => { if (m.type() === 'warning' && m.text().includes('edge-marks')) warnings.push(m.text()) })
+      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+      await startPuzzle(p)
+      // `_actList` is the field the click wrap reads; SudokuPad's own `actStart` recreates it
+      // on the first click, so the pen tool still works.
+      await p.evaluate(() => { ToolPen.tool._actList = undefined })
+      await p.addScriptTag({ content: script })
+      await p.evaluate(() => Framework.setSetting('toolpen', true))
+      await p.locator('#control-pen').waitFor({ state: 'visible' })
+      await settle(async () => warnings.length, 1)
+      assert.equal(warnings.length, 1)
+      assert.equal(await p.locator('style#edge-marks-style').count(), 0)
+      const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
+      const deadline = Date.now() + SETTLE_MS
+      while (!(await shown()) && Date.now() < deadline) {
+        await p.click('#control-pen')
+        await settle(shown, true, 500)
+      }
+      const pen = () => p.evaluate(() => Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).pen.map((v) => v[0]))
+      const [x, y] = await p.evaluate(() => {
+        const e = Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).elem.getBoundingClientRect()
+        return [e.x + e.width - 2, e.y + e.height / 2]
+      })
+      await p.mouse.click(x, y)
+      assert.deepEqual(await settle(pen, ['3']), ['3'])
+      await p.mouse.click(x, y)
+      assert.deepEqual(await settle(pen, []), [])
       assert.deepEqual(errors, [])
     } finally {
       await context.close()

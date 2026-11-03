@@ -18,7 +18,7 @@
 (function () {
   'use strict'
 
-  const DATA_KEY = 'EdgeMarks_enabled'
+  const DATA_KEY = 'EdgeMarks_marks'
   const STYLE_ID = 'edge-marks-style'
   // The pen value of SudokuPad's own edge X on the right, bottom, left and top edge of a cell.
   // An edge between two cells is stored on one of them, so a click on it is always one of
@@ -29,7 +29,7 @@
   const ADDED = { 3: ['h', 'i', 'j'], 4: ['k', 'l', 'm'], b: ['n', 'o', 'p'], c: ['q', 'r', 's'] }
   // The two directions of a vertical edge, then of a horizontal one.
   const SHAPES = { 3: ['>', '<'], 4: ['^', 'v'], b: ['>', '<'], c: ['^', 'v'] }
-  // The kinds of mark in cycle order. `directions` is the one checkbox for dirA and dirB.
+  // The types of mark in cycle order. `directions` is the one checkbox for dirA and dirB.
   const CYCLE = ['x', 'dirA', 'dirB', 'dot']
   const SETTING_OF = { x: 'x', dirA: 'directions', dirB: 'directions', dot: 'dot' }
   const DEFAULT_SETTINGS = { x: true, directions: true, dot: true }
@@ -50,19 +50,19 @@
     return out
   }
 
-  // The pen value of each kind on the edge whose X value is `edge`.
-  function valueOfKind (edge, kind) {
-    return kind === 'x' ? edge : ADDED[edge][CYCLE.indexOf(kind) - 1]
+  // The pen value of each type on the edge whose X value is `edge`.
+  function valueOfType (edge, type) {
+    return type === 'x' ? edge : ADDED[edge][CYCLE.indexOf(type) - 1]
   }
 
-  // The kind of mark after `current` ('empty' or a kind), skipping unticked kinds. 'empty' is
+  // The type of mark after `current` ('empty' or a type), skipping unticked types. 'empty' is
   // always allowed. A `current` whose type is unticked still moves on.
-  function nextKind (current, settings) {
+  function nextType (current, settings) {
     const order = [...CYCLE, 'empty']
     const from = order.indexOf(current)
     for (let step = 1; step <= order.length; step++) {
-      const kind = order[(from + step) % order.length]
-      if (kind === 'empty' || settings[SETTING_OF[kind]]) return kind
+      const type = order[(from + step) % order.length]
+      if (type === 'empty' || settings[SETTING_OF[type]]) return type
     }
     throw new Error('edge-marks: the cycle has no empty step')
   }
@@ -72,11 +72,11 @@
   // null). Null when nothing is ticked, so the click does nothing.
   function planClick (edge, present, settings) {
     if (!Object.keys(DEFAULT_SETTINGS).some((key) => settings[key])) return null
-    const held = CYCLE.filter((kind) => present.includes(valueOfKind(edge, kind)))
-    const next = nextKind(held.length ? held[0] : 'empty', settings)
+    const held = CYCLE.filter((type) => present.includes(valueOfType(edge, type)))
+    const next = nextType(held.length ? held[0] : 'empty', settings)
     return {
-      remove: held.map((kind) => valueOfKind(edge, kind)),
-      add: next === 'empty' ? null : valueOfKind(edge, next)
+      remove: held.map((type) => valueOfType(edge, type)),
+      add: next === 'empty' ? null : valueOfType(edge, next)
     }
   }
 
@@ -108,7 +108,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { nextKind, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS }
+    module.exports = { nextType, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -206,6 +206,7 @@
     const renderer = app.svgRenderer
     const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
     const found = tool && ['clickCell', 'actSend', 'actAdd'].every((name) => typeof tool[name] === 'function') &&
+      Array.isArray(tool._actList) &&
       proto && typeof proto.renderPen === 'function' &&
       typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
     if (!found) {

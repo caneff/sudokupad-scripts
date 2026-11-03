@@ -1,7 +1,7 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { nextKind, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS } = require('./edge-marks.user.js')
+const { nextType, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS } = require('./edge-marks.user.js')
 
 const ALL = { x: true, directions: true, dot: true }
 const NONE = { x: false, directions: false, dot: false }
@@ -24,33 +24,33 @@ test('a saved boolean is kept and a non-boolean entry takes its default', () => 
 
 test('with everything ticked the cycle is X, direction, other direction, dot, empty', () => {
   const seen = []
-  let kind = 'empty'
+  let type = 'empty'
   for (let i = 0; i < 5; i++) {
-    kind = nextKind(kind, ALL)
-    seen.push(kind)
+    type = nextType(type, ALL)
+    seen.push(type)
   }
   assert.deepEqual(seen, ['x', 'dirA', 'dirB', 'dot', 'empty'])
 })
 
 test('an unticked type is skipped', () => {
-  assert.equal(nextKind('empty', { x: false, directions: true, dot: true }), 'dirA')
-  assert.equal(nextKind('dirB', { x: true, directions: true, dot: false }), 'empty')
-  assert.equal(nextKind('x', { x: true, directions: false, dot: true }), 'dot')
-  assert.equal(nextKind('empty', { x: false, directions: false, dot: true }), 'dot')
-  assert.equal(nextKind('dot', { x: false, directions: false, dot: true }), 'empty')
+  assert.equal(nextType('empty', { x: false, directions: true, dot: true }), 'dirA')
+  assert.equal(nextType('dirB', { x: true, directions: true, dot: false }), 'empty')
+  assert.equal(nextType('x', { x: true, directions: false, dot: true }), 'dot')
+  assert.equal(nextType('empty', { x: false, directions: false, dot: true }), 'dot')
+  assert.equal(nextType('dot', { x: false, directions: false, dot: true }), 'empty')
 })
 
 test('Directions is one box: both directions or neither', () => {
   const only = { x: false, directions: true, dot: false }
-  assert.equal(nextKind('empty', only), 'dirA')
-  assert.equal(nextKind('dirA', only), 'dirB')
-  assert.equal(nextKind('dirB', only), 'empty')
+  assert.equal(nextType('empty', only), 'dirA')
+  assert.equal(nextType('dirA', only), 'dirB')
+  assert.equal(nextType('dirB', only), 'empty')
 })
 
 test('a mark whose type is unticked moves to the next ticked mark, or to empty', () => {
-  assert.equal(nextKind('x', { x: false, directions: false, dot: true }), 'dot')
-  assert.equal(nextKind('x', { x: false, directions: false, dot: false }), 'empty')
-  assert.equal(nextKind('dot', { x: true, directions: false, dot: false }), 'empty')
+  assert.equal(nextType('x', { x: false, directions: false, dot: true }), 'dot')
+  assert.equal(nextType('x', { x: false, directions: false, dot: false }), 'empty')
+  assert.equal(nextType('dot', { x: true, directions: false, dot: false }), 'empty')
 })
 
 test('a click on an empty right edge adds the X, which is the character 3', () => {
@@ -108,7 +108,7 @@ test('shapeOf names the arrow each character draws, per edge', () => {
   }
 })
 
-test('the dot is a zero-length segment, which a round cap draws and fill: none does not hide', () => {
+test('the dot is a zero-length segment', () => {
   assert.match(shapePath('.', 8), /^ l0 0$/)
 })
 
