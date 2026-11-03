@@ -8,6 +8,9 @@ Chromium. Not read from a real player's browser.
 - `setLetterMode` saves the mode with `Framework.setData('ToolLetter_letterMode', letterMode)`,
   which lands in `localStorage` as `svencodes_ToolLetter_letterMode`. A temporary switch from a
   held hotkey is not saved.
+- `ToolLetter.keyHandlers` binds both `/` and `Tab` to the same toggle, so a stray Tab turns the
+  mode on and saves it, and it is still on after a refresh (Chris hit this in play; read from
+  source, the Tab press itself not run here).
 - `ToolLetter.init` reads that key back, so the mode applies to every puzzle in that browser
   profile. It is not stored per puzzle.
 
