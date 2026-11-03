@@ -9,7 +9,7 @@
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
 // Every click is a real mouse click on the page at an edge's pixel position.
-/* global Replay, Framework, ToolPen */
+/* global Replay, Framework, ToolPen, MouseEvent */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -120,10 +120,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         top: [e.x + e.width / 2, e.y + pad]
       }[s]
     }, [row, col, side])
-    const clickEdge = async (row, col, side) => {
+    const clickEdge = async (row, col, side, button = 'left') => {
       const [x, y] = await edgePoint(row, col, side)
-      await p.mouse.click(x, y)
+      await p.mouse.click(x, y, { button })
     }
+    // Whether the page's own `contextmenu` listeners left each right click's menu alone
+    // (false) or prevented it (true), in order. The listener sits on `window`, in the bubble
+    // phase, so it reads the event after the script's capture listener ran.
+    const menuLog = () => read(() => window.__menuPrevented)
+    const watchMenus = () => read(() => {
+      window.__menuPrevented = []
+      window.addEventListener('contextmenu', (event) => window.__menuPrevented.push(event.defaultPrevented))
+    })
     const clickCellCentre = async (row, col) => {
       const [x, y] = await cellCentre(p, row, col)
       await p.mouse.click(x, y)
@@ -162,6 +170,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await selectPen()
+      await watchMenus()
     }
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
@@ -197,6 +206,69 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await clearMarks()
       })
     }
+
+    for (const [name, edge] of Object.entries(EDGES)) {
+      it(`${name}: right clicks cycle the other way, circle, other direction, direction, X, empty, and one undo reverses each`, async () => {
+        const [sr, sc] = edge.stored
+        const backwards = [...edge.cycle.slice(0, -1).reverse(), null]
+        const want = (value) => value === null ? [] : [value]
+        for (const value of backwards) {
+          await clickEdge(edge.row, edge.col, edge.side, 'right')
+          assert.deepEqual(await settle(() => penValues(sr, sc), want(value)), want(value), `${name} after a right click`)
+          const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
+          assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
+          assert.equal(drawn.length, value === null ? 0 : 1)
+        }
+        // each undo restores the step before it
+        for (const value of [...backwards.slice(0, -1).reverse(), null]) {
+          await p.click('#control-undo')
+          assert.deepEqual(await settle(() => penValues(sr, sc), want(value)), want(value), `${name} after an undo`)
+        }
+        await clearMarks()
+      })
+    }
+
+    it('a left click after a right click goes forward again, and a right click after it comes back', async () => {
+      await clickEdge(3, 3, 'right', 'right')
+      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
+      await clickEdge(3, 3, 'right')
+      assert.deepEqual(await settle(() => penValues(3, 3), []), [])
+      await clickEdge(3, 3, 'right')
+      assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
+      await clickEdge(3, 3, 'right', 'right')
+      assert.deepEqual(await settle(() => penValues(3, 3), []), [])
+      await clearMarks()
+    })
+
+    it('a right click on an edge keeps the browser menu closed, and one off the grid, in a cell middle or with another tool does not', async () => {
+      const before = (await menuLog()).length
+      await clickEdge(3, 3, 'right', 'right')
+      await clickEdge(0, 3, 'top', 'right')
+      assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true])), [true, true], 'edge right clicks')
+      // a right click in a cell middle stays as SudokuPad has it: a cell mark, and the menu opens
+      const [cx, cy] = await cellCentre(p, ...CELL_MARK)
+      await p.mouse.click(cx, cy, { button: 'right' })
+      assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'], 'a right click in a cell middle makes the cell mark')
+      // a right click off the grid
+      await p.mouse.click(5, 5, { button: 'right' })
+      assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false])), [true, true, false, false], 'cell middle, then off the grid')
+      // the pointer last pressed on an edge, but the menu is asked for by something outside the grid
+      await clickEdge(3, 3, 'right', 'right')
+      const outside = await read(() => {
+        const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+        document.body.dispatchEvent(event)
+        return event.defaultPrevented
+      })
+      assert.equal(outside, false, 'a menu asked for outside the grid')
+      await clearMarks()
+      // another tool: turn the pen tool off, then right click the same edge point
+      await p.click('#control-normal')
+      assert.equal(await settle(() => read(() => Framework.app.tool), 'normal'), 'normal')
+      await clickEdge(3, 3, 'right', 'right')
+      assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false, true, false, false])), [true, true, false, false, true, false, false], 'other tool')
+      await selectPen()
+      await clearMarks()
+    })
 
     it('the other side of an interior edge reaches the same mark', async () => {
       await clickEdge(3, 4, 'left')
