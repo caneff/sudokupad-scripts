@@ -18,7 +18,7 @@
 (function () {
   'use strict'
 
-  // Shown in the settings, and the same as @version above. The script cannot read its own header
+  // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
   const VERSION = '0.1.2'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
