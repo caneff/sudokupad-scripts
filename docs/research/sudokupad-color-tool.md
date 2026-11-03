@@ -118,6 +118,31 @@ into the page, not installed through Tampermonkey.
 - Not tested: givens, dark mode, `outlinesondigits`, digits on colored cells, and
   moving to another puzzle without a reload.
 
+### How givens and marks render
+
+Tested 2026-11-03 on sudokupad.app in headless Chromium, with a scratch probe and
+no script installed.
+
+| What | Group under `#svgrenderer` | Element | Digit is in | Default `fill` |
+| --- | --- | --- | --- | --- |
+| Given | `#cell-givens` | `text.cell-given` | text | `rgb(0, 0, 0)` |
+| Entered digit | `#cell-values` | `text.cell-value` | text | `rgb(29, 106, 229)` |
+| Corner mark | `#cell-pencilmarks` | `text.cell-pencilmark.pm-<n>`, one per mark | `data-val` | `rgb(29, 106, 229)` |
+| Centre mark | `#cell-candidates` | one `text.cell-candidate` per cell, one `tspan` per mark | `data-val` on the `tspan` | `rgb(29, 106, 229)` |
+
+- Givens sit in their own group, so selecting `#cell-values` already leaves them out.
+- A mark that conflicts with a digit in its row, column or box gets class `conflict`
+  (on the `text` for a corner mark, on the `tspan` for a centre mark) and a `fill` of
+  `rgb(179, 58, 58)`.
+- A `style.fill` set on a mark would hide that red. A stylesheet rule on
+  `#cell-candidates tspan[data-val="8"]` did not override it, so the red won there.
+  The same rule on a corner mark was only run with `:not(.conflict)`.
+- An entered digit that conflicts got no `conflict` class in this test and stayed
+  `rgb(29, 106, 229)`.
+- A stylesheet rule keyed on `data-val` colored marks added after the rule went in,
+  with no observer. `text.cell-value` has no `data-val`, so an entered digit still
+  needs its own way to read the digit.
+
 ## Adding an app button after load
 
 Found 2026-11-02 running the merged script on sudokupad.app in headless Chromium.
