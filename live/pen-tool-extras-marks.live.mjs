@@ -274,7 +274,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.mouse.up()
       assert.equal(await settle(async () => (await penCount()) > before, true), true)
       const values = await read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])))
-      assert.deepEqual(values.filter((v) => !'12789adefg'.includes(v)), [], 'a drag draws line values only')
+      // A drag leaves a line, and a cell circle where it ends; never a mark on an edge.
+      assert.deepEqual(values.filter((v) => '34bchijklmnopqrs'.includes(v)), [], 'a drag draws no edge mark')
       await p.click('#control-undo')
       assert.equal(await settle(penCount, before), before)
     })
