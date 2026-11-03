@@ -21,12 +21,16 @@ import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
-const { RECT_ID, STYLE_ID, SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
+const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
 
+// Dark Page's button among the entries of the Experimental group.
+const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ })
 const RECT = `#${RECT_ID}`
 const STYLE = `#${STYLE_ID}`
 const BLACK = 'rgb(0, 0, 0)'
 const CREDIT_TEXT = 'rgb(221, 221, 221)'
+const DARK_TEXT = 'rgb(34, 34, 34)'
+const PICKER = 'input[type=color]'
 // SudokuPad's red accent (`--main-color` of `.setting-uitheme-red`), read with no script installed.
 const ACCENT_RED = 'rgb(212, 17, 89)'
 const START = /Start Puzzle|Continue|Resume/i
@@ -405,15 +409,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       for (const [side, white] of Object.entries(slack)) assert.equal(white >= 0 && white <= TIGHT_SLACK_PX, true, `${side}: ${white}px of white past the drawing, ${JSON.stringify(slack)}`)
     })
 
-    it('the settings entry sits in the Experimental group, shows the version from the script header, and a click on it changes nothing', async () => {
+    it('the settings entry is a button named Dark page in the Experimental group, and it opens a dialog with the version as small text', async () => {
       const group = await openSettings(p)
-      const entry = group.locator('p').filter({ hasText: 'Dark page' })
-      assert.equal((await entry.textContent()).trim(), `Dark page v${headerVersion(script)}`)
-      const before = await read(() => JSON.stringify(Framework.getSettings()))
+      const entry = settingsEntry(group)
+      assert.equal(await entry.count(), 1)
       await entry.click()
-      assert.equal(await read(() => JSON.stringify(Framework.getSettings())), before)
-      assert.equal(await entry.isVisible(), true)
-      await p.locator('.dialog button.dialog-back').click()
+      const dialog = p.locator('.dialog')
+      await dialog.locator(PICKER).waitFor({ state: 'visible' })
+      assert.equal((await dialog.locator('small').textContent()).trim(), `v${headerVersion(script)}`)
+      assert.equal(await dialog.locator(PICKER).inputValue(), '#000000')
+      await dialog.getByRole('button', { name: 'Cancel' }).click()
     })
 
     it('no uncaught page errors', () => {
@@ -421,6 +426,90 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
   })
 }
+
+// The options dialog changes the page color and keeps it. One context, so localStorage carries over
+// a reload; the script is injected at DOMContentLoaded, as `@run-at document-idle` approximates it.
+describe('the page color dialog', { concurrency: false }, () => {
+  let context, p, errors
+  const bodyColor = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
+  const footerColor = () => p.evaluate(() => window.getComputedStyle(document.querySelector('.controls-footer')).color)
+  const saved = () => p.evaluate((key) => Framework.getData(key), DATA_KEY)
+  const openDialog = async () => {
+    await settingsEntry(await openSettings(p)).click()
+    await p.locator(`.dialog ${PICKER}`).waitFor({ state: 'visible' })
+  }
+  const dialogButton = (name) => p.locator('.dialog').getByRole('button', { name, exact: true })
+  const load = async () => {
+    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    await openPuzzle(p)
+    await p.locator(STYLE).waitFor({ state: 'attached' })
+  }
+
+  before(async () => {
+    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    errors = []
+    p = await context.newPage()
+    p.on('pageerror', (e) => errors.push(String(e)))
+    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+    // Records the script's CSS the moment its style first exists, before any frame paints with it.
+    // The style stays disabled until a board is on the page, so only its text says which color the
+    // first paint will use.
+    await p.addInitScript(([src, styleId]) => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const s = document.createElement('script')
+        s.textContent = src
+        document.documentElement.appendChild(s)
+        window.__firstCss = document.getElementById(styleId).textContent
+      })
+    }, [script, STYLE_ID])
+    await load()
+  })
+  after(async () => { await context.close() })
+
+  it('Save applies a light color without a reload, with dark text on it, and saves it', async () => {
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
+    await dialogButton('Save').click()
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
+    assert.equal(await footerColor(), DARK_TEXT)
+    assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('the stylesheet the script first writes after a reload already holds the saved color, never black', async () => {
+    await load()
+    const firstCss = await p.evaluate(() => window.__firstCss)
+    assert.match(firstCss, /body \{ background-color: #ffcc00 !important \}/)
+    assert.doesNotMatch(firstCss, /#000000/)
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
+    await openDialog()
+    assert.equal(await p.locator(`.dialog ${PICKER}`).inputValue(), '#ffcc00')
+    await dialogButton('Cancel').click()
+  })
+
+  it('Cancel after a pick changes nothing', async () => {
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#00ff00')
+    await dialogButton('Cancel').click()
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
+    assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('Black then Save returns to the default black with light text, and saves nothing', async () => {
+    await openDialog()
+    await dialogButton('Black').click()
+    assert.equal(await p.locator(`.dialog ${PICKER}`).inputValue(), '#000000')
+    await dialogButton('Save').click()
+    assert.equal(await bodyColor(), BLACK)
+    assert.equal(await footerColor(), CREDIT_TEXT)
+    assert.equal(await saved(), null)
+    await load()
+    assert.equal(await bodyColor(), BLACK)
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})
 
 // A page with no puzzle in it, such as another page of a site the script matches, is left alone.
 describe('a page with no puzzle', () => {
