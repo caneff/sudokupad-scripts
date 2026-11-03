@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.0
+// @version      0.3.1
 // @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark gets a small red circle behind it, keeping its digit color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -100,8 +100,21 @@
     return { cx: mark.x, cy: mark.y, r: mark.width * CIRCLE_RADIUS_PER_WIDTH }
   }
 
+  // The middle of a character's ink in the text's own coordinates, from the character's extent (its
+  // origin on the baseline at `x`, its em box from `y`) and the ink and font measures of a canvas
+  // `measureText`: `left`/`right` and `ascent`/`descent` are the ink's reach from the origin and the
+  // baseline (`left` positive going left, as the canvas reports it), `fontAscent` the em box's top above
+  // the baseline.
+  function inkMiddle (extent, measure) {
+    const baseline = extent.y + measure.fontAscent
+    return {
+      x: extent.x + (measure.right - measure.left) / 2,
+      y: baseline + (measure.descent - measure.ascent) / 2
+    }
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
+    module.exports = { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -128,20 +141,29 @@
     })
   }
 
-  // A mark's middle and width in `space`'s units. SudokuPad sets `dominant-baseline: middle` on
-  // marks, so a `text`'s `y` is the middle of its digit; a corner mark's `x` is its middle too
-  // (`text-anchor: middle`), and a centre mark's `tspan` has no position of its own, so its
-  // character's extent gives its middle. A corner mark carries a CSS translate that its own
-  // attributes omit, so the point is mapped through the `text`'s transform into `space`, which
-  // holds a translation and a scale only.
+  let measuring = null
+
+  // The canvas measures of a mark's digit, in the mark's computed font. They are in the text's own
+  // units: SudokuPad sizes its fonts in the board's units, which a canvas takes as pixels.
+  function measureInk (mark) {
+    if (!measuring) measuring = document.createElement('canvas').getContext('2d')
+    const style = window.getComputedStyle(mark)
+    measuring.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    const m = measuring.measureText(mark.textContent)
+    return { left: m.actualBoundingBoxLeft, right: m.actualBoundingBoxRight, ascent: m.actualBoundingBoxAscent, descent: m.actualBoundingBoxDescent, fontAscent: m.fontBoundingBoxAscent }
+  }
+
+  // The middle of a mark's digit ink and the mark's width, in `space`'s units. The ink is centred,
+  // not the character's advance box or the point its `dominant-baseline: middle` aims at, which sit
+  // off the digit's shape. The character's extent is in the `text`'s own coordinates, and a corner
+  // mark carries a CSS translate its attributes omit, so the point is mapped through the `text`'s
+  // transform into `space`, which holds a translation and a scale only.
   function markMiddle (mark, space) {
-    const isTspan = mark.localName === 'tspan'
-    const text = isTspan ? mark.parentNode : mark
-    const extent = isTspan ? mark.getExtentOfChar(0) : mark.getBBox()
-    const x = isTspan ? extent.x + extent.width / 2 : Number(text.getAttribute('x'))
-    if (!text.hasAttribute('y') || (!isTspan && !text.hasAttribute('x'))) throw new Error('digit-color: a mark has no position to draw its circle at')
+    const text = mark.localName === 'tspan' ? mark.parentNode : mark
+    const extent = mark.getExtentOfChar(0)
+    const ink = inkMiddle(extent, measureInk(mark))
     const toSpace = space.getCTM().inverse().multiply(text.getCTM())
-    const point = new window.DOMPoint(x, Number(text.getAttribute('y'))).matrixTransform(toSpace)
+    const point = new window.DOMPoint(ink.x, ink.y).matrixTransform(toSpace)
     return { x: point.x, y: point.y, width: extent.width * toSpace.a }
   }
 
