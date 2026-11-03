@@ -1,12 +1,12 @@
-// Takes docs/research/edge-marks-all-colors.png: a block of the sample puzzle's grid with Edge Marks' four
+// Takes docs/research/site-edge-marks.png, the homepage's Edge Marks picture: a block of the sample puzzle's grid with Edge Marks' four
 // marks (X, two arrows, dot) drawn on cell edges in several pen colors, the mascot hidden.
-// Run from the repo root: node docs/research/edge-marks-screenshot.mjs
+// Run from the repo root: node docs/research/edge-marks-site-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 
 const url = readFileSync(new URL('../../live/puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../../edge-marks.user.js', import.meta.url), 'utf8')
-const out = new URL('./edge-marks-all-colors.png', import.meta.url).pathname
+const out = new URL('./site-edge-marks.png', import.meta.url).pathname
 
 const browser = await chromium.launch()
 const page = await (await browser.newContext({ viewport: { width: 1200, height: 900 } })).newPage()
@@ -48,7 +48,9 @@ const box = await page.evaluate(() => {
   const rect = (r, c) => Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c).elem.getBoundingClientRect()
   const a = rect(1, 1)
   const b = rect(5, 5)
-  return { x: a.x, y: a.y, width: b.right - a.x, height: b.bottom - a.y }
+  // A margin past the last cell keeps a mark on its right edge whole.
+  const margin = 12
+  return { x: a.x, y: a.y, width: b.right - a.x + margin, height: b.bottom - a.y + margin }
 })
 await page.screenshot({ path: out, clip: box })
 await browser.close()

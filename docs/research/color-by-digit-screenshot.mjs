@@ -1,4 +1,4 @@
-// Takes docs/research/color-by-digit-grid.png: the sample puzzle's grid after one press of the
+// Takes docs/research/site-color-by-digit.png: the sample puzzle's grid after one press of the
 // Color by digit button with its default groups, the mascot hidden. Run from the repo root:
 // node docs/research/color-by-digit-screenshot.mjs
 import { chromium } from 'playwright'
@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 
 const url = readFileSync(new URL('../../live/puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
-const out = new URL('./color-by-digit-grid.png', import.meta.url).pathname
+const out = new URL('./site-color-by-digit.png', import.meta.url).pathname
 
 const browser = await chromium.launch()
 const page = await (await browser.newContext({ viewport: { width: 1200, height: 900 } })).newPage()

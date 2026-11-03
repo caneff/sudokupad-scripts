@@ -1,6 +1,6 @@
 // Takes docs/research/pen-color-match.png: on the default first color page, a pen stroke in
 // each of the nine derived pen colors (cols 2-4) beside a cell in the matching cell color
-// (col 7), one row per color, the mascot hidden. Run from the repo root: node docs/research/pen-color-screenshot.mjs
+// (col 7), one row per color. Run from the repo root: node docs/research/pen-color-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 
@@ -13,7 +13,6 @@ await page.goto(url, { waitUntil: 'load' })
 await page.waitForFunction(() => Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length)
 await page.getByRole('button', { name: /Start Puzzle|Continue|Resume/i }).first().click()
 await page.locator('#control-undo').waitFor()
-await page.addStyleTag({ content: '#svenpeek { display: none !important }' })
 await page.addScriptTag({ content: script })
 await page.locator('#pen-color-style').waitFor({ state: 'attached' })
 await page.evaluate(() => Framework.setSetting('toolpen', true))

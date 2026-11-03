@@ -1,6 +1,7 @@
 // Takes docs/research/site-homepage-desktop.png and checks site/index.html at desktop (1280) and
 // phone (390) widths, light and dark: no horizontal scroll, every image loaded. The page's
 // raw.githubusercontent.com images come from this checkout, since a branch is not on main yet.
+// The other three combinations go to $SHOTS, else /tmp.
 // Run from the repo root: node docs/research/site-homepage-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
