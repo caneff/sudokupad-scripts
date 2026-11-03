@@ -233,14 +233,33 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('a circle lets pointer events through to the board', async () => {
-      const [{ cx, cy }] = await circles()
-      const hit = await read(([cx, cy]) => {
-        const svg = document.querySelector('#svgrenderer')
-        const pt = new window.DOMPoint(cx, cy).matrixTransform(svg.getScreenCTM())
+      // The circle's right edge, where no digit sits on top of it.
+      const hit = await read(() => {
+        const circle = document.querySelector('#digit-color-circles circle')
+        const edge = new window.DOMPoint(Number(circle.getAttribute('cx')) + 0.9 * Number(circle.getAttribute('r')), Number(circle.getAttribute('cy')))
+        const pt = edge.matrixTransform(circle.getScreenCTM())
         const el = document.elementFromPoint(pt.x, pt.y)
         return el && el.closest('#digit-color-circles') ? 'circle' : 'board'
-      }, [cx, cy])
+      })
       assert.equal(hit, 'board')
+    })
+
+    // The page's clock changes text every second and redraws the circles anyway, so this reads the
+    // circles two frames after the class change, before a tick is likely.
+    it('a mark entering or leaving the conflict state with no other change on the page gets or loses its circle at once', async () => {
+      // Circles drawn beyond one per conflicting mark, read two frames after each class change.
+      const extraAfterToggle = await read(async () => {
+        const extra = () => document.querySelectorAll('#digit-color-circles circle').length - document.querySelectorAll('#cell-pencilmarks .cell-pencilmark.conflict, #cell-candidates tspan.conflict').length
+        const twoFrames = () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
+        const mark = document.querySelector('#cell-pencilmarks .cell-pencilmark:not(.conflict)')
+        mark.classList.add('conflict')
+        await twoFrames()
+        const entered = extra()
+        mark.classList.remove('conflict')
+        await twoFrames()
+        return [entered, extra()]
+      })
+      assert.deepEqual(extraAfterToggle, [0, 0])
     })
 
     it('no circle shows while SudokuPad\'s check pencil marks setting is off, and the marks keep their color', async () => {
