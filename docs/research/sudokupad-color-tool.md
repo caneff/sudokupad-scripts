@@ -232,3 +232,24 @@ marks in conflict with a given 5, in the corner at row 1 and the centre at row 2
   class with it off. The outline rules carry that class, so the setting off means no outline.
 - A conflicting mark of a digit on SudokuPad's own color keeps the red fill and gets the same
   red stroke, so it looks as before, a little bolder.
+
+## Reading the palette for Pen Color (2026-11-03)
+
+Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #16, by `live/pen-color.live.mjs`.
+Not run through Tampermonkey or on `crackingthecryptic.com`.
+
+- `Framework.app.tools.colour` is the color tool (the keys of `app.tools` are `normal`,
+  `corner`, `centre`, `colour`). Its `.palette.pages` and `.currentPage` hold the palette and
+  the current page, and `.setPage(n)`, `.setColor(key, css)` and `.setPalette(p)` work live.
+- `--cell-color-<key>` already has SudokuPad's default value from the stylesheet before the tool
+  starts, so the variable existing says nothing about a custom palette. `init` assigns
+  `currentPage` and runs `setPalette` in one synchronous step, so `tools.colour.palette` being set
+  is the readiness signal.
+- The default palette is not saved: `ToolColor_palette` reads `null` until a color is changed.
+  `ToolColor_page` reads `0` by default.
+- `setPalette` with a palette of fewer pages clamps `currentPage` and saves it to `ToolColor_page`.
+- `Framework.removeData(name)` removes a saved value; `getData` then reads `null`.
+- `docs/research/pen-color-match.png`: pen strokes in the nine derived pen colors (cols 2-4) beside
+  cells in the matching cell colors (col 7), default first page, 1200x900 viewport. The cells
+  show lighter than their raw colors because of `--cell-color-opacity: 0.6`; the pen is darkened
+  from the raw value. Made by `docs/research/pen-color-screenshot.mjs`.

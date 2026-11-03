@@ -17,17 +17,26 @@ const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').t
 const script = readFileSync(new URL('../pen-color.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'PenColor_colors'
-// SudokuPad's own pen colors (tool-pen.css), read off the page with no script installed:
-// the dialog's #rrggbb, and the same colors as the page computes them.
-const DEFAULTS = {
-  1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000'
-}
-const DEFAULT_RGB = {
-  1: 'rgb(31, 128, 32)', 4: 'rgb(245, 58, 55)', 9: 'rgb(0, 0, 0)'
-}
+// What the pen colors are with nothing saved: SudokuPad's cell color pages, darkened. Typed out
+// here from the script's own darkening of SudokuPad's default palette (tool-color.js) as the
+// expected result; the three entries are the default pages 0-2, pen colors 1-9 in order.
+const PAGE_PENS = [
+  ['#919191', '#525252', '#000000', '#719f17', '#aa40b3', '#a06200', '#b10011', '#ada000', '#0065b5'],
+  ['#8d1a00', '#004f1d', '#002b85', '#ad5f70', '#aeae00', '#ac00ae', '#6f3800', '#007fa6', '#64007f'],
+  ['#b10011', '#007b18', '#0065b5', '#b84e4f', '#58915b', '#5f8bb6', '#740001', '#07490f', '#003a74']
+]
+// SudokuPad's own pen colors (tool-pen.css), read off the page with no script installed.
+const OWN_PEN_HEX = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
+const toObject = (list) => Object.fromEntries(list.map((hex, i) => [String(i + 1), hex]))
+const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
+// SudokuPad's default cell colors for keys 0-9 (tool-color.js), as the page computes them.
+const CELL_VARS = ['transparent', 'rgb(214, 214, 214)', 'rgb(124, 124, 124)', 'rgb(-36, -36, -36)', 'rgb(179, 229, 106)', 'rgb(232, 124, 241)', 'rgb(228, 150, 50)', 'rgb(245, 58, 55)', 'rgb(252, 235, 63)', 'rgb(61, 153, 245)']
 // The colors the checks choose.
 const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
 const NINE = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
+// A customized cell color on page 0, key 4, and the pen color it darkens to (computed by the
+// script's darkening of rgb(10, 20, 200)).
+const CUSTOM_CELL = { css: 'rgb(10, 20, 200)', pen: '#05008c' }
 
 const POLL_MS = 50
 const SETTLE_MS = 10000
@@ -70,6 +79,21 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const strokeCount = async () => (await read(() => document.querySelectorAll('.cell-pen').length))
     // The color of a tool button's swatch, which SudokuPad draws as the button's :after.
     const swatch = (n) => read((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor, n)
+    // All nine swatches, as rgb(), once the pen tool's buttons are showing.
+    const swatches = async () => {
+      await selectPen()
+      return read(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor))
+    }
+    const swatchesAre = async (hexes) => {
+      const want = hexes.map(rgbOf)
+      assert.deepEqual(await settle(swatches, want), want)
+    }
+    // The cell color variables for keys 0-9 as the page computes them, and SudokuPad's color tool.
+    const cellVars = () => read(() => [...Array(10)].map((_, i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${i}`).trim()))
+    const setCellColorPage = (page) => read((page) => Framework.app.tools.colour.setPage(page), page)
+    const setCellColor = ([key, css]) => read(([key, css]) => Framework.app.tools.colour.setColor(key, css), [key, css])
+    const restoreDefaults = () => dialogButton('Restore defaults').click()
+    const pickerValues = () => editor().locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value))
 
     // The pen button toggles the tool, and SudokuPad binds its handler a moment after the
     // button appears, so it is clicked again until the tool's buttons show.
@@ -151,18 +175,20 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
     }
 
-    it('a fresh install has nothing saved, and strokes and swatches show SudokuPad\'s own colors', async () => {
+    it('a fresh install has nothing saved, and swatches and strokes show the darkened first color page', async () => {
       assert.equal(await saved(), null)
+      await swatchesAre(PAGE_PENS[0])
       await draw(4, 1)
-      assert.deepEqual(await settle(allStrokes(4), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
-      assert.equal(await swatch(4), DEFAULT_RGB[4])
-      assert.equal(await swatch(9), DEFAULT_RGB[9])
+      assert.deepEqual(await settle(allStrokes(4), [rgbOf(PAGE_PENS[0][3])]), [rgbOf(PAGE_PENS[0][3])])
     })
 
-    it('the dialog has a Pen color entry in settings with a picker for each of the nine pen colors, set to the defaults', async () => {
+    it('the cell colors are the ones SudokuPad ships, untouched by the pen', async () => {
+      assert.deepEqual(await cellVars(), CELL_VARS)
+    })
+
+    it('the dialog has a Pen color entry in settings with a picker for each of the nine pen colors, set to the derived colors', async () => {
       await openEditor()
-      const values = await editor().locator('input[type=color]').evaluateAll((es) => Object.fromEntries(es.map((e) => [e.dataset.pen, e.value])))
-      assert.deepEqual(values, DEFAULTS)
+      assert.deepEqual(await pickerValues(), PAGE_PENS[0])
       await closeWith('Cancel')
     })
 
@@ -171,15 +197,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await pick('4', FOUR.hex)
       await closeWith('Cancel')
       assert.equal(await saved(), null)
-      assert.deepEqual(await allStrokes(4)(), [DEFAULT_RGB[4]])
+      assert.deepEqual(await allStrokes(4)(), [rgbOf(PAGE_PENS[0][3])])
+      await swatchesAre(PAGE_PENS[0])
     })
 
-    it('Save recolors a stroke drawn before the edit, a new stroke and the button swatch', async () => {
+    it('Save recolors a stroke drawn before the edit, a new stroke and the button swatch, and leaves the cell colors alone', async () => {
       await openEditor()
       await pick('4', FOUR.hex)
       await pick('9', NINE.hex)
       await closeWith('Save')
-      assert.deepEqual(await saved(), { ...DEFAULTS, 4: FOUR.hex, 9: NINE.hex })
+      assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex, 9: NINE.hex })
       assert.deepEqual(await settle(allStrokes(4), [FOUR.rgb]), [FOUR.rgb])
       assert.equal(await swatch(4), FOUR.rgb)
       assert.equal(await swatch(9), NINE.rgb)
@@ -190,12 +217,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await settle(async () => (await strokes(4)).length > oldCount, true), true)
       assert.deepEqual(await allStrokes(4)(), [FOUR.rgb])
       assert.deepEqual(await settle(allStrokes(9), [NINE.rgb]), [NINE.rgb])
+      assert.deepEqual(await cellVars(), CELL_VARS)
     })
 
     it('a pen color left unedited keeps its color', async () => {
-      assert.equal(await swatch(1), DEFAULT_RGB[1])
+      assert.equal(await swatch(1), rgbOf(PAGE_PENS[0][0]))
       await draw(1, 4)
-      assert.deepEqual(await settle(allStrokes(1), [DEFAULT_RGB[1]]), [DEFAULT_RGB[1]])
+      assert.deepEqual(await settle(allStrokes(1), [rgbOf(PAGE_PENS[0][0])]), [rgbOf(PAGE_PENS[0][0])])
     })
 
     it('undo removes strokes and redo brings them back, each in its pen color\'s current color', async () => {
@@ -204,7 +232,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await settle(strokeCount, before - 1), before - 1)
       await p.click('#control-redo')
       assert.equal(await settle(strokeCount, before), before)
-      assert.deepEqual(await settle(allStrokes(1), [DEFAULT_RGB[1]]), [DEFAULT_RGB[1]])
+      assert.deepEqual(await settle(allStrokes(1), [rgbOf(PAGE_PENS[0][0])]), [rgbOf(PAGE_PENS[0][0])])
       // Three more undos take the strokes drawn last (pen colors 1, 9 and 4); what remains is
       // the pen color 4 stroke drawn before the edit, still in the edited color.
       await p.click('#control-undo')
@@ -217,35 +245,100 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(allStrokes(9), [NINE.rgb]), [NINE.rgb])
     })
 
-    it('the colors survive a reload', async () => {
+    it('a saved set survives a reload and a change of cell color or page', async () => {
+      await setCellColor(['1', 'rgb(1, 2, 3)'])
+      await setCellColorPage(2)
       await reload()
-      assert.deepEqual(await saved(), { ...DEFAULTS, 4: FOUR.hex, 9: NINE.hex })
-      assert.equal(await swatch(4), FOUR.rgb)
-      assert.equal(await swatch(9), NINE.rgb)
+      assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex, 9: NINE.hex })
+      await swatchesAre(Object.values({ ...toObject(PAGE_PENS[0]), 4: FOUR.hex, 9: NINE.hex }))
       await draw(4, 5)
       assert.deepEqual(await settle(allStrokes(4), [FOUR.rgb]), [FOUR.rgb])
+      await setCellColor(['1', CELL_VARS[1]])
     })
 
-    it('Restore defaults brings back every original color', async () => {
+    it('Restore defaults then Save returns to the derived colors of the current page, from each default page and a customized cell color', async () => {
+      await setCellColor(['4', CUSTOM_CELL.css])
+      for (const page of [0, 1, 2]) {
+        const want = page === 0 ? PAGE_PENS[0].map((hex, i) => (i === 3 ? CUSTOM_CELL.pen : hex)) : PAGE_PENS[page]
+        await setCellColorPage(page)
+        await openEditor()
+        await restoreDefaults()
+        assert.deepEqual(await pickerValues(), want, `page ${page}`)
+        await closeWith('Save')
+        assert.equal(await saved(), null, `page ${page}`)
+        await swatchesAre(want)
+      }
+      assert.deepEqual(await cellVars(), CELL_VARS.map((v, i) => (i === 4 ? CUSTOM_CELL.css : v)))
+    })
+
+    it('Restore defaults then Cancel changes nothing', async () => {
       await openEditor()
-      await dialogButton('Restore defaults').click()
+      await pick('4', FOUR.hex)
       await closeWith('Save')
-      assert.deepEqual(await saved(), DEFAULTS)
-      assert.deepEqual(await settle(allStrokes(4), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
-      assert.equal(await swatch(4), DEFAULT_RGB[4])
-      assert.equal(await swatch(9), DEFAULT_RGB[9])
+      const savedSet = await saved()
+      await openEditor()
+      await restoreDefaults()
+      await closeWith('Cancel')
+      assert.deepEqual(await saved(), savedSet)
+      assert.deepEqual(await allStrokes(4)(), [FOUR.rgb])
     })
 
-    it('corrupt saved settings fall back to the default colors with no thrown error', async () => {
+    it('Save after Restore defaults and a hand edit keeps the edit', async () => {
+      await openEditor()
+      await restoreDefaults()
+      await pick('9', NINE.hex)
+      await closeWith('Save')
+      assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 9: NINE.hex })
+      // Clear it again for the checks below.
+      await openEditor()
+      await restoreDefaults()
+      await closeWith('Save')
+      assert.equal(await saved(), null)
+    })
+
+    it('with nothing saved, a reload derives from the page and palette in force at load', async () => {
+      await reload()
+      await swatchesAre(PAGE_PENS[2])
+    })
+
+    it('cycling the color page mid-solve leaves the pen alone', async () => {
+      await draw(4, 6)
+      const before = await allStrokes(4)()
+      await setCellColorPage(0)
+      await swatchesAre(PAGE_PENS[2])
+      assert.deepEqual(await allStrokes(4)(), before)
+      await setCellColorPage(2)
+    })
+
+    it('a page with fewer than nine usable colors keeps SudokuPad\'s pen colors for the rest and says so in the dialog', async () => {
+      await read(() => {
+        const t = Framework.app.tools.colour
+        const palette = { colors: { w: 'transparent', x: 'rgb(200, 0, 0)', y: 'rgb(0, 0, 200)', z: 'rgb(0, 150, 0)' }, pages: [['w', 'x', 'y', 'z']] }
+        t.setPalette(palette)
+      })
+      await openEditor()
+      await restoreDefaults()
+      const values = await pickerValues()
+      assert.deepEqual(values.slice(3), OWN_PEN_HEX.slice(3))
+      assert.equal(values.slice(0, 3).filter((v, i) => OWN_PEN_HEX[i] !== v).length, 3)
+      assert.match(await editor().innerText(), /pen colors 4-9 keep SudokuPad's own/)
+      await closeWith('Cancel')
+      // setPalette clamped and saved the current page; put the stored palette and page 2 back.
+      await read(() => {
+        const t = Framework.app.tools.colour
+        t.setPalette(Framework.getData('ToolColor_palette'))
+        t.setPage(2)
+      })
+    })
+
+    it('corrupt saved settings fall back to the derived colors with no thrown error', async () => {
       const errorsBefore = errors.length
       for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
         await read(([k, raw]) => {
-          const key = Object.keys(window.localStorage).find((n) => n.endsWith(k))
-          if (!key) throw new Error('no stored key for ' + k)
-          window.localStorage.setItem(key, raw)
+          window.localStorage.setItem(Framework.makeDataKey(k), raw)
         }, [DATA_KEY, bad])
         await reload()
-        assert.equal(await swatch(4), DEFAULT_RGB[4], bad)
+        assert.equal(await settle(() => swatch(4), rgbOf(PAGE_PENS[2][3])), rgbOf(PAGE_PENS[2][3]), bad)
       }
       assert.deepEqual(errors.slice(errorsBefore), [])
     })
@@ -255,3 +348,33 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
   })
 }
+
+describe('the color tool never becomes ready', { concurrency: false }, () => {
+  it('after the wait, the pen keeps SudokuPad\'s own colors and the dialog still opens', async () => {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    try {
+      const p = await context.newPage()
+      const errors = []
+      p.on('pageerror', (e) => errors.push(String(e)))
+      await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+      await p.getByRole('button', { name: START }).first().click()
+      await p.locator('#control-undo').waitFor({ state: 'visible' })
+      await p.evaluate(() => { Framework.app.tools.colour.palette = undefined })
+      await p.addScriptTag({ content: script })
+      // Nothing may happen for the script's whole wait, so this one is a sleep: the check is
+      // that no override appeared in the 12 seconds after a 10 second wait began.
+      await sleep(12000)
+      assert.equal(await p.locator(STYLE).count(), 0)
+      await p.click('#control-settings')
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
+      await p.locator('#pen-color-editor').waitFor({ state: 'visible' })
+      const values = await p.locator('#pen-color-editor input[type=color]').evaluateAll((es) => es.map((e) => e.value))
+      assert.deepEqual(values, OWN_PEN_HEX)
+      assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
+  })
+})
