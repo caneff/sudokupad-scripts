@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -154,6 +154,139 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
     delete require.cache[path]
     if (saved) require.cache[path] = saved
   }
+})
+
+// A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
+const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
+const keys = (names) => names.split(' ')
+const slotKeys = (slots) => slots.map((s) => (s ? s.key : null))
+
+test('layoutPages puts indices 1-9 in rows of three, in the order of SudokuPad\'s buttons', () => {
+  const [page] = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  assert.deepEqual(page.rows.map(slotKeys), [['a1', 'a2', 'a3'], ['a4', 'a5', 'a6'], ['a7', 'a8', 'a9']])
+})
+
+test('layoutPages keeps a visible color at index 0 on its own, and null when index 0 is transparent', () => {
+  const [lit, dark] = layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9'), keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  assert.deepEqual(lit.zero, { key: 'z', value: '#z' })
+  assert.equal(lit.rows[0][0].key, 'a1')
+  assert.equal(dark.zero, null)
+})
+
+test('layoutPages leaves a transparent slot empty and every other color where it was', () => {
+  const [page] = layoutPages([keys('clear a1 clear a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  assert.deepEqual(slotKeys(page.rows[0]), ['a1', null, 'a3'])
+  assert.deepEqual(slotKeys(page.rows[1]), ['a4', 'a5', 'a6'])
+})
+
+test('layoutPages leaves a slot empty when the page is short or the key is unreadable', () => {
+  const unreadable = (key) => (key === 'bad' ? '' : `#${key}`)
+  const [page] = layoutPages([keys('a0 a1 bad')], 0, unreadable)
+  assert.deepEqual(page.rows.map(slotKeys), [['a1', null, null], [null, null, null], [null, null, null]])
+  assert.deepEqual(page.zero, { key: 'a0', value: '#a0' })
+})
+
+test('layoutPages reads any number of pages, numbering them from 0 and marking the current one', () => {
+  const pages = [0, 1, 2, 3].map((p) => keys(`p${p}z p${p}a p${p}b p${p}c p${p}d p${p}e p${p}f p${p}g p${p}h p${p}i`))
+  const out = layoutPages(pages, 2, colorOf)
+  assert.deepEqual(out.map((p) => p.page), [0, 1, 2, 3])
+  assert.deepEqual(out.map((p) => p.current), [false, false, true, false])
+  assert.equal(out[3].rows[2][2].key, 'p3i')
+})
+
+test('layoutPages of no pages is empty', () => {
+  assert.deepEqual(layoutPages([], 0, colorOf), [])
+})
+
+test('layoutColors lists the visible colors page by page, index 0 first', () => {
+  const pages = layoutPages([keys('z a1 clear a3 a4 a5 a6 a7 a8 a9'), keys('clear b1 b2')], 0, colorOf)
+  assert.deepEqual(layoutColors(pages).map((c) => c.key), ['z', 'a1', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'b1', 'b2'])
+})
+
+const count = (html, re) => (html.match(re) || []).length
+
+const twoPages = () => layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9'), keys('clear b1 b2 b3 b4 b5 b6 b7 b8 b9')], 1, colorOf)
+
+test('initialPage opens on the page that holds the key', () => {
+  assert.equal(initialPage(twoPages(), 'a4'), 0)
+  assert.equal(initialPage(twoPages(), 'b4'), 1)
+  assert.equal(initialPage(twoPages(), 'z'), 0)
+})
+
+test('initialPage tries the current page first when the key is on several pages', () => {
+  const pages = layoutPages([keys('clear a1 shared'), keys('clear b1 shared'), keys('clear c1 shared')], 1, colorOf)
+  assert.equal(initialPage(pages, 'shared'), 1)
+  const other = layoutPages([keys('clear a1 shared'), keys('clear b1'), keys('clear c1 shared')], 1, colorOf)
+  assert.equal(initialPage(other, 'shared'), 0)
+})
+
+test('initialPage opens on the current page when no page holds the key, and on the first page with none current', () => {
+  assert.equal(initialPage(twoPages(), 'nope'), 1)
+  assert.equal(initialPage(layoutPages([keys('clear a1'), keys('clear b1')], 5, colorOf), 'nope'), 0)
+  assert.equal(initialPage([], 'a'), 0)
+})
+
+const options = (html) => [...html.matchAll(/<option value="(\d+)"( selected)?>([^<]*)<\/option>/g)].map((m) => [m[1], Boolean(m[2]), m[3]])
+
+test('renderEditor gives each group a page pulldown labelled Page 1, Page 2 (current), with the shown page selected', () => {
+  const html = renderEditor([{ key: 'a2', digits: [] }], twoPages(), [0])
+  assert.deepEqual(options(html), [['0', true, 'Page 1'], ['1', false, 'Page 2 (current)']])
+  assert.equal(count(html, /<select data-act="page" data-group="0"/g), 1)
+})
+
+test('renderEditor draws only the shown page of a group, keeping data-act and data-key on every swatch', () => {
+  const first = renderEditor([{ key: 'a2', digits: [] }], twoPages(), [0])
+  assert.equal(count(first, /data-act="color"/g), 10)
+  assert.equal(count(first, /data-act="color"[^>]*data-key="z"/g), 1)
+  assert.equal(count(first, /data-key="b1"/g), 0)
+  const second = renderEditor([{ key: 'a2', digits: [] }], twoPages(), [1])
+  assert.equal(count(second, /data-act="color"/g), 9)
+  assert.equal(count(second, /data-key="b1"/g), 1)
+  assert.equal(count(second, /data-key="a1"/g), 0)
+})
+
+test('renderEditor shows each group on its own page', () => {
+  const html = renderEditor([{ key: 'a2', digits: [] }, { key: 'b2', digits: [] }], twoPages(), [0, 1])
+  assert.equal(count(html, /data-group="0"[^>]*data-key="a1"/g), 1)
+  assert.equal(count(html, /data-group="1"[^>]*data-key="b1"/g), 1)
+  assert.equal(count(html, /data-group="0"[^>]*data-key="b1"/g), 0)
+})
+
+test('renderEditor shows the group\'s color beside the pulldown even when its page is not shown', () => {
+  const html = renderEditor([{ key: 'b2', digits: [] }], twoPages(), [0])
+  assert.match(html, /data-role="chosen"[^>]*title="b2"[^>]*background:#b2/)
+  assert.equal(count(html, /aria-pressed="true"/g), 0)
+})
+
+test('renderEditor draws an empty slot as a spacer with no button, so nothing shifts', () => {
+  const pages = layoutPages([keys('clear a1 clear a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  const html = renderEditor([{ key: 'a1', digits: [] }], pages, [0])
+  assert.equal(count(html, /data-act="color"/g), 8)
+  assert.equal(count(html, /data-empty="slot"/g), 1)
+})
+
+test('renderEditor marks only the group\'s own color as selected', () => {
+  const pages = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  const html = renderEditor([{ key: 'a2', digits: [] }], pages, [0])
+  assert.equal(count(html, /aria-pressed="true"/g), 1)
+  assert.match(html, /data-key="a2"[^>]*aria-pressed="true"/)
+})
+
+test('renderEditor keeps the "No palette colors found" note, and draws no pulldown, when no page has a color', () => {
+  const html = renderEditor([], layoutPages([], 0, colorOf), [])
+  assert.match(html, /No palette colors found/)
+  assert.equal(count(html, /data-act="color"/g), 0)
+  assert.equal(count(renderEditor([], layoutPages([keys('a b')], 0, colorOf), []), /No palette colors found/g), 0)
+  assert.equal(count(renderEditor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0]), /<select/g), 0)
+})
+
+test('the Preload row lists only real presets, and a Clear all button sits beside it', () => {
+  assert.deepEqual(Object.keys(PRELOADS), ['Low/5/High', 'Odd/Even'])
+  assert.deepEqual(Object.keys(PRELOADS).filter((name) => PRELOADS[name].length === 0), [])
+  const html = renderEditor([], layoutPages([], 0, colorOf), [])
+  assert.equal(count(html, /data-act="preload"/g), 2)
+  assert.doesNotMatch(html, /data-name="Custom"/)
+  assert.equal(count(html, /data-act="clear"[^>]*>Clear all</g), 1)
 })
 
 test('VERSION is the @version in the script header', () => {

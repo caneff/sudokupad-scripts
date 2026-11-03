@@ -32,3 +32,4 @@
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
   rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is black outside it.
+- **swatch** — one square button in the Color by Digit dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.

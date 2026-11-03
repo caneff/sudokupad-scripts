@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.3
+// @version      0.1.4
 // @description  Adds a button that colors every cell holding a digit, using groups of palette colors set in a settings dialog.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.1.3'
+  const VERSION = '0.1.4'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'ColorByDigit_groups'
@@ -34,8 +34,7 @@
     'Odd/Even': [
       { key: '6', digits: ['1', '3', '5', '7', '9'] },
       { key: '9', digits: ['0', '2', '4', '6', '8'] }
-    ],
-    Custom: []
+    ]
   }
   const DEFAULT_GROUPS = PRELOADS['Odd/Even']
 
@@ -120,24 +119,116 @@
     app.refreshControls()
   }
 
+  // A cell color page has ten colors, one per SudokuPad color button: index 0, then indices 1-9 in rows of three.
+  const PAGE_COLUMNS = 3
+  const PAGE_BUTTONS = 10
+
+  // Each cell color page as SudokuPad's color buttons show it: `rows` holds indices 1-9, three to a
+  // row, and `zero` index 0. An entry is { key, value }, or null where the key is missing,
+  // transparent or unreadable, so the empty space keeps every other color on its index.
+  // `readColor(key)` gives the key's CSS color.
+  function layoutPages (pages, currentPage, readColor) {
+    return pages.map((keys, page) => {
+      const list = Array.isArray(keys) ? keys.slice(0, PAGE_BUTTONS) : []
+      const slot = (index) => {
+        if (list[index] === undefined) return null
+        const key = String(list[index])
+        const value = String(readColor(key)).trim()
+        return isVisibleColor(value) ? { key, value } : null
+      }
+      const rows = []
+      for (let index = 1; index < PAGE_BUTTONS; index += PAGE_COLUMNS) {
+        rows.push(Array.from({ length: PAGE_COLUMNS }, (_, c) => slot(index + c)))
+      }
+      return { page, current: page === currentPage, rows, zero: slot(0) }
+    })
+  }
+
+  // Every visible color of the laid-out pages, page by page, index 0 first.
+  function layoutColors (pages) {
+    return pages.flatMap((p) => [p.zero, ...p.rows.flat()]).filter(Boolean)
+  }
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  const SWATCH_SIZE = '44px'
+
+  // One color of a page: a square button, ringed twice (white inside, black outside) when it
+  // is the group's color so it shows on any swatch color. An index with no visible color is a spacer of the same size.
+  function renderSwatch (slot, groupIndex, selectedKey) {
+    if (!slot) return `<span data-empty="slot" style="display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE}"></span>`
+    const selected = slot.key === selectedKey
+    return `<button type="button" data-act="color" data-group="${groupIndex}" data-key="${esc(slot.key)}" ` +
+      `title="${esc(slot.key)}" aria-pressed="${selected}" ` +
+      `style="box-sizing:border-box;display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE};margin:0;padding:0;border-radius:3px;` +
+      `background:${esc(slot.value)};` +
+      (selected ? 'border:2px solid #fff;outline:3px solid #000' : 'border:1px solid #888') + '"></button>'
+  }
+
+  const pageLabel = (page) => `Page ${page.page + 1}${page.current ? ' (current)' : ''}`
+
+  // The page a group opens on: the page that holds its color, the current page first when the
+  // color is on several; the current page when no page holds it, and the first with none current.
+  function initialPage (pages, key) {
+    const holds = (p) => [p.zero, ...p.rows.flat()].some((slot) => slot && slot.key === key)
+    const found = pages.find((p) => p.current && holds(p)) || pages.find(holds) || pages.find((p) => p.current)
+    return found ? found.page : 0
+  }
+
+  // The group's color as a small square, so it shows while another page is open; dashed when
+  // no page has a visible color for the key.
+  function renderChosen (colors, key) {
+    const color = colors.find((c) => c.key === key)
+    const look = color ? `background:${esc(color.value)};border:1px solid #888` : 'border:1px dashed #888'
+    return `<span data-role="chosen" title="${esc(key)}" style="display:inline-block;box-sizing:border-box;width:1.6em;height:1.6em;` +
+      `border-radius:3px;vertical-align:middle;${look}"></span>`
+  }
+
+  // One group's page pulldown, its chosen color, and the shown page as a 3 by 3 grid with index 0 below.
+  function renderPalette (pages, colors, groupIndex, key, shownPage) {
+    if (pages.length === 0) return ''
+    const page = pages[shownPage] || pages[0]
+    const options = pages.map((p) => `<option value="${p.page}"${p === page ? ' selected' : ''}>${pageLabel(p)}</option>`).join('')
+    const grid = 'display:grid;gap:6px;grid-template-columns:repeat(' + PAGE_COLUMNS + ',' + SWATCH_SIZE + ')'
+    const swatches = page.rows.flat().map((slot) => renderSwatch(slot, groupIndex, key)).join('')
+    const zero = page.zero ? `<div style="${grid};margin-top:6px">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
+    return '<div style="margin-bottom:6px">' +
+      `<select data-act="page" data-group="${groupIndex}" aria-label="Palette page" style="font-size:1em;padding:2px">${options}</select> ${renderChosen(colors, key)}</div>` +
+      `<div style="${grid}">${swatches}</div>${zero}`
+  }
+
+  // `shown[i]` is the page index group i shows.
+  function renderEditor (groups, pages, shown) {
+    const colors = layoutColors(pages)
+    const rows = groups.map((g, i) => {
+      const digits = DIGITS.map((d) =>
+        `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
+        `style="width:1.8em;margin:1px;font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
+        `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
+      return '<div style="margin:6px 0;padding:6px;border:1px solid #888;border-radius:4px">' +
+        `${renderPalette(pages, colors, i, g.key, shown[i])}<div style="margin-top:8px">${digits} ` +
+        `<button type="button" data-act="remove" data-group="${i}">Remove</button></div></div>`
+    }).join('')
+    const preloads = Object.keys(PRELOADS)
+      .map((n) => `<button type="button" data-act="preload" data-name="${esc(n)}">${esc(n)}</button>`).join(' ')
+    const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
+    return `<div>Preload: ${preloads} <button type="button" data-act="clear">Clear all</button></div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
+      '<button type="button" data-act="add">Add group</button>'
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { VERSION, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
-  // SudokuPad's default palette keys, in its page order. Keys outside them are not read.
-  const PALETTE_KEYS = '0123456789abcdefghijklmnopqrst'.split('')
-
-  // The visible colors of the user's current palette, read from the CSS variables
-  // SudokuPad sets for each key. Transparent and unset slots are skipped.
-  function paletteColors () {
+  // The color tool's pages laid out as SudokuPad's buttons are, read now from the tool and
+  // the raw `--cell-color-<key>` values; [] until the tool holds a palette.
+  function readPages () {
+    const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
+    const palette = tool && tool.palette
+    if (!palette || !Array.isArray(palette.pages)) return []
     const style = window.getComputedStyle(document.documentElement)
-    const colors = []
-    PALETTE_KEYS.forEach((key) => {
-      const value = style.getPropertyValue(`--cell-color-${key}`).trim()
-      if (isVisibleColor(value)) colors.push({ key, value })
-    })
-    return colors
+    return layoutPages(palette.pages, tool.currentPage, (key) => style.getPropertyValue(`--cell-color-${key}`))
   }
 
   const loadGroups = () => groupsFromStored(Framework.getData(DATA_KEY))
@@ -166,31 +257,9 @@
     }
   }
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-
-  function renderEditor (groups, colors) {
-    const rows = groups.map((g, i) => {
-      const swatches = colors.map((c) =>
-        `<button type="button" data-act="color" data-group="${i}" data-key="${esc(c.key)}" title="${esc(c.key)}" ` +
-        `style="width:1.4em;height:1.4em;margin:1px;border-radius:50%;background:${esc(c.value)};` +
-        `border:${c.key === g.key ? '3px solid #000' : '1px solid #888'}"></button>`).join('')
-      const digits = DIGITS.map((d) =>
-        `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
-        `style="width:1.8em;margin:1px;font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
-        `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
-      return '<div style="margin:6px 0;padding:4px;border:1px solid #888;border-radius:4px">' +
-        `<div>${swatches}</div><div>${digits} ` +
-        `<button type="button" data-act="remove" data-group="${i}">Remove</button></div></div>`
-    }).join('')
-    const preloads = Object.keys(PRELOADS)
-      .map((n) => `<button type="button" data-act="preload" data-name="${esc(n)}">${esc(n)}</button>`).join(' ')
-    const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
-    return `<div>Preload: ${preloads}</div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
-      '<button type="button" data-act="add">Add group</button>'
-  }
-
   function openDialog () {
-    const colors = paletteColors()
+    const pages = readPages()
+    const colors = layoutColors(pages)
     let groups = loadGroups()
     Framework.showDialog({
       centerOverBoard: true,
@@ -208,8 +277,19 @@
     })
     const box = document.getElementById('color-by-digit-editor')
     if (!box) return
-    const draw = () => { box.innerHTML = renderEditor(groups, colors) }
+    // The page each group shows, by group index; a group not yet shown opens on its color's page.
+    let shown = []
+    const draw = () => {
+      groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
+      box.innerHTML = renderEditor(groups, pages, shown)
+    }
     draw()
+    box.addEventListener('change', (event) => {
+      const el = event.target.closest('select[data-act="page"]')
+      if (!el) return
+      shown[Number(el.dataset.group)] = Number(el.value)
+      draw()
+    })
     box.addEventListener('click', (event) => {
       const el = event.target.closest('button[data-act]')
       if (!el) return
@@ -219,8 +299,9 @@
       switch (el.dataset.act) {
         case 'color': groups = groups.map((g, j) => (j === i ? { key: el.dataset.key, digits: g.digits } : g)); break
         case 'digit': groups = assignDigit(groups, i, el.dataset.digit); break
-        case 'remove': groups = groups.filter((_, j) => j !== i); break
-        case 'preload': groups = cloneGroups(PRELOADS[el.dataset.name]); break
+        case 'remove': groups = groups.filter((_, j) => j !== i); shown = shown.filter((_, j) => j !== i); break
+        case 'clear': groups = []; shown = []; break
+        case 'preload': groups = cloneGroups(PRELOADS[el.dataset.name]); shown = []; break
         case 'add': {
           const used = groups.map((g) => g.key)
           const free = colors.find((c) => !used.includes(c.key)) || colors[0]

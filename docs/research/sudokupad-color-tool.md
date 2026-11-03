@@ -286,3 +286,19 @@ Not run through Tampermonkey or on `crackingthecryptic.com`.
   color shows it on button 0 and every other color stays on its own number. A button's
   `data-value` is the color key it shows, and `--cell-color-<data-value>` is its color. Read live
   on sudokupad.app, 2026-11-03.
+
+## Color by Digit's dialog by page (2026-11-03)
+
+Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #31, by `live/color-by-digit.live.mjs`.
+Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshots from
+`docs/research/color-by-digit-dialog-screenshot.mjs`: `color-by-digit-dialog-{before,after}-{desktop,phone}.png`.
+
+- `tools.colour.setPalette(p)` with a fourth page and new keys (`u`, `v`, `w` in `colors`) shows
+  them at once: the dialog reads `tool.palette.pages` and `--cell-color-<key>` when it opens.
+- A swatch sized in `em` came out 45x57 px in SudokuPad's dialog, whose font is large and whose
+  buttons carry their own styles, and overflowed its page. A `44px` width and height gives 44x44
+  at 1200 px wide. Removing `min-width: 0; min-height: 0` or `flex: none` from the swatch style
+  changed nothing at that width in the live run, so neither is in the script.
+- Chris then ruled one page at a time per group: a `<select>` of the pages, labelled `Page 1`,
+  `Page 2 (current)` and so on, with a small swatch of the group's color beside it. At 390 px
+  one group is one 3x3 grid plus the digit buttons, where showing every page took a screen each.

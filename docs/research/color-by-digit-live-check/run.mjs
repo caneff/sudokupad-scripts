@@ -132,10 +132,10 @@ const wrongLH = s.filter(x => !eq(x.colours, expectLH(x)));
 check('4f the reloaded page colors with the saved list', wrongLH.length === 0, `wrong=${JSON.stringify(wrongLH.slice(0, 4))} coloured=${coloured(s)}`);
 await p.screenshot({ path: (process.env.TAG||'x')+'-shot-6-lowhigh-colored.png' });
 await undo(p);
-// Custom: empty list, press does nothing.
-await openEditor(p); await dialogBtn(p, 'Custom').click(); await p.waitForTimeout(150); await dialogBtn(p, 'Save').click(); await p.waitForTimeout(300);
+// Clear all: empty list, press does nothing.
+await openEditor(p); await dialogBtn(p, 'Clear all').click(); await p.waitForTimeout(150); await dialogBtn(p, 'Save').click(); await p.waitForTimeout(300);
 const cBefore = coloured(await state(p)); await press(p); const cAfter = coloured(await state(p));
-check('4g Custom saves an empty list and a press does nothing', eq(await getData(p), []) && cBefore === cAfter, `${JSON.stringify(await getData(p))} ${cBefore}->${cAfter}`);
+check('4g Clear all saves an empty list and a press does nothing', eq(await getData(p), []) && cBefore === cAfter, `${JSON.stringify(await getData(p))} ${cBefore}->${cAfter}`);
 check('no uncaught page errors', errors.length === 0, errors.join(' | ').slice(0, 400));
 await b.close();
 const failed = results.filter(r => !r.ok);
