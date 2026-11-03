@@ -61,6 +61,29 @@ test('the credit line takes the text color for the page color given', () => {
   assert.equal(credit('#000000'), '.controls-footer, .controls-footer a { color: #dddddd !important }')
 })
 
+// The one-line rules of buildCss(color) whose selector mentions a control button.
+const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
+
+test('on a dark page color the control buttons go dark gray with light purple icons, and the selected mode button keeps a purple border', () => {
+  assert.deepEqual(buttonRules('#000000'), [
+    '.controls-app button, .controls-tool button:not(.selected), .controls-aux button { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }',
+    '.controls-tool button.selected { border-color: #d2a8f0 !important }',
+    '.button-row button { border-color: #4a4a4a !important }'
+  ])
+  assert.equal(buttonRules('#0000ff').length, 3)
+})
+
+test('on a light page color SudokuPad\'s buttons are left as they are', () => {
+  assert.deepEqual(buttonRules('#ffffff'), [])
+  assert.deepEqual(buttonRules('#ffcc00'), [])
+})
+
+test('the buttons switch exactly where the credit text does', () => {
+  for (const color of ['#000000', '#333333', '#707070', '#777777', '#cccccc', '#ffffff', '#0000ff', '#ffff00']) {
+    assert.equal(buttonRules(color).length > 0, textColorFor(color) === '#dddddd', color)
+  }
+})
+
 test('savedColor reads a saved #rrggbb string as lowercase, and anything else as nothing saved', () => {
   assert.equal(savedColor('#336699'), '#336699')
   assert.equal(savedColor('#ABCDEF'), '#abcdef')

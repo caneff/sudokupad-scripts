@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.2.0
-// @description  Makes the page black around the puzzle, or another color chosen in a settings dialog. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
+// @version      0.3.0
+// @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,7 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.2.0'
+  const VERSION = '0.3.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
@@ -29,6 +29,11 @@
   // Page text that sits straight on the page background: light on a dark page, dark on a light one.
   const LIGHT_TEXT = '#dddddd'
   const DARK_TEXT = '#222222'
+  // SudokuPad's control buttons on a dark page: dark gray with light purple icons, so the light
+  // `#eee` buttons do not glare. The selected mode button keeps a purple border.
+  const BUTTON_BG = '#2a2a2a'
+  const BUTTON_ICON = '#d2a8f0'
+  const BUTTON_BORDER = '#4a4a4a'
   // White kept beyond the tightest box, in page pixels, before it is rounded outward: covers the
   // antialiasing and a text outline filter, which the elements' boxes leave out.
   const PAD = 1
@@ -85,12 +90,22 @@
   // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
   // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
   // that changes nothing.
+  // The control buttons turn dark only when the page does (the same test the footer text uses), and
+  // the colors of the svg-painted icons and color swatches are not touched: only the button's own
+  // background, text color and border are.
   function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
+    const textColor = textColorFor(pageColor)
+    const darkButtons = [
+      rule('.controls-app button, .controls-tool button:not(.selected), .controls-aux button', `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ICON}`, `border-color: ${BUTTON_BORDER}`),
+      rule('.controls-tool button.selected', `border-color: ${BUTTON_ICON}`),
+      rule('.button-row button', `border-color: ${BUTTON_BORDER}`)
+    ]
     return [
       rule('body', `background-color: ${pageColor}`),
       rule(`#${RECT_ID}`, 'background-color: var(--body-bg)'),
-      rule('.controls-footer, .controls-footer a', `color: ${textColorFor(pageColor)}`)
+      rule('.controls-footer, .controls-footer a', `color: ${textColor}`),
+      ...(textColor === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }
 
