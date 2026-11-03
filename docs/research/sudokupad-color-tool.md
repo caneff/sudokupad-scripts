@@ -248,8 +248,10 @@ corner 5s, 4 and a centre 1 and 5), to be read beside `digit-color-conflict-outl
   that `getBBox` and the attributes leave out, so the point goes through `getCTM()`. A centre mark's
   `tspan` is not a graphics element (no `getCTM`, no `getBBox`): `getExtentOfChar(0)` gives its
   x, and its parent `text` gives the y and the transform. An early version centred on a guessed
-  baseline offset and drew the circles 4 units off; the check now compares against the box the
-  browser reports (`getBoundingClientRect`).
+  baseline offset and drew the circles 4 units off; the check then compared against the box the
+  browser reports (`getBoundingClientRect`). Superseded by #19: `y` is the middle of a lowercase
+  letter, not of a digit, and the check now reads the ink from screenshot pixels
+  (`sudokupad-mark-ink-centre.md`).
 - Fill `#ff6b6b` at `fill-opacity: 0.4` over white is a pale pink: digit 1's `#b0125b` and every
   other default color stay readable on it. Radius is 0.8 of the mark's width, about 8 units for a
   corner mark; it covers the digit and a little more.
