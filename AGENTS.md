@@ -27,7 +27,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 
 - **Seam**: `npm test` (`node --test`), against each script's pure functions
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run
-  test:live` covers them on sudokupad.app in headless Chromium, with the script
+  test:live` (`live/color-by-digit.live.mjs`, `live/digit-color.live.mjs`) covers them on sudokupad.app in headless Chromium, with the script
   injected at three times (at `DOMContentLoaded`, after load before Start Puzzle,
   after Start Puzzle). It needs the network and a Playwright Chromium
   (`npx playwright install chromium`), so it stays out of `npm test` and

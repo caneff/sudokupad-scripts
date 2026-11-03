@@ -155,3 +155,26 @@ Found 2026-11-02 running the merged script on sudokupad.app in headless Chromium
 - `content: 'Color'` showed as a blank grey box in `.controls-app.controls-small`.
   SudokuPad's own app buttons use `<div class="icon">...</div>`, so a button needs an
   icon in that shape.
+
+## Digit color, run live (2026-11-03)
+
+`digit-color.user.js` injected into sudokupad.app 0.611.0 in headless Chromium at the
+three injection times, by `live/digit-color.live.mjs`. Not run through Tampermonkey or on
+`crackingthecryptic.com`.
+
+- A stylesheet rule colors corner marks and centre marks from `data-val`, with
+  `:not(.conflict)` so a conflicting mark keeps `rgb(179, 58, 58)`. Entered digits have no
+  `data-val`, so a `MutationObserver` on `document.body` (`childList`, `characterData`) stamps
+  a `data-digit-color` attribute on each `#cell-values .cell-value`, and the same stylesheet
+  colors that. Stamping an attribute does not retrigger the observer.
+- The stylesheet rules beat SudokuPad's own `fill` without `!important`. Givens, in
+  `#cell-givens`, stay `rgb(0, 0, 0)`.
+- Previously untested, now run: `outlinesondigits` on; `prefers-color-scheme: dark`
+  emulated; an entered digit on a cell with a color; the board rebuilt in the page without a
+  reload. SudokuPad 0.611.0 lists no dark-mode setting (`uitheme` offers only color themes),
+  so the dark run is the media-query emulation and nothing more.
+- `App.loadPuzzle` takes a puzzle object, not an id, and throws on an id. The page's own
+  loader is `parsePuzzleData(await fetchPuzzle(id))` then `app.loadCTCPuzzle(...)`, using the
+  top-level `PuzzleLoader`, which is not a `window` property.
+- A mark conflicts with a given in its row, column or box, so a test mark needs a cell
+  chosen against the givens.
