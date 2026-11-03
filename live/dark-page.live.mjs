@@ -17,6 +17,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
+import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
@@ -402,6 +403,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await setScript(true)
       const { slack } = await compareBoards(p, off, on)
       for (const [side, white] of Object.entries(slack)) assert.equal(white >= 0 && white <= TIGHT_SLACK_PX, true, `${side}: ${white}px of white past the drawing, ${JSON.stringify(slack)}`)
+    })
+
+    it('the settings entry sits in the Experimental group, shows the version from the script header, and a click on it changes nothing', async () => {
+      const group = await openSettings(p)
+      const entry = group.locator('p').filter({ hasText: 'Dark page' })
+      assert.equal((await entry.textContent()).trim(), `Dark page v${headerVersion(script)}`)
+      const before = await read(() => JSON.stringify(Framework.getSettings()))
+      await entry.click()
+      assert.equal(await read(() => JSON.stringify(Framework.getSettings())), before)
+      assert.equal(await entry.isVisible(), true)
+      await p.locator('.dialog button.dialog-back').click()
     })
 
     it('no uncaught page errors', () => {

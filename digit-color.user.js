@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.1
+// @version      0.3.2
 // @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark gets a small red circle behind it, keeping its digit color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,6 +16,11 @@
 (function () {
   'use strict'
 
+  // Shown in the settings, and the same as @version above: the live checks inject the script without
+  // Tampermonkey, so there is no GM_info to read it from.
+  const VERSION = '0.3.2'
+  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'DigitColor_colors'
   const STYLE_ID = 'digit-color-style'
   // An entered digit's text element carries no digit attribute, so the script adds this one.
@@ -118,7 +123,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
+    module.exports = { VERSION, normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -240,7 +245,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: '<b>Digit color</b>' },
+        { tag: 'text', innerHTML: `<b>Digit color v${VERSION}</b>` },
         { tag: 'text', innerHTML: '<div id="digit-color-editor"></div>' },
         {
           tag: 'options',
@@ -284,7 +289,8 @@
     Framework.addSetting({
       tag: 'button',
       name: 'digitcolor',
-      content: 'Digit color',
+      group: SETTINGS_GROUP,
+      content: `Digit color v${VERSION}`,
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

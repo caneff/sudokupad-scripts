@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.1
+// @version      0.1.2
 // @description  Adds a button that colors every cell holding a digit, using groups of palette colors set in a settings dialog.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,6 +16,11 @@
 (function () {
   'use strict'
 
+  // Shown in the settings, and the same as @version above: the live checks inject the script without
+  // Tampermonkey, so there is no GM_info to read it from.
+  const VERSION = '0.1.2'
+  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'ColorByDigit_groups'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
@@ -116,7 +121,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { VERSION, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -190,7 +195,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: '<b>Color by digit</b>' },
+        { tag: 'text', innerHTML: `<b>Color by digit v${VERSION}</b>` },
         { tag: 'text', innerHTML: '<div id="color-by-digit-editor"></div>' },
         {
           tag: 'options',
@@ -232,7 +237,8 @@
     Framework.addSetting({
       tag: 'button',
       name: 'colorbydigit',
-      content: 'Color by digit',
+      group: SETTINGS_GROUP,
+      content: `Color by digit v${VERSION}`,
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

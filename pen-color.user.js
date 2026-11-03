@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.0
+// @version      0.3.1
 // @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors saved in a settings dialog replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,6 +16,11 @@
 (function () {
   'use strict'
 
+  // Shown in the settings, and the same as @version above: the live checks inject the script without
+  // Tampermonkey, so there is no GM_info to read it from.
+  const VERSION = '0.3.1'
+  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'PenColor_colors'
   const STYLE_ID = 'pen-color-style'
   const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -188,7 +193,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeColors, savedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS }
+    module.exports = { VERSION, normalizeColors, savedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -281,7 +286,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: '<b>Pen color</b>' },
+        { tag: 'text', innerHTML: `<b>Pen color v${VERSION}</b>` },
         { tag: 'text', innerHTML: '<div id="pen-color-editor"></div>' },
         {
           tag: 'options',
@@ -342,7 +347,8 @@
     Framework.addSetting({
       tag: 'button',
       name: 'pencolor',
-      content: 'Pen color',
+      group: SETTINGS_GROUP,
+      content: `Pen color v${VERSION}`,
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

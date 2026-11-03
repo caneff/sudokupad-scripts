@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  Makes the page black around the puzzle. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,6 +16,11 @@
 (function () {
   'use strict'
 
+  // Shown in the settings, and the same as @version above: the live checks inject the script without
+  // Tampermonkey, so there is no GM_info to read it from.
+  const VERSION = '0.1.1'
+  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
   const RECT_ID = 'dark-page-rect'
   const PAGE_COLOR = '#000000'
@@ -116,7 +121,7 @@
   const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
+    module.exports = { VERSION, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
   if (typeof document === 'undefined') return
 
@@ -204,4 +209,17 @@
   window.addEventListener('load', scheduleUpdate)
   // Text boxes change size when the page's fonts arrive.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleUpdate)
+
+  // The script has no dialog, so its settings entry only shows the version. SudokuPad's default
+  // handler for a settings entry saves a setting under its name, so a handler that does nothing
+  // keeps a click on the text from writing one.
+  Framework.getApp().then(() => {
+    Framework.addSetting({
+      tag: 'text',
+      name: 'darkpage',
+      group: SETTINGS_GROUP,
+      content: `Dark page v${VERSION}`,
+      handler: () => {}
+    })
+  })
 })()

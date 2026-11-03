@@ -1,7 +1,9 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS } = require('./color-by-digit.user.js')
+const fs = require('node:fs')
+const path = require('node:path')
+const { installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -151,4 +153,10 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
     delete require.cache[path]
     if (saved) require.cache[path] = saved
   }
+})
+
+test('VERSION is the @version in the script header', () => {
+  const header = /^\/\/ @version\s+(\S+)\s*$/m.exec(fs.readFileSync(path.join(__dirname, 'color-by-digit.user.js'), 'utf8'))
+  assert.notEqual(header, null, 'the script has no @version header')
+  assert.equal(VERSION, header[1])
 })
