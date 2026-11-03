@@ -46,3 +46,17 @@ test('netlify.toml publishes only site/', () => {
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)
 })
+
+test('netlify.toml sends a Content-Security-Policy that stops the Netlify badge', () => {
+  const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
+  const block = toml.match(/\[\[headers\]\]([\s\S]*?)(?=\n\[|$)/)
+  assert.ok(block, 'netlify.toml has a [[headers]] block')
+  assert.match(block[1], /^\s*for\s*=\s*"\/\*"\s*$/m)
+  const csp = block[1].match(/Content-Security-Policy\s*=\s*"([^"]*)"/)
+  assert.ok(csp, 'the block sets Content-Security-Policy')
+  const directives = csp[1].split(';').map(d => d.trim()).filter(Boolean)
+  // script-src without 'unsafe-inline' is what keeps the badge's inline frame from rendering
+  assert.deepEqual(directives.filter(d => d.startsWith('script-src')), ["script-src 'self'"])
+  // images (raw.githubusercontent.com screenshots) and inline styles stay unrestricted
+  assert.deepEqual(directives.filter(d => !d.startsWith('script-src')), [])
+})
