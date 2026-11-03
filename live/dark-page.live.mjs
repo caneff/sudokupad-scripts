@@ -33,9 +33,11 @@ const DARK_TEXT = 'rgb(34, 34, 34)'
 // The control buttons on a dark page: dark gray with light purple icons, and a purple border on
 // the selected mode button. SudokuPad's own are `#eee` with `#ccc` borders.
 const BUTTON_BG = 'rgb(42, 42, 42)'
-const BUTTON_ICON = 'rgb(210, 168, 240)'
+const BUTTON_ACCENT = 'rgb(210, 168, 240)'
 const BUTTON_BORDER = 'rgb(74, 74, 74)'
 const OWN_BUTTON_BG = 'rgb(238, 238, 238)'
+// SudokuPad's own purple for the keypad and for a button that is on, read with no script installed.
+const OWN_PURPLE = 'rgb(106, 27, 154)'
 const PICKER = 'input[type=color]'
 // SudokuPad's red accent (`--main-color` of `.setting-uitheme-red`), read with no script installed.
 const ACCENT_RED = 'rgb(212, 17, 89)'
@@ -320,16 +322,31 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await computed('.controls-footer a', 'color'), CREDIT_TEXT)
     })
 
-    it('the control buttons are dark gray with light purple icons, the digits keep their purple, and the selected mode button keeps its purple with a purple border', async () => {
+    it('the control buttons are dark gray with light purple icons, the digits and backspace keep their purple with the softer border, and the selected mode button keeps its purple with a purple border', async () => {
       for (const selector of ['#control-settings', '#control-undo', '#control-corner', '#control-colour']) {
-        assert.deepEqual(await readButton(selector), { bg: BUTTON_BG, fg: BUTTON_ICON, border: BUTTON_BORDER }, selector)
+        assert.deepEqual(await readButton(selector), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER }, selector)
       }
-      const digit = await readButton('.controls-input button.digit')
-      assert.equal(digit.border, BUTTON_BORDER)
-      assert.notEqual(digit.bg, BUTTON_BG)
+      for (const selector of ['.controls-input button.digit', '.controls-input button:not(.digit)']) {
+        const key = await readButton(selector)
+        assert.equal(key.bg, OWN_PURPLE, selector)
+        assert.equal(key.border, BUTTON_BORDER, selector)
+      }
       const selected = await readButton('#control-normal.selected')
-      assert.equal(selected.border, BUTTON_ICON)
-      assert.notEqual(selected.bg, BUTTON_BG)
+      assert.equal(selected.bg, OWN_PURPLE)
+      assert.equal(selected.border, BUTTON_ACCENT)
+    })
+
+    it('the Select button keeps its purple fill while it is on, with a purple border, and goes dark again when it is off', async () => {
+      await p.click('#control-select')
+      await p.waitForSelector('#control-select.selectedperm')
+      await p.mouse.move(5, 5)
+      const on = await readButton('#control-select')
+      assert.equal(on.bg, OWN_PURPLE)
+      assert.equal(on.border, BUTTON_ACCENT)
+      await p.click('#control-select')
+      await p.waitForSelector('#control-select:not(.selectedperm)')
+      await p.mouse.move(5, 5)
+      assert.deepEqual(await readButton('#control-select'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
     })
 
     it('a button another script adds to the bottom row (.controls-aux) goes dark too', async () => {
@@ -338,26 +355,29 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         button.id = 'dark-page-live-aux'
         document.querySelector('.controls-aux').appendChild(button)
       })
-      assert.deepEqual(await readButton('#dark-page-live-aux'), { bg: BUTTON_BG, fg: BUTTON_ICON, border: BUTTON_BORDER })
+      assert.deepEqual(await readButton('#dark-page-live-aux'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
       await read(() => document.getElementById('dark-page-live-aux').remove())
     })
 
-    it('the color swatches in color mode look as they do with the script off', async () => {
+    it('the color swatches in color mode keep their fills and take the softer border', async () => {
       await p.click('#control-colour')
       const swatches = () => read(() => [...document.querySelectorAll('.controls-input button')].map((b) => { const c = window.getComputedStyle(b); return [c.backgroundColor, c.color, c.filter] }))
+      const borders = () => read(() => [...document.querySelectorAll('.controls-input button')].map((b) => window.getComputedStyle(b).borderTopColor))
       const on = await swatches()
+      const onBorders = await borders()
       await setScript(false)
       const off = await swatches()
       await setScript(true)
       await p.click('#control-normal')
       assert.ok(on.length >= 9, `${on.length} swatches`)
       assert.deepEqual(on, off)
+      assert.deepEqual(onBorders, onBorders.map(() => BUTTON_BORDER))
     })
 
     it('hover on a button changes nothing the script set, and brightens a digit as it does with the script off', async () => {
       await p.hover('#control-undo')
-      assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_BG, fg: BUTTON_ICON, border: BUTTON_BORDER })
-      const hovered = () => read(() => window.getComputedStyle(document.querySelector('.controls-input button.digit')).filter)
+      assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
+      const hovered = () => computed('.controls-input button.digit', 'filter')
       await p.hover('.controls-input button.digit')
       const on = await hovered()
       await setScript(false)

@@ -37,6 +37,9 @@ test('textColorFor gives light text on a dark page and dark text on a light one,
   // Mid greys either side of the contrast crossover, where a plain half-way split on lightness differs.
   assert.equal(textColorFor('#777777'), '#222222')
   assert.equal(textColorFor('#707070'), '#dddddd')
+  // The switch falls between these two neighbouring greys.
+  assert.equal(textColorFor('#747474'), '#dddddd')
+  assert.equal(textColorFor('#757575'), '#222222')
 })
 
 test('readSavedColor reads the saved color through the Framework, and reports a Framework it cannot read as nothing saved', () => {
@@ -64,13 +67,12 @@ test('the credit line takes the text color for the page color given', () => {
 // The one-line rules of buildCss(color) whose selector mentions a control button.
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
 
-test('on a dark page color the control buttons go dark gray with light purple icons, and the selected mode button keeps a purple border', () => {
+test('on a dark page color the control buttons go dark gray with light purple text, and a button that is on keeps its own fill and gets a purple border', () => {
   assert.deepEqual(buttonRules('#000000'), [
-    '.controls-app button, .controls-tool button:not(.selected), .controls-aux button { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }',
-    '.controls-tool button.selected { border-color: #d2a8f0 !important }',
+    '.controls-app button:not(.selected):not(.selectedperm), .controls-tool button:not(.selected):not(.selectedperm), .controls-aux button:not(.selected):not(.selectedperm) { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }',
+    '.controls-app button.selected, .controls-app button.selectedperm, .controls-tool button.selected, .controls-tool button.selectedperm, .controls-aux button.selected, .controls-aux button.selectedperm { border-color: #d2a8f0 !important }',
     '.button-row button { border-color: #4a4a4a !important }'
   ])
-  assert.equal(buttonRules('#0000ff').length, 3)
 })
 
 test('on a light page color SudokuPad\'s buttons are left as they are', () => {
@@ -79,7 +81,7 @@ test('on a light page color SudokuPad\'s buttons are left as they are', () => {
 })
 
 test('the buttons switch exactly where the credit text does', () => {
-  for (const color of ['#000000', '#333333', '#707070', '#777777', '#cccccc', '#ffffff', '#0000ff', '#ffff00']) {
+  for (const color of ['#000000', '#333333', '#747474', '#757575', '#cccccc', '#ffffff', '#0000ff', '#ffff00']) {
     assert.equal(buttonRules(color).length > 0, textColorFor(color) === '#dddddd', color)
   }
 })

@@ -29,11 +29,13 @@
   // Page text that sits straight on the page background: light on a dark page, dark on a light one.
   const LIGHT_TEXT = '#dddddd'
   const DARK_TEXT = '#222222'
-  // SudokuPad's control buttons on a dark page: dark gray with light purple icons, so the light
-  // `#eee` buttons do not glare. The selected mode button keeps a purple border.
+  // SudokuPad's control buttons on a dark page: dark gray with light purple text and icons, so the
+  // light `#eee` buttons do not glare. A button that is on (`.selected`, or `.selectedperm` on the
+  // Select button) keeps SudokuPad's own fill and gets the light purple as its border.
   const BUTTON_BG = '#2a2a2a'
-  const BUTTON_ICON = '#d2a8f0'
+  const BUTTON_ACCENT = '#d2a8f0'
   const BUTTON_BORDER = '#4a4a4a'
+  const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
   // White kept beyond the tightest box, in page pixels, before it is rounded outward: covers the
   // antialiasing and a text outline filter, which the elements' boxes leave out.
   const PAD = 1
@@ -90,15 +92,15 @@
   // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
   // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
   // that changes nothing.
-  // The control buttons turn dark only when the page does (the same test the footer text uses), and
-  // the colors of the svg-painted icons and color swatches are not touched: only the button's own
-  // background, text color and border are.
+  // The control buttons turn dark only when the page does (the same test the footer text uses). Only
+  // a button's own background, text color and border change: the svg-painted icons and the fills of
+  // the color swatches keep their colors.
   function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     const textColor = textColorFor(pageColor)
     const darkButtons = [
-      rule('.controls-app button, .controls-tool button:not(.selected), .controls-aux button', `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ICON}`, `border-color: ${BUTTON_BORDER}`),
-      rule('.controls-tool button.selected', `border-color: ${BUTTON_ICON}`),
+      rule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`).join(', '), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
+      rule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]).join(', '), `border-color: ${BUTTON_ACCENT}`),
       rule('.button-row button', `border-color: ${BUTTON_BORDER}`)
     ]
     return [
