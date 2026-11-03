@@ -384,10 +384,28 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('a right click inside the corner zone where SudokuPad sees neither an edge nor a cell keeps the browser menu closed', async () => {
+      // The pointer is read in whole pixels, so the point is found by moving the mouse along the diagonal
+      // from corner (3,3) and applying SudokuPad's own arithmetic (tool-pen.js `clickCell`) to what the page
+      // reads: a point inside the 0.2 zone that is neither an edge click nor a cell click.
+      let found = null
+      for (let offset = 0.12; offset < 0.16 && found === null; offset += 0.002) {
+        const [x, y] = await cornerPoint(3, 3, offset, offset)
+        await p.mouse.move(x, y)
+        const point = await read(() => {
+          const { r, c } = ToolPen.tool.getInputRc()
+          const [cellR, cellC] = [Math.floor(r), Math.floor(c)]
+          const [dx, dy] = [c - (cellC + 0.5), r - (cellR + 0.5)]
+          const [sx, sy] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]
+          const cellDist = Math.hypot(r - cellR - 0.5, c - cellC - 0.5)
+          const edgeDist = Math.hypot(r - (cellR + 0.5 + 0.5 * sy), c - (cellC + 0.5 + 0.5 * sx))
+          const neither = !(edgeDist < cellDist * 0.75 && edgeDist <= 1) && !(cellDist <= 0.5)
+          return { cornerDist: Math.hypot(r - 3, c - 3), neither }
+        })
+        if (point.neither && point.cornerDist < CORNER_RADIUS) found = [x, y]
+      }
+      assert.notEqual(found, null, 'no pixel near the corner is in the zone and neither an edge nor a cell to SudokuPad')
       const before = (await menuLog()).length
-      // 0.14 of a cell along each axis is 0.198 from the corner: inside the zone, yet by SudokuPad's own
-      // arithmetic too far from the cell middle to be a cell mark and not near enough an edge midpoint
-      await clickCorner(3, 3, 'right', 0.14, 0.14)
+      await p.mouse.click(found[0], found[1], { button: 'right' })
       assert.deepEqual(await settle(async () => (await menuLog()).slice(before), [true]), [true])
       assert.deepEqual(await settle(() => penValues(2, 2), ['x']), ['x'], 'the corner mark, stepped backwards from empty')
       await clearMarks()
