@@ -109,6 +109,13 @@ test('inkMiddle centres on the digit\'s ink, not on its advance box or its font\
   assert.equal(inkMiddle({ x: 100, y: 20 }, { left: 1, right: 5, ascent: 7, descent: 0, fontAscent: 10 }).x, 102)
 })
 
+test('inkMiddle throws when the browser lacks a measure, instead of giving NaN', () => {
+  const whole = { left: -1, right: 5, ascent: 7, descent: 0, fontAscent: 10 }
+  for (const key of Object.keys(whole)) {
+    assert.throws(() => inkMiddle({ x: 100, y: 20 }, { ...whole, [key]: undefined }), new RegExp(`no ${key} measure`), key)
+  }
+})
+
 test('digitOfText reads a single digit and nothing else', () => {
   assert.equal(digitOfText('5'), '5')
   assert.equal(digitOfText(' 5 '), '5')

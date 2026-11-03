@@ -27,6 +27,12 @@ const CONFLICT_RED = 'rgb(179, 58, 58)'
 const NEAR = 6
 // How far, in screen pixels, a circle's centre may be from the centre of its digit's ink.
 const INK_TOLERANCE = 1
+// The screenshot clip around a mark's box: this many pixels more on the top and left, and on the
+// bottom and right, so antialiasing at the digit's edge is inside it.
+const CLIP_BEFORE = 3
+const CLIP_AFTER = 5
+// A pixel is ink when it differs between the two screenshots by at least this fraction of the largest difference.
+const INK_FRACTION = 0.5
 // Hides every mark and the circles, then shows only the mark carrying the probe attribute.
 const INK_PROBE_CSS = '#cell-pencilmarks text, #cell-candidates text, #cell-candidates tspan { visibility: hidden !important } #digit-color-circles { display: none !important } #cell-pencilmarks [data-ink-probe], #cell-candidates [data-ink-probe] { visibility: visible !important }'
 // Per digit, a row with that digit given and two empty cells in it, so a mark of the digit
@@ -137,21 +143,19 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const { x, y, width, height } = mark.getBoundingClientRect()
         return { x, y, width, height }
       }, [CONFLICTING[place], digit])
-      const clip = { x: Math.floor(box.x) - 3, y: Math.floor(box.y) - 3, width: Math.ceil(box.width) + 8, height: Math.ceil(box.height) + 8 }
+      const clip = { x: Math.floor(box.x) - CLIP_BEFORE, y: Math.floor(box.y) - CLIP_BEFORE, width: Math.ceil(box.width) + CLIP_BEFORE + CLIP_AFTER, height: Math.ceil(box.height) + CLIP_BEFORE + CLIP_AFTER }
       const drawn = (await circles()).filter((c) => c.shown)
-      await p.addStyleTag({ content: INK_PROBE_CSS }).then((tag) => tag.evaluate((e) => { e.id = 'ink-probe-style' }))
+      const probeStyle = await p.addStyleTag({ content: INK_PROBE_CSS })
       let shown, hidden
       try {
         shown = (await p.screenshot({ clip })).toString('base64')
         await read(() => document.querySelector('[data-ink-probe]').removeAttribute('data-ink-probe'))
         hidden = (await p.screenshot({ clip })).toString('base64')
       } finally {
-        await read(() => {
-          document.querySelectorAll('[data-ink-probe]').forEach((e) => e.removeAttribute('data-ink-probe'))
-          document.getElementById('ink-probe-style').remove()
-        })
+        await read(() => document.querySelectorAll('[data-ink-probe]').forEach((e) => e.removeAttribute('data-ink-probe')))
+        await probeStyle.evaluate((e) => e.remove())
       }
-      const ink = await decoder.evaluate(async ([a, b]) => {
+      const ink = await decoder.evaluate(async ([a, b, fraction]) => {
         const pixels = async (base64) => {
           const bitmap = await window.createImageBitmap(await (await fetch('data:image/png;base64,' + base64)).blob())
           const ctx = new window.OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
@@ -162,16 +166,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const diff = []
         for (let i = 0; i < one.data.length; i += 4) diff.push(Math.max(...[0, 1, 2].map((k) => Math.abs(one.data[i + k] - two.data[i + k]))))
         const top = Math.max(...diff)
-        const inked = diff.map((d, i) => [d, i]).filter(([d]) => top > 0 && d >= top / 2).map(([, i]) => [i % one.width, Math.floor(i / one.width)])
+        const inked = diff.map((d, i) => [d, i]).filter(([d]) => d >= fraction * top).map(([, i]) => [i % one.width, Math.floor(i / one.width)])
         const xs = inked.map(([x]) => x)
         const ys = inked.map(([, y]) => y)
         return { top, left: Math.min(...xs), right: Math.max(...xs) + 1, up: Math.min(...ys), down: Math.max(...ys) + 1 }
-      }, [shown, hidden])
+      }, [shown, hidden, INK_FRACTION])
       assert.ok(ink.top > 0, `${place} ${digit}: the screenshots with and without the mark are identical`)
       const cx = clip.x + (ink.left + ink.right) / 2
       const cy = clip.y + (ink.up + ink.down) / 2
-      const nearest = drawn.map((c) => ({ dx: c.cx - cx, dy: c.cy - cy })).sort((m, n) => Math.hypot(m.dx, m.dy) - Math.hypot(n.dx, n.dy))[0]
-      return nearest
+      return drawn.map((c) => ({ dx: c.cx - cx, dy: c.cy - cy })).sort((m, n) => Math.hypot(m.dx, m.dy) - Math.hypot(n.dx, n.dy))[0]
     }
 
     const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
@@ -306,8 +309,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           for (const digit of Object.keys(CONFLICT_CELLS)) {
             assert.deepEqual(await settle(circleState(place, digit), circled(1)), circled(1), `${place} ${digit}`)
             const { dx, dy } = await inkCentring(place, digit)
-            const off = { dx: Math.abs(dx) <= INK_TOLERANCE, dy: Math.abs(dy) <= INK_TOLERANCE }
-            assert.deepEqual(off, { dx: true, dy: true }, `${place} ${digit}: the circle's centre is (${dx.toFixed(2)}, ${dy.toFixed(2)}) px from the ink's`)
+            const distance = Math.hypot(dx, dy)
+            assert.equal(distance <= INK_TOLERANCE, true, `${place} ${digit}: the circle's centre is (${dx.toFixed(2)}, ${dy.toFixed(2)}) px, ${distance.toFixed(2)} px, from the ink's`)
           }
         }
       } finally {

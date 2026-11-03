@@ -106,6 +106,10 @@
   // baseline (`left` positive going left, as the canvas reports it), `fontAscent` the em box's top above
   // the baseline.
   function inkMiddle (extent, measure) {
+    // A browser that lacks a measure gives `undefined`, which would draw no circle and say nothing.
+    for (const key of ['left', 'right', 'ascent', 'descent', 'fontAscent']) {
+      if (!Number.isFinite(measure[key])) throw new Error(`digit-color: the browser gave no ${key} measure for a mark's digit`)
+    }
     const baseline = extent.y + measure.fontAscent
     return {
       x: extent.x + (measure.right - measure.left) / 2,
