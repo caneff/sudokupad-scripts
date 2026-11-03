@@ -29,7 +29,7 @@ const CELL_MARK = [5, 5]
 const PEN_4 = 'rgb(113, 159, 23)'
 
 // Each edge a click can reach: the cell a click lands in, the side of it, and the cell and
-// pen values that store it. The cycle on an edge is its X, two directions, a dot, then empty.
+// pen values that store it. The cycle on an edge is its X, two directions, a circle, then empty.
 const EDGES = {
   'interior right (4,4)|(4,5)': { row: 3, col: 3, side: 'right', stored: [3, 3], cycle: ['3', 'h', 'i', 'j', null] },
   'interior bottom (4,4)|(5,4)': { row: 3, col: 3, side: 'bottom', stored: [3, 3], cycle: ['4', 'k', 'l', 'm', null] },
@@ -184,7 +184,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     after(async () => { await context.close() })
 
     for (const [name, edge] of Object.entries(EDGES)) {
-      it(`${name}: clicks cycle X, direction, other direction, dot, empty, and draw each`, async () => {
+      it(`${name}: clicks cycle X, direction, other direction, circle, empty, and draw each`, async () => {
         const [sr, sc] = edge.stored
         for (const value of [...edge.cycle, edge.cycle[0]]) {
           await clickEdge(edge.row, edge.col, edge.side)
@@ -234,16 +234,28 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await pickColor(1)
     })
 
-    it('the dot has a visible stroke: round cap, a width, and a zero-length segment', async () => {
+    it('the edge circle (stored under the dot value) is an open ring with a round stroke at half the pen width, and no fill', async () => {
       for (let i = 0; i < 4; i++) await clickEdge(3, 3, 'right')
-      const dot = () => read(() => {
+      const ring = () => read(() => {
         const e = document.querySelector('.cell-pen.pen-j')
         if (!e) return null
         const s = window.getComputedStyle(e)
         return { cap: s.strokeLinecap, width: s.strokeWidth, fill: s.fill, d: e.getAttribute('d').replace(/^M[\d. ]+ /, '') }
       })
-      assert.deepEqual(await settle(dot, { cap: 'round', width: '7px', fill: 'none', d: 'l0 0' }), { cap: 'round', width: '7px', fill: 'none', d: 'l0 0' })
+      const want = { cap: 'round', width: '2.5px', fill: 'none', d: 'm -4.4,0 a 4.4,4.4 0 1,0 8.8,0 a 4.4,4.4 0 1,0 -8.8,0' }
+      assert.deepEqual(await settle(ring, want), want)
       await clearMarks()
+    })
+
+    it('the dialog shows a small picture beside each edge mark box, and the circle is labelled Circle', async () => {
+      await openEditor()
+      const rows = editor().locator('div:has(> input[data-mark])')
+      assert.equal(await rows.count(), 3)
+      for (const mark of ['x', 'directions', 'dot']) {
+        assert.equal(await editor().locator(`div:has(> input[data-mark="${mark}"]) > svg`).count(), 1, mark)
+      }
+      assert.equal((await editor().locator('label[for="pen-tool-extras-mark-dot"]').textContent()).trim(), 'Circle')
+      await closeWith('Cancel')
     })
 
     it('cell marks and drawn lines still work', async () => {

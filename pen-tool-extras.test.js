@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, LINE_THICKNESS, MARK_THICKNESS, LINE_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   nextType, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS
 } = require('./pen-tool-extras.user.js')
 
@@ -294,64 +294,58 @@ test('editedColors refuses a pen color or a value it cannot save, rather than sa
   assert.throws(() => editedColors(TABLE, '4', '#abc'), RangeError)
 })
 
-test('the thickness ranges: lines 1 to 12 from SudokuPad\'s own 5, edge marks 1 to 6 in halves from its 2.5', () => {
-  assert.deepEqual(LINE_THICKNESS, { min: 1, max: 12, step: 1, fallback: 5 })
-  assert.deepEqual(MARK_THICKNESS, { min: 1, max: 6, step: 0.5, fallback: 2.5 })
+test('the thickness runs 1 to 12 in whole steps from SudokuPad\'s own pen width of 5', () => {
+  assert.deepEqual(THICKNESS, { min: 1, max: 12, step: 1, fallback: 5 })
 })
 
-test('normalizeThickness keeps a saved value on its range\'s steps', () => {
-  for (const ok of [1, 8, 12]) assert.equal(normalizeThickness(ok, LINE_THICKNESS), ok)
-  for (const ok of [1, 2.5, 3.5, 6]) assert.equal(normalizeThickness(ok, MARK_THICKNESS), ok)
+test('normalizeThickness keeps a saved whole number from 1 to 12', () => {
+  for (const ok of [1, 5, 8, 12]) assert.equal(normalizeThickness(ok), ok)
 })
 
-test('normalizeThickness falls back to the range\'s default for nothing saved and for anything untrusted', () => {
+test('normalizeThickness falls back to 5 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 13, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
-    assert.equal(normalizeThickness(bad, LINE_THICKNESS), 5, String(bad))
-  }
-  for (const bad of [null, undefined, 0, 0.5, 6.5, 12, 2.3, NaN, '3', [3], true]) {
-    assert.equal(normalizeThickness(bad, MARK_THICKNESS), 2.5, String(bad))
+    assert.equal(normalizeThickness(bad), 5, String(bad))
   }
 })
 
-test('buildThicknessCss sets the line width on the line values only, under :root:root', () => {
-  const [lines] = buildThicknessCss(9, 2.5).split('\n')
-  const [selector, body] = lines.split(' { ')
-  assert.equal(body, 'stroke-width: 9; }')
-  assert.deepEqual(selector.split(', '), LINE_VALUES.map((v) => `:root:root .cell-pen.pen-${v}`))
+test('the full width values are the free lines and the cell circle and cross, not the edge X marks or the arrows and circles this script adds', () => {
+  assert.deepEqual(FULL_WIDTH_VALUES, ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
 })
 
-test('the line values leave out the edge X marks, the cell circle and cross, and the arrows and dots', () => {
-  assert.deepEqual(LINE_VALUES, ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
-})
-
-test('buildThicknessCss at the defaults gives the widths the pen had before: lines 5, X and arrows 2.5, dots 7', () => {
-  const rules = buildThicknessCss(5, 2.5).split('\n').map((rule) => rule.split(' { '))
-  const width = (value) => {
-    const rule = rules.find(([selector]) => selector.split(', ').includes(`:root:root .cell-pen.pen-${value}`))
-    return rule[1]
+// The width each pen value gets from the CSS, read back from the rules.
+function widthsOf (css) {
+  const widths = {}
+  for (const rule of css.split('\n')) {
+    const [selector, body] = rule.split(' { ')
+    for (const part of selector.split(', ')) widths[part.replace(':root:root .cell-pen.pen-', '')] = body.replace('stroke-width: ', '').replace('; }', '')
   }
-  for (const v of ['1', 'g']) assert.equal(width(v), 'stroke-width: 5; }', v)
-  for (const v of ['3', '4', 'b', 'c', 'h', 'i', 'k', 'l', 'n', 'o', 'q', 'r']) assert.equal(width(v), 'stroke-width: 2.5; }', v)
-  for (const v of ['j', 'm', 'p', 's']) assert.equal(width(v), 'stroke-width: 7; }', v)
+  return widths
+}
+
+test('buildThicknessCss at 5 gives the widths the pen had before: free lines, circle and cross 5; edge X marks, arrows and edge circles 2.5', () => {
+  const widths = widthsOf(buildThicknessCss(5))
+  for (const v of FULL_WIDTH_VALUES) assert.equal(widths[v], '5', v)
+  for (const v of ['3', '4', 'b', 'c', 'h', 'i', 'k', 'l', 'n', 'o', 'q', 'r', 'j', 'm', 'p', 's']) assert.equal(widths[v], '2.5', v)
 })
 
-test('the edge mark slider sets the X and arrow width, and the dot keeps its 7 to 2.5 proportion', () => {
-  const css = buildThicknessCss(5, 4)
-  assert.match(css, /pen-3[^{]*\{ stroke-width: 4; \}/)
-  assert.match(css, /pen-j[^{]*\{ stroke-width: 11.2; \}/)
+test('one thickness scales every width by the same factor: 10 doubles all of them', () => {
+  const before = widthsOf(buildThicknessCss(5))
+  const after = widthsOf(buildThicknessCss(10))
+  assert.deepEqual(Object.keys(after), Object.keys(before))
+  for (const v of Object.keys(before)) assert.equal(Number(after[v]), Number(before[v]) * 2, v)
 })
 
-test('no value gets two width rules, so none depends on which rule is last', () => {
-  const selectors = buildThicknessCss(5, 2.5).split('\n').flatMap((rule) => rule.split(' { ')[0].split(', '))
+test('every selector sits under :root:root, and no value gets two width rules', () => {
+  const selectors = buildThicknessCss(5).split('\n').flatMap((rule) => rule.split(' { ')[0].split(', '))
+  for (const s of selectors) assert.match(s, /^:root:root \.cell-pen\.pen-[0-9a-z]$/)
   assert.equal(new Set(selectors).size, selectors.length)
 })
 
 test('buildThicknessCss refuses a thickness it cannot save', () => {
-  assert.throws(() => buildThicknessCss(0, 2.5), RangeError)
-  assert.throws(() => buildThicknessCss(13, 2.5), RangeError)
-  assert.throws(() => buildThicknessCss('5', 2.5), RangeError)
-  assert.throws(() => buildThicknessCss(5, 7), RangeError)
-  assert.throws(() => buildThicknessCss(5, 2.3), RangeError)
+  assert.throws(() => buildThicknessCss(0), RangeError)
+  assert.throws(() => buildThicknessCss(13), RangeError)
+  assert.throws(() => buildThicknessCss('5'), RangeError)
+  assert.throws(() => buildThicknessCss(2.5), RangeError)
 })
 
 test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
@@ -377,7 +371,7 @@ test('a saved boolean is kept and a non-boolean entry takes its default', () => 
   assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', dot: false }), { x: false, directions: true, dot: false })
 })
 
-test('with everything ticked the cycle is X, direction, other direction, dot, empty', () => {
+test('with everything ticked the cycle is X, direction, other direction, circle, empty', () => {
   const seen = []
   let type = 'empty'
   for (let i = 0; i < 5; i++) {
@@ -435,7 +429,7 @@ test('each edge has its own characters, none shared with another edge or with Su
 })
 
 test('a mark on another edge of the same cell is left alone', () => {
-  // the cell has the right-edge X and the bottom-edge dot; a click on the right edge sees only its own
+  // the cell has the right-edge X and the bottom-edge circle; a click on the right edge sees only its own
   assert.deepEqual(planClick('3', ['3', 'm', '5'], ALL), { remove: ['3'], add: 'h' })
 })
 
@@ -454,17 +448,29 @@ test('two marks on one edge, as a replay can hold, both go on the next click', (
 })
 
 test('shapeOf names the arrow each character draws, per edge', () => {
-  assert.deepEqual(['h', 'i', 'j'].map(shapeOf), ['>', '<', '.'])
-  assert.deepEqual(['k', 'l', 'm'].map(shapeOf), ['^', 'v', '.'])
-  assert.deepEqual(['n', 'o', 'p'].map(shapeOf), ['>', '<', '.'])
-  assert.deepEqual(['q', 'r', 's'].map(shapeOf), ['^', 'v', '.'])
+  assert.deepEqual(['h', 'i', 'j'].map(shapeOf), ['>', '<', 'o'])
+  assert.deepEqual(['k', 'l', 'm'].map(shapeOf), ['^', 'v', 'o'])
+  assert.deepEqual(['n', 'o', 'p'].map(shapeOf), ['>', '<', 'o'])
+  assert.deepEqual(['q', 'r', 's'].map(shapeOf), ['^', 'v', 'o'])
   for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 't', 'z']) {
     assert.equal(shapeOf(other), null, other)
   }
 })
 
-test('the dot is a zero-length segment', () => {
-  assert.match(shapePath('.', 8), /^ l0 0$/)
+test('the edge circle is an open ring closed back at the edge midpoint, a little wider than a 7 unit point', () => {
+  // Two half-circle arcs of radius r, from -r to +r and back: relative moves sum to zero.
+  const m = /^ m (-?[\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 (-?[\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 (-?[\d.]+),0$/.exec(shapePath('o', 8))
+  assert.notEqual(m, null)
+  const [r1, rx, ry, to, rx2, ry2, back] = m.slice(1).map(Number)
+  assert.equal(rx, ry)
+  assert.equal(rx2, rx)
+  assert.equal(ry2, rx)
+  assert.equal(r1, -rx)
+  assert.equal(to, 2 * rx)
+  assert.equal(back, -2 * rx)
+  // The ring's outer diameter (path plus its 2.5 stroke) is a little more than 7 and under an arrow's reach.
+  const outer = 2 * rx + 2.5
+  assert.equal(outer > 7 && outer < 14, true, String(outer))
 })
 
 test('an arrow is a two-segment chevron pointing the way it names', () => {

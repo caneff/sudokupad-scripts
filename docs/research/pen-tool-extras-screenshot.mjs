@@ -1,9 +1,9 @@
 // Takes the Pen Tool Extras pictures in docs/research/, the mascot hidden:
 //   site-pen-tool-extras.png         the homepage picture: colored pen lines in pen colors 4-9 beside edge
-//                                    marks (X, arrows, dot) in several pen colors, at the defaults
-//   pen-tool-extras-dialog.png       the merged settings dialog, both sliders in the middle of their ranges
-//   pen-tool-extras-thin.png         the same drawing at line thickness 2 and edge mark thickness 1
-//   pen-tool-extras-thick.png        the same drawing at line thickness 11 and edge mark thickness 5
+//                                    marks (X, arrows, circle) in several pen colors, at the defaults
+//   pen-tool-extras-dialog.png       the merged settings dialog, its thickness slider at 6
+//   pen-tool-extras-thin.png         the same drawing at thickness 2
+//   pen-tool-extras-thick.png        the same drawing at thickness 11
 // The thin and thick pictures are the dialog's live preview, taken before Cancel.
 // Run from the repo root: node docs/research/pen-tool-extras-screenshot.mjs
 import { chromium } from 'playwright'
@@ -33,7 +33,7 @@ const rect = (row, col) => page.evaluate(([r, c]) => {
   return { x: e.x, y: e.y, width: e.width, height: e.height }
 }, [row, col])
 // A click 2 px inside a cell, next to one side, is an edge click; each further click on the same
-// edge steps through X, two arrows, a dot.
+// edge steps through X, two arrows, a circle.
 const edgePoint = async (row, col, side) => {
   const e = await rect(row, col)
   return { right: [e.x + e.width - 2, e.y + e.height / 2], bottom: [e.x + e.width / 2, e.y + e.height - 2] }[side]
@@ -80,20 +80,18 @@ const openDialog = async () => {
   await page.locator('.dialog button').filter({ hasText: 'Pen tool extras' }).first().click()
   await page.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
 }
-const slide = (name, value) => page.locator(`#pen-tool-extras-editor input[data-slider=${name}]`)
+const slide = (value) => page.locator('#pen-tool-extras-editor input[type=range]')
   .evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 
 await openDialog()
-await slide('line', 6)
-await slide('mark', 3.5)
+await slide(6)
 await page.locator('.dialog').screenshot({ path: out('pen-tool-extras-dialog.png') })
 // The dialog sits over the board, so its preview is shown by moving the pointer-free overlay
 // away: only the board is cropped, from a page screenshot taken with the dialog hidden.
 const hideDialog = () => page.addStyleTag({ content: '.dialog, .dialog-overlay, .modal { visibility: hidden !important }' })
 await hideDialog()
-for (const [name, line, mark] of [['thin', 2, 1], ['thick', 11, 5]]) {
-  await slide('line', line)
-  await slide('mark', mark)
+for (const [name, thickness] of [['thin', 2], ['thick', 11]]) {
+  await slide(thickness)
   await page.waitForTimeout(300)
   await page.screenshot({ path: out(`pen-tool-extras-${name}.png`), clip: await block() })
 }
