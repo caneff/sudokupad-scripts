@@ -2,13 +2,16 @@
 
 Read on 2026-11-03. No translator was built and no converted puzzle was loaded.
 
+Dropped: Chris ruled on 2026-11-03 not to build this, after reading SudokuBank's terms
+(below). Reopening it starts from those terms.
+
 ## SudokuBank's data
 
 - Sampled 17 fetches of `sudokubank.com/puzzles/<uuid>` with no login: one first probe
   and the 16 puzzle links on the home page. The sample is what the home page showed,
   so it is not random.
 - Each page embeds the whole puzzle as JSON in its `self.__next_f.push` chunks:
-  `givenCells`, `solutionData` (`symbols-v1`, the solution in plain text),
+  `givenCells`,
   `constraints` (`[{id, type, data}]`), `puzzleName` and `puzzleRuleset`.
 - `puzzleRuleset` is structured (categories and types). Whether the page also holds
   the rule text as prose was not checked.
