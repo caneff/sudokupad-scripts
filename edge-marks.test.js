@@ -1,7 +1,10 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { nextType, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS } = require('./edge-marks.user.js')
+const fs = require('node:fs')
+const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
+const { nextType, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS, VERSION } = require('./edge-marks.user.js')
 
 const ALL = { x: true, directions: true, dot: true }
 const NONE = { x: false, directions: false, dot: false }
@@ -126,4 +129,8 @@ test('an arrow is a two-segment chevron pointing the way it names', () => {
   assert.equal(lx < 0, true)
   assert.equal(uy < 0, true)
   assert.equal(dy > 0, true)
+})
+
+test('VERSION is the @version in the script header', () => {
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'edge-marks.user.js'), 'utf8')))
 })

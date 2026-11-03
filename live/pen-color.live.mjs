@@ -13,6 +13,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
+import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-color.user.js', import.meta.url), 'utf8')
@@ -139,7 +140,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     }
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
     const openEditor = async () => {
-      await p.click('#control-settings')
+      await openSettings(p)
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
       await editor().waitFor({ state: 'visible' })
     }
@@ -408,6 +409,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(errors.slice(errorsBefore), [])
     })
 
+    it('the settings entry sits in the Experimental group and, like the dialog heading, shows the version from the script header', async () => {
+      const shown = `Pen color v${headerVersion(script)}`
+      const group = await openSettings(p)
+      const entry = group.locator('button').filter({ hasText: 'Pen color' })
+      assert.equal((await entry.textContent()).trim(), shown)
+      await entry.click()
+      await editor().waitFor({ state: 'visible' })
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), shown)
+      await closeWith('Cancel')
+    })
+
     it('no uncaught page errors', () => {
       assert.deepEqual(errors, [])
     })
@@ -432,7 +444,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       // that no override appeared in the two seconds after its wait ran out.
       await sleep(COLOR_TOOL_WAIT_MS + 2000)
       assert.equal(await p.locator(STYLE).count(), 0)
-      await p.click('#control-settings')
+      await openSettings(p)
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
       await p.locator('#pen-color-editor').waitFor({ state: 'visible' })
       const values = await p.locator('#pen-color-editor input[type=color]').evaluateAll((es) => es.map((e) => e.value))
@@ -454,7 +466,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await p.locator('#control-undo').waitFor({ state: 'visible' })
       await p.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
       await p.addScriptTag({ content: script })
-      await p.click('#control-settings')
+      await openSettings(p)
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen color' }).first().click()
       await p.locator('#pen-color-editor').waitFor({ state: 'visible' })
       await p.locator('#pen-color-editor input[data-pen="4"]').fill(FOUR.hex)

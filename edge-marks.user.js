@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Edge Marks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.0
+// @version      0.1.1
 // @description  Adds direction arrows and a dot to the pen tool's marks on a cell edge. Clicking an edge cycles through the marks ticked in a settings dialog. Relies on SudokuPad internals, so an update can break it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,6 +18,11 @@
 (function () {
   'use strict'
 
+  // Shown in the settings, and the same as @version above. The script cannot read its own header
+  // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
+  const VERSION = '0.1.1'
+  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'EdgeMarks_marks'
   const STYLE_ID = 'edge-marks-style'
   // The pen value of SudokuPad's own edge X on the right, bottom, left and top edge of a cell.
@@ -108,7 +113,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { nextType, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS }
+    module.exports = { VERSION, nextType, planClick, normalizeSettings, shapeOf, shapePath, DEFAULT_SETTINGS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -231,7 +236,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: '<b>Edge marks</b><br>Marks a click on a cell edge cycles through' },
+        { tag: 'text', innerHTML: `<b>Edge marks v${VERSION}</b><br>Marks a click on a cell edge cycles through` },
         { tag: 'text', innerHTML: '<div id="edge-marks-editor"></div>' },
         {
           tag: 'options',
@@ -265,7 +270,8 @@
     Framework.addSetting({
       tag: 'button',
       name: 'edgemarks',
-      content: 'Edge marks',
+      group: SETTINGS_GROUP,
+      content: `Edge marks v${VERSION}`,
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

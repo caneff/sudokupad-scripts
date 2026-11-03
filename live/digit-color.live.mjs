@@ -12,6 +12,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../digit-color.user.js', import.meta.url), 'utf8')
@@ -196,7 +197,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     }
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
     const openEditor = async () => {
-      await p.click('#control-settings')
+      await openSettings(p)
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Digit color' }).first().click()
       await editor().waitFor({ state: 'visible' })
     }
@@ -576,6 +577,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]], bad)
       }
       assert.deepEqual(errors.slice(errorsBefore), [])
+    })
+
+    it('the settings entry sits in the Experimental group and, like the dialog heading, shows the version from the script header', async () => {
+      const shown = `Digit color v${headerVersion(script)}`
+      const group = await openSettings(p)
+      const entry = group.locator('button').filter({ hasText: 'Digit color' })
+      assert.equal((await entry.textContent()).trim(), shown)
+      await entry.click()
+      await editor().waitFor({ state: 'visible' })
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), shown)
+      await closeWith('Cancel')
     })
 
     it('no uncaught page errors', () => {

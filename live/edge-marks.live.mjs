@@ -14,6 +14,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../edge-marks.user.js', import.meta.url), 'utf8')
@@ -141,7 +142,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     }
 
     const openEditor = async () => {
-      await p.click('#control-settings')
+      await openSettings(p)
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Edge marks' }).first().click()
       await editor().waitFor({ state: 'visible' })
     }
@@ -370,6 +371,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await closeWith('Cancel')
       }
       assert.deepEqual(errors.slice(errorsBefore), [])
+    })
+
+    it('the settings entry sits in the Experimental group and, like the dialog heading, shows the version from the script header', async () => {
+      const shown = `Edge marks v${headerVersion(script)}`
+      const group = await openSettings(p)
+      const entry = group.locator('button').filter({ hasText: 'Edge marks' })
+      assert.equal((await entry.textContent()).trim(), shown)
+      await entry.click()
+      await editor().waitFor({ state: 'visible' })
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), shown)
+      await closeWith('Cancel')
     })
 
     it('no uncaught page errors', () => {
