@@ -39,3 +39,16 @@ Read on 2026-11-03. No translator was built and no converted puzzle was loaded.
 Two Exa searches: none is described as reading SudokuBank. The closest are
 `marktekfan.github.io/sudokupad-penpa-import` (Penpa+ and f-puzzles input) and
 `sudokupad.app/demo/puzzleimporter.html`. Only the search result text was read.
+
+## A paste-a-URL page
+
+- A GET and an OPTIONS sent to a puzzle page with an `Origin` header returned no
+  `access-control-*` headers, so a static page's `fetch` of the URL should fail. This
+  was tested with curl, not in a browser.
+- The Penpa converter (`marktekfan.github.io/sudokupad-penpa-import`) is such a static
+  page. Its bundle expands tinyurl and tinypuz links through its author's own API,
+  `marktekfan-api.azurewebsites.net`, so it uses a small server for the fetch it cannot
+  make itself.
+- A page of ours needs the same: a small proxy limited to `sudokubank.com/puzzles/`.
+  Whether SudokuBank answers a request from a proxy host was not tested; this box's
+  curl got a 200.
