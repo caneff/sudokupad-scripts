@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SudokuPad scripts</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 52rem; margin: 0 auto; padding: 1rem; color: #1a1a1a; background: #fafafa; }
+  article { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 0 1rem 1rem; margin: 1rem 0; }
+  img { max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; }
+  .install { display: inline-block; padding: .4rem .9rem; background: #1a56c4; color: #fff; border-radius: 4px; text-decoration: none; }
+  a { color: #1a56c4; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>SudokuPad scripts</h1>
+    <p>Tampermonkey userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, then open a script's install link; Tampermonkey offers to install it.</p>
+  </header>
+  <main>
+    <article>
+      <h2>Color by Digit</h2>
+      <p>Adds a button that colors every cell holding a digit, using groups of palette colors you set in a settings dialog.</p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
+    </article>
+    <article>
+      <h2>Digit Color</h2>
+      <p>Colors the digits themselves, one color per digit, in entered digits, corner marks and centre marks. A conflicting mark gets a small red circle behind it.</p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/digit-color.user.js">Install Digit Color</a></p>
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/digit-color-conflict-circle.png" alt="Digit Color in SudokuPad" loading="lazy">
+    </article>
+    <article>
+      <h2>Pen Color</h2>
+      <p>Sets the pen tool's nine colors to your current cell color page, darkened, until you save your own in a settings dialog.</p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-color.user.js">Install Pen Color</a></p>
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-color-match.png" alt="Pen Color in SudokuPad" loading="lazy">
+    </article>
+    <article>
+      <h2>Edge Marks</h2>
+      <p>Adds direction arrows and a dot to the pen tool's marks on a cell edge. Relies on SudokuPad internals, so an update can break it.</p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/edge-marks.user.js">Install Edge Marks</a></p>
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/edge-marks-all-colors.png" alt="Edge Marks in SudokuPad" loading="lazy">
+    </article>
+    <article>
+      <h2>Dark Page</h2>
+      <p>Makes the page black around the puzzle, leaving a rectangle around everything the puzzle draws as SudokuPad renders it.</p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install Dark Page</a></p>
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/dark-page.png" alt="Dark Page in SudokuPad" loading="lazy">
+    </article>
+  </main>
+  <footer>
+    <p><a href="https://github.com/caneff/sudokupad-scripts#readme">README</a> · <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
+  </footer>
+</body>
+</html>
