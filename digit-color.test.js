@@ -18,7 +18,7 @@ test('nothing saved is the fresh-install state: every digit has its default colo
 })
 
 test('corrupt saved data falls back to the default colors', () => {
-  for (const bad of ['red', 7, true, [], [['1', '#ff0000']], '{"1":"#ff0000"}']) {
+  for (const bad of ['red', 7, true, [], ['#ff0000'], [['1', '#ff0000']], '{"1":"#ff0000"}']) {
     assert.deepEqual(normalizeColors(bad), TABLE, JSON.stringify(bad))
   }
 })
@@ -71,17 +71,12 @@ test('a digit with a color gets a rule for entered digits, corner marks and cent
   assert.match(css, /#cell-candidates [^{]*\[data-val="7"\][^{]*{[^}]*fill:\s*#123456/)
 })
 
-test('mark rules skip a mark in the conflict state; the given group is never named', () => {
+test('mark rules skip a mark in the conflict state; no rule names the givens', () => {
   const css = buildCss({ 7: '#123456' })
   const markRules = css.split('}').filter((r) => r.includes('data-val'))
   assert.equal(markRules.length, 2)
   markRules.forEach((r) => assert.match(r, /:not\(\.conflict\)/))
   assert.doesNotMatch(css, /cell-given/)
-})
-
-test('a digit with no color gets no rule', () => {
-  const css = buildCss({ 7: '#123456' })
-  assert.doesNotMatch(css, /"8"/)
 })
 
 test('digitOfText reads a single digit and nothing else', () => {

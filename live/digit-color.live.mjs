@@ -21,12 +21,12 @@ const DATA_KEY = 'DigitColor_colors'
 const GIVEN_FILL = 'rgb(0, 0, 0)'
 const DEFAULT_FILL = 'rgb(29, 106, 229)'
 const CONFLICT_FILL = 'rgb(179, 58, 58)'
-// The default palette (issue #7), as the dialog's #rrggbb. The map is the independent source
+// The default colors (issue #7), as the dialog's #rrggbb. The map is the independent source
 // the saved value is compared with; RGB is the same colors as the page computes them.
 const DEFAULTS = {
   0: '#4b5563', 1: '#b0125b', 2: '#b04a00', 3: '#7a6200', 4: '#1b7a2f', 5: '#00736f', 6: '#0059c9', 7: '#3d2bb8', 8: '#8a1fa8', 9: '#5e3a1a'
 }
-const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 5: 'rgb(0, 115, 111)' }
+const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 6: 'rgb(0, 89, 201)' }
 // The colors the checks choose.
 const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
 const EIGHT = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
@@ -139,7 +139,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
     }
 
-    it('a fresh install has nothing saved, and entered digits show the default palette', async () => {
+    it('a fresh install has nothing saved, and entered digits show the default colors', async () => {
       assert.equal(await saved(), null)
       await enter(0, 2, '4')
       assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
@@ -164,7 +164,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await allFills('entered', '4')(), [DEFAULT_RGB[4]])
     })
 
-    it('Save colors an entered digit, and the whole palette is saved', async () => {
+    it('Save colors an entered digit, and each digit has its color saved', async () => {
       await openEditor()
       await pick('4', FOUR.hex)
       await pick('8', EIGHT.hex)
@@ -212,6 +212,20 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await settle(count('4'), 1), 1)
     })
 
+    // (7,1) shares no row, column or box with a given 8 or another 8 mark, so the new mark is not in conflict.
+    it('undo and redo keep a corner mark\'s color right', async () => {
+      const count = async () => (await fills('corner', '8')).length
+      const before = await count()
+      await markMode('#control-corner', async () => { await enter(7, 1, '8') })
+      assert.equal(await settle(count, before + 1), before + 1)
+      assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
+      await undo()
+      assert.equal(await settle(count, before), before)
+      await redo()
+      assert.equal(await settle(count, before + 1), before + 1)
+      assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
+    })
+
     const expectColorsAfterEntry = async () => {
       assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
       assert.deepEqual(await allFills('entered', '2')(), [DEFAULT_RGB[2]])
@@ -229,7 +243,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await expectColorsAfterEntry()
     })
 
-    describe('cases the research note listed as untested', { concurrency: false }, () => {
+    describe('cases beyond the plain board', { concurrency: false }, () => {
       it('outlines on digits: the colors still apply', async () => {
         await read(() => Framework.setSetting('outlinesondigits', true))
         try {
@@ -283,16 +297,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
     })
 
-    it('Restore defaults brings the whole palette back', async () => {
+    it('Restore defaults brings back every default color', async () => {
       await openEditor()
       await dialogButton('Restore defaults').click()
       await closeWith('Save')
       assert.deepEqual(await saved(), DEFAULTS)
       assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
-      assert.deepEqual(await allFills('corner', '6')(), ['rgb(0, 89, 201)'])
+      assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_RGB[6]])
     })
 
-    it('corrupt saved settings fall back to the default palette with no thrown error', async () => {
+    it('corrupt saved settings fall back to the default colors with no thrown error', async () => {
       const errorsBefore = errors.length
       for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
         await read(([k, raw]) => {

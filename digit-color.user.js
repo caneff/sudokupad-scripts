@@ -2,7 +2,7 @@
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      0.1.0
-// @description  Colors the digits themselves, one color per digit, starting from a default palette and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens and conflicting marks keep their color.
+// @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens and conflicting marks keep their color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -75,7 +75,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { normalizeColors, setDigitColor, buildCss, digitOfText, DEFAULT_COLORS, DIGIT_ATTR, DIGITS }
+    module.exports = { normalizeColors, setDigitColor, buildCss, digitOfText, DEFAULT_COLORS, DIGIT_ATTR }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -152,7 +152,7 @@
       ]
     })
     const box = document.getElementById('digit-color-editor')
-    if (!box) return
+    if (!box) throw new Error('digit-color: the dialog has no editor element')
     const draw = () => { box.innerHTML = renderEditor(colors) }
     draw()
     box.addEventListener('click', (event) => {
