@@ -208,15 +208,16 @@
   // and the button's swatch is hidden under it. The sizes are those SudokuPad's color tool
   // uses for the same job.
   const EDITING = 'pen-color-editing'
+  const PICKER = 'pen-color-picker'
   const EDIT_CSS = [
     `.${EDITING} button[data-value]::after { opacity: 0; }`,
-    `.${EDITING} .pen-color-picker { width: 0; height: 0; overflow: visible; }`,
-    `.${EDITING} .pen-color-picker input { position: absolute; width: 2.4rem; height: 2.4rem; margin-left: 0.95rem; margin-top: 0.95rem; z-index: 10; pointer-events: all; }`
+    `.${EDITING} .${PICKER} { width: 0; height: 0; overflow: visible; }`,
+    `.${EDITING} .${PICKER} input { position: absolute; width: 2.4rem; height: 2.4rem; margin-left: 0.95rem; margin-top: 0.95rem; z-index: 10; pointer-events: all; }`
   ].join('\n')
   // The elements a hold starts on, and the ones the context menu is suppressed over: the pen
   // tool's color buttons and, in edit mode, the pickers standing in for them (a right-click
   // hold ends over a picker, and Windows opens the menu on release).
-  const HOLD_TARGETS = '.tool-pen button[data-value], .tool-pen .pen-color-picker input'
+  const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, penColorsFromPage, buildCss, DEFAULT_COLORS, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS }
@@ -329,9 +330,7 @@
                   Framework.closeDialog()
                   return
                 }
-                active = colors
-                activeMissing = edited.size ? [] : missing
-                applyColors(colors)
+                adoptColors(colors, edited.size ? [] : missing)
                 Framework.closeDialog()
               }
             },
@@ -362,11 +361,20 @@
     box.addEventListener('change', (event) => {
       const el = event.target.closest('input[type="color"]')
       if (!el) return
-      colors = { ...colors, [el.dataset.pen]: el.value.toLowerCase() }
+      colors = editedColors(colors, el.dataset.pen, el.value)
       edited.add(el.dataset.pen)
       reset = false
       draw()
     })
+  }
+
+  // Makes `colors` the set in force: the style, the dialog's starting point and any pickers
+  // already open, so every place that shows a pen color shows the same one.
+  function adoptColors (colors, missing) {
+    active = colors
+    activeMissing = missing
+    applyColors(colors)
+    document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
   }
 
   // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
@@ -374,9 +382,7 @@
   function savePenColor (pen, value) {
     const colors = editedColors(active, pen, value)
     Framework.setData(DATA_KEY, colors)
-    active = colors
-    activeMissing = []
-    applyColors(colors)
+    adoptColors(colors, [])
   }
 
   // Holding a pen color button for HOLD_TO_EDIT_MS, with either mouse button or a finger, puts
@@ -390,16 +396,20 @@
     if (leaveWatch) leaveWatch.disconnect()
     leaveWatch = null
     panel.classList.remove(EDITING)
-    panel.querySelectorAll('.pen-color-picker').forEach((el) => el.remove())
+    panel.querySelectorAll(`.${PICKER}`).forEach((el) => el.remove())
   }
 
   function enterEditMode (panel) {
-    panel.classList.add(EDITING)
-    PEN_COLORS.forEach((n) => {
+    // Every button is found before anything changes, so a missing one leaves no half edit mode.
+    const buttons = PEN_COLORS.map((n) => {
       const button = panel.querySelector(`button[data-value="${n}"]`)
-      if (!button) return
+      if (!button) throw new Error(`pen-color: the pen tool has no button for pen color ${n}`)
+      return button
+    })
+    panel.classList.add(EDITING)
+    buttons.forEach((button, i) => {
       button.insertAdjacentHTML('beforebegin',
-        `<div class="pen-color-picker"><input type="color" data-pen="${n}" value="${active[n]}"></div>`)
+        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLORS[i]}" value="${active[PEN_COLORS[i]]}"></div>`)
     })
     leaveWatch = new window.MutationObserver(() => {
       if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
@@ -414,24 +424,31 @@
 
   function installHoldToEdit () {
     let timer
+    // True from the moment a hold opens or closes edit mode until the next press anywhere.
+    let holdDone = false
     const cancel = () => { clearTimeout(timer); timer = undefined }
+    // Pointer events carry a mouse button of either kind, and touch too (touch is not tested).
     document.addEventListener('pointerdown', (event) => {
-      const target = event.target.closest && event.target.closest(HOLD_TARGETS)
-      if (!target) return
       cancel()
+      holdDone = false
+      const target = event.target.closest(HOLD_TARGETS)
+      if (!target) return
       const panel = target.closest('.tool-pen')
-      timer = setTimeout(() => toggleEditMode(panel), HOLD_TO_EDIT_MS)
+      timer = setTimeout(() => { holdDone = true; toggleEditMode(panel) }, HOLD_TO_EDIT_MS)
     }, true)
     window.addEventListener('pointerup', cancel, true)
     window.addEventListener('pointercancel', cancel, true)
-    // A right-click hold or a long touch would open the browser's menu over the picker.
+    // The browser's menu would open over the picker during a right-click hold or a long touch:
+    // when the press is still going (Linux opens it on press), or after the hold has run its
+    // course (Windows opens it on release, over the picker that appeared under the pointer).
+    // A quick right-click on a button, released before the delay, keeps its menu on Windows.
     document.addEventListener('contextmenu', (event) => {
-      if (event.target.closest && event.target.closest(HOLD_TARGETS)) event.preventDefault()
+      if ((timer !== undefined || holdDone) && event.target.closest(HOLD_TARGETS)) event.preventDefault()
     }, true)
     // `input` fires as the picker moves, so the color changes live.
     document.addEventListener('input', (event) => {
       const el = event.target
-      if (el.matches && el.matches('.pen-color-picker input')) savePenColor(el.dataset.pen, el.value)
+      if (el.matches(`.${PICKER} input`)) savePenColor(el.dataset.pen, el.value)
     })
   }
 
@@ -449,8 +466,7 @@
     })
     const saved = savedColors(Framework.getData(DATA_KEY))
     if (saved) {
-      active = saved
-      applyColors(saved)
+      adoptColors(saved, [])
       return
     }
     // Nothing saved: the pen takes the darkened current color page, read once at load. When
@@ -459,8 +475,6 @@
     // A save made in the dialog while waiting outranks the derived colors.
     if (!tool || savedColors(Framework.getData(DATA_KEY))) return
     const derived = deriveFromTool(tool)
-    active = derived.colors
-    activeMissing = derived.missing
-    applyColors(active)
+    adoptColors(derived.colors, derived.missing)
   })
 })()
