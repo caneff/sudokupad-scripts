@@ -4,6 +4,7 @@
 // e.g. the "before" script is `git show origin/main:color-by-digit.user.js > before.js`.
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
+import { openSettings } from '../../live/settings.mjs'
 
 const [scriptPath, prefix] = process.argv.slice(2)
 const url = readFileSync(new URL('../../live/puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -18,8 +19,8 @@ for (const [name, viewport] of [['desktop', { width: 1200, height: 900 }], ['pho
   await page.locator('#control-undo').waitFor()
   await page.addScriptTag({ content: script })
   await page.locator('#control-colorbydigit').waitFor({ state: 'attached' })
-  await page.click('#control-settings')
-  await page.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Color by digit' }).first().click()
+  const group = await openSettings(page)
+  await group.locator('button').filter({ hasText: 'Color by digit' }).click()
   await page.locator('#color-by-digit-editor').waitFor({ state: 'visible' })
   await page.locator('.dialog').first().screenshot({ path: `${prefix}-${name}.png` })
 }
