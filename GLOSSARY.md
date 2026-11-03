@@ -10,3 +10,6 @@
   after the dialog's "Restore defaults".
 - **preload** — a settings button that overwrites the list of groups with a
   ready-made set. It saves nothing of its own.
+- **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
+  the puzzle visibly draws, joined with every cell's box and grown by 2px, rounded outward to whole
+  pixels. The page is black outside it.
