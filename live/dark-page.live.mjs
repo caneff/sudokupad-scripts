@@ -21,8 +21,10 @@ import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
-const { RECT_ID, STYLE_ID, SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
+const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
 
+// Dark Page's button among the entries of the Experimental group.
+const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ })
 const RECT = `#${RECT_ID}`
 const STYLE = `#${STYLE_ID}`
 const BLACK = 'rgb(0, 0, 0)'
@@ -409,7 +411,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('the settings entry is a button named Dark page in the Experimental group, and it opens a dialog with the version as small text', async () => {
       const group = await openSettings(p)
-      const entry = group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ })
+      const entry = settingsEntry(group)
       assert.equal(await entry.count(), 1)
       await entry.click()
       const dialog = p.locator('.dialog')
@@ -431,10 +433,9 @@ describe('the page color dialog', { concurrency: false }, () => {
   let context, p, errors
   const bodyColor = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
   const footerColor = () => p.evaluate(() => window.getComputedStyle(document.querySelector('.controls-footer')).color)
-  const saved = () => p.evaluate(() => Framework.getData('DarkPage_color'))
+  const saved = () => p.evaluate((key) => Framework.getData(key), DATA_KEY)
   const openDialog = async () => {
-    const group = await openSettings(p)
-    await group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ }).click()
+    await settingsEntry(await openSettings(p)).click()
     await p.locator(`.dialog ${PICKER}`).waitFor({ state: 'visible' })
   }
   const dialogButton = (name) => p.locator('.dialog').getByRole('button', { name, exact: true })
@@ -453,14 +454,14 @@ describe('the page color dialog', { concurrency: false }, () => {
     // Records the script's CSS the moment its style first exists, before any frame paints with it.
     // The style stays disabled until a board is on the page, so only its text says which color the
     // first paint will use.
-    await p.addInitScript((src) => {
+    await p.addInitScript(([src, styleId]) => {
       document.addEventListener('DOMContentLoaded', () => {
         const s = document.createElement('script')
         s.textContent = src
         document.documentElement.appendChild(s)
-        window.__firstCss = document.querySelector('style[id="dark-page-style"]').textContent
+        window.__firstCss = document.getElementById(styleId).textContent
       })
-    }, script)
+    }, [script, STYLE_ID])
     await load()
   })
   after(async () => { await context.close() })
@@ -474,7 +475,7 @@ describe('the page color dialog', { concurrency: false }, () => {
     assert.equal(await saved(), '#ffcc00')
   })
 
-  it('the saved color is in force at the first frame after a reload, never black first', async () => {
+  it('the stylesheet the script first writes after a reload already holds the saved color, never black', async () => {
     await load()
     const firstCss = await p.evaluate(() => window.__firstCss)
     assert.match(firstCss, /body \{ background-color: #ffcc00 !important \}/)

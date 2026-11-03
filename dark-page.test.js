@@ -4,11 +4,11 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor } = require('./dark-page.user.js')
+const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY } = require('./dark-page.user.js')
 
 // The rules buildCss returns, one per line, as { selector, declarations }.
 function rules () {
-  return buildCss().split('\n').map((line) => {
+  return buildCss(DEFAULT_COLOR).split('\n').map((line) => {
     const m = /^(.*?) \{ (.*) \}$/.exec(line)
     assert.ok(m, `not a one-line rule: ${line}`)
     return { selector: m[1], declarations: m[2] }
@@ -27,13 +27,32 @@ test('the page background is the color given', () => {
   assert.equal(given, 'body { background-color: #336699 !important }')
 })
 
-test('textColorFor gives light text on a dark page and dark text on a light one, switching on the color\'s lightness', () => {
+test('textColorFor gives light text on a dark page and dark text on a light one, switching where their contrast with the page color is equal', () => {
   assert.equal(textColorFor('#000000'), '#dddddd')
   assert.equal(textColorFor('#333333'), '#dddddd')
   assert.equal(textColorFor('#0000ff'), '#dddddd')
   assert.equal(textColorFor('#ffffff'), '#222222')
   assert.equal(textColorFor('#cccccc'), '#222222')
   assert.equal(textColorFor('#ffff00'), '#222222')
+  // Mid greys either side of the contrast crossover, where a plain half-way split on lightness differs.
+  assert.equal(textColorFor('#777777'), '#222222')
+  assert.equal(textColorFor('#707070'), '#dddddd')
+})
+
+test('readSavedColor reads the saved color through the Framework, and reports a Framework it cannot read as nothing saved', () => {
+  assert.equal(readSavedColor({ getData: (key) => (key === DATA_KEY ? '#ABCDEF' : null) }), '#abcdef')
+  assert.equal(readSavedColor({ getData: () => null }), null)
+  assert.equal(readSavedColor({}), null)
+  assert.equal(readSavedColor(null), null)
+  const logged = []
+  const original = console.error
+  console.error = (...args) => logged.push(args)
+  try {
+    assert.equal(readSavedColor({ getData: () => { throw new Error('storage blocked') } }), null)
+  } finally {
+    console.error = original
+  }
+  assert.equal(logged.length, 1)
 })
 
 test('the credit line takes the text color for the page color given', () => {

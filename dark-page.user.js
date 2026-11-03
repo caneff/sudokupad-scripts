@@ -45,6 +45,20 @@
     return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
   }
 
+  // The color saved through `framework`, or null when there is none or it cannot be read. A page
+  // without SudokuPad's Framework has nothing saved. A Framework whose storage throws (a frame with
+  // storage blocked) is reported and treated as nothing saved, so the page still gets the default
+  // darkening, which needs no Framework.
+  function readSavedColor (framework) {
+    if (!framework || typeof framework.getData !== 'function') return null
+    try {
+      return savedColor(framework.getData(DATA_KEY))
+    } catch (error) {
+      console.error('dark-page: could not read the saved color, using the default', error)
+      return null
+    }
+  }
+
   // The WCAG relative luminance of a #rrggbb color, 0 (black) to 1 (white).
   function luminance (color) {
     const [r, g, b] = [1, 3, 5].map((i) => {
@@ -71,7 +85,7 @@
   // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
   // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
   // that changes nothing.
-  function buildCss (pageColor = DEFAULT_COLOR) {
+  function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     return [
       rule('body', `background-color: ${pageColor}`),
@@ -146,7 +160,7 @@
   const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, DEFAULT_COLOR, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
+    module.exports = { VERSION, DATA_KEY, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
   if (typeof document === 'undefined') return
 
@@ -191,8 +205,7 @@
 
   // The saved color is read before the first paint of the style, so a saved color never shows the
   // default first. Framework.getData works as soon as Framework exists, before the app is ready.
-  const hasData = typeof Framework !== 'undefined' && typeof Framework.getData === 'function'
-  let pageColor = (hasData && savedColor(Framework.getData(DATA_KEY))) || DEFAULT_COLOR
+  let pageColor = readSavedColor(typeof Framework === 'undefined' ? null : Framework) || DEFAULT_COLOR
 
   const style = document.createElement('style')
   style.id = STYLE_ID
@@ -245,10 +258,10 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Dark page</b> <small style="opacity:0.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<b>Dark page</b> <small style="opacity:.6">v${VERSION}</small>` },
         {
           tag: 'text',
-          innerHTML: '<div id="dark-page-editor" style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+          innerHTML: '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
             `<input type="color" id="dark-page-input" value="${picked}">` +
             '<button type="button" id="dark-page-reset">Black</button></div>'
         },
