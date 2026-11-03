@@ -178,3 +178,30 @@ three injection times, by `live/digit-color.live.mjs`. Not run through Tampermon
   top-level `PuzzleLoader`, which is not a `window` property.
 - A mark conflicts with a given in its row, column or box, so a test mark needs a cell
   chosen against the givens.
+
+## Two kinds of pencil mark, with duplicates
+
+Tested 2026-11-03 on sudokupad.app in headless Chromium, with a scratch prototype
+injected into the page. No script exists yet.
+
+- `pencilmarks` and `candidates` store any string, unvalidated. `Cell.toggleProp`
+  toggles and sorts the list, so `"1"` and `"a"` coexist as different marks. A
+  multi-character string renders one element per character, so a stand-in must be
+  one character.
+- Prototype: a wrapper on `Framework.app.act` turned digit `1`-`9` into `a`-`i` while
+  a toggle was on, and a `MutationObserver` on `#svgrenderer` rewrote the rendered
+  text to the digit and set its `fill`. A real key press went through the wrapper in
+  corner and centre mode. The stand-in stays in `data-val`, so the observer can tell
+  the two kinds apart after a repaint.
+- Those marks worked with SudokuPad's own undo, redo and toggling off, and survived a
+  reload. The action log records them as ordinary marks (`pm:a`).
+- Without the script, a stored stand-in shows as its letter, so a shared replay or
+  saved progress opened elsewhere shows `a`, not a colored `1`.
+- SudokuPad's conflict check does not see a stand-in: a second-kind `5` in a row with
+  a given `5` got no `conflict` class, while the ordinary `5` beside it did. The
+  ordinary mark then turns `rgb(179, 58, 58)`, so a red second kind cannot be told
+  from a conflicting first kind.
+- A cell holding 18 corner marks showed only about ten positions, packed and
+  overlapping. Two plus two marks laid out cleanly.
+- Not tested: the on-screen digit buttons, several selected cells, Clear, SudokuPad's
+  automatic mark removal on entering a digit, 0, and a puzzle whose digits use letters.
