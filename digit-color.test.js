@@ -79,10 +79,11 @@ test('a mark in the conflict state keeps the digit color: no rule outlines it or
   assert.doesNotMatch(css, /stroke|conflict|cell-given/)
 })
 
-test('the circle CSS shows the circles only while SudokuPad shows conflicts, never takes a pointer event, and fills with a translucent red', () => {
+test('the circle CSS shows the circles only while SudokuPad shows conflicts, never takes a pointer event, and fills with a translucent color', () => {
   assert.match(CIRCLE_CSS, /#digit-color-circles\s*{[^}]*display:\s*none/)
   assert.match(CIRCLE_CSS, /\.setting-checkpencilmarks #digit-color-circles\s*{[^}]*display:\s*inline/)
   assert.match(CIRCLE_CSS, /#digit-color-circles\s*{[^}]*pointer-events:\s*none/)
+  assert.match(CIRCLE_CSS, /#digit-color-circles circle\s*{[^}]*fill:\s*#[0-9a-f]{6}/i)
   assert.match(CIRCLE_CSS, /#digit-color-circles circle\s*{[^}]*fill-opacity:\s*0?\.\d/)
 })
 
@@ -92,6 +93,7 @@ test('circleFor centres on the mark\'s middle and is sized by its width', () => 
   assert.equal(c.cx, 352)
   assert.equal(c.cy, 35.8)
   assert.ok(c.r >= 7 && c.r <= 10, `r ${c.r}`)
+  assert.equal(circleFor({ x: 352, y: 35.8, width: 20 }).r, 2 * c.r)
 })
 
 test('digitOfText reads a single digit and nothing else', () => {

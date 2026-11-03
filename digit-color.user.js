@@ -87,11 +87,12 @@
   }
 
   // The group of conflict circles is hidden unless SudokuPad shows conflicts, so the setting alone
-  // turns them on and off. SVG paint has no pointer events to give the marks, so none are taken.
+  // turns them on and off. The group takes no pointer events, and its circles inherit that, so a
+  // click on a circle reaches the board.
   const CIRCLE_CSS = [
     `#${CIRCLES_ID} { display: none; pointer-events: none }`,
     `${CHECK_MARKS_CLASS} #${CIRCLES_ID} { display: inline }`,
-    `#${CIRCLES_ID} circle { fill: ${CIRCLE_FILL}; fill-opacity: ${CIRCLE_OPACITY}; pointer-events: none }`
+    `#${CIRCLES_ID} circle { fill: ${CIRCLE_FILL}; fill-opacity: ${CIRCLE_OPACITY} }`
   ].join('\n')
 
   // The circle behind a mark, from the mark's middle and width in the board's units.
@@ -134,9 +135,11 @@
   // attributes omit, so the point is mapped through the `text`'s transform into `space`, which
   // holds a translation and a scale only.
   function markMiddle (mark, space) {
-    const text = mark.localName === 'tspan' ? mark.parentNode : mark
-    const extent = mark.localName === 'tspan' ? mark.getExtentOfChar(0) : mark.getBBox()
-    const x = mark.localName === 'tspan' ? extent.x + extent.width / 2 : Number(text.getAttribute('x'))
+    const isTspan = mark.localName === 'tspan'
+    const text = isTspan ? mark.parentNode : mark
+    const extent = isTspan ? mark.getExtentOfChar(0) : mark.getBBox()
+    const x = isTspan ? extent.x + extent.width / 2 : Number(text.getAttribute('x'))
+    if (!text.hasAttribute('y') || (!isTspan && !text.hasAttribute('x'))) throw new Error('digit-color: a mark has no position to draw its circle at')
     const toSpace = space.getCTM().inverse().multiply(text.getCTM())
     const point = new window.DOMPoint(x, Number(text.getAttribute('y'))).matrixTransform(toSpace)
     return { x: point.x, y: point.y, width: extent.width * toSpace.a }

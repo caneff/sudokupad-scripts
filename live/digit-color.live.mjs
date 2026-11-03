@@ -25,6 +25,8 @@ const CONFLICT_RED = 'rgb(179, 58, 58)'
 // How far from the digit's middle, in screen pixels, a circle may sit and still read as centred.
 const CENTRE_TOLERANCE = 2.5
 const CIRCLES = '#digit-color-circles'
+// A mark in SudokuPad's conflict state, per place on the board.
+const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
 // The default colors (issue #7), as the dialog's #rrggbb. The map is the independent source
 // the saved value is compared with; RGB is the same colors as the page computes them.
 const DEFAULTS = {
@@ -87,30 +89,29 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const allOf = (property) => (place, digit, conflict) => async () => [...new Set(await styleOf(property, place, digit, conflict))]
     const allFills = allOf('fill')
 
-    // Every circle in the group, as it is drawn: its centre and radius, and whether it paints at all.
-    const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => ({
-      ...(({ x, y }) => ({ cx: x, cy: y }))(new window.DOMPoint(Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))).matrixTransform(c.getScreenCTM())),
-      r: Number(c.getAttribute('r')),
-      shown: window.getComputedStyle(c.parentNode).display !== 'none'
-    })), CIRCLES)
-    const conflictCount = () => read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark.conflict, #cell-candidates tspan.conflict').length)
+    // Every circle in the group, as it is drawn: its centre in screen pixels and radius, and whether it paints at all.
+    const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
+      const centre = new window.DOMPoint(Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))).matrixTransform(c.getScreenCTM())
+      return { cx: centre.x, cy: centre.y, r: Number(c.getAttribute('r')), shown: window.getComputedStyle(c.parentNode).display !== 'none' }
+    }), CIRCLES)
+    // Circles drawn beyond one per conflicting mark on the board: zero when each mark has its own and no other stands.
+    const extraCircles = () => read(([circles, conflicting]) => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length, [CIRCLES, Object.values(CONFLICTING).join(',')])
     // The middle of each conflicting mark of `digit` in `place` and the middle of every circle, both
     // in screen pixels so the board's own transforms are the page's to apply. A mark's middle is the
     // middle of the box the browser reports for it.
-    const middles = (place, digit) => read(([place, digit]) => {
-      const sel = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }[place]
+    const middles = (place, digit) => read(([sel, digit]) => {
       return [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit).map((e) => {
         const box = e.getBoundingClientRect()
         return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 }
       })
-    }, [place, digit])
-    // How many conflicting marks of `digit` in `place` there are and how many have a shown circle centred
-    // on them, and how many circles beyond one per conflicting mark on the board are drawn.
+    }, [CONFLICTING[place], digit])
+    // How many conflicting marks of `digit` in `place` there are, how many of them have a shown circle
+    // centred on them, and how many circles are drawn beyond one per conflicting mark on the board.
     const circleState = (place, digit) => async () => {
       const marks = await middles(place, digit)
       const drawn = await circles()
       const centred = marks.filter((m) => drawn.some((c) => c.shown && Math.hypot(c.cx - m.cx, c.cy - m.cy) <= CENTRE_TOLERANCE))
-      return { marks: marks.length, centred: centred.length, extra: drawn.length - await conflictCount() }
+      return { marks: marks.length, centred: centred.length, extra: await extraCircles() }
     }
     const circled = (marks) => ({ marks, centred: marks, extra: 0 })
 
@@ -232,24 +233,26 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       }
     })
 
-    it('a circle lets pointer events through to the board', async () => {
+    // SudokuPad's own layers already pass `pointer-events: none` down, so this cannot go red if the
+    // script's rule is removed; the unit test reads that rule. It does fail if a rule gave a circle events.
+    it('a circle takes no pointer events: a click at its edge reaches the board', async () => {
       // The circle's right edge, where no digit sits on top of it.
-      const hit = await read(() => {
-        const circle = document.querySelector('#digit-color-circles circle')
+      const hit = await read(([circles]) => {
+        const circle = document.querySelector(circles + ' circle')
         const edge = new window.DOMPoint(Number(circle.getAttribute('cx')) + 0.9 * Number(circle.getAttribute('r')), Number(circle.getAttribute('cy')))
         const pt = edge.matrixTransform(circle.getScreenCTM())
         const el = document.elementFromPoint(pt.x, pt.y)
-        return el && el.closest('#digit-color-circles') ? 'circle' : 'board'
-      })
-      assert.equal(hit, 'board')
+        return { pointerEvents: window.getComputedStyle(circle).pointerEvents, hit: el && el.closest(circles) ? 'circle' : 'board' }
+      }, [CIRCLES])
+      assert.deepEqual(hit, { pointerEvents: 'none', hit: 'board' })
     })
 
     // The page's clock changes text every second and redraws the circles anyway, so this reads the
     // circles two frames after the class change, before a tick is likely.
     it('a mark entering or leaving the conflict state with no other change on the page gets or loses its circle at once', async () => {
       // Circles drawn beyond one per conflicting mark, read two frames after each class change.
-      const extraAfterToggle = await read(async () => {
-        const extra = () => document.querySelectorAll('#digit-color-circles circle').length - document.querySelectorAll('#cell-pencilmarks .cell-pencilmark.conflict, #cell-candidates tspan.conflict').length
+      const extraAfterToggle = await read(async ([circles, conflicting]) => {
+        const extra = () => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length
         const twoFrames = () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
         const mark = document.querySelector('#cell-pencilmarks .cell-pencilmark:not(.conflict)')
         mark.classList.add('conflict')
@@ -258,7 +261,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         mark.classList.remove('conflict')
         await twoFrames()
         return [entered, extra()]
-      })
+      }, [CIRCLES, Object.values(CONFLICTING).join(',')])
       assert.deepEqual(extraAfterToggle, [0, 0])
     })
 
@@ -286,6 +289,57 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
       await undo()
       assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
+    })
+
+    // The circles' own redraw must not queue another redraw. Drawing is counted as childList records
+    // on the group over 20 frames; the page clock may cause one honest redraw (two records) in that
+    // window, and a loop would cause one every frame.
+    it('drawing the circles does not retrigger the drawing', async () => {
+      const records = await read(async ([circles]) => {
+        let count = 0
+        const observer = new window.MutationObserver((list) => { count += list.length })
+        observer.observe(document.querySelector(circles), { childList: true })
+        for (let i = 0; i < 20; i++) await new Promise((resolve) => window.requestAnimationFrame(resolve))
+        observer.disconnect()
+        return count
+      }, [CIRCLES])
+      assert.ok(records <= 6, `${records} childList records on the circles in 20 frames`)
+    })
+
+    // (8,2) takes a 1 mark with no conflict; a 1 entered at (8,0), in the same row, puts it in conflict.
+    it('a circle goes when SudokuPad clears a conflict and the mark stays, and returns with it', async () => {
+      await markMode('#control-corner', async () => { await enter(8, 2, '1') })
+      assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
+      await enter(8, 0, '1')
+      assert.deepEqual(await settle(circleState('corner', '1'), circled(1)), circled(1))
+      await p.keyboard.press('Delete')
+      assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
+      assert.equal(await read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark[data-val="1"]').length), 1)
+      await undo()
+      assert.deepEqual(await settle(circleState('corner', '1'), circled(1)), circled(1))
+      await undo()
+      await undo()
+      assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
+    })
+
+    // SudokuPad's replay encodes its undo stack, so the string is not the same after an undo and a
+    // redo; this checks that it still encodes the moves, not that playback works (playback stays owed).
+    it('SudokuPad\'s own undo and replay are unaffected: the replay still encodes the moves and tracks undo', async () => {
+      const replay = () => read(() => Framework.app.getReplay())
+      await markMode('#control-corner', async () => { await enter(0, 6, '5') })
+      try {
+        const recorded = await replay()
+        assert.match(recorded, /^\{"type":"clzw"/)
+        await undo()
+        const undone = await replay()
+        assert.match(undone, /^\{"type":"clzw"/)
+        assert.notEqual(undone, recorded)
+        assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
+        await redo()
+        assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
+      } finally {
+        await undo()
+      }
     })
 
     it('undo, redo and a changed digit keep the colors right', async () => {
@@ -379,6 +433,12 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await enter(0, 3, '4')
         assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
         assert.equal(await p.locator(STYLE).count(), 1)
+        // The rebuilt board gets one circle group, and a conflicting mark on it gets its circle.
+        await markMode('#control-corner', async () => { await enter(0, 7, '5') })
+        // The corner 5 at (0,5) survived the rebuild, so two conflicting corner 5s each have a circle.
+        assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
+        assert.equal(await p.locator(CIRCLES).count(), 1)
+        await undo()
       })
     })
 
