@@ -26,7 +26,6 @@
 - **edit mode** — Pen Color's state after a hold on a pen color button: a color picker sits over
   each of the nine pen buttons. A second hold, or leaving the pen tool, ends it. SudokuPad's color
   tool has the same state for its cell color buttons.
-
 - **edge mark** — a pen mark on a cell edge: SudokuPad's own X, or one of the
   marks this script adds (a direction arrow or a dot). Each one is a single
   character in the pen value of the cell that stores the edge.
