@@ -5,27 +5,44 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SudokuPad scripts</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { max-width: 44rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
-  section { display: flex; gap: 1.25rem; align-items: flex-start; margin: 2rem 0; }
-  section img { flex: none; max-width: 100%; height: auto; }
+  :root {
+    color-scheme: light dark;
+    /* SudokuPad's own button purple, read from its controls: rgb(106, 27, 154). */
+    --accent: #6a1b9a; --on-accent: #fff; --rule: #bbb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --accent: #d2a8f0; --on-accent: #1a0a24; --rule: #555; }
+  }
+  body { max-width: 68rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
+  a { color: var(--accent); }
   h1, h2 { margin: 0 0 .5rem; }
   h2 { font-size: 1.2rem; }
   p { margin: 0 0 .5rem; }
+  .entries { display: grid; grid-template-columns: 1fr; gap: 1px; margin: 1.5rem 0; background: var(--rule); border-block: 1px solid var(--rule); }
+  section { display: flex; gap: 1.25rem; align-items: flex-start; padding: 1.25rem 1rem 1rem 0; background: Canvas; }
+  section img { flex: none; max-width: 45%; height: auto; }
+  .install { display: inline-block; padding: .2rem .7rem; border-radius: 3px; background: var(--accent); color: var(--on-accent); font-size: .9rem; text-decoration: none; }
+  .install:hover, .install:focus-visible { text-decoration: underline; }
+  @media (min-width: 52rem) {
+    .entries { grid-template-columns: 1fr 1fr; }
+    section { padding-left: 1rem; }
+    section:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  }
   @media (max-width: 36rem) {
-    section { flex-direction: column; gap: .75rem; }
+    section { flex-direction: column; gap: .75rem; padding-left: 0; }
   }
 </style>
 </head>
 <body>
   <h1>SudokuPad scripts</h1>
   <p>A few small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, click a script's install link, and Tampermonkey asks if you want it.</p>
+  <div class="entries">
   <section>
     <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/site-color-by-digit.png" alt="A sudoku grid with cells colored by digit" width="220" height="220">
     <div>
       <h2>Color by Digit</h2>
       <p>A button that colors cells by their digit, in groups you set in a dialog. Empty cells whose centre marks all fall in one group get colored too.</p>
-      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
     </div>
   </section>
   <section>
@@ -33,7 +50,7 @@
     <div>
       <h2>Digit Color</h2>
       <p>Gives each digit its own color, in entered digits and in corner and centre marks. A mark that conflicts gets a small red circle behind it.</p>
-      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/digit-color.user.js">Install Digit Color</a></p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/digit-color.user.js">Install Digit Color</a></p>
     </div>
   </section>
   <section>
@@ -41,7 +58,7 @@
     <div>
       <h2>Pen Color</h2>
       <p>Makes the pen's nine colors match your cell colors, a little darker. Hold a pen color button to change it. Turn the pen tool on in SudokuPad's settings first.</p>
-      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-color.user.js">Install Pen Color</a></p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-color.user.js">Install Pen Color</a></p>
     </div>
   </section>
   <section>
@@ -49,7 +66,7 @@
     <div>
       <h2>Edge Marks</h2>
       <p>Click a cell edge with the pen to cycle an X, two arrows and a dot. It leans on SudokuPad internals, so an update can break it. Turn the pen tool on in settings first.</p>
-      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/edge-marks.user.js">Install Edge Marks</a></p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/edge-marks.user.js">Install Edge Marks</a></p>
     </div>
   </section>
   <section>
@@ -57,9 +74,10 @@
     <div>
       <h2>Dark Page</h2>
       <p>Turns the page black around the puzzle, or any color you pick. The puzzle and the cells you write in stay as SudokuPad draws them. It is not SudokuPad's dark mode.</p>
-      <p><a href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install Dark Page</a></p>
+      <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install Dark Page</a></p>
     </div>
   </section>
+  </div>
   <p><a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
 </body>
 </html>
