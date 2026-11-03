@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines, circles, crosses and edge marks are with one slider, and adds direction arrows and a circle to the marks a click on a cell edge cycles through. Relies on SudokuPad internals for the edge marks, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.0.0'
+  const VERSION = '1.1.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -29,6 +29,8 @@
   const THICKNESS_KEY = 'PenColor_thickness'
   const MARKS_KEY = 'EdgeMarks_marks'
   const STYLE_ID = 'pen-tool-extras-style'
+  // The element SudokuPad draws the grid in.
+  const GRID_SELECTOR = '#svgrenderer'
   const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad's own pen colors (tool-pen.css), as #rrggbb. Pen color 9 is written there as
   // rgb(-36, -36, -36), which clamps to black.
@@ -138,25 +140,37 @@
     return type === 'x' ? edge : ADDED[edge][CYCLE.indexOf(type) - 1]
   }
 
-  // The type of mark after `current` ('empty' or a type), skipping unticked types. 'empty' is
-  // always allowed. A `current` whose type is unticked still moves on.
-  function nextType (current, settings) {
+  // The type of mark `direction` steps (1 forward, -1 backward) from `current` ('empty' or a
+  // type) round the cycle, skipping unticked types. 'empty' is always allowed. A `current`
+  // whose type is unticked still moves on.
+  function stepType (current, settings, direction) {
     const order = [...CYCLE, 'empty']
     const from = order.indexOf(current)
     for (let step = 1; step <= order.length; step++) {
-      const type = order[(from + step) % order.length]
+      const type = order[(((from + direction * step) % order.length) + order.length) % order.length]
       if (type === 'empty' || settings[MARK_SETTING_OF[type]]) return type
     }
     throw new Error('pen-tool-extras: the cycle has no empty step')
   }
 
+  // The type of mark a left click moves to from `current`.
+  function nextType (current, settings) {
+    return stepType(current, settings, 1)
+  }
+
+  // The type of mark a right click moves to from `current`: the same cycle, backwards.
+  function previousType (current, settings) {
+    return stepType(current, settings, -1)
+  }
+
   // What one click on the edge whose X value is `edge` does to a cell that holds the pen
   // values `present`: { remove, add }, the values to toggle off and the one to toggle on (or
-  // null). Null when nothing is ticked, so the click does nothing.
-  function planClick (edge, present, settings) {
+  // null). Null when nothing is ticked, so the click does nothing. `backwards` steps the cycle
+  // the other way.
+  function planClick (edge, present, settings, backwards = false) {
     if (!Object.keys(DEFAULT_MARK_SETTINGS).some((key) => settings[key])) return null
     const held = CYCLE.filter((type) => present.includes(valueOfType(edge, type)))
-    const next = nextType(held.length ? held[0] : 'empty', settings)
+    const next = (backwards ? previousType : nextType)(held.length ? held[0] : 'empty', settings)
     return {
       remove: held.map((type) => valueOfType(edge, type)),
       add: next === 'empty' ? null : valueOfType(edge, next)
@@ -353,6 +367,7 @@
       buildThicknessCss,
       normalizeMarkSettings,
       nextType,
+      previousType,
       planClick,
       shapeOf,
       shapePath,
@@ -448,39 +463,72 @@
     }
   }
 
+  // Runs the original `clickCell` with its `actSend` held back and returns the actions it
+  // queued (null when it queued none), leaving the tool's action list empty.
+  function queuedActs (tool, original, args) {
+    const hadOwn = Object.prototype.hasOwnProperty.call(tool, 'actSend')
+    const ownSend = tool.actSend
+    let queued = null
+    tool.actSend = function () { queued = this._actList.slice() }
+    try {
+      original.apply(tool, args)
+    } finally {
+      if (hadOwn) tool.actSend = ownSend
+      else delete tool.actSend
+    }
+    tool._actList.length = 0
+    return queued
+  }
+
+  // An edge click has a select action and one pen action with an edge X value.
+  function isEdgeActs (acts) {
+    return acts !== null && acts.length === 2 && acts[0].type === 'select' && acts[1].type === 'pen' && EDGE_X.includes(acts[1].arg)
+  }
+
+  // The mouse button of the latest press or release. SudokuPad calls `clickCell` on the
+  // release, with no event, so the button is read from the pointer events before it.
+  let lastButton = 0
+  const RIGHT_BUTTON = 2
+
+  function trackButton () {
+    const remember = (event) => { lastButton = event.button }
+    window.addEventListener('pointerdown', remember, true)
+    window.addEventListener('pointerup', remember, true)
+  }
+
   // Chooses the mark for an edge click. The original `clickCell` runs unchanged, so its
   // edge-versus-cell hit test decides what was clicked; its `actSend` is held back to see
-  // the actions it queued. An edge click has a select action and one pen action with an
-  // edge X value; those are replaced by this script's cycle, and everything else is sent as
-  // it was. The actions still go out through `actSend`, one group per click, so one undo
-  // reverses one click.
+  // the actions it queued. An edge click is replaced by this script's cycle (backwards after a
+  // right click), and everything else is sent as it was. The actions still go out through
+  // `actSend`, one group per click, so one undo reverses one click. Returns a function that
+  // says whether a click at the pointer's current position would be an edge click, without
+  // doing it.
   function wrapClickCell (tool) {
     const original = tool.clickCell
     tool.clickCell = function () {
-      const hadOwn = Object.prototype.hasOwnProperty.call(this, 'actSend')
-      const ownSend = this.actSend
-      let queued = null
-      this.actSend = function () { queued = this._actList.slice() }
-      try {
-        original.apply(this, arguments)
-      } finally {
-        if (hadOwn) this.actSend = ownSend
-        else delete this.actSend
-      }
+      const queued = queuedActs(this, original, arguments)
       if (queued === null) return
-      const [select, pen] = queued
-      const isEdgeClick = queued.length === 2 && select.type === 'select' && pen.type === 'pen' && EDGE_X.includes(pen.arg)
       let acts = queued
-      if (isEdgeClick) {
+      if (isEdgeActs(queued)) {
+        const [select, pen] = queued
         const cell = select.arg[0]
-        const plan = planClick(pen.arg, (cell.pen || []).map((valueColor) => valueColor[0]), markSettings)
+        const plan = planClick(pen.arg, (cell.pen || []).map((valueColor) => valueColor[0]), markSettings, lastButton === RIGHT_BUTTON)
         if (plan === null) return
         acts = [select, ...plan.remove.map((arg) => ({ type: 'pen', arg })), ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])]
       }
-      this._actList.length = 0
       acts.forEach((act) => this.actAdd(act))
       this.actSend()
     }
+    return () => isEdgeActs(queuedActs(tool, original, []))
+  }
+
+  // The pen tool steps an edge backwards on a right click, so the browser's menu must not open
+  // over it. The check runs the pen tool's own hit test at the pointer, so only an edge counts:
+  // a right click in a cell's middle, with another tool, or off the grid keeps its menu.
+  function suppressEdgeMenu (app, isEdgeClick) {
+    document.addEventListener('contextmenu', (event) => {
+      if (app.tool === 'pen' && event.target.closest(GRID_SELECTOR) && isEdgeClick()) event.preventDefault()
+    }, true)
   }
 
   // Cells drawn before the wrap hold values the old `renderPen` drew as nothing.
@@ -503,7 +551,9 @@
       return
     }
     wrapRenderPen(proto, renderer)
-    wrapClickCell(tool)
+    const isEdgeClick = wrapClickCell(tool)
+    trackButton()
+    suppressEdgeMenu(app, isEdgeClick)
     redrawAddedMarks(app)
   }
 

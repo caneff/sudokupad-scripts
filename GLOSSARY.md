@@ -29,9 +29,9 @@
 - **edge mark** — a pen mark on a cell edge: SudokuPad's own X, or one of the
   marks Pen Tool Extras adds (a direction arrow or the edge circle). Each one is a single
   character in the pen value of the cell that stores the edge.
-- **edge cycle** — the order a click on an edge steps through its marks: X,
+- **edge cycle** — the order a left click on an edge steps through its marks: X,
   first direction, second direction, circle, empty, skipping any type unticked in
-  the settings dialog.
+  the settings dialog. A right click steps the same cycle backwards.
 - **thickness** — the one slider setting the stroke width of the pen's free lines, the cell circle and
   cross (pen values 5 and 6) and every edge mark, from 1 to 12, saved under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle)

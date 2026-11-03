@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
   HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
-  nextType, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS
+  nextType, previousType, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS
 } = require('./pen-tool-extras.user.js')
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
@@ -400,6 +400,47 @@ test('a mark whose type is unticked moves to the next ticked mark, or to empty',
   assert.equal(nextType('x', { x: false, directions: false, dot: true }), 'dot')
   assert.equal(nextType('x', { x: false, directions: false, dot: false }), 'empty')
   assert.equal(nextType('dot', { x: true, directions: false, dot: false }), 'empty')
+})
+
+test('with everything ticked the backward cycle is empty, circle, other direction, direction, X, empty', () => {
+  const seen = []
+  let type = 'empty'
+  for (let i = 0; i < 5; i++) {
+    type = previousType(type, ALL)
+    seen.push(type)
+  }
+  assert.deepEqual(seen, ['dot', 'dirB', 'dirA', 'x', 'empty'])
+})
+
+test('going backwards from empty lands on the last ticked mark, and from the X on empty', () => {
+  assert.equal(previousType('empty', { x: true, directions: true, dot: false }), 'dirB')
+  assert.equal(previousType('empty', { x: true, directions: false, dot: false }), 'x')
+  assert.equal(previousType('x', ALL), 'empty')
+  assert.equal(previousType('empty', NONE), 'empty')
+})
+
+test('going backwards skips an unticked type', () => {
+  assert.equal(previousType('dot', { x: true, directions: false, dot: true }), 'x')
+  assert.equal(previousType('dirA', { x: false, directions: true, dot: true }), 'empty')
+  assert.equal(previousType('dot', { x: false, directions: true, dot: true }), 'dirB')
+})
+
+test('a mark whose type is unticked moves back to the previous ticked mark, or to empty', () => {
+  assert.equal(previousType('dot', { x: true, directions: false, dot: false }), 'x')
+  assert.equal(previousType('dirB', { x: false, directions: false, dot: true }), 'empty')
+  assert.equal(previousType('dirA', NONE), 'empty')
+})
+
+test('backwards on a right edge goes empty, j, i, h, 3, empty', () => {
+  assert.deepEqual(planClick('3', [], ALL, true), { remove: [], add: 'j' })
+  assert.deepEqual(planClick('3', ['j'], ALL, true), { remove: ['j'], add: 'i' })
+  assert.deepEqual(planClick('3', ['i'], ALL, true), { remove: ['i'], add: 'h' })
+  assert.deepEqual(planClick('3', ['h'], ALL, true), { remove: ['h'], add: '3' })
+  assert.deepEqual(planClick('3', ['3'], ALL, true), { remove: ['3'], add: null })
+})
+
+test('backwards with nothing ticked does nothing', () => {
+  assert.equal(planClick('3', ['3'], NONE, true), null)
 })
 
 test('a click on an empty right edge adds the X, which is the character 3', () => {
