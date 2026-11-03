@@ -242,7 +242,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const s = window.getComputedStyle(e)
         return { cap: s.strokeLinecap, width: s.strokeWidth, fill: s.fill, d: e.getAttribute('d').replace(/^M[\d. ]+ /, '') }
       })
-      const want = { cap: 'round', width: '2.5px', fill: 'none', d: 'm -4.4,0 a 4.4,4.4 0 1,0 8.8,0 a 4.4,4.4 0 1,0 -8.8,0' }
+      const want = { cap: 'round', width: '2.5px', fill: 'none', d: 'm -6.64,0 a 6.64,6.64 0 1,0 13.28,0 a 6.64,6.64 0 1,0 -13.28,0' }
       assert.deepEqual(await settle(ring, want), want)
       await clearMarks()
     })

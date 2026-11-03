@@ -1,7 +1,7 @@
 // Takes the Pen Tool Extras pictures in docs/research/, the mascot hidden:
 //   site-pen-tool-extras.png         the homepage picture: colored pen lines in pen colors 4-9 beside edge
 //                                    marks (X, arrows, circle) in several pen colors, at the defaults
-//   pen-tool-extras-dialog.png       the merged settings dialog, its thickness slider at 6
+//   pen-tool-extras-dialog.png       the merged settings dialog, its thickness slider at the default 5
 //   pen-tool-extras-thin.png         the same drawing at thickness 2
 //   pen-tool-extras-thick.png        the same drawing at thickness 11
 // The thin and thick pictures are the dialog's live preview, taken before Cancel.
@@ -84,7 +84,6 @@ const slide = (value) => page.locator('#pen-tool-extras-editor input[type=range]
   .evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 
 await openDialog()
-await slide(6)
 await page.locator('.dialog').screenshot({ path: out('pen-tool-extras-dialog.png') })
 // The dialog sits over the board, so its preview is shown by moving the pointer-free overlay
 // away: only the board is cropped, from a page screenshot taken with the dialog hidden.

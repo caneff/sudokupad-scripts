@@ -457,7 +457,7 @@ test('shapeOf names the arrow each character draws, per edge', () => {
   }
 })
 
-test('the edge circle is an open ring closed back at the edge midpoint, a little wider than a 7 unit point', () => {
+test('the edge circle is an open ring closed back at the edge midpoint, about 1.7 times an old 7 unit point across', () => {
   // Two half-circle arcs of radius r, from -r to +r and back: relative moves sum to zero.
   const m = /^ m (-?[\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 (-?[\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 (-?[\d.]+),0$/.exec(shapePath('o', 8))
   assert.notEqual(m, null)
@@ -468,9 +468,17 @@ test('the edge circle is an open ring closed back at the edge midpoint, a little
   assert.equal(r1, -rx)
   assert.equal(to, 2 * rx)
   assert.equal(back, -2 * rx)
-  // The ring's outer diameter (path plus its 2.5 stroke) is a little more than 7 and under an arrow's reach.
+  // At the default the ring's outer diameter (path plus its 2.5 stroke) is about 16 units, a
+  // 64 unit cell's quarter, against 11.3 before and a 7 unit point before that.
   const outer = 2 * rx + 2.5
-  assert.equal(outer > 7 && outer < 14, true, String(outer))
+  assert.equal(outer > 15 && outer < 17, true, String(outer))
+})
+
+test('the edge circle\'s hole stays clearly open at the largest thickness', () => {
+  const rx = Number(/ a ([\d.]+),/.exec(shapePath('o', 8))[1])
+  const stroke = THICKNESS.max * 0.5
+  // The inner radius is the path radius less half the stroke: more than a stroke's width.
+  assert.equal(rx - stroke / 2 > stroke / 2, true, `${rx} ${stroke}`)
 })
 
 test('an arrow is a two-segment chevron pointing the way it names', () => {

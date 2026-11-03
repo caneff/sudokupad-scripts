@@ -77,7 +77,7 @@
   const DEFAULT_MARK_SETTINGS = { x: true, directions: true, dot: true }
   // The shape of the third mark per edge. Its checkbox is the `dot` field of the saved settings.
   const CIRCLE = 'o'
-  const CIRCLE_RADIUS_PER_HALF_SIZE = 0.55
+  const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
   const COLOR_TOOL_WAIT_MS = 10000
   const COLOR_TOOL_POLL_MS = 100
   // How long a pen color button is held to open the pickers: SudokuPad's color tool uses the
@@ -531,7 +531,7 @@
   const MARK_PICTURES = {
     x: '<path d="M3 3 L13 13 M13 3 L3 13"/>',
     directions: '<path d="M2 4 L6 8 L2 12 M14 4 L10 8 L14 12"/>',
-    dot: '<circle cx="8" cy="8" r="4.4"/>'
+    dot: '<circle cx="8" cy="8" r="5.2"/>'
   }
   const markPicture = (key) =>
     `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MARK_PICTURES[key]}</svg>`
