@@ -75,5 +75,5 @@ Run for Dark Page (`dark-page.user.js`, issue #14); the notes above were read fr
   SudokuPad's dark mode on it is dark and unchanged from SudokuPad's own rendering.
 - With no `#svgrenderer` on the page the script leaves the page alone (its stylesheet is
   disabled), so a page of a matched site that is not a puzzle keeps its white.
-- Screenshots at real size: `dark-page.png` (ChinStrap's Speed Stripes as it opens, retaken with
+- Screenshots at real size: `dark-page.png` (the sample puzzle as it opens, retaken with
   `dark-page-screenshot.mjs`) and `dark-page-outside-text.png` (a 6x6 with clue text outside the grid).

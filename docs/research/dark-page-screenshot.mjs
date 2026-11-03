@@ -1,10 +1,10 @@
-// Takes docs/research/dark-page.png, the homepage's picture of Dark Page: ChinStrap's Speed Stripes
-// as it opens (link in dark-page-puzzle-url.txt), 1200x900 viewport, mascot hidden. Run from the repo root:
+// Takes docs/research/dark-page.png, the homepage's picture of Dark Page: the sample puzzle
+// as it opens, 1200x900 viewport, mascot hidden. Run from the repo root:
 // node docs/research/dark-page-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 
-const url = readFileSync(new URL('./dark-page-puzzle-url.txt', import.meta.url), 'utf8').trim()
+const url = readFileSync(new URL('../../live/puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
 const out = new URL('./dark-page.png', import.meta.url).pathname
 
