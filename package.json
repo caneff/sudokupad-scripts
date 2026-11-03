@@ -11,9 +11,10 @@
     "standard": "^17.1.2"
   },
   "standard": {
-    "//": "Framework is the global SudokuPad gives a userscript. docs/research/ holds frozen scratch scripts from closed investigations; the gate never reads them.",
+    "//": "Framework is the global SudokuPad gives a userscript, and ToolLetter the one its letter tool declares. docs/research/ holds frozen scratch scripts from closed investigations; the gate never reads them.",
     "globals": [
-      "Framework"
+      "Framework",
+      "ToolLetter"
     ],
     "ignore": [
       "docs/research/**"
