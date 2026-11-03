@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Edge Marks
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.1
+// @version      0.1.2
 // @description  Adds direction arrows and a dot to the pen tool's marks on a cell edge. Clicking an edge cycles through the marks ticked in a settings dialog. Relies on SudokuPad internals, so an update can break it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.1.1'
+  const VERSION = '0.1.2'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'EdgeMarks_marks'
@@ -236,7 +236,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Edge marks v${VERSION}</b><br>Marks a click on a cell edge cycles through` },
+        { tag: 'text', innerHTML: `<b>Edge marks</b> <small style="opacity:.6">v${VERSION}</small><br>Marks a click on a cell edge cycles through` },
         { tag: 'text', innerHTML: '<div id="edge-marks-editor"></div>' },
         {
           tag: 'options',
@@ -271,7 +271,7 @@
       tag: 'button',
       name: 'edgemarks',
       group: SETTINGS_GROUP,
-      content: `Edge marks v${VERSION}`,
+      content: 'Edge marks',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

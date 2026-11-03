@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.1
+// @version      0.3.2
 // @description  Sets the pen tool's nine colors to your current cell color page, darkened, each pen on the same button number as its cell color; the darkest grey turns black. Your own colors saved in a settings dialog replace them. Drawn strokes, old strokes and the tool's color buttons all change; puzzle state and replays do not.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.1'
+  const VERSION = '0.3.2'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'PenColor_colors'
@@ -286,7 +286,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Pen color v${VERSION}</b>` },
+        { tag: 'text', innerHTML: `<b>Pen color</b> <small style="opacity:.6">v${VERSION}</small>` },
         { tag: 'text', innerHTML: '<div id="pen-color-editor"></div>' },
         {
           tag: 'options',
@@ -348,7 +348,7 @@
       tag: 'button',
       name: 'pencolor',
       group: SETTINGS_GROUP,
-      content: `Pen color v${VERSION}`,
+      content: 'Pen color',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)
