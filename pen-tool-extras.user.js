@@ -530,7 +530,7 @@
   // A small picture of each edge mark, drawn in the text color: the X, the arrows, the circle.
   const MARK_PICTURES = {
     x: '<path d="M3 3 L13 13 M13 3 L3 13"/>',
-    directions: '<path d="M2 4 L6 8 L2 12 M14 4 L10 8 L14 12"/>',
+    directions: '<path d="M1 4 L4 8 L1 12 M15 4 L12 8 L15 12"/>',
     dot: '<circle cx="8" cy="8" r="5.2"/>'
   }
   const markPicture = (key) =>
