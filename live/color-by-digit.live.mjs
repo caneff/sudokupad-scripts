@@ -288,10 +288,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await p.locator('#color-by-digit-editor button[data-act=digit][data-digit="1"]').count(), 2)
     })
 
-    it('the palette is read from the CSS variables: 27 visible swatches', async () => {
-      const swatches = await p.$$eval('#color-by-digit-editor button[data-act=color][data-group="0"]', (es) => es.map((e) => window.getComputedStyle(e).backgroundColor))
-      assert.equal(swatches.length, 27)
-      assert.equal(swatches.filter((bg) => bg === 'rgba(0, 0, 0, 0)').length, 0)
+    it('the palette is read from the CSS variables: three pages of 9 visible swatches, 27 in all', async () => {
+      const select = p.locator('#color-by-digit-editor select[data-act="page"][data-group="0"]')
+      const seen = []
+      for (const value of ['0', '1', '2']) {
+        await select.selectOption(value)
+        seen.push(await p.$$eval('#color-by-digit-editor button[data-act=color][data-group="0"]', (es) => es.map((e) => window.getComputedStyle(e).backgroundColor)))
+      }
+      assert.deepEqual(seen.map((page) => page.length), [9, 9, 9])
+      assert.equal(seen.flat().filter((bg) => bg === 'rgba(0, 0, 0, 0)').length, 0)
     })
 
     it('assigning a digit moves it out of its other group, and the dialog stays open', async () => {
@@ -357,16 +362,22 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
     })
 
-    // A custom palette: page 1 has a color at index 0 and a transparent slot at index 4, and
-    // there is a fourth page of four colors, three of them on keys the default palette lacks.
+    // A custom palette, with page 4 current: page 1 has a color at index 0 and a transparent index 4,
+    // and a fourth page of four colors, three of them on keys the default palette lacks. Three saved
+    // groups: key 8 (on pages 1 and 4), key 6 (on page 1) and key nope (on none).
     describe('custom palette', { concurrency: false }, () => {
-      // Group 0's four page labels; every group draws its own set.
-      const labels = () => p.$$eval('#color-by-digit-editor [data-page] > div:first-child', (es) => es.map((e) => e.textContent).slice(0, 4))
-      const swatchKeys = (page) => p.$$eval('#color-by-digit-editor [data-group="0"][data-act="color"]', (es, page) => es.filter((e) => e.closest('[data-page]').dataset.page === String(page)).map((e) => e.dataset.key), page)
-      const boxOf = (key) => p.locator(`#color-by-digit-editor button[data-group="0"][data-key="${key}"]`).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) } })
-      let original
+      const group = (g) => `#color-by-digit-editor [data-group="${g}"]`
+      const pageSelect = (g) => p.locator(`${group(g)}[data-act="page"]`)
+      const shownPage = (g) => pageSelect(g).inputValue()
+      const labels = (g) => p.$$eval(`${group(g)}[data-act="page"] option`, (es) => es.map((e) => e.textContent))
+      const swatchKeys = (g) => p.$$eval(`${group(g)}[data-act="color"]`, (es) => es.map((e) => e.dataset.key))
+      const pressedKeys = (g) => p.$$eval(`${group(g)}[aria-pressed="true"]`, (es) => es.map((e) => e.dataset.key))
+      const chosenKey = (g) => p.locator(`${group(g)}[data-act="page"] + [data-role="chosen"]`).getAttribute('title')
+      const boxOf = (g, key) => p.locator(`#color-by-digit-editor button[data-group="${g}"][data-key="${key}"]`).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y) } })
+      let original, savedGroups
 
       before(async () => {
+        savedGroups = await getData()
         original = await read(() => JSON.parse(JSON.stringify(Framework.app.tools.colour.palette)))
         await read((original) => {
           const palette = JSON.parse(JSON.stringify(original))
@@ -376,50 +387,82 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           palette.pages[0] = ['4', '1', '2', '3', '0', '5', '6', '7', '8', '9']
           palette.pages.push(['u', 'v', 'w', '8'])
           Framework.app.tools.colour.setPalette(palette)
-          Framework.app.tools.colour.setPage(1)
+          Framework.app.tools.colour.setPage(3)
+          Framework.setData('ColorByDigit_groups', [{ key: '8', digits: [] }, { key: '6', digits: [] }, { key: 'nope', digits: [] }])
         }, original)
         await openEditor()
-        await dialogButton('Odd/Even').click()
       })
       after(async () => {
-        await read((original) => {
+        await read(([original, savedGroups]) => {
           Framework.app.tools.colour.setPalette(original)
           Framework.app.tools.colour.setPage(0)
           Framework.removeData('ToolColor_palette')
           Framework.removeData('ToolColor_page')
-        }, original)
+          if (savedGroups === null) Framework.removeData('ColorByDigit_groups')
+          else Framework.setData('ColorByDigit_groups', savedGroups)
+        }, [original, savedGroups])
         if (await editor().count()) await closeWith('Cancel')
       })
 
-      it('labels four pages and marks SudokuPad\'s current page', async () => {
-        assert.deepEqual(await labels(), ['Page 1', 'Page 2 (current)', 'Page 3', 'Page 4'])
+      it('the pulldown lists four pages and marks SudokuPad\'s current page', async () => {
+        assert.deepEqual(await labels(0), ['Page 1', 'Page 2', 'Page 3', 'Page 4 (current)'])
       })
 
-      it('lays page 1 out by index, with the empty slot kept and index 0 on its own row below', async () => {
-        assert.deepEqual(await swatchKeys(0), ['1', '2', '3', '5', '6', '7', '8', '9', '4'])
-        const [one, two, five, nine, zero] = await Promise.all(['1', '2', '5', '9', '4'].map(boxOf))
+      it('each group opens on the page holding its color, the current page first, and the current page with no color', async () => {
+        assert.deepEqual([await shownPage(0), await shownPage(1), await shownPage(2)], ['3', '0', '3'])
+      })
+
+      it('a group shows one 3 by 3 page: nine or ten swatches, not every page', async () => {
+        assert.equal((await swatchKeys(1)).length, 9)
+        assert.equal((await swatchKeys(0)).length, 4)
+      })
+
+      it('lays page 1 out by index, with the empty index kept and index 0 on its own row below', async () => {
+        assert.deepEqual(await swatchKeys(1), ['1', '2', '3', '5', '6', '7', '8', '9', '4'])
+        const [one, two, five, nine, zero] = await Promise.all(['1', '2', '5', '9', '4'].map((key) => boxOf(1, key)))
         // Index 4 is empty, so index 5 stays under index 2 in the second column of row 2.
         assert.equal(five.x, two.x)
         assert.equal(five.y > two.y, true)
         assert.equal(zero.x, one.x)
         assert.equal(zero.y > nine.y, true)
         // Every swatch is the same square, whatever height SudokuPad's own button styles ask for.
-        const sizes = await p.$$eval('#color-by-digit-editor [data-group="0"][data-act="color"]', (es) => [...new Set(es.map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}` }))])
+        const sizes = await p.$$eval(`${group(1)}[data-act="color"]`, (es) => [...new Set(es.map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}` }))])
         assert.deepEqual(sizes, ['44x44'])
       })
 
-      it('shows the fourth page, and pages fit side by side at this width', async () => {
-        assert.deepEqual(await swatchKeys(3), ['v', 'w', '8', 'u'])
-        const [first, second] = await Promise.all(['1', 'b'].map(boxOf))
-        assert.equal(first.y, second.y)
+      it('shows the fourth page, with its index 0 below', async () => {
+        assert.deepEqual(await swatchKeys(0), ['v', 'w', '8', 'u'])
       })
 
-      it('the group\'s own color is the only one marked selected', async () => {
-        const pressed = await p.$$eval('#color-by-digit-editor [data-group="0"][aria-pressed="true"]', (es) => es.map((e) => e.dataset.key))
-        assert.deepEqual(pressed, ['6'])
-        await p.click('#color-by-digit-editor button[data-group="0"][data-key="u"]')
-        const after = await p.$$eval('#color-by-digit-editor [data-group="0"][aria-pressed="true"]', (es) => es.map((e) => e.dataset.key))
-        assert.deepEqual(after, ['u'])
+      it('the group\'s own color is marked selected only on the page that holds it', async () => {
+        assert.deepEqual(await pressedKeys(1), ['6'])
+        assert.deepEqual(await pressedKeys(0), ['8'])
+      })
+
+      it('switching pages leaves the group\'s color alone, shows it beside the pulldown, and the page stays chosen', async () => {
+        await pageSelect(1).selectOption('3')
+        assert.equal(await shownPage(1), '3')
+        assert.deepEqual(await pressedKeys(1), [])
+        assert.equal(await chosenKey(1), '6')
+        const chosen = await p.locator(`${group(1)}[data-act="page"] + [data-role="chosen"]`).evaluate((e) => window.getComputedStyle(e).backgroundColor)
+        assert.equal(chosen, 'rgb(228, 150, 50)')
+        await p.click(`${group(1)}[data-key="u"]`)
+        assert.equal(await shownPage(1), '3')
+        assert.deepEqual(await pressedKeys(1), ['u'])
+        assert.equal(await chosenKey(1), 'u')
+      })
+
+      it('the other groups keep their own page', async () => {
+        assert.deepEqual([await shownPage(0), await shownPage(2)], ['3', '3'])
+        await pageSelect(0).selectOption('0')
+        assert.deepEqual([await shownPage(0), await shownPage(1), await shownPage(2)], ['0', '3', '3'])
+      })
+
+      it('removing a group leaves each remaining group on its own page', async () => {
+        await p.click(`${group(0)}[data-act="remove"]`)
+        assert.equal(await p.locator('#color-by-digit-editor select[data-act="page"]').count(), 2)
+        assert.deepEqual([await shownPage(0), await shownPage(1)], ['3', '3'])
+        assert.equal(await chosenKey(0), 'u')
       })
     })
 

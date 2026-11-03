@@ -299,4 +299,6 @@ Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshots from
   buttons carry their own styles, and overflowed its page. A `44px` width and height gives 44x44
   at 1200 px wide. Removing `min-width: 0; min-height: 0` or `flex: none` from the swatch style
   changed nothing at that width in the live run, so neither is in the script.
-- At 1200 px wide the dialog holds three 3x3 pages per row; at 390 px it holds one.
+- Chris then ruled one page at a time per group: a `<select>` of the pages, labelled `Page 1`,
+  `Page 2 (current)` and so on, with a small swatch of the group's color beside it. At 390 px
+  one group is one 3x3 grid plus the digit buttons, where showing every page took a screen each.

@@ -165,35 +165,59 @@
       (selected ? 'border:2px solid #fff;outline:3px solid #000' : 'border:1px solid #888') + '"></button>'
   }
 
-  function renderPage (page, groupIndex, selectedKey) {
-    const grid = 'display:grid;gap:6px;grid-template-columns:repeat(' + PAGE_COLUMNS + ',' + SWATCH_SIZE + ')'
-    const swatches = (slots) => slots.map((s) => renderSwatch(s, groupIndex, selectedKey)).join('')
-    const zero = page.zero ? `<div style="${grid};margin-top:4px">${renderSwatch(page.zero, groupIndex, selectedKey)}</div>` : ''
-    return `<div data-page="${page.page}" style="flex:none;margin:2px 10px 8px 0;padding:6px;border:1px solid #ccc;border-radius:4px">` +
-      `<div style="font-size:0.85em;margin-bottom:5px">Page ${page.page + 1}${page.current ? ' (current)' : ''}</div>` +
-      `<div style="${grid}">${swatches(page.rows.flat())}</div>${zero}</div>`
+  const pageLabel = (page) => `Page ${page.page + 1}${page.current ? ' (current)' : ''}`
+
+  // The page a group opens on: the page that holds its color, the current page first when the
+  // color is on several; the current page when no page holds it, and the first with none current.
+  function initialPage (pages, key) {
+    const holds = (p) => [p.zero, ...p.rows.flat()].some((slot) => slot && slot.key === key)
+    const found = pages.find((p) => p.current && holds(p)) || pages.find(holds) || pages.find((p) => p.current)
+    return found ? found.page : 0
   }
 
-  function renderEditor (groups, pages) {
+  // The group's color as a small square, so it shows while another page is open; dashed when
+  // no page has a visible color for the key.
+  function renderChosen (colors, key) {
+    const color = colors.find((c) => c.key === key)
+    const look = color ? `background:${esc(color.value)};border:1px solid #888` : 'border:1px dashed #888'
+    return `<span data-role="chosen" title="${esc(key)}" style="display:inline-block;box-sizing:border-box;width:1.6em;height:1.6em;` +
+      `border-radius:3px;vertical-align:middle;${look}"></span>`
+  }
+
+  // One group's page pulldown, its chosen color, and the shown page as a 3 by 3 grid with index 0 below.
+  function renderPalette (pages, colors, groupIndex, key, shownPage) {
+    if (pages.length === 0) return ''
+    const page = pages[shownPage] || pages[0]
+    const options = pages.map((p) => `<option value="${p.page}"${p === page ? ' selected' : ''}>${pageLabel(p)}</option>`).join('')
+    const grid = 'display:grid;gap:6px;grid-template-columns:repeat(' + PAGE_COLUMNS + ',' + SWATCH_SIZE + ')'
+    const swatches = page.rows.flat().map((slot) => renderSwatch(slot, groupIndex, key)).join('')
+    const zero = page.zero ? `<div style="${grid};margin-top:6px">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
+    return '<div style="margin-bottom:6px">' +
+      `<select data-act="page" data-group="${groupIndex}" aria-label="Palette page" style="font-size:1em;padding:2px">${options}</select> ${renderChosen(colors, key)}</div>` +
+      `<div style="${grid}">${swatches}</div>${zero}`
+  }
+
+  // `shown[i]` is the page index group i shows.
+  function renderEditor (groups, pages, shown) {
+    const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
-      const swatches = pages.map((p) => renderPage(p, i, g.key)).join('')
       const digits = DIGITS.map((d) =>
         `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
         `style="width:1.8em;margin:1px;font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
         `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
-      return '<div style="margin:6px 0;padding:4px;border:1px solid #888;border-radius:4px">' +
-        `<div style="display:flex;flex-wrap:wrap;align-items:flex-start">${swatches}</div><div>${digits} ` +
+      return '<div style="margin:6px 0;padding:6px;border:1px solid #888;border-radius:4px">' +
+        `${renderPalette(pages, colors, i, g.key, shown[i])}<div style="margin-top:8px">${digits} ` +
         `<button type="button" data-act="remove" data-group="${i}">Remove</button></div></div>`
     }).join('')
     const preloads = Object.keys(PRELOADS)
       .map((n) => `<button type="button" data-act="preload" data-name="${esc(n)}">${esc(n)}</button>`).join(' ')
-    const note = layoutColors(pages).length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
+    const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
     return `<div>Preload: ${preloads} <button type="button" data-act="clear">Clear all</button></div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
       '<button type="button" data-act="add">Add group</button>'
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, renderEditor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { VERSION, installButton, planColoring, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -253,8 +277,19 @@
     })
     const box = document.getElementById('color-by-digit-editor')
     if (!box) return
-    const draw = () => { box.innerHTML = renderEditor(groups, pages) }
+    // The page each group shows, by group index; a group not yet shown opens on its color's page.
+    let shown = []
+    const draw = () => {
+      groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
+      box.innerHTML = renderEditor(groups, pages, shown)
+    }
     draw()
+    box.addEventListener('change', (event) => {
+      const el = event.target.closest('select[data-act="page"]')
+      if (!el) return
+      shown[Number(el.dataset.group)] = Number(el.value)
+      draw()
+    })
     box.addEventListener('click', (event) => {
       const el = event.target.closest('button[data-act]')
       if (!el) return
@@ -264,9 +299,9 @@
       switch (el.dataset.act) {
         case 'color': groups = groups.map((g, j) => (j === i ? { key: el.dataset.key, digits: g.digits } : g)); break
         case 'digit': groups = assignDigit(groups, i, el.dataset.digit); break
-        case 'remove': groups = groups.filter((_, j) => j !== i); break
-        case 'clear': groups = []; break
-        case 'preload': groups = cloneGroups(PRELOADS[el.dataset.name]); break
+        case 'remove': groups = groups.filter((_, j) => j !== i); shown = shown.filter((_, j) => j !== i); break
+        case 'clear': groups = []; shown = []; break
+        case 'preload': groups = cloneGroups(PRELOADS[el.dataset.name]); shown = []; break
         case 'add': {
           const used = groups.map((g) => g.key)
           const free = colors.find((c) => !used.includes(c.key)) || colors[0]
