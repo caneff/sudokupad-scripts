@@ -21,12 +21,16 @@
   const PAGE_COLOR = '#000000'
   // Page text that sits straight on the page background, which the black would hide.
   const TEXT_COLOR = '#dddddd'
-  // White kept beyond the tightest box, in page pixels: covers antialiasing, a text outline filter
-  // and a pen line's overhang, none of which the elements' boxes include.
-  const PAD = 2
-  // What the puzzle draws as leaf elements; anything inside these containers is not drawn directly.
+  // White kept beyond the tightest box, in page pixels, before it is rounded outward: covers the
+  // antialiasing and a text outline filter, which the elements' boxes leave out.
+  const PAD = 1
+  // How far a solver's pen mark reaches past the box of the cell it is on: the edge X on an outer
+  // edge, measured on sudokupad.app v0.611.0 at 10.07px. The rectangle keeps this much around the
+  // cells so the mark sits on white from the moment it is drawn, not from the next measurement.
+  const SOLVER_REACH = 11
+  // What the puzzle draws as leaf elements. Elements in `defs`, `marker` and the like have no box.
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
-  const NOT_DRAWN = 'defs, clipPath, mask, pattern, marker, symbol, filter'
+  const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']
 
   // The rules never name anything inside the board or declare a variable: SudokuPad's theme
   // variables sit on `:root` and color the grid too, so overriding one would reach it. Each
@@ -34,12 +38,14 @@
   // The page is black, and the rectangle is a div behind the board that takes `--body-bg`, the value
   // SudokuPad gives `body` itself: the puzzle has no background of its own and shows `body` through
   // it, so the rectangle keeps what the board showed, SudokuPad's dark mode included. Painting the
-  // svg itself changes its antialiasing, so the board's own elements are left alone.
+  // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
+  // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
+  // that changes nothing.
   function buildCss () {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     return [
       rule('body', `background-color: ${PAGE_COLOR}`),
-      rule(`#${RECT_ID}`, 'position: fixed', 'z-index: -1', 'pointer-events: none', 'background-color: var(--body-bg)'),
+      rule(`#${RECT_ID}`, 'background-color: var(--body-bg)'),
       rule('.controls-footer, .controls-footer a', `color: ${TEXT_COLOR}`)
     ].join('\n')
   }
@@ -83,72 +89,100 @@
     return strokeShows(style) ? parseFloat(style.strokeWidth) * scale / 2 : 0
   }
 
+  // How far a marker's box extends from the point it sits on, in page pixels: the farthest of its
+  // four sides from its reference point. `marker` holds the marker element's `markerWidth`,
+  // `markerHeight`, `refX`, `refY` and `markerUnits` attribute values, null where absent (the SVG
+  // defaults are 3, 3, 0, 0 and `strokeWidth`); `strokeWidth` is the stroke width of the element that
+  // uses it, in user units, and `scale` is page pixels per user unit.
+  function markerReach (marker, strokeWidth, scale) {
+    const number = (value, fallback) => (value === null ? fallback : parseFloat(value))
+    const width = number(marker.markerWidth, 3)
+    const height = number(marker.markerHeight, 3)
+    const refX = number(marker.refX, 0)
+    const refY = number(marker.refY, 0)
+    const unit = marker.markerUnits === 'userSpaceOnUse' ? 1 : strokeWidth
+    return Math.max(refX, width - refX, refY, height - refY) * unit * scale
+  }
+
+  // The part of `box` that lies within `limit`.
+  const clampBox = (box, limit) => ({
+    left: Math.max(box.left, limit.left),
+    top: Math.max(box.top, limit.top),
+    right: Math.min(box.right, limit.right),
+    bottom: Math.min(box.bottom, limit.bottom)
+  })
+
+  // Grows a box by `amount` on every side.
+  const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { buildCss, unionBoxes, snapOutward, paintAlpha, hasVisiblePaint, halfStroke, PAD }
+    module.exports = { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
   if (typeof document === 'undefined') return
 
   const boxOf = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
 
-  // The box of everything the puzzle visibly draws, with each element's stroke, joined with the box
-  // of every cell, where a solver's digits, marks, colors and selection appear; limited to what the
-  // svg shows, which clips what lies outside it. Null when there is no board.
+  // How far the markers an element uses extend past its own box, in page pixels.
+  function markersReach (el, style, scale) {
+    const strokeWidth = parseFloat(style.strokeWidth) || 0
+    return MARKER_PROPERTIES.reduce((reach, property) => {
+      const id = /url\(["']?#([^"')]+)["']?\)/.exec(style.getPropertyValue(property))
+      const marker = id && el.ownerSVGElement.getElementById(id[1])
+      if (!marker) return reach
+      const attr = (name) => marker.getAttribute(name)
+      return Math.max(reach, markerReach({ markerWidth: attr('markerWidth'), markerHeight: attr('markerHeight'), refX: attr('refX'), refY: attr('refY'), markerUnits: attr('markerUnits') }, strokeWidth, scale))
+    }, 0)
+  }
+
+  // The box of everything the puzzle visibly draws, with each element's stroke and markers, joined
+  // with every cell's box grown by what a solver's pen marks reach, padded and rounded outward;
+  // limited to the svg's own box, which clips what lies outside it. Null when there is no board.
   function measure () {
     const svg = document.querySelector('#svgrenderer')
-    if (!svg) return null
+    const ctm = svg && svg.getScreenCTM()
+    if (!ctm) return null
     const svgBox = boxOf(svg.getBoundingClientRect())
-    const scale = svg.getScreenCTM() ? svg.getScreenCTM().a : 1
     const boxes = []
     svg.querySelectorAll(DRAWN).forEach((el) => {
-      if (el.closest(NOT_DRAWN)) return
       if (el.tagName === 'text' && !el.textContent.trim()) return
       const style = window.getComputedStyle(el)
       if (!hasVisiblePaint(style)) return
-      if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return
       const r = el.getBoundingClientRect()
       if (!r.width && !r.height) return
-      const s = halfStroke(style, scale)
-      boxes.push({ left: r.left - s, top: r.top - s, right: r.right + s, bottom: r.bottom + s })
+      boxes.push(growBox(boxOf(r), halfStroke(style, ctm.a) + markersReach(el, style, ctm.a)))
     })
     document.querySelectorAll('.cells .cell').forEach((el) => {
       const r = el.getBoundingClientRect()
-      if (r.width && r.height) boxes.push(boxOf(r))
+      if (r.width && r.height) boxes.push(growBox(boxOf(r), SOLVER_REACH))
     })
     const drawn = unionBoxes(boxes)
-    if (!drawn) return null
-    const clipped = {
-      left: Math.max(drawn.left, svgBox.left),
-      top: Math.max(drawn.top, svgBox.top),
-      right: Math.min(drawn.right, svgBox.right),
-      bottom: Math.min(drawn.bottom, svgBox.bottom)
-    }
-    return snapOutward(clipped, PAD)
+    return drawn && clampBox(snapOutward(drawn, PAD), snapOutward(svgBox, 0))
   }
 
-  function ensureRect () {
-    let rect = document.getElementById(RECT_ID)
-    if (!rect) {
-      rect = document.createElement('div')
-      rect.id = RECT_ID
-      document.body.appendChild(rect)
-    }
-    return rect
-  }
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = buildCss()
+  document.head.appendChild(style)
 
-  // Writes only what changed, so updating the rectangle never triggers the observer again.
-  function setStyle (el, name, value) {
-    if (el.style.getPropertyValue(name) !== value) el.style.setProperty(name, value, 'important')
-  }
+  const rect = document.createElement('div')
+  rect.id = RECT_ID
+  rect.style.setProperty('position', 'fixed', 'important')
+  rect.style.setProperty('z-index', '-1', 'important')
+  rect.style.setProperty('pointer-events', 'none', 'important')
+  document.body.appendChild(rect)
 
+  // With no board on the page (before a puzzle loads, or on a page of the site that is not a
+  // puzzle) the page is left as it is: the black would otherwise hide white the board has not drawn.
   function updateRect () {
-    const rect = ensureRect()
     const box = measure()
-    setStyle(rect, 'display', box ? 'block' : 'none')
-    if (!box) return
-    setStyle(rect, 'left', `${box.left}px`)
-    setStyle(rect, 'top', `${box.top}px`)
-    setStyle(rect, 'width', `${box.right - box.left}px`)
-    setStyle(rect, 'height', `${box.bottom - box.top}px`)
+    style.disabled = !box
+    const set = (name, value) => rect.style.setProperty(name, value, 'important')
+    if (!box) return set('display', 'none')
+    set('display', 'block')
+    set('left', `${box.left}px`)
+    set('top', `${box.top}px`)
+    set('width', `${box.right - box.left}px`)
+    set('height', `${box.bottom - box.top}px`)
   }
 
   // Recomputes before the next paint, once however many changes arrive.
@@ -159,14 +193,12 @@
     window.requestAnimationFrame(() => { queued = false; updateRect() })
   }
 
-  const style = document.createElement('style')
-  style.id = STYLE_ID
-  style.textContent = buildCss()
-  document.head.appendChild(style)
   updateRect()
   // SudokuPad swaps the board's elements when a puzzle loads and changes them as a solver plays.
+  // The rectangle's own updates and the top bar's clock are not changes to the puzzle.
   new window.MutationObserver((records) => {
-    if (records.some((r) => (r.target.nodeType === 1 ? r.target : r.target.parentElement)?.closest('.game'))) scheduleUpdate()
+    const target = (r) => (r.target.nodeType === 1 ? r.target : r.target.parentElement)
+    if (records.some((r) => target(r) !== rect && !target(r)?.closest('.topbar'))) scheduleUpdate()
   }).observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true })
   window.addEventListener('resize', scheduleUpdate)
   window.addEventListener('load', scheduleUpdate)

@@ -16,5 +16,5 @@
   `#rrggbb` value kept in SudokuPad's `--puzzle-pencolor-N` variable, which
   strokes and the tool's color buttons both read. The eraser has no pen color.
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
-  the puzzle visibly draws, joined with every cell's box and grown by 2px, rounded outward to whole
-  pixels. The page is black outside it.
+  the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
+  rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is black outside it.
