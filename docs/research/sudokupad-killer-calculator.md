@@ -62,6 +62,22 @@ pencil marks has to pass them to `filterCombinations` itself.
 - `update()` added nothing to the replay stack. Selecting the cells added one entry.
 - `solverTool` on those three cells, in an otherwise empty grid, returned `[6, 24]`.
 
+## Reading the remaining and eliminated sets
+
+Run live on the same cage, after excluding digit 4 and crossing out 235 by calling
+`handleClickDetails` with a fake event, not with a real mouse click. Both routes
+gave remaining 127 and 136, and eliminated 145 and 235.
+
+- **From the panel:** rows without the class `invalid` remain and rows with it are
+  eliminated. `exclude` on a row means the player crossed that row out. `.digit.exclude`
+  marks excluded digits. This covers only the selected cage and needs the panel on.
+- **From the state:** rebuild what `showCage` does. Take `getKillerCombinations` for
+  the cage, `.sort(KillerCalculator.sortCombsSum)`, then `filterCombinations` with the
+  `getCageInfo(id)` marks and the placed digits from `getCellVals(cage.cells)`.
+  `excCombs` holds indexes into that sorted list, so the sort is required. This still
+  worked with the panel detached, and `killerCages` gives every cage by index. The
+  union of the remaining sets gave digits 1, 2, 3, 6 and 7.
+
 The cage was pushed straight onto `Framework.app.puzzle.currentPuzzle.cages` after a
 `loadCTCPuzzle`. The minimal hand-built puzzle object lost its killer cage in that
 load, so loading a real killer puzzle through this path has not been shown. The
