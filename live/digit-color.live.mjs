@@ -20,13 +20,16 @@ const DATA_KEY = 'DigitColor_colors'
 // SudokuPad's own colors, read off the page with no script installed.
 const GIVEN_FILL = 'rgb(0, 0, 0)'
 const DEFAULT_FILL = 'rgb(29, 106, 229)'
-const CONFLICT_FILL = 'rgb(179, 58, 58)'
+// The stroke SudokuPad gives every mark, a white halo, read with no script installed.
+const MARK_STROKE = 'rgba(255, 255, 255, 0.7)'
+// SudokuPad's red for a mark in the conflict state, which the script reuses as the outline.
+const CONFLICT_RED = 'rgb(179, 58, 58)'
 // The default colors (issue #7), as the dialog's #rrggbb. The map is the independent source
 // the saved value is compared with; RGB is the same colors as the page computes them.
 const DEFAULTS = {
   0: '#4b5563', 1: '#b0125b', 2: '#b04a00', 3: '#7a6200', 4: '#1b7a2f', 5: '#00736f', 6: '#0059c9', 7: '#3d2bb8', 8: '#8a1fa8', 9: '#5e3a1a'
 }
-const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 6: 'rgb(0, 89, 201)' }
+const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 5: 'rgb(0, 115, 111)', 6: 'rgb(0, 89, 201)' }
 // The colors the checks choose.
 const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
 const EIGHT = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
@@ -65,9 +68,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
     const startButton = () => p.getByRole('button', { name: START }).first()
 
-    // Computed fills of the elements that show `digit`, per place on the board.
+    // One computed style property of the elements that show `digit`, per place on the board.
     // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
-    const fills = (place, digit, conflict = false) => read(([place, digit, conflict]) => {
+    const styleOf = (property, place, digit, conflict = false) => read(([property, place, digit, conflict]) => {
       const sel = {
         given: '#cell-givens text.cell-given',
         entered: '#cell-values text.cell-value',
@@ -77,9 +80,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       return [...document.querySelectorAll(sel)]
         .filter((e) => (place === 'given' || place === 'entered' ? e.textContent.trim() : e.dataset.val) === digit)
         .filter((e) => e.classList.contains('conflict') === conflict)
-        .map((e) => window.getComputedStyle(e).fill)
-    }, [place, digit, conflict])
-    const allFills = (place, digit, conflict) => async () => [...new Set(await fills(place, digit, conflict))]
+        .map((e) => window.getComputedStyle(e)[property])
+    }, [property, place, digit, conflict])
+    const fills = (place, digit, conflict) => styleOf('fill', place, digit, conflict)
+    const allOf = (property) => (place, digit, conflict) => async () => [...new Set(await styleOf(property, place, digit, conflict))]
+    const allFills = allOf('fill')
+    const allStrokes = allOf('stroke')
+    const allStrokeWidths = allOf('strokeWidth')
 
     const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
     const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
@@ -189,12 +196,33 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(allFills('centre', '7'), [DEFAULT_FILL]), [DEFAULT_FILL])
     })
 
-    it('conflicting marks stay red, with a color set for that digit', async () => {
+    it('conflicting marks keep the digit color and get a red outline', async () => {
       await markMode('#control-corner', async () => { await enter(0, 5, '5') })
       await markMode('#control-centre', async () => { await enter(1, 6, '5') })
       // 5 conflicts with the given 5 in row 1, so both marks are in the conflict state.
-      assert.deepEqual(await settle(allFills('corner', '5', true), [CONFLICT_FILL]), [CONFLICT_FILL])
-      assert.deepEqual(await settle(allFills('centre', '5', true), [CONFLICT_FILL]), [CONFLICT_FILL])
+      for (const place of ['corner', 'centre']) {
+        assert.deepEqual(await settle(allFills(place, '5', true), [DEFAULT_RGB[5]]), [DEFAULT_RGB[5]], place)
+        assert.deepEqual(await settle(allStrokes(place, '5', true), [CONFLICT_RED]), [CONFLICT_RED], place)
+        assert.deepEqual(await allStrokeWidths(place, '5', true)(), ['2px'], place)
+      }
+    })
+
+    it('conflicting marks get no outline while SudokuPad\'s check pencil marks setting is off', async () => {
+      await read(() => Framework.setSetting('checkpencilmarks', false))
+      try {
+        for (const place of ['corner', 'centre']) {
+          assert.deepEqual(await settle(allStrokes(place, '5', true), [MARK_STROKE]), [MARK_STROKE], place)
+          assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
+        }
+      } finally {
+        await read(() => Framework.setSetting('checkpencilmarks', true))
+      }
+      assert.deepEqual(await settle(allStrokes('corner', '5', true), [CONFLICT_RED]), [CONFLICT_RED])
+    })
+
+    it('a mark that does not conflict keeps SudokuPad\'s own stroke, with no red outline', async () => {
+      assert.deepEqual(await allStrokes('corner', '8')(), [MARK_STROKE])
+      assert.deepEqual(await allStrokes('centre', '8')(), [MARK_STROKE])
     })
 
     it('undo, redo and a changed digit keep the colors right', async () => {
@@ -233,8 +261,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await allFills('centre', '8')(), [EIGHT.rgb])
       assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_FILL])
       assert.deepEqual(await allFills('centre', '7')(), [DEFAULT_FILL])
-      assert.deepEqual(await allFills('corner', '5', true)(), [CONFLICT_FILL])
-      assert.deepEqual(await allFills('centre', '5', true)(), [CONFLICT_FILL])
+      for (const place of ['corner', 'centre']) {
+        assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
+        assert.deepEqual(await allStrokes(place, '5', true)(), [CONFLICT_RED], place)
+      }
       assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
     }
 
@@ -295,6 +325,14 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await closeWith('Save')
       assert.deepEqual(await saved(), { ...DEFAULTS, 4: null, 8: EIGHT.hex, 6: null, 7: null })
       assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
+    })
+
+    // The given 4 at row 5 makes a 4 mark at (4,1) conflict; the fill stays SudokuPad's red.
+    it('a conflicting mark of a digit on SudokuPad\'s own color still gets the outline', async () => {
+      await markMode('#control-corner', async () => { await enter(4, 1, '4') })
+      assert.deepEqual(await settle(allStrokes('corner', '4', true), [CONFLICT_RED]), [CONFLICT_RED])
+      assert.deepEqual(await allFills('corner', '4', true)(), [CONFLICT_RED])
+      await undo()
     })
 
     it('Restore defaults brings back every default color', async () => {

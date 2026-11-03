@@ -133,10 +133,13 @@ no script installed.
 - Givens sit in their own group, so selecting `#cell-values` already leaves them out.
 - A mark that conflicts with a digit in its row, column or box gets class `conflict`
   (on the `text` for a corner mark, on the `tspan` for a centre mark) and a `fill` of
-  `rgb(179, 58, 58)`.
+  `rgb(179, 58, 58)`. The rule is `.setting-checkpencilmarks #cell-pencilmarks .conflict,
+  .setting-checkpencilmarks #cell-candidates .conflict { fill: var(--puzzle-pencilmarkerror) }`,
+  specificity (1,2,0).
 - A `style.fill` set on a mark would hide that red. A stylesheet rule on
   `#cell-candidates tspan[data-val="8"]` did not override it, so the red won there.
-  The same rule on a corner mark was only run with `:not(.conflict)`.
+  The same rule on a corner mark was only run with `:not(.conflict)`. (Explained below, in
+  "Conflicting marks keep the digit color": the tspan rule's specificity (1,1,1) lost to that rule.)
 - An entered digit that conflicts got no `conflict` class in this test and stayed
   `rgb(29, 106, 229)`.
 - A stylesheet rule keyed on `data-val` colored marks added after the rule went in,
@@ -163,7 +166,8 @@ three injection times, by `live/digit-color.live.mjs`. Not run through Tampermon
 `crackingthecryptic.com`.
 
 - A stylesheet rule colors corner marks and centre marks from `data-val`, with
-  `:not(.conflict)` so a conflicting mark keeps `rgb(179, 58, 58)`. Entered digits have no
+  `:not(.conflict)` so a conflicting mark keeps `rgb(179, 58, 58)` (superseded by "Conflicting
+  marks keep the digit color" below). Entered digits have no
   `data-val`, so a `MutationObserver` on `document.body` (`childList`, `characterData`) stamps
   a `data-digit-color` attribute on each `#cell-values .cell-value`, and the same stylesheet
   colors that. Stamping an attribute does not retrigger the observer.
@@ -205,3 +209,26 @@ injected into the page. No script exists yet.
   overlapping. Two plus two marks laid out cleanly.
 - Not tested: the on-screen digit buttons, several selected cells, Clear, SudokuPad's
   automatic mark removal on entering a digit, 0, and a puzzle whose digits use letters.
+
+## Conflicting marks keep the digit color (2026-11-03)
+
+Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #10. Not run through
+Tampermonkey or on `crackingthecryptic.com`. Screenshot at real size, 1200x900 viewport, with
+the puzzle in `live/puzzle-url.txt`: `docs/research/digit-color-conflict-outline.png` (two 5
+marks in conflict with a given 5, in the corner at row 1 and the centre at row 2).
+
+- The fill needs no `!important`. The corner rule `#cell-pencilmarks .cell-pencilmark[data-val]`
+  ties SudokuPad's red rule at (1,2,0) and wins by coming later; the centre rule
+  `#cell-candidates tspan[data-val]` at (1,1,1) lost to it. Prefixing both with `#svgrenderer`
+  gives (2,x,x), which beats the red on both without `!important`.
+- `stroke` alone shows nothing: the computed `stroke-width` is `0px` on a mark, so the outline
+  needs an explicit `stroke-width`. `paint-order: stroke` computes as `stroke` and puts the
+  stroke behind the fill, so half the width shows.
+- Marks are about 11 px wide on screen. At `stroke-width: 3px` the red crowded the digit
+  color; at `2px` both read. The script uses 2px.
+- Every mark has a white halo stroke, `rgba(255, 255, 255, 0.7)`, with no script. The conflict
+  rule's `stroke` replaces it on a conflicting mark only.
+- The red only shows with `.setting-checkpencilmarks` on the page; marks keep the `conflict`
+  class with it off. The outline rules carry that class, so the setting off means no outline.
+- A conflicting mark of a digit on SudokuPad's own color keeps the red fill and gets the same
+  red stroke, so it looks as before, a little bolder.
