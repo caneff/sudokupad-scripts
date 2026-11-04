@@ -182,9 +182,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
     }
 
+    const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
     const openEditor = async () => {
       await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
+      await settingsEntry().click()
       await editor().waitFor({ state: 'visible' })
     }
     const closeWith = async (text) => {
@@ -610,8 +611,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await box('cornerX').uncheck()
       await box('cornerDot').uncheck()
       await closeWith('Save')
-      // A click on a dialog button that lands over the grid can leave a pen mark under it, so the
-      // cells are cleared before the click under test.
+      // Cleared so that the click under test starts from an empty grid.
       await clearMarks()
       await clickCorner(3, 3, 'left', 0, 0.01)
       // by SudokuPad's own arithmetic a click on a corner comes out as an edge mark
@@ -848,12 +848,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // to see the point makes a mark, then runs `open` again and returns the button's point.
       const probedPoint = async (open, button) => {
         await open()
+        // opening may itself click over the grid, so the count starts after it
+        await clearMarks()
         const [x, y] = await centreOf(button())
         await closeNow()
         await p.mouse.click(x, y)
         assert.equal(await anyMark(), true, 'a click on the grid at the button\'s point makes a mark')
         await clearMarks()
         await open()
+        await clearMarks()
         assert.deepEqual(await centreOf(button()), [x, y])
         return [x, y]
       }
@@ -868,12 +871,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       }
 
       it('the settings entry leaves no pen mark under it', async () => {
-        const entry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
         const open = async () => {
           await openSettings(p)
-          await entry().evaluate((e) => e.scrollIntoView({ block: 'center' }))
+          await settingsEntry().evaluate((e) => e.scrollIntoView({ block: 'center' }))
         }
-        const [x, y] = await probedPoint(open, entry)
+        const [x, y] = await probedPoint(open, settingsEntry)
         await p.mouse.click(x, y)
         await editor().waitFor({ state: 'visible' })
         assert.equal(await anyMark(), false)

@@ -642,28 +642,24 @@
   // The mouse button of the latest press or release. SudokuPad calls `clickCell` on the
   // release, with no event, so the button is read from the pointer events before it.
   let lastButton = 0
-  // Whether a pointer is pressed now, from the pointer events before it.
-  let pointerHeld = false
 
   function trackButton () {
     const remember = (event) => { lastButton = event.button }
-    window.addEventListener('pointerdown', (event) => { pointerHeld = true; remember(event) }, true)
-    window.addEventListener('pointerup', (event) => { pointerHeld = false; remember(event) }, true)
-    window.addEventListener('pointercancel', () => { pointerHeld = false }, true)
+    window.addEventListener('pointerdown', remember, true)
+    window.addEventListener('pointerup', remember, true)
   }
 
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
-  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are held.
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
 
   // Closes the open dialog. SudokuPad runs a dialog button's handler on the press and removes the
   // dialog at once, so the release lands on the grid and the pen tool takes it for a click on the
-  // cell under the button. While a pointer is pressed, this swallows the events that end the press
-  // before the grid sees them, until the next press; a close from the keyboard, with no pointer
-  // pressed, swallows nothing.
+  // cell under the button. This swallows the events that end the press before the grid sees them,
+  // until the next press, which ends the swallowing even when no release came (a close from the
+  // keyboard).
   function closeDialogKeepingGrid () {
     Framework.closeDialog()
-    if (!pointerHeld) return
     const swallow = (event) => event.stopImmediatePropagation()
     const stop = () => {
       RELEASE_EVENTS.forEach((type) => window.removeEventListener(type, swallow, true))
