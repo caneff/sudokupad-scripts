@@ -98,8 +98,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       const digit = ENTERED[`${x.r},${x.c}`] || GIVENS[x.r * 9 + x.c]
       return digit === '0' ? [] : [keyOfDigit(digit)]
     }
-    const oddEven = expectedColours((d) => (Number(d) % 2 ? '6' : '9'))
-    const lowFiveHigh = expectedColours((d) => (Number(d) < 5 ? '9' : d === '5' ? '1' : '6'))
+    const oddEven = expectedColours((d) => (Number(d) % 2 ? '1' : '2'))
+    const lowFiveHigh = expectedColours((d) => (Number(d) < 5 ? '1' : d === '5' ? '5' : '9'))
     const wrongCount = async (expected) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(expected(x))).length
 
     const inject = async () => {
@@ -267,8 +267,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await coloredCount(), DIGIT_CELLS)
       assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
       const s = await cellsState()
-      assert.deepEqual(at(s, 0, 2).colours, ['9'])
-      assert.deepEqual(at(s, 0, 3).colours, ['6'])
+      assert.deepEqual(at(s, 0, 2).colours, ['2'])
+      assert.deepEqual(at(s, 0, 3).colours, ['1'])
     })
 
     it('corner-marked and empty cells are untouched', async () => {
@@ -282,8 +282,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('the colors render on the board', async () => {
-      const rendered = await read(() => ({ six: document.querySelectorAll('.color-6').length, nine: document.querySelectorAll('.color-9').length }))
-      assert.equal(rendered.six > 0 && rendered.nine > 0, true, JSON.stringify(rendered))
+      const rendered = await read(() => ({ one: document.querySelectorAll('.color-1').length, two: document.querySelectorAll('.color-2').length }))
+      assert.equal(rendered.one > 0 && rendered.two > 0, true, JSON.stringify(rendered))
     })
 
     it('one undo reverses the whole press and leaves digits alone', async () => {
@@ -314,7 +314,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await paint(0, 0, '3')
         assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
         await press()
-        assert.deepEqual((await settle(async () => [...await colorsAt(0, 0)].sort(), ['3', '6'])), ['3', '6'])
+        assert.deepEqual((await settle(async () => [...await colorsAt(0, 0)].sort(), ['1', '3'])), ['1', '3'])
         await undo()
         assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
       })
@@ -323,7 +323,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await setMultiColor(false)
         assert.equal(await getSetting(), false)
         await press()
-        assert.deepEqual(await settle(() => colorsAt(0, 0), ['6']), ['6'])
+        assert.deepEqual(await settle(() => colorsAt(0, 0), ['1']), ['1'])
         assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
         await press()
         // "Nothing happened": the colors must not toggle away.
@@ -368,7 +368,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await openEditor()
         await dialogButton('Low/5/High').click()
         await closeWith('Save')
-        const expected = [{ key: '9', digits: ['0', '1', '2', '3', '4'] }, { key: '1', digits: ['5'] }, { key: '6', digits: ['6', '7', '8', '9'] }]
+        const expected = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
         assert.deepEqual(await settle(getData, expected), expected)
       })
 
@@ -393,7 +393,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(coloredCount, 0), 0)
       })
 
-      // Saved groups are Low/5/High here, so centre marks 6, 7 and 9 all belong to key 6.
+      // Saved groups are Low/5/High here, so centre marks 6, 7 and 9 all belong to key 9.
       it('a press also colors an empty cell whose centre marks fit one group, leaves one spanning two groups, and one undo removes it', async () => {
         await select(8, 0); await p.click('#control-centre')
         for (const k of ['6', '7', '9']) await p.keyboard.press(k)
@@ -404,9 +404,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.deepEqual(await settle(marks, ['679', '17']), ['679', '17'])
         assert.equal(await pressUntil(coloredCount, DIGIT_CELLS + 1), DIGIT_CELLS + 1)
         const s = await cellsState()
-        assert.deepEqual(at(s, 8, 0).colours, ['6'])
+        assert.deepEqual(at(s, 8, 0).colours, ['9'])
         assert.deepEqual(at(s, 8, 1).colours, [])
-        assert.equal(await wrongCount((x) => (x.r === 8 && x.c === 0 ? ['6'] : lowFiveHigh(x))), 0)
+        assert.equal(await wrongCount((x) => (x.r === 8 && x.c === 0 ? ['9'] : lowFiveHigh(x))), 0)
         await undo()
         assert.equal(await settle(coloredCount, 0), 0)
       })
