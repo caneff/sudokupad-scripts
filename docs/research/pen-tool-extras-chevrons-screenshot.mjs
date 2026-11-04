@@ -1,5 +1,5 @@
 // Draws center, edge and diagonal lines in page 3 pens (chevron lines) on sudokupad.app with pen-tool-extras.user.js, both ways
-// and with turns, and shoots the board at thickness 1, 5 and 16 (the thin and thick ends and the default), then the pen panel on
+// and with turns, and shoots the board at thickness 1, 5, 10 and 16 (the thin and thick ends, the default and a middle value), then the pen panel on
 // page 3. The shots are laid side by side into docs/research/pen-tool-extras-chevrons.png.
 // Run from the repo root with Playwright's Chromium installed. Not part of any test.
 import { chromium } from 'playwright'
@@ -38,7 +38,7 @@ await p.locator('.tool-pen button[data-key="4"]').click()
 await mode('edgeonly'); await drag([[0, 5], [0, 8], [3, 8]])
 console.log(await p.evaluate(() => Framework.app.puzzle.cells.flatMap(c => c.pen.map(v => c.row + ',' + c.col + ':' + String(v))).join(' ')))
 const shots = []
-for (const t of [1, 5, 16]) {
+for (const t of [1, 5, 10, 16]) {
   await p.evaluate((t) => { const el = document.getElementById('pen-tool-extras-thickness'); el.value = t; el.dispatchEvent(new Event('input', { bubbles: true })) }, t)
   await p.mouse.move(5, 5)
   shots.push([`thickness ${t}`, (await p.screenshot({ clip: { x: cell.x - 10, y: cell.y - 10, width: cell.w * 9 + 20, height: cell.h * 9 + 20 } })).toString('base64')])
@@ -46,7 +46,7 @@ for (const t of [1, 5, 16]) {
 await p.evaluate(() => { const el = document.getElementById('pen-tool-extras-thickness'); el.value = 5; el.dispatchEvent(new Event('input', { bubbles: true })) })
 const panel = await p.evaluate(() => { const r = document.querySelector('.tool-pen .controls-input').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height } })
 shots.push(['the pen panel on page 3', (await p.screenshot({ clip: panel })).toString('base64')])
-const sheet = await b.newPage({ viewport: { width: 2400, height: 1000 } })
+const sheet = await b.newPage({ viewport: { width: 3400, height: 1000 } })
 await sheet.setContent(`<body style="margin:0;background:#fff;font:28px sans-serif;display:flex;gap:24px;padding:16px;align-items:flex-start">${shots.map(([label, data]) => `<figure style="margin:0"><img src="data:image/png;base64,${data}" style="height:760px"><figcaption>${label}</figcaption></figure>`).join('')}</body>`)
 await sheet.waitForLoadState('load')
 await sheet.screenshot({ path: 'docs/research/pen-tool-extras-chevrons.png', fullPage: true })
