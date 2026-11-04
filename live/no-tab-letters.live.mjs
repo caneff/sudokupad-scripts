@@ -26,8 +26,8 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Loads the puzzle, running `beforeStart` / `afterStart` around Start Puzzle.
-async function openPuzzle (p, { beforeStart = async () => {}, afterStart = async () => {} } = {}) {
+// Loads the puzzle, running `beforeStart` while the Start Puzzle button still shows, and clicks it.
+async function openPuzzle (p, { beforeStart = async () => {} } = {}) {
   await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
   const start = p.getByRole('button', { name: START }).first()
   await start.waitFor({ state: 'visible' })
@@ -35,7 +35,6 @@ async function openPuzzle (p, { beforeStart = async () => {}, afterStart = async
   await start.click()
   await start.waitFor({ state: 'hidden' })
   await p.locator('#control-undo').waitFor({ state: 'visible' })
-  await afterStart()
 }
 
 async function newPage (context) {
@@ -68,7 +67,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     p = await newPage(context)
     p.on('pageerror', (e) => errors.push(String(e)))
     await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-    await openPuzzle(p, { afterStart: () => p.addScriptTag({ content: script }) })
+    await openPuzzle(p)
+    await p.addScriptTag({ content: script })
     // Enable Letter Tool, switched on after the page and the script are in.
     await p.evaluate(() => Framework.setSetting('toolletter', true))
     await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
@@ -138,9 +138,9 @@ describe('the Tab binding is not found', () => {
         beforeStart: async () => {
           // A SudokuPad whose letter tool binds no Tab.
           await p.evaluate(() => { ToolLetter.tool.keyHandlers = ToolLetter.tool.keyHandlers.filter((e) => e.key !== 'Tab') })
-        },
-        afterStart: async () => { await p.addScriptTag({ content: script }) }
+        }
       })
+      await p.addScriptTag({ content: script })
       await warned
       const handlers = await p.evaluate(() => ToolLetter.tool.keyHandlers.map((e) => (typeof e.key === 'string' ? e.key : 'fn')))
       assert.deepEqual(handlers, ['/', 'fn'])
