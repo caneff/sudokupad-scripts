@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.2.1
+// @version      0.2.2
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using groups of palette colors set in a settings dialog.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.2.1'
+  const VERSION = '0.2.2'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'ColorByDigit_groups'
@@ -27,13 +27,13 @@
   // A group is one palette key plus the digits that get it.
   const PRELOADS = {
     'Low/5/High': [
-      { key: '9', digits: ['0', '1', '2', '3', '4'] },
-      { key: '1', digits: ['5'] },
-      { key: '6', digits: ['6', '7', '8', '9'] }
+      { key: '1', digits: ['0', '1', '2', '3', '4'] },
+      { key: '5', digits: ['5'] },
+      { key: '9', digits: ['6', '7', '8', '9'] }
     ],
     'Odd/Even': [
-      { key: '6', digits: ['1', '3', '5', '7', '9'] },
-      { key: '9', digits: ['0', '2', '4', '6', '8'] }
+      { key: '1', digits: ['1', '3', '5', '7', '9'] },
+      { key: '2', digits: ['0', '2', '4', '6', '8'] }
     ]
   }
   const DEFAULT_GROUPS = PRELOADS['Odd/Even']

@@ -103,12 +103,12 @@ test('an empty list of groups plans nothing', () => {
 const allDigits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => ({ value: String(d) }))
 const byDigit = (g) => plan(allDigits, g).map((p) => p.key).join('')
 
-test('Low/5/High maps 0-4 to slot 9, 5 to slot 1, 6-9 to slot 6', () => {
-  assert.equal(byDigit(PRELOADS['Low/5/High']), '9999916666')
+test('Low/5/High maps 0-4 to slot 1, 5 to slot 5, 6-9 to slot 9', () => {
+  assert.equal(byDigit(PRELOADS['Low/5/High']), '1111159999')
 })
 
-test('Odd/Even maps odd to slot 6, even and 0 to slot 9', () => {
-  assert.equal(byDigit(PRELOADS['Odd/Even']), '9696969696')
+test('Odd/Even maps odd to slot 1, even and 0 to slot 2', () => {
+  assert.equal(byDigit(PRELOADS['Odd/Even']), '2121212121')
 })
 
 test('nothing saved yet starts with Odd/Even', () => {
