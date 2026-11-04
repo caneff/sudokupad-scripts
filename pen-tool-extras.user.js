@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.4.2
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), puts two sliders in the pen tool's panel for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through they are, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks and for the panel's two sliders, so an update can break them.
+// @version      1.5.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dotted lines (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.4.2'
+  const VERSION = '1.5.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -36,17 +36,41 @@
   // The block of both sliders in the pen tool's panel, and the row of each.
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
-  // SudokuPad's line mode pulldown (`.penlinemode`, with the values `both`, `centeronly` and `edgeonly`),
-  // and the short label each choice gets so the box fits in one button's width.
+  // SudokuPad's line mode pulldown (`.penlinemode`), which this script hides and offers in its dialog instead.
+  // `ToolPen_linemode` is where SudokuPad saves the mode; its three values and SudokuPad's own labels.
   const LINE_MODE_BOX = '.tool-pen .penlinemode'
-  const LINE_MODE_LABELS = { both: 'Both', centeronly: 'Center', edgeonly: 'Edge' }
+  const LINE_MODE_KEY = 'ToolPen_linemode'
+  const LINE_MODES = [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']]
   const MARKS_KEY = 'EdgeMarks_marks'
   const STYLE_ID = 'pen-tool-extras-style'
   // The element SudokuPad draws the grid in.
   const GRID_SELECTOR = '#svgrenderer'
+  // The group SudokuPad draws every pen stroke in.
+  const PEN_LAYER = '#cell-pen'
+  // The group the drag highlight (`.penhint`, and the erase highlight, which is the same element) is moved
+  // to while a line is dragged, so the pen layer's opacity does not fade it. It sits right above the pen layer.
+  const HINT_LAYER_ID = 'pen-tool-extras-hint'
+  const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
   // `MouseEvent.button` of the right mouse button.
   const RIGHT_BUTTON = 2
   const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+  // The pages of pens, in paging order. Each page's characters line up with PEN_COLORS: the pen on button
+  // N is the Nth character, and its color is color N, so a recolor changes the pen on every page. A
+  // character is the one a stroke stores after its value and the replay holds (`pc:a`), which draws,
+  // undoes and replays for any lowercase letter (docs/research/sudokupad-pen-tool.md, "Pen colors past
+  // nine"). The first page is SudokuPad's own and must stay first: its characters are the only ones stock
+  // SudokuPad can select. A dotted page draws its lines as dots.
+  const PEN_PAGES = [
+    { chars: PEN_COLORS, dotted: false },
+    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true }
+  ]
+  // The key the selected pen character is saved under. `ToolPen_color` is SudokuPad's own and stays a
+  // digit: stock SudokuPad throws when the pen tool opens on a letter there, and this script may be
+  // removed with the letter still saved.
+  const PEN_KEY = 'PenColor_pen'
+  // The panel's own key of a page button, and the attribute of each color button that names the page its pen is on.
+  const PAGE_BUTTON = 'pen-tool-extras-page'
+  const PAGE_ATTRIBUTE = 'data-pen-page'
   // SudokuPad's own pen colors (tool-pen.css), as #rrggbb. Pen color 9 is written there as
   // rgb(-36, -36, -36), which clamps to black.
   const DEFAULT_COLORS = {
@@ -83,6 +107,13 @@
   // cross). Left out on purpose: 3, 4, b and c (the edge X marks, half the width), and h to y (the
   // arrows, circles and grid-corner marks this script adds, also half).
   const FULL_WIDTH_VALUES = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
+  // The lines among them, which a dotted page draws as dots: the cell circle and cross (5 and 6) stay solid.
+  // The diagonal ones span a cell's diagonal, 64 * sqrt(2), the others one side, 64 (a cell is 64 units).
+  const DIAGONAL_LINES = ['d', 'e', 'f', 'g']
+  const ORTHOGONAL_LINES = FULL_WIDTH_VALUES.filter((v) => v !== '5' && v !== '6' && !DIAGONAL_LINES.includes(v))
+  const CELL_UNITS = 64
+  // The distance between dot centres, in line widths. Snapped per line so a segment holds whole dots.
+  const DOT_SPACING_PER_THICKNESS = 2
   // The pen value of SudokuPad's own edge X on the right, bottom, left and top edge of a cell.
   // An edge between two cells is stored on one of them, so a click on it is always one of
   // these four values.
@@ -155,6 +186,39 @@
     if (!PEN_COLORS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
     if (typeof value !== 'string' || !HEX_COLOR.test(value)) throw new RangeError(`pen-tool-extras: ${value} is not a #rrggbb color`)
     return { ...colors, [pen]: value.toLowerCase() }
+  }
+
+  // Saved data is untrusted: the saved line mode when it is one of the three, else 'both' (SudokuPad's own default).
+  function normalizeLineMode (data) {
+    return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
+  }
+
+  // The index of the page that holds the color character `pen`, or -1.
+  function penPageOf (pen) {
+    return PEN_PAGES.findIndex((page) => page.chars.includes(pen))
+  }
+
+  // The number of the color (and of the button) of the pen `pen`, as PEN_COLORS names it; undefined for no pen.
+  function penSlot (pen) {
+    const page = PEN_PAGES[penPageOf(pen)]
+    return page ? PEN_COLORS[page.chars.indexOf(pen)] : undefined
+  }
+
+  // The color character of the pen with color `slot` on page `page`.
+  function penCharOn (page, slot) {
+    return PEN_PAGES[page].chars[PEN_COLORS.indexOf(slot)]
+  }
+
+  // Saved data is untrusted: the saved pen character when it is one of a page, else null. SudokuPad's
+  // `getData` parses what it reads, so a saved '3' comes back as the number 3.
+  function normalizePen (data) {
+    const pen = typeof data === 'number' ? String(data) : data
+    return typeof pen === 'string' && penPageOf(pen) !== -1 ? pen : null
+  }
+
+  // The page `delta` pages (1 forward, -1 back) from `page`, going round `count` pages.
+  function stepPage (page, delta, count) {
+    return (((page + delta) % count) + count) % count
   }
 
   // Saved data is untrusted: the saved thickness when it is a whole number from THICKNESS.min to
@@ -423,13 +487,45 @@
     return [rule(FULL_WIDTH_VALUES, thickness), rule(marks, thickness * MARK_PER_THICKNESS)].join('\n')
   }
 
-  // Sets the opacity of every pen stroke, for strokes drawn already and new ones. `opacity` (not
-  // `stroke-opacity`) is the property SudokuPad's own rule sets, so it replaces that rule and the
-  // default of 80 draws exactly what the page drew before; `:root:root` outranks it whichever
-  // stylesheet loads last.
+  // Sets the opacity of every pen stroke, for strokes drawn already and new ones. SudokuPad's own rule
+  // gives each stroke path `opacity: 0.8`, and each segment of a line is its own path, so strokes that
+  // overlap darken where they do. Here the paths are solid and the group they are drawn in carries the
+  // opacity, so the layer fades as one picture and an overlap shows the same as the rest of its stroke
+  // (where two colors cross, the later one covers the earlier). `:root:root` outranks SudokuPad's rule
+  // whichever stylesheet loads last.
   function buildOpacityCss (opacity) {
     if (normalizeOpacity(opacity) !== opacity) throw new RangeError(`pen-tool-extras: ${opacity} is not an opacity from ${OPACITY.min} to ${OPACITY.max} in steps of ${OPACITY.step}`)
-    return `:root:root .cell-pen { opacity: ${opacity / 100}; }`
+    return `:root:root .cell-pen { opacity: 1; }\n:root:root ${PEN_LAYER} { opacity: ${opacity / 100}; }`
+  }
+
+  // How much shorter than an even split of a segment the dot spacing is. With the spacing exactly `length / dots`
+  // the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end
+  // had no dot; this puts it a hair before the end (0.0064 of a unit on a cell of 64).
+  const END_DOT_SHRINK = 0.9999
+  // A line's dot spacing: DOT_SPACING_PER_THICKNESS line widths, snapped so `length` holds a whole number
+  // of dots. Each segment of a line is its own path with its own pattern, starting on a dot, so a
+  // whole number keeps the dots evenly spaced across a join.
+  const dotGap = (thickness, length) => END_DOT_SHRINK * length / Math.max(1, Math.round(length / (DOT_SPACING_PER_THICKNESS * thickness)))
+
+  // The look of the pages after the first, which SudokuPad's own CSS knows nothing about: each pen
+  // character strokes in the color of its partner on the first page, a dotted page's lines are dots
+  // (a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so they
+  // scale with the slider), and its buttons' swatches are dots too. `:root:root` outranks SudokuPad's
+  // own rules whichever stylesheet loads last.
+  function buildPagesCss (thickness) {
+    if (normalizeThickness(thickness) !== thickness) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
+    const rules = []
+    PEN_PAGES.forEach((page, index) => {
+      if (index === 0) return
+      page.chars.forEach((char, i) => rules.push(`.pencolor-${char} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`))
+      if (!page.dotted) return
+      const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
+      const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { stroke-dasharray: 0 ${dotGap(thickness, length)}; }`
+      rules.push(lines(ORTHOGONAL_LINES, CELL_UNITS), lines(DIAGONAL_LINES, CELL_UNITS * Math.SQRT2))
+      PEN_COLORS.forEach((n) => rules.push(
+        `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${index + 1}"]:after { background-color: transparent; background-image: radial-gradient(circle, var(--puzzle-pencolor-${n}) 0.14rem, transparent calc(0.14rem + 0.5px)); background-size: 25% 25%; background-position: center; }`))
+    })
+    return rules.join('\n')
   }
 
   // Edit mode (the class is on the pen tool's panel): each color picker sits over its button
@@ -448,26 +544,26 @@
   const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
 
   // The pen tool's panel: SudokuPad draws `.penlinemode` as a box across the panel's last row, 4rem
-  // tall, absolutely placed in `.controls-input`. It is cut to about one button's width, and the
-  // sliders take the rest of the same row, so the pad is no taller. The select's own inset and font
-  // are cut to fit "Center" in the narrower box.
+  // tall, absolutely placed in `.controls-input`. That box is hidden, and the row holds the two sliders
+  // and the page button instead, so the pad is no taller.
   // SudokuPad's purple, as its own icons draw it.
   const PANEL_COLOR = '#6a1b9a'
-  // The row `.penlinemode` fills (SudokuPad's own CSS puts it 13rem down `.controls-input`, 4rem tall), the
-  // width the box is cut to, and the gap before the sliders, which start where the box ends.
+  // The row `.penlinemode` fills (SudokuPad's own CSS puts it 13rem down `.controls-input`, 4rem tall).
   const PANEL_ROW_TOP_REM = 13
   const PANEL_ROW_HEIGHT_REM = 4
-  const MODE_BOX_WIDTH_REM = 4.8
-  const SLIDERS_GAP_REM = 0.6
+  // The page button is a square the height of the row at its right end, and the sliders stop short of it.
+  const PAGE_BUTTON_WIDTH_REM = PANEL_ROW_HEIGHT_REM
+  const PAGE_GAP_REM = 0.5
   // The stroke width of the line picture on each slider's left, in its 20 x 16 view box.
   const LINE_PICTURE_WIDTH = 3.4
   const PANEL_CSS = [
-    `${LINE_MODE_BOX} { right: auto; width: ${MODE_BOX_WIDTH_REM}rem; }`,
-    `${LINE_MODE_BOX} select { inset: 0.4rem; font-size: 0.9rem; padding: 0; }`,
-    `.${SLIDERS} { position: absolute; left: ${MODE_BOX_WIDTH_REM + SLIDERS_GAP_REM}rem; right: 0.2rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
+    `${LINE_MODE_BOX} { display: none; }`,
+    `.${SLIDERS} { position: absolute; left: 0.2rem; right: ${PAGE_BUTTON_WIDTH_REM + PAGE_GAP_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; }`,
     `.${SLIDER_ROW} svg { flex: none; width: 1.4rem; height: 1.1rem; }`,
-    `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; accent-color: ${PANEL_COLOR}; }`
+    `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; accent-color: ${PANEL_COLOR}; }`,
+    `.tool-pen .controls-input button.${PAGE_BUTTON} { position: absolute; right: 0; top: ${PANEL_ROW_TOP_REM}rem; width: ${PAGE_BUTTON_WIDTH_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    `.${PAGE_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`
   ].join('\n')
 
   // A slanted line, the picture of a slider: its width says Thickness, its fading says Opacity.
@@ -486,6 +582,20 @@
       '</div>'
   }
 
+  // The page button's picture: a sample of the line the button turns to (dots on a dotted page, else a solid
+  // line) in the panel's colour, under a dot for each page with the current one filled, as SudokuPad's color
+  // tool's page button has.
+  function renderPageIcon (current) {
+    const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
+    const sample = next.dotted
+      ? [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + 9 * k}" cy="${52 - 7 * k}" r="3.6" fill="currentColor" stroke="none"/>`).join('')
+      : '<path d="M12 54 L52 26" stroke-width="7.2" stroke-linecap="round" fill="none"/>'
+    const dots = PEN_PAGES.map((_, i) =>
+      `<circle cx="${54 - 8 * (PEN_PAGES.length - i - 1)}" cy="10" r="3" data-page-dot="${i === current ? 'filled' : 'outline'}"${i === current ? '' : ' fill="none"'}/>`)
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 64 64" stroke="currentColor" fill="currentColor" stroke-width="1">' +
+      `<g data-page-sample="${next.dotted ? 'dotted' : 'solid'}">${sample}</g><g>${dots.join('')}</g></svg>`
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       VERSION,
@@ -501,6 +611,16 @@
       buildThicknessCss,
       normalizeOpacity,
       buildOpacityCss,
+      PEN_PAGES,
+      penPageOf,
+      penSlot,
+      penCharOn,
+      normalizePen,
+      stepPage,
+      normalizeLineMode,
+      LINE_MODES,
+      buildPagesCss,
+      renderPageIcon,
       renderPanelSliders,
       normalizeMarkSettings,
       stepType,
@@ -798,7 +918,7 @@
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = [buildCss(active), buildThicknessCss(activeThickness), buildOpacityCss(activeOpacity), EDIT_CSS, PANEL_CSS].join('\n')
+    style.textContent = [buildCss(active), buildThicknessCss(activeThickness), buildOpacityCss(activeOpacity), buildPagesCss(activeThickness), EDIT_CSS, PANEL_CSS].join('\n')
   }
 
   function missingNote (missing) {
@@ -831,7 +951,30 @@
       '<div style="font-weight:600;margin-top:10px">Edge marks a click cycles through</div>' +
       box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle') +
       '<div style="font-weight:600;margin-top:10px">Corner marks a click near a grid corner cycles through</div>' +
-      box('cornerX', 'X', 'x') + box('cornerDot', 'Circle', 'dot')
+      box('cornerX', 'X', 'x') + box('cornerDot', 'Circle', 'dot') +
+      lineModeChoice(state.lineMode)
+  }
+
+  // The pen's line mode, which SudokuPad's own pulldown in the panel (hidden by this script) used to set.
+  // `lineMode` is undefined when the pen tool was not found, and the choice is left out.
+  function lineModeChoice (lineMode) {
+    if (lineMode === undefined) return ''
+    const options = LINE_MODES.map(([value, label]) => `<option value="${value}"${value === lineMode ? ' selected' : ''}>${label}</option>`).join('')
+    return '<div style="font-weight:600;margin-top:10px">Pen line mode</div>' +
+      `<select data-line-mode style="margin:4px 0;font-size:1rem">${options}</select>`
+  }
+
+  // The pen tool's line mode now, or undefined with no pen tool.
+  function currentLineMode () {
+    return penTool ? normalizeLineMode(penTool.lineMode) : undefined
+  }
+
+  // Sets the line mode and saves it where SudokuPad does, so its hidden pulldown, when the pen tool is on, shows it too.
+  function applyLineMode (lineMode) {
+    penTool.lineMode = lineMode
+    Framework.setData(LINE_MODE_KEY, lineMode)
+    const select = document.querySelector(`${LINE_MODE_BOX} select`)
+    if (select) select.value = lineMode
   }
 
   function openDialog () {
@@ -843,9 +986,10 @@
     // changes nothing, so a derived set is never saved by accident.
     const edited = new Set()
     let marks = markSettings
+    let lineMode = currentLineMode()
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks })
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode })
     }
     // Reads the color tool's current page now; with no color tool, SudokuPad's own colors.
     const restoreDefaults = () => {
@@ -878,6 +1022,7 @@
                 }
                 if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
+                if (lineMode !== undefined && lineMode !== currentLineMode()) applyLineMode(lineMode)
                 closeDialogKeepingGrid()
               }
             },
@@ -893,6 +1038,11 @@
     // `change` fires when a color picker closes (the swatch the user sees is already the new
     // color) and when a mark box is ticked.
     box.addEventListener('change', (event) => {
+      const mode = event.target.closest('select[data-line-mode]')
+      if (mode) {
+        lineMode = normalizeLineMode(mode.value)
+        return
+      }
       const mark = event.target.closest('input[type="checkbox"]')
       if (mark) {
         marks = { ...marks, [mark.dataset.mark]: mark.checked }
@@ -952,20 +1102,19 @@
   }
 
   // Keeps the pen tool's panel as this script wants it. SudokuPad builds `.penlinemode` each time
-  // the pen tool is turned on and removes it when another tool is; the sliders are added beside it
-  // and taken away with it, and its choices get short labels. Safe to run any number of times.
+  // the pen tool is turned on and removes it when another tool is; the sliders and the page button are
+  // added beside it (it is hidden, not removed, so SudokuPad's own handlers keep their element) and taken
+  // away with it. Safe to run any number of times.
   function syncPenPanel () {
     const mode = document.querySelector(LINE_MODE_BOX)
     const sliders = document.querySelector(`.${SLIDERS}`)
     if (!mode) {
       if (sliders) sliders.remove()
+      document.querySelectorAll(`.${PAGE_BUTTON}`).forEach((el) => el.remove())
       return
     }
-    mode.querySelectorAll('option').forEach((option) => {
-      const label = LINE_MODE_LABELS[option.value]
-      if (label && option.textContent !== label) option.textContent = label
-    })
     if (!sliders) mode.insertAdjacentHTML('afterend', renderPanelSliders(activeThickness, activeOpacity))
+    syncPageButton()
   }
 
   // A drag on a slider leaves the focus on it, and then the arrow and paging keys would move the slider
@@ -986,6 +1135,137 @@
       const focused = document.activeElement
       if (focused && focused.matches(`.${SLIDERS} input`)) focused.blur()
     }, true)
+  }
+
+  // The pen tool, once its selection is wrapped for pages; null until then, and when it cannot be.
+  let penTool = null
+
+  // The index of the page the selected pen is on; the first page before any pen is selected.
+  function currentPage () {
+    return Math.max(0, penPageOf(penTool.selectedColor))
+  }
+
+  // Gives the panel's nine color buttons the pens of page `page`: each keeps its `data-key` and takes the
+  // pen's character as its `data-value` (and title), as SudokuPad's color tool does for its pages, since the
+  // button press and the selection both read `data-value`. Button 0 is not a pen.
+  function setPadPage (page) {
+    document.querySelectorAll('.controls-input button[data-key]').forEach((button) => {
+      const slot = PEN_COLORS.indexOf(button.dataset.key)
+      if (slot === -1) return
+      const pen = PEN_PAGES[page].chars[slot]
+      button.dataset.value = pen
+      button.setAttribute('title', pen)
+      button.setAttribute(PAGE_ATTRIBUTE, String(page + 1))
+    })
+  }
+
+  // The page button, at the right end of the panel's last row: it shows the next page and a dot per page. The picture is
+  // only rewritten when what it shows changed, so the panel's mutation watcher does not loop on it.
+  function syncPageButton () {
+    const mode = document.querySelector(LINE_MODE_BOX)
+    if (!penTool || !mode) return
+    let button = document.querySelector(`.${PAGE_BUTTON}`)
+    if (!button) {
+      mode.insertAdjacentHTML('afterend', `<button class="${PAGE_BUTTON}" data-control="penpage" title="Next pen page"></button>`)
+      button = document.querySelector(`.${PAGE_BUTTON}`)
+    }
+    const page = currentPage()
+    if (button.dataset.shown === String(page)) return
+    button.innerHTML = renderPageIcon(page)
+    button.dataset.shown = String(page)
+  }
+
+  // Selects the pen on the page `delta` pages from the selected one with the same color number: a page
+  // turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
+  function turnPage (delta) {
+    const slot = penSlot(penTool.selectedColor) || PEN_COLORS[0]
+    penTool.setSelectedColor(penCharOn(stepPage(currentPage(), delta, PEN_PAGES.length), slot))
+  }
+
+  // The selected pen is saved under PEN_KEY, and `ToolPen_color` keeps only its color number. After a
+  // reload SudokuPad has selected that number on the first page; the saved pen replaces it when its color
+  // number is that one, so a number changed by stock SudokuPad (the script removed for a while) wins.
+  function restoreSelectedPen (saved) {
+    if (saved && saved !== String(penTool.selectedColor) && penSlot(saved) === String(penTool.selectedColor)) penTool.setSelectedColor(saved)
+  }
+
+  const PAGE_TURN_SKIPS = `.${SLIDERS}`
+
+  // The group the drag highlight lives in, made on first use beside the pen layer; null when the page has no
+  // pen layer.
+  function hintLayer () {
+    let layer = document.getElementById(HINT_LAYER_ID)
+    const penLayer = document.querySelector(PEN_LAYER)
+    if (!layer && penLayer) {
+      layer = document.createElementNS(SVG_NAMESPACE, 'g')
+      layer.id = HINT_LAYER_ID
+      penLayer.after(layer)
+    }
+    return layer
+  }
+
+  function installPenPages (tool) {
+    const found = tool && ['setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint'].every((name) => typeof tool[name] === 'function')
+    if (!found) {
+      console.warn('pen-tool-extras: the pen tool has no setSelectedColor, drawLineHint or tool enter and exit handler, so the second page of pens is not installed')
+      return
+    }
+    penTool = tool
+    const select = tool.setSelectedColor
+    // SudokuPad's own looks for the button holding the color, so the pad shows the pen's page first, and it
+    // saves the pen to `ToolPen_color`, which is put back to the color number the moment it returns.
+    // Its own read of `ToolPen_color` gives a number for a digit (`getData` parses), so the color is a string here.
+    tool.setSelectedColor = function (color) {
+      const pen = String(color)
+      const page = penPageOf(pen)
+      if (page === -1) return select.call(this, color)
+      setPadPage(page)
+      select.call(this, pen)
+      Framework.setData('ToolPen_color', penSlot(pen))
+      Framework.setData(PEN_KEY, pen)
+      syncPageButton()
+    }
+    const enter = tool.handleToolEnter
+    // SudokuPad's own enter selects the saved color number through the wrapper above, which saves it as the
+    // pen, so the saved pen is read first.
+    tool.handleToolEnter = function () {
+      const saved = normalizePen(Framework.getData(PEN_KEY))
+      enter.call(this)
+      restoreSelectedPen(saved)
+    }
+    // The panel's buttons are shared with the other tools, which read their `data-value`.
+    const exit = tool.handleToolExit
+    tool.handleToolExit = function () {
+      exit.call(this)
+      setPadPage(0)
+    }
+    // SudokuPad draws the highlight inside the pen layer; it is moved to the layer beside it the moment it exists.
+    const drawHint = tool.drawLineHint
+    tool.drawLineHint = function (path) {
+      drawHint.call(this, path)
+      const layer = hintLayer()
+      if (layer && this.linePart && this.linePart.parentNode !== layer) layer.appendChild(this.linePart)
+    }
+    // SudokuPad's key handlers run after the tools' own, and stop at the first that answers, so answering Tab
+    // here keeps the letter tool's Tab binding from running, with No Tab Letters installed or not. Shift+Tab is
+    // left alone: a held Shift is the letter tool's own temporary switch.
+    tool.handleKeydown = function (event) {
+      if (Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false
+      event.preventDefault()
+      turnPage(1)
+      return true
+    }
+    document.addEventListener('click', (event) => {
+      if (event.target.closest(`.${PAGE_BUTTON}`)) turnPage(1)
+    })
+    // `preventDefault` needs a listener that is not passive.
+    document.addEventListener('wheel', (event) => {
+      if (event.deltaY === 0 || !event.target.closest('.tool-pen .controls-input') || event.target.closest(PAGE_TURN_SKIPS)) return
+      event.preventDefault()
+      turnPage(event.deltaY < 0 ? -1 : 1)
+    }, { passive: false })
+    if (tool.active) restoreSelectedPen(normalizePen(Framework.getData(PEN_KEY)))
+    syncPageButton()
   }
 
   // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
@@ -1013,7 +1293,7 @@
   function enterEditMode (panel) {
     // Every button is found before anything changes, so a missing one leaves no half edit mode.
     const buttons = PEN_COLORS.map((n) => {
-      const button = panel.querySelector(`button[data-value="${n}"]`)
+      const button = panel.querySelector(`button[data-key="${n}"]`)
       if (!button) throw new Error(`pen-tool-extras: the pen tool has no button for pen color ${n}`)
       return button
     })
@@ -1081,6 +1361,7 @@
       }
     })
     installEdgeMarks(Framework.app)
+    installPenPages(typeof ToolPen !== 'undefined' ? ToolPen.tool : undefined)
     const saved = savedColors(Framework.getData(COLORS_KEY))
     if (saved) {
       adoptColors(saved, [])

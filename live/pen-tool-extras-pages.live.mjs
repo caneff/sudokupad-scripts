@@ -1,0 +1,298 @@
+// Live check of pen-tool-extras.user.js's second page of pens (color characters a to i, drawn dotted)
+// on sudokupad.app in headless Chromium. Run with `npm run test:live`. It needs the network and a
+// Playwright Chromium, so it is not part of `npm test`.
+//
+// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
+// injection time and crackingthecryptic.com stay untested, and so does a touch screen. Each injection
+// time runs the same checks:
+//   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
+//   before-start:  after the page loads, before Start Puzzle
+//   after-start:   after Start Puzzle, when the controls already exist
+// Every press, wheel turn and line is real input. A last group runs with No Tab Letters installed too.
+/* global Framework, ToolPen */
+import { after, before, describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { chromium } from 'playwright'
+
+const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
+const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
+const noTabLetters = readFileSync(new URL('../no-tab-letters.user.js', import.meta.url), 'utf8')
+
+const PEN_KEY = 'PenColor_pen'
+const COLORS_KEY = 'PenColor_colors'
+const POLL_MS = 50
+const SETTLE_MS = 10000
+const START = /Start Puzzle|Continue|Resume/i
+const PAGE_BUTTON = '.pen-tool-extras-page'
+const PAGE_ONE = '123456789'
+const PAGE_TWO = 'abcdefghi'
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Reads until it equals `expected` (compared as JSON) or `timeoutMs` passes, and returns the last
+// reading, so the caller's assert.deepEqual names what it got.
+async function settle (read, expected, timeoutMs = SETTLE_MS) {
+  const want = JSON.stringify(expected)
+  const deadline = Date.now() + timeoutMs
+  let value = await read()
+  while (JSON.stringify(value) !== want && Date.now() < deadline) {
+    await sleep(POLL_MS)
+    value = await read()
+  }
+  return value
+}
+
+let browser
+before(async () => { browser = await chromium.launch() })
+after(async () => { await browser?.close() })
+
+// One browser context per group: its page, its page errors, and the checks. `extra` is the scripts
+// injected besides pen-tool-extras, for the group that has No Tab Letters installed.
+function group (title, mode, extra = []) {
+  describe(title, { concurrency: false }, () => {
+    let context, p, errors
+
+    const read = (fn, arg) => p.evaluate(fn, arg)
+    const saved = (key) => read((k) => Framework.getData(k), key)
+    const selected = () => read(() => ToolPen.tool.selectedColor)
+    const padValues = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
+    const currentButtonKey = () => read(() => { const b = document.querySelector('.tool-pen button.current'); return b && b.dataset.key })
+    const penValues = () => read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => String(v))).sort())
+    const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
+    const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
+    const styleOf = (selector) => read((s) => { const st = window.getComputedStyle(document.querySelector(s)); return { dash: st.strokeDasharray, stroke: st.stroke, width: st.strokeWidth } }, selector)
+    const pageErrors = () => errors.slice()
+
+    const selectPen = async () => {
+      const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
+      const deadline = Date.now() + SETTLE_MS
+      while (!(await shown()) && Date.now() < deadline) {
+        await p.click('#control-pen')
+        await settle(shown, true, 500)
+      }
+      await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
+    }
+
+    const cellCentre = (row, col) => read(([r, c]) => {
+      const box = Framework.app.puzzle.cells.find((cell) => cell.row === r && cell.col === c).elem.getBoundingClientRect()
+      return [box.x + box.width / 2, box.y + box.height / 2]
+    }, [row, col])
+
+    // One free line across the middle of grid row `row`, a real drag; a second line takes another row.
+    const draw = async (row) => {
+      const before = await strokeCount()
+      const [x, y] = await cellCentre(row, 2)
+      await p.mouse.move(x, y)
+      await p.mouse.down()
+      await p.mouse.move(x + 110, y + 4, { steps: 6 })
+      await p.mouse.up()
+      assert.equal(await settle(async () => (await strokeCount()) > before, true), true, 'a stroke appeared')
+    }
+
+    const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
+    const turnPageWithWheel = async (deltaY) => {
+      const box = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.wheel(0, deltaY)
+    }
+
+    const boot = async () => {
+      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+      const start = p.getByRole('button', { name: START }).first()
+      await start.waitFor({ state: 'visible' })
+      if (mode === 'before-start') for (const src of [script, ...extra]) await p.addScriptTag({ content: src })
+      await start.click()
+      await start.waitFor({ state: 'hidden' })
+      await p.locator('#control-undo').waitFor({ state: 'visible' })
+      if (mode === 'after-start') for (const src of [script, ...extra]) await p.addScriptTag({ content: src })
+      await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
+      await read(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolletter', true) })
+      await p.locator('#control-pen').waitFor({ state: 'visible' })
+      await selectPen()
+    }
+    const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+
+    before(async () => {
+      context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+      errors = []
+      p = await context.newPage()
+      p.on('pageerror', (e) => errors.push(String(e)))
+      await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      if (mode === 'document-idle') {
+        await p.addInitScript((sources) => {
+          document.addEventListener('DOMContentLoaded', () => {
+            for (const src of sources) {
+              const s = document.createElement('script')
+              s.textContent = src
+              document.documentElement.appendChild(s)
+            }
+          })
+        }, [script, ...extra])
+      }
+      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+      await boot()
+      await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, 'ToolPen_color', 'ToolLetter_letterMode'])
+      await press(1)
+    })
+    after(async () => {
+      await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, 'ToolPen_color', 'ToolLetter_letterMode'])
+      await context.close()
+    })
+
+    it('the pen tool starts on page 1: SudokuPad\'s own 1 to 9, pen 1 selected, a page button at the right end of the last row', async () => {
+      assert.equal(await padValues(), PAGE_ONE)
+      assert.equal(await selected(), '1')
+      assert.equal(await currentButtonKey(), '1')
+      assert.equal(await p.locator(`${PAGE_BUTTON} svg circle[data-page-dot="filled"]`).count(), 1)
+    })
+
+    it('the page button turns to page 2: the same buttons carry a to i in data-value, and the same color number stays selected', async () => {
+      await press(3)
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO)
+      assert.equal(await selected(), 'c')
+      assert.equal(await currentButtonKey(), '3')
+      assert.equal(await read(() => [...document.querySelectorAll('.tool-pen button[data-key]')].filter((b) => b.dataset.key !== '0').every((b) => b.dataset.key === String('123456789'.indexOf(b.dataset.key) + 1))), true)
+    })
+
+    it('ToolPen_color keeps the color number, never a letter, and the pen is saved under the script\'s own key', async () => {
+      assert.equal(await saved('ToolPen_color'), 3)
+      assert.equal(await saved(PEN_KEY), 'c')
+    })
+
+    it('a page 2 swatch is dotted and a page 1 swatch is not', async () => {
+      const swatch = () => read(() => window.getComputedStyle(document.querySelector('.tool-pen button[data-key="2"]'), ':after').backgroundImage)
+      assert.match(await swatch(), /radial-gradient/)
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      assert.equal(await swatch(), 'none')
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO)
+    })
+
+    it('a line drawn with a page 2 pen is dotted in its partner\'s color; a line with its page 1 partner stays solid', async () => {
+      const colorOf3 = await read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
+      await draw(8)
+      assert.deepEqual((await penValues()).filter((v) => v.endsWith('c')), ['1c'])
+      const dotted = await styleOf('.cell-pen.pencolor-c')
+      assert.notEqual(dotted.dash, 'none')
+      assert.match(dotted.dash, /^0(px)?[ ,]+\d/)
+      assert.equal(await read((c) => { const probe = document.createElement('span'); probe.style.color = c; document.body.appendChild(probe); const v = window.getComputedStyle(probe).color; probe.remove(); return v }, colorOf3), dotted.stroke)
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(selected, '3'), '3')
+      await draw(7)
+      assert.equal((await styleOf('.cell-pen.pencolor-3')).dash, 'none')
+    })
+
+    it('a cell mark drawn with a page 2 pen stays solid', async () => {
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(selected, 'c'), 'c')
+      const [x, y] = await cellCentre(2, 2)
+      await p.mouse.click(x, y)
+      assert.equal(await settle(async () => (await penValues()).includes('5c'), true), true)
+      assert.equal((await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray)), 'none')
+    })
+
+    it('undo removes the page 2 marks, and the replay draws them again, dotted', async () => {
+      const replay = await read(() => Framework.app.getReplay())
+      const total = await strokeCount()
+      for (let i = await undoDepth(); i > 0; i--) await p.click('#control-undo')
+      assert.equal(await settle(strokeCount, 0), 0)
+      await read((r) => Framework.app.loadReplay(r), replay)
+      assert.equal(await settle(strokeCount, total), total)
+      assert.deepEqual((await penValues()).filter((v) => v.endsWith('c')), ['1c', '5c'])
+      assert.notEqual((await styleOf('.cell-pen.pencolor-c')).dash, 'none')
+    })
+
+    it('Tab turns the page, and the letter tool\'s mode is not toggled', async () => {
+      await p.keyboard.press('Tab')
+      assert.equal(await settle(selected, '3'), '3')
+      await p.keyboard.press('Tab')
+      assert.equal(await settle(selected, 'c'), 'c')
+      assert.notEqual(await saved('ToolLetter_letterMode'), true)
+      assert.notEqual(await read(() => ToolLetter.tool.letterMode), true)
+      assert.equal(await saved('ToolPen_color'), 3)
+    })
+
+    it('the mouse wheel over the panel turns the page: down forward, up back; over a slider it does not', async () => {
+      await turnPageWithWheel(100)
+      assert.equal(await settle(selected, '3'), '3')
+      await turnPageWithWheel(-100)
+      assert.equal(await settle(selected, 'c'), 'c')
+      const box = await p.locator('#pen-tool-extras-thickness').boundingBox()
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.wheel(0, 100)
+      assert.equal(await selected(), 'c')
+    })
+
+    it('holding a page 2 button opens the pickers; recoloring pen 3 there recolors page 1\'s pen 3 and the dotted line too', async () => {
+      const box = await p.locator('.tool-pen button[data-key="3"]').boundingBox()
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.down()
+      const picker = p.locator('.pen-tool-extras-picker input[data-pen="3"]')
+      await picker.waitFor({ state: 'attached', timeout: 5000 })
+      await p.mouse.up()
+      await picker.fill('#123456')
+      assert.deepEqual(await saved(COLORS_KEY).then((c) => c && c[3]), '#123456')
+      assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, 'rgb(18, 52, 86)')
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(selected, '3'), '3')
+      assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, 'rgb(18, 52, 86)')
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(selected, 'c'), 'c')
+      await read((k) => Framework.removeData(k), COLORS_KEY)
+    })
+
+    it('leaving the pen tool puts the buttons back on 1 to 9, and returning shows page 2 with pen c selected', async () => {
+      await read(() => Framework.app.changeTool('normal'))
+      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      assert.equal(await p.locator(PAGE_BUTTON).count(), 0)
+      await selectPen()
+      assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO)
+      assert.equal(await selected(), 'c')
+      assert.equal(await currentButtonKey(), '3')
+    })
+
+    it('after a page reload the pen tool opens on page 2 with the same pen, and ToolPen_color is still a digit', async () => {
+      assert.equal(await saved('ToolPen_color'), 3)
+      await reload()
+      assert.equal(await settle(selected, 'c'), 'c')
+      assert.equal(await padValues(), PAGE_TWO)
+      assert.equal(await currentButtonKey(), '3')
+      assert.equal(await saved('ToolPen_color'), 3)
+      assert.equal(await saved(PEN_KEY), 'c')
+    })
+
+    it('with the script gone, stock SudokuPad opens the pen tool on the saved digit with no error', async () => {
+      const bare = await context.newPage()
+      const bareErrors = []
+      bare.on('pageerror', (e) => bareErrors.push(String(e)))
+      await bare.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await bare.goto(url, { waitUntil: 'load', timeout: 60000 })
+      await bare.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+      const start = bare.getByRole('button', { name: START }).first()
+      await start.waitFor({ state: 'visible' })
+      await start.click()
+      await bare.locator('#control-undo').waitFor({ state: 'visible' })
+      await bare.evaluate(() => Framework.setSetting('toolpen', true))
+      await bare.locator('#control-pen').waitFor({ state: 'visible' })
+      const shown = () => bare.locator('.tool-pen button[data-key="1"]').isVisible()
+      const deadline = Date.now() + SETTLE_MS
+      while (!(await shown()) && Date.now() < deadline) {
+        await bare.click('#control-pen')
+        await settle(shown, true, 500)
+      }
+      assert.equal(await bare.evaluate(() => ToolPen.tool.selectedColor), 3)
+      assert.deepEqual(bareErrors, [])
+      await bare.close()
+    })
+
+    it('no page error was raised in the whole group', () => {
+      assert.deepEqual(pageErrors(), [])
+    })
+  })
+}
+
+for (const mode of ['document-idle', 'before-start', 'after-start']) group(`injected ${mode}`, mode)
+group('injected after-start, with No Tab Letters installed too', 'after-start', [noTabLetters])

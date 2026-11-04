@@ -8,7 +8,8 @@ const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
   HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
-  CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick
+  CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
+  PEN_PAGES, penPageOf, penSlot, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES
 } = require('./pen-tool-extras.user.js')
 
 // The edge cycle, a step forward and a step back.
@@ -367,14 +368,15 @@ test('normalizeOpacity falls back to 80 for nothing saved and for anything untru
   }
 })
 
-test('buildOpacityCss at 80 gives SudokuPad\'s own pen opacity of 0.8 on every pen stroke, under :root:root', () => {
-  assert.equal(buildOpacityCss(80), ':root:root .cell-pen { opacity: 0.8; }')
+test('buildOpacityCss at 80 fades the pen layer to SudokuPad\'s own 0.8 as one group and leaves each stroke solid, under :root:root', () => {
+  assert.equal(buildOpacityCss(80), ':root:root .cell-pen { opacity: 1; }\n:root:root #cell-pen { opacity: 0.8; }')
 })
 
 test('buildOpacityCss writes the fraction of the percent, and 1 at 100', () => {
-  assert.equal(buildOpacityCss(20), ':root:root .cell-pen { opacity: 0.2; }')
-  assert.equal(buildOpacityCss(35), ':root:root .cell-pen { opacity: 0.35; }')
-  assert.equal(buildOpacityCss(100), ':root:root .cell-pen { opacity: 1; }')
+  const layer = (css) => css.split('\n')[1]
+  assert.equal(layer(buildOpacityCss(20)), ':root:root #cell-pen { opacity: 0.2; }')
+  assert.equal(layer(buildOpacityCss(35)), ':root:root #cell-pen { opacity: 0.35; }')
+  assert.equal(layer(buildOpacityCss(100)), ':root:root #cell-pen { opacity: 1; }')
 })
 
 // The id, range and value of each range input in markup, in order.
@@ -734,6 +736,112 @@ test('corner marks are half the thickness, like edge marks', () => {
 
 test('the corner X is two crossing diagonals of half-size s, drawn from the point it is centred on', () => {
   assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
+})
+
+// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dotted.
+test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dotted', () => {
+  assert.deepEqual(PEN_PAGES, [
+    { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dotted: false },
+    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true }
+  ])
+})
+
+test('penPageOf, penSlot and penCharOn move between a color character, its page and its button number', () => {
+  assert.equal(penPageOf('3'), 0)
+  assert.equal(penPageOf('c'), 1)
+  assert.equal(penPageOf('z'), -1)
+  assert.equal(penSlot('c'), '3')
+  assert.equal(penSlot('3'), '3')
+  assert.equal(penSlot('i'), '9')
+  assert.equal(penCharOn(1, '1'), 'a')
+  assert.equal(penCharOn(0, '9'), '9')
+  assert.equal(penCharOn(1, '9'), 'i')
+})
+
+test('normalizePen keeps a saved color character of any page and nothing else', () => {
+  for (const ok of ['1', '9', 'a', 'i']) assert.equal(normalizePen(ok), ok)
+  // SudokuPad's getData parses a saved '3' into the number 3
+  assert.equal(normalizePen(3), '3')
+  for (const bad of [null, undefined, 0, 10, 3.5, 'j', 'z', '0', '', 'ab', ['a'], { a: 1 }]) assert.equal(normalizePen(bad), null, JSON.stringify(bad))
+})
+
+test('stepPage goes round the pages in either direction, whatever the count', () => {
+  assert.equal(stepPage(0, 1, 2), 1)
+  assert.equal(stepPage(1, 1, 2), 0)
+  assert.equal(stepPage(0, -1, 2), 1)
+  assert.equal(stepPage(1, -1, 3), 0)
+  assert.equal(stepPage(2, 1, 3), 0)
+})
+
+// The rules of buildPagesCss as { selector, body }.
+const rulesOf = (css) => css.split('\n').filter(Boolean).map((rule) => { const i = rule.indexOf(' { '); return { selector: rule.slice(0, i), body: rule.slice(i + 3, -2) } })
+
+test('every page 2 color character strokes in the color of its page 1 partner, so one recolor changes both', () => {
+  const rules = rulesOf(buildPagesCss(5))
+  for (let i = 0; i < 9; i++) {
+    const rule = rules.find((r) => r.selector === `.pencolor-${PEN_PAGES[1].chars[i]}`)
+    assert.equal(rule && rule.body, `stroke: var(--puzzle-pencolor-${i + 1});`)
+  }
+})
+
+test('dots are on lines only: the free lines and the edge and diagonal lines, never 5, 6 or a mark', () => {
+  const dots = rulesOf(buildPagesCss(5)).filter((r) => r.body.startsWith('stroke-dasharray'))
+  const named = dots.flatMap((r) => r.selector.match(/\.pen-([0-9a-z])/g)).map((v) => v.slice(5))
+  assert.deepEqual([...new Set(named)].sort(), ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
+  for (const r of dots) {
+    assert.match(r.selector, /^:root:root \.cell-pen:is\(/)
+    assert.match(r.selector, /:is\(\.pencolor-a,\.pencolor-b,\.pencolor-c,\.pencolor-d,\.pencolor-e,\.pencolor-f,\.pencolor-g,\.pencolor-h,\.pencolor-i\)$/)
+  }
+})
+
+test('the dot spacing is two line widths, snapped so a cell of 64 holds whole dots and a diagonal cell of 90.51 does too, the last dot a hair before the segment\'s end', () => {
+  const gaps = (t) => rulesOf(buildPagesCss(t)).filter((r) => r.body.startsWith('stroke-dasharray')).map((r) => Number(r.body.match(/^stroke-dasharray: 0 ([\d.]+);$/)[1]))
+  const [ortho, diagonal] = [64, 64 * Math.SQRT2]
+  // [thickness, dots in a cell, dots in a diagonal]: 64 / 10 = 6.4 -> 6 and 90.51 / 10 = 9.05 -> 9; 64 / 24 = 2.67 -> 3 and 90.51 / 24 = 3.77 -> 4; 32 dots at 1
+  for (const [thickness, cell, diag] of [[5, 6, 9], [12, 3, 4], [1, 32, 45]]) {
+    const [g1, g2] = gaps(thickness)
+    assert.equal(Math.round(ortho / g1), cell, `thickness ${thickness}`)
+    assert.equal(Math.round(diagonal / g2), diag, `thickness ${thickness}`)
+    for (const [g, n, length] of [[g1, cell, ortho], [g2, diag, diagonal]]) {
+      assert.equal(n * g < length && n * g > length - 0.02, true, `${n} dots of ${g} end a hair before ${length}`)
+    }
+  }
+})
+
+test('buildPagesCss refuses a thickness it cannot save', () => {
+  assert.throws(() => buildPagesCss(0), RangeError)
+})
+
+test('a page 2 swatch is dotted in the pen color of its button, and a page 1 swatch is left to SudokuPad', () => {
+  const css = buildPagesCss(5)
+  for (let n = 1; n <= 9; n++) {
+    const rule = rulesOf(css).find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="2"]:after`)
+    assert.ok(rule, `swatch ${n}`)
+    assert.match(rule.body, new RegExp(`radial-gradient\\(.*var\\(--puzzle-pencolor-${n}\\)`))
+  }
+  assert.equal(css.includes('data-pen-page="1"'), false)
+})
+
+test('the page button samples the page it turns to: dots on page 2, a solid line on page 1, and a dot for each page with the current one filled', () => {
+  const fromOne = renderPageIcon(0)
+  assert.match(fromOne, /data-page-sample="dotted"/)
+  assert.equal((fromOne.match(/<circle/g) || []).length, 5 + 2)
+  const fromTwo = renderPageIcon(1)
+  assert.match(fromTwo, /data-page-sample="solid"/)
+  assert.equal((fromTwo.match(/<circle/g) || []).length, 2)
+  assert.equal((fromTwo.match(/<path/g) || []).length, 1)
+  for (const icon of [fromOne, fromTwo]) {
+    assert.equal((icon.match(/data-page-dot="filled"/g) || []).length, 1)
+    assert.equal((icon.match(/data-page-dot="outline"/g) || []).length, 1)
+  }
+  assert.match(fromOne, /<circle[^>]*data-page-dot="filled"[^>]*\/>[^]*<circle[^>]*data-page-dot="outline"/)
+  assert.match(fromTwo, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
+})
+
+test('the line mode choices are SudokuPad\'s three, and anything else saved reads as both', () => {
+  assert.deepEqual(LINE_MODES.map(([value]) => value), ['both', 'centeronly', 'edgeonly'])
+  for (const ok of ['both', 'centeronly', 'edgeonly']) assert.equal(normalizeLineMode(ok), ok)
+  for (const bad of [null, undefined, 'edge', 1, ['both'], '']) assert.equal(normalizeLineMode(bad), 'both', JSON.stringify(bad))
 })
 
 test('VERSION is the @version in the script header', () => {
