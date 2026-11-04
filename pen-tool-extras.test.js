@@ -1211,6 +1211,16 @@ test('the chevrons and the line scale with the thickness: wider chevrons, wider 
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
+test('below the default thickness the chevrons keep their size at the default and only the thin line gets thinner, so the direction shows at 1', () => {
+  const one = chevronLine('1', true, 0, 0, 1)
+  const five = chevronLine('1', true, 0, 0, THICKNESS.fallback)
+  assert.equal(one.chevrons, five.chevrons)
+  assert.equal(one.chevronWidth, five.chevronWidth)
+  assert.equal(one.lineWidth, CHEVRON.line)
+  assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
+  assert.equal(one.chevronWidth > one.lineWidth * 5, true, `a chevron stroke of ${one.chevronWidth} stands clear of a line of ${one.lineWidth}`)
+})
+
 test('at the largest thickness a chevron on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
   // a top edge line, 'a', on row 0: the chevron's wings are the furthest from the edge itself
   const shape = chevronLine('a', true, 0, 0, THICKNESS.max)

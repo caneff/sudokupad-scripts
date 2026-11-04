@@ -67,7 +67,8 @@
   dashes are the same length across a cell boundary.
 - **chevron line** — a line drawn with a page 3 pen: a thin line with a run of chevrons along it, pointing the way the line was
   dragged. Only lines are chevron lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Its size and
-  spacing scale with the thickness, and it follows the opacity. Each cell's segment fits whole chevrons, half a space in from
+  spacing scale with the thickness from the default up (a chevron is never smaller than at 5, while the thin line keeps
+  thinning), and it follows the opacity. Each cell's segment fits whole chevrons, half a space in from
   each end, so a run reads as one across a cell boundary.
 - **direction character** — a page 3 pen is two color characters, since a pen value has no direction: the one on its button
   (`j`, `l`, `n`, `p`, `r`, `t`, `v`, `x`, `z`) for a line dragged the way SudokuPad draws the value (right, down, up and right for `d`,

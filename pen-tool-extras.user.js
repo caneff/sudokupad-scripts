@@ -402,7 +402,8 @@
     f: [[0, 1], [1, 0]],
     g: [[0, 0], [1, 1]]
   }
-  // The sizes of a chevron line, in line widths (the thickness setting): a chevron's wings reach `halfLength` back and
+  // The sizes of a chevron line, in line widths (the thickness setting; the line's own width follows it all the way down, but a
+  // chevron is never smaller than at the default thickness, so its direction stays visible at 1): a chevron's wings reach `halfLength` back and
   // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the thin line and the
   // chevrons; `spacing` is the distance between two chevrons' middles, fitted to a whole number per segment. The furthest a
   // chevron reaches off its line, halfWidth plus half the stroke at the largest thickness, stays inside what Dark Page keeps
@@ -492,9 +493,11 @@
     const [from, to] = (forward ? [start, end] : [end, start]).map(([r, c]) => [(col + c) * CELL_UNITS, (row + r) * CELL_UNITS])
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
-    const [half, wide] = [CHEVRON.halfLength * thickness, CHEVRON.halfWidth * thickness]
+    // Chevrons keep the size they have at the default thickness below it; only the thin line gets thinner.
+    const size = Math.max(thickness, THICKNESS.fallback)
+    const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
     // The shortest segment (a cell side) holds at least two even at the largest thickness, so there is never none.
-    const count = Math.round(length / (CHEVRON.spacing * thickness))
+    const count = Math.round(length / (CHEVRON.spacing * size))
     let chevrons = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
@@ -505,7 +508,7 @@
       line: `M${pointText(from)}L${pointText(to)}`,
       chevrons,
       lineWidth: CHEVRON.line * thickness,
-      chevronWidth: CHEVRON.stroke * thickness
+      chevronWidth: CHEVRON.stroke * size
     }
   }
 
