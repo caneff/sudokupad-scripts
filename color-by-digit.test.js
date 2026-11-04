@@ -473,7 +473,7 @@ test('auto: the dialog box opens at the draft it is given', () => {
   assert.doesNotMatch(editor([], [], []), /data-role="auto-draft" checked/)
 })
 
-test('auto: the dialog box label drops the repeated "Auto mode:" and the box keeps "Auto mode" as its accessible name', () => {
+test('auto: the dialog box label reads "Keep colors in step with digits and centre marks" and the box is named "Auto mode"', () => {
   const html = editor([], [], [])
   assert.match(html, /<label for="color-by-digit-auto-draft"[^>]*>Keep colors in step with digits and centre marks<\/label>/)
   assert.doesNotMatch(html, /Auto mode:/)
