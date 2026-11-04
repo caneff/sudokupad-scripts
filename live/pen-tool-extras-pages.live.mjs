@@ -398,7 +398,7 @@ function group (title, mode, extra = []) {
 
     it('Dashed lines unticked: Save moves a page 2 pen to page 1, the button, Tab and the wheel skip page 2, lines already drawn in it still draw, and it survives a reload', () => withStyles(async () => {
       await toPage(PAGE_TWO, 3)
-      await draw(5)
+      // The page 2 line the checks before this one left on the grid.
       const before = await styleOf('.cell-pen.pencolor-c')
       assert.notEqual(before.dash, 'none', 'a page 2 line is dashed')
       await openEditor()
@@ -437,7 +437,6 @@ function group (title, mode, extra = []) {
       await p.locator(PAGE_BUTTON).click()
       assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO, 'page 2 is back in the rotation')
       await press(3)
-      while ((await undoDepth()) > 0) await p.click('#control-undo')
     }))
 
     it('Directional arrow lines unticked while on page 3: Save moves the pen to the same number on page 1, and page 3 is skipped', () => withStyles(async () => {
