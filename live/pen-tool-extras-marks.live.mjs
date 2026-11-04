@@ -870,6 +870,27 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         })
       }
 
+      // The overlay is the dialog's backdrop over the whole page. SudokuPad closes the dialog on a press
+      // on it, so the grid never saw the press and the release marks wherever its stale pointer was.
+      it('a press on the overlay over the grid closes the dialog and leaves no pen mark', async () => {
+        await openEditor()
+        await clearMarks()
+        const [x, y] = await cellCentre(p, 0, 0)
+        await p.mouse.click(x, y)
+        await editor().waitFor({ state: 'detached' })
+        assert.deepEqual(await read(() => Framework.app.puzzle.cells.filter((cell) => cell.pen.length).map((cell) => [cell.row, cell.col])), [])
+      })
+
+      it('a click on the grid after the overlay press still makes a mark', async () => {
+        await openEditor()
+        const [x, y] = await cellCentre(p, 0, 0)
+        await p.mouse.click(x, y)
+        await editor().waitFor({ state: 'detached' })
+        await p.mouse.click(x, y)
+        assert.equal(await anyMark(), true)
+        await clearMarks()
+      })
+
       it('the settings entry leaves no pen mark under it', async () => {
         const open = async () => {
           await openSettings(p)

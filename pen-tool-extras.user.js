@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.4.1
+// @version      1.4.2
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), puts two sliders in the pen tool's panel for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through they are, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks and for the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.4.1'
+  const VERSION = '1.4.2'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -653,13 +653,9 @@
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
 
-  // Closes the open dialog. SudokuPad runs a dialog button's handler on the press and removes the
-  // dialog at once, so the release lands on the grid and the pen tool takes it for a click on the
-  // cell under the button. This swallows the events that end the press before the grid sees them,
-  // until the next press, which ends the swallowing even when no release came (a close from the
-  // keyboard).
-  function closeDialogKeepingGrid () {
-    Framework.closeDialog()
+  // Swallows the events that end the current press before the grid sees them, until the next press,
+  // which ends the swallowing even when no release came (a close from the keyboard).
+  function swallowRelease () {
     const swallow = (event) => event.stopImmediatePropagation()
     const stop = () => {
       RELEASE_EVENTS.forEach((type) => window.removeEventListener(type, swallow, true))
@@ -667,6 +663,24 @@
     }
     RELEASE_EVENTS.forEach((type) => window.addEventListener(type, swallow, true))
     window.addEventListener('pointerdown', stop, true)
+  }
+
+  // Closes the open dialog. SudokuPad runs a dialog button's handler on the press and removes the
+  // dialog at once, so the release lands on the grid and the pen tool takes it for a click on the
+  // cell under the button.
+  function closeDialogKeepingGrid () {
+    Framework.closeDialog()
+    swallowRelease()
+  }
+
+  // SudokuPad also closes a dialog on a press on its overlay, which covers the page. The grid never
+  // saw that press, so the release would mark the cell of the pointer's last position on the grid.
+  // The overlay of this script's own dialog is told apart by the editor inside it.
+  function swallowOverlayPress () {
+    window.addEventListener('pointerdown', (event) => {
+      const target = event.target
+      if (target.classList && target.classList.contains('dialog-overlay') && target.querySelector('#pen-tool-extras-editor')) swallowRelease()
+    }, true)
   }
 
   // The grid corner under the pointer, as cornerAt names it, or null: also null while both corner
@@ -1050,6 +1064,7 @@
   Framework.getApp().then(async () => {
     installHoldToEdit()
     installPenPanel()
+    swallowOverlayPress()
     markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
     adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
     adoptOpacity(normalizeOpacity(Framework.getData(OPACITY_KEY)))
