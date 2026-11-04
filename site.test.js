@@ -8,9 +8,12 @@ const path = require('node:path')
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const SCRIPT_SUFFIX = '.user.js'
 const SITE_DIR = path.join(__dirname, 'site')
+// The two places the site is served from; a link to either by its full address breaks on the other.
+const SITE_ADDRESS = /^https?:\/\/(caneff\.github\.io\/sudokupad-scripts|[^/]*netlify)/i
 const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
-const PAGES = [HOME, DETAILS]
+// Every page of the site, so a page added later is held to the same checks.
+const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
@@ -19,10 +22,9 @@ const targets = page => [...page.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m =>
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
 const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length))
 const rootScripts = () => fs.readdirSync(__dirname).filter(f => f.endsWith(SCRIPT_SUFFIX))
-// A link to another page of the site: no scheme, no leading slash (the site is served from a subpath on
-// GitHub Pages and from the root on Netlify), no fragment or query.
-const isRelative = t => !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(t)
-const siteLinks = page => targets(page).filter(t => isRelative(t) && !t.startsWith('?'))
+// A link into the site itself: not a URL with a scheme and not a fragment. The site is served from a
+// subpath on GitHub Pages and from the root on Netlify, so these must be relative.
+const siteLinks = page => targets(page).filter(t => !/^([a-z][a-z0-9+.-]*:|#)/i.test(t))
 
 test('every *.user.js in the repo root has an install link on the homepage', () => {
   const scripts = rootScripts()
@@ -54,10 +56,16 @@ for (const name of PAGES) {
     assert.doesNotMatch(page, /<script\b/i)
   })
 
-  test(`every link from ${name} to another page of the site is relative and names a file that exists`, () => {
+  test(`every link from ${name} into the site is relative and names a file in site/`, () => {
     for (const t of siteLinks(page)) {
-      assert.equal(fs.existsSync(path.join(SITE_DIR, t.split(/[?#]/)[0])), true, `site/${name} links ${t}, which is not in site/`)
+      assert.match(t, /^[^/#?]/, `site/${name} links ${JSON.stringify(t)}, which is empty or not relative`)
+      const file = path.resolve(SITE_DIR, t.split(/[?#]/)[0])
+      assert.equal(file.startsWith(SITE_DIR + path.sep) && fs.existsSync(file), true, `site/${name} links ${t}, which is not a file in site/`)
     }
+  })
+
+  test(`${name} links no page of the site by its absolute address`, () => {
+    for (const t of targets(page)) assert.doesNotMatch(t, SITE_ADDRESS, `site/${name} links ${t} by its absolute address`)
   })
 }
 

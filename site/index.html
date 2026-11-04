@@ -4,25 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SudokuPad scripts</title>
+<link rel="stylesheet" href="style.css">
 <style>
-  :root {
-    color-scheme: light dark;
-    /* SudokuPad's own button purple, read from its controls: rgb(106, 27, 154). */
-    --accent: #6a1b9a; --on-accent: #fff; --rule: #bbb;
-  }
+  :root { --rule: #bbb; }
   @media (prefers-color-scheme: dark) {
-    :root { --accent: #d2a8f0; --on-accent: #1a0a24; --rule: #555; }
+    :root { --rule: #555; }
   }
-  body { max-width: 68rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
-  a { color: var(--accent); }
-  h1, h2 { margin: 0 0 .5rem; }
-  h2 { font-size: 1.2rem; }
-  p { margin: 0 0 .5rem; }
   .entries { display: grid; grid-template-columns: 1fr; gap: 1px; margin: 1.5rem 0; background: var(--rule); border-block: 1px solid var(--rule); }
   section { display: flex; gap: 1.25rem; align-items: flex-start; padding: 1.25rem 1rem 1rem 0; background: Canvas; }
   section img { flex: none; max-width: 50%; height: auto; }
-  .install { display: inline-block; padding: .2rem .7rem; border-radius: 3px; background: var(--accent); color: var(--on-accent); font-size: .9rem; text-decoration: none; }
-  .install:hover, .install:focus-visible { text-decoration: underline; }
   @media (min-width: 52rem) {
     .entries { grid-template-columns: 1fr 1fr; }
     section { padding-left: 1rem; }

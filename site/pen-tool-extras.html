@@ -4,22 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pen Tool Extras: SudokuPad scripts</title>
+<link rel="stylesheet" href="style.css">
 <style>
-  :root {
-    color-scheme: light dark;
-    /* SudokuPad's own button purple, read from its controls: rgb(106, 27, 154). */
-    --accent: #6a1b9a; --on-accent: #fff; --rule: #bbb;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --accent: #d2a8f0; --on-accent: #1a0a24; --rule: #555; }
-  }
-  body { max-width: 68rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
-  a { color: var(--accent); }
-  h1, h2 { margin: 0 0 .5rem; }
-  h2 { font-size: 1.2rem; }
-  p { margin: 0 0 .5rem; }
-  .install { display: inline-block; padding: .2rem .7rem; border-radius: 3px; background: var(--accent); color: var(--on-accent); font-size: .9rem; text-decoration: none; }
-  .install:hover, .install:focus-visible { text-decoration: underline; }
   h2 { margin-top: 1.5rem; }
   ul { margin: 0 0 .5rem; padding-left: 1.25rem; }
   li { margin-bottom: .25rem; }
@@ -75,7 +61,7 @@
   <p>Click a cell edge with the pen to cycle an X, direction arrows and a circle. Click near a grid corner to cycle an X and a circle. Each mark is a checkbox in the dialog, so you choose which ones the click cycles through.</p>
   <figure>
     <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-corners-grid.png" alt="Colored X and circle marks on grid corners" width="667" height="667">
-    <figcaption>Corner marks.</figcaption>
+    <figcaption>Grid-corner marks.</figcaption>
   </figure>
 
   <h2>Right click goes backwards</h2>
