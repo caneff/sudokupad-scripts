@@ -53,7 +53,8 @@
   dialog also holds both sliders (drafts, applied on Save) and two **slider boxes**, Show thickness slider and Show
   opacity slider, saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
   its row stays as an empty row of the same height, and with both hidden the block is not drawn. Its Restore defaults
-  sets both dialog sliders back to their defaults for Save, like the colors.
+  resets both panel sliders at once (and clears what they saved, so Cancel does not bring the old values back); the dialog's
+  Dash length and slider boxes go back to their defaults for Save, like the colors.
 - **opacity** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting how see-through the pen layer is (lines, cell circles and
   crosses, edge marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under
   `PenColor_opacity`. SudokuPad's own is 80, set on each stroke (`.cell-pen { opacity: 0.8 }`); the script sets it on the
@@ -70,8 +71,8 @@
   spacing scale with the thickness, and it follows the opacity. Each cell's segment fits whole chevrons, half a space in from
   each end, so a run reads as one across a cell boundary.
 - **direction character** — a page 3 pen is two color characters, since a pen value has no direction: the one on its button
-  (`j`, `l`, `n`, `p`, `r`, `t`, `v`, `x`, `z`) for a line dragged the way SudokuPad draws the value (right, down, or up and right
-  for `d`, `f`), and the **reverse character** (`k`, `m`, `o`, `q`, `s`, `u`, `w`, `y`, `0`) for the other way. The pen action
+  (`j`, `l`, `n`, `p`, `r`, `t`, `v`, `x`, `z`) for a line dragged the way SudokuPad draws the value (right, down, up and right for `d`,
+  down and left for `f`), and the **reverse character** (`k`, `m`, `o`, `q`, `s`, `u`, `w`, `y`, `0`) for the other way. The pen action
   of a line carries it (`1k` is the line `1` in pen 1's reverse character), so each segment of one drag stores its own way.
   Only the first is ever selected.
 - **color character** — the one character a stroke stores for its pen color, and the replay holds as `pc:<character>`: `1`

@@ -861,22 +861,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(sameAt('0.3'), true), true, 'after a reload')
       })
 
-      it('Restore defaults sets the dialog\'s opacity slider to 80 for Save: Cancel afterwards leaves the saved opacity and the marks, Save clears it and draws at 0.8', async () => {
+      it('Restore defaults puts the panel slider back to 80 and clears the saved opacity at once, and Cancel afterwards does not bring it back', async () => {
         assert.equal(await savedOpacity(), 30)
         await openEditor()
         assert.equal(await editor().locator('input[type=range]').count(), 3)
         await dialogButton('Restore defaults').click()
-        assert.equal(await editor().locator('input[data-setting="opacity"]').inputValue(), '80')
-        assert.equal(await savedOpacity(), 30, 'nothing is saved before Save')
-        assert.equal(await settle(sameAt('0.3'), true), true)
-        await closeWith('Cancel')
-        assert.equal(await savedOpacity(), 30)
-        assert.equal(await settle(sameAt('0.3'), true), true)
-        await openEditor()
-        await dialogButton('Restore defaults').click()
-        await closeWith('Save')
-        assert.equal(await savedOpacity(), null)
         assert.equal(await settle(() => slider().inputValue(), '80'), '80')
+        assert.equal(await settle(sameAt('0.8'), true), true)
+        assert.equal(await savedOpacity(), null)
+        await closeWith('Cancel')
+        assert.equal(await savedOpacity(), null)
         assert.equal(await settle(sameAt('0.8'), true), true)
       })
 

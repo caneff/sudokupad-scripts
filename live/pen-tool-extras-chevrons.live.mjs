@@ -12,9 +12,12 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { effectiveOpacities } from './settings.mjs'
 
+// The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
+const { CHEVRON } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
@@ -157,6 +160,8 @@ function group (title, mode) {
       errors = []
       p = await context.newPage()
       p.on('pageerror', (e) => errors.push(String(e)))
+      // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
+      p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console.error: ${m.text()}`) })
       await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
       if (mode === 'document-idle') {
         await p.addInitScript((source) => {
@@ -180,13 +185,19 @@ function group (title, mode) {
     it('page 3 is the nine chevron pens: the buttons carry the forward characters j, l, n, ... and each has a chevron swatch in its pen color', async () => {
       assert.equal(await padValues(), PAGE_THREE)
       assert.equal(await selected(), 'n')
+      // each swatch is a mask over a background of the pen color: the color a probe element resolves --puzzle-pencolor-N to
       const swatches = await read(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
         const after = window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after')
-        return { mask: after.webkitMaskImage || after.maskImage, color: after.backgroundColor, pen: window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim() }
+        const probe = document.createElement('span')
+        probe.style.color = `var(--puzzle-pencolor-${n})`
+        document.body.appendChild(probe)
+        const pen = window.getComputedStyle(probe).color
+        probe.remove()
+        return { mask: after.webkitMaskImage || after.maskImage, color: after.backgroundColor, pen }
       }))
-      for (const [i, s] of swatches.entries()) {
-        assert.match(s.mask, /^url\("data:image\/svg\+xml,/, `swatch ${i + 1} is a mask`)
-        assert.notEqual(s.color, 'rgba(0, 0, 0, 0)', `swatch ${i + 1} has the pen color behind its mask`)
+      for (const [i, sw] of swatches.entries()) {
+        assert.match(sw.mask, /^url\("data:image\/svg\+xml,/, `swatch ${i + 1} is a mask`)
+        assert.equal(sw.color, sw.pen, `swatch ${i + 1} is the color of pen ${i + 1}`)
       }
       assert.equal(await saved('ToolPen_color'), 3)
       assert.equal(await saved(PEN_KEY), 'n')
@@ -204,7 +215,7 @@ function group (title, mode) {
       }
     })
 
-    it('a line dragged left is stored with the pen\'s other character and its chevrons point left', async () => {
+    it('a line dragged left is stored with the pen\'s reverse character and its chevrons point left', async () => {
       await drag([[4.5, 4.5], [4.5, 2.5]])
       assert.deepEqual(await penOf(['4,2', '4,3']), ['4,2:1o', '4,3:1o'])
       const groups = (await chevronGroups()).filter((g) => g.cls.endsWith('pencolor-o'))
@@ -229,7 +240,7 @@ function group (title, mode) {
       assert.deepEqual(await penOf(['6,2', '6,3', '6,4', '7,2', '7,3']), ['6,2:1n', '6,3:1n', '6,4:2n', '7,2:1o', '7,3:1o'])
     })
 
-    it('a drag up and then right stores the up segment with the other character: 2 is drawn downward, so up is the reverse', async () => {
+    it('a drag up and then right stores the up segment with the reverse character: 2 is drawn downward, so up is the reverse', async () => {
       await drag([[8.5, 6.5], [7.5, 6.5], [7.5, 7.5]])
       assert.deepEqual(await penOf(['7,6']), ['7,6:1n', '7,6:2o'])
       const headingOfClass = async (cls) => (await chevronGroups()).filter((g) => g.cls === cls).flatMap((g) => headings(g.chevrons))
@@ -237,7 +248,7 @@ function group (title, mode) {
       assert.deepEqual([...new Set((await headingOfClass('cell-pen pen-1 pencolor-n')).slice(-1))], ['E'])
     })
 
-    it('center diagonals and edge lines (straight and diagonal) store their way too: down-right is forward, up-left is the other character', async () => {
+    it('center diagonals and edge lines (straight and diagonal) store their way too: down-right is forward, up-left is the reverse character', async () => {
       // center diagonal e, dragged down and right, then up and left on another row
       await drag([[0.5, 5.5], [1.5, 6.5]])
       await drag([[1.5, 8.5], [0.5, 7.5]])
@@ -306,6 +317,19 @@ function group (title, mode) {
       assert.equal(await settle(async () => (await chevronGroups()).length, drawn - 4), drawn - 4, 'the erased lines are no longer drawn')
     })
 
+    it('dragging a line over a run drawn both ways erases all of it: a cell stored in one character is not skipped for the other\'s', async () => {
+      // (5,2) is drawn right (1n) and (5,3) left (1o); one erase drag over both removes both, in either direction
+      await drag([[5.5, 2.5], [5.5, 3.5]])
+      await drag([[5.5, 4.5], [5.5, 3.5]])
+      assert.deepEqual(await penOf(['5,2', '5,3']), ['5,2:1n', '5,3:1o'])
+      await eraseDrag([[5.5, 2.5], [5.5, 4.5]])
+      assert.deepEqual(await settle(() => penOf(['5,2', '5,3']), []), [])
+      await drag([[5.5, 2.5], [5.5, 3.5]])
+      await drag([[5.5, 4.5], [5.5, 3.5]])
+      await eraseDrag([[5.5, 4.5], [5.5, 2.5]])
+      assert.deepEqual(await settle(() => penOf(['5,2', '5,3']), []), [])
+    })
+
     it('dragging a line over one drawn the same way erases it too, and the line can then be drawn again', async () => {
       await drag([[2.5, 2.5], [2.5, 4.5]])
       assert.deepEqual(await penOf(['2,2', '2,3']), ['2,2:1n', '2,3:1n'])
@@ -319,17 +343,17 @@ function group (title, mode) {
       const slider = (value) => p.locator('#pen-tool-extras-thickness').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
       const sample = async () => { const [g] = (await chevronGroups()).filter((x) => x.cls === 'cell-pen pen-1 pencolor-o'); return { lineWidth: g.lineWidth, chevronWidth: g.chevronWidth, count: headings(g.chevrons).length } }
       await slider(5)
-      const normal = await settle(async () => (await sample()).lineWidth, 1.25)
-      assert.equal(normal, 1.25)
+      const normal = await settle(async () => (await sample()).lineWidth, CHEVRON.line * 5)
+      assert.equal(normal, CHEVRON.line * 5)
       const base = await sample()
       await slider(16)
-      const big = await settle(async () => (await sample()).lineWidth, 4)
-      assert.equal(big, 4)
+      const big = await settle(async () => (await sample()).lineWidth, CHEVRON.line * 16)
+      assert.equal(big, CHEVRON.line * 16)
       const wide = await sample()
-      assert.equal(wide.chevronWidth, 7.2)
+      assert.equal(wide.chevronWidth, CHEVRON.stroke * 16)
       assert.equal(wide.count < base.count, true, `${wide.count} chevrons at 16 against ${base.count} at 5`)
       await slider(1)
-      assert.equal(await settle(async () => (await sample()).chevronWidth, 0.45), 0.45)
+      assert.equal(await settle(async () => (await sample()).chevronWidth, CHEVRON.stroke), CHEVRON.stroke)
       await slider(5)
       assert.deepEqual(await settle(sample, base), base)
     })

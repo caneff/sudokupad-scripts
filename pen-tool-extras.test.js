@@ -10,7 +10,7 @@ const {
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
-  LINE_VALUES, directionCharOf, chevronPenOf, lineSegment, splitLineActs, chevronLine
+  LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
@@ -782,7 +782,8 @@ test('the corner X is two crossing diagonals of half-size s, drawn from the poin
   assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
 })
 
-// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dotted.
+// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dotted, page 3 is j to z and 0, two
+// to a pen, drawn as chevron lines.
 test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dotted, then chevron lines with a character for each way', () => {
   assert.deepEqual(PEN_PAGES, [
     { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dotted: false },
@@ -1059,12 +1060,12 @@ test('directionCharOf gives a page 3 pen\'s character for the way a line is drag
   assert.equal(directionCharOf('3', false), '3')
 })
 
-test('chevronPenOf reads a stored character back as its pen and its way, and is null for any other character', () => {
-  assert.deepEqual(chevronPenOf('j'), { pen: 'j', forward: true })
-  assert.deepEqual(chevronPenOf('k'), { pen: 'j', forward: false })
-  assert.deepEqual(chevronPenOf('0'), { pen: 'z', forward: false })
-  assert.deepEqual(chevronPenOf('z'), { pen: 'z', forward: true })
-  for (const other of ['1', 'a', 'i', 'A', '', undefined, 'jk']) assert.equal(chevronPenOf(other), null, String(other))
+test('chevronWayOf reads a stored character back as the way its line was dragged, and is null for any other character', () => {
+  assert.equal(chevronWayOf('j'), true)
+  assert.equal(chevronWayOf('k'), false)
+  assert.equal(chevronWayOf('0'), false)
+  assert.equal(chevronWayOf('z'), true)
+  for (const other of ['1', 'a', 'i', 'A', '', undefined, 'jk']) assert.equal(chevronWayOf(other), null, String(other))
 })
 
 test('the page 3 characters stroke in the color of their page 1 partner, both ways, and are never dotted', () => {
@@ -1166,7 +1167,7 @@ test('a chevron line draws the line along the whole segment and the chevrons as 
   assert.equal(points.length % 3, 0)
   for (let i = 0; i < points.length; i += 3) {
     const [wing, tip, other] = points.slice(i, i + 3)
-    assert.equal(tip[0] > wing[0] && tip[0] > other[0], true, 'the tip points the way the line was dragged (right)')
+    assert.equal(tip[0] > wing[0] && tip[0] > other[0], true, `the tip points the way the line was dragged (right): wing ${wing}, tip ${tip}, wing ${other}`)
     assert.equal(wing[1] - tip[1], tip[1] - other[1], 'the wings are either side of the line')
     assert.equal(tip[1], 160)
   }
@@ -1177,16 +1178,16 @@ test('a chevron line dragged the other way has its chevrons pointing back and th
   const back = chevronLine('1', false, 0, 0, 5)
   assert.deepEqual(pointsOf(back.line).slice().reverse(), pointsOf(forward.line))
   const [wing, tip] = pointsOf(back.chevrons)
-  assert.equal(tip[0] < wing[0], true)
+  assert.equal(tip[0] < wing[0], true, `dragged left, the tip is left of the wings: wing ${wing}, tip ${tip}`)
 })
 
 test('chevrons point along a diagonal and along a vertical line as well', () => {
   const [wing, tip, other] = pointsOf(chevronLine('e', true, 0, 0, 5).chevrons).slice(0, 3)
   // down and right: the tip is the furthest of the three along (1, 1)
   const along = ([x, y]) => x + y
-  assert.equal(along(tip) > along(wing) && along(tip) > along(other), true)
+  assert.equal(along(tip) > along(wing) && along(tip) > along(other), true, `down and right, the tip is furthest along (1, 1): ${wing} ${tip} ${other}`)
   const [w2, t2] = pointsOf(chevronLine('2', false, 0, 0, 5).chevrons)
-  assert.equal(t2[1] < w2[1], true, 'dragged up, the tip is above the wings')
+  assert.equal(t2[1] < w2[1], true, `dragged up, the tip is above the wings: wing ${w2}, tip ${t2}`)
 })
 
 test('the chevrons are evenly spaced along the line, half a space in from each end, so two cells in a row read as one run', () => {
@@ -1202,25 +1203,26 @@ test('the chevrons are evenly spaced along the line, half a space in from each e
 test('the chevrons and the line scale with the thickness: wider chevrons, wider strokes, fewer chevrons', () => {
   const thin = chevronLine('1', true, 0, 0, 2)
   const thick = chevronLine('1', true, 0, 0, 12)
-  assert.equal(thick.lineWidth > thin.lineWidth && thick.chevronWidth > thin.chevronWidth, true)
-  assert.equal(thin.chevronWidth > thin.lineWidth, true, 'the line is the thin part')
+  assert.equal(thick.lineWidth > thin.lineWidth && thick.chevronWidth > thin.chevronWidth, true, `widths ${thin.lineWidth}/${thin.chevronWidth} at 2, ${thick.lineWidth}/${thick.chevronWidth} at 12`)
+  assert.equal(thin.chevronWidth > thin.lineWidth, true, `the line is the thin part: ${thin.lineWidth} against ${thin.chevronWidth}`)
   assert.equal(thick.lineWidth / thin.lineWidth, 6)
-  assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true)
+  assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} chevrons at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
   const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
-  assert.equal(span(thick) > span(thin), true)
+  assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
 test('at the largest thickness a chevron on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
   // a top edge line, 'a', on row 0: the chevron's wings are the furthest from the edge itself
   const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
+  assert.equal(Math.abs(reach - (CHEVRON.halfWidth + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}`)
 })
 
-test('a chevron line has at least one chevron on any segment at any thickness', () => {
+test('a chevron line has at least two chevrons on any segment at any thickness, so a run never has none', () => {
   for (const value of LINE_VALUES) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-      assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 3, true, `${value} at ${t}`)
+      assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 6, true, `at least two chevrons: ${value} at ${t}`)
     }
   }
 })

@@ -208,7 +208,8 @@
     return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
   }
 
-  // The index of the page that holds the color character `pen`, or -1.
+  // The index of the page whose button holds the color character `pen` (a chevron page's reverse characters are on no
+  // button, so they are no pen), or -1.
   function penPageOf (pen) {
     return PEN_PAGES.findIndex((page) => page.chars.includes(pen))
   }
@@ -401,20 +402,20 @@
     f: [[0, 1], [1, 0]],
     g: [[0, 0], [1, 1]]
   }
-  // The sizes of a chevron line, in line widths (the thickness setting), all but `spacing` as stroke or half extent: a chevron's
-  // wings reach `halfLength` back and `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are
-  // the widths of the thin line and the chevrons; `spacing` is the least distance between two chevrons' middles. The widest the
-  // pen reaches off its line, halfWidth plus half the stroke at the largest thickness, stays inside the 17 units Dark Page keeps.
+  // The sizes of a chevron line, in line widths (the thickness setting): a chevron's wings reach `halfLength` back and
+  // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the thin line and the
+  // chevrons; `spacing` is the distance between two chevrons' middles, fitted to a whole number per segment. The furthest a
+  // chevron reaches off its line, halfWidth plus half the stroke at the largest thickness, stays inside what Dark Page keeps
+  // past a cell (its `SOLVER_REACH`; a unit test holds the two together).
   const CHEVRON = { halfLength: 0.5, halfWidth: 0.75, stroke: 0.45, line: 0.25, spacing: 2.6 }
 
-  // The page that has the color character `char`, as { pen, forward }: its pen (the character on the button) and whether the
-  // character is the one for a line dragged forward; null for a character no chevron page uses.
-  function chevronPenOf (char) {
+  // Which way a line stored with the color character `char` was dragged: true for the character on a chevron page's button
+  // (forward), false for its reverse character, null for a character no chevron page uses.
+  function chevronWayOf (char) {
     for (const page of PEN_PAGES) {
       if (!page.chevrons) continue
-      if (page.chars.includes(char)) return { pen: char, forward: true }
-      const index = page.reverse.indexOf(char)
-      if (index !== -1) return { pen: page.chars[index], forward: false }
+      if (page.chars.includes(char)) return true
+      if (page.reverse.includes(char)) return false
     }
     return null
   }
@@ -473,6 +474,15 @@
     return out
   }
 
+  // The corners of a chevron, wing, tip, wing, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
+  // its wings `half` back and `wide` out from the middle and its tip `half` forward.
+  function chevronCorners (x, y, ux, uy, half, wide) {
+    return [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
+  }
+
+  // A point as path data text, to 2 places.
+  const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
+
   // The path data of a chevron line, in the renderer's units (a cell is CELL_UNITS), for the line value `value` on the cell at
   // (row, col) dragged `forward` or not, at `thickness`: { line, chevrons, lineWidth, chevronWidth }. The line is the whole
   // segment, thin; each chevron is wing, tip, wing, the tip toward the way it was dragged. Whole chevrons are fitted to the
@@ -483,16 +493,16 @@
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
     const [half, wide] = [CHEVRON.halfLength * thickness, CHEVRON.halfWidth * thickness]
-    const count = Math.max(1, Math.round(length / (CHEVRON.spacing * thickness)))
-    const at = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
+    // The shortest segment (a cell side) holds at least two even at the largest thickness, so there is never none.
+    const count = Math.round(length / (CHEVRON.spacing * thickness))
     let chevrons = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
-      const [x, y] = [from[0] + ux * along, from[1] + uy * along]
-      chevrons += `M${at([x - ux * half - uy * wide, y - uy * half + ux * wide])}L${at([x + ux * half, y + uy * half])}L${at([x - ux * half + uy * wide, y - uy * half - ux * wide])}`
+      const [wing, tip, other] = chevronCorners(from[0] + ux * along, from[1] + uy * along, ux, uy, half, wide)
+      chevrons += `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}`
     }
     return {
-      line: `M${at(from)}L${at(to)}`,
+      line: `M${pointText(from)}L${pointText(to)}`,
       chevrons,
       lineWidth: CHEVRON.line * thickness,
       chevronWidth: CHEVRON.stroke * thickness
@@ -774,26 +784,25 @@
   const SAMPLE_TO = [52, 26]
   const SAMPLE_WIDTH = 7.2
   const SAMPLE_DASH_SHARE = 0.42
+  // The chevron sample: its thin line and chevron widths, a chevron's half extents (as CHEVRON's), and where along the line
+  // the three sit, as shares of its length.
+  const SAMPLE_CHEVRON = { line: 2.4, stroke: 4.4, half: 4, wide: 7, at: [0.25, 0.5, 0.75] }
   function renderPageIcon (current, dash) {
     const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
     const kind = next.chevrons ? 'chevrons' : !next.dotted ? 'solid' : dash === 0 ? 'dotted' : 'dashed'
     let sample
+    const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
+    const length = Math.hypot(dx, dy)
     if (kind === 'chevrons') {
       // a thin line and three chevrons along it, tips toward the line's end
-      const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
-      const length = Math.hypot(dx, dy)
-      const [ux, uy] = [dx / length, dy / length]
-      const at = (x, y) => `${x.toFixed(1)} ${y.toFixed(1)}`
-      sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="2.4" stroke-linecap="round" fill="none" data-sample-line/>` +
-        [0.25, 0.5, 0.75].map((t) => {
-          const [x, y] = [SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t]
-          return `<path d="M${at(x - 4 * ux - 7 * uy, y - 4 * uy + 7 * ux)} L${at(x + 4 * ux, y + 4 * uy)} L${at(x - 4 * ux + 7 * uy, y - 4 * uy - 7 * ux)}" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round" fill="none" data-chevron/>`
+      sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_CHEVRON.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
+        SAMPLE_CHEVRON.at.map((t) => {
+          const [wing, tip, other] = chevronCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, SAMPLE_CHEVRON.half, SAMPLE_CHEVRON.wide)
+          return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}" stroke-width="${SAMPLE_CHEVRON.stroke}" stroke-linecap="round" stroke-linejoin="round" fill="none" data-chevron/>`
         }).join('')
     } else if (kind === 'dotted') {
       sample = [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + 9 * k}" cy="${52 - 7 * k}" r="3.6" fill="currentColor" stroke="none"/>`).join('')
     } else if (kind === 'dashed') {
-      const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
-      const length = Math.hypot(dx, dy)
       const share = Math.min(dash * SAMPLE_WIDTH, SAMPLE_DASH_SHARE * length) / length
       const point = (t) => `${(SAMPLE_FROM[0] + dx * t).toFixed(1)} ${(SAMPLE_FROM[1] + dy * t).toFixed(1)}`
       sample = [[0, share], [1 - share, 1]].map(([a, b]) =>
@@ -887,7 +896,8 @@
       PEN_PAGES,
       LINE_VALUES,
       directionCharOf,
-      chevronPenOf,
+      chevronWayOf,
+      CHEVRON,
       lineSegment,
       splitLineActs,
       chevronLine,
@@ -1012,17 +1022,16 @@
     return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
   }
 
-  // The chevron line `opts` asks `renderPen` for: { forward } when its value is a line and its class holds a page 3 color
-  // character (`cell-pen pen-1 pencolor-j`), else null.
+  // Whether the chevron line `opts` asks `renderPen` for was dragged forward (true or false), when its value is a line and its
+  // class holds a page 3 color character (`cell-pen pen-1 pencolor-j`); null for anything else.
   function chevronOf (opts) {
     const match = /(?:^|\s)pencolor-(\S+)$/.exec(opts.className || '')
-    const pen = match && LINE_VALUES.includes(opts.value) ? chevronPenOf(match[1]) : null
-    return pen && { forward: pen.forward }
+    return match && LINE_VALUES.includes(opts.value) ? chevronWayOf(match[1]) : null
   }
 
   // Draws a chevron line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
   // eraser's lookups act on it as on any stroke) of a thin line and a path of chevrons, each with its own width.
-  function renderChevronLine (renderer, opts, { forward }) {
+  function renderChevronLine (renderer, opts, forward) {
     const shape = chevronLine(opts.value, forward, opts.row, opts.col, activeThickness)
     const group = renderer.renderPart({ target: 'cell-pen', type: 'g', attr: { class: opts.className } })
     ;[['line', shape.line, shape.lineWidth], ['chevrons', shape.chevrons, shape.chevronWidth]].forEach(([name, d, width]) => {
@@ -1042,8 +1051,8 @@
     const original = proto.renderPen
     const size = renderer.constructor.CellSize
     proto.renderPen = function (opts = {}) {
-      const chevrons = chevronOf(opts)
-      if (chevrons !== null) return renderChevronLine(this, opts, chevrons)
+      const forward = chevronOf(opts)
+      if (forward !== null) return renderChevronLine(this, opts, forward)
       const mark = addedMark(opts.value, opts.row, opts.col)
       if (mark === null) return original.call(this, opts)
       const d = this.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125)
@@ -1200,7 +1209,7 @@
     })
   }
 
-  // Whether the wrap on `renderPen` is in, so a chevron line is drawn by this script; set by installEdgeMarks.
+  // Whether the wrap on `renderPen` is in, so a chevron line is drawn by this script.
   let chevronsDrawn = false
 
   // Draws every chevron line again: a chevron's size and spacing are fixed when it is drawn, so a change of thickness, and a
@@ -1208,7 +1217,7 @@
   function redrawChevronLines () {
     if (!chevronsDrawn) return
     Framework.app.puzzle.cells.forEach((cell) => {
-      if ((cell.pen || []).some((valueColor) => LINE_VALUES.includes(valueColor[0]) && chevronPenOf(valueColor[1]) !== null)) cell.renderContent(true)
+      if ((cell.pen || []).some((valueColor) => LINE_VALUES.includes(valueColor[0]) && chevronWayOf(valueColor[1]) !== null)) cell.renderContent(true)
     })
   }
 
@@ -1289,8 +1298,9 @@
       missing = derived.missing
       edited.clear()
       reset = true
-      // The sliders and boxes are drafts like the colors: they go back to their defaults on Save, and Cancel
-      // leaves what is in force.
+      // The panel's sliders have no Save or Cancel, so their reset is at once, like their moves; the dash
+      // length and the slider boxes are the dialog's own and wait for Save like the colors.
+      resetSliders()
       thickness = THICKNESS.fallback
       opacity = OPACITY.fallback
       dash = DASH.fallback
@@ -1432,6 +1442,14 @@
       else Framework.setData(SLIDERS_SHOWN_KEY, draft.show)
       adoptShow(draft.show)
     }
+  }
+
+  // Back to SudokuPad's own thickness and opacity, with nothing saved.
+  function resetSliders () {
+    Framework.removeData(THICKNESS_KEY)
+    Framework.removeData(OPACITY_KEY)
+    adoptThickness(THICKNESS.fallback)
+    adoptOpacity(OPACITY.fallback)
   }
 
   // Moving a panel slider sets and saves its value at once. It changes no cell, so nothing goes on the
@@ -1601,7 +1619,7 @@
     // alone, which removes the line whichever way it was stored, and is left as it is.
     const send = tool.actSend
     tool.actSend = function () {
-      if (!this.eraseMode && Array.isArray(this.currentPath) && chevronPenOf(selectedPen()) !== null) {
+      if (!this.eraseMode && Array.isArray(this.currentPath) && chevronWayOf(selectedPen()) !== null) {
         try {
           this._actList.splice(0, this._actList.length, ...splitLineActs(this._actList, this.currentPath, selectedPen()))
         } catch (error) {
