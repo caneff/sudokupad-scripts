@@ -409,21 +409,29 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await saved(SLIDERS_KEY), null)
     })
 
-    it('Restore defaults resets the panel\'s sliders at once, and the dialog\'s sliders to the defaults for Save', async () => {
+    it('Restore defaults sets the dialog\'s sliders to the defaults for Save: Cancel afterwards leaves the panel\'s sliders, the saved values and the marks, and Save resets them', async () => {
       await dragToMax(THICKNESS)
+      const keep = { thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }
       await openEditor()
       await dialogButton('Restore defaults').click()
+      assert.deepEqual(await Promise.all(['thickness', 'opacity'].map((k) => editor().locator(`input[data-setting="${k}"]`).inputValue())), ['5', '80'])
+      assert.deepEqual({ thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }, keep, 'the panel is untouched before Save')
+      assert.equal(await saved(THICKNESS_KEY), 16)
+      await dialogButton('Cancel').click()
+      await editor().waitFor({ state: 'detached' })
+      assert.deepEqual({ thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }, keep)
+      assert.equal(await saved(THICKNESS_KEY), 16)
+      assert.equal(await lineWidth(), 16)
+      await openEditor()
+      await dialogButton('Restore defaults').click()
+      await dialogButton('Save').click()
+      await editor().waitFor({ state: 'detached' })
       assert.equal(await settle(() => sliderValue(THICKNESS), '5'), '5')
       assert.equal(await sliderValue(OPACITY), '80')
       assert.equal(await settle(lineWidth, 5), 5)
       assert.equal(await settle(lineOpacity, 0.8), 0.8)
       assert.equal(await saved(THICKNESS_KEY), null)
       assert.equal(await saved(OPACITY_KEY), null)
-      assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
-      await dialogButton('Cancel').click()
-      await editor().waitFor({ state: 'detached' })
-      assert.equal(await saved(THICKNESS_KEY), null)
-      assert.equal(await sliderValue(THICKNESS), '5')
     })
 
     it('no uncaught page errors', () => {

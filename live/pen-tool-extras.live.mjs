@@ -515,17 +515,24 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.deepEqual(await allWidths(), { full: [9], half: [4.5] })
       })
 
-      it('Restore defaults puts the panel slider back to 5 and clears the saved thickness at once, and Cancel afterwards does not bring it back', async () => {
+      it('Restore defaults sets the dialog\'s thickness slider to 5 for Save: Cancel afterwards leaves the saved thickness and the marks, Save clears it and draws at 5', async () => {
         await setSlider(7)
         assert.equal(await savedThickness(), 7)
         await openEditor()
         assert.equal(await editor().locator('input[type=range]').count(), 3)
         await restoreDefaults()
-        assert.equal(await settle(() => slider().inputValue(), '5'), '5')
-        assert.deepEqual(await settle(widths(1), [5]), [5])
-        assert.equal(await savedThickness(), null)
+        assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
+        assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
+        assert.deepEqual(await widths(1)(), [7])
         await closeWith('Cancel')
+        assert.equal(await savedThickness(), 7)
+        assert.deepEqual(await allWidths(), { full: [7], half: [3.5] })
+        await openEditor()
+        await restoreDefaults()
+        await closeWith('Save')
         assert.equal(await savedThickness(), null)
+        assert.deepEqual(await settle(widths(1), [5]), [5])
+        assert.equal(await slider().inputValue(), '5')
         assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
       })
 

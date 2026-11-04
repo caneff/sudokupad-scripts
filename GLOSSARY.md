@@ -53,8 +53,7 @@
   dialog also holds both sliders (drafts, applied on Save) and two **slider boxes**, Show thickness slider and Show
   opacity slider, saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
   its row stays as an empty row of the same height, and with both hidden the block is not drawn. Its Restore defaults
-  resets both panel sliders at once (and clears what they saved, so Cancel does not bring the old values back); the dialog's
-  Dash length and slider boxes go back to their defaults for Save, like the colors.
+  sets both dialog sliders back to their defaults for Save, like the colors.
 - **opacity** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting how see-through the pen layer is (lines, cell circles and
   crosses, edge marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under
   `PenColor_opacity`. SudokuPad's own is 80, set on each stroke (`.cell-pen { opacity: 0.8 }`); the script sets it on the

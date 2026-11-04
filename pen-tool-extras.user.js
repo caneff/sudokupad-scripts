@@ -1298,9 +1298,8 @@
       missing = derived.missing
       edited.clear()
       reset = true
-      // The panel's sliders have no Save or Cancel, so their reset is at once, like their moves; the dash
-      // length and the slider boxes are the dialog's own and wait for Save like the colors.
-      resetSliders()
+      // The sliders and boxes are drafts like the colors: they go back to their defaults on Save, and Cancel
+      // leaves what is in force.
       thickness = THICKNESS.fallback
       opacity = OPACITY.fallback
       dash = DASH.fallback
@@ -1442,14 +1441,6 @@
       else Framework.setData(SLIDERS_SHOWN_KEY, draft.show)
       adoptShow(draft.show)
     }
-  }
-
-  // Back to SudokuPad's own thickness and opacity, with nothing saved.
-  function resetSliders () {
-    Framework.removeData(THICKNESS_KEY)
-    Framework.removeData(OPACITY_KEY)
-    adoptThickness(THICKNESS.fallback)
-    adoptOpacity(OPACITY.fallback)
   }
 
   // Moving a panel slider sets and saves its value at once. It changes no cell, so nothing goes on the
