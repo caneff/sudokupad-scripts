@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.0
+// @version      0.5.1
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.5.0'
+  const VERSION = '0.5.1'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
@@ -533,8 +533,8 @@
     }).join('')
     const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
     const autoBox = '<div style="display:flex;align-items:center;gap:8px;margin:0 0 4px">' +
-      `<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"${auto ? ' checked' : ''} style="margin:0">` +
-      '<label for="color-by-digit-auto-draft" style="width:auto !important;min-width:0 !important;margin:0 !important;text-align:left !important">Auto mode: keep colors in step with digits and centre marks</label></div>'
+      `<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"${auto ? ' checked' : ''} aria-label="Auto mode" style="margin:0">` +
+      '<label for="color-by-digit-auto-draft" style="width:auto !important;min-width:0 !important;margin:0 !important;text-align:left !important">Keep colors in step with digits and centre marks</label></div>'
     const clear = `<button type="button" data-act="clear" style="${BUTTON_LOOK}">Clear all</button>`
     return `${heading('Auto mode')}${autoBox}<div style="${DIVIDER}">${profilesHtml}</div>` +
       `<div style="${DIVIDER}">${heading('Groups of the active profile', clear)}${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
