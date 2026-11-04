@@ -31,6 +31,8 @@ const CLICK_TAKES_MS = 300
 const BLACK = 'rgb(0, 0, 0)'
 // The color Digit Color gives an entered 4.
 const DIGIT_COLOR_FOUR = 'rgb(27, 122, 47)'
+const DIGITS = '1234567890'
+const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
 
@@ -102,7 +104,8 @@ const SCRIPTS = [
       await p.locator(LETTER_TOGGLE).waitFor({ state: 'attached' })
     },
     control: (p) => p.locator(LETTER_TOGGLE).waitFor({ state: 'visible' }),
-    // Tab is swallowed: the page's keydown default is prevented, as with SudokuPad's own letter toggle.
+    // Tab is swallowed: it leaves the number pad on digits and saves no letter mode. The keydown default is prevented
+    // either way, since SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script.
     act: async (p) => {
       await p.evaluate(() => {
         window.__keydowns = []
@@ -110,6 +113,9 @@ const SCRIPTS = [
       })
       await p.keyboard.press('Tab')
       assert.deepEqual(await p.evaluate(() => window.__keydowns), [true])
+      const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
+      assert.equal(await settle(pad, DIGITS), DIGITS, 'the number pad stayed on digits')
+      assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
     }
   },
   {
@@ -121,7 +127,7 @@ const SCRIPTS = [
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears.
       const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-      await clickUntil(p, '#control-pen', shown, true)
+      assert.equal(await clickUntil(p, '#control-pen', shown, true), true, 'the pen tool opened')
     },
     control: (p) => p.locator(PEN_PAGE_BUTTON).waitFor({ state: 'visible' }),
     // Two clicks on one cell edge: SudokuPad's own X, then this script's arrow 'm'.

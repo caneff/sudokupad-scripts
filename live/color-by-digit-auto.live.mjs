@@ -4,7 +4,8 @@
 //
 // The script is injected into the page, not installed through Tampermonkey, so
 // Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// The script goes in after Start Puzzle, when the controls already exist, except in the two saved-on groups, which run at every injection
+// time; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -61,8 +62,11 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Runs the page through load and Start Puzzle, then injects the script.
-const bootPage = async (p) => {
+// The injection times a check can ask for: a script that waits on SudokuPad's own startup behaves differently at each.
+const MODES = ['document-idle', 'before-start', 'after-start']
+
+// Runs the page through load, the script's injection time for `mode` (document-idle is already set up by `openSession`), and Start Puzzle.
+const bootPage = async (p, mode = 'after-start') => {
   await p.goto(url, { waitUntil: 'load', timeout: 60000 })
   const startButton = () => p.getByRole('button', { name: START }).first()
   await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
@@ -71,15 +75,16 @@ const bootPage = async (p) => {
     await p.addScriptTag({ content: script })
     await p.locator(BUTTON).waitFor({ state: 'attached' })
   }
+  if (mode === 'before-start') await inject()
   await startButton().click()
   await startButton().waitFor({ state: 'hidden' })
   await p.locator('#control-undo').waitFor({ state: 'visible' })
-  await inject()
+  if (mode === 'after-start') await inject()
   await p.locator(BUTTON).waitFor({ state: 'visible' })
 }
 
-// A page. `seedAuto` writes the saved auto mode before the page's own scripts run.
-const openSession = async (seedAuto, contextOptions = {}) => {
+// A page injected at `mode`. `seedAuto` writes the saved auto mode before the page's own scripts run.
+const openSession = async (seedAuto, contextOptions = {}, mode = 'after-start') => {
   const context = await browser.newContext({ viewport: { width: 1200, height: 900 }, ...contextOptions })
   const errors = []
   const p = await context.newPage()
@@ -87,7 +92,16 @@ const openSession = async (seedAuto, contextOptions = {}) => {
   await routeSudokuPad(p)
   await p.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
   if (seedAuto) await p.addInitScript(([key]) => window.localStorage.setItem(key, 'true'), [AUTO_STORAGE_KEY])
-  await bootPage(p)
+  if (mode === 'document-idle') {
+    await p.addInitScript((src) => {
+      document.addEventListener('DOMContentLoaded', () => {
+        const s = document.createElement('script')
+        s.textContent = src
+        document.documentElement.appendChild(s)
+      })
+    }, script)
+  }
+  await bootPage(p, mode)
   return { context, p, errors }
 }
 
@@ -399,47 +413,50 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 })
 
-describe('auto mode saved on, injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors
+// These two depend on the injection time: at document-idle the script waits for SudokuPad's progress to load before it colors the givens.
+for (const mode of MODES) {
+  describe(`auto mode saved on, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors
 
-  before(async () => {
-    ({ context, p, errors } = await openSession(true))
-  })
-  after(async () => { await context.close() })
+    before(async () => {
+      ({ context, p, errors } = await openSession(true, {}, mode))
+    })
+    after(async () => { await context.close() })
 
-  it('the box is ticked and the givens are colored at puzzle start, with no click', async () => {
-    assert.equal(await boxCheckedOn(p), 'true')
-    assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
-  })
+    it('the box is ticked and the givens are colored at puzzle start, with no click', async () => {
+      assert.equal(await boxCheckedOn(p), 'true')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+    })
 
-  it('no uncaught page errors', () => {
-    assert.deepEqual(errors, [])
-  })
-})
-
-describe('auto mode saved on, with saved progress, injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors
-
-  before(async () => {
-    ({ context, p, errors } = await openSession(false))
-    await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
-    await p.keyboard.press('4')
-    // SudokuPad saves progress a moment after a change.
-    await p.waitForFunction(() => Object.keys(window.localStorage).some((k) => /progress/i.test(k)), null, { timeout: SETTLE_MS })
-    await p.evaluate(([key]) => Framework.setData(key, true), [AUTO_KEY])
-    await bootPage(p)
-  })
-  after(async () => { await context.close() })
-
-  it('the saved digit is back and the givens are colored, since loading progress resets the board', async () => {
-    assert.equal(await p.evaluate(() => String(Framework.app.grid.getCell(0, 2).value)), '4')
-    assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
   })
 
-  it('no uncaught page errors', () => {
-    assert.deepEqual(errors, [])
+  describe(`auto mode saved on, with saved progress, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors
+
+    before(async () => {
+      ({ context, p, errors } = await openSession(false, {}, mode))
+      await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
+      await p.keyboard.press('4')
+      // SudokuPad saves progress a moment after a change.
+      await p.waitForFunction(() => Object.keys(window.localStorage).some((k) => /progress/i.test(k)), null, { timeout: SETTLE_MS })
+      await p.evaluate(([key]) => Framework.setData(key, true), [AUTO_KEY])
+      await bootPage(p, mode)
+    })
+    after(async () => { await context.close() })
+
+    it('the saved digit is back and the givens are colored, since loading progress resets the board', async () => {
+      assert.equal(await p.evaluate(() => String(Framework.app.grid.getCell(0, 2).value)), '4')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+    })
+
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
   })
-})
+}
 
 describe('auto mode box on a touch screen, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors

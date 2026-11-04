@@ -69,7 +69,7 @@ const headings = (chevronsPath) => {
   return out
 }
 
-// One browser context per group: its page, its page errors, and the checks.
+// One browser context: its page, its page errors, and the checks.
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
 

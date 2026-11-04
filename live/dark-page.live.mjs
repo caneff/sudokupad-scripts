@@ -4,7 +4,8 @@
 //
 // The script is injected into the page, not installed through Tampermonkey, so
 // Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// The script goes in after Start Puzzle, when the controls already exist, except in the page color dialog group at the end, which
+// injects at DOMContentLoaded; startup.live.mjs checks the other injection times.
 //
 // The reference for every board check is the same page with the script switched off (its
 // stylesheet's media set to `not all`): a separate page that never had the script rasterizes the
@@ -91,15 +92,14 @@ const OTHER_BOARDS = {
   'an 11x11 board whose outer ring of cells is outside every region': board({ size: 11, boxHeight: 3, boxWidth: 3, offset: 1 })
 }
 
-// Loads the puzzle, running `afterStart` once Start Puzzle is through.
-async function openPuzzle (p, { afterStart = async () => {} } = {}) {
+// Loads the puzzle and clicks Start Puzzle.
+async function openPuzzle (p) {
   await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
   const start = p.getByRole('button', { name: START }).first()
   await start.waitFor({ state: 'visible' })
   await start.click()
   await start.waitFor({ state: 'hidden' })
   await p.locator('#control-undo').waitFor({ state: 'visible' })
-  await afterStart()
 }
 
 // Enters digits, corner marks, centre marks and colored cells, then deselects, so the board holds
@@ -266,7 +266,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.waitForFunction((selector) => document.querySelector(selector)?.style.display === 'block', RECT)
   }
 
-  const boot = () => openPuzzle(p, { afterStart: () => p.addScriptTag({ content: script }) }).then(() => p.locator(STYLE).waitFor({ state: 'attached' }))
+  const boot = async () => {
+    await openPuzzle(p)
+    await p.addScriptTag({ content: script })
+    await p.locator(STYLE).waitFor({ state: 'attached' })
+  }
 
   before(async () => {
     context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
