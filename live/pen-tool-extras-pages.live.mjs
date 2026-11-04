@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -26,28 +27,12 @@ const COLORS_KEY = 'PenColor_colors'
 const DASH_KEY = 'PenColor_dash'
 const THICKNESS_KEY = 'PenColor_thickness'
 const LINE_STYLES_KEY = 'PenColor_linestyles'
-const POLL_MS = 50
-const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_ONE = '123456789'
 const PAGE_TWO = 'abcdefghi'
 const PAGE_THREE = 'jlnprtvxz'
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Reads until it equals `expected` (compared as JSON) or `timeoutMs` passes, and returns the last
-// reading, so the caller's assert.deepEqual names what it got.
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 // Waits for the puzzle, runs `beforeStart` (the injection that wants the page before Start Puzzle), starts it, and
 // returns once the controls exist.

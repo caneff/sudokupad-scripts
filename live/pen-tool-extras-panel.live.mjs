@@ -18,6 +18,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { effectiveOpacities, openSettings } from './settings.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -28,24 +29,7 @@ const OPACITY_KEY = 'PenColor_opacity'
 const LINE_MODE_KEY = 'ToolPen_linemode'
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
-const POLL_MS = 50
-const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Reads until it equals `expected` (compared as JSON) or `timeoutMs` passes, and
-// returns the last reading, so the caller's assert.deepEqual names what it got.
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 let browser
 before(async () => { browser = await chromium.launch() })
