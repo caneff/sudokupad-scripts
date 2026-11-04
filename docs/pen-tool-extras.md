@@ -136,8 +136,21 @@ The dialog's Restore defaults goes back to the darkened cell color page. It also
 
 ## If SudokuPad changes
 
-| If an update changes | What happens |
-| --- | --- |
-| The pen tool or its renderer | Edge and corner marks and the middle click line erase are left off, and page 3 lines draw as plain lines with no arrows |
-| SudokuPad's line mode pulldown | The sliders and the page button don't appear. Saved thickness and opacity still apply, but can't be changed until the script is updated |
-| Either of these | The colors still work |
+Each feature checks at startup that the SudokuPad internals it needs are there, and a feature whose internals are gone is left off, so SudokuPad's own pen tool works as it did without the script. A feature that fails later (SudokuPad throws in a call the script makes) falls back to SudokuPad's own function, is turned off for the rest of the page's life, and logs the error to the browser console as `pen-tool-extras: <feature> turned off because SudokuPad changed:`, once. Other features keep working.
+
+The settings dialog says which features are off in one line at its top, for example `Off because SudokuPad changed: arrow lines`, and shows nothing when all is well. The controls of a feature that is off are left out of the dialog. Reload after updating the script; a feature comes back only when the page loads with its internals present.
+
+| Feature | Off when SudokuPad no longer has | What you see with it off |
+| --- | --- | --- |
+| colors | the cell color tool (`tools.colour`), or a call into its page fails; also when a hold on a pen color button finds no panel buttons | The pen colors are not derived from the cell color page, or a hold on a pen color button opens no pickers. The dialog's pickers and saved colors still work. A color tool that is merely slow or empty leaves SudokuPad's own pen colors and is not reported |
+| pen pages | the pen tool's `setSelectedColor`, `handleToolEnter` or `handleToolExit` | Only SudokuPad's nine pens. Tab, the mouse wheel and the page button do nothing, and a pen on page 2 or 3 that was selected is replaced by the same color on page 1. Lines already stored with a page 2 or page 3 pen stay stored and draw with no color, as they do without the script |
+| dashes | pen pages | Page 2 is gone with its pens; its stored lines are as above |
+| arrow lines | pen pages, or the renderer's `renderPen` or `renderPart`, the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, or the app's `puzzle.cells`; also when a drag's path no longer matches the segments | Page 3 is gone with its pens. If only the arrows fail, page 3 lines draw as plain lines of the pen's color, and a stored direction is kept but not drawn |
+| sliders | the pen tool's `drawLineHint` | No Thickness or Opacity slider in the panel or the dialog, and the pen is SudokuPad's own thickness (5) and opacity (80%). The saved values wait for the feature to come back |
+| marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X). The arrows, circles and corner marks you drew stay stored in the puzzle and its replay, and draw as nothing; SudokuPad's own X and the cell circle and cross draw as SudokuPad draws them. The dialog's Edge marks and Corner marks boxes are left out |
+| right click | marks, or a failure while the browser's menu is being decided | A right click steps forward like a left click, and the browser's menu opens over an edge |
+| line mode | the `.penlinemode` element in the pen tool's panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders and the page button, which would take its row, are left out. Tab and the mouse wheel still turn pages. The dialog has no Pen line mode |
+| outline | the pen tool's `drawLineHint` | No white outline, and no outline controls in the dialog |
+| line erase | the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell` | A middle click is a plain click again: it cycles the marks like a left click when marks are on |
+
+Sliders and outline share `drawLineHint`, so a failure there turns both off: the script moves the drag highlight out of the pen layer so neither the opacity nor the outline touches it. A feature that needs another (dashes and arrow lines need pen pages, right click needs marks) is named in the dialog's line with it.
