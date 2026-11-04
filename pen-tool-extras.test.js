@@ -11,7 +11,8 @@ const {
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
-  linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS
+  linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
+  createFeatures, FEATURE_LABELS, FEATURE_NEEDS
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
@@ -1507,4 +1508,72 @@ test('eraseLineActs removes each value from its own cells as one select and one 
     { type: 'pen', arg: '2' }
   ])
   assert.deepEqual(eraseLineActs([], cellAt), [])
+})
+
+// Failing safely: one feature at a time.
+const newFeatures = () => {
+  const logged = []
+  const changes = []
+  const features = createFeatures(FEATURE_LABELS, FEATURE_NEEDS, { log: (labels, why) => logged.push([labels, why]), changed: () => changes.push(1) })
+  return { features, logged, changes }
+}
+
+test('a feature that throws is turned off, logged once with its name, and answers with the fallback', () => {
+  const { features, logged, changes } = newFeatures()
+  const boom = new TypeError('x is not a function')
+  let runs = 0
+  const run = () => { runs++; throw boom }
+  assert.equal(features.attempt('marks', run, (error) => ['fallback', error]).at(0), 'fallback')
+  assert.equal(features.isOff('marks'), true)
+  assert.deepEqual(logged, [[['marks'], boom]])
+  assert.equal(changes.length, 1)
+  assert.deepEqual(features.attempt('marks', run, (error) => ['again', error]), ['again', undefined])
+  assert.equal(runs, 1, 'a feature that is off is not run, so its error is not repeated')
+  assert.equal(logged.length, 1)
+})
+
+test('a feature that works runs and keeps its result', () => {
+  const { features, logged } = newFeatures()
+  assert.equal(features.attempt('marks', () => 42, () => 'fallback'), 42)
+  assert.equal(features.isOff('marks'), false)
+  assert.deepEqual(logged, [])
+})
+
+test('turning one feature off leaves the others on', () => {
+  const { features } = newFeatures()
+  features.turnOff('chevrons', 'no renderPart')
+  for (const name of Object.keys(FEATURE_LABELS).filter((n) => n !== 'chevrons')) assert.equal(features.isOff(name), false, name)
+})
+
+test('a feature that needs another is off with it, and the list names both in the dialog\'s order', () => {
+  const { features } = newFeatures()
+  features.turnOff('pages', 'no setSelectedColor')
+  assert.deepEqual(features.offLabels(), ['pen pages', 'dashes', 'chevrons'])
+  const second = newFeatures().features
+  second.turnOff('marks', 'no getInputRc')
+  assert.deepEqual(second.offLabels(), ['marks', 'right click'])
+})
+
+test('a throw in a feature that is off already on its own need does not turn the others off', () => {
+  const { features } = newFeatures()
+  features.attempt(['sliders', 'outline'], () => { throw new Error('hint') }, () => null)
+  assert.deepEqual(features.offLabels(), ['sliders', 'outline'])
+  assert.equal(features.isOff('marks'), false)
+})
+
+test('the dialog shows one plain line naming the features that are off, and nothing when none is', () => {
+  assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
+  assert.doesNotMatch(renderEditor(editorState()), /Off because/)
+  assert.match(renderEditor(editorState({ off: ['chevrons'] })), />Off because SudokuPad changed: chevrons<\/div>/)
+  assert.match(renderEditor(editorState({ off: ['marks', 'rightClick'] })), />Off because SudokuPad changed: marks, right click<\/div>/)
+})
+
+test('the dialog leaves out the controls of a feature that is off', () => {
+  const html = (off) => renderEditor(editorState({ off }))
+  assert.match(html([]), /data-setting="thickness"/)
+  assert.doesNotMatch(html(['sliders']), /data-setting="thickness"|data-setting="opacity"|data-show=/)
+  assert.doesNotMatch(html(['dashes']), /data-setting="dash"/)
+  assert.doesNotMatch(html(['marks']), /data-mark=/)
+  assert.doesNotMatch(html(['outline']), /data-outline|outlineWidth/)
+  assert.match(html(['colors']), /data-pen="1"/, 'the pickers set a saved color and need no SudokuPad internal')
 })
