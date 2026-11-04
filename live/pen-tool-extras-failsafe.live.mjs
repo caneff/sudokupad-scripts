@@ -19,13 +19,12 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'EdgeMarks_marks']
-const POLL_MS = 50
-const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const SLIDERS = '#pen-tool-extras-thickness'
@@ -82,19 +81,6 @@ const CASES = [
   },
   { name: 'nothing broken', off: NOTHING_OFF, breaks: '' }
 ]
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 async function startPuzzle (page, beforeStart = async () => {}) {
   await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })

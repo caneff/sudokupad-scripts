@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node --test",
-    "test:live": "node --test \"live/*.live.mjs\"",
+    "test:live": "node --test --test-concurrency=4 \"live/*.live.mjs\"",
     "lint": "standard"
   },
   "devDependencies": {
