@@ -31,9 +31,9 @@
   // The `id` of each slider in the pen tool's panel; the input handler tells them apart by it.
   const THICKNESS_SLIDER = 'pen-tool-extras-thickness'
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
-  // The block of both sliders in the pen tool's panel, and the row of each.
-  // The id of the editor inside this script's dialog.
+  // The `id` of the editor inside this script's dialog.
   const EDITOR_ID = 'pen-tool-extras-editor'
+  // The block of both sliders in the pen tool's panel, and the row of each.
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
   // SudokuPad's line mode pulldown (`.penlinemode`, with the values `both`, `centeronly` and `edgeonly`),
