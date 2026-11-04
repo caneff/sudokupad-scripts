@@ -197,6 +197,29 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await closeWith('Cancel')
     })
 
+    it('the dialog lays the nine pen colors out as a 3 by 3 grid like the pen tool\'s buttons, each keeping its number', async () => {
+      await openEditor()
+      const cells = await editor().locator('input[type=color][data-pen]').evaluateAll((els) => els.map((el) => {
+        const r = el.getBoundingClientRect()
+        return { pen: el.dataset.pen, x: r.x, y: r.y, label: el.previousElementSibling.textContent }
+      }))
+      assert.deepEqual(cells.map((c) => c.pen), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+      assert.deepEqual(cells.map((c) => c.label), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+      const rows = [cells.slice(0, 3), cells.slice(3, 6), cells.slice(6)]
+      for (const row of rows) {
+        assert.equal(row.every((c) => Math.abs(c.y - row[0].y) < 2), true, `one row: ${JSON.stringify(row)}`)
+        assert.equal(row[0].x < row[1].x && row[1].x < row[2].x, true, 'left to right')
+      }
+      assert.equal(rows[0][0].y < rows[1][0].y && rows[1][0].y < rows[2][0].y, true, 'top to bottom')
+      for (const col of [0, 1, 2]) assert.equal(Math.abs(rows[0][col].x - rows[2][col].x) < 2, true, `column ${col} lines up`)
+      // The pen tool's own buttons are in the same arrangement.
+      await closeWith('Cancel')
+      await selectPen()
+      const buttons = await p.locator('.tool-pen button[data-key]').evaluateAll((els) => els.filter((el) => el.dataset.key !== '0').map((el) => { const r = el.getBoundingClientRect(); return [el.dataset.key, Math.round(r.x), Math.round(r.y)] }))
+      assert.deepEqual(buttons.map((b) => b[0]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+      assert.equal(buttons[0][1] < buttons[1][1] && buttons[3][2] > buttons[0][2], true, 'the panel runs left to right, then down')
+    })
+
     it('Cancel saves nothing and changes no color', async () => {
       await openEditor()
       await pick('4', FOUR.hex)
