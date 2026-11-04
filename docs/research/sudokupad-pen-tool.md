@@ -53,3 +53,23 @@ Read 2026-11-03 from SudokuPad 0.611.0's `tool-color.js`. Nothing here was run l
   keeps SudokuPad's extra click.
 - Screenshot of edit mode: `pen-color-edit-mode.png`.
 
+
+## The panel's line mode box and a slider drag (read 2026-11-04, #60)
+
+- `ToolPen.handleToolEnter` builds `.penlinemode` (a `select` with `both`, `centeronly` and
+  `edgeonly`) inside `.tool-pen .button-row:last-child`, and `handleToolExit` removes it, so
+  it exists only while the pen tool is on. Its CSS is `position: absolute; left: 0; right: 0;
+  top: 13rem; height: 4rem` inside `.tool-pen .controls-input`, so the box fills the row on its
+  own and the row's two buttons are not shown. Its `change` listener reads
+  `event.target.value`, so a slider placed inside it would overwrite the mode: the script puts
+  its sliders beside it, not in it.
+- SudokuPad calls `preventDefault` on every `mousemove` on the page (the move default is
+  what drags a range input's thumb in Chromium). A bare `<input type=range>` appended to the
+  page cannot be dragged with the mouse there, though a click on its track sets the value; the
+  same input on an empty page drags. A `mousemove` that is stopped from propagating before
+  SudokuPad's handler sees it drags normally. `pointermove` is not cancelled.
+- A digit key does nothing in the pen tool (no pen color change), and arrow keys are handled by
+  SudokuPad, so neither shows whether a slider holds the focus; `document.activeElement` does.
+- Dragging a line over an existing line in the same cells erases it.
+- Pictures of the panel: `pen-tool-extras-panel.png`, `-moved.png`, `-letter.png` (the letter
+  tool and Color by Digit on) and `-dialog.png`; `pen-tool-extras-panel-screenshot.mjs` takes them.
