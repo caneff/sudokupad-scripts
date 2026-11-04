@@ -1,0 +1,581 @@
+// Live check of Color by Digit's profiles on sudokupad.app, in headless Chromium: the profile menu on
+// the button, switching profile, the button's icon, the dialog's profile list, and migration.
+// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of
+// `npm test`.
+//
+// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
+// injection time and crackingthecryptic.com stay untested. Each injection time runs the same checks
+// (see color-by-digit.live.mjs):
+//   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
+//   before-start:  after the page loads, before Start Puzzle
+//   after-start:   after Start Puzzle, when the controls already exist
+import { after, before, describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { chromium } from 'playwright'
+import { openSettings } from './settings.mjs'
+
+const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
+const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
+
+const POLL_MS = 50
+const SETTLE_MS = 10000
+// How long a "nothing happened" check watches. A fixed sleep is correct only here.
+const QUIET_MS = 500
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// Reads until it equals `expected` (compared as JSON) or SETTLE_MS passes, and returns the last
+// reading, so the caller's assert.deepEqual names what it got.
+async function settle (read, expected, timeoutMs = SETTLE_MS) {
+  const want = JSON.stringify(expected)
+  const deadline = Date.now() + timeoutMs
+  let value = await read()
+  while (JSON.stringify(value) !== want && Date.now() < deadline) {
+    await sleep(POLL_MS)
+    value = await read()
+  }
+  return value
+}
+
+// Watches `read` for QUIET_MS and returns every distinct reading.
+async function watch (read) {
+  const seen = [JSON.stringify(await read())]
+  const deadline = Date.now() + QUIET_MS
+  while (Date.now() < deadline) {
+    await sleep(POLL_MS)
+    const now = JSON.stringify(await read())
+    if (now !== seen[seen.length - 1]) seen.push(now)
+  }
+  return seen.map((s) => JSON.parse(s))
+}
+
+const START = /Start Puzzle|Continue|Resume/i
+const BUTTON = '#control-colorbydigit'
+const BOX = `${BUTTON} [data-role="auto"]`
+const ARROW = `${BUTTON} [data-role="menu"]`
+const MENU = '#color-by-digit-menu'
+const EDITOR = '#color-by-digit-editor'
+const ROWS = `${EDITOR} [data-role=profile-row]`
+// Framework.setData prefixes the script's key with the site's own prefix.
+const PROFILES_STORAGE_KEY = 'svencodes_ColorByDigit_profiles'
+const LEGACY_STORAGE_KEY = 'svencodes_ColorByDigit_groups'
+// The script's own hold time on the button.
+const HOLD_MS = 500
+// How far past a row's middle a drag ends to land beyond it.
+const DROP_PAST_MIDDLE_PX = 8
+
+const group = (key, digits) => ({ key, digits })
+const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0', '2', '4', '6', '8'])]
+const LOW_FIVE_HIGH = [group('1', ['0', '1', '2', '3', '4']), group('5', ['5']), group('9', ['6', '7', '8', '9'])]
+const FOUR = [group('1', ['1', '2']), group('3', ['3', '4']), group('5', ['5', '6']), group('9', ['7', '8', '9'])]
+const SIX = ['1', '2', '3', '5', '7', '9'].map((key, i) => group(key, [String(i)]))
+// Four profiles of one to six groups, to show every icon layout: Odd/Even active.
+const FOUR_PROFILES = {
+  profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }, { name: 'Four', groups: FOUR }, { name: 'Six', groups: SIX }],
+  active: 0
+}
+const TWO_PROFILES = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
+
+// The key a digit gets in `groups`, or undefined.
+const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
+
+let browser
+before(async () => { browser = await chromium.launch() })
+after(async () => { await browser?.close() })
+
+for (const mode of ['document-idle', 'before-start', 'after-start']) {
+  // Runs the page through load, the script's injection time for this mode, and Start Puzzle.
+  const bootPage = async (p) => {
+    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    const startButton = () => p.getByRole('button', { name: START }).first()
+    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+    await startButton().waitFor({ state: 'visible' })
+    const inject = async () => {
+      await p.addScriptTag({ content: script })
+      await p.locator(BUTTON).waitFor({ state: 'attached' })
+    }
+    if (mode === 'before-start') await inject()
+    await startButton().click()
+    await startButton().waitFor({ state: 'hidden' })
+    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    if (mode === 'after-start') await inject()
+    await p.locator(BUTTON).waitFor({ state: 'visible' })
+  }
+
+  // A page for this injection time. `seed` maps a localStorage key to a JSON value, written before the
+  // page's own scripts run, and only while the key is absent so a reload keeps what was saved.
+  const openSession = async (seed, contextOptions = {}) => {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 }, ...contextOptions })
+    const errors = []
+    const p = await context.newPage()
+    p.on('pageerror', (e) => errors.push(String(e)))
+    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+    await p.addInitScript((entries) => {
+      entries.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
+    }, Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]))
+    if (mode === 'document-idle') {
+      await p.addInitScript((src) => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const s = document.createElement('script')
+          s.textContent = src
+          document.documentElement.appendChild(s)
+        })
+      }, script)
+    }
+    await bootPage(p)
+    return { context, p, errors }
+  }
+
+  // The reads and moves every group of checks below uses, bound to a page.
+  const tools = (p) => {
+    const read = (fn, arg) => p.evaluate(fn, arg)
+    const cellsState = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({
+      r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])]
+    })))
+    const coloredCount = async () => (await cellsState()).filter((x) => x.colours.length).length
+    const coloursOf = async () => JSON.stringify((await cellsState()).map((x) => x.colours))
+    const digitOf = (x) => String(x.given || x.value || '')
+    // The cells whose colors are not what `groups` gives their digit.
+    const wrongCount = async (groups) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(digitOf(x) === '' ? [] : [keyOf(groups, digitOf(x))])).length
+    const getState = () => read(() => Framework.getData('ColorByDigit_profiles'))
+    const names = async () => (await getState()).profiles.map((x) => x.name)
+    const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
+    const valueAt = (r, c) => read(([r, c]) => String(Framework.app.grid.getCell(r, c).value || ''), [r, c])
+    const undo = () => p.click('#control-undo')
+    const menu = () => p.locator(MENU)
+    const menuRows = () => p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => ({ name: e.querySelector('[data-role=name]').textContent, active: e.getAttribute('aria-checked') === 'true' })))
+    const iconDigits = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
+    const iconKeys = () => p.$$eval(`${BUTTON} svg rect[data-role=cell]`, (es) => es.map((e) => e.dataset.key))
+    const editor = () => p.locator(EDITOR)
+    const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
+    const openEditor = async () => {
+      await openSettings(p)
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Color by digit' }).first().click()
+      await editor().waitFor({ state: 'visible' })
+    }
+    const closeWith = async (text) => {
+      await dialogButton(text).click()
+      await editor().waitFor({ state: 'detached' })
+    }
+    const rowNames = () => p.$$eval(ROWS, (rows) => rows.map((r) => r.querySelector('[data-act=activate]').getAttribute('aria-label').replace('Active profile: ', '')))
+    const activeRow = () => p.$$eval(`${ROWS} [data-act=activate]`, (es) => es.findIndex((e) => e.checked))
+    // A click on the button proper, away from the AUTO box and the arrow box. The first moments after
+    // injection can be dead while SudokuPad binds its handlers, so it clicks until `read` shows `expected`.
+    const pressUntil = async (read, expected) => {
+      const deadline = Date.now() + SETTLE_MS
+      let value
+      do {
+        const box = await p.locator(BUTTON).boundingBox()
+        await p.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.55)
+        value = await settle(read, expected, 300)
+      } while (JSON.stringify(value) !== JSON.stringify(expected) && Date.now() < deadline)
+      return value
+    }
+    const openMenuByArrow = async () => {
+      await p.click(ARROW)
+      await menu().waitFor({ state: 'visible' })
+    }
+    const pick = async (name) => {
+      await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
+      await menu().waitFor({ state: 'detached' })
+    }
+    return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconDigits, iconKeys, editor, dialogButton, openEditor, closeWith, rowNames, activeRow, pressUntil, openMenuByArrow, pick }
+  }
+
+  describe(`profiles on a fresh install, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors, t
+
+    before(async () => {
+      ({ context, p, errors } = await openSession({}))
+      t = tools(p)
+    })
+    after(async () => { await context.close() })
+
+    it('the menu lists Low/5/High then Odd/Even, Low/5/High highlighted, under its heading', async () => {
+      await t.openMenuByArrow()
+      assert.deepEqual(await t.menuRows(), [{ name: 'Low/5/High', active: true }, { name: 'Odd/Even', active: false }].map((r) => ({ ...r, name: r.name })))
+      assert.match(await t.menu().innerText(), /color by digit profile/i)
+      assert.match(await t.menu().innerText(), /Edit profiles…/)
+      await p.keyboard.press('Escape')
+    })
+
+    it('the icon shows Low/5/High: three cells with the lowest digits 0, 5 and 6', async () => {
+      assert.deepEqual(await t.iconDigits(), ['0', '5', '6'])
+      assert.deepEqual(await t.iconKeys(), ['1', '5', '9'])
+    })
+
+    it('a short press colors every given by Low/5/High, as the active profile', async () => {
+      const low = LOW_FIVE_HIGH
+      assert.equal(await t.pressUntil(() => t.wrongCount(low), 0), 0)
+      assert.equal(await t.coloredCount() > 0, true)
+    })
+
+    it('nothing is saved until a profile is picked or the dialog saved', async () => {
+      assert.equal(await t.getState(), null)
+    })
+
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
+  })
+
+  describe(`migration from saved groups, injected ${mode}`, { concurrency: false }, () => {
+    const migrate = async (groups, expectedName, expectedDigits) => {
+      const { context, p, errors } = await openSession({ [LEGACY_STORAGE_KEY]: groups })
+      try {
+        const t = tools(p)
+        await t.openMenuByArrow()
+        assert.deepEqual(await t.menuRows(), [{ name: expectedName, active: true }])
+        assert.deepEqual(await t.iconDigits(), expectedDigits)
+        await p.keyboard.press('Escape')
+        // Nothing saved is lost: the groups are still where they were, and a switch writes the new key.
+        assert.deepEqual(JSON.parse(await p.evaluate((k) => window.localStorage.getItem(k), LEGACY_STORAGE_KEY)), groups)
+        assert.deepEqual(errors, [])
+      } finally {
+        await context.close()
+      }
+    }
+
+    it('saved groups equal to a preload become the active profile, named after it', async () => {
+      await migrate(ODD_EVEN, 'Odd/Even', ['1', '0'])
+    })
+
+    it('saved groups equal to no preload become the active profile named Custom', async () => {
+      await migrate([group('3', ['2', '4']), group('7', ['9'])], 'Custom', ['2', '9'])
+    })
+  })
+
+  describe(`the menu and switching, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors, t
+
+    before(async () => {
+      ({ context, p, errors } = await openSession({ [PROFILES_STORAGE_KEY]: FOUR_PROFILES }))
+      t = tools(p)
+    })
+    after(async () => { await context.close() })
+
+    it('a click on the arrow box opens the menu above the button, rows in order, Odd/Even highlighted', async () => {
+      await t.openMenuByArrow()
+      assert.deepEqual(await t.menuRows(), [{ name: 'Odd/Even', active: true }, { name: 'Low/5/High', active: false }, { name: 'Four', active: false }, { name: 'Six', active: false }])
+      const [menu, button] = await Promise.all([t.menu().boundingBox(), p.locator(BUTTON).boundingBox()])
+      assert.equal(menu.y + menu.height <= button.y, true, JSON.stringify({ menu, button }))
+    })
+
+    it('Escape closes the menu', async () => {
+      await p.keyboard.press('Escape')
+      await t.menu().waitFor({ state: 'detached' })
+    })
+
+    it('a click elsewhere closes the menu', async () => {
+      await t.openMenuByArrow()
+      await p.mouse.click(5, 5)
+      await t.menu().waitFor({ state: 'detached' })
+    })
+
+    it('a second click on the arrow box closes the menu again', async () => {
+      await t.openMenuByArrow()
+      await p.click(ARROW)
+      await t.menu().waitFor({ state: 'detached' })
+    })
+
+    it('a right click on the button opens the menu, the browser menu is kept closed, and no cell is colored', async () => {
+      await p.evaluate(() => { window.__contextmenu = []; document.addEventListener('contextmenu', (e) => window.__contextmenu.push(e.defaultPrevented)) })
+      const box = await p.locator(BUTTON).boundingBox()
+      await p.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.55, { button: 'right' })
+      await t.menu().waitFor({ state: 'visible' })
+      // The page's own listener runs after the script's, so it reads the final defaultPrevented.
+      assert.deepEqual(await p.evaluate(() => window.__contextmenu), [true])
+      assert.deepEqual(await watch(t.coloredCount), [0])
+      await p.keyboard.press('Escape')
+    })
+
+    it('a hold on the button opens the menu, and the press colors nothing', async () => {
+      assert.equal(await t.menu().count(), 0)
+      const box = await p.locator(BUTTON).boundingBox()
+      await p.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.55)
+      await p.mouse.down()
+      // Opens on a timer after HOLD_MS; waits on the menu, not on the clock.
+      await t.menu().waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
+      await p.mouse.up()
+      assert.deepEqual(await watch(t.coloredCount), [0])
+      await p.keyboard.press('Escape')
+    })
+
+    it('a short press on the button still colors the grid and opens no menu', async () => {
+      assert.equal(await t.pressUntil(() => t.wrongCount(ODD_EVEN), 0), 0)
+      assert.equal(await t.menu().count(), 0)
+    })
+
+    it('a pick with auto mode off removes the old colors and colors every pure cell by the new profile, as one undo step', async () => {
+      const before = await t.coloursOf()
+      await t.openMenuByArrow()
+      await t.pick('Low/5/High')
+      assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
+      assert.equal((await t.getState()).active, 1)
+      assert.deepEqual(await settle(t.iconDigits, ['0', '5', '6']), ['0', '5', '6'])
+      await t.undo()
+      assert.equal(await settle(t.coloursOf, before), before)
+    })
+
+    it('the undo left the profile switched: the saved profile and the icon stay Low/5/High', async () => {
+      assert.equal((await t.getState()).active, 1)
+      assert.deepEqual(await t.iconDigits(), ['0', '5', '6'])
+    })
+
+    it('a pick with auto mode on does the same, as one undo step', async () => {
+      await p.click(BOX)
+      await settle(() => p.locator(BOX).getAttribute('aria-checked'), 'true')
+      const before = await t.coloursOf()
+      await t.openMenuByArrow()
+      await t.pick('Odd/Even')
+      assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
+      await t.undo()
+      assert.equal(await settle(t.coloursOf, before), before)
+      await p.click(BOX)
+      await settle(() => p.locator(BOX).getAttribute('aria-checked'), 'false')
+    })
+
+    it('a pick by right click works too, and a cell entered by hand keeps its digit: the keyboard stays with the puzzle', async () => {
+      const box = await p.locator(BUTTON).boundingBox()
+      await p.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.55, { button: 'right' })
+      await t.menu().waitFor({ state: 'visible' })
+      await t.pick('Four')
+      await t.select(8, 0)
+      await p.keyboard.press('4')
+      assert.equal(await settle(() => t.valueAt(8, 0), '4'), '4')
+    })
+
+    it('after a pick through the arrow box the keyboard also stays with the puzzle', async () => {
+      await t.openMenuByArrow()
+      await t.pick('Six')
+      await t.select(8, 1)
+      await p.keyboard.press('3')
+      assert.equal(await settle(() => t.valueAt(8, 1), '3'), '3')
+    })
+
+    it('the AUTO box and the arrow box overlap no cell of the icon, for profiles of 2, 3, 4 and 6 groups', async () => {
+      const overlaps = () => p.evaluate(({ auto, arrow }) => {
+        const rect = (e) => e.getBoundingClientRect()
+        const cells = [...document.querySelectorAll('#control-colorbydigit svg rect[data-role=cell]')].map(rect)
+        const small = [auto, arrow].map((sel) => rect(document.querySelector(sel)))
+        const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+        return { cells: cells.length, hits: cells.flatMap((c) => small.map((s) => hit(c, s))).filter(Boolean).length }
+      }, { auto: BOX, arrow: ARROW })
+      const seen = []
+      for (const [name, cells] of [['Odd/Even', 2], ['Low/5/High', 3], ['Four', 4], ['Six', 4]]) {
+        await t.openMenuByArrow()
+        await t.pick(name)
+        seen.push([name, await settle(overlaps, { cells, hits: 0 })])
+      }
+      assert.deepEqual(seen, [['Odd/Even', { cells: 2, hits: 0 }], ['Low/5/High', { cells: 3, hits: 0 }], ['Four', { cells: 4, hits: 0 }], ['Six', { cells: 4, hits: 0 }]])
+    })
+
+    it('a group of the icon shows its lowest digit: Six shows 0 to 3 on its first four groups', async () => {
+      assert.deepEqual(await t.iconDigits(), ['0', '1', '2', '3'])
+    })
+
+    it('Edit profiles… opens the dialog', async () => {
+      await t.openMenuByArrow()
+      await p.locator(`${MENU} [data-act=edit]`).click()
+      await t.editor().waitFor({ state: 'visible' })
+      await t.closeWith('Cancel')
+    })
+
+    it('the switch survives a reload: the saved profile is the active one', async () => {
+      await p.reload({ waitUntil: 'load' })
+      await bootPage(p)
+      assert.equal((await t.getState()).active, 3)
+      assert.deepEqual(await t.iconDigits(), ['0', '1', '2', '3'])
+    })
+
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
+  })
+
+  describe(`the menu on a touch screen, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors, t, cdp
+
+    before(async () => {
+      ({ context, p, errors } = await openSession({ [PROFILES_STORAGE_KEY]: TWO_PROFILES }, { hasTouch: true }))
+      t = tools(p)
+      cdp = await context.newCDPSession(p)
+    })
+    after(async () => { await context.close() })
+
+    const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+
+    it('a tap on the arrow box opens the menu, and a tap on a row picks it', async () => {
+      await p.tap(ARROW)
+      await t.menu().waitFor({ state: 'visible' })
+      await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).tap()
+      await t.menu().waitFor({ state: 'detached' })
+      assert.equal((await settle(t.getState, { ...TWO_PROFILES, active: 1 })).active, 1)
+    })
+
+    it('a hold on the button opens the menu and colors nothing', async () => {
+      const box = await p.locator(BUTTON).boundingBox()
+      const x = box.x + box.width * 0.5
+      const y = box.y + box.height * 0.55
+      const before = await t.coloursOf()
+      await touch('touchStart', x, y)
+      await t.menu().waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
+      await touch('touchEnd', x, y)
+      assert.deepEqual(await watch(t.coloursOf), [before])
+      await p.keyboard.press('Escape')
+      await t.menu().waitFor({ state: 'detached' })
+    })
+
+    it('a short tap on the button colors the grid', async () => {
+      await t.undo() // the pick's colors, so the grid starts clear
+      assert.equal(await settle(t.coloredCount, 0), 0)
+      const box = await p.locator(BUTTON).boundingBox()
+      const x = box.x + box.width * 0.5
+      const y = box.y + box.height * 0.55
+      const deadline = Date.now() + SETTLE_MS
+      let colored = 0
+      while (colored === 0 && Date.now() < deadline) {
+        await touch('touchStart', x, y)
+        await touch('touchEnd', x, y)
+        colored = await settle(t.coloredCount, 1, 300)
+      }
+      assert.equal(colored > 0, true)
+    })
+
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
+  })
+
+  describe(`the dialog's profile list, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors, t, cdp
+
+    before(async () => {
+      ({ context, p, errors } = await openSession({ [PROFILES_STORAGE_KEY]: { ...FOUR_PROFILES, profiles: FOUR_PROFILES.profiles.slice(0, 3) } }, { hasTouch: true }))
+      t = tools(p)
+      cdp = await context.newCDPSession(p)
+    })
+    after(async () => { await context.close() })
+
+    const handle = (i) => p.locator(`${ROWS} [data-role=handle]`).nth(i)
+    const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
+    const count = () => p.locator(ROWS).count()
+    const heading = () => p.locator(EDITOR).innerText()
+    // Drags a handle to the vertical middle of row `to` with the mouse.
+    const dragWithMouse = async (from, to) => {
+      await p.locator(ROWS).first().scrollIntoViewIfNeeded()
+      const start = await center(handle(from))
+      const end = await center(p.locator(ROWS).nth(to))
+      // Past the row's middle, where the dragged row lands after it.
+      end.y += to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX
+      await p.mouse.move(start.x, start.y)
+      await p.mouse.down()
+      await p.mouse.move(start.x, (start.y + end.y) / 2, { steps: 4 })
+      await p.mouse.move(start.x, end.y, { steps: 4 })
+      await p.mouse.up()
+    }
+    // The same drag with a finger.
+    const dragWithTouch = async (from, to) => {
+      await p.locator(ROWS).first().scrollIntoViewIfNeeded()
+      const start = await center(handle(from))
+      const end = await center(p.locator(ROWS).nth(to))
+      end.y += to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x, y: start.y }] })
+      for (let step = 1; step <= 6; step++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x, y: start.y + ((end.y - start.y) * step) / 6 }] })
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    }
+
+    it('the dialog lists each profile with its colors and lowest digits, a count and the active checkbox', async () => {
+      await t.openEditor()
+      assert.deepEqual(await t.rowNames(), ['Odd/Even', 'Low/5/High', 'Four'])
+      assert.equal(await t.activeRow(), 0)
+      assert.match(await heading(), /\(3 of 4\)/)
+      assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['1', '0', '0', '5', '6', '1', '3', '5', '7'])
+      assert.equal(await p.locator(`${EDITOR} button[data-act=preload]`).count(), 0)
+    })
+
+    it('only one profile is active at a time: ticking another unticks the first, and the groups below follow it', async () => {
+      await p.check(`${EDITOR} input[data-act=activate][data-index="1"]`)
+      assert.equal(await t.activeRow(), 1)
+      assert.equal(await p.locator(`${EDITOR} input[data-act=activate]:checked`).count(), 1)
+      assert.equal(await p.locator(`${EDITOR} button[data-act=remove]`).count(), 3)
+    })
+
+    it('a drag of the handle with the mouse reorders the draft, and Cancel drops it', async () => {
+      await dragWithMouse(0, 2)
+      assert.deepEqual(await t.rowNames(), ['Low/5/High', 'Four', 'Odd/Even'])
+      assert.equal(await t.activeRow(), 0)
+      await t.closeWith('Cancel')
+      assert.deepEqual(await t.names(), ['Odd/Even', 'Low/5/High', 'Four'])
+      assert.equal((await t.getState()).active, 0)
+    })
+
+    it('a drag with a finger reorders the draft, and Save keeps the order, the active profile and shows it in the menu', async () => {
+      await t.openEditor()
+      await dragWithTouch(2, 0)
+      assert.deepEqual(await t.rowNames(), ['Four', 'Odd/Even', 'Low/5/High'])
+      await t.closeWith('Save')
+      assert.deepEqual(await settle(t.names, ['Four', 'Odd/Even', 'Low/5/High']), ['Four', 'Odd/Even', 'Low/5/High'])
+      assert.equal((await t.getState()).active, 1)
+      await t.openMenuByArrow()
+      assert.deepEqual(await t.menuRows(), [{ name: 'Four', active: false }, { name: 'Odd/Even', active: true }, { name: 'Low/5/High', active: false }])
+      await p.keyboard.press('Escape')
+    })
+
+    it('a name and Add append a copy of the active profile, which is not made active; Cancel drops it', async () => {
+      await t.openEditor()
+      await p.fill(`${EDITOR} [data-role=new-name]`, 'Mine')
+      await p.click(`${EDITOR} button[data-act=add]`)
+      assert.deepEqual(await t.rowNames(), ['Four', 'Odd/Even', 'Low/5/High', 'Mine'])
+      assert.equal(await t.activeRow(), 1)
+      assert.match(await heading(), /\(4 of 4\)/)
+      assert.equal(await p.inputValue(`${EDITOR} [data-role=new-name]`), '')
+      // A copy of the active profile, Odd/Even: its lowest digits are 1 and 0.
+      assert.deepEqual(await p.$$eval(`${ROWS}:nth-child(4) [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['1', '0'])
+      await t.closeWith('Cancel')
+      assert.deepEqual(await t.names(), ['Four', 'Odd/Even', 'Low/5/High'])
+    })
+
+    it('Add is disabled at four profiles, and a blank name adds nothing', async () => {
+      await t.openEditor()
+      await p.click(`${EDITOR} button[data-act=add]`)
+      assert.equal(await count(), 3)
+      await p.fill(`${EDITOR} [data-role=new-name]`, 'Mine')
+      await p.press(`${EDITOR} [data-role=new-name]`, 'Enter')
+      assert.equal(await count(), 4)
+      assert.equal(await p.locator(`${EDITOR} button[data-act=add]`).isDisabled(), true)
+    })
+
+    it('Save keeps the four profiles, and the new one is last', async () => {
+      await t.closeWith('Save')
+      assert.deepEqual(await settle(t.names, ['Four', 'Odd/Even', 'Low/5/High', 'Mine']), ['Four', 'Odd/Even', 'Low/5/High', 'Mine'])
+    })
+
+    it('delete removes a profile in the draft, and Cancel drops that too', async () => {
+      await t.openEditor()
+      await p.click(`${ROWS}:nth-child(1) button[data-act=delete]`)
+      assert.deepEqual(await t.rowNames(), ['Odd/Even', 'Low/5/High', 'Mine'])
+      assert.equal(await t.activeRow(), 0)
+      await t.closeWith('Cancel')
+      assert.equal((await t.names()).length, 4)
+    })
+
+    it('delete is disabled on the last profile, and Save keeps just it, active', async () => {
+      await t.openEditor()
+      for (let i = 0; i < 3; i++) await p.click(`${ROWS}:nth-child(1) button[data-act=delete]`)
+      assert.equal(await count(), 1)
+      assert.equal(await p.locator(`${ROWS} button[data-act=delete]`).isDisabled(), true)
+      assert.equal(await t.activeRow(), 0)
+      await t.closeWith('Save')
+      const state = await settle(async () => (await t.getState()).profiles.length, 1)
+      assert.equal(state, 1)
+      assert.equal((await t.getState()).active, 0)
+    })
+
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
+  })
+}
