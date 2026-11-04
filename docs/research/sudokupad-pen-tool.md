@@ -11,8 +11,9 @@ page.
   and `ToolPen_color` store the digit N, never an RGB value.
 - So overriding the nine variables should recolor strokes, swatches and old strokes
   together, with no change to puzzle state or replays.
-- The set is nine: colors are one character in the pen value, and the buttons are
-  the digit keys. More than nine would need changes to SudokuPad's own code.
+- SudokuPad's own set is nine, on the digit keys. A color is one character in the pen
+  value. More than nine does not need changes to SudokuPad's code: see "Pen colors past
+  nine" below, which corrects an earlier reading here.
 - The eraser stroke (`.pencolor-erase`) has its own fixed color and no variable.
 - `feature-customcolors.js` mentions no pen color.
 
@@ -73,3 +74,20 @@ Read 2026-11-03 from SudokuPad 0.611.0's `tool-color.js`. Nothing here was run l
 - Dragging a line over an existing line in the same cells erases it.
 - Pictures of the panel: `pen-tool-extras-panel.png`, `-moved.png`, `-letter.png` (the letter
   tool and Color by Digit on) and `-dialog.png`; `pen-tool-extras-panel-screenshot.mjs` takes them.
+
+## Pen colors past nine (run on the page 2026-11-04, SudokuPad 0.611.0, headless Chromium, no script loaded)
+
+A throwaway probe set `ToolPen.tool.selectedColor` to `a` and `z`, added a `.pencolor-a, .pencolor-z` stroke rule, and
+drew real mouse drags.
+
+- The strokes store as `1a` and `1z`, and draw with class `pencolor-a` and the rule's stroke.
+- `getReplay()` holds `pc:a` and `pc:z`. Undo removes the last stroke, and `loadReplay` draws both again. No page errors.
+- The color character is separate from the mark character, so colors do not use up the scarce mark values in
+  `sudokupad-pen-edge-marks.md`. Replays lowercase their actions, so a color has to be a lowercase letter: 26 more. Only
+  `a` and `z` were run.
+- `ToolPen_color` saved as `a` throws `TypeError: Cannot read properties of null (reading 'classList')` when the pen
+  tool opens, because `setSelectedColor` looks for a `.tool-pen button[data-value="a"]`. A script needs that button to
+  exist by then, or has to save a digit instead.
+- A page without the rule loads the replay with no error and stores the marks, but draws them with `stroke: none`, so
+  they are invisible to anyone without the script.
+- Not run: a page reload, custom buttons in the panel, Windows, Tampermonkey.
