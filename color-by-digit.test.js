@@ -473,6 +473,13 @@ test('auto: the dialog box opens at the draft it is given', () => {
   assert.doesNotMatch(editor([], [], []), /data-role="auto-draft" checked/)
 })
 
+test('auto: the dialog box label reads "Keep colors in step with digits and centre marks" and the box is named "Auto mode"', () => {
+  const html = editor([], [], [])
+  assert.match(html, /<label for="color-by-digit-auto-draft"[^>]*>Keep colors in step with digits and centre marks<\/label>/)
+  assert.doesNotMatch(html, /Auto mode:/)
+  assert.match(html, /<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"[^>]* aria-label="Auto mode"/)
+})
+
 test('iconHtml draws one cell per group, at most four, each with its shown digit in the ink that reads on its color', () => {
   const html = iconHtml(false, [{ key: 'a', digits: ['3', '4'] }, { key: 'b', digits: ['7'] }], colorFor)
   assert.equal(count(html, /<rect data-role="cell"/g), 2)
