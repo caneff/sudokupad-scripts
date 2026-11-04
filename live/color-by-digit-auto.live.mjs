@@ -293,14 +293,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('an entry SudokuPad runs inside its own group, as a paste does, is colored and undone with it', async () => {
+      const state = async () => [await valueAt(8, 3), await colorsAt(8, 3)]
+      await select(8, 3); await p.keyboard.press('7')
+      assert.deepEqual(await settle(state, ['7', ['1']]), ['7', ['1']])
       await read(() => {
         const a = Framework.app
-        a.deselect(); a.select(a.grid.getCell(8, 3))
         a.act({ type: 'groupstart' }); a.act({ type: 'clear', arg: 'normal' }); a.act({ type: 'value', arg: '6' }); a.act({ type: 'groupend' })
       })
-      assert.deepEqual(await settle(async () => [await valueAt(8, 3), await colorsAt(8, 3)], ['6', ['2']]), ['6', ['2']])
+      assert.deepEqual(await settle(state, ['6', ['2']]), ['6', ['2']])
+      await undo() // the clear, the 6 and the colors together: back to the 7 in its odd color
+      assert.deepEqual(await settle(state, ['7', ['1']]), ['7', ['1']])
       await undo()
-      assert.deepEqual(await settle(async () => [await valueAt(8, 3), await colorsAt(8, 3)], ['', []]), ['', []])
+      assert.deepEqual(await settle(state, ['', []]), ['', []])
     })
 
     it('loadReplay and replay playback with auto mode on change no colors', async () => {
