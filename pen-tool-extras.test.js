@@ -12,7 +12,7 @@ const {
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
-  createFeatures, FEATURE_LABELS, FEATURE_NEEDS
+  createFeatures, inStock, FEATURE_LABELS, FEATURE_NEEDS
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
@@ -1548,23 +1548,48 @@ test('turning one feature off leaves the others on', () => {
 test('a feature that needs another is off with it, and the list names both in the dialog\'s order', () => {
   const { features } = newFeatures()
   features.turnOff('pages', 'no setSelectedColor')
-  assert.deepEqual(features.offLabels(), ['pen pages', 'dashes', 'chevrons'])
+  assert.deepEqual(features.offLabels(), ['pen pages', 'dashes', 'arrow lines'])
   const second = newFeatures().features
   second.turnOff('marks', 'no getInputRc')
   assert.deepEqual(second.offLabels(), ['marks', 'right click'])
 })
 
-test('a throw in a feature that is off already on its own need does not turn the others off', () => {
+test('one throw turns off every feature the attempt names, and the others stay on', () => {
   const { features } = newFeatures()
-  features.attempt(['sliders', 'outline'], () => { throw new Error('hint') }, () => null)
+  features.attempt(['sliders', 'outline'], () => { throw new Error('hint') })
   assert.deepEqual(features.offLabels(), ['sliders', 'outline'])
   assert.equal(features.isOff('marks'), false)
+})
+
+test('an attempt that names two features still runs while one of them is on', () => {
+  const { features } = newFeatures()
+  features.turnOff('sliders', 'no drawLineHint')
+  assert.equal(features.attempt(['sliders', 'outline'], () => 'ran', () => 'fallback'), 'ran')
+  features.turnOff('outline', 'no drawLineHint')
+  assert.equal(features.attempt(['sliders', 'outline'], () => 'ran', () => 'fallback'), 'fallback')
+})
+
+test('turning off a feature that is off already logs nothing more and tells nobody', () => {
+  const { features, logged, changes } = newFeatures()
+  features.turnOff('colors', 'first')
+  features.turnOff('colors', 'second')
+  assert.deepEqual(logged, [[['colors'], 'first']])
+  assert.equal(changes.length, 1)
+})
+
+test('a throw in a SudokuPad function the feature only called passes through and turns nothing off', () => {
+  const { features, logged } = newFeatures()
+  const stock = new TypeError('SudokuPad broke')
+  assert.throws(() => features.attempt('marks', () => inStock(() => { throw stock }), () => 'fallback'), (error) => error === stock)
+  assert.equal(features.isOff('marks'), false)
+  assert.deepEqual(logged, [])
+  assert.equal(inStock(() => 7), 7)
 })
 
 test('the dialog shows one plain line naming the features that are off, and nothing when none is', () => {
   assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
   assert.doesNotMatch(renderEditor(editorState()), /Off because/)
-  assert.match(renderEditor(editorState({ off: ['chevrons'] })), />Off because SudokuPad changed: chevrons<\/div>/)
+  assert.match(renderEditor(editorState({ off: ['chevrons'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
   assert.match(renderEditor(editorState({ off: ['marks', 'rightClick'] })), />Off because SudokuPad changed: marks, right click<\/div>/)
 })
 

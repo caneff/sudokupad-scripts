@@ -7,8 +7,10 @@
 //   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
-// A case removes an internal by setting it to undefined, which also takes it from SudokuPad's own code, so a case only draws with what that
-// internal does not serve: a click on a cell edge, which SudokuPad turns into its own X, and a drag in the case that breaks only the arrows.
+// A case breaks an internal by taking it away (undefined), or by making the call the script makes fail while SudokuPad's own use of it goes on (a
+// snippet that throws only during the script's moment of need). A removed internal also goes from SudokuPad's own code, so a case that removes
+// one draws only with what it does not serve: a click on a cell edge, which SudokuPad turns into its own X, and a dragged line unless the case
+// removes the drag highlight. Dashes follow pen pages, and the outline shares the drag highlight with the sliders, so neither has a case of its own.
 // Not covered: a real Tampermonkey install and crackingthecryptic.com.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
@@ -28,13 +30,21 @@ const PAGE_BUTTON = '.pen-tool-extras-page'
 const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
 
-// The internal each case breaks, as the snippet that breaks it, and what the dialog must then say is off.
+// The internal each case breaks, as the snippet that breaks it, and what the dialog must then say is off. What the case leaves different:
+// `noPageButton` and `noSliders` for a panel without them, `pulldown` for SudokuPad's line mode pulldown
+// ('hidden' unless the line mode feature is off), `edgeAgain` for the mark a second click on an edge makes (this script's arrow 'k', or nothing when
+// marks are off and SudokuPad's own click takes the X away), `noDrag` for a case that removes what a drag needs.
 const CASES = [
-  // The color tool never holds a readable page, which the script waits ten seconds for before it gives up on the derived colors.
-  { name: 'colors', off: 'colors', breaks: 'Framework.app.tools.colour.palette = { pages: [] }' },
-  { name: 'pages', off: 'pen pages, dashes, chevrons', breaks: 'ToolPen.tool.handleToolExit = undefined' },
-  { name: 'sliders', off: 'sliders, outline', logs: 2, breaks: 'ToolPen.tool.drawLineHint = undefined' },
-  { name: 'marks', off: 'marks, right click', breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
+  // The color tool's page cannot be read when the colors are derived.
+  {
+    name: 'colors',
+    off: 'colors',
+    breaks: `const tool = Framework.app.tools.colour
+      tool.palette.pages[tool.currentPage] = new Proxy(tool.palette.pages[tool.currentPage], { get (page, key) { if (key === 'length') throw new TypeError('no length'); return page[key] } })`
+  },
+  { name: 'pages', off: 'pen pages, dashes, arrow lines', noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
+  { name: 'sliders', off: 'sliders, outline', noSliders: true, noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
+  { name: 'marks', off: 'marks, right click', edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
   // Here too the call fails only while the middle press is handled, so SudokuPad's own pointer reading, which uses it, goes on.
   {
     name: 'line erase',
@@ -43,11 +53,20 @@ const CASES = [
       window.addEventListener('pointerdown', (e) => { window.middle = e.button === 1; setTimeout(() => { window.middle = false }) }, true)
       Framework.app.xyToRCExact = function () { if (window.middle) throw new TypeError('xyToRCExact is gone'); return xyToRCExact.apply(this, arguments) }`
   },
-  { name: 'line mode', off: 'line mode', breaks: 'ToolPen.tool.lineMode = undefined' },
-  // The arrows' own group is the only thing script asks the renderer for that SudokuPad's pen does not.
+  // SudokuPad builds the pen tool's panel without the element the sliders and the page button sit beside.
+  {
+    name: 'panel row',
+    off: 'line mode',
+    noPageButton: true,
+    noSliders: true,
+    pulldown: 'absent',
+    breaks: `new MutationObserver(() => document.querySelectorAll('.penlinemode').forEach((el) => el.classList.replace('penlinemode', 'renamed')))
+      .observe(document.documentElement, { childList: true, subtree: true })`
+  },
+  // The arrows' own group is the only thing the script asks the renderer for that SudokuPad's pen does not.
   {
     name: 'chevrons',
-    off: 'chevrons',
+    off: 'arrow lines',
     breaks: `const renderPart = Framework.app.svgRenderer.renderPart
       Framework.app.svgRenderer.renderPart = function (opts) { if (opts && opts.type === 'g') throw new TypeError('renderPart has no group'); return renderPart.apply(this, arguments) }`
   },
@@ -176,6 +195,7 @@ function group (title, mode) {
 
         // The failure of some shows only when the feature is used: a page 3 line is drawn, a context menu is asked for, the color tool is waited on.
         const triggerFailure = async () => {
+          if (kase.name === 'panel row') assert.equal(await settle(async () => logged.length, 1, 5000), 1, 'the panel check ended')
           if (kase.name === 'colors') assert.equal(await settle(async () => logged.length, 1, 20000), 1, 'the wait for the color tool ended')
           if (kase.name === 'chevrons') {
             await p.locator(PAGE_BUTTON).click()
@@ -221,16 +241,16 @@ function group (title, mode) {
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'the X on the bottom edge of the cell above')
           await clickEdge()
-          const second = kase.name === 'marks' ? [] : ['k']
+          const second = kase.edgeAgain === null ? [] : ['k']
           assert.deepEqual(await settle(edgeValues, second), second)
           while ((await penValues()).length) await p.click('#control-undo')
         })
 
         it('the features that are not off still work', async () => {
           const pageButtons = await p.locator(PAGE_BUTTON).count()
-          assert.equal(pageButtons, kase.name === 'pages' || kase.name === 'line mode' ? 0 : 1, 'the page button')
+          assert.equal(pageButtons, kase.noPageButton ? 0 : 1, 'the page button')
           const sliders = await p.locator(SLIDERS).count()
-          assert.equal(sliders, kase.name === 'sliders' || kase.name === 'line mode' ? 0 : 1, 'the thickness slider')
+          assert.equal(sliders, kase.noSliders ? 0 : 1, 'the thickness slider')
           const pad = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
           assert.equal(await pad(), '123456789')
           if (pageButtons) {
@@ -239,15 +259,30 @@ function group (title, mode) {
             await p.locator(PAGE_BUTTON).click()
             await p.locator(PAGE_BUTTON).click()
           }
-          const lineModeBox = await read(() => {
+          const pulldown = await read(() => {
             const box = document.querySelector('.tool-pen .penlinemode')
-            return box ? window.getComputedStyle(box).display : 'absent'
+            return !box ? 'absent' : window.getComputedStyle(box).display === 'none' ? 'hidden' : 'visible'
           })
-          assert.equal(lineModeBox === 'none', kase.name !== 'line mode', 'SudokuPad\'s line mode pulldown is hidden unless that feature is off')
+          assert.equal(pulldown, kase.pulldown || 'hidden', 'SudokuPad\'s line mode pulldown')
         })
 
+        // A dragged line is SudokuPad's own drawing; it needs the drag highlight, which one case removes.
+        if (!kase.noDrag) {
+          it('SudokuPad\'s own dragged line still draws', async () => {
+            while ((await penValues()).length) await p.click('#control-undo')
+            const [x0, y0] = await pixel([4.5, 2.5])
+            const [x1] = await pixel([4.5, 4.5])
+            await p.mouse.move(x0, y0)
+            await p.mouse.down()
+            await p.mouse.move(x1, y0, { steps: 8 })
+            await p.mouse.up()
+            assert.equal(await settle(async () => (await penValues()).length > 0, true), true, 'the drag stored a line')
+            while ((await penValues()).length) await p.click('#control-undo')
+          })
+        }
+
         it('the failure is logged once with the script\'s name, and nothing else throws', async () => {
-          assert.equal(logged.length, kase.logs || (kase.off === NOTHING_OFF ? 0 : 1), logged.join('\n'))
+          assert.equal(logged.length, kase.off === NOTHING_OFF ? 0 : 1, logged.join('\n'))
           assert.deepEqual(errors, [])
         })
       })

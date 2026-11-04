@@ -1137,7 +1137,8 @@ describe('without the script', { concurrency: false }, () => {
 })
 
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
-  // Each is read by the corner click or its hit test; with one gone the wrap would throw on every pen click.
+  // Each is read by the corner click or its hit test; with one gone the click wrap would throw on every pen click, so the script turns marks off alone and logs it once.
+  const TURNED_OFF = /^pen-tool-extras: .*marks.* turned off because SudokuPad changed:/
   const REMOVALS = {
     'ToolPen.tool.actStart': () => { ToolPen.tool.actStart = undefined },
     'ToolPen.tool.getInputRc': () => { ToolPen.tool.getInputRc = undefined },
@@ -1146,32 +1147,31 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
     'Framework.app.grid.cols': () => { Framework.app.grid.cols = undefined }
   }
   for (const [member, remove] of Object.entries(REMOVALS)) {
-    it(`${member} gone: one warning, and the click wrap is not installed`, async () => {
+    it(`${member} gone: one report that marks are off`, async () => {
       const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
       const warnings = []
       try {
         const p = await newPage(context, [])
-        p.on('console', (m) => { if (m.type() === 'warning' && m.text().includes('pen-tool-extras')) warnings.push(m.text()) })
+        p.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
         await p.goto(url, { waitUntil: 'load', timeout: 60000 })
         await startPuzzle(p)
-        await p.evaluate(`window.__clickCell = ToolPen.tool.clickCell; (${remove})()`)
+        await p.evaluate(`(${remove})()`)
         await p.addScriptTag({ content: script })
         await settle(async () => warnings.length, 1)
         assert.equal(warnings.length, 1, JSON.stringify(warnings))
-        assert.equal(await p.evaluate(() => ToolPen.tool.clickCell === window.__clickCell), true, 'clickCell was wrapped')
       } finally {
         await context.close()
       }
     })
   }
 
-  it('logs one warning, installs no edge marks, and the pen tool still works', async () => {
+  it('logs one report, turns marks off, and the pen tool still works', async () => {
     const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
     const errors = []
     const warnings = []
     try {
       const p = await newPage(context, errors)
-      p.on('console', (m) => { if (m.type() === 'warning' && m.text().includes('pen-tool-extras')) warnings.push(m.text()) })
+      p.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
       await p.goto(url, { waitUntil: 'load', timeout: 60000 })
       await startPuzzle(p)
       // `_actList` is the field the click wrap reads; SudokuPad's own `actStart` recreates it
