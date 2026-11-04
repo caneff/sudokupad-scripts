@@ -4,10 +4,12 @@
 //
 //   record  records one solve with every script installed (real mouse and keyboard input), saves it through SudokuPad's own
 //           "Replay Save/Load" dialog to docs/research/replay-files/recorded.replay, and writes the recorded grid next to it.
-//   play    for each case (all scripts, each script alone, no scripts) opens a fresh page, loads that file through the same
-//           dialog, then plays it in the replay tool at normal speed and by stepping, comparing the grid each time.
+//   play    for each case (all scripts, each script alone, no scripts; `:nopen` after a case turns SudokuPad's pen tool setting
+//           off) opens a fresh page, loads that file through the same dialog, rewinds the replay tool and plays it at normal
+//           speed (speed 1) and with the tool's own Play button (speed 10), then steps by its buttons and by action, comparing
+//           the grid each time.
 //
-// Results go to .scratch/replay-results.json and screenshots to .scratch/replay-shots/, both outside the note.
+// A page that fails to load reports that without the puzzle URL. Results go to .scratch/replay-results.json and screenshots to .scratch/replay-shots/, both outside the note.
 /* global Framework, Replay, ToolReplay, ToolPen, Puzzle */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -26,30 +28,41 @@ const RESULTS = new URL('.scratch/replay-results.json', ROOT).pathname
 const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGES = { 1: '123456789', 2: 'abcdefghi', 3: 'jlnprtvxz' }
+// The hosts the page's own trackers use, blocked in every context; the console errors that blocking causes are the only ones ignored.
+const BLOCKED = /cookiebot|googletagmanager|plausible/
+// Each phase name is typed once: a page error is filed under the phase running when it arrives, and read back under the same name.
+const PHASE = { boot: 'boot', record: 'record', save: 'record: save', load: 'load file', normal: 'normal speed', play10: 'play button', buttons: 'step by buttons', action: 'step by action' }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 mkdirSync(SHOT_DIR, { recursive: true })
 mkdirSync(FILE_DIR.pathname, { recursive: true })
 
-// Polls `read` until `ok(value)` or the timeout; returns the last value.
-async function until (read, ok, timeoutMs = 10000, everyMs = 50) {
+// Polls `read` until `ok(value)` or the timeout; returns the last value, so the caller decides what a timeout means.
+async function tryUntil (read, ok, timeoutMs = 10000, everyMs = 50) {
   const deadline = Date.now() + timeoutMs
   let v = await read()
   while (!ok(v) && Date.now() < deadline) { await sleep(everyMs); v = await read() }
   return v
 }
+// The same, but a timeout stops the run naming what was waited for.
+async function waitFor (what, read, ok, timeoutMs = 10000, everyMs = 50) {
+  const v = await tryUntil(read, ok, timeoutMs, everyMs)
+  if (!ok(v)) throw new Error(`timed out waiting for ${what}`)
+  return v
+}
+const errorsOf = (p, phase) => p.errors.filter((e) => e.phase === phase)
 
 // A fresh browser context holding one page with `names` installed at DOMContentLoaded (as @run-at document-idle),
-// the puzzle started, and the pen tool and replay tool settings turned on when asked.
-async function openPage (browser, names, { toolpen = true, label = '' } = {}) {
+// the puzzle started, the pen tool setting as `toolpen` says and the replay tool setting on.
+async function openPage (browser, names, { toolpen = true } = {}) {
   const context = await browser.newContext({ viewport: { width: 1200, height: 900 }, acceptDownloads: true })
   const p = await context.newPage()
   p.errors = []
-  p.phase = 'boot'
+  p.phase = PHASE.boot
   const note = (text) => p.errors.push({ phase: p.phase, text: text.slice(0, 400) })
   p.on('pageerror', (e) => note(`pageerror: ${e}`))
-  p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) note(`console.error: ${m.text()}`) })
-  await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+  p.on('console', (m) => { if (m.type() === 'error' && !BLOCKED.test(m.location().url)) note(`console.error: ${m.text()}`) })
+  await p.route(BLOCKED, (r) => r.abort())
   if (names.length) {
     await p.addInitScript((srcs) => {
       document.addEventListener('DOMContentLoaded', () => srcs.forEach((src) => {
@@ -59,7 +72,8 @@ async function openPage (browser, names, { toolpen = true, label = '' } = {}) {
       }))
     }, names.map((n) => sources[n]))
   }
-  await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+  // Playwright's own error names the URL, which stays out of the terminal.
+  await p.goto(url, { waitUntil: 'load', timeout: 60000 }).catch((e) => { throw new Error(`the puzzle page did not load: ${String(e.message).split('\n')[0].replace(/https?:\/\/\S+/g, '<url>')}`) })
   await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
   const start = p.getByRole('button', { name: START }).first()
   await start.waitFor({ state: 'visible' })
@@ -67,21 +81,20 @@ async function openPage (browser, names, { toolpen = true, label = '' } = {}) {
   await start.waitFor({ state: 'hidden' })
   await p.locator('#control-undo').waitFor({ state: 'visible' })
   await p.evaluate(([pen]) => { Framework.setSetting('toolpen', pen); Framework.setSetting('toolreplay', true) }, [toolpen])
-  p.label = label
   return p
 }
 
 // The grid as data and as drawn. `state` is every cell's stored values; `draw` is what each pen element computes to, so a
-// stroke that has no color shows as stroke `none`; `texts` is each digit's computed fill.
+// stroke that has no color shows as stroke `none`; `texts` is every `svg text`'s computed fill, with the button icons' own.
 const snapshot = (p) => p.evaluate(() => {
   const plain = (v) => v instanceof Set ? [...v].sort() : Array.isArray(v) ? v.map(plain) : (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v)
   const P = Framework.app.puzzle
   const state = P.cells.map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, candidates: plain(c.candidates), pencilmarks: plain(c.pencilmarks), colours: plain(c.colours), pen: plain(c.pen) }))
   const r1 = (n) => Math.round(n * 10) / 10
-  const draw = [...document.querySelectorAll('#cell-pen *')].filter((e) => !/^(g|defs|filter|feMorphology|feGaussianBlur|feFlood|feComposite|feMerge|feMergeNode|feOffset)$/i.test(e.tagName)).map((e) => {
+  // Drawn shapes only: a group, a filter and its primitives have no box of their own.
+  const draw = [...document.querySelectorAll('#cell-pen *')].filter((e) => e instanceof window.SVGGraphicsElement && e.tagName !== 'g').map((e) => {
     const cs = window.getComputedStyle(e)
-    let box = { x: 0, y: 0, width: 0, height: 0 }
-    try { box = e.getBBox() } catch (_) { /* no box */ }
+    const box = e.getBBox()
     return `${e.tagName}|${e.getAttribute('class') || ''}|stroke=${cs.stroke}|fill=${cs.fill}|w=${cs.strokeWidth}|dash=${cs.strokeDasharray}|d=${r1(box.x)},${r1(box.y)},${r1(box.width)},${r1(box.height)}`
   }).sort()
   const texts = [...document.querySelectorAll('svg text')].map((t) => {
@@ -109,7 +122,7 @@ function compare (ref, now) {
   const invisible = now.draw.filter((d) => /stroke=none/.test(d) && /fill=none/.test(d)).length
   return {
     stateEqual: cells.length === 0, cells: cells.slice(0, 5), cellsDiffering: cells.length,
-    stackEqual: stack === null, stack,
+    stackEqual: stack === null, stack, stackDigest: digest(b),
     drawEqual: JSON.stringify(ref.draw) === JSON.stringify(now.draw), drawDigest: digest(now.draw), drawCount: now.draw.length, invisibleStrokes: invisible,
     drawOnlyRecorded: setDiff(ref.draw, now.draw).length, drawOnlyPlayed: setDiff(now.draw, ref.draw).length, drawSample: setDiff(now.draw, ref.draw).slice(0, 3),
     textsEqual: JSON.stringify(ref.texts) === JSON.stringify(now.texts), textsDigest: digest(now.texts), textCount: now.texts.length, textSample: setDiff(now.texts, ref.texts).slice(0, 3)
@@ -125,19 +138,23 @@ const edgeAt = async (p, r, c, side) => { const e = await cellRect(p, r, c); ret
 // The page point of grid corner [r, c] (0 to 9).
 const cornerAt = async (p, r, c) => { const size = 9; const e = await cellRect(p, Math.min(r, size - 1), Math.min(c, size - 1)); return [e.x + (c >= size ? e.w : 0) + 2 * (c >= size ? -1 : 1), e.y + (r >= size ? e.h : 0) + 2 * (r >= size ? -1 : 1)] }
 const select = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-const settle = async (p) => { await sleep(120) }
+// Pacing between recorded inputs, so each lands as its own action with a gap; nothing is waited on.
+const settle = () => sleep(120)
+// `n` clicks at one point.
+const clicks = async (p, pt, n) => { for (let i = 0; i < n; i++) { await p.mouse.click(...pt); await settle() } }
+// Selects each cell and types its keys.
+const typeInto = async (p, entries) => { for (const [cell, keys] of entries) { await select(p, ...cell); for (const k of keys) await p.keyboard.press(k); await settle() } }
 
 async function openPenTool (p) {
   const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-  const deadline = Date.now() + 10000
-  while (!(await shown()) && Date.now() < deadline) { await p.click('#control-pen'); await sleep(400) }
+  await waitFor('the pen tool to open', async () => { if (!(await shown())) await p.click('#control-pen'); return shown() }, (v) => v === true, 10000, 400)
 }
+const padValues = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
 async function goToPage (p, n) {
   for (let i = 0; i < 4; i++) {
-    const pad = await p.evaluate(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
-    if (pad === PAGES[n]) return
+    if ((await padValues(p)) === PAGES[n]) return
     await p.locator(PAGE_BUTTON).click()
-    await sleep(200)
+    await tryUntil(() => padValues(p), (v) => v === PAGES[n], 1000)
   }
   throw new Error(`could not reach pen page ${n}`)
 }
@@ -146,7 +163,7 @@ async function drag (p, points) {
   await p.mouse.down()
   for (const pt of points.slice(1)) await p.mouse.move(...pt, { steps: 6 })
   await p.mouse.up()
-  await settle(p)
+  await settle()
 }
 const gridPoints = async (p, cells) => Promise.all(cells.map(([r, c]) => centre(p, r, c)))
 
@@ -158,74 +175,67 @@ async function recordSolve (p) {
   // Two empty cells in one row take the same digit, so Digit Color has a conflict to mark.
   const row = [...new Set(empties.map(([r]) => r))].find((r) => rowOf(r).length >= 4)
   const [a, b, c, d] = rowOf(row)
-  p.phase = 'record: digits'
-  for (const [cell, digit] of [[a, '5'], [b, '5'], [c, '2'], [d, '8']]) { await select(p, ...cell); await p.keyboard.press(digit); await settle(p) }
-  p.phase = 'record: corner and centre marks'
+  p.phase = PHASE.record
+  await typeInto(p, [[a, '5'], [b, '5'], [c, '2'], [d, '8']])
   const others = empties.filter(([r]) => r !== row)
   const [e, f, g, h] = others
   await p.click('#control-corner')
-  for (const [cell, digits] of [[e, '13'], [f, '4']]) { await select(p, ...cell); for (const k of digits) await p.keyboard.press(k); await settle(p) }
+  await typeInto(p, [[e, '13'], [f, '4']])
   await p.click('#control-centre')
-  for (const [cell, digits] of [[g, '13'], [h, '2468']]) { await select(p, ...cell); for (const k of digits) await p.keyboard.press(k); await settle(p) }
+  await typeInto(p, [[g, '13'], [h, '2468']])
   await p.click('#control-normal')
-  p.phase = 'record: cell colors'
   await p.click('#control-colour')
-  for (const [cell, key] of [[others[4], '3'], [others[5], '5']]) { await select(p, ...cell); await p.keyboard.press(key); await settle(p) }
+  await typeInto(p, [[others[4], '3'], [others[5], '5']])
   await p.click('#control-normal')
-  p.phase = 'record: color by digit'
+  // A press changes the colored cell count; SudokuPad binds a new button's handler a moment late, so a dead click is repeated.
   const colored = () => p.evaluate(() => Framework.app.puzzle.cells.filter((x) => x.colours && x.colours.length).length)
-  const before = await colored()
-  for (let i = 0; i < 10 && (await colored()) === before; i++) { await p.click('#control-colorbydigit'); await sleep(400) }
+  const pressColorByDigit = async (what) => {
+    const before = await colored()
+    await waitFor(what, async () => { if ((await colored()) === before) await p.click('#control-colorbydigit'); return colored() }, (n) => n !== before, 10000, 400)
+  }
+  await pressColorByDigit('Color by Digit to color cells')
+  const afterPress = await colored()
   await p.click('#control-undo') // takes the whole press back
-  await sleep(200)
-  const afterUndo = await colored()
-  for (let i = 0; i < 5 && (await colored()) === afterUndo; i++) { await p.click('#control-colorbydigit'); await sleep(400) }
-  p.phase = 'record: pen'
+  await waitFor('the undo of Color by Digit', colored, (n) => n < afterPress)
+  await pressColorByDigit('Color by Digit to color cells again')
   await openPenTool(p)
   await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-  const lines = []
+  let erasePoint
   // Page 1, 2 and 3 lines across rows 6, 7 and 8, each with a bend so page 3 has arrows to turn.
   for (const [page, key, row, bend] of [[1, 1, 6, 1], [2, 2, 7, 1], [3, 3, 8, 1], [2, 4, 5, 0]]) {
     await goToPage(p, page)
     await p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const pts = await gridPoints(p, bend ? [[row, 1], [row, 3], [row - 1, 4], [row - 1, 6]] : [[row, 6], [row, 8]])
     await drag(p, pts)
-    lines.push({ page, key, row, at: pts[1] })
+    if (!bend) erasePoint = pts[1]
   }
-  p.phase = 'record: edge and corner marks'
   await goToPage(p, 1)
   await p.locator('.tool-pen button[data-key="6"]').click()
-  for (const [r, c, side, clicks] of [[0, 0, 'right', 1], [0, 1, 'bottom', 2], [1, 3, 'right', 3], [2, 5, 'bottom', 4], [3, 2, 'left', 1], [4, 4, 'top', 2]]) {
-    const pt = await edgeAt(p, r, c, side)
-    for (let i = 0; i < clicks; i++) { await p.mouse.click(...pt); await settle(p) }
+  for (const [r, c, side, n] of [[0, 0, 'right', 1], [0, 1, 'bottom', 2], [1, 3, 'right', 3], [2, 5, 'bottom', 4], [3, 2, 'left', 1], [4, 4, 'top', 2]]) {
+    await clicks(p, await edgeAt(p, r, c, side), n)
   }
   await p.locator('.tool-pen button[data-key="7"]').click()
-  for (const [r, c, clicks] of [[0, 0, 1], [3, 3, 2], [9, 9, 1], [0, 9, 2], [9, 0, 1], [5, 5, 1]]) {
-    const pt = await cornerAt(p, r, c)
-    for (let i = 0; i < clicks; i++) { await p.mouse.click(...pt); await settle(p) }
+  for (const [r, c, n] of [[0, 0, 1], [3, 3, 2], [9, 9, 1], [0, 9, 2], [9, 0, 1], [5, 5, 1]]) {
+    await clicks(p, await cornerAt(p, r, c), n)
   }
-  p.phase = 'record: cell circle and cross'
   await p.locator('.tool-pen button[data-key="8"]').click()
-  for (const [r, c, clicks] of [[3, 7, 1], [4, 7, 2]]) {
-    const pt = await centre(p, r, c)
-    for (let i = 0; i < clicks; i++) { await p.mouse.click(...pt); await settle(p) }
+  for (const [r, c, n] of [[3, 7, 1], [4, 7, 2]]) {
+    await clicks(p, await centre(p, r, c), n)
   }
-  p.phase = 'record: middle click erase and its undo'
+  // The middle click erases the page 2 line through `erasePoint`, the undo brings it back, and a second erase leaves it erased.
   await goToPage(p, 2)
-  const target = lines[3]
-  const [mx, my] = target.at
+  const [mx, my] = erasePoint
   await p.mouse.move(mx, my)
   await p.mouse.click(mx, my, { button: 'middle' })
-  await settle(p)
+  await settle()
   await p.click('#control-undo') // the erase is one act, so one undo brings the line back
-  await sleep(200)
-  await p.mouse.click(...(await lines.slice(0, 1).map(() => [mx, my])[0]), { button: 'middle' }) // erase again; stays erased
-  await settle(p)
-  p.phase = 'record: leave pen tool'
+  await settle()
+  await p.mouse.click(mx, my, { button: 'middle' })
+  await settle()
   await p.click('#control-pen')
-  await sleep(300)
+  await settle()
   await p.evaluate(() => Framework.app.deselect())
-  await sleep(300)
+  await settle()
 }
 
 // ---- The replay file ----------------------------------------------------------------------------------------------------
@@ -247,76 +257,106 @@ async function saveFile (p, to) {
   return download.suggestedFilename()
 }
 
-async function loadFile (p, from) {
+// `actions` is the number of actions the file holds: the load is done when the stack holds all of them and nothing is playing.
+async function loadFile (p, from, actions) {
   await openReplayDialog(p)
   const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.locator('.dialog-options').getByText('Load File', { exact: true }).click()])
   await chooser.setFiles(from)
   await p.locator('#replaysave_filename').waitFor({ state: 'detached', timeout: 30000 })
-  await until(() => p.evaluate(() => Framework.app.puzzle.replayStack.length), (n) => n > 0, 10000)
-  await sleep(500)
+  await waitFor('the file to load', () => p.evaluate(() => ({ n: Framework.app.puzzle.replayStack.length, playing: Framework.app.puzzle.replayPlaying })), (s) => s.n === actions && !s.playing, 15000)
 }
 
 // ---- Recording ----------------------------------------------------------------------------------------------------------
 
 async function record (browser) {
-  const p = await openPage(browser, SCRIPT_NAMES, { label: 'record' })
+  const p = await openPage(browser, SCRIPT_NAMES)
   await recordSolve(p)
-  p.phase = 'record: save'
+  p.phase = PHASE.save
   const name = await saveFile(p, REPLAY_FILE)
   const snap = await snapshot(p)
   writeFileSync(GRID_FILE, JSON.stringify(snap, null, 1))
   await p.screenshot({ path: `${SHOT_DIR}recorded.png` })
   const filePayload = JSON.parse(readFileSync(REPLAY_FILE, 'utf8'))
-  console.log(JSON.stringify({ file: name, format: filePayload.format, actions: snap.stack.length, penPaths: snap.penPaths, errors: p.errors, stateDigest: digest(snap.state), drawDigest: digest(snap.draw) }, null, 1))
+  console.log(JSON.stringify({ file: name, format: filePayload.format, replayVersion: filePayload.replay.version, actions: snap.stack.length, penPaths: snap.penPaths, errors: p.errors, stackDigest: digest(strip(snap.stack)), stateDigest: digest(snap.state), drawDigest: digest(snap.draw) }, null, 1))
   await p.context().close()
 }
 
 // ---- Playing ------------------------------------------------------------------------------------------------------------
 
 async function enterReplayTool (p) {
-  await until(async () => { await p.click('#control-replay'); await sleep(400); return p.evaluate(() => Framework.app.tool) }, (t) => t === 'replay', 10000, 0)
+  await waitFor('the replay tool to open', async () => { await p.click('#control-replay'); return waitToolOpen(p) }, (t) => t === 'replay', 15000, 0)
 }
+// SudokuPad binds the tool button's handler a moment after the button appears, so a click can do nothing.
+const waitToolOpen = (p) => tryUntil(() => p.evaluate(() => Framework.app.tool), (t) => t === 'replay', 500)
 
 const toolState = (p) => p.evaluate(() => ({ cls: document.body.className.split(' ').filter((c) => /^replay-/.test(c)).join(' '), playing: Framework.app.puzzle.replayPlaying, time: ToolReplay.tool.replayCurrentTime, total: ToolReplay.tool.replayTotalTime, stack: Framework.app.puzzle.replayStack.length }))
+const isPaused = (s) => s.cls === 'replay-paused' && !s.playing
+// Waits for the tool to be paused: a jump finishes on its own, a play when the last action has run.
+const untilPaused = (what, p, timeoutMs = 10000) => waitFor(what, () => toolState(p), isPaused, timeoutMs, 50)
+const pressKey = (p, key) => p.locator(`.controls-input button[data-key="${key}"]`).click()
+
+// What a phase's end reads: the grid against the recording, and the page errors filed under the phase.
+async function checked (p, phase, ref, extra = {}) {
+  return { ...extra, ...compare(ref, await snapshot(p)), errors: errorsOf(p, phase) }
+}
+
+// Plays from the start with `start()`, sampling the tool while it runs, so a play that never advanced shows. The mid picture is
+// taken once half the actions have played.
+async function playFromStart (p, ref, phase, start, shot, timeoutMs) {
+  p.phase = phase
+  await pressKey(p, '1') // the tool's start-of-replay button
+  const rewound = await untilPaused('the rewind', p)
+  const t0 = Date.now()
+  const progress = []
+  let shotTaken = false
+  await start()
+  const last = await tryUntil(async () => {
+    const s = await toolState(p)
+    progress.push({ ms: Date.now() - t0, stack: s.stack, cls: s.cls })
+    if (!shotTaken && s.stack >= ref.stack.length / 2) { shotTaken = true; await shot(`mid-${phase.replace(/ /g, '-')}`) }
+    return s
+  }, isPaused, timeoutMs, 100)
+  const stacks = [...new Set(progress.map((x) => x.stack))]
+  return checked(p, phase, ref, {
+    ms: Date.now() - t0, stalled: !isPaused(last), finalTool: last, startedAt: { time: rewound.time, stack: rewound.stack },
+    sawPlaying: progress.some((x) => x.cls === 'replay-playing'), distinctStackSizes: stacks.length, progress: progress.filter((x, i) => i === 0 || x.stack !== progress[i - 1].stack).slice(0, 40)
+  })
+}
 
 async function playCase (browser, name, ref, opts = {}) {
-  const out = { case: name, toolpen: opts.toolpen !== false }
-  const p = await openPage(browser, CASES[name], { toolpen: opts.toolpen !== false, label: name })
-  const shot = (tag) => p.screenshot({ path: `${SHOT_DIR}${name}${opts.toolpen === false ? '-nopen' : ''}-${tag}.png` })
-  p.phase = 'load file'
+  const toolpen = opts.toolpen !== false
+  const out = { case: name, toolpen }
+  const p = await openPage(browser, CASES[name], { toolpen })
+  const shot = (tag) => p.screenshot({ path: `${SHOT_DIR}${name}${toolpen ? '' : '-nopen'}-${tag}.png` })
+  p.phase = PHASE.load
   const t0 = Date.now()
-  await loadFile(p, REPLAY_FILE)
-  out.load = { ms: Date.now() - t0, ...compare(ref, await snapshot(p)), errors: p.errors.filter((e) => e.phase === 'load file') }
+  await loadFile(p, REPLAY_FILE, ref.stack.length)
+  out.load = await checked(p, PHASE.load, ref, { ms: Date.now() - t0 })
   await shot('loaded')
-  if (opts.loadOnly) { out.errors = p.errors; await p.context().close(); return out }
 
-  p.phase = 'normal speed'
   await enterReplayTool(p)
-  const total = (await toolState(p)).total
-  out.totalMs = total
-  const t1 = Date.now()
-  await p.evaluate(() => { ToolReplay.tool.play(-1, 1) })
-  await sleep(Math.min(3000, total / 2))
-  await shot('mid-normal')
-  const done = await until(() => toolState(p), (s) => s.cls === 'replay-paused' && !s.playing, total + 20000, 200)
-  out.normal = { ms: Date.now() - t1, stalled: !(done.cls === 'replay-paused' && !done.playing), finalTool: done, ...compare(ref, await snapshot(p)), errors: p.errors.filter((e) => e.phase === 'normal speed') }
+  out.totalMs = (await toolState(p)).total
+  // Normal speed: the tool's own play at speed 1, from the start. Entering the tool leaves its clock at the end, so it is rewound first.
+  out.normal = await playFromStart(p, ref, PHASE.normal, () => p.evaluate(() => { ToolReplay.tool.play(-1, 1) }), shot, out.totalMs + 30000)
   await shot('normal')
+  // The tool's Play button, which plays at speed 10.
+  out.play10 = await playFromStart(p, ref, PHASE.play10, () => pressKey(p, '2'), shot, out.totalMs + 30000)
+  await shot('play10')
 
-  p.phase = 'step by buttons'
-  const press = async (key) => { await p.locator(`.controls-input button[data-key="${key}"]`).click(); await sleep(150) }
-  await press('1')
-  const afterStart = await toolState(p)
-  const trail = [afterStart.stack]
-  for (let i = 0; i < 12 && (await toolState(p)).time < total; i++) { await press('6'); trail.push((await toolState(p)).stack) }
-  await press('4'); trail.push((await toolState(p)).stack)
-  await press('4'); trail.push((await toolState(p)).stack)
-  await press('3'); trail.push((await toolState(p)).stack)
-  out.buttons = { trail, ...compare(ref, await snapshot(p)), errors: p.errors.filter((e) => e.phase === 'step by buttons') }
+  p.phase = PHASE.buttons
+  const step = async (key) => { await pressKey(p, key); return (await untilPaused(`the replay tool after button ${key}`, p)).stack }
+  await untilPaused('the tool before stepping', p)
+  const trail = [await step('1')]
+  for (let i = 0; i < 12 && (await toolState(p)).time < out.totalMs; i++) trail.push(await step('6'))
+  trail.push(await step('4'))
+  trail.push(await step('4'))
+  trail.push(await step('3'))
+  out.buttons = await checked(p, PHASE.buttons, ref, { trail })
   await shot('buttons')
 
-  p.phase = 'step by action'
-  // Every action boundary in time order, forward then back to the start, then to the end: each jump resets the puzzle
-  // and plays up to the time, so a step lands on exactly that many actions.
+  p.phase = PHASE.action
+  // Every action boundary in time order, forward, then back from the end every seventh action, then the start and the end: each
+  // jump resets the puzzle and plays up to the time.
   const times = await p.evaluate(() => {
     let t = 0
     return ToolReplay.tool.replay.actions.map((a) => { const [type, arg, time] = Replay.parseActA(a); t += Number(time) * Puzzle.logTimeResolutionMs; if (type === 'up') t -= Number(arg) * Puzzle.logTimeResolutionMs; return t })
@@ -327,20 +367,28 @@ async function playCase (browser, name, ref, opts = {}) {
   const jump = async (time) => {
     jumps++
     await p.evaluate((t) => { ToolReplay.tool.jumpTo(t) }, time)
-    const s = await toolState(p)
+    const s = await untilPaused(`the jump to ${time}`, p)
     const want = times.filter((x) => x <= time).length
     if (s.stack < want || s.stack > want + 1) wrongCount.push({ time, stack: s.stack, want })
-    return s
   }
   for (let k = 0; k < times.length; k++) await jump(times[k])
   for (let k = times.length - 1; k >= 0; k -= 7) await jump(times[k])
   await jump(0)
-  await jump(total)
-  out.step = { jumps, wrongCount: wrongCount.slice(0, 5), ...compare(ref, await snapshot(p)), errors: p.errors.filter((e) => e.phase === 'step by action') }
+  await jump(out.totalMs)
+  out.step = await checked(p, PHASE.action, ref, { jumps, wrongCount: wrongCount.slice(0, 5) })
   await shot('step')
   out.errors = p.errors
   await p.context().close()
   return out
+}
+
+// Whether each phase's played action list equals the "none" case's, which is SudokuPad's own list with no script installed.
+function annotateAgainstNone (results) {
+  for (const [name, result] of Object.entries(results)) {
+    const none = results[name.endsWith(':nopen') ? 'none:nopen' : 'none']
+    if (!none) continue
+    for (const phase of ['load', 'normal', 'play10', 'buttons', 'step']) result[phase].stackSameAsNone = result[phase].stackDigest === none[phase].stackDigest
+  }
 }
 
 // ---- Main ---------------------------------------------------------------------------------------------------------------
@@ -361,8 +409,11 @@ try {
       const key = name.replace(':nopen', '')
       results[name] = await playCase(browser, key, ref, { toolpen: !flag })
       writeFileSync(RESULTS, JSON.stringify(results, null, 1))
-      console.log(name, JSON.stringify({ load: results[name].load.stateEqual, normal: results[name].normal && results[name].normal.stateEqual, buttons: results[name].buttons && results[name].buttons.stateEqual, step: results[name].step && results[name].step.stateEqual, errors: results[name].errors.length }))
+      const phases = ['load', 'normal', 'play10', 'buttons', 'step']
+      console.log(name, JSON.stringify(Object.fromEntries([...phases.map((ph) => [ph, results[name][ph].stateEqual]), ['stalled', results[name].normal.stalled || results[name].play10.stalled], ['errors', results[name].errors.length]])))
     }
+    annotateAgainstNone(results)
+    writeFileSync(RESULTS, JSON.stringify(results, null, 1))
   }
 } finally {
   await browser.close()
