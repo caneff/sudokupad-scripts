@@ -34,3 +34,7 @@ export const effectiveOpacities = (page, selector) => page.evaluate((sel) => [..
   for (let el = e; el && el.nodeType === 1; el = el.parentElement) product *= parseFloat(window.getComputedStyle(el).opacity)
   return Math.round(product * 1000) / 1000
 }), selector)
+
+// Empties the puzzle's replay and undo stack. Every earlier check in a file grows the replay, and `loadReplay` plays one back
+// at about 13 ms an action, so a check that loads a replay restarts first and holds only its own actions.
+export const restartPuzzle = (page) => page.evaluate(() => Framework.app.restartPuzzle())

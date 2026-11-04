@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { effectiveOpacities, headerVersion, openSettings, scaleOf } from './settings.mjs'
+import { effectiveOpacities, headerVersion, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
 import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -194,9 +194,6 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await watchMenus()
     }
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-    // Empties the replay and the undo stack, which every earlier check in the file has grown: loadReplay plays a
-    // replay back at about 13 ms an action, so a check that loads one starts from an empty replay and holds only its own.
-    const restart = () => read(() => Framework.app.restartPuzzle())
 
     before(async () => {
       context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
@@ -405,7 +402,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('a corner mark survives a replay: it is in getReplay(), and loading that replay draws it again', async () => {
-      await restart()
+      await restartPuzzle(p)
       await clickCorner(3, 3)
       await clickCorner(0, SIZE)
       await clickCorner(0, SIZE)
@@ -839,7 +836,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       before(async () => {
         await read((k) => Framework.removeData(k), OPACITY_KEY)
         await reload()
-        await restart()
+        await restartPuzzle(p)
         await drawAll()
       })
       after(async () => { await read((k) => Framework.removeData(k), OPACITY_KEY) })

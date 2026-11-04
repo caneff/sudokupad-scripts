@@ -47,6 +47,7 @@ const CUSTOM_CELL = { css: 'rgb(10, 20, 200)', pen: '#05008c' }
 
 // The pickers appear only when the hold timer fires, so a count that has not moved yet is not a count that stopped.
 const HOLD_QUIET_MS = HOLD_TO_EDIT_MS + 500
+const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const START = /Start Puzzle|Continue|Resume/i
@@ -571,13 +572,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // Holds pen button `n` until the pickers show, then releases.
       const holdToOpen = async (n, which = 'left') => {
         await press(n, which)
-        assert.equal(await settle(pickerCount, 9, HOLD_TO_EDIT_MS + 5000, HOLD_QUIET_MS), 9)
+        assert.equal(await settle(pickerCount, 9, HOLD_WAIT_MS, HOLD_QUIET_MS), 9)
         await p.mouse.up({ button: which })
       }
       const leaveEditMode = async () => {
         if (await pickerCount() === 0) return
         await press(4, 'left')
-        assert.equal(await settle(pickerCount, 0, HOLD_TO_EDIT_MS + 5000, HOLD_QUIET_MS), 0)
+        assert.equal(await settle(pickerCount, 0, HOLD_WAIT_MS, HOLD_QUIET_MS), 0)
         await p.mouse.up()
       }
       // Dispatches a cancelable contextmenu on the first element matching `selector` and says
@@ -598,7 +599,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           // A "nothing happened yet" check, so it is a sleep: well before the hold ends, no picker.
           await sleep(HOLD_TO_EDIT_MS / 3)
           assert.equal(await pickerCount(), 0)
-          assert.equal(await settle(pickerCount, 9, HOLD_TO_EDIT_MS + 5000, HOLD_QUIET_MS), 9)
+          assert.equal(await settle(pickerCount, 9, HOLD_WAIT_MS, HOLD_QUIET_MS), 9)
           await p.mouse.up({ button: which })
           assert.deepEqual(await pickers().evaluateAll((es) => es.map((e) => e.dataset.pen)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
           assert.deepEqual(await penPickerValues(), PAGE_PENS[2])
@@ -635,7 +636,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await menuAllowed('.tool-pen button[data-control="delete"]'), true)
         // The hold has run its course and the button is released over a picker, where Windows
         // opens the menu: it is suppressed there, and no longer once a later press starts elsewhere.
-        assert.equal(await settle(pickerCount, 9, HOLD_TO_EDIT_MS + 5000, HOLD_QUIET_MS), 9)
+        assert.equal(await settle(pickerCount, 9, HOLD_WAIT_MS, HOLD_QUIET_MS), 9)
         await p.mouse.up({ button: 'right' })
         assert.equal(await menuAllowed('.tool-pen .pen-tool-extras-picker input'), false)
         await leaveEditMode()
@@ -707,7 +708,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       it('a second hold leaves edit mode, and so does leaving the pen tool', async () => {
         await holdToOpen(4)
         await press(4, 'left')
-        assert.equal(await settle(pickerCount, 0, HOLD_TO_EDIT_MS + 5000, HOLD_QUIET_MS), 0)
+        assert.equal(await settle(pickerCount, 0, HOLD_WAIT_MS, HOLD_QUIET_MS), 0)
         await p.mouse.up()
         assert.equal(await p.locator('.tool-pen.pen-tool-extras-editing').count(), 0)
         await holdToOpen(4)

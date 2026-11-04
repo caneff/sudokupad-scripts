@@ -181,9 +181,10 @@ function group (title, mode) {
         })
 
         // The failure of some shows only when the feature is used: a page 3 line is drawn, a context menu is asked for, the color tool is waited on.
+        // The panel check and the color tool wait are the script's own timers (1 s and 10 s), so the log stays empty until they fire: an infinite quiet window waits them out.
         const triggerFailure = async () => {
-          if (kase.name === 'panel row') assert.equal(await settle(async () => logged.length, 1, 5000), 1, 'the panel check ended')
-          if (kase.name === 'colors') assert.equal(await settle(async () => logged.length, 1, 20000), 1, 'the wait for the color tool ended')
+          if (kase.name === 'panel row') assert.equal(await settle(async () => logged.length, 1, 5000, Infinity), 1, 'the panel check ended')
+          if (kase.name === 'colors') assert.equal(await settle(async () => logged.length, 1, 20000, Infinity), 1, 'the wait for the color tool ended')
           if (kase.name === 'chevrons') {
             await p.locator(PAGE_BUTTON).click()
             await p.locator(PAGE_BUTTON).click()

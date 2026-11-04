@@ -16,6 +16,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
+import { restartPuzzle } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -86,9 +87,6 @@ function group (title, mode) {
       await p.mouse.click(x, y, { button: 'middle' })
     }
     const undo = () => p.click('#control-undo')
-    // Empties the replay and the undo stack, which every earlier check in the file has grown: loadReplay plays a
-    // replay back at about 13 ms an action, so a check that loads one starts from an empty replay and holds only its own.
-    const restart = () => read(() => Framework.app.restartPuzzle())
     const undoAll = async () => { while ((await undoDepth()) > 0) await undo() }
 
     // Turns to pen page `page` and selects the pen on button `key`.
@@ -140,7 +138,7 @@ function group (title, mode) {
     // click on the row removes the row and its branch and leaves the other pen's line, in one undo step.
     for (const [page, key] of [[1, 3], [2, 3], [3, 3]]) {
       it(`page ${page}: a middle click erases the whole line with its branch, leaves a crossing from another pen, and one undo brings it all back`, async () => {
-        await restart()
+        await restartPuzzle(p)
         // the other pen: a vertical line through the row, drawn first with the pen on button 6 of the same page
         await selectPen(page, 6)
         await drag([[0.5, 4.5], [4.5, 4.5]])
