@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -360,19 +360,25 @@ test('every selector sits under :root:root, and no value gets two width rules', 
   assert.equal(new Set(selectors).size, selectors.length)
 })
 
-test('edge marks and corner marks keep today\'s size up to the default thickness of 5 and grow gradually above it, to 1.3 times at 16', () => {
+test('edge marks and corner marks keep today\'s size up to the default thickness of 5 and grow gradually above it, to 1.6 times at 16', () => {
   for (const t of [1, 3, 5]) assert.equal(markGrowthScale(t), 1, String(t))
-  assert.equal(markGrowthScale(16), 1.3)
+  assert.equal(markGrowthScale(16), 1.6)
   const grown = [6, 10, 16].map(markGrowthScale)
   assert.equal(grown[0] > 1 && grown[0] < grown[1] && grown[1] < grown[2], true, grown.join(' < '))
-  assert.equal(Math.abs(markGrowthScale(10) - (1 + 0.3 * 5 / 11)) < 1e-3, true)
+  assert.equal(Math.abs(markGrowthScale(10) - (1 + 0.6 * 5 / 11)) < 1e-3, true)
+})
+
+test('MARK_VALUES holds exactly the values of SudokuPad\'s edge X and cell circle and cross and of every edge mark and grid-corner mark this script adds, and no line value', () => {
+  const expected = ['3', '4', 'b', 'c', '5', '6', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
+  assert.deepEqual([...MARK_VALUES].sort(), [...expected].sort())
+  assert.deepEqual(MARK_VALUES.filter((v) => LINE_VALUES.includes(v)), [])
 })
 
 test('the scale lands on every edge and corner mark and on no line, and a mark stays centred on its edge or corner while it grows', () => {
   const css = buildThicknessCss(16)
   const scales = scalesOf(css)
   const marks = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
-  for (const v of marks) assert.equal(scales[v], 1.3, v)
+  for (const v of marks) assert.equal(scales[v], 1.6, v)
   for (const v of FULL_WIDTH_VALUES) assert.equal(scales[v], 1, v)
   const rule = css.split('\n').find((r) => r.includes('.pen-3,'))
   assert.match(rule, /transform-box: fill-box; transform-origin: center;/)
@@ -382,7 +388,7 @@ test('a grown mark is as thick as before: its stroke width is shrunk by the scal
   const widths = widthsOf(buildThicknessCss(16))
   for (const v of ['3', 'h', 'o', 's', 't', 'y']) assert.equal(widths[v], '8', v)
   const rule = buildThicknessCss(16).split('\n').find((r) => r.includes('.pen-3,'))
-  assert.match(rule, /stroke-width: 6\.1538\d*;/)
+  assert.match(rule, /stroke-width: 5;/)
 })
 
 test('lines are never scaled', () => {
