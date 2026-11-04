@@ -1,5 +1,5 @@
 // Takes the Pen Tool Extras pictures in docs/research/, the mascot hidden:
-//   site-pen-tool-extras.png         the homepage picture: colored pen lines in pen colors 4-9 beside edge
+//   (the homepage picture, site-pen-tool-extras.png, now comes from site-pen-tool-extras-screenshot.mjs)
 //                                    marks (X, arrows, circle) in several pen colors, at the defaults
 //   pen-tool-extras-dialog.png       the merged settings dialog, its thickness slider at the default 5
 //   pen-tool-extras-thin.png         the same drawing at thickness 2
@@ -70,7 +70,6 @@ const block = async () => {
   const margin = 12
   return { x: a.x, y: a.y, width: b.x + b.width - a.x + margin, height: b.y + b.height - a.y + margin }
 }
-await page.screenshot({ path: out('site-pen-tool-extras.png'), clip: await block() })
 
 const openDialog = async () => {
   await page.click('#control-settings')
