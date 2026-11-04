@@ -58,7 +58,7 @@ The dialog's Outline section has a White outline box, off by default and saved u
 - The outline wraps the combined shape, so it doesn't cut across lines where they join or cross, and it follows the shape's curves with round corners. Its edge is a little soft: about 1 unit wide at width 3, wider at the top of the range.
 - It follows Opacity: the outline is part of the pen layer, so at 40% the white fades with the marks.
 - The drag and erase highlights are not outlined.
-- With Dark Page, a mark stays inside the rectangle Dark Page keeps, but its outline can reach past it. On a mark along the grid's outer edge at Thickness 13 or more with an Outline width of 5 or more, the black margin cuts the outer part of the white band.
+- With Dark Page, a mark stays inside the rectangle Dark Page keeps, but its outline can reach past it. Dark Page's rectangle stops at the puzzle's own edge, which on a standard puzzle is 16 units outside the grid (measured on sudokupad.app), and nothing is drawn past that edge. On a mark along the grid's outer edge, the outer part of the white band is cut where the band (half the Thickness plus the Outline width, plus its soft edge) would reach past those 16 units: only near the top of both sliders. Raising the margin Dark Page keeps around the cells does not change this.
 - Nothing about it is stored in the puzzle, so replays don't change. Like the other dialog settings it takes effect on Save, Cancel leaves it, and Restore defaults sets the box off and the width to 3 in the dialog (Save keeps them).
 
 ## Pen pages

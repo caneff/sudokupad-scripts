@@ -146,7 +146,8 @@ test('growBox grows every side by the amount', () => {
 
 test('a pen mark\'s reach is kept around the cells, past the 18.53px edge X measured on the page and the 24 unit arrow, at Pen Tool Extras\' largest thickness', () => {
   assert.equal(SOLVER_REACH >= 24, true, `reach ${SOLVER_REACH} against the arrow's 24`)
-  assert.equal(SOLVER_REACH <= 24 * 1.2, true, 'a reach well past the farthest mark keeps white the marks never reach')
+  assert.equal(SOLVER_REACH >= 32, true, `reach ${SOLVER_REACH} keeps less margin than the 32 that cuts the White outline least`)
+  assert.equal(SOLVER_REACH <= 32, true, 'the reach is raised to 32 so the White outline along the grid\'s outer edge is cut less, and no further: each unit adds white around every puzzle')
 })
 
 test('markerReach is the farthest side of the marker from its reference point, times the stroke width unless it is in user units, times the scale', () => {
