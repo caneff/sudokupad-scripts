@@ -57,31 +57,20 @@ async function watch (read) {
 const START = /Start Puzzle|Continue|Resume/i
 const BUTTON = '#control-colorbydigit'
 const BOX = '#control-colorbydigit [data-role="auto"]'
+const AUTO_KEY = 'ColorByDigit_auto'
 // Framework.setData prefixes the script's key with the site's own prefix.
-const AUTO_STORAGE_KEY = 'svencodes_ColorByDigit_auto'
+const AUTO_STORAGE_KEY = `svencodes_${AUTO_KEY}`
+
+const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
+const boxCheckedOn = (p) => p.locator(BOX).getAttribute('aria-checked')
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
 for (const mode of ['document-idle', 'before-start', 'after-start']) {
-  // A page for this injection time. `seedAuto` writes the saved auto mode before the page's own scripts run.
-  const openSession = async (seedAuto) => {
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    const errors = []
-    const p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
-    if (seedAuto) await p.addInitScript(([key]) => window.localStorage.setItem(key, 'true'), [AUTO_STORAGE_KEY])
-    if (mode === 'document-idle') {
-      await p.addInitScript((src) => {
-        document.addEventListener('DOMContentLoaded', () => {
-          const s = document.createElement('script')
-          s.textContent = src
-          document.documentElement.appendChild(s)
-        })
-      }, script)
-    }
+  // Runs the page through load, the script's injection time for this mode, and Start Puzzle.
+  const bootPage = async (p) => {
     await p.goto(url, { waitUntil: 'load', timeout: 60000 })
     const startButton = () => p.getByRole('button', { name: START }).first()
     await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
@@ -96,6 +85,26 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     await p.locator('#control-undo').waitFor({ state: 'visible' })
     if (mode === 'after-start') await inject()
     await p.locator(BUTTON).waitFor({ state: 'visible' })
+  }
+
+  // A page for this injection time. `seedAuto` writes the saved auto mode before the page's own scripts run.
+  const openSession = async (seedAuto, contextOptions = {}) => {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 }, ...contextOptions })
+    const errors = []
+    const p = await context.newPage()
+    p.on('pageerror', (e) => errors.push(String(e)))
+    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+    if (seedAuto) await p.addInitScript(([key]) => window.localStorage.setItem(key, 'true'), [AUTO_STORAGE_KEY])
+    if (mode === 'document-idle') {
+      await p.addInitScript((src) => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const s = document.createElement('script')
+          s.textContent = src
+          document.documentElement.appendChild(s)
+        })
+      }, script)
+    }
+    await bootPage(p)
     return { context, p, errors }
   }
 
@@ -108,13 +117,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })))
     const at = (s, r, c) => s.find((x) => x.r === r && x.c === c)
     const coloredCount = async () => (await cellsState()).filter((x) => x.colours.length).length
-    const givensColored = async () => (await cellsState()).filter((x) => x.given && x.colours.length).length
+    const givensColored = () => givensColoredOn(p)
     const cellAt = async (r, c) => at(await cellsState(), r, c)
     const colorsAt = async (r, c) => (await cellAt(r, c)).colours
     const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
-    const getAuto = () => read((key) => Framework.getData('ColorByDigit_auto'))
+    const getAuto = () => read((key) => Framework.getData(key), AUTO_KEY)
     const getGroups = () => read(() => Framework.getData('ColorByDigit_groups'))
-    const boxChecked = () => p.locator(BOX).getAttribute('aria-checked')
+    const boxChecked = () => boxCheckedOn(p)
     const dialogBox = () => p.locator('#color-by-digit-editor input[data-role="auto-draft"]')
     const editor = () => p.locator('#color-by-digit-editor')
     const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
@@ -194,8 +203,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await colorsAt(0, 3), [])
     })
 
-    it('the keyboard stays with the puzzle after a box click: a digit typed next lands and takes its color', async () => {
-      await select(0, 5); await p.keyboard.press('3')
+    it('the keyboard stays with the puzzle right after a box click: a digit typed next lands and takes its color', async () => {
+      await select(0, 5)
+      await p.click(BOX) // off
+      assert.equal(await settle(boxChecked, 'false'), 'false')
+      await p.click(BOX) // on again, straight before the key
+      assert.equal(await settle(boxChecked, 'true'), 'true')
+      await p.keyboard.press('3')
       assert.equal(await settle(() => valueAt(0, 5), '3'), '3')
       assert.deepEqual(await settle(() => colorsAt(0, 5), ['1']), ['1'])
     })
@@ -206,6 +220,29 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await givensColored(), GIVEN_COUNT)
       await redo()
       assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['3', ['1']]), ['3', ['1']])
+    })
+
+    it('a multi-cell entry and its colors are one undo step', async () => {
+      await read(() => { const a = Framework.app; a.deselect(); a.select([a.grid.getCell(8, 1), a.grid.getCell(8, 2)]) })
+      await p.keyboard.press('1')
+      const both = async () => [await valueAt(8, 1), await colorsAt(8, 1), await valueAt(8, 2), await colorsAt(8, 2)]
+      assert.deepEqual(await settle(both, ['1', ['1'], '1', ['1']]), ['1', ['1'], '1', ['1']])
+      await undo()
+      assert.deepEqual(await settle(both, ['', [], '', []]), ['', [], '', []])
+      await redo()
+      assert.deepEqual(await settle(both, ['1', ['1'], '1', ['1']]), ['1', ['1'], '1', ['1']])
+      await undo()
+      assert.deepEqual(await settle(both, ['', [], '', []]), ['', [], '', []])
+    })
+
+    it('a Delete that changes nothing leaves the redo stack alone', async () => {
+      await select(8, 6)
+      await p.keyboard.press('Delete')
+      assert.equal(await read(() => Framework.app.puzzle.redoStack.length) > 0, true)
+      await select(0, 5)
+      await redo()
+      assert.deepEqual(await settle(async () => [await valueAt(8, 1), await valueAt(8, 2)], ['1', '1']), ['1', '1'])
+      await undo()
     })
 
     it('a change to a digit moves the color: 3 to 4 swaps the odd color for the even one, in one step', async () => {
@@ -220,6 +257,19 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['', []]), ['', []])
       await undo()
       assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['3', ['1']]), ['3', ['1']])
+    })
+
+    it('with Multi-color off, a Delete takes the group color off a cell that holds two colors', async () => {
+      await select(8, 6); await p.keyboard.press('4')
+      assert.deepEqual(await settle(() => colorsAt(8, 6), ['2']), ['2'])
+      await read(() => Framework.setSetting('multicolour', true))
+      await read(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(8, 6)); a.act({ type: 'colour', arg: '3' }); a.deselect() })
+      assert.deepEqual(await settle(async () => [...await colorsAt(8, 6)].sort(), ['2', '3']), ['2', '3'])
+      await read(() => Framework.setSetting('multicolour', false))
+      await select(8, 6); await p.keyboard.press('Delete')
+      assert.equal(await settle(() => valueAt(8, 6), ''), '')
+      assert.equal((await colorsAt(8, 6)).includes('2'), false)
+      await read(() => Framework.setSetting('multicolour', true))
     })
 
     it('centre marks of one group color an empty cell, marks of two groups take it away, and corner marks are ignored', async () => {
@@ -240,6 +290,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await watch(() => colorsAt(0, 5)), [[]])
       await select(0, 5); await p.keyboard.press('5')
       assert.deepEqual(await settle(() => colorsAt(0, 5), ['1']), ['1'])
+    })
+
+    it('an entry SudokuPad runs inside its own group, as a paste does, is colored and undone with it', async () => {
+      await read(() => {
+        const a = Framework.app
+        a.deselect(); a.select(a.grid.getCell(8, 3))
+        a.act({ type: 'groupstart' }); a.act({ type: 'clear', arg: 'normal' }); a.act({ type: 'value', arg: '6' }); a.act({ type: 'groupend' })
+      })
+      assert.deepEqual(await settle(async () => [await valueAt(8, 3), await colorsAt(8, 3)], ['6', ['2']]), ['6', ['2']])
+      await undo()
+      assert.deepEqual(await settle(async () => [await valueAt(8, 3), await colorsAt(8, 3)], ['', []]), ['', []])
     })
 
     it('loadReplay and replay playback with auto mode on change no colors', async () => {
@@ -289,7 +350,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await openEditor()
       await dialogButton('Low/5/High').click()
       await closeWith('Save')
-      assert.equal((await settle(getGroups, null)).length, 3)
+      const lowFiveHigh = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
+      assert.deepEqual(await settle(getGroups, lowFiveHigh), lowFiveHigh)
       const colors = JSON.stringify((await cellsState()).map((x) => x.colours))
       assert.deepEqual(await watch(async () => JSON.stringify((await cellsState()).map((x) => x.colours))), [colors])
     })
@@ -301,8 +363,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await closeWith('Save')
       assert.equal(await settle(boxChecked, 'true'), 'true')
       assert.equal(await settle(getAuto, true), true)
-      const given = await cellAt(0, 0) // r1c1 holds 5, key 5 in Low/5/High
-      assert.deepEqual(given.colours.length, 1)
+      // Every given is colored again, and r1c1 holds 5, which is key 5 in Low/5/High.
+      assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
+      assert.deepEqual(await colorsAt(0, 0), ['5'])
     })
 
     it('Save with changed groups and auto mode on recolors every cell in one undo step', async () => {
@@ -355,9 +418,53 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     after(async () => { await context.close() })
 
     it('the box is ticked and the givens are colored at puzzle start, with no click', async () => {
-      assert.equal(await p.locator(BOX).getAttribute('aria-checked'), 'true')
-      const givensColored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
-      assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
+      assert.equal(await boxCheckedOn(p), 'true')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+    })
+
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
+  })
+
+  describe(`auto mode saved on, with saved progress, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors
+
+    before(async () => {
+      ({ context, p, errors } = await openSession(false))
+      await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
+      await p.keyboard.press('4')
+      // SudokuPad saves progress a moment after a change.
+      await p.waitForFunction(() => Object.keys(window.localStorage).some((k) => /progress/i.test(k)), null, { timeout: SETTLE_MS })
+      await p.evaluate(([key]) => Framework.setData(key, true), [AUTO_KEY])
+      await bootPage(p)
+    })
+    after(async () => { await context.close() })
+
+    it('the saved digit is back and the givens are colored, since loading progress resets the board', async () => {
+      assert.equal(await p.evaluate(() => String(Framework.app.grid.getCell(0, 2).value)), '4')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+    })
+
+    it('no uncaught page errors', () => {
+      assert.deepEqual(errors, [])
+    })
+  })
+
+  describe(`auto mode box on a touch screen, injected ${mode}`, { concurrency: false }, () => {
+    let context, p, errors
+
+    before(async () => {
+      ({ context, p, errors } = await openSession(false, { hasTouch: true }))
+    })
+    after(async () => { await context.close() })
+
+    it('a tap on the box turns auto mode on and colors the givens, and a second tap turns it off', async () => {
+      await p.tap(BOX)
+      assert.equal(await settle(() => boxCheckedOn(p), 'true'), 'true')
+      assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+      await p.tap(BOX)
+      assert.equal(await settle(() => boxCheckedOn(p), 'false'), 'false')
     })
 
     it('no uncaught page errors', () => {

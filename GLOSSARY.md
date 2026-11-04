@@ -7,7 +7,7 @@
   and no centre marks, or a digit in no group, is not pure.
 - **auto mode** — Color by Digit's setting, off by default, that keeps a cell's color in step with
   its digit and centre marks as they change: a pure cell gets its group's color and loses any other
-  group's, and a cell that is not pure loses every group's color. Colors in no group are left alone.
+  group's, and a cell that is not pure loses every group's color. Colors in no group are left alone, except that with SudokuPad's Multi-color setting off, adding a group color replaces whatever color the cell held.
 - **settings group** — one of SudokuPad's collapsible sections of its settings dialog. Every
   script's settings entry goes in the Experimental one, which starts collapsed.
 - **digit color** — the fill of one digit, in entered digits, corner marks and

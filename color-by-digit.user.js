@@ -79,17 +79,17 @@
 
   const givenIndices = (cells) => cells.flatMap((cell, index) => (String(cell.given || '') === '' ? [] : [index]))
 
-  // An action by the player that can change a cell's digit or centre marks, as SudokuPad names them:
-  // `value` (digit), `candidates` (centre mark) and `clear` of anything but colors and pen marks.
-  // Corner marks (`pencilmarks`) and colors never start auto mode.
-  function isEditAction (action) {
-    if (!action || typeof action !== 'object') return false
+  // An action that can change a cell's digit or centre marks, as SudokuPad names them: `value` (digit),
+  // `candidates` (centre mark) and `clear` of anything but colors and pen marks. Corner marks
+  // (`pencilmarks`) and colors never start auto mode. Anything that is not an action object is not one.
+  function isEntryAction (action) {
+    if (!action) return false
     if (action.type === 'value' || action.type === 'candidates') return true
     return action.type === 'clear' && action.arg !== 'colour' && action.arg !== 'pen'
   }
 
   // What auto mode watches in a plan cell: the entered digit and the centre marks, in any order.
-  const editSignature = (cell) => JSON.stringify([String(cell.value || ''), [...(cell.centre || [])].sort()])
+  const entrySignature = (cell) => JSON.stringify([String(cell.value || ''), [...(cell.centre || [])].sort()])
 
   // The indices whose signature differs between two readings of the same cells.
   const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
@@ -108,8 +108,8 @@
       const want = pureKey(cell, keyOfDigit)
       const held = cell.colours || []
       managedKeys.filter((key) => key !== want && held.includes(key)).forEach((key) => push(removals, key, index))
-      if (want !== undefined && !held.includes(want)) push(additions, want, index)
     })
+    planColoring(indices.map((index) => cells[index]), groups).forEach(({ index, key }) => push(additions, key, indices[index]))
     return [
       ...[...removals].map(([key, list]) => ({ action: 'remove', key, indices: list })),
       ...[...additions].map(([key, list]) => ({ action: 'add', key, indices: list }))
@@ -300,7 +300,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, autoBoxHtml, planColoring, planAuto, groupKeys, givenIndices, isEditAction, editSignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { VERSION, installButton, autoBoxHtml, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -334,11 +334,19 @@
   // cell holds it (so an op's cells must all lack it, or all hold it). The selection is put back.
   function runColorOps (app, cells, ops) {
     const savedSelection = [...app.puzzle.selectedCells]
+    const toggle = (target, key) => {
+      app.deselect()
+      app.select(target)
+      app.act({ type: 'colour', arg: key })
+    }
     try {
-      ops.forEach(({ key, indices }) => {
-        app.deselect()
-        app.select(indices.map((i) => cells[i]))
-        app.act({ type: 'colour', arg: key })
+      ops.forEach(({ action, key, indices }) => {
+        const target = indices.map((i) => cells[i])
+        toggle(target, key)
+        // With Multi-color off, SudokuPad's toggle clears a cell's other colors and then toggles the key
+        // back on, so a removal from a cell that held two colors leaves the key: toggle those again.
+        const left = action === 'remove' ? target.filter((cell) => (cell.colours || []).includes(key)) : []
+        if (left.length > 0) toggle(left, key)
       })
     } finally {
       app.deselect()
@@ -346,41 +354,37 @@
     }
   }
 
-  // The button: adds each pure cell's group color, never removes one.
-  function colorCells (app) {
-    const cells = allCells(app)
-    const plan = planColoring(cells.map(toPlanCell), loadGroups())
-    if (plan.length === 0) return
-    const byKey = {}
-    plan.forEach(({ index, key }) => (byKey[key] = byKey[key] || []).push(index))
-    const ops = Object.entries(byKey).map(([key, indices]) => ({ action: 'add', key, indices }))
-    inOneUndoStep(app, () => runColorOps(app, cells, ops))
-  }
+  const everyIndex = (plans) => plans.map((_, i) => i)
 
-  // Auto mode over the listed cells (every cell when `indices` is left out): one undo step, nothing when nothing changes.
-  function autoColor (app, groups, indices, managedKeys) {
+  // Auto mode over the cells `choose` picks from the plan cells (their indices): one undo step, and
+  // nothing when nothing changes. With `managedKeys` of [] it only adds, as the button does.
+  function autoColor (app, groups, choose, managedKeys) {
     const cells = allCells(app)
-    if (indices === undefined) indices = cells.map((_, i) => i)
-    const ops = planAuto(cells.map(toPlanCell), groups, indices, managedKeys)
+    const plans = cells.map(toPlanCell)
+    const ops = planAuto(plans, groups, choose(plans), managedKeys)
     if (ops.length > 0) inOneUndoStep(app, () => runColorOps(app, cells, ops))
   }
 
-  const colorGivens = (app) => {
-    const plans = allCells(app).map(toPlanCell)
-    autoColor(app, loadGroups(), givenIndices(plans))
-  }
+  // The button: adds each pure cell's group color, never removes one.
+  const colorCells = (app) => autoColor(app, loadGroups(), everyIndex, [])
+
+  const colorGivens = (app) => autoColor(app, loadGroups(), givenIndices)
 
   let autoMode = false
 
-  // Runs `fn` now if the puzzle's cells exist, else when SudokuPad says the puzzle has loaded.
-  function whenPuzzleLoaded (app, fn) {
+  // The box on the button.
+  const BOX = '#control-colorbydigit [data-role="auto"]'
+
+  // Runs `fn` now if the puzzle's cells exist, else once SudokuPad has loaded the puzzle and its saved
+  // progress: loading progress resets the board, so a pass before it would be wiped.
+  function whenProgressLoaded (app, fn) {
     if (allCells(app).length > 0) fn()
-    else app.puzzle.addEventListener('loaded', fn, { once: true })
+    else app.puzzle.addEventListener('progressloaded', fn, { once: true })
   }
 
-  // Puts the saved value in force and redraws the button's box.
+  // Redraws the button's box at the value in force.
   function showAutoMode () {
-    const box = document.querySelector('#control-colorbydigit [data-role="auto"]')
+    const box = document.querySelector(BOX)
     if (box) box.outerHTML = autoBoxHtml(autoMode)
   }
 
@@ -393,42 +397,56 @@
     if (turnedOn) colorGivens(app)
   }
 
+  // Whether `action` could change what auto mode watches in `cell`: a digit goes only on a cell that
+  // shows digits, a centre mark on one that shows centre marks, and a clear only where there is a
+  // digit or a centre mark to clear. A change SudokuPad would drop is not wrapped in a group, since a
+  // group around nothing still empties the redo stack and leaves a dead undo step.
+  function mayChange (action, cell) {
+    if (action.type === 'value') return cell.propVisible('normal')
+    if (action.type === 'candidates') return cell.propVisible('centre')
+    const plan = toPlanCell(cell)
+    return String(plan.value || '') !== '' || plan.centre.length > 0
+  }
+
   // Wraps app.act so that, with auto mode on, the player's change to a digit or centre marks and the
-  // color changes it brings are one group, and so one undo step. Only the player's own actions pass
-  // through app.act: undo, redo, replays and the loading of progress run on the puzzle itself, and
-  // SudokuPad's own multi-step acts (a restart) are already in a group, which is never nested.
+  // color changes it brings are one undo step. A change SudokuPad already runs inside its own group
+  // (a paste) has its color changes added to that group; opening a second would end it early. Undo,
+  // redo, replays and the loading of progress run on the puzzle itself, never through app.act.
   function installAutoMode (app) {
     const act = app.act
     app.act = function (action) {
-      if (!autoMode || app.puzzle.inGroup || !isEditAction(action)) return act.call(this, action)
+      if (!autoMode || !isEntryAction(action)) return act.call(this, action)
       const touched = [...app.puzzle.selectedCells]
+      if (!touched.some((cell) => mayChange(action, cell))) return act.call(this, action)
       const cells = allCells(app)
       const indices = touched.map((cell) => cells.indexOf(cell))
-      const before = touched.map((cell) => editSignature(toPlanCell(cell)))
-      return inOneUndoStep(app, () => {
+      const before = touched.map((cell) => entrySignature(toPlanCell(cell)))
+      const enter = () => {
         const result = act.call(this, action)
-        const changed = changedIndices(before, touched.map((cell) => editSignature(toPlanCell(cell)))).map((i) => indices[i])
-        // Already inside the group this function opened: a second one would end it early.
-        const edited = allCells(app)
-        runColorOps(app, edited, planAuto(edited.map(toPlanCell), loadGroups(), changed))
+        const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
+        const entered = allCells(app)
+        runColorOps(app, entered, planAuto(entered.map(toPlanCell), loadGroups(), changed))
         return result
-      })
+      }
+      return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
     }
     app.on('restarted', () => { if (autoMode) colorGivens(app) })
   }
 
-  // A click on the button's box toggles auto mode and is not a click on the button. The listener runs
-  // before SudokuPad's, and the press is stopped from focusing the button so the keyboard stays with the puzzle.
-  const BOX = '#control-colorbydigit [data-role="auto"]'
+  // A press on the box toggles auto mode and is not a press on the button. SudokuPad acts on a press of
+  // a control by reading `event.target.dataset.control`, which the box does not have, and on a touch it
+  // cancels the touchstart so the browser sends no click: the box takes the touch itself. A mouse press
+  // is stopped from focusing the button so the keyboard stays with the puzzle.
   function listenForBox (app) {
     const onBox = (event) => event.target.closest && event.target.closest(BOX)
-    document.addEventListener('mousedown', (event) => { if (onBox(event)) event.preventDefault() }, true)
-    document.addEventListener('click', (event) => {
-      if (!onBox(event)) return
+    const toggle = (event) => {
       event.preventDefault()
       event.stopPropagation()
       setAutoMode(app, !autoMode)
-    }, true)
+    }
+    document.addEventListener('mousedown', (event) => { if (onBox(event)) event.preventDefault() }, true)
+    document.addEventListener('click', (event) => { if (onBox(event)) toggle(event) }, true)
+    document.addEventListener('touchstart', (event) => { if (onBox(event)) toggle(event) }, { capture: true, passive: false })
   }
 
   // Save: stores the groups, then puts the auto mode draft in force. With auto mode on after the Save,
@@ -438,7 +456,7 @@
   function saveDialog (app, oldGroups, groups, auto) {
     saveGroups(groups)
     const changed = JSON.stringify(oldGroups) !== JSON.stringify(groups)
-    if (auto && changed) autoColor(app, groups, undefined, [...groupKeys(oldGroups), ...groupKeys(groups)])
+    if (auto && changed) autoColor(app, groups, everyIndex, [...groupKeys(oldGroups), ...groupKeys(groups)])
     setAutoMode(app, auto)
   }
 
@@ -519,6 +537,6 @@
     installButton(Framework, app, () => colorCells(app), autoMode)
     installAutoMode(app)
     listenForBox(app)
-    if (autoMode) whenPuzzleLoaded(app, () => colorGivens(app))
+    if (autoMode) whenProgressLoaded(app, () => colorGivens(app))
   })
 })()
