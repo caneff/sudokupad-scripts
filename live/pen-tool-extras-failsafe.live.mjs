@@ -31,7 +31,7 @@ const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
 
 // The internal each case breaks, as the snippet that breaks it, and what the dialog must then say is off. What the case leaves different:
-// `noPageButton` and `noSliders` for a panel without them, `pulldown` for SudokuPad's line mode pulldown
+// `noPageButton`, `noSliders` and `noGear` for a panel or button without them, `pulldown` for SudokuPad's line mode pulldown
 // ('hidden' unless the line mode feature is off), `edgeAgain` for the mark a second click on an edge makes (this script's arrow 'k', or nothing when
 // marks are off and SudokuPad's own click takes the X away), `noDrag` for a case that removes what a drag needs.
 const CASES = [
@@ -78,6 +78,14 @@ const CASES = [
       window.addEventListener('contextmenu', () => { window.asking = true }, true)
       window.addEventListener('contextmenu', () => { window.asking = false })
       ToolPen.tool.getInputRc = function () { if (window.asking) throw new TypeError('getInputRc is gone'); return getInputRc.apply(this, arguments) }`
+  },
+  // The gear is put into the pen tool button with insertAdjacentHTML; here that call fails only for the gear's markup.
+  {
+    name: 'settings gear',
+    off: 'settings gear',
+    noGear: true,
+    breaks: `const insert = Element.prototype.insertAdjacentHTML
+      Element.prototype.insertAdjacentHTML = function (where, html) { if (String(html).includes('pen-tool-extras-gear')) throw new TypeError('no gear'); return insert.apply(this, arguments) }`
   },
   { name: 'nothing broken', off: NOTHING_OFF, breaks: '' }
 ]
@@ -237,6 +245,7 @@ function group (title, mode) {
         it('the features that are not off still work', async () => {
           const pageButtons = await p.locator(PAGE_BUTTON).count()
           assert.equal(pageButtons, kase.noPageButton ? 0 : 1, 'the page button')
+          assert.equal(await p.locator('#control-pen .pen-tool-extras-gear').count(), kase.noGear ? 0 : 1, 'the settings gear')
           const sliders = await p.locator(SLIDERS).count()
           assert.equal(sliders, kase.noSliders ? 0 : 1, 'the thickness slider')
           const pad = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
