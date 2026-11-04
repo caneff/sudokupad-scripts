@@ -2,7 +2,7 @@
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      1.11.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, adds an optional white outline around every pen mark, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, adds an optional white outline around every pen mark, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click. Relies on SudokuPad internals for the pages, the edge and corner marks, the middle click line erase and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -1379,10 +1379,9 @@
       .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
   }
 
-  // Erases the whole line under the pointer (every segment joined to it, drawn with the same pen) in one group, so one
-  // undo restores it. A click that is not near a line sends nothing.
-  function eraseLineUnderPointer (tool) {
-    const { r, c } = tool.getInputRc()
+  // Erases the whole line under `point` ({ r, c } in cells from the grid's top left): every segment joined to the one nearest it and
+  // drawn with the same pen, in one group, so one undo restores it. A point that is not near a line sends nothing.
+  function eraseLineAt (tool, { r, c }) {
     const segments = lineSegmentsOf(Framework.app.puzzle.cells)
     const hit = segmentNear([r, c], segments, LINE_HIT_RADIUS)
     if (hit === null) return
@@ -1393,14 +1392,15 @@
 
   // A middle press over the grid in the pen tool erases the line under the pointer and has its default prevented, which stops the
   // browser's autoscroll. A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's
-  // `clickCell` (checked live), so the erase runs from the press itself and no pen mark or drag follows; `mousedown` is prevented
-  // too for a browser that still sends it. The pointer's position is the one SudokuPad last saw, which `getInputRc` reads.
+  // `clickCell` (checked live), so the erase runs from the press itself and no pen mark or drag follows. `mousedown` is prevented
+  // too for a browser that still sends it, which stops only the autoscroll: SudokuPad's own `mousedown` handler still runs there.
+  // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
   function installMiddleClickErase (app, tool) {
     const middlePress = (event) => event.button === MIDDLE_BUTTON && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
     window.addEventListener('pointerdown', (event) => {
       if (!middlePress(event)) return
       event.preventDefault()
-      eraseLineUnderPointer(tool)
+      eraseLineAt(tool, app.xyToRCExact(event.clientX, event.clientY))
     }, true)
     window.addEventListener('mousedown', (event) => { if (middlePress(event)) event.preventDefault() }, true)
   }
@@ -1475,9 +1475,9 @@
       Array.isArray(tool._actList) &&
       grid && typeof grid.getCell === 'function' && Number.isInteger(grid.rows) && Number.isInteger(grid.cols) &&
       proto && typeof proto.renderPen === 'function' &&
-      typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
+      typeof app.xyToRCExact === 'function' && typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
     if (!found) {
-      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge and corner marks are not installed')
+      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge and corner marks and the middle click line erase are not installed')
       return
     }
     wrapRenderPen(proto, renderer)

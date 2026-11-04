@@ -1395,7 +1395,7 @@ test('the dialog has an Outline width slider from 1 to 8 beside the White outlin
   assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"'), true, 'the slider follows the box')
 })
 
-// A segment as the eraser reads it off a cell: its value, cell and color character.
+// A segment as the line erase reads it off a cell: its value, cell and color character.
 const seg = (value, row, col, color = '1') => ({ value, row, col, color })
 
 test('linePoints gives the two grid points of every line value, in cell units from the grid top left', () => {
@@ -1437,6 +1437,16 @@ test('segmentNear picks the segment closest to a point, and none beyond the hit 
   assert.equal(segmentNear([0.5 + LINE_HIT_RADIUS * 1.5, 0.5], [across], LINE_HIT_RADIUS), null)
   assert.equal(segmentNear([0.5, 2.5], [across], LINE_HIT_RADIUS), null, 'past the segment end')
   assert.equal(segmentNear([0.5, 1.0], [], LINE_HIT_RADIUS), null)
+})
+
+test('segmentNear picks the nearer of two segments both within reach, whichever comes first in the list', () => {
+  // The center line 1 of cell (0,0) runs along row 0.5, the center line 2 down column 0.5; both are within the radius of this point.
+  const along = seg('1', 0, 0)
+  const down = seg('2', 0, 0)
+  assert.equal(segmentNear([0.55, 0.58], [down, along], LINE_HIT_RADIUS), along)
+  assert.equal(segmentNear([0.55, 0.58], [along, down], LINE_HIT_RADIUS), along)
+  assert.equal(segmentNear([0.58, 0.55], [along, down], LINE_HIT_RADIUS), down)
+  assert.equal(segmentNear([0.58, 0.55], [down, along], LINE_HIT_RADIUS), down)
 })
 
 test('connectedLine follows shared points through a bend and a branch', () => {

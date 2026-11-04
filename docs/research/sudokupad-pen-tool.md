@@ -229,3 +229,6 @@ So a click with a modifier held doesn't reach the pen tool unless the script sto
 - Erasing is a `select` of the cells holding a value and a bare `pen` action for it, per value, in one group; one undo brings the whole line back
   (the undo stack holds one entry per action, so its length is not a count of undo steps).
 - Not run: a real middle button on Windows, where autoscroll shows; headless Chromium cannot show it, so the test reads `defaultPrevented`.
+- SudokuPad stops updating its cached pointer position (`inputPos`, what `getInputRc()` reads) while a dialog is open. A pointer moved during a
+  dialog and a middle press right after it closes would hit the old position, so the erase hit-tests the press's own `clientX`/`clientY` through
+  `app.xyToRCExact`, which gives the same cell units (checked live: the point 2 cells right and 3 down of cell (0,0)'s middle gave 3.5, 2.5).

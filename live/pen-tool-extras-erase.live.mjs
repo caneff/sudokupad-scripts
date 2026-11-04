@@ -1,4 +1,4 @@
-// Live check of pen-tool-extras.user.js's whole-line eraser (a middle click in the pen tool) on sudokupad.app in headless Chromium.
+// Live check of pen-tool-extras.user.js's whole-line erase (a middle click in the pen tool) on sudokupad.app in headless Chromium.
 // Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real injection time and
@@ -8,7 +8,8 @@
 //   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
-// Every drag and click is real input, and each check reads what is stored (`cell.pen`) and the undo stack.
+// Every drag and click is real input except one `mousedown` sent by hand, and each check reads what is stored (`cell.pen`) and the
+// undo stack; the autoscroll checks read `defaultPrevented` on the press events instead.
 /* global Framework, MouseEvent */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -160,13 +161,14 @@ function group (title, mode) {
         await drag([[2.5, 6.5], [2.5, 4.5]])
         await drag([[2.5, 3.5], [3.5, 3.5], [3.5, 2.5]])
         const drawn = await penValues()
-        assert.equal(drawn.length > otherPen.length, true)
+        assert.ok(drawn.length > otherPen.length, `${drawn.length} entries drawn, ${otherPen.length} of the other pen`)
         if (page === 3) assert.deepEqual([...new Set(drawn.filter((v) => !otherPen.includes(v)).map((v) => v.slice(-1)))].sort(), ['n', 'o'])
         const depth = await undoDepth()
 
         await middleClick([2.5, 3.0])
         assert.deepEqual(await settle(penValues, otherPen), otherPen, 'only the other pen is left')
-        assert.equal(await undoDepth() > depth, true, 'the erase is on the undo stack')
+        const erasedDepth = await undoDepth()
+        assert.ok(erasedDepth > depth, `undo depth ${erasedDepth} after the erase, ${depth} before`)
 
         const afterErase = await read(() => Framework.app.getReplay())
         await undo()
@@ -187,7 +189,7 @@ function group (title, mode) {
       await drag([[2.5, 2.5], [2.5, 4.5]])
       const lines = await penValues()
       const depth = await undoDepth()
-      for (const point of [[6.5, 6.5], [6.0, 6.5], [6.0, 6.0], [-0.3, 3.0], [2.5 + 0.5, 3.5]]) {
+      for (const point of [[6.5, 6.5], [6.0, 6.5], [6.0, 6.0], [-0.3, 3.0], [3.0, 3.5]]) {
         await middleClick(point)
         // a mark would be stored by the time the click's handlers have run, so the same state a moment later is the answer
         await sleep(150) // "nothing happened in 150 ms" check
@@ -215,6 +217,23 @@ function group (title, mode) {
       await undoAll()
     })
 
+    it('a middle click hits where the pointer is now, not the position SudokuPad last saw: a dialog stops its tracking, and a press right after it closes erases nothing', async () => {
+      await undoAll()
+      await selectPen(1, 3)
+      await drag([[2.5, 2.5], [2.5, 4.5]])
+      const lines = await penValues()
+      await p.mouse.move(...await pixel([2.5, 3.0]))
+      await read(() => Framework.showDialog({ content: 'A dialog', buttons: [{ tag: 'button', content: 'Close', handler: () => Framework.closeDialog() }] }))
+      await p.mouse.move(...await pixel([6.5, 6.5]))
+      await read(() => Framework.closeDialog())
+      // no move between the close and the press: the pointer is over empty space
+      await p.mouse.down({ button: 'middle' })
+      await p.mouse.up({ button: 'middle' })
+      await sleep(150) // "nothing happened in 150 ms" check
+      assert.deepEqual(await penValues(), lines)
+      await undoAll()
+    })
+
     it('a middle press over the grid in the pen tool is default-prevented (no autoscroll), and left alone in another tool', async () => {
       await undoAll()
       await read(() => {
@@ -230,8 +249,12 @@ function group (title, mode) {
       assert.deepEqual(await presses(), [['pointerdown', 1, true]], 'the prevented pointerdown is the only event: no mouse events follow')
       await syntheticMousedown(1)
       assert.deepEqual(await presses(), [['mousedown', 1, true]])
+      // a middle press off the grid (the page's corner) keeps its autoscroll
+      await p.mouse.move(5, 5)
+      await p.mouse.click(5, 5, { button: 'middle' })
+      assert.deepEqual((await presses()).filter(([, button]) => button === 1), [['pointerdown', 1, false], ['mousedown', 1, false]])
       await p.mouse.click(...(await pixel([6.5, 6.5])))
-      assert.deepEqual((await presses()).map(([type, button, prevented]) => [type, button, prevented]), [['pointerdown', 0, false], ['mousedown', 0, false]], 'a left press is not prevented')
+      assert.deepEqual(await presses(), [['pointerdown', 0, false], ['mousedown', 0, false]], 'a left press is not prevented')
       await undo()
       await p.click('#control-normal')
       assert.equal(await settle(() => read(() => Framework.app.tool), 'normal'), 'normal')
