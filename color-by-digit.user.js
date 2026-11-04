@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.2.2
-// @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using groups of palette colors set in a settings dialog.
+// @version      0.3.0
+// @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using groups of palette colors set in a settings dialog. An auto mode box on the button keeps the colors in step as digits and centre marks change.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -18,10 +18,12 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.2.2'
+  const VERSION = '0.3.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'ColorByDigit_groups'
+  // Whether auto mode is on: true or false, absent until first set.
+  const AUTO_KEY = 'ColorByDigit_auto'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
   // A group is one palette key plus the digits that get it.
@@ -47,20 +49,71 @@
     return keys.size === 1 ? [...keys][0] : undefined
   }
 
-  // Which cells get which key. Pure: cells in, [{index, key}] out. A given or entered digit
-  // decides the key; a cell with neither takes the key its `centre` marks (digit strings) all share.
-  function planColoring (cells, groups) {
+  const keyOfDigitMap = (groups) => {
     const keyOfDigit = Object.create(null)
     groups.forEach((g) => g.digits.filter((d) => DIGITS.includes(d)).forEach((d) => { keyOfDigit[d] = g.key }))
+    return keyOfDigit
+  }
+
+  // The key of the one group a cell belongs to (a pure cell), or undefined. A given or entered digit
+  // decides the key; a cell with neither takes the key its `centre` marks (digit strings) all share.
+  function pureKey (cell, keyOfDigit) {
+    const placed = String(cell.given || cell.value || '')
+    return placed === '' ? sharedKey(cell.centre || [], keyOfDigit) : keyOfDigit[placed]
+  }
+
+  // Which cells get which key. Pure: cells in, [{index, key}] out.
+  function planColoring (cells, groups) {
+    const keyOfDigit = keyOfDigitMap(groups)
     const plan = []
     cells.forEach((cell, index) => {
-      const placed = String(cell.given || cell.value || '')
-      const key = placed === '' ? sharedKey(cell.centre || [], keyOfDigit) : keyOfDigit[placed]
+      const key = pureKey(cell, keyOfDigit)
       if (key === undefined) return
       if ((cell.colours || []).includes(key)) return
       plan.push({ index, key })
     })
     return plan
+  }
+
+  const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
+
+  const givenIndices = (cells) => cells.flatMap((cell, index) => (String(cell.given || '') === '' ? [] : [index]))
+
+  // An action by the player that can change a cell's digit or centre marks, as SudokuPad names them:
+  // `value` (digit), `candidates` (centre mark) and `clear` of anything but colors and pen marks.
+  // Corner marks (`pencilmarks`) and colors never start auto mode.
+  function isEditAction (action) {
+    if (!action || typeof action !== 'object') return false
+    if (action.type === 'value' || action.type === 'candidates') return true
+    return action.type === 'clear' && action.arg !== 'colour' && action.arg !== 'pen'
+  }
+
+  // What auto mode watches in a plan cell: the entered digit and the centre marks, in any order.
+  const editSignature = (cell) => JSON.stringify([String(cell.value || ''), [...(cell.centre || [])].sort()])
+
+  // The indices whose signature differs between two readings of the same cells.
+  const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
+
+  // What auto mode does to the listed cells: [{action, key, indices}], removals first. A pure cell
+  // gets its group's key and loses every other managed key; a cell that is not pure loses every
+  // managed key; a color outside `managedKeys` stays. `managedKeys` defaults to the groups' keys, and
+  // is wider when a Save drops an old group whose color must come off too.
+  function planAuto (cells, groups, indices, managedKeys = groupKeys(groups)) {
+    const keyOfDigit = keyOfDigitMap(groups)
+    const removals = new Map()
+    const additions = new Map()
+    const push = (map, key, index) => map.set(key, [...(map.get(key) || []), index])
+    indices.forEach((index) => {
+      const cell = cells[index]
+      const want = pureKey(cell, keyOfDigit)
+      const held = cell.colours || []
+      managedKeys.filter((key) => key !== want && held.includes(key)).forEach((key) => push(removals, key, index))
+      if (want !== undefined && !held.includes(want)) push(additions, want, index)
+    })
+    return [
+      ...[...removals].map(([key, list]) => ({ action: 'remove', key, indices: list })),
+      ...[...additions].map(([key, list]) => ({ action: 'add', key, indices: list }))
+    ]
   }
 
   // The centre marks SudokuPad shows on a cell, read as its own solver does
@@ -118,24 +171,33 @@
     return true
   }
 
+  // The auto mode checkbox, drawn in the corner of the button. A span with the checkbox role, not an
+  // <input>: a form control inside a <button> takes focus from the puzzle and is swallowed by some browsers.
+  function autoBoxHtml (on) {
+    return '<span data-role="auto" role="checkbox" aria-label="Auto mode" title="Auto mode" ' + `aria-checked="${Boolean(on)}" ` +
+      'style="position:absolute;top:-4px;right:-6px;box-sizing:border-box;width:16px;height:16px;border:2px solid #444;' +
+      'border-radius:3px;background:#fff;color:#111;font:bold 13px/12px sans-serif;text-align:center">' +
+      (on ? '&#10003;' : '') + '</span>'
+  }
+
   // Two cells colored and numbered: reads as "color by digit". SudokuPad's own app
-  // buttons put their icon in <div class="icon">.
-  const ICON =
-    '<div class="icon"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
+  // buttons put their icon in <div class="icon">. The auto mode box sits in its corner.
+  const iconHtml = (autoOn) =>
+    '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
     '<rect x="5" y="5" width="43" height="43" fill="#e5484d"/>' +
     '<rect x="52" y="5" width="43" height="43" fill="#3e63dd"/>' +
     '<rect x="5" y="52" width="43" height="43" fill="#3e63dd"/>' +
     '<rect x="52" y="52" width="43" height="43" fill="#e5484d"/>' +
     '<g fill="#fff" font-family="sans-serif" font-size="34" font-weight="bold" text-anchor="middle">' +
     '<text x="26.5" y="39">1</text><text x="73.5" y="86">1</text>' +
-    '<text x="73.5" y="39">2</text><text x="26.5" y="86">2</text></g></svg></div>'
+    '<text x="73.5" y="39">2</text><text x="26.5" y="86">2</text></g></svg>' + autoBoxHtml(autoOn) + '</div>'
 
   // The button goes in the bottom row (.controls-aux) beside Undo, Redo, Check and Select, where
   // SudokuPad lays it out and wraps it like theirs. SudokuPad binds button handlers only to
   // buttons present when the controls were built, so a button added later needs refreshControls
   // to get its onClick.
-  function installButton (framework, app, onClick) {
-    framework.addAuxButton({ name: 'colorbydigit', title: 'Color by digit', content: ICON, onClick })
+  function installButton (framework, app, onClick, autoOn = false) {
+    framework.addAuxButton({ name: 'colorbydigit', title: 'Color by digit', content: iconHtml(autoOn), onClick })
     app.refreshControls()
   }
 
@@ -217,8 +279,8 @@
       `<div style="${grid}">${swatches}</div>${zero}`
   }
 
-  // `shown[i]` is the page index group i shows.
-  function renderEditor (groups, pages, shown) {
+  // `shown[i]` is the page index group i shows; `auto` is the draft of the auto mode box.
+  function renderEditor (groups, pages, shown, auto = false) {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
       const digits = DIGITS.map((d) =>
@@ -232,12 +294,13 @@
     const preloads = Object.keys(PRELOADS)
       .map((n) => `<button type="button" data-act="preload" data-name="${esc(n)}">${esc(n)}</button>`).join(' ')
     const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
-    return `<div>Preload: ${preloads} <button type="button" data-act="clear">Clear all</button></div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
+    const autoBox = `<label style="display:block;margin:6px 0"><input type="checkbox" data-role="auto-draft"${auto ? ' checked' : ''}> Auto mode: keep colors in step with digits and centre marks</label>`
+    return `${autoBox}<div>Preload: ${preloads} <button type="button" data-act="clear">Clear all</button></div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
       '<button type="button" data-act="add">Add group</button>'
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, planColoring, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
+    module.exports = { VERSION, installButton, autoBoxHtml, planColoring, planAuto, groupKeys, givenIndices, isEditAction, editSignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -254,33 +317,135 @@
   const loadGroups = () => groupsFromStored(Framework.getData(DATA_KEY))
   const saveGroups = (groups) => Framework.setData(DATA_KEY, groups)
 
-  function colorCells (app) {
-    const groups = loadGroups()
-    const puzzle = app.puzzle
-    const cells = [].concat(puzzle.cells).flat(Infinity)
-    const plan = planColoring(cells.map(toPlanCell), groups)
-    if (plan.length === 0) return
-    const byKey = {}
-    plan.forEach(({ index, key }) => (byKey[key] = byKey[key] || []).push(cells[index]))
-    const savedSelection = [...puzzle.selectedCells]
+  const allCells = (app) => [].concat(app.puzzle.cells).flat(Infinity)
+
+  // Runs `fn` between groupstart and groupend, so SudokuPad undoes everything it does in one step.
+  function inOneUndoStep (app, fn) {
     app.act({ type: 'groupstart' })
     try {
-      Object.entries(byKey).forEach(([key, keyCells]) => {
+      return fn()
+    } finally {
+      app.act({ type: 'groupend' })
+    }
+  }
+
+  // Applies [{action, key, indices}] to `cells` as SudokuPad's color tool does: each op selects its
+  // cells and toggles the key, which adds it where every cell lacks it and removes it where every
+  // cell holds it (so an op's cells must all lack it, or all hold it). The selection is put back.
+  function runColorOps (app, cells, ops) {
+    const savedSelection = [...app.puzzle.selectedCells]
+    try {
+      ops.forEach(({ key, indices }) => {
         app.deselect()
-        app.select(keyCells)
+        app.select(indices.map((i) => cells[i]))
         app.act({ type: 'colour', arg: key })
       })
     } finally {
       app.deselect()
       if (savedSelection.length > 0) app.select(savedSelection)
-      app.act({ type: 'groupend' })
     }
   }
 
-  function openDialog () {
+  // The button: adds each pure cell's group color, never removes one.
+  function colorCells (app) {
+    const cells = allCells(app)
+    const plan = planColoring(cells.map(toPlanCell), loadGroups())
+    if (plan.length === 0) return
+    const byKey = {}
+    plan.forEach(({ index, key }) => (byKey[key] = byKey[key] || []).push(index))
+    const ops = Object.entries(byKey).map(([key, indices]) => ({ action: 'add', key, indices }))
+    inOneUndoStep(app, () => runColorOps(app, cells, ops))
+  }
+
+  // Auto mode over the listed cells (every cell when `indices` is left out): one undo step, nothing when nothing changes.
+  function autoColor (app, groups, indices, managedKeys) {
+    const cells = allCells(app)
+    if (indices === undefined) indices = cells.map((_, i) => i)
+    const ops = planAuto(cells.map(toPlanCell), groups, indices, managedKeys)
+    if (ops.length > 0) inOneUndoStep(app, () => runColorOps(app, cells, ops))
+  }
+
+  const colorGivens = (app) => {
+    const plans = allCells(app).map(toPlanCell)
+    autoColor(app, loadGroups(), givenIndices(plans))
+  }
+
+  let autoMode = false
+
+  // Runs `fn` now if the puzzle's cells exist, else when SudokuPad says the puzzle has loaded.
+  function whenPuzzleLoaded (app, fn) {
+    if (allCells(app).length > 0) fn()
+    else app.puzzle.addEventListener('loaded', fn, { once: true })
+  }
+
+  // Puts the saved value in force and redraws the button's box.
+  function showAutoMode () {
+    const box = document.querySelector('#control-colorbydigit [data-role="auto"]')
+    if (box) box.outerHTML = autoBoxHtml(autoMode)
+  }
+
+  // Applies a new auto mode value at once and saves it; turning it on colors the givens.
+  function setAutoMode (app, on) {
+    const turnedOn = on && !autoMode
+    autoMode = on
+    Framework.setData(AUTO_KEY, on)
+    showAutoMode()
+    if (turnedOn) colorGivens(app)
+  }
+
+  // Wraps app.act so that, with auto mode on, the player's change to a digit or centre marks and the
+  // color changes it brings are one group, and so one undo step. Only the player's own actions pass
+  // through app.act: undo, redo, replays and the loading of progress run on the puzzle itself, and
+  // SudokuPad's own multi-step acts (a restart) are already in a group, which is never nested.
+  function installAutoMode (app) {
+    const act = app.act
+    app.act = function (action) {
+      if (!autoMode || app.puzzle.inGroup || !isEditAction(action)) return act.call(this, action)
+      const touched = [...app.puzzle.selectedCells]
+      const cells = allCells(app)
+      const indices = touched.map((cell) => cells.indexOf(cell))
+      const before = touched.map((cell) => editSignature(toPlanCell(cell)))
+      return inOneUndoStep(app, () => {
+        const result = act.call(this, action)
+        const changed = changedIndices(before, touched.map((cell) => editSignature(toPlanCell(cell)))).map((i) => indices[i])
+        autoColor(app, loadGroups(), changed)
+        return result
+      })
+    }
+    app.on('restarted', () => { if (autoMode) colorGivens(app) })
+  }
+
+  // A click on the button's box toggles auto mode and is not a click on the button. The listener runs
+  // before SudokuPad's, and the press is stopped from focusing the button so the keyboard stays with the puzzle.
+  const BOX = '#control-colorbydigit [data-role="auto"]'
+  function listenForBox (app) {
+    const onBox = (event) => event.target.closest && event.target.closest(BOX)
+    document.addEventListener('mousedown', (event) => { if (onBox(event)) event.preventDefault() }, true)
+    document.addEventListener('click', (event) => {
+      if (!onBox(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      setAutoMode(app, !autoMode)
+    }, true)
+  }
+
+  // Save: stores the groups, then puts the auto mode draft in force. With auto mode already on, changed
+  // groups take the old groups' colors off every cell and give every pure cell its new color; turning
+  // auto mode on colors the givens (setAutoMode); with auto mode off, nothing is colored.
+  function saveDialog (app, oldGroups, groups, auto) {
+    saveGroups(groups)
+    const changed = JSON.stringify(oldGroups) !== JSON.stringify(groups)
+    if (autoMode && auto && changed) autoColor(app, groups, undefined, [...groupKeys(oldGroups), ...groupKeys(groups)])
+    setAutoMode(app, auto)
+  }
+
+  function openDialog (app) {
     const pages = readPages()
     const colors = layoutColors(pages)
-    let groups = loadGroups()
+    const savedGroups = loadGroups()
+    let groups = savedGroups
+    // The draft of the auto mode box: it opens at the value in force and takes effect on Save.
+    let auto = autoMode
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
@@ -289,7 +454,7 @@
         {
           tag: 'options',
           options: [
-            { tag: 'button', content: 'Save', handler: () => { saveGroups(groups); Framework.closeDialog() } },
+            { tag: 'button', content: 'Save', handler: () => { saveDialog(app, savedGroups, groups, auto); Framework.closeDialog() } },
             { tag: 'button', content: 'Cancel', action: 'close' }
           ]
         }
@@ -301,10 +466,12 @@
     let shown = []
     const draw = () => {
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor(groups, pages, shown)
+      box.innerHTML = renderEditor(groups, pages, shown, auto)
     }
     draw()
     box.addEventListener('change', (event) => {
+      const draft = event.target.closest('input[data-role="auto-draft"]')
+      if (draft) { auto = draft.checked; return }
       const el = event.target.closest('select[data-act="page"]')
       if (!el) return
       shown[Number(el.dataset.group)] = Number(el.value)
@@ -342,9 +509,13 @@
       content: 'Color by digit',
       handler: () => {
         Framework.closeDialog()
-        setTimeout(openDialog, 0)
+        setTimeout(() => openDialog(app), 0)
       }
     })
-    installButton(Framework, app, () => colorCells(app))
+    autoMode = Framework.getData(AUTO_KEY) === true
+    installButton(Framework, app, () => colorCells(app), autoMode)
+    installAutoMode(app)
+    listenForBox(app)
+    if (autoMode) whenPuzzleLoaded(app, () => colorGivens(app))
   })
 })()

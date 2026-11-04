@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEditAction, editSignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, groupsFromStored, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, DEFAULT_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -164,6 +164,107 @@ test('normalizeGroups keeps a digit in only its first group', () => {
   )
 })
 
+// Auto mode: which colors come off and go on when cells change. Cells are plan cells.
+const autoGroups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
+const auto = (cells, indices = cells.map((_, i) => i), g = autoGroups, managed) => planAuto(cells, g, indices, managed)
+
+test('auto: a pure cell gets its group color', () => {
+  assert.deepEqual(auto([{ value: '1' }, { centre: ['3'] }]), [
+    { action: 'add', key: 'a', indices: [0] },
+    { action: 'add', key: 'b', indices: [1] }
+  ])
+})
+
+test('auto: a pure cell loses another group\'s color and gets its own, removals first', () => {
+  assert.deepEqual(auto([{ value: '1', colours: ['b'] }]), [
+    { action: 'remove', key: 'b', indices: [0] },
+    { action: 'add', key: 'a', indices: [0] }
+  ])
+})
+
+test('auto: a pure cell that already holds its color and no other group color changes nothing', () => {
+  assert.deepEqual(auto([{ value: '1', colours: ['a'] }]), [])
+})
+
+test('auto: a cell that is not pure loses every group color, whoever painted it', () => {
+  assert.deepEqual(auto([{ colours: ['a', 'b'] }, { value: '7', colours: ['a'] }, { centre: ['1', '3'], colours: ['b'] }]), [
+    { action: 'remove', key: 'a', indices: [0, 1] },
+    { action: 'remove', key: 'b', indices: [0, 2] }
+  ])
+})
+
+test('auto: a color in no group stays, on a pure cell and on one that is not', () => {
+  assert.deepEqual(auto([{ value: '1', colours: ['z'] }, { colours: ['z'] }]), [{ action: 'add', key: 'a', indices: [0] }])
+})
+
+test('auto: corner marks are not part of a plan cell, so they never decide', () => {
+  assert.deepEqual(auto([{ value: '1', pencilmarks: ['3'] }]), [{ action: 'add', key: 'a', indices: [0] }])
+})
+
+test('auto: only the listed cells are planned', () => {
+  assert.deepEqual(auto([{ value: '1' }, { value: '1' }], [1]), [{ action: 'add', key: 'a', indices: [1] }])
+})
+
+test('auto: managed keys beyond the groups (an old group\'s) come off every listed cell', () => {
+  assert.deepEqual(auto([{ value: '1', colours: ['old'] }, { colours: ['old', 'z'] }], undefined, autoGroups, ['a', 'b', 'old']), [
+    { action: 'remove', key: 'old', indices: [0, 1] },
+    { action: 'add', key: 'a', indices: [0] }
+  ])
+})
+
+test('auto: groupKeys lists each group\'s key once', () => {
+  assert.deepEqual(groupKeys([{ key: 'a', digits: [] }, { key: 'b', digits: [] }, { key: 'a', digits: [] }]), ['a', 'b'])
+})
+
+test('auto: givenIndices lists the cells with a given digit', () => {
+  assert.deepEqual(givenIndices([{ given: '5' }, { value: '3' }, { given: '' }, { given: 7 }]), [0, 3])
+})
+
+test('auto: digits, centre marks and clears of them are edits; corner marks, colors, pen and undo are not', () => {
+  const edit = (type, arg) => isEditAction({ type, arg })
+  assert.equal(edit('value', '4'), true)
+  assert.equal(edit('candidates', '4'), true)
+  assert.equal(edit('clear', 'normal'), true)
+  assert.equal(edit('clear', 'centre'), true)
+  assert.equal(edit('pencilmarks', '4'), false)
+  assert.equal(edit('colour', '1'), false)
+  assert.equal(edit('clear', 'colour'), false)
+  assert.equal(edit('clear', 'pen'), false)
+  assert.equal(edit('undo'), false)
+  assert.equal(isEditAction('vl:4'), false)
+  assert.equal(isEditAction(undefined), false)
+})
+
+test('auto: the edit signature moves with the digit and the centre marks, not their order, and ignores corner marks and colors', () => {
+  const sig = editSignature
+  assert.equal(sig({ centre: ['2', '1'] }), sig({ centre: ['1', '2'] }))
+  assert.notEqual(sig({ value: '1' }), sig({ value: '2' }))
+  assert.notEqual(sig({ centre: ['1'] }), sig({ centre: ['1', '2'] }))
+  assert.equal(sig({ value: '1', colours: ['a'], pencilmarks: ['5'] }), sig({ value: '1' }))
+})
+
+test('auto: changedIndices lists the positions whose signature differs', () => {
+  assert.deepEqual(changedIndices(['a', 'b', 'c'], ['a', 'x', 'y']), [1, 2])
+  assert.deepEqual(changedIndices(['a'], ['a']), [])
+})
+
+test('auto: the button box shows its state in aria-checked and a check mark', () => {
+  assert.match(autoBoxHtml(true), /aria-checked="true"[\s\S]*&#10003;/)
+  assert.match(autoBoxHtml(false), /aria-checked="false"/)
+  assert.doesNotMatch(autoBoxHtml(false), /&#10003;/)
+})
+
+test('auto: installButton draws the box at the value it is given', () => {
+  const content = (on) => { let spec; installButton({ addAuxButton: (x) => { spec = x } }, { refreshControls: () => {} }, () => {}, on); return spec.content }
+  assert.match(content(true), /aria-checked="true"/)
+  assert.match(content(false), /aria-checked="false"/)
+})
+
+test('auto: the dialog box opens at the draft it is given', () => {
+  assert.match(renderEditor([], [], [], true), /data-role="auto-draft" checked/)
+  assert.doesNotMatch(renderEditor([], [], []), /data-role="auto-draft" checked/)
+})
+
 test('installButton: adds an aux-row icon button titled "Color by digit", then refreshControls so the click handler binds', () => {
   const calls = []
   const click = () => {}
@@ -177,7 +278,7 @@ test('installButton: adds an aux-row icon button titled "Color by digit", then r
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
   assert.equal(spec.title, 'Color by digit')
-  assert.match(spec.content, /^<div class="icon">[\s\S]*<svg[\s\S]*<\/svg><\/div>$/)
+  assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="auto"[\s\S]*<\/span><\/div>$/)
   assert.equal(spec.onClick, click)
 })
 
@@ -191,8 +292,10 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
     act: (a) => calls.push(['act', a.type]),
     deselect: () => {},
     select: () => {},
+    on: () => {},
     refreshControls: () => calls.push(['refresh'])
   }
+  global.document = { addEventListener: () => {} }
   global.Framework = {
     getApp: () => Promise.resolve(app),
     getData: () => null,
@@ -207,7 +310,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
     global.click()
     assert.ok(calls.some((c) => c[0] === 'act' && c[1] === 'colour'))
   } finally {
-    delete global.Framework; delete global.click
+    delete global.Framework; delete global.click; delete global.document
     delete require.cache[path]
     if (saved) require.cache[path] = saved
   }
