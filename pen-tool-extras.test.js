@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, normalizeOutline, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_RADIUS,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, normalizeOutline, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, normalizeOutlineWidth, OUTLINE_WIDTH,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -790,7 +790,7 @@ test('the corner X is two crossing diagonals of half-size s, drawn from the poin
 
 // Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dashed, page 3 is j to z and 0, two
 // to a pen, drawn as chevron lines.
-test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dashed, then chevron lines with a character for each way', () => {
+test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dashed, then arrow lines with a character for each way', () => {
   assert.deepEqual(PEN_PAGES, [
     { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dashed: false },
     { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dashed: true },
@@ -898,7 +898,7 @@ test('the page 2 swatch follows the dash length: dots at 0, longer dashes as it 
   assert.equal(long.offset, long.array[0] / 2, 'the line starts half a dash in, so it is inked at both ends')
 })
 
-test('the page button samples the page it turns to: dashes on page 2, a chevron line on page 3, a solid line on page 1, and a dot for each page with the current one filled', () => {
+test('the page button samples the page it turns to: dashes on page 2, an arrow line on page 3, a solid line on page 1, and a dot for each page with the current one filled', () => {
   const fromOne = renderPageIcon(0, 3)
   assert.match(fromOne, /data-page-sample="dashed"/)
   assert.equal((fromOne.match(/<circle/g) || []).length, 3)
@@ -1039,6 +1039,7 @@ const editorState = (over = {}) => ({
   show: { thickness: true, opacity: true },
   dash: 0,
   outline: false,
+  outlineWidth: 3,
   ...over
 })
 
@@ -1071,13 +1072,14 @@ test('the dialog has Show thickness slider and Show opacity slider boxes, ticked
   assert.equal(Boolean(box(none, 'opacity')[1]), true)
 })
 
-test('the dialog always holds the thickness and opacity sliders, at the values in force, whether or not the panel shows them', () => {
+test('the dialog always holds the thickness, opacity, dash and outline width sliders, at the values in force, whether or not the panel shows them', () => {
   const html = renderEditor(editorState({ thickness: 9, opacity: 35, show: { thickness: false, opacity: false } }))
   const ranges = [...html.matchAll(/<input type="range" data-setting="(\w+)" min="(\d+)" max="(\d+)" step="(\d+)" value="(\d+)"/g)].map((m) => m.slice(1))
   assert.deepEqual(ranges, [
     ['thickness', String(THICKNESS.min), String(THICKNESS.max), String(THICKNESS.step), '9'],
     ['opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35'],
-    ['dash', String(DASH.min), String(DASH.max), String(DASH.step), '0']
+    ['dash', String(DASH.min), String(DASH.max), String(DASH.step), '0'],
+    ['outlineWidth', String(OUTLINE_WIDTH.min), String(OUTLINE_WIDTH.max), String(OUTLINE_WIDTH.step), '3']
   ])
 })
 
@@ -1119,7 +1121,15 @@ test('the page 3 characters stroke in the color of their page 1 partner, both wa
   for (const r of rules.filter((r) => r.body.startsWith('stroke-dasharray'))) assert.doesNotMatch(r.selector, /pencolor-[j-z0]/)
 })
 
-test('a page 3 swatch is a chevron in the pen color of its button, as a mask so the color follows a recolor', () => {
+test('a page 3 arrow is filled and not stroked, in the pen color of its character, for the way it was stored and the way back', () => {
+  const css = buildPagesCss(5, 0)
+  const page = PEN_PAGES[2]
+  page.chars.forEach((char, i) => [char, page.reverse[i]].forEach((c) => {
+    assert.ok(css.includes(`:root:root .pencolor-${c} [data-chevron-part="chevrons"] { fill: var(--puzzle-pencolor-${i + 1}); stroke: none; }`), `character ${c}`)
+  }))
+})
+
+test('a page 3 swatch is an arrow in the pen color of its button, as a mask so the color follows a recolor', () => {
   const rules = rulesOf(buildPagesCss(5, 0))
   for (let n = 1; n <= 9; n++) {
     const rule = rules.find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="3"]:after`)
@@ -1199,12 +1209,13 @@ test('splitLineActs leaves actions that are not line values alone, and refuses a
 const numbersOf = (d) => d.match(/-?\d+(?:\.\d+)?/g).map(Number)
 const pointsOf = (d) => { const n = numbersOf(d); const out = []; for (let i = 0; i < n.length; i += 2) out.push([n[i], n[i + 1]]); return out }
 
-test('a chevron line draws the line along the whole segment and the chevrons as triples of points: wing, tip, wing', () => {
+test('an arrow line draws the line along the whole segment and the arrows as closed triangles of three points: base corner, tip, base corner', () => {
   const { line, chevrons } = chevronLine('1', true, 2, 3, 5)
   // the cell at row 2, col 3 is at x 192, y 128; the center line runs right from its middle
   assert.deepEqual(pointsOf(line), [[224, 160], [288, 160]])
   const points = pointsOf(chevrons)
   assert.equal(points.length % 3, 0)
+  assert.equal(chevrons.split('Z').length - 1, points.length / 3, 'every arrow is a closed triangle')
   for (let i = 0; i < points.length; i += 3) {
     const [wing, tip, other] = points.slice(i, i + 3)
     assert.equal(tip[0] > wing[0] && tip[0] > other[0], true, `the tip points the way the line was dragged (right): wing ${wing}, tip ${tip}, wing ${other}`)
@@ -1213,7 +1224,7 @@ test('a chevron line draws the line along the whole segment and the chevrons as 
   }
 })
 
-test('a chevron line dragged the other way has its chevrons pointing back and the same line', () => {
+test('an arrow line dragged the other way has its arrows pointing back and the same line', () => {
   const forward = chevronLine('1', true, 0, 0, 5)
   const back = chevronLine('1', false, 0, 0, 5)
   assert.deepEqual(pointsOf(back.line).slice().reverse(), pointsOf(forward.line))
@@ -1221,7 +1232,7 @@ test('a chevron line dragged the other way has its chevrons pointing back and th
   assert.equal(tip[0] < wing[0], true, `dragged left, the tip is left of the wings: wing ${wing}, tip ${tip}`)
 })
 
-test('chevrons point along a diagonal and along a vertical line as well', () => {
+test('arrows point along a diagonal and along a vertical line as well', () => {
   const [wing, tip, other] = pointsOf(chevronLine('e', true, 0, 0, 5).chevrons).slice(0, 3)
   // down and right: the tip is the furthest of the three along (1, 1)
   const along = ([x, y]) => x + y
@@ -1230,7 +1241,7 @@ test('chevrons point along a diagonal and along a vertical line as well', () => 
   assert.equal(t2[1] < w2[1], true, `dragged up, the tip is above the wings: wing ${w2}, tip ${t2}`)
 })
 
-test('the chevrons are evenly spaced along the line, half a space in from each end, so two cells in a row read as one run', () => {
+test('the arrows are evenly spaced along the line, half a space in from each end, so two cells in a row read as one run', () => {
   // a chevron's middle is halfway between its wings and its tip
   const middles = (d) => { const p = pointsOf(d); const out = []; for (let i = 0; i < p.length; i += 3) out.push((p[i][0] + p[i + 1][0]) / 2); return out }
   for (const thickness of [1, 5, 12, 16]) {
@@ -1240,45 +1251,46 @@ test('the chevrons are evenly spaced along the line, half a space in from each e
   }
 })
 
-test('the chevrons and the line scale with the thickness: wider chevrons, wider strokes, fewer chevrons', () => {
+test('the arrows and the line scale with the thickness: larger arrows, a wider line, fewer arrows', () => {
   const thin = chevronLine('1', true, 0, 0, 2)
   const thick = chevronLine('1', true, 0, 0, 12)
-  assert.equal(thick.lineWidth > thin.lineWidth && thick.chevronWidth > thin.chevronWidth, true, `widths ${thin.lineWidth}/${thin.chevronWidth} at 2, ${thick.lineWidth}/${thick.chevronWidth} at 12`)
-  assert.equal(thin.chevronWidth, thin.lineWidth, 'a chevron is as thick as its line')
+  assert.equal(thick.lineWidth > thin.lineWidth, true, `line widths ${thin.lineWidth} at 2, ${thick.lineWidth} at 12`)
   assert.equal(chevronLine('1', true, 0, 0, 10).lineWidth / chevronLine('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
-  assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} chevrons at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
+  assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} arrows at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
   const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
-test('below the default thickness the chevrons keep their size at the default and only the strokes get thinner, so the direction shows at 1', () => {
+test('below the default thickness the arrows keep their size at the default and only the line gets thinner, so the direction shows at 1', () => {
   const one = chevronLine('1', true, 0, 0, 1)
   const five = chevronLine('1', true, 0, 0, THICKNESS.fallback)
   assert.equal(one.chevrons, five.chevrons)
   assert.equal(one.lineWidth, 1, 'the line is as thick as a page 1 line, 1')
   assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
-  assert.equal(one.chevronWidth, one.lineWidth, 'the chevron stroke is as thick as the line, 1')
 })
 
-test('the line under the chevrons is as thick as a page 1 line at every slider value, and the chevrons clearly stick out past it', () => {
+test('the line under the arrows is as thick as a page 1 line at every slider value, and the arrows clearly stick out past it', () => {
   for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
     const shape = chevronLine('a', true, 0, 0, t)
     assert.equal(shape.lineWidth, t, `the line at thickness ${t}`)
     // 'a' is the top edge line, so a point's distance from y 0 is its distance from the line's middle.
-    const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
-    const beyondLine = reach - t / 2
-    assert.equal(beyondLine >= Math.max(t / 2, 2), true, `at thickness ${t} the chevrons stick out ${beyondLine} past a line ${t} wide`)
+    const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y)))
+    assert.equal(reach - t / 2 >= Math.max(t / 2, 2), true, `at thickness ${t} the arrows stick out ${reach - t / 2} past a line ${t} wide`)
   }
 })
 
-test('from thickness 5 up a chevron\'s wings reach the thickness times CHEVRON.halfWidth (1), the stroke is the thickness, and the spacing scales with it', () => {
-  const reachOf = (t) => { const shape = chevronLine('a', true, 0, 0, t); return Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) }
-  for (const t of [5, 8, 10, 13, 16]) assert.equal(Math.abs(reachOf(t) - t) < 0.01, true, `at ${t}`)
-  assert.equal(chevronLine('a', true, 0, 0, 16).chevronWidth, CHEVRON.stroke * 16)
-  assert.equal(pointsOf(chevronLine('a', true, 0, 0, 16).chevrons).length / 3, Math.round(64 / (CHEVRON.spacing * 16)) || 1)
+test('from thickness 5 up an arrow\'s base reaches CHEVRON.halfWidth (1.5) times the thickness to each side, it is twice CHEVRON.halfLength (1.125) times the thickness long, and the spacing scales with it', () => {
+  for (const t of [5, 8, 10, 13, 16]) {
+    const shape = chevronLine('a', true, 0, 0, t)
+    const points = pointsOf(shape.chevrons)
+    const [first, tip] = points
+    assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - CHEVRON.halfWidth * t) < 0.01, true, `reach at ${t}`)
+    assert.equal(Math.abs(Math.hypot(tip[0] - first[0], 0) - 2 * CHEVRON.halfLength * t) < 0.01, true, `length at ${t}`)
+    assert.equal(points.length / 3, Math.round(64 / (CHEVRON.spacing * t)) || 1, `count at ${t}`)
+  }
 })
 
-test('a chevron is centered on its line, on a diagonal as on a straight line, at every thickness from 1 to 16: its two wings mirror each other across the line', () => {
+test('an arrow is centered on its line, on a diagonal as on a straight line, at every thickness from 1 to 16: its two base corners mirror each other across the line', () => {
   for (const value of ['1', '2', 'a', 'e', 'd']) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
       const shape = chevronLine(value, true, 3, 3, t)
@@ -1299,15 +1311,15 @@ test('a chevron is centered on its line, on a diagonal as on a straight line, at
   }
 })
 
-test('at the largest thickness a chevron on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
+test('at the largest thickness an arrow on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
   // a top edge line, 'a', on row 0: the chevron's wings are the furthest from the edge itself
   const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
-  const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
-  assert.equal(Math.abs(reach - (CHEVRON.halfWidth + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
+  const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y)))
+  assert.equal(Math.abs(reach - CHEVRON.halfWidth * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON size at the largest thickness`)
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
 })
 
-test('a chevron line has at least one chevron on any segment at any thickness, so a run never has none', () => {
+test('an arrow line has at least one arrow on any segment at any thickness, so a run never has none', () => {
   for (const value of LINE_VALUES) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
       assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 3, true, `at least one chevron: ${value} at ${t}`)
@@ -1331,10 +1343,13 @@ test('buildOutlineCss refuses a value that is not a boolean', () => {
   assert.throws(() => buildOutlineCss('on'), RangeError)
 })
 
-test('the outline filter dilates the layer\'s combined shape by the fixed radius, fills it white and draws the layer over it', () => {
-  const svg = renderOutlineFilter()
+test('the outline filter grows the layer\'s combined shape by the fixed radius with a blur and a cut (round corners), fills it white and draws the layer over it', () => {
+  const svg = renderOutlineFilter(OUTLINE_WIDTH.fallback)
   assert.match(svg, new RegExp(`<filter id="${OUTLINE_FILTER_ID}"`))
-  assert.match(svg, new RegExp(`<feMorphology in="SourceAlpha" operator="dilate" radius="${OUTLINE_RADIUS}"`))
+  const blur = /<feGaussianBlur in="SourceAlpha" stdDeviation="([\d.]+)"/.exec(svg)
+  assert.ok(blur, 'the layer\'s alpha is blurred')
+  assert.equal(Math.abs(Number(blur[1]) * 1.645 - OUTLINE_WIDTH.fallback) < 0.01, true, `a blur of ${blur[1]} reaches ${OUTLINE_WIDTH.fallback} units out at the cut`)
+  assert.match(svg, /<feComponentTransfer in="blurred" result="grown"><feFuncA type="linear" slope="16" intercept="-0\.3"\/>/)
   assert.match(svg, /<feFlood flood-color="#ffffff"/)
   assert.ok(svg.indexOf('<feMergeNode') < svg.lastIndexOf('in="SourceGraphic"'), 'the layer is merged over the white')
 })
@@ -1344,4 +1359,23 @@ test('the dialog has a White outline box, off unless the outline is on', () => {
   assert.equal(box(renderEditor(editorState()))[1], undefined)
   assert.equal(box(renderEditor(editorState({ outline: true })))[1], ' checked')
   assert.match(renderEditor(editorState()), /<label for="pen-tool-extras-outline"[^>]*>White outline<\/label>/)
+})
+
+test('normalizeOutlineWidth keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 3', () => {
+  assert.deepEqual(OUTLINE_WIDTH, { min: 1, max: 8, step: 1, fallback: 3 })
+  for (const ok of [1, 3, 8]) assert.equal(normalizeOutlineWidth(ok), ok)
+  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(normalizeOutlineWidth(bad), 3, JSON.stringify(bad))
+})
+
+test('the outline filter blurs wider for a wider outline, and refuses a width it cannot save', () => {
+  const blurOf = (width) => Number(/stdDeviation="([\d.]+)"/.exec(renderOutlineFilter(width))[1])
+  assert.equal(blurOf(1) < blurOf(3) && blurOf(3) < blurOf(8), true, `${blurOf(1)}, ${blurOf(3)}, ${blurOf(8)}`)
+  for (const bad of [0, 9, 2.5, '3']) assert.throws(() => renderOutlineFilter(bad), RangeError)
+})
+
+test('the dialog has an Outline width slider from 1 to 8 beside the White outline box, at the width in force', () => {
+  const html = renderEditor(editorState({ outlineWidth: 6 }))
+  assert.match(html, /<input type="range" data-setting="outlineWidth" min="1" max="8" step="1" value="6"/)
+  assert.match(html, /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
+  assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"'), true, 'the slider follows the box')
 })

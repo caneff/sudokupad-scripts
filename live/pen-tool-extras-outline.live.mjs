@@ -24,9 +24,13 @@ const THICKNESS_KEY = 'PenColor_thickness'
 const POLL_MS = 50
 const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
-// The outline is 2 units wide beyond a line 5 wide, so 3.5 units from a line's middle is outline and 8 is not.
-const OUTLINE_UNITS = 3.5
-const CLEAR_UNITS = 8
+// A line is 5 wide, so its edge is 2.5 units from its middle. The outline is 3 units wide by default (up to 8): 4 units out is outline at the default,
+// 5.5 is past the outline of width 1 (3.5 out, plus its soft edge), 7 is outline only from a width of 5 up, and 14 is clear of every width (the widest, 8, reaches 10.5 and fades out over about 3 units more).
+const OUTLINE_UNITS = 4
+const WIDE_UNITS = 7
+const PAST_NARROW_UNITS = 5.5
+const CLEAR_UNITS = 14
+const OUTLINE_WIDTH_KEY = 'PenColor_outlinewidth'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -140,7 +144,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
       await editor().waitFor({ state: 'visible' })
     }
-    const clearSaved = () => read((keys) => keys.forEach((k) => Framework.removeData(k)), [OUTLINE_KEY, OPACITY_KEY, THICKNESS_KEY])
+    const clearSaved = () => read((keys) => keys.forEach((k) => Framework.removeData(k)), [OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY, THICKNESS_KEY])
+    const widthSlider = () => editor().locator('input[data-setting="outlineWidth"]')
+    const setWidth = (value) => widthSlider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 
     before(async () => {
       context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
@@ -196,6 +202,44 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await unback()
     })
 
+    it('the Outline width slider is 1 to 8 at 3 by default; Cancel leaves the width, Save applies it to the line already drawn and saves it, and Restore defaults then Save puts back 3', async () => {
+      await back()
+      await openEditor()
+      assert.deepEqual(await widthSlider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '8', '1', '3'])
+      await setWidth(8)
+      await dialogButton('Cancel').click()
+      await editor().waitFor({ state: 'detached' })
+      assert.equal(await brightnessAbove(WIDE_UNITS), 0, 'Cancel left the width at 3')
+      await openEditor()
+      assert.equal(await widthSlider().inputValue(), '3', 'the dialog opens at the width in force')
+      await setWidth(8)
+      await dialogButton('Save').click()
+      await editor().waitFor({ state: 'detached' })
+      assert.equal(await saved(OUTLINE_WIDTH_KEY), 8)
+      assert.equal(await settle(() => brightnessAbove(WIDE_UNITS).then((v) => v > 100), true), true, 'white 7 units out at width 8')
+      assert.equal(await brightnessAbove(CLEAR_UNITS), 0, 'black beyond width 8')
+      await openEditor()
+      await setWidth(1)
+      await dialogButton('Save').click()
+      await editor().waitFor({ state: 'detached' })
+      assert.equal(await settle(() => brightnessAbove(PAST_NARROW_UNITS), 0), 0, 'black 5.5 units out at width 1')
+      await openEditor()
+      await dialogButton('Restore defaults').click()
+      assert.equal(await widthSlider().inputValue(), '3')
+      assert.equal(await outlineBox().isChecked(), false)
+      await dialogButton('Cancel').click()
+      await editor().waitFor({ state: 'detached' })
+      assert.equal(await saved(OUTLINE_WIDTH_KEY), 1, 'Restore defaults waits for Save')
+      await openEditor()
+      await outlineBox().check()
+      await setWidth(3)
+      await dialogButton('Save').click()
+      await editor().waitFor({ state: 'detached' })
+      assert.equal(await saved(OUTLINE_WIDTH_KEY), null, 'the default width is not kept')
+      assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS).then((v) => v > 100), true), true)
+      await unback()
+    })
+
     it('the outline fades with the opacity slider: the pixel beside a line is brighter at 100 than at 40', async () => {
       await back()
       await read(([k]) => Framework.setData(k, 100), [OPACITY_KEY])
@@ -233,7 +277,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(hint, { found: true, inPenLayer: false, filters: ['none'] })
     })
 
-    it('Restore defaults then Save turns it off and clears the saved value; settings saved without the field load with it off', async () => {
+    it('Restore defaults then Save turns it off and clears the saved value; settings saved without the fields load with it off at width 3', async () => {
       await openEditor()
       await dialogButton('Restore defaults').click()
       assert.equal(await outlineBox().isChecked(), false)
@@ -242,10 +286,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await settle(layerFilter, 'none'), 'none')
       assert.equal(await saved(OUTLINE_KEY), null)
       assert.equal(await read(() => document.getElementById('pen-tool-extras-outline-holder')), null)
+      assert.equal(await saved(OUTLINE_WIDTH_KEY), null)
       // Settings saved by an earlier version hold no outline field.
       await read(([k]) => Framework.setData(k, 9), [THICKNESS_KEY])
       await reload()
       assert.equal(await layerFilter(), 'none')
+      // A saved width that is not a whole number from 1 to 8 reads as 3.
+      await read(([k]) => Framework.setData(k, 99), [OUTLINE_WIDTH_KEY])
+      await reload()
+      await openEditor()
+      assert.equal(await widthSlider().inputValue(), '3')
+      await dialogButton('Cancel').click()
+      await editor().waitFor({ state: 'detached' })
       await clearSaved()
     })
 

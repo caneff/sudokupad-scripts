@@ -47,13 +47,18 @@ Both sliders sit in the pen tool's panel, each with a small line icon, so you ca
 
 ## White outline
 
-The dialog's Outline section has a White outline box, off by default and saved under `PenColor_outline` (the saved value is removed when it is off, so settings saved before the box existed load with it off).
+The dialog's Outline section has a White outline box, off by default and saved under `PenColor_outline`, and an Outline width slider beside it, saved under `PenColor_outlinewidth`. Either key is removed when its value is the default, so settings saved before they existed load with the outline off and its width at 3.
 
-- On, every pen mark on every page gets a white outline 2 units wide (a cell is 64), lines and marks already drawn included. There is one width and no slider.
-- The outline wraps the combined shape, so it doesn't cut across lines where they join or cross.
+| Setting | Range | Default | Changes | Saved under |
+| --- | --- | --- | --- | --- |
+| White outline | on or off | off | Whether every pen mark gets a white outline | `PenColor_outline` |
+| Outline width | 1 to 8 units, in steps of 1 | 3 | How far the outline reaches past a mark's edge (a cell is 64 units, a default line 5 wide) | `PenColor_outlinewidth` |
+
+- On, every pen mark on every page gets the outline, lines and marks already drawn included. The width doesn't scale with Thickness.
+- The outline wraps the combined shape, so it doesn't cut across lines where they join or cross, and it follows the shape's curves with round corners. Its edge is a little soft: about 1 unit wide at width 3, wider at the top of the range.
 - It follows Opacity: the outline is part of the pen layer, so at 40% the white fades with the marks.
 - The drag and erase highlights are not outlined.
-- Nothing about it is stored in the puzzle, so replays don't change. Like the other dialog settings it takes effect on Save, Cancel leaves it, and Restore defaults turns it off.
+- Nothing about it is stored in the puzzle, so replays don't change. Like the other dialog settings it takes effect on Save, Cancel leaves it, and Restore defaults sets the box off and the width to 3 in the dialog (Save keeps them).
 
 ## Pen pages
 
@@ -63,7 +68,7 @@ There are three pages of nine pens, for 27, using the same nine colors.
 | --- | --- |
 | 1 | SudokuPad's solid lines |
 | 2 | Dashed lines, or dots with a Dash length of 0 |
-| 3 | A line with a run of chevrons, pointing the way you dragged |
+| 3 | A line with a run of arrows (filled triangles), pointing the way you dragged |
 
 Only lines change with the page. A cell circle, a cross and the edge and corner marks stay solid.
 
@@ -84,10 +89,10 @@ A dialog slider from 0 to 8 line widths, saved under `PenColor_dash`.
 - Each cell's piece of a line starts and ends with half a dash, with a whole number of dash-and-gap periods fitted to the piece, whether it runs along a cell's center, its edge or a diagonal. So a line is inked at its two ends, at every turn and at every join between cells, as a solid line would be, and two pieces meet in one whole dash. Dots follow the same rule, with a dot on each of those points.
 - Every gap is at least one line width wide where it shows (two line widths between the dash patterns, since the round caps take one), on a straight and a diagonal piece alike. A dash too long for a cell to hold that gap is shortened to leave it, so a page 2 line is never solid.
 
-### Chevrons (page 3)
+### Arrow lines (page 3)
 
-- Each cell's piece of a line is drawn with whole chevrons, about three to a cell at thickness 5, so a run reads as one across a cell boundary.
-- The line under the chevrons is as thick as a page 1 line at every Thickness, and each chevron's stroke is as thick as the line. Chevrons scale with Thickness from 5 up, their wings reaching 1 line width out from the line's middle, so they stick out past the line at every value. Below 5 they keep their size at 5, with thinner strokes, so direction stays visible.
+- Each cell's piece of a line is drawn with whole arrows, about three to a cell at thickness 5, so a run reads as one across a cell boundary.
+- Each arrow is a triangle filled in the pen's color, sitting on the line and pointing the way you dragged: 1.5 line widths out to each side of the line's middle and 2.25 line widths long. The line under the arrows is as thick as a page 1 line at every Thickness. Arrows scale with Thickness from 5 up, so they stick out past the line at every value. Below 5 they keep their size at 5, so direction stays visible.
 - They follow Opacity, and lines already drawn follow Thickness. They stay inside the rectangle Dark Page keeps at 16.
 - A drag that turns stores the right direction per segment and is one undo step. The replay and a reload keep it.
 - Dragging over a line erases it, whichever way either was drawn.
@@ -120,12 +125,12 @@ The dialog's Pen line mode (Center & Edge, Center only, Edge only) is SudokuPad'
 
 ## Restore defaults
 
-The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity and Dash length (3) sliders, the two Show boxes and the White outline box back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity and Dash length (3) sliders, the two Show boxes, the White outline box and the Outline width slider (3) back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 
 | If an update changes | What happens |
 | --- | --- |
-| The pen tool or its renderer | Edge and corner marks are left off, and page 3 lines draw as plain lines with no chevrons |
+| The pen tool or its renderer | Edge and corner marks are left off, and page 3 lines draw as plain lines with no arrows |
 | SudokuPad's line mode pulldown | The sliders and the page button don't appear. Saved thickness and opacity still apply, but can't be changed until the script is updated |
 | Either of these | The colors still work |

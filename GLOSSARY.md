@@ -59,8 +59,11 @@
   crosses, edge marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under
   `PenColor_opacity`. SudokuPad's own is 80, set on each stroke (`.cell-pen { opacity: 0.8 }`); the script sets it on the
   whole pen layer (`#cell-pen`) instead, so overlapping strokes do not darken. 80 is the default; 100 is solid.
+- **white outline** — the dialog's White outline box (off by default, saved under `PenColor_outline`) and Outline width slider (1 to 8 units, default 3, saved under
+  `PenColor_outlinewidth`). On, a filter on the pen layer (`#cell-pen`) draws a white band of that width round the layer's combined shape, so lines and marks
+  already drawn get it, it fades with the opacity, and the drag highlight, which sits in its own group beside the layer, is left out. Nothing is stored in the puzzle.
 - **pen page** — one of the lists of nine pens in `PEN_PAGES`. Page 1 is SudokuPad's own pens 1 to 9; page 2 is the same
-  nine colors drawn as dashed lines (dots at a **dash length** of 0); page 3 is the same nine as **chevron lines**. The pen on color button N has the same color on every page, so recoloring it changes
+  nine colors drawn as dashed lines (dots at a **dash length** of 0); page 3 is the same nine as **arrow lines**. The pen on color button N has the same color on every page, so recoloring it changes
   it on all of them.
 - **dash length** — the dialog's slider, 0 to 8 line widths, saved under `PenColor_dash`, giving how long each dash of a dashed
   page's lines is. 3 is the default and 0 is dots; a dash scales with the thickness and changes lines already drawn. A dash too long for a cell's line to hold a gap
@@ -69,9 +72,9 @@
 - **SudokuPad colors button** — the settings dialog's button beside the Pen colors grid. It sets the nine pickers to SudokuPad's own pen colors
   (`DEFAULT_COLORS`) as a draft: Save stores them as the user's colors, so they stop following the cell color page, and Cancel leaves the colors as
   they were. Unlike Restore defaults, it touches no other setting.
-- **chevron line** — a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of chevrons along it, pointing the way the line was
-  dragged. Only lines are chevron lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Its size and
-  spacing scale with the thickness from the default up (a chevron is never smaller than at 5, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole chevrons, half a space in from
+- **arrow line** — a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of filled triangles (its arrows, in the pen's color) along it, pointing the way the line was
+  dragged. Only lines are arrow lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Not a **direction arrow**, the `>` `<` `^` `v` mark a click on a cell edge cycles through. Its arrows' size and
+  spacing scale with the thickness from the default up (an arrow is never smaller than at 5, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole arrows, half a space in from
   each end, so a run reads as one across a cell boundary.
 - **direction character** — a page 3 pen is two color characters, since a pen value has no direction: the one on its button
   (`j`, `l`, `n`, `p`, `r`, `t`, `v`, `x`, `z`) for a line dragged the way SudokuPad draws the value (right, down, up and right for `d`,
@@ -91,7 +94,7 @@
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
   rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is the chosen page color (black by default) outside it.
-- **swatch** — also, in Pen Tool Extras, the picture on a pen color button of page 2 (a dashed line) or page 3 (a line and chevrons), cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
+- **swatch** — also, in Pen Tool Extras, the picture on a pen color button of page 2 (a dashed line) or page 3 (a line and two arrows), cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
 - **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
