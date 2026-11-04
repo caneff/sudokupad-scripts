@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.4.0
+// @version      1.4.1
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), puts two sliders in the pen tool's panel for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through they are, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks and for the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.4.0'
+  const VERSION = '1.4.1'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -642,11 +642,35 @@
   // The mouse button of the latest press or release. SudokuPad calls `clickCell` on the
   // release, with no event, so the button is read from the pointer events before it.
   let lastButton = 0
+  // Whether a pointer is pressed now, from the pointer events before it.
+  let pointerHeld = false
 
   function trackButton () {
     const remember = (event) => { lastButton = event.button }
-    window.addEventListener('pointerdown', remember, true)
-    window.addEventListener('pointerup', remember, true)
+    window.addEventListener('pointerdown', (event) => { pointerHeld = true; remember(event) }, true)
+    window.addEventListener('pointerup', (event) => { pointerHeld = false; remember(event) }, true)
+    window.addEventListener('pointercancel', () => { pointerHeld = false }, true)
+  }
+
+  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are held.
+  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
+
+  // Closes the open dialog. SudokuPad runs a dialog button's handler on the press and removes the
+  // dialog at once, so the release lands on the grid and the pen tool takes it for a click on the
+  // cell under the button. While a pointer is pressed, this swallows the events that end the press
+  // before the grid sees them, until the next press; a close from the keyboard, with no pointer
+  // pressed, swallows nothing.
+  function closeDialogKeepingGrid () {
+    Framework.closeDialog()
+    if (!pointerHeld) return
+    const swallow = (event) => event.stopImmediatePropagation()
+    const stop = () => {
+      RELEASE_EVENTS.forEach((type) => window.removeEventListener(type, swallow, true))
+      window.removeEventListener('pointerdown', stop, true)
+    }
+    RELEASE_EVENTS.forEach((type) => window.addEventListener(type, swallow, true))
+    window.addEventListener('pointerdown', stop, true)
   }
 
   // The grid corner under the pointer, as cornerAt names it, or null: also null while both corner
@@ -842,10 +866,10 @@
                 }
                 if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
-                Framework.closeDialog()
+                closeDialogKeepingGrid()
               }
             },
-            { tag: 'button', content: 'Cancel', action: 'close' },
+            { tag: 'button', content: 'Cancel', handler: closeDialogKeepingGrid },
             { tag: 'button', content: 'Restore defaults', handler: restoreDefaults }
           ]
         }
@@ -1039,7 +1063,7 @@
       group: SETTINGS_GROUP,
       content: 'Pen tool extras',
       handler: () => {
-        Framework.closeDialog()
+        closeDialogKeepingGrid()
         setTimeout(openDialog, 0)
       }
     })

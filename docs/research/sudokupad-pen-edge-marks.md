@@ -78,7 +78,25 @@ edge marks. Only the result text was read.
 - Dark Page's kept rectangle: an X centred on an outer corner reaches 8 units (plus half the stroke) past the
   cell box on two sides, the same as an edge X reaches past an outer edge, so it is inside `SOLVER_REACH`
   (checked on all four outer corners at the default thickness).
-- A click on a dialog button that lands over the grid with the pen tool on can leave a pen mark under it
-  (seen in the live test: a click on a checkbox left a cell circle). Not fixed here.
 - Pictures: `pen-tool-extras-corners-grid.png`, `pen-tool-extras-corners-dialog.png`
   (`pen-tool-extras-corners-screenshot.mjs`).
+
+## A dialog button over the grid leaves a pen mark, 2026-11-03 (v0.611.0, #63; run on the page in `live/pen-tool-extras-marks.live.mjs`)
+
+- Stock SudokuPad does it, with no script loaded. A dialog from `Framework.showDialog({ centerOverBoard: true })`
+  whose button handler calls `Framework.closeDialog()` removes the dialog on the press. Event order of one real
+  click: `pointerdown` and `mousedown` on the button, then `pointerup` and `mouseup` on the grid's `svg`.
+  `ToolPen.handleInputup` (`tool-pen.js`) runs from `mouseup`, calls `clickCell`, and `clickCell` marks whatever
+  the pointer is over: a cell circle in a cell's middle, an edge mark near an edge. Held for 150 ms or not, the
+  mark is the same. The grid never saw the press, so this is a release with no press.
+- A point that is neither near enough to a cell middle nor an edge makes no mark, so the mark shows only on some
+  button positions. The stock settings buttons that open another dialog (Screenshot, Create Short URL) open it on
+  the press, so the new dialog's overlay catches the release and no mark appears.
+- Pen Tool Extras' own dialog did it on Save and Cancel (an edge mark under Save in the live run), and its
+  settings entry did it on an instant click: the entry closed the settings dialog and opened its own in a
+  `setTimeout`, and a click whose release came first landed on the grid. A click held for 100 ms did not.
+- The fix is the script's own, for its own buttons only: `closeDialogKeepingGrid` closes the dialog and, when a
+  pointer is pressed, swallows the events that end the press (`pointerup`, `pointercancel`, `mouseup`, `touchend`)
+  at `window` in the capture phase until the next `pointerdown`. A close from the keyboard has no pointer
+  pressed and swallows nothing. Stock dialogs and every other script's dialog are unchanged.
+- Not run: a touch screen (the `touchend` swallow is by reading, not by a run), Windows, Tampermonkey.

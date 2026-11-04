@@ -818,6 +818,69 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
     })
 
+    // SudokuPad runs a dialog button's handler on the press and removes the dialog, so the release
+    // lands on the grid and counts as a click on the cell under the button (stock SudokuPad does
+    // this too: docs/research/sudokupad-pen-edge-marks.md). Each check first clicks the grid at the
+    // button's point with no dialog open and requires a mark, so a point that makes no mark cannot
+    // pass for a fix.
+    describe('a release over the grid after a press on a dialog button', () => {
+      const anyMark = () => read(() => Framework.app.puzzle.cells.some((cell) => cell.pen.length))
+      const pointOf = async (locator) => {
+        const b = await locator.boundingBox()
+        return [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)]
+      }
+      // The button's point once two readings in a row agree: a dialog may still be sliding or scrolling.
+      const centreOf = async (locator) => {
+        let last = await pointOf(locator)
+        const deadline = Date.now() + SETTLE_MS
+        for (;;) {
+          await sleep(POLL_MS)
+          const now = await pointOf(locator)
+          if (now.join() === last.join() || Date.now() > deadline) return now
+          last = now
+        }
+      }
+      const closeNow = async () => {
+        await read(() => Framework.closeDialog())
+        await p.locator('.dialog').waitFor({ state: 'detached' })
+      }
+      // Runs `open` to show the button, clicks the grid at the button's point with the dialog gone
+      // to see the point makes a mark, then runs `open` again and returns the button's point.
+      const probedPoint = async (open, button) => {
+        await open()
+        const [x, y] = await centreOf(button())
+        await closeNow()
+        await p.mouse.click(x, y)
+        assert.equal(await anyMark(), true, 'a click on the grid at the button\'s point makes a mark')
+        await clearMarks()
+        await open()
+        assert.deepEqual(await centreOf(button()), [x, y])
+        return [x, y]
+      }
+
+      for (const text of ['Save', 'Cancel']) {
+        it(`${text} leaves no pen mark under the button`, async () => {
+          const [x, y] = await probedPoint(openEditor, () => dialogButton(text))
+          await p.mouse.click(x, y)
+          await editor().waitFor({ state: 'detached' })
+          assert.equal(await anyMark(), false)
+        })
+      }
+
+      it('the settings entry leaves no pen mark under it', async () => {
+        const entry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
+        const open = async () => {
+          await openSettings(p)
+          await entry().evaluate((e) => e.scrollIntoView({ block: 'center' }))
+        }
+        const [x, y] = await probedPoint(open, entry)
+        await p.mouse.click(x, y)
+        await editor().waitFor({ state: 'visible' })
+        assert.equal(await anyMark(), false)
+        await closeWith('Cancel')
+      })
+    })
+
     it('no uncaught page errors', () => {
       assert.deepEqual(errors, [])
     })
