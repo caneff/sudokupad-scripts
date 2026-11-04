@@ -1,6 +1,6 @@
 // Live check of Color by Digit's profiles on sudokupad.app, in headless Chromium: the profile menu on
 // the button, switching profile, the button's icon, the dialog's profile list, and migration.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of
+// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of
 // `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
@@ -13,6 +13,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -111,7 +112,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const errors = []
     const p = await context.newPage()
     p.on('pageerror', (e) => errors.push(String(e)))
-    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+    await routeSudokuPad(p)
     await p.addInitScript((entries) => {
       entries.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
     }, Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]))
