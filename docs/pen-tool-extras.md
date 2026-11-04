@@ -11,9 +11,13 @@ Lines drawn with a page 2 or page 3 pen are invisible to anyone without this scr
 
 A replay played with SudokuPad's own pen tool setting off draws page 1 and page 2 marks in pen color 1, with or without the script: a page 2 dashed line comes out solid, and edge and corner marks lose their colors. Page 3 lines keep their colors and arrows. Turn the pen tool on before playing a replay. See `docs/research/sudokupad-replay-files.md`.
 
+## The settings gear
+
+A small white box with a purple gear sits in the upper right corner of the pen tool button, whichever tool is selected. Click or tap it to open the settings dialog; the selected tool stays as it was. A click anywhere else on the button selects the pen tool as before.
+
 ## The settings dialog
 
-Pen tool extras in SudokuPad's settings opens one dialog, top to bottom, each section under a thin divider:
+Pen tool extras in SudokuPad's settings, or the small gear in the upper right corner of the pen tool button, opens one dialog, top to bottom, each section under a thin divider:
 
 1. **Pen colors**, with the SudokuPad colors button.
 2. **Line settings**: Thickness and Opacity, each with a Slider in panel box.
@@ -182,5 +186,6 @@ The settings dialog says which features are off in one line at its top, for exam
 | line mode | the `.penlinemode` element in the pen tool's panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders and the page button, which would take its row, are left out. Tab still turns pages, but the mouse wheel does not, since it needs the page button. The dialog has no Pen line mode |
 | outline | the pen tool's `drawLineHint` | No white outline, and no outline controls in the dialog |
 | line erase | the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell` | A middle click is a plain click again: it cycles the marks like a left click when marks are on. The dialog's Middle click box is left out |
+| settings gear | adding the gear to the pen tool button (`#control-pen`) fails | No gear on the button; the entry in SudokuPad's settings still opens the dialog. A page with no pen tool button just shows no gear and is not reported |
 
 Sliders and outline share `drawLineHint`, so a failure there turns both off: the script moves the drag highlight out of the pen layer so neither the opacity nor the outline touches it. A feature that needs another (dashes and arrow lines need pen pages, right click needs marks) is named in the dialog's line with it.

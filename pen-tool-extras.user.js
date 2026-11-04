@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.13.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
+// @version      1.14.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.13.0'
+  const VERSION = '1.14.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -964,6 +964,19 @@
   const LINE_PICTURE_WIDTH = 3.4
   // The height of each slider row; a hidden slider's empty row has the same, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
+  // The settings gear in the corner of SudokuPad's pen tool button: a small white box with a purple border and gear, which opens the dialog.
+  const GEAR_BUTTON = '#control-pen'
+  const GEAR_CLASS = 'pen-tool-extras-gear'
+  const GEAR_LABEL = 'Pen tool extras settings'
+  const GEAR_SIZE_PX = 13
+  const GEAR_INSET_PX = 2
+  const GEAR_ICON_PX = 9
+  // SudokuPad's own CSS turns pointer events off on what is inside a tool button, so the gear turns them back on.
+  const GEAR_CSS = [
+    `${GEAR_BUTTON} { position: relative; }`,
+    `.${GEAR_CLASS} { position: absolute; right: ${GEAR_INSET_PX}px; top: ${GEAR_INSET_PX}px; box-sizing: border-box; width: ${GEAR_SIZE_PX}px; height: ${GEAR_SIZE_PX}px; border: 1.5px solid ${PANEL_COLOR}; border-radius: 3px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }`
+  ].join('\n')
+  const GEAR_MARKUP = `<span class="${GEAR_CLASS}" role="button" aria-label="${GEAR_LABEL}" title="${GEAR_LABEL}"><svg viewBox="0 0 24 24" width="${GEAR_ICON_PX}" height="${GEAR_ICON_PX}" fill="${PANEL_COLOR}" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.88 2h-3.84a.5.5 0 0 0-.49.42l-.36 2.54a7 7 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.64 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.38 1.05.7 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54a7 7 0 0 0 1.63-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg></span>`
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
     `.${SLIDERS} { position: absolute; left: 0.2rem; right: ${PAGE_BUTTON_WIDTH_REM + PAGE_GAP_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
@@ -1174,7 +1187,8 @@
     rightClick: 'right click',
     lineMode: 'line mode',
     outline: 'outline',
-    lineErase: 'line erase'
+    lineErase: 'line erase',
+    gear: 'settings gear'
   }
   // The features that cannot work without another one: the dashes and arrows are pens on pages, and a right click steps the marks' cycle.
   const FEATURE_NEEDS = { dashes: ['pages'], chevrons: ['pages'], rightClick: ['marks'] }
@@ -1718,6 +1732,7 @@
       features.isOff('pages') ? '' : buildPagesCss(effectiveThickness(), activeDash),
       EDIT_CSS,
       DIALOG_CSS,
+      features.isOff('gear') ? '' : GEAR_CSS,
       features.isOff('lineMode') ? '' : PANEL_CSS
     ].join('\n')
   }
@@ -2077,6 +2092,29 @@
     syncPageButton()
   }
 
+  // Puts the gear in the pen tool button, once; a page without the button (the pen tool is off, or the controls are not built yet) gets none.
+  function syncGear () {
+    features.attempt('gear', () => {
+      const button = document.querySelector(GEAR_BUTTON)
+      if (button && !button.querySelector(`.${GEAR_CLASS}`)) button.insertAdjacentHTML('beforeend', GEAR_MARKUP)
+    }, () => document.querySelectorAll(`.${GEAR_CLASS}`).forEach((el) => el.remove()))
+  }
+
+  // SudokuPad runs a tool button's action on the press, so a press on the gear is kept from its handlers (the capture phase on the document
+  // runs before the button's own); the click then opens the dialog and selects nothing.
+  function installGear () {
+    const onGear = (event) => event.target.closest && event.target.closest(`.${GEAR_CLASS}`)
+    ;['mousedown', 'touchstart', 'pointerdown'].forEach((type) => {
+      document.addEventListener(type, (event) => { if (onGear(event)) event.stopPropagation() }, true)
+    })
+    document.addEventListener('click', (event) => {
+      if (!onGear(event)) return
+      event.stopPropagation()
+      openDialog()
+    }, true)
+    syncGear()
+  }
+
   function removePageButtons () {
     document.querySelectorAll(`.${PAGE_BUTTON}`).forEach((el) => el.remove())
   }
@@ -2084,8 +2122,9 @@
   // A drag on a slider leaves the focus on it, and then the arrow and paging keys would move the slider
   // and not reach the puzzle; the focus goes back to the page when the pointer is released.
   function installPenPanel () {
-    new window.MutationObserver(syncPenPanel).observe(document.body, { childList: true, subtree: true })
+    new window.MutationObserver(() => { syncPenPanel(); syncGear() }).observe(document.body, { childList: true, subtree: true })
     syncPenPanel()
+    installGear()
     document.addEventListener('input', (event) => {
       if (event.target.matches(`.${SLIDERS} input`)) features.attempt('sliders', () => saveSlider(event.target))
     })
