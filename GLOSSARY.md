@@ -2,6 +2,9 @@
 
 - **group** — one palette color plus the digits that get it. A digit is in at
   most one group.
+- **pure cell** — a cell that belongs to exactly one group: its given or entered digit is in that
+  group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit
+  and no centre marks, or a digit in no group, is not pure.
 - **settings group** — one of SudokuPad's collapsible sections of its settings dialog. Every
   script's settings entry goes in the Experimental one, which starts collapsed.
 - **digit color** — the fill of one digit, in entered digits, corner marks and
