@@ -2,7 +2,7 @@
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      1.4.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), puts two sliders in the pen tool's panel for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through they are, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks, so an update can break them.
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), puts two sliders in the pen tool's panel for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through they are, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks and for the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -451,10 +451,18 @@
   // are cut to fit "Center" in the narrower box.
   // SudokuPad's purple, as its own icons draw it.
   const PANEL_COLOR = '#6a1b9a'
+  // The row `.penlinemode` fills (SudokuPad's own CSS puts it 13rem down `.controls-input`, 4rem tall), the
+  // width the box is cut to, and the gap before the sliders, which start where the box ends.
+  const PANEL_ROW_TOP_REM = 13
+  const PANEL_ROW_HEIGHT_REM = 4
+  const MODE_BOX_WIDTH_REM = 4.8
+  const SLIDERS_GAP_REM = 0.6
+  // The stroke width of the line picture on each slider's left, in its 20 x 16 view box.
+  const LINE_PICTURE_WIDTH = 3.4
   const PANEL_CSS = [
-    `${LINE_MODE_BOX} { right: auto; width: 4.8rem; }`,
+    `${LINE_MODE_BOX} { right: auto; width: ${MODE_BOX_WIDTH_REM}rem; }`,
     `${LINE_MODE_BOX} select { inset: 0.4rem; font-size: 0.9rem; padding: 0; }`,
-    `.${SLIDERS} { position: absolute; left: 5.4rem; right: 0.2rem; top: 13rem; height: 4rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
+    `.${SLIDERS} { position: absolute; left: ${MODE_BOX_WIDTH_REM + SLIDERS_GAP_REM}rem; right: 0.2rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; }`,
     `.${SLIDER_ROW} svg { flex: none; width: 1.4rem; height: 1.1rem; }`,
     `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; accent-color: ${PANEL_COLOR}; }`
@@ -471,8 +479,8 @@
       `<div class="${SLIDER_ROW}" title="${label}">${picture}` +
       `<input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
     return `<div class="${SLIDERS}">` +
-      row(THICKNESS_SLIDER, 'Thickness', linePicture(3.4, 1), THICKNESS, thickness) +
-      row(OPACITY_SLIDER, 'Opacity', linePicture(3.4, 0.35), OPACITY, opacity) +
+      row(THICKNESS_SLIDER, 'Thickness', linePicture(LINE_PICTURE_WIDTH, 1), THICKNESS, thickness) +
+      row(OPACITY_SLIDER, 'Opacity', linePicture(LINE_PICTURE_WIDTH, 0.35), OPACITY, opacity) +
       '</div>'
   }
 
@@ -924,8 +932,8 @@
     if (!sliders) mode.insertAdjacentHTML('afterend', renderPanelSliders(activeThickness, activeOpacity))
   }
 
-  // A drag on a slider leaves the focus on it, and then the digit keys and arrows would work on the
-  // slider and not on the puzzle; the focus goes back to the page when the pointer is released.
+  // A drag on a slider leaves the focus on it, and then the arrow and paging keys would move the slider
+  // and not reach the puzzle; the focus goes back to the page when the pointer is released.
   function installPenPanel () {
     new window.MutationObserver(syncPenPanel).observe(document.body, { childList: true, subtree: true })
     syncPenPanel()
@@ -933,13 +941,11 @@
       if (event.target.matches(`.${SLIDERS} input`)) saveSlider(event.target)
     })
     // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops
-    // the browser dragging a slider's thumb. A move over a slider is kept from SudokuPad's handlers, so
-    // the thumb drags and the drag reaches nothing else on the page.
-    ;['mousemove', 'pointermove'].forEach((type) => {
-      document.addEventListener(type, (event) => {
-        if (event.target.closest(`.${SLIDERS}`)) event.stopPropagation()
-      }, true)
-    })
+    // the browser dragging a slider's thumb. A mouse move over a slider is kept from SudokuPad's
+    // handlers, so the thumb drags and the drag reaches nothing else on the page.
+    document.addEventListener('mousemove', (event) => {
+      if (event.target.closest(`.${SLIDERS}`)) event.stopPropagation()
+    }, true)
     window.addEventListener('pointerup', () => {
       const focused = document.activeElement
       if (focused && focused.matches(`.${SLIDERS} input`)) focused.blur()
