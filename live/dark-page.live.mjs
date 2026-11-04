@@ -4,10 +4,8 @@
 //
 // The script is injected into the page, not installed through Tampermonkey, so
 // Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// Each injection time runs the same checks:
-//   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
-//   before-start:  after the page loads, before Start Puzzle
-//   after-start:   after Start Puzzle, when the controls already exist
+// The script goes in after Start Puzzle, when the controls already exist, except in the page color dialog group at the end, which
+// injects at DOMContentLoaded; startup.live.mjs checks the other injection times.
 //
 // The reference for every board check is the same page with the script switched off (its
 // stylesheet's media set to `not all`): a separate page that never had the script rasterizes the
@@ -94,16 +92,14 @@ const OTHER_BOARDS = {
   'an 11x11 board whose outer ring of cells is outside every region': board({ size: 11, boxHeight: 3, boxWidth: 3, offset: 1 })
 }
 
-// Loads the puzzle, running `beforeStart` / `afterStart` around Start Puzzle.
-async function openPuzzle (p, { beforeStart = async () => {}, afterStart = async () => {} } = {}) {
+// Loads the puzzle and clicks Start Puzzle.
+async function openPuzzle (p) {
   await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
   const start = p.getByRole('button', { name: START }).first()
   await start.waitFor({ state: 'visible' })
-  await beforeStart()
   await start.click()
   await start.waitFor({ state: 'hidden' })
   await p.locator('#control-undo').waitFor({ state: 'visible' })
-  await afterStart()
 }
 
 // Enters digits, corner marks, centre marks and colored cells, then deselects, so the board holds
@@ -245,283 +241,273 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-for (const mode of ['document-idle', 'before-start', 'after-start']) {
-  describe(`injected ${mode}`, { concurrency: false }, () => {
-    let context, p, errors
+describe('injected after Start Puzzle', { concurrency: false }, () => {
+  let context, p, errors
 
-    const read = (fn, arg) => p.evaluate(fn, arg)
-    const readButton = (selector) => read((selector) => { const c = window.getComputedStyle(document.querySelector(selector)); return { bg: c.backgroundColor, fg: c.color, border: c.borderTopColor } }, selector)
-    const computed = (selector, property) => read(([selector, property]) => window.getComputedStyle(document.querySelector(selector))[property], [selector, property])
-    // Switches the script's stylesheet off and on in the page the checks already use. Its rectangle
-    // stays, as a transparent div that takes no click and changes no layout.
-    const setScript = (on) => read(([selector, on]) => { document.querySelector(selector).media = on ? '' : 'not all' }, [STYLE, on])
-    // The board as it is now with the script on, against the same board with it off.
-    const expectBoardKept = async () => {
-      const on = await boardShot(p)
-      await setScript(false)
-      const off = await boardShot(p)
-      await setScript(true)
-      return expectKept(p, off, on)
-    }
-    const loadBoard = async (data) => {
-      await read((d) => Framework.app.loadCTCPuzzle(d), data)
-      const start = p.getByRole('button', { name: START }).first()
-      if (await start.isVisible()) await start.click()
-      await p.locator('#svgrenderer').waitFor({ state: 'attached' })
-      await p.waitForFunction((selector) => document.querySelector(selector)?.style.display === 'block', RECT)
-    }
+  const read = (fn, arg) => p.evaluate(fn, arg)
+  const readButton = (selector) => read((selector) => { const c = window.getComputedStyle(document.querySelector(selector)); return { bg: c.backgroundColor, fg: c.color, border: c.borderTopColor } }, selector)
+  const computed = (selector, property) => read(([selector, property]) => window.getComputedStyle(document.querySelector(selector))[property], [selector, property])
+  // Switches the script's stylesheet off and on in the page the checks already use. Its rectangle
+  // stays, as a transparent div that takes no click and changes no layout.
+  const setScript = (on) => read(([selector, on]) => { document.querySelector(selector).media = on ? '' : 'not all' }, [STYLE, on])
+  // The board as it is now with the script on, against the same board with it off.
+  const expectBoardKept = async () => {
+    const on = await boardShot(p)
+    await setScript(false)
+    const off = await boardShot(p)
+    await setScript(true)
+    return expectKept(p, off, on)
+  }
+  const loadBoard = async (data) => {
+    await read((d) => Framework.app.loadCTCPuzzle(d), data)
+    const start = p.getByRole('button', { name: START }).first()
+    if (await start.isVisible()) await start.click()
+    await p.locator('#svgrenderer').waitFor({ state: 'attached' })
+    await p.waitForFunction((selector) => document.querySelector(selector)?.style.display === 'block', RECT)
+  }
 
-    const boot = () => openPuzzle(p, {
-      beforeStart: async () => { if (mode === 'before-start') await p.addScriptTag({ content: script }) },
-      afterStart: async () => { if (mode === 'after-start') await p.addScriptTag({ content: script }) }
-    }).then(() => p.locator(STYLE).waitFor({ state: 'attached' }))
+  const boot = async () => {
+    await openPuzzle(p)
+    await p.addScriptTag({ content: script })
+    await p.locator(STYLE).waitFor({ state: 'attached' })
+  }
 
-    before(async () => {
-      context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-      errors = []
-      p = await context.newPage()
-      p.on('pageerror', (e) => errors.push(String(e)))
-      await routeSudokuPad(p)
-      if (mode === 'document-idle') {
-        await p.addInitScript((src) => {
-          document.addEventListener('DOMContentLoaded', () => {
-            const s = document.createElement('script')
-            s.textContent = src
-            document.documentElement.appendChild(s)
-          })
-        }, script)
-      }
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await boot()
-      await p.addStyleTag({ content: HIDE_PAGE_UI })
-    })
-    after(async () => { await context.close() })
-
-    it('the page background is black', async () => {
-      assert.equal(await computed('body', 'backgroundColor'), BLACK)
-    })
-
-    it('the page shows black on all four sides of the rectangle, and white at its corner', async () => {
-      await fillBoard(p)
-      const rect = await settledRectangle(p)
-      const gap = 6
-      const strip = (x, y, width, height) => colorsIn(p, { x: Math.round(x), y: Math.round(y), width, height })
-      assert.deepEqual(await strip(rect.x - gap - 4, rect.y + 40, 4, 40), ['0,0,0'], 'left')
-      assert.deepEqual(await strip(rect.x + rect.width + gap, rect.y + 40, 4, 40), ['0,0,0'], 'right')
-      assert.deepEqual(await strip(rect.x + 40, rect.y - gap - 4, 40, 4), ['0,0,0'], 'top')
-      assert.deepEqual(await strip(rect.x + 40, rect.y + rect.height + gap, 40, 4), ['0,0,0'], 'bottom')
-      assert.deepEqual(await strip(rect.x, rect.y, 1, 1), ['255,255,255'], 'inside, at the corner')
-    })
-
-    it('the rectangle has whole-pixel edges and lies within the board', async () => {
-      const rect = await settledRectangle(p)
-      for (const edge of [rect.x, rect.y, rect.width, rect.height]) assert.equal(Number.isInteger(edge), true, JSON.stringify(rect))
-      const { x, y, width, height } = await regionOf(p)
-      assert.equal(rect.x >= x && rect.y >= y && rect.x + rect.width <= x + width && rect.y + rect.height <= y + height, true, JSON.stringify({ rect, region: { x, y, width, height } }))
-    })
-
-    it('the credit line is readable on black', async () => {
-      assert.equal(await computed('.controls-footer', 'color'), CREDIT_TEXT)
-      assert.equal(await computed('.controls-footer a', 'color'), CREDIT_TEXT)
-    })
-
-    // The replay tool's readout is the ::after of .controls-input. The replay tool itself is not entered
-    // here; with the script's stylesheet off the readout shows SudokuPad's own color, so the rule is
-    // seen beating it, which is what the tool's black on black needs.
-    it('the replay tool\'s readout is readable on black, where SudokuPad\'s own color is not', async () => {
-      assert.equal(await readoutColor(p), CREDIT_TEXT)
-      const own = await p.evaluate(() => {
-        const style = document.getElementById('dark-page-style')
-        style.disabled = true
-        const color = window.getComputedStyle(document.querySelector('.controls-input'), '::after').color
-        style.disabled = false
-        return color
-      })
-      assert.notEqual(own, CREDIT_TEXT)
-    })
-
-    it('the control buttons are dark gray with light purple icons, the digits and backspace keep their purple with the softer border, and the selected mode button keeps its purple with a purple border', async () => {
-      for (const selector of ['#control-settings', '#control-undo', '#control-corner', '#control-colour']) {
-        assert.deepEqual(await readButton(selector), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER }, selector)
-      }
-      for (const selector of ['.controls-input button.digit', '.controls-input button:not(.digit)']) {
-        const key = await readButton(selector)
-        assert.equal(key.bg, OWN_PURPLE, selector)
-        assert.equal(key.border, BUTTON_BORDER, selector)
-      }
-      const selected = await readButton('#control-normal.selected')
-      assert.equal(selected.bg, OWN_PURPLE)
-      assert.equal(selected.border, BUTTON_ACCENT)
-    })
-
-    it('the Select button keeps its purple fill while it is on, with a purple border, and goes dark again when it is off', async () => {
-      await p.click('#control-select')
-      await p.waitForSelector('#control-select.selectedperm')
-      await p.mouse.move(5, 5)
-      const on = await readButton('#control-select')
-      assert.equal(on.bg, OWN_PURPLE)
-      assert.equal(on.border, BUTTON_ACCENT)
-      await p.click('#control-select')
-      await p.waitForSelector('#control-select:not(.selectedperm)')
-      await p.mouse.move(5, 5)
-      assert.deepEqual(await readButton('#control-select'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
-    })
-
-    it('a button another script adds to the bottom row (.controls-aux) goes dark too', async () => {
-      await read(() => {
-        const button = document.createElement('button')
-        button.id = 'dark-page-live-aux'
-        document.querySelector('.controls-aux').appendChild(button)
-      })
-      assert.deepEqual(await readButton('#dark-page-live-aux'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
-      await read(() => document.getElementById('dark-page-live-aux').remove())
-    })
-
-    it('the color swatches in color mode keep their fills and take the softer border', async () => {
-      await p.click('#control-colour')
-      const swatches = () => read(() => [...document.querySelectorAll('.controls-input button')].map((b) => { const c = window.getComputedStyle(b); return [c.backgroundColor, c.color, c.filter] }))
-      const borders = () => read(() => [...document.querySelectorAll('.controls-input button')].map((b) => window.getComputedStyle(b).borderTopColor))
-      const on = await swatches()
-      const onBorders = await borders()
-      await setScript(false)
-      const off = await swatches()
-      await setScript(true)
-      await p.click('#control-normal')
-      assert.ok(on.length >= 9, `${on.length} swatches`)
-      assert.deepEqual(on, off)
-      assert.deepEqual(onBorders, onBorders.map(() => BUTTON_BORDER))
-    })
-
-    it('hover on a button changes nothing the script set, and brightens a digit as it does with the script off', async () => {
-      await p.hover('#control-undo')
-      assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
-      const hovered = () => computed('.controls-input button.digit', 'filter')
-      await p.hover('.controls-input button.digit')
-      const on = await hovered()
-      await setScript(false)
-      const off = await hovered()
-      await setScript(true)
-      await p.mouse.move(5, 5)
-      assert.notEqual(on, 'none')
-      assert.equal(on, off)
-    })
-
-    it('the puzzle is kept: no pixel inside the rectangle differs with the script off, and none of the puzzle lies outside it', async () => {
-      await expectBoardKept()
-    })
-
-    for (const corner of [[0, 0], [8, 8]]) {
-      it(`a selection on the outermost cell ${JSON.stringify(corner)} sits on white, and the puzzle is kept`, async () => {
-        await selectCells(p, [corner])
-        try {
-          await expectBoardKept()
-        } finally {
-          await deselect(p)
-        }
-      })
-    }
-
-    // The edge X is the pen mark that reaches farthest past a cell. The rectangle already holds it
-    // before it is drawn: it does not move when the marks go on the outermost cells.
-    it('pen marks on the outermost cells sit on white without the rectangle moving', async () => {
-      const before = await settledRectangle(p)
-      await selectCells(p, [[0, 0], [8, 8]])
-      await read(() => ['31', '41', 'b1', 'c1'].forEach((arg) => Framework.app.act({ type: 'pen', arg })))
-      try {
-        await deselect(p)
-        assert.deepEqual(await settledRectangle(p), before, 'the rectangle after the marks')
-        await expectBoardKept()
-      } finally {
-        await selectCells(p, [[0, 0], [8, 8]])
-        await read(() => Framework.app.act({ type: 'pen', arg: '0' }))
-        await deselect(p)
-      }
-    })
-
-    it('the rectangle keeps at least a pen mark\'s reach around the cells', async () => {
-      const gap = await read(() => {
-        const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
-        const svg = document.querySelector('#svgrenderer').getBoundingClientRect()
-        return { left: Math.min(...cells.map((c) => c.left)), top: Math.min(...cells.map((c) => c.top)), svgLeft: svg.left, svgTop: svg.top }
-      })
-      const rect = await settledRectangle(p)
-      // The rectangle is clamped to the puzzle's own svg box, which a mark cannot draw past, so the reach is kept up to that edge.
-      const keeps = (cells, svg, edge) => edge <= Math.max(Math.floor(svg), Math.ceil(cells - SOLVER_REACH))
-      assert.equal(keeps(gap.left, gap.svgLeft, rect.x) && keeps(gap.top, gap.svgTop, rect.y), true, JSON.stringify({ gap, rect }))
-    })
-
-    it('the controls sit in front of the page: the keypad is still what a click at its center reaches', async () => {
-      const hit = await read(() => {
-        const b = document.querySelector('button.digit').getBoundingClientRect()
-        return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest('button').className
-      })
-      assert.match(hit, /digit/)
-    })
-
-    it('SudokuPad\'s accent color setting still colors the keypad', async () => {
-      await read(() => Framework.setSetting('uitheme', 'red'))
-      try {
-        assert.equal(await computed('button.digit', 'backgroundColor'), ACCENT_RED)
-      } finally {
-        await read(() => Framework.setSetting('uitheme', 'purple'))
-      }
-    })
-
-    it('with SudokuPad\'s own dark mode on, the page is black and the puzzle is kept', async () => {
-      await read(() => Framework.setSetting('darkmode', true))
-      try {
-        assert.equal(await computed('body', 'backgroundColor'), BLACK)
-        await expectBoardKept()
-      } finally {
-        await read(() => Framework.setSetting('darkmode', false))
-      }
-    })
-
-    // The same page with the script switched off is the reference: only the script differs.
-    for (const [name, data] of Object.entries(OTHER_BOARDS)) {
-      for (const viewport of [{ width: 1200, height: 900 }, { width: 800, height: 1000 }]) {
-        for (const selected of [false, true]) {
-          it(`${name} at ${viewport.width}x${viewport.height}${selected ? ', outermost cells selected' : ''}: the puzzle is kept inside the rectangle`, async () => {
-            await p.setViewportSize(viewport)
-            await loadBoard(data)
-            if (selected) await selectCells(p, [[0, 0], [data.size - 1, data.size - 1]])
-            await expectBoardKept()
-            await deselect(p)
-          })
-        }
-      }
-    }
-
-    // On a board whose four sides all carry text, the drawing defines every edge of the rectangle,
-    // so a rectangle that counted the transparent '88' or the whole svg box leaves more white.
-    it('a 6x6 board with outside text: the rectangle is tight to the text on every side, and ignores text that is transparent', async () => {
-      await p.setViewportSize({ width: 1200, height: 900 })
-      await loadBoard(OTHER_BOARDS['a 6x6 board with outside text'])
-      const on = await boardShot(p)
-      await setScript(false)
-      const off = await boardShot(p)
-      await setScript(true)
-      const { slack } = await compareBoards(p, off, on)
-      for (const [side, white] of Object.entries(slack)) assert.equal(white >= 0 && white <= TIGHT_SLACK_PX, true, `${side}: ${white}px of white past the drawing, ${JSON.stringify(slack)}`)
-    })
-
-    it('the settings entry is a button named Dark page in the Experimental group, and it opens a dialog with the version as small text', async () => {
-      const group = await openSettings(p)
-      const entry = settingsEntry(group)
-      assert.equal(await entry.count(), 1)
-      await entry.click()
-      const dialog = p.locator('.dialog')
-      await dialog.locator(PICKER).waitFor({ state: 'visible' })
-      assert.equal((await dialog.locator('small').textContent()).trim(), `v${headerVersion(script)}`)
-      assert.equal(await dialog.locator(PICKER).inputValue(), '#000000')
-      await dialog.getByRole('button', { name: 'Cancel' }).click()
-    })
-
-    it('no uncaught page errors', () => {
-      assert.deepEqual(errors, [])
-    })
+  before(async () => {
+    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    errors = []
+    p = await context.newPage()
+    p.on('pageerror', (e) => errors.push(String(e)))
+    await routeSudokuPad(p)
+    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    await boot()
+    await p.addStyleTag({ content: HIDE_PAGE_UI })
   })
-}
+  after(async () => { await context.close() })
+
+  it('the page background is black', async () => {
+    assert.equal(await computed('body', 'backgroundColor'), BLACK)
+  })
+
+  it('the page shows black on all four sides of the rectangle, and white at its corner', async () => {
+    await fillBoard(p)
+    const rect = await settledRectangle(p)
+    const gap = 6
+    const strip = (x, y, width, height) => colorsIn(p, { x: Math.round(x), y: Math.round(y), width, height })
+    assert.deepEqual(await strip(rect.x - gap - 4, rect.y + 40, 4, 40), ['0,0,0'], 'left')
+    assert.deepEqual(await strip(rect.x + rect.width + gap, rect.y + 40, 4, 40), ['0,0,0'], 'right')
+    assert.deepEqual(await strip(rect.x + 40, rect.y - gap - 4, 40, 4), ['0,0,0'], 'top')
+    assert.deepEqual(await strip(rect.x + 40, rect.y + rect.height + gap, 40, 4), ['0,0,0'], 'bottom')
+    assert.deepEqual(await strip(rect.x, rect.y, 1, 1), ['255,255,255'], 'inside, at the corner')
+  })
+
+  it('the rectangle has whole-pixel edges and lies within the board', async () => {
+    const rect = await settledRectangle(p)
+    for (const edge of [rect.x, rect.y, rect.width, rect.height]) assert.equal(Number.isInteger(edge), true, JSON.stringify(rect))
+    const { x, y, width, height } = await regionOf(p)
+    assert.equal(rect.x >= x && rect.y >= y && rect.x + rect.width <= x + width && rect.y + rect.height <= y + height, true, JSON.stringify({ rect, region: { x, y, width, height } }))
+  })
+
+  it('the credit line is readable on black', async () => {
+    assert.equal(await computed('.controls-footer', 'color'), CREDIT_TEXT)
+    assert.equal(await computed('.controls-footer a', 'color'), CREDIT_TEXT)
+  })
+
+  // The replay tool's readout is the ::after of .controls-input. The replay tool itself is not entered
+  // here; with the script's stylesheet off the readout shows SudokuPad's own color, so the rule is
+  // seen beating it, which is what the tool's black on black needs.
+  it('the replay tool\'s readout is readable on black, where SudokuPad\'s own color is not', async () => {
+    assert.equal(await readoutColor(p), CREDIT_TEXT)
+    const own = await p.evaluate(() => {
+      const style = document.getElementById('dark-page-style')
+      style.disabled = true
+      const color = window.getComputedStyle(document.querySelector('.controls-input'), '::after').color
+      style.disabled = false
+      return color
+    })
+    assert.notEqual(own, CREDIT_TEXT)
+  })
+
+  it('the control buttons are dark gray with light purple icons, the digits and backspace keep their purple with the softer border, and the selected mode button keeps its purple with a purple border', async () => {
+    for (const selector of ['#control-settings', '#control-undo', '#control-corner', '#control-colour']) {
+      assert.deepEqual(await readButton(selector), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER }, selector)
+    }
+    for (const selector of ['.controls-input button.digit', '.controls-input button:not(.digit)']) {
+      const key = await readButton(selector)
+      assert.equal(key.bg, OWN_PURPLE, selector)
+      assert.equal(key.border, BUTTON_BORDER, selector)
+    }
+    const selected = await readButton('#control-normal.selected')
+    assert.equal(selected.bg, OWN_PURPLE)
+    assert.equal(selected.border, BUTTON_ACCENT)
+  })
+
+  it('the Select button keeps its purple fill while it is on, with a purple border, and goes dark again when it is off', async () => {
+    await p.click('#control-select')
+    await p.waitForSelector('#control-select.selectedperm')
+    await p.mouse.move(5, 5)
+    const on = await readButton('#control-select')
+    assert.equal(on.bg, OWN_PURPLE)
+    assert.equal(on.border, BUTTON_ACCENT)
+    await p.click('#control-select')
+    await p.waitForSelector('#control-select:not(.selectedperm)')
+    await p.mouse.move(5, 5)
+    assert.deepEqual(await readButton('#control-select'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
+  })
+
+  it('a button another script adds to the bottom row (.controls-aux) goes dark too', async () => {
+    await read(() => {
+      const button = document.createElement('button')
+      button.id = 'dark-page-live-aux'
+      document.querySelector('.controls-aux').appendChild(button)
+    })
+    assert.deepEqual(await readButton('#dark-page-live-aux'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
+    await read(() => document.getElementById('dark-page-live-aux').remove())
+  })
+
+  it('the color swatches in color mode keep their fills and take the softer border', async () => {
+    await p.click('#control-colour')
+    const swatches = () => read(() => [...document.querySelectorAll('.controls-input button')].map((b) => { const c = window.getComputedStyle(b); return [c.backgroundColor, c.color, c.filter] }))
+    const borders = () => read(() => [...document.querySelectorAll('.controls-input button')].map((b) => window.getComputedStyle(b).borderTopColor))
+    const on = await swatches()
+    const onBorders = await borders()
+    await setScript(false)
+    const off = await swatches()
+    await setScript(true)
+    await p.click('#control-normal')
+    assert.ok(on.length >= 9, `${on.length} swatches`)
+    assert.deepEqual(on, off)
+    assert.deepEqual(onBorders, onBorders.map(() => BUTTON_BORDER))
+  })
+
+  it('hover on a button changes nothing the script set, and brightens a digit as it does with the script off', async () => {
+    await p.hover('#control-undo')
+    assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
+    const hovered = () => computed('.controls-input button.digit', 'filter')
+    await p.hover('.controls-input button.digit')
+    const on = await hovered()
+    await setScript(false)
+    const off = await hovered()
+    await setScript(true)
+    await p.mouse.move(5, 5)
+    assert.notEqual(on, 'none')
+    assert.equal(on, off)
+  })
+
+  it('the puzzle is kept: no pixel inside the rectangle differs with the script off, and none of the puzzle lies outside it', async () => {
+    await expectBoardKept()
+  })
+
+  for (const corner of [[0, 0], [8, 8]]) {
+    it(`a selection on the outermost cell ${JSON.stringify(corner)} sits on white, and the puzzle is kept`, async () => {
+      await selectCells(p, [corner])
+      try {
+        await expectBoardKept()
+      } finally {
+        await deselect(p)
+      }
+    })
+  }
+
+  // The edge X is the pen mark that reaches farthest past a cell. The rectangle already holds it
+  // before it is drawn: it does not move when the marks go on the outermost cells.
+  it('pen marks on the outermost cells sit on white without the rectangle moving', async () => {
+    const before = await settledRectangle(p)
+    await selectCells(p, [[0, 0], [8, 8]])
+    await read(() => ['31', '41', 'b1', 'c1'].forEach((arg) => Framework.app.act({ type: 'pen', arg })))
+    try {
+      await deselect(p)
+      assert.deepEqual(await settledRectangle(p), before, 'the rectangle after the marks')
+      await expectBoardKept()
+    } finally {
+      await selectCells(p, [[0, 0], [8, 8]])
+      await read(() => Framework.app.act({ type: 'pen', arg: '0' }))
+      await deselect(p)
+    }
+  })
+
+  it('the rectangle keeps at least a pen mark\'s reach around the cells', async () => {
+    const gap = await read(() => {
+      const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
+      const svg = document.querySelector('#svgrenderer').getBoundingClientRect()
+      return { left: Math.min(...cells.map((c) => c.left)), top: Math.min(...cells.map((c) => c.top)), svgLeft: svg.left, svgTop: svg.top }
+    })
+    const rect = await settledRectangle(p)
+    // The rectangle is clamped to the puzzle's own svg box, which a mark cannot draw past, so the reach is kept up to that edge.
+    const keeps = (cells, svg, edge) => edge <= Math.max(Math.floor(svg), Math.ceil(cells - SOLVER_REACH))
+    assert.equal(keeps(gap.left, gap.svgLeft, rect.x) && keeps(gap.top, gap.svgTop, rect.y), true, JSON.stringify({ gap, rect }))
+  })
+
+  it('the controls sit in front of the page: the keypad is still what a click at its center reaches', async () => {
+    const hit = await read(() => {
+      const b = document.querySelector('button.digit').getBoundingClientRect()
+      return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest('button').className
+    })
+    assert.match(hit, /digit/)
+  })
+
+  it('SudokuPad\'s accent color setting still colors the keypad', async () => {
+    await read(() => Framework.setSetting('uitheme', 'red'))
+    try {
+      assert.equal(await computed('button.digit', 'backgroundColor'), ACCENT_RED)
+    } finally {
+      await read(() => Framework.setSetting('uitheme', 'purple'))
+    }
+  })
+
+  it('with SudokuPad\'s own dark mode on, the page is black and the puzzle is kept', async () => {
+    await read(() => Framework.setSetting('darkmode', true))
+    try {
+      assert.equal(await computed('body', 'backgroundColor'), BLACK)
+      await expectBoardKept()
+    } finally {
+      await read(() => Framework.setSetting('darkmode', false))
+    }
+  })
+
+  // The same page with the script switched off is the reference: only the script differs.
+  for (const [name, data] of Object.entries(OTHER_BOARDS)) {
+    for (const viewport of [{ width: 1200, height: 900 }, { width: 800, height: 1000 }]) {
+      for (const selected of [false, true]) {
+        it(`${name} at ${viewport.width}x${viewport.height}${selected ? ', outermost cells selected' : ''}: the puzzle is kept inside the rectangle`, async () => {
+          await p.setViewportSize(viewport)
+          await loadBoard(data)
+          if (selected) await selectCells(p, [[0, 0], [data.size - 1, data.size - 1]])
+          await expectBoardKept()
+          await deselect(p)
+        })
+      }
+    }
+  }
+
+  // On a board whose four sides all carry text, the drawing defines every edge of the rectangle,
+  // so a rectangle that counted the transparent '88' or the whole svg box leaves more white.
+  it('a 6x6 board with outside text: the rectangle is tight to the text on every side, and ignores text that is transparent', async () => {
+    await p.setViewportSize({ width: 1200, height: 900 })
+    await loadBoard(OTHER_BOARDS['a 6x6 board with outside text'])
+    const on = await boardShot(p)
+    await setScript(false)
+    const off = await boardShot(p)
+    await setScript(true)
+    const { slack } = await compareBoards(p, off, on)
+    for (const [side, white] of Object.entries(slack)) assert.equal(white >= 0 && white <= TIGHT_SLACK_PX, true, `${side}: ${white}px of white past the drawing, ${JSON.stringify(slack)}`)
+  })
+
+  it('the settings entry is a button named Dark page in the Experimental group, and it opens a dialog with the version as small text', async () => {
+    const group = await openSettings(p)
+    const entry = settingsEntry(group)
+    assert.equal(await entry.count(), 1)
+    await entry.click()
+    const dialog = p.locator('.dialog')
+    await dialog.locator(PICKER).waitFor({ state: 'visible' })
+    assert.equal((await dialog.locator('small').textContent()).trim(), `v${headerVersion(script)}`)
+    assert.equal(await dialog.locator(PICKER).inputValue(), '#000000')
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})
 
 // The options dialog changes the page color and keeps it. One context, so localStorage carries over
 // a reload; the script is injected at DOMContentLoaded, as `@run-at document-idle` approximates it.
