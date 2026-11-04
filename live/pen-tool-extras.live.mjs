@@ -520,7 +520,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await setSlider(7)
         assert.equal(await savedThickness(), 7)
         await openEditor()
-        assert.equal(await editor().locator('input[type=range]').count(), 4)
+        assert.equal(await editor().locator('input[type=range]').count(), 5)
         await restoreDefaults()
         assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
         assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
@@ -537,14 +537,29 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
       })
 
-      it('Restore defaults is no bigger than Save and Cancel', async () => {
+      it('the buttons are one row under a divider: Restore defaults as small underlined grey text at the left, then Cancel (light) and Save (filled purple) at the right', async () => {
         await openEditor()
-        const size = (text) => dialogButton(text).evaluate((el) => {
+        // All three in one read, so a dialog still moving into place cannot put them in different frames.
+        const [restore, cancel, save] = await p.evaluate(() => ['Restore defaults', 'Cancel', 'Save'].map((text) => {
+          const el = [...document.querySelectorAll('.dialog button')].find((b) => b.textContent.trim() === text)
           const box = el.getBoundingClientRect()
-          return { height: Math.round(box.height), fontSize: window.getComputedStyle(el).fontSize }
+          const style = window.getComputedStyle(el)
+          return { x: box.x, y: Math.round(box.y + box.height / 2), height: Math.round(box.height), fontSize: parseFloat(style.fontSize), underline: style.textDecorationLine, background: style.backgroundColor, color: style.color }
+        }))
+        assert.deepEqual([restore.y, cancel.y].map((y) => Math.abs(y - save.y) <= 3), [true, true], 'one row')
+        assert.equal(restore.x < cancel.x && cancel.x < save.x, true, 'Restore defaults, Cancel, Save from the left')
+        assert.equal(cancel.height, save.height)
+        assert.equal(restore.fontSize < save.fontSize, true, 'small text')
+        assert.match(restore.underline, /underline/)
+        assert.equal(restore.background, 'rgba(0, 0, 0, 0)', 'Restore defaults has no fill')
+        assert.equal(save.background, 'rgb(106, 27, 154)', 'Save is filled purple')
+        assert.notEqual(cancel.background, save.background)
+        const row = await dialogButton('Save').evaluate((el) => {
+          const options = el.parentElement
+          const style = window.getComputedStyle(options)
+          return { top: style.borderTopWidth, flex: style.display }
         })
-        assert.deepEqual(await size('Restore defaults'), await size('Save'))
-        assert.deepEqual(await size('Cancel'), await size('Save'))
+        assert.deepEqual(row, { top: '1px', flex: 'flex' }, 'a divider above the row')
         await closeWith('Cancel')
       })
 

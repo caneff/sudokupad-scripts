@@ -37,14 +37,14 @@ const CELL_MARK = [5, 5]
 const PEN_4 = 'rgb(113, 159, 23)'
 
 // Each edge a click can reach: the cell a click lands in, the side of it, and the cell and
-// pen values that store it. The cycle on an edge is its X, two directions, a circle, then empty.
+// pen values that store it. The cycle on an edge is its X, a circle, two directions, then empty.
 const EDGES = {
-  'interior right (4,4)|(4,5)': { row: 3, col: 3, side: 'right', stored: [3, 3], cycle: ['3', 'h', 'i', 'j', null] },
-  'interior bottom (4,4)|(5,4)': { row: 3, col: 3, side: 'bottom', stored: [3, 3], cycle: ['4', 'k', 'l', 'm', null] },
-  'outer left of column 1': { row: 3, col: 0, side: 'left', stored: [3, 0], cycle: ['b', 'n', 'o', 'p', null] },
-  'outer top of row 1': { row: 0, col: 3, side: 'top', stored: [0, 3], cycle: ['c', 'q', 'r', 's', null] },
-  'outer right of the last column': { row: 3, col: SIZE - 1, side: 'right', stored: [3, SIZE - 1], cycle: ['3', 'h', 'i', 'j', null] },
-  'outer bottom of the last row': { row: SIZE - 1, col: 3, side: 'bottom', stored: [SIZE - 1, 3], cycle: ['4', 'k', 'l', 'm', null] }
+  'interior right (4,4)|(4,5)': { row: 3, col: 3, side: 'right', stored: [3, 3], cycle: ['3', 'j', 'h', 'i', null] },
+  'interior bottom (4,4)|(5,4)': { row: 3, col: 3, side: 'bottom', stored: [3, 3], cycle: ['4', 'm', 'k', 'l', null] },
+  'outer left of column 1': { row: 3, col: 0, side: 'left', stored: [3, 0], cycle: ['b', 'p', 'n', 'o', null] },
+  'outer top of row 1': { row: 0, col: 3, side: 'top', stored: [0, 3], cycle: ['c', 's', 'q', 'r', null] },
+  'outer right of the last column': { row: 3, col: SIZE - 1, side: 'right', stored: [3, SIZE - 1], cycle: ['3', 'j', 'h', 'i', null] },
+  'outer bottom of the last row': { row: SIZE - 1, col: 3, side: 'bottom', stored: [SIZE - 1, 3], cycle: ['4', 'm', 'k', 'l', null] }
 }
 
 // Each grid corner a click can reach, as [row, col] of the corner (0 to 9): the cell that stores
@@ -228,7 +228,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     after(async () => { await context.close() })
 
     for (const [name, edge] of Object.entries(EDGES)) {
-      it(`${name}: clicks cycle X, direction, other direction, circle, empty, and draw each`, async () => {
+      it(`${name}: clicks cycle X, circle, direction, other direction, empty, and draw each`, async () => {
         const [sr, sc] = edge.stored
         for (const value of [...edge.cycle, edge.cycle[0]]) {
           await clickEdge(edge.row, edge.col, edge.side)
@@ -243,7 +243,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     }
 
     for (const [name, edge] of Object.entries(EDGES)) {
-      it(`${name}: right clicks cycle the other way, circle, other direction, direction, X, empty, and one undo reverses each`, async () => {
+      it(`${name}: right clicks cycle the other way, other direction, direction, circle, X, empty, and one undo reverses each`, async () => {
         const [sr, sc] = edge.stored
         const backwards = [...edge.cycle.slice(0, -1).reverse(), null]
         const want = (value) => value === null ? [] : [value]
@@ -265,7 +265,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('a left click after a right click goes forward again, and a right click after it comes back', async () => {
       await clickEdge(3, 3, 'right', 'right')
-      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
+      assert.deepEqual(await settle(() => penValues(3, 3), ['i']), ['i'])
       await clickEdge(3, 3, 'right')
       assert.deepEqual(await settle(() => penValues(3, 3), []), [])
       await clickEdge(3, 3, 'right')
@@ -310,7 +310,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
       assert.deepEqual(await penValues(3, 4), [])
       await clickEdge(3, 3, 'right')
-      assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'])
+      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
       await clearMarks()
     })
 
@@ -504,9 +504,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const r = document.querySelector(sel)?.getBoundingClientRect()
         return r ? { w: r.width, h: r.height, x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
       }, selector)
-      // [kind of click, clicks to reach it, the mark it draws]: SudokuPad's own edge X, an arrow, the other arrow, the circle, a corner X and a corner circle.
+      // [kind of click, clicks to reach it, the mark it draws]: SudokuPad's own edge X, the circle, an arrow, the other arrow, a corner X and a corner circle.
       const marks = [
-        ['edge', 1, '.cell-pen.pen-3'], ['edge', 2, '.cell-pen.pen-h'], ['edge', 3, '.cell-pen.pen-i'], ['edge', 4, '.cell-pen.pen-j'],
+        ['edge', 1, '.cell-pen.pen-3'], ['edge', 2, '.cell-pen.pen-j'], ['edge', 3, '.cell-pen.pen-h'], ['edge', 4, '.cell-pen.pen-i'],
         ['corner', 1, '.cell-pen.pen-u'], ['corner', 2, '.cell-pen.pen-x']
       ]
       for (const [kind, clicks, selector] of marks) {
@@ -586,11 +586,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     it('one undo reverses one click and redo restores it', async () => {
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
-      assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'])
+      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
       await p.click('#control-undo')
       assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
       await p.click('#control-redo')
-      assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'])
+      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
       await p.click('#control-undo')
       await p.click('#control-undo')
       assert.deepEqual(await settle(() => penValues(3, 3), []), [])
@@ -601,17 +601,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await pickColor(4)
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
-      const stroke = () => read(() => [...document.querySelectorAll('.cell-pen.pen-h')].map((e) => ({ cls: e.getAttribute('class'), stroke: window.getComputedStyle(e).stroke })))
-      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }]), [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }])
+      const stroke = () => read(() => [...document.querySelectorAll('.cell-pen.pen-j')].map((e) => ({ cls: e.getAttribute('class'), stroke: window.getComputedStyle(e).stroke })))
+      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-j pencolor-4', stroke: PEN_4 }]), [{ cls: 'cell-pen pen-j pencolor-4', stroke: PEN_4 }])
       await p.click('#control-undo')
       await p.click('#control-redo')
-      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }]), [{ cls: 'cell-pen pen-h pencolor-4', stroke: PEN_4 }])
+      assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-j pencolor-4', stroke: PEN_4 }]), [{ cls: 'cell-pen pen-j pencolor-4', stroke: PEN_4 }])
       await clearMarks()
       await pickColor(1)
     })
 
     it('the edge circle (stored under the dot value) is an open ring with a round stroke at half the pen width, and no fill', async () => {
-      for (let i = 0; i < 4; i++) await clickEdge(3, 3, 'right')
+      for (let i = 0; i < 2; i++) await clickEdge(3, 3, 'right')
       const ring = () => read(() => {
         const e = document.querySelector('.cell-pen.pen-j')
         if (!e) return null
@@ -623,16 +623,21 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clearMarks()
     })
 
-    it('the dialog shows a small picture beside each edge and corner mark box, and each circle is labelled Circle', async () => {
+    it('the dialog shows one table of marks: a picture and no word beside each box, the mark\'s name as the box\'s name and hover title', async () => {
       await openEditor()
-      const rows = editor().locator('div:has(> input[data-mark])')
-      assert.equal(await rows.count(), 5)
+      const labels = editor().locator('label:has(> input[data-mark])')
+      assert.equal(await labels.count(), 5)
+      const names = { x: 'Edge X Mark', dot: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerDot: 'Corner Circle' }
       for (const mark of MARK_BOXES) {
-        assert.equal(await editor().locator(`div:has(> input[data-mark="${mark}"]) > svg`).count(), 1, mark)
+        assert.equal(await editor().locator(`label:has(> input[data-mark="${mark}"]) > svg`).count(), 1, mark)
+        assert.equal(await box(mark).getAttribute('title'), names[mark], mark)
+        assert.equal((await editor().locator(`label:has(> input[data-mark="${mark}"])`).textContent()).trim(), '', `${mark} has no word`)
+        assert.equal((await p.getByRole('checkbox', { name: names[mark] }).count()), 1, `${mark} is found by its name`)
       }
-      assert.equal((await editor().locator('label[for="pen-tool-extras-mark-dot"]').textContent()).trim(), 'Circle')
-      assert.equal((await editor().locator('label[for="pen-tool-extras-mark-cornerDot"]').textContent()).trim(), 'Circle')
-      assert.match(await editor().textContent(), /Corner marks a click near a grid corner cycles through/)
+      const text = await editor().textContent()
+      assert.match(text, /Marks a click cycles through/)
+      assert.match(text, /X Mark\s*Circle\s*Directions\s*Edge\s*Corner/)
+      assert.doesNotMatch(text, /Corner marks a click near a grid corner/)
       await closeWith('Cancel')
     })
 
@@ -662,7 +667,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
       const actions = () => read(() => Replay.decode(Framework.app.getReplay()).actions)
-      assert.equal((await settle(async () => (await actions()).includes('pe:h/0'), true)), true)
+      assert.equal((await settle(async () => (await actions()).includes('pe:j/0'), true)), true)
       assert.equal((await actions()).includes('pe:3/0'), true)
       await clearMarks()
     })
@@ -681,7 +686,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await saved(), null)
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
-      assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'])
+      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
       await clearMarks()
     })
 
@@ -709,13 +714,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await closeWith('Save')
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
+      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
+      await openEditor()
+      await box('dot').uncheck()
+      await closeWith('Save')
+      assert.deepEqual(await penValues(3, 3), ['j'])
+      await clickEdge(3, 3, 'right')
       assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'])
       await openEditor()
-      await box('directions').uncheck()
+      await box('dot').check()
       await closeWith('Save')
-      assert.deepEqual(await penValues(3, 3), ['h'])
-      await clickEdge(3, 3, 'right')
-      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
       await clearMarks()
     })
 
@@ -781,7 +789,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await reload()
         await clickEdge(3, 3, 'right')
         await clickEdge(3, 3, 'right')
-        assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'], bad)
+        assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'], bad)
         await clearMarks()
         // the dialog shows the defaults too, so Save cannot store the corrupt value
         await openEditor()
@@ -866,6 +874,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
 
       it('at the default the grid matches SudokuPad\'s own per-stroke opacity to within a few levels per channel, where marks do not overlap', async () => {
+        // The white outline (on by default) is a filter on the layer, which fading the layer as one picture and fading each stroke do not agree on; it is left out of both pictures.
+        await read(() => {
+          const style = document.getElementById('pen-tool-extras-style')
+          style.textContent = style.textContent.split('\n').filter((line) => !/filter: url/.test(line)).join('\n')
+        })
         const withRule = await grid()
         await read(() => {
           const style = document.getElementById('pen-tool-extras-style')
@@ -918,7 +931,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       it('Restore defaults sets the dialog\'s opacity slider to 80 for Save: Cancel afterwards leaves the saved opacity and the marks, Save clears it and draws at 0.8', async () => {
         assert.equal(await savedOpacity(), 30)
         await openEditor()
-        assert.equal(await editor().locator('input[type=range]').count(), 4)
+        assert.equal(await editor().locator('input[type=range]').count(), 5)
         await dialogButton('Restore defaults').click()
         assert.equal(await editor().locator('input[data-setting="opacity"]').inputValue(), '80')
         assert.equal(await savedOpacity(), 30, 'nothing is saved before Save')
@@ -1035,7 +1048,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(x < box.x || x > box.x + box.width || y < box.y || y > box.y + box.height, true, `(${x}, ${y}) is inside the dialog`)
         await p.mouse.click(x, y)
       }
-      const corner = () => cellCentre(p, 0, 0)
+      // A grid corner cell the open dialog does not cover: the dialog is centred over the board and can be tall enough to cover a corner.
+      const corner = async () => {
+        const box = await p.locator('.dialog').boundingBox()
+        for (const [row, col] of [[0, 0], [0, 8], [8, 8], [8, 0]]) {
+          const [x, y] = await cellCentre(p, row, col)
+          if (x < box.x || x > box.x + box.width || y < box.y || y > box.y + box.height) return [x, y]
+        }
+        throw new Error('the dialog covers every corner of the grid')
+      }
       // The viewport's top left, which no dialog reaches.
       const OFF_DIALOG = [2, 2]
       // Counts every mouseup that reaches the page's bubble phase, after the script's capture listener.

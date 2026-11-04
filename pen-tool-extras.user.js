@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.12.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, adds an optional white outline around every pen mark, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
+// @version      1.13.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.12.0'
+  const VERSION = '1.13.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -31,7 +31,12 @@
   // The dash length of page 2 and which panel sliders show are the script's own keys too.
   const DASH_KEY = 'PenColor_dash'
   const SLIDERS_SHOWN_KEY = 'PenColor_sliders'
-  // Whether the pen layer has a white outline: saved as true, and the key is removed when it is off.
+  // The arrow spacing of page 3, whether a middle click erases a line, and which of the line styles (page 2 dashed lines, page 3 arrow lines)
+  // are enabled: each key is removed when its setting is the default.
+  const ARROW_SPACING_KEY = 'PenColor_arrowspacing'
+  const MIDDLE_ERASE_KEY = 'PenColor_middleerase'
+  const LINE_STYLES_KEY = 'PenColor_linestyles'
+  // Whether the pen layer has a white outline: on by default, so the key is removed when it is on and saved as false when it is off.
   const OUTLINE_KEY = 'PenColor_outline'
   // The outline's width, in cell units: saved when it is not the default.
   const OUTLINE_WIDTH_KEY = 'PenColor_outlinewidth'
@@ -128,8 +133,8 @@
   // floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
   // The white outline's width on each side of the pen layer's shape, in cell units (a cell is 64; a default line is 5 wide), set by a slider in the dialog. It
-  // does not scale with the thickness. 3 shows over a colored cell and a digit as well as over white without covering the digits beside a line.
-  const OUTLINE_WIDTH = { min: 1, max: 8, step: 1, fallback: 3 }
+  // does not scale with the thickness. 2 shows over a colored cell and a digit as well as over white without covering the digits beside a line.
+  const OUTLINE_WIDTH = { min: 1, max: 8, step: 1, fallback: 2 }
   // The outline is made in two steps. The layer's alpha is first grown square by OUTLINE_SQUARE_SHARE of the width, so a thin shape (a one-wide
   // dot) is already wide enough for the second step to keep; then it is blurred and cut at OUTLINE_CUT, which rounds the corners (a square dilation
   // alone steps round every corner) and grows it by the rest of the width. Along a straight edge the blurred alpha falls to OUTLINE_CUT at
@@ -162,16 +167,18 @@
   // An edge between two cells is stored on one of them, so a click on it is always one of
   // these four values.
   const EDGE_X = ['3', '4', 'b', 'c']
-  // The values this script adds, per edge: the first direction, the second direction, the circle.
+  // The values this script adds, per edge: the first direction, the second direction, the circle (in that order here, which is not the cycle's).
   // SudokuPad's own pen values stop at `g`, so `h` onward are free. They stay lowercase letters:
   // SudokuPad lowercases a pen value when it undoes or replays one.
   const ADDED = { 3: ['h', 'i', 'j'], 4: ['k', 'l', 'm'], b: ['n', 'o', 'p'], c: ['q', 'r', 's'] }
+  // The type each of an edge's ADDED values is, in the same order.
+  const ADDED_ORDER = ['dirA', 'dirB', 'dot']
   // The two directions of a vertical edge, then of a horizontal one.
   const SHAPES = { 3: ['>', '<'], 4: ['^', 'v'], b: ['>', '<'], c: ['^', 'v'] }
-  // The types of mark in cycle order, and the setting that ticks each. `directions` is the one
+  // The types of mark in cycle order (X, circle, first direction, second direction), and the setting that ticks each. `directions` is the one
   // checkbox for dirA and dirB.
   const EDGE_CYCLE = {
-    types: ['x', 'dirA', 'dirB', 'dot'],
+    types: ['x', 'dot', 'dirA', 'dirB'],
     setting: { x: 'x', dirA: 'directions', dirB: 'directions', dot: 'dot' }
   }
   // A grid corner has no edge direction for an arrow to name, so it cycles an X and a circle.
@@ -263,6 +270,26 @@
     return typeof pen === 'string' && penPageOf(pen) !== -1 ? pen : null
   }
 
+  // The indexes of the pages in the rotation: page 1 always, the dashed page with dashed lines enabled and the arrow page with arrow lines enabled.
+  function enabledPages (styles) {
+    return PEN_PAGES.map((_, index) => index).filter((index) => index === 0 || (PEN_PAGES[index].chevrons ? styles.arrows : styles.dashed))
+  }
+
+  // The enabled page `delta` pages (1 forward, -1 back) from `page`, which may itself be a page that is not enabled.
+  function stepEnabledPage (page, delta, styles) {
+    const enabled = enabledPages(styles)
+    let next = page
+    do next = stepPage(next, delta, PEN_PAGES.length)
+    while (!enabled.includes(next))
+    return next
+  }
+
+  // The pen to have selected once `styles` are saved: a pen on a page that is not enabled becomes the pen of the same number on page 1.
+  function pageAfterSave (pen, styles) {
+    const page = penPageOf(pen)
+    return page === -1 || enabledPages(styles).includes(page) ? pen : penCharOn(0, penNumber(pen))
+  }
+
   // The page `delta` pages (1 forward, -1 back) from `page`, going round `count` pages.
   function stepPage (page, delta, count) {
     return (((page + delta) % count) + count) % count
@@ -282,9 +309,26 @@
     return ok ? data : OPACITY.fallback
   }
 
-  // Saved data is untrusted: the outline is on only for a saved true, so data saved before the setting existed has it off.
+  // Saved data is untrusted: the outline is off only for a saved false.
   function normalizeOutline (data) {
-    return data === true
+    return data !== false
+  }
+
+  // Saved data is untrusted: the saved arrow spacing when it is a whole number from ARROW_SPACING.min to ARROW_SPACING.max, else ARROW_SPACING.fallback.
+  function normalizeArrowSpacing (data) {
+    const ok = Number.isInteger(data) && data >= ARROW_SPACING.min && data <= ARROW_SPACING.max
+    return ok ? data : ARROW_SPACING.fallback
+  }
+
+  // Saved data is untrusted: a middle click erases a line unless the setting is saved as the boolean false.
+  function normalizeMiddleErase (data) {
+    return data !== false
+  }
+
+  // Saved data is untrusted: { dashed, arrows }, each true (the line style is enabled) unless saved as the boolean false.
+  function normalizeLineStyles (data) {
+    const saved = data && typeof data === 'object' && !Array.isArray(data) ? data : {}
+    return { dashed: saved.dashed !== false, arrows: saved.arrows !== false }
   }
 
   // Saved data is untrusted: the saved outline width when it is a whole number from OUTLINE_WIDTH.min to OUTLINE_WIDTH.max, else OUTLINE_WIDTH.fallback.
@@ -321,7 +365,7 @@
 
   // The pen value of each type on the edge whose X value is `edge`.
   function valueOfType (edge, type) {
-    return type === 'x' ? edge : ADDED[edge][EDGE_CYCLE.types.indexOf(type) - 1]
+    return type === 'x' ? edge : ADDED[edge][ADDED_ORDER.indexOf(type)]
   }
 
   // The type of mark `direction` steps (1 forward, -1 backward) from `current` ('empty' or a
@@ -444,13 +488,14 @@
     f: [[0, 1], [1, 0]],
     g: [[0, 0], [1, 1]]
   }
+  // The distance between two arrows' middles on page 3, in line widths, set by a slider in the dialog; 5 is the default, a run of arrows rather than a solid row.
+  const ARROW_SPACING = { min: 3, max: 12, step: 1, fallback: 5 }
   // The sizes of an arrow line (page 3), in line widths (the thickness setting; the line's width follows it all the way down, but an arrow's size
   // is never smaller than at the default thickness, so its direction stays visible at 1): an arrow is a filled triangle on the line, its base
   // `halfWidth` out to each side of the line's middle and `halfLength` back from it, and its tip `halfLength` forward (so it is twice `halfLength`
-  // long); `line` is the width of the line (1, the same as a page 1 line at every thickness); `spacing` is the distance between two arrows'
-  // middles, fitted to a whole number per segment (a run of arrows, not a solid row of them). The furthest an
+  // long); `line` is the width of the line (1, the same as a page 1 line at every thickness). The arrows are spaced by ARROW_SPACING, fitted to a whole number per segment. The furthest an
   // arrow reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
-  const CHEVRON = { halfLength: 1.125, halfWidth: 1.5, line: 1, spacing: 5 }
+  const CHEVRON = { halfLength: 1.125, halfWidth: 1.5, line: 1 }
 
   // Which way a line stored with the color character `char` was dragged: true for the character on an arrow page's button
   // (forward), false for its reverse character, null for a character no arrow page uses.
@@ -609,10 +654,10 @@
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
   // The path data of an arrow line, in the renderer's units (a cell is CELL_UNITS), for the line value `value` on the cell at
-  // (row, col) dragged `forward` or not, at `thickness`: { line, chevrons, lineWidth }. The line is the whole
+  // (row, col) dragged `forward` or not, at `thickness` with arrows `spacing` line widths apart: { line, chevrons, lineWidth }. The line is the whole
   // segment, as wide as a page 1 line; each arrow in `chevrons` is a closed triangle, base corner, tip, base corner, the tip toward the way it was
   // dragged. Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
-  function chevronLine (value, forward, row, col, thickness) {
+  function chevronLine (value, forward, row, col, thickness, spacing) {
     const [start, end] = LINE_PATHS[value]
     const [from, to] = (forward ? [start, end] : [end, start]).map(([r, c]) => [(col + c) * CELL_UNITS, (row + r) * CELL_UNITS])
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
@@ -620,8 +665,8 @@
     // Arrows keep the size they have at the default thickness below it; only the line gets thinner.
     const size = Math.max(thickness, THICKNESS.fallback)
     const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
-    // The shortest segment (a cell side) holds at least one even at the largest thickness, so there is never none.
-    const count = Math.round(length / (CHEVRON.spacing * size))
+    // Every segment holds at least one arrow, however wide the spacing and thick the pen (the shortest segment, a cell side, rounds to none at the top of both), so a line never loses its direction.
+    const count = Math.max(1, Math.round(length / (spacing * size)))
     let chevrons = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
@@ -950,7 +995,7 @@
   }
 
   // The page button's picture: a sample of the line the button turns to (dashes on a dashed page, or dots at a dash length of 0,
-  // else a solid line) in the panel's colour, under a dot for each page with the current one
+  // else a solid line) in the panel's colour, under a dot for each enabled page with the current one
   // filled, as SudokuPad's color tool's page button has. The sample line runs from (12, 54) to (52, 26); a
   // dash is drawn at each end of it, `dash` line widths long and no longer than 0.42 of the line.
   const SAMPLE_FROM = [12, 54]
@@ -960,8 +1005,8 @@
   // The arrow sample: its line width, an arrow's half extents (CHEVRON's proportions of the line width), and where along the line
   // the three sit, as shares of its length.
   const SAMPLE_CHEVRON = { line: 3.2, at: [0.25, 0.5, 0.75] }
-  function renderPageIcon (current, dash) {
-    const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
+  function renderPageIcon (current, dash, styles) {
+    const next = PEN_PAGES[stepEnabledPage(current, 1, styles)]
     const kind = next.chevrons ? 'chevrons' : !next.dashed ? 'solid' : dash === 0 ? 'dots' : 'dashed'
     let sample
     const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
@@ -983,20 +1028,23 @@
     } else {
       sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_WIDTH}" stroke-linecap="round" fill="none"/>`
     }
-    const dots = PEN_PAGES.map((_, i) =>
-      `<circle cx="${54 - 8 * (PEN_PAGES.length - i - 1)}" cy="10" r="3" data-page-dot="${i === current ? 'filled' : 'outline'}"${i === current ? '' : ' fill="none"'}/>`)
+    const pages = enabledPages(styles)
+    const dots = pages.map((page, i) =>
+      `<circle cx="${54 - 8 * (pages.length - i - 1)}" cy="10" r="3" data-page-dot="${page === current ? 'filled' : 'outline'}"${page === current ? '' : ' fill="none"'}/>`)
     return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 64 64" stroke="currentColor" fill="currentColor" stroke-width="1">' +
       `<g data-page-sample="${kind}">${sample}</g><g>${dots.join('')}</g></svg>`
   }
 
-  // A small picture of each edge mark, drawn in the text color: the X, the arrows, the circle.
+  // A small picture of each mark, drawn in the text color: the X, the four arrows (> < ^ v), the circle.
   const MARK_PICTURES = {
-    x: '<path d="M3 3 L13 13 M13 3 L3 13"/>',
-    directions: '<path d="M1 4 L4 8 L1 12 M15 4 L12 8 L15 12"/>',
-    dot: '<circle cx="8" cy="8" r="5.2"/>'
+    x: ['16', '<path d="M3 3 L13 13 M13 3 L3 13"/>'],
+    directions: ['64', '<path d="M3 3 L9 8 L3 13 M25 3 L19 8 L25 13 M36 11 L41 5 L46 11 M54 5 L59 11 L64 5"/>'],
+    dot: ['16', '<circle cx="8" cy="8" r="5.2"/>']
   }
-  const markPicture = (key) =>
-    `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MARK_PICTURES[key]}</svg>`
+  const markPicture = (key) => {
+    const [width, shapes] = MARK_PICTURES[key]
+    return `<svg width="${width}" height="16" viewBox="0 0 ${width} 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
+  }
 
   // The one plain line that names the features that are off because SudokuPad changed; nothing when none is.
   function offNote (off = []) {
@@ -1010,19 +1058,46 @@
     return `<div style="margin:6px 0;max-width:20em">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
+  // The heading of a dialog section after the first: the divider line above it, then the title.
+  const sectionHeading = (text) => `${DIVIDER}<div style="font-weight:600;margin-top:10px">${text}</div>`
+
   // The pen's line mode choice, in place of SudokuPad's own pulldown in the panel, which this script hides.
   // `lineMode` is undefined when the page has no pen tool, and the choice is left out.
   function lineModeChoice (lineMode) {
     if (lineMode === undefined) return ''
     const options = LINE_MODES.map(([value, label]) => `<option value="${value}"${value === lineMode ? ' selected' : ''}>${label}</option>`).join('')
-    return '<div style="font-weight:600;margin-top:10px">Pen line mode</div>' +
+    return sectionHeading('Pen line mode') +
       `<select data-line-mode style="margin:4px 0;font-size:1rem">${options}</select>`
   }
 
+  // The dialog's slider rows share four columns, so the sliders of Line settings, Line styles and the outline line up: the label, the slider, its
+  // value, and a box (Slider in panel, Enable) centred under its small grey heading. The first two shrink on a narrow dialog.
+  const SLIDER_COLUMNS = 'display:grid;grid-template-columns:minmax(6em,12.5em) minmax(5em,11em) 2em 6.2em;column-gap:8px;align-items:center;margin:4px 0'
+  const COLUMN_HEADING = 'font-size:.8rem;color:#666;font-weight:400;justify-self:center;white-space:nowrap'
+  // The thin line above every section but the first.
+  const DIVIDER = '<div style="border-top:1px solid #e3dff0;margin:12px 0 0"></div>'
+  // The class of the dialog's button row, which DIALOG_CSS styles.
+  const DIALOG_CLASS = 'pen-tool-extras-dialog'
+  // The slider row under each line style's Enable box.
+  const STYLE_SLIDERS = { dashed: 'dash', arrows: 'arrowSpacing' }
+
+  // The look of the dialog's button row (Restore defaults as small underlined text at the left, Cancel and Save at the right, under a
+  // divider), of the SudokuPad colors button and of the pen line mode pulldown. Scoped by DIALOG_CLASS, so SudokuPad's other dialogs are left alone.
+  const DIALOG_CSS = [
+    `.dialog-options.${DIALOG_CLASS} { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; justify-content: flex-end; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+    `.dialog-options.${DIALOG_CLASS} button { width: auto !important; min-width: 0 !important; margin: 0 !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; border-radius: 8px !important; font-size: 1rem !important; flex: none; }`,
+    `.dialog-options.${DIALOG_CLASS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+    `.dialog-options.${DIALOG_CLASS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
+    `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: #777 !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
+    `#${EDITOR_ID} [data-sudokupad-colors] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; padding: 0 14px !important; height: 34px !important; line-height: 32px !important; margin: 0 !important; font-weight: 500; text-align: center; }`,
+    `#${EDITOR_ID} select[data-line-mode] { font-size: 0.95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
+  ].join('\n')
+
   // The dialog's body at the state it holds: the nine pen colors as a 3 by 3 grid in the order of the pen
-  // tool's buttons (1 2 3, 4 5 6, 7 8 9), each with its number; the two slider boxes and the three sliders;
-  // the mark boxes; the line mode. A slider here is a draft that takes effect on Save, so the panel's own
-  // sliders and these show the same value when the dialog opens.
+  // tool's buttons (1 2 3, 4 5 6, 7 8 9), each with its number; Line settings (the thickness and opacity sliders, each with the box that
+  // shows it in the pen tool's panel); Line styles (dashed and arrow lines, each with an Enable box and a slider that is hidden while it is unticked);
+  // the table of marks a click cycles through; the outline and the middle click boxes; the line mode. A slider here is a draft that takes effect on
+  // Save, so the panel's own sliders and these show the same value when the dialog opens.
   function renderEditor (state) {
     const off = new Set(state.off || [])
     const cells = PEN_COLORS.map((n) =>
@@ -1031,39 +1106,59 @@
       `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
     ).join('')
     const grid = `<div style="display:grid;grid-template-columns: repeat(3, max-content);gap:6px 18px;margin:4px 0">${cells}</div>`
-    const colorsRow = `<div data-colors-row style="display:flex;align-items:flex-start;gap:18px">${grid}` +
-      '<button type="button" data-sudokupad-colors style="margin:4px 0;font-size:inherit;white-space:nowrap">SudokuPad colors</button></div>'
-    const box = (key, label, picture = key) =>
-      '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
-      `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}"${state.marks[key] ? ' checked' : ''}>` +
-      `${markPicture(picture)}<label for="pen-tool-extras-mark-${key}" style="width:auto;text-align:left;margin:0">${label}</label></div>`
-    const showBox = (key, label) =>
-      '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
-      `<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"${state.show[key] ? ' checked' : ''}>` +
-      `<label for="pen-tool-extras-show-${key}" style="width:auto;text-align:left;margin:0">${label}</label></div>`
-    const slider = (key, label, range, value) =>
-      '<div style="margin:4px 0;display:flex;align-items:center;gap:8px">' +
-      `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;min-width:9em;margin:0">${label}</label>` +
-      `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}">` +
-      `<output data-readout="${key}" style="min-width:2.4em">${value}</output></div>`
+    const colorsRow = `<div data-colors-row style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px">${grid}` +
+      '<button type="button" data-sudokupad-colors style="font-size:inherit;white-space:nowrap">SudokuPad colors</button></div>'
+    // A box with no word label: its picture, and its name as the accessible name and the hover title.
+    const markBox = (key, name, picture) =>
+      `<label title="${name}" style="display:flex;align-items:center;gap:6px;margin:0;width:auto">` +
+      `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}" aria-label="${name}" title="${name}"${state.marks[key] ? ' checked' : ''}>` +
+      `${markPicture(picture)}</label>`
+    const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} style="margin:0;justify-self:center">`
+    // `shown` false hides the row (a setting under an unticked box); `boxMarkup` is the box in the fourth column; `indented` sets the label under a name above it.
+    const slider = (key, label, range, value, { indented = false, shown = true, boxMarkup = '<span></span>' } = {}) =>
+      `<div data-row="${key}" style="${SLIDER_COLUMNS}${shown ? '' : ';display:none'}">` +
+      `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;margin:0${indented ? ';padding-left:1.2em;color:#444;box-sizing:border-box' : ''}">${label}</label>` +
+      `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" style="width:100%;min-width:0;margin:0">` +
+      `<output data-readout="${key}">${value}</output>${boxMarkup}</div>`
+    // A name and its Enable box, with the slider row under it, hidden while the box is unticked.
+    const styleBlock = (key, name, enabled, sliderMarkup) =>
+      `<div style="${SLIDER_COLUMNS};margin-bottom:0"><span style="grid-column:1 / 4">${name}</span>` +
+      `${box(`id="pen-tool-extras-style-${key}" data-style="${key}" aria-label="Enable ${name}"`, enabled)}</div>` + sliderMarkup
     // The controls of a feature that is off are left out, so the dialog offers nothing that does nothing.
     const when = (feature, markup) => off.has(feature) ? '' : markup
-    const heading = (text) => `<div style="font-weight:600;margin-top:10px">${text}</div>`
+    const heading = (text, caption) =>
+      DIVIDER + `<div style="${SLIDER_COLUMNS};margin:10px 0 4px"><span style="font-weight:600;grid-column:1 / 4">${text}</span>` +
+      `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>`
+    const markRow = (label, cellsMarkup) => `<div>${label}</div>${cellsMarkup}`
+    const columnHead = (text) => `<div style="font-size:.85rem;color:#666">${text}</div>`
+    const marksTable = '<div style="display:grid;grid-template-columns:max-content repeat(3, max-content);column-gap:28px;row-gap:6px;align-items:center;margin:4px 0">' +
+      '<div></div>' + columnHead('X Mark') + columnHead('Circle') + columnHead('Directions') +
+      markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('dot', 'Edge Circle', 'dot') + markBox('directions', 'Edge Directions', 'directions')) +
+      markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerDot', 'Corner Circle', 'dot') + '<div></div>') +
+      '</div>'
+    const dashed = !off.has('dashes')
+    const arrows = !off.has('chevrons')
+    const labelled = (id, attributes, checked, text) =>
+      '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
+      `<input type="checkbox" id="${id}" ${attributes}${checked ? ' checked' : ''} style="margin:0">` +
+      `<label for="${id}" style="width:auto;text-align:left;margin:0">${text}</label></div>`
     return offNote(state.off) + '<div style="font-weight:600">Pen colors</div>' + colorsRow +
       missingNote(state.missing) +
-      when('sliders', heading('Sliders') + showBox('thickness', 'Show thickness slider') + showBox('opacity', 'Show opacity slider') +
-        slider('thickness', 'Thickness', THICKNESS, state.thickness) +
-        slider('opacity', 'Opacity (%)', OPACITY, state.opacity)) +
-      when('dashes', slider('dash', 'Dash length (page 2)', DASH, state.dash)) +
-      when('marks', heading('Edge marks a click cycles through') +
-        box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle') +
-        heading('Corner marks a click near a grid corner cycles through') +
-        box('cornerX', 'X', 'x') + box('cornerDot', 'Circle', 'dot')) +
-      when('outline', heading('Outline') +
-        '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
-        `<input type="checkbox" id="pen-tool-extras-outline" data-outline${state.outline ? ' checked' : ''}>` +
-        '<label for="pen-tool-extras-outline" style="width:auto;text-align:left;margin:0">White outline</label></div>' +
-        slider('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth)) +
+      when('sliders', heading('Line settings', 'Slider in panel') +
+        slider('thickness', 'Thickness', THICKNESS, state.thickness, { boxMarkup: box('id="pen-tool-extras-show-thickness" data-show="thickness"', state.show.thickness, 'Show this slider in the pen panel') }) +
+        slider('opacity', 'Opacity (%)', OPACITY, state.opacity, { boxMarkup: box('id="pen-tool-extras-show-opacity" data-show="opacity"', state.show.opacity, 'Show this slider in the pen panel') })) +
+      (dashed || arrows
+        ? heading('Line styles', 'Enable') +
+          (dashed ? styleBlock('dashed', 'Dashed lines', state.lineStyles.dashed, slider('dash', 'Dash length', DASH, state.dash, { indented: true, shown: state.lineStyles.dashed })) : '') +
+          (arrows ? styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, slider('arrowSpacing', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) : '')
+        : '') +
+      when('marks', sectionHeading('Marks a click cycles through') + marksTable) +
+      (off.has('outline') && off.has('lineErase')
+        ? ''
+        : sectionHeading('Other') +
+          when('outline', labelled('pen-tool-extras-outline', 'data-outline', state.outline, 'White outline on lines and marks') +
+            slider('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth, { indented: true, shown: state.outline })) +
+          when('lineErase', labelled('pen-tool-extras-middle-erase', 'data-middle-erase', state.middleErase, 'Middle click erases a whole line'))) +
       lineModeChoice(state.lineMode)
   }
 
@@ -1157,6 +1252,13 @@
       OUTLINE_FILTER_ID,
       normalizeOutlineWidth,
       OUTLINE_WIDTH,
+      ARROW_SPACING,
+      normalizeArrowSpacing,
+      normalizeMiddleErase,
+      normalizeLineStyles,
+      enabledPages,
+      stepEnabledPage,
+      pageAfterSave,
       MARK_VALUES,
       MARKS_LAYER_ID,
       PEN_PAGES,
@@ -1233,8 +1335,12 @@
   let activeThickness = THICKNESS.fallback
   let activeOpacity = OPACITY.fallback
   let activeDash = DASH.fallback
-  let activeOutline = false
+  let activeOutline = normalizeOutline(null)
   let activeOutlineWidth = OUTLINE_WIDTH.fallback
+  let activeArrowSpacing = ARROW_SPACING.fallback
+  let activeMiddleErase = normalizeMiddleErase(null)
+  // Which line styles (page 2 dashed lines, page 3 arrow lines) are enabled: a page that is not is left out of the rotation.
+  let activeLineStyles = normalizeLineStyles(null)
   let activeShow = normalizeSliderVisibility(null)
   // The edge mark types ticked in the dialog, which the edge click cycles through.
   let markSettings = normalizeMarkSettings(null)
@@ -1316,7 +1422,7 @@
   // Draws an arrow line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
   // eraser's lookups act on it as on any stroke) of a line and a path of filled arrows (the fill is set in CSS, with the group's color).
   function renderChevronLine (renderer, opts, forward) {
-    const shape = chevronLine(opts.value, forward, opts.row, opts.col, effectiveThickness())
+    const shape = chevronLine(opts.value, forward, opts.row, opts.col, effectiveThickness(), activeArrowSpacing)
     const group = renderer.renderPart({ target: 'cell-pen', type: 'g', attr: { class: opts.className } })
     ;[['line', shape.line], ['chevrons', shape.chevrons]].forEach(([name, d]) => {
       const path = document.createElementNS(SVG_NAMESPACE, 'path')
@@ -1485,7 +1591,7 @@
   // too for a browser that still sends it, which stops only the autoscroll: SudokuPad's own `mousedown` handler still runs there.
   // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
   function installMiddleClickErase (app, tool) {
-    const middlePress = (event) => event.button === MIDDLE_BUTTON && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
+    const middlePress = (event) => activeMiddleErase && event.button === MIDDLE_BUTTON && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
     window.addEventListener('pointerdown', (event) => features.attempt('lineErase', () => {
       if (!middlePress(event)) return
       event.preventDefault()
@@ -1517,8 +1623,12 @@
       inStock(() => self.actSend())
     }
     tool.clickCell = function () {
-      // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
-      if (lastButton === MIDDLE_BUTTON && !features.isOff('lineErase')) return
+      if (lastButton === MIDDLE_BUTTON && !features.isOff('lineErase')) {
+        // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
+        if (activeMiddleErase) return
+        // With the erase unticked a middle click is SudokuPad's own, not this script's mark cycle.
+        return original.apply(this, arguments)
+      }
       // A click that failed half way leaves actions queued, which the original click must not send as its own.
       return features.attempt('marks', () => clickMark(this, arguments), (error) => {
         if (error && Array.isArray(this._actList)) this._actList.length = 0
@@ -1607,6 +1717,7 @@
       buildOutlineCss(activeOutline && !features.isOff('outline')),
       features.isOff('pages') ? '' : buildPagesCss(effectiveThickness(), activeDash),
       EDIT_CSS,
+      DIALOG_CSS,
       features.isOff('lineMode') ? '' : PANEL_CSS
     ].join('\n')
   }
@@ -1636,6 +1747,25 @@
     if (select) select.value = lineMode
   }
 
+  // Gives the dialog's button row its look (DIALOG_CSS): Restore defaults at the left, then Cancel and Save, under a divider. A dialog whose
+  // buttons are not the three of this one's is left with SudokuPad's own stacked buttons.
+  function arrangeButtons (editor) {
+    const dialog = editor.closest('.dialog')
+    const options = dialog && dialog.querySelector('.dialog-options')
+    if (!options) return
+    const roles = { Save: 'save', Cancel: 'cancel', 'Restore defaults': 'restore' }
+    const byRole = {}
+    options.querySelectorAll('button').forEach((button) => {
+      const role = roles[button.textContent.trim()]
+      if (!role) return
+      byRole[role] = button
+      button.dataset.role = role
+    })
+    if (Object.keys(byRole).length !== Object.keys(roles).length) return
+    options.classList.add(DIALOG_CLASS)
+    options.replaceChildren(byRole.restore, byRole.cancel, byRole.save)
+  }
+
   function openDialog () {
     let colors = { ...active }
     let missing = activeMissing
@@ -1652,10 +1782,13 @@
     let dash = activeDash
     let outline = activeOutline
     let outlineWidth = activeOutlineWidth
+    let arrowSpacing = activeArrowSpacing
+    let middleErase = activeMiddleErase
+    let lineStyles = activeLineStyles
     let show = activeShow
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, thickness, opacity, dash, show, outline, outlineWidth, off: features.offNames() })
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, thickness, opacity, dash, arrowSpacing, lineStyles, show, outline, outlineWidth, middleErase, off: features.offNames() })
     }
     // Reads the color tool's current page now; with no color tool, SudokuPad's own colors.
     const restoreDefaults = () => {
@@ -1670,8 +1803,11 @@
       thickness = THICKNESS.fallback
       opacity = OPACITY.fallback
       dash = DASH.fallback
-      outline = false
+      outline = normalizeOutline(null)
       outlineWidth = OUTLINE_WIDTH.fallback
+      arrowSpacing = ARROW_SPACING.fallback
+      middleErase = normalizeMiddleErase(null)
+      lineStyles = normalizeLineStyles(null)
       show = normalizeSliderVisibility(null)
       draw()
     }
@@ -1694,7 +1830,7 @@
                 }
                 if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
-                saveDialogSliders({ thickness, opacity, dash, show, outline, outlineWidth })
+                saveDialogDrafts({ thickness, opacity, dash, arrowSpacing, lineStyles, middleErase, show, outline, outlineWidth })
                 if (lineMode !== undefined && lineMode !== currentLineMode()) features.attempt('lineMode', () => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
               }
@@ -1707,7 +1843,10 @@
     })
     box = document.getElementById(EDITOR_ID)
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
+    // A ticked or unticked box shows or hides the slider row under it at once; the slider keeps its value.
+    const showRow = (key, shown) => { box.querySelector(`[data-row="${key}"]`).style.display = shown ? 'grid' : 'none' }
     draw()
+    arrangeButtons(box)
     // `change` fires when a color picker closes (the swatch the user sees is already the new
     // color), when a mark box or a slider box is ticked and when the line mode is chosen.
     // A dialog slider is a draft: its readout moves with it and nothing is applied until Save.
@@ -1719,6 +1858,7 @@
         case 'thickness': thickness = value; break
         case 'opacity': opacity = value; break
         case 'dash': dash = value; break
+        case 'arrowSpacing': arrowSpacing = value; break
         case 'outlineWidth': outlineWidth = value; break
         default: throw new Error(`pen-tool-extras: the dialog has no slider named ${el.dataset.setting}`)
       }
@@ -1742,6 +1882,18 @@
       const outlined = event.target.closest('input[data-outline]')
       if (outlined) {
         outline = outlined.checked
+        showRow('outlineWidth', outline)
+        return
+      }
+      const erasing = event.target.closest('input[data-middle-erase]')
+      if (erasing) {
+        middleErase = erasing.checked
+        return
+      }
+      const styled = event.target.closest('input[data-style]')
+      if (styled) {
+        lineStyles = { ...lineStyles, [styled.dataset.style]: styled.checked }
+        showRow(STYLE_SLIDERS[styled.dataset.style], styled.checked)
         return
       }
       const shown = event.target.closest('input[data-show]')
@@ -1804,6 +1956,26 @@
     applyStyle()
   }
 
+  // Makes `spacing` the arrow spacing in force: arrow lines already drawn are drawn again at it.
+  function adoptArrowSpacing (spacing) {
+    activeArrowSpacing = spacing
+    redrawChevronLines()
+  }
+
+  // Makes `styles` the enabled line styles: the page button, Tab and the wheel skip a page that is not enabled, and a pen on one becomes the
+  // pen of the same number on page 1. Lines already drawn in a page that is not enabled still draw: its rules stay in the style.
+  function adoptLineStyles (styles) {
+    activeLineStyles = styles
+    if (penTool) {
+      const pen = pageAfterSave(selectedPen(), styles)
+      if (pen !== selectedPen()) {
+        if (penTool.active) penTool.setSelectedColor(pen)
+        else Framework.setData(PEN_KEY, pen)
+      }
+    }
+    syncPenPanel()
+  }
+
   // Makes `show` the set of panel sliders that show: the sliders in the panel are rebuilt (or taken away).
   function adoptShow (show) {
     activeShow = show
@@ -1813,7 +1985,7 @@
 
   // What Save does with the dialog's sliders and boxes: each that differs from what is in force is applied and
   // saved, and one back at its default clears its saved value.
-  function saveDialogSliders (draft) {
+  function saveDialogDrafts (draft) {
     const save = (key, value, fallback) => {
       if (value === fallback) Framework.removeData(key)
       else Framework.setData(key, value)
@@ -1830,8 +2002,21 @@
       save(DASH_KEY, draft.dash, DASH.fallback)
       adoptDash(draft.dash)
     }
+    if (draft.arrowSpacing !== activeArrowSpacing) {
+      save(ARROW_SPACING_KEY, draft.arrowSpacing, ARROW_SPACING.fallback)
+      adoptArrowSpacing(draft.arrowSpacing)
+    }
+    if (draft.middleErase !== activeMiddleErase) {
+      save(MIDDLE_ERASE_KEY, draft.middleErase, normalizeMiddleErase(null))
+      activeMiddleErase = draft.middleErase
+    }
+    if (draft.lineStyles.dashed !== activeLineStyles.dashed || draft.lineStyles.arrows !== activeLineStyles.arrows) {
+      if (draft.lineStyles.dashed && draft.lineStyles.arrows) Framework.removeData(LINE_STYLES_KEY)
+      else Framework.setData(LINE_STYLES_KEY, draft.lineStyles)
+      adoptLineStyles(draft.lineStyles)
+    }
     if (draft.outline !== activeOutline || draft.outlineWidth !== activeOutlineWidth) {
-      save(OUTLINE_KEY, draft.outline, false)
+      save(OUTLINE_KEY, draft.outline, normalizeOutline(null))
       save(OUTLINE_WIDTH_KEY, draft.outlineWidth, OUTLINE_WIDTH.fallback)
       adoptOutline(draft.outline, draft.outlineWidth)
     }
@@ -1961,23 +2146,28 @@
     const mode = document.querySelector(LINE_MODE_BOX)
     if (!penTool || !mode || features.isOff('lineMode')) return
     features.attempt('pages', () => {
+      // With no line style enabled there is no page to turn to, and no button.
+      if (!hasPageToTurnTo()) return removePageButtons()
       let button = document.querySelector(`.${PAGE_BUTTON}`)
       if (!button) {
         mode.insertAdjacentHTML('afterend', `<button class="${PAGE_BUTTON}" data-control="penpage" title="Next pen page"></button>`)
         button = document.querySelector(`.${PAGE_BUTTON}`)
       }
-      const shown = `${currentPage()}:${activeDash}`
+      const shown = `${currentPage()}:${activeDash}:${enabledPages(activeLineStyles)}`
       if (button.dataset.shown === shown) return
-      button.innerHTML = renderPageIcon(currentPage(), activeDash)
+      button.innerHTML = renderPageIcon(currentPage(), activeDash, activeLineStyles)
       button.dataset.shown = shown
     }, removePageButtons)
   }
 
-  // Selects the pen on the page `delta` pages from the selected one with the same color number: a page
+  // Whether any page besides page 1 is enabled.
+  const hasPageToTurnTo = () => enabledPages(activeLineStyles).length > 1
+
+  // Selects the pen on the enabled page `delta` pages from the selected one with the same color number: a page
   // turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
   function turnPage (delta) {
     const number = penNumber(selectedPen()) || PEN_COLORS[0]
-    penTool.setSelectedColor(penCharOn(stepPage(currentPage(), delta, PEN_PAGES.length), number))
+    penTool.setSelectedColor(penCharOn(stepEnabledPage(currentPage(), delta, activeLineStyles), number))
   }
 
   // The selected pen is saved under PEN_KEY, and `ToolPen_color` keeps only its color number. After a
@@ -1986,6 +2176,9 @@
   function restoreSelectedPen (saved) {
     if (saved && saved !== selectedPen() && penNumber(saved) === selectedPen()) penTool.setSelectedColor(saved)
   }
+
+  // The saved pen `pen` (or null), moved to page 1 when its page is not enabled.
+  const pageAfterSavedPen = (pen) => pen && pageAfterSave(pen, activeLineStyles)
 
   // The group `id`, made on first use as the last child of the pen layer, or right after it with `beside`; null when the page has no
   // pen layer.
@@ -2036,7 +2229,7 @@
     // SudokuPad's own enter selects the saved color number through the wrapper above, which saves it as the
     // pen, so the saved pen is read first.
     tool.handleToolEnter = function () {
-      const saved = features.attempt('pages', () => normalizePen(Framework.getData(PEN_KEY)), () => null)
+      const saved = features.attempt('pages', () => pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY))), () => null)
       enter.call(this)
       features.attempt('pages', () => restoreSelectedPen(saved))
     }
@@ -2053,7 +2246,7 @@
     const keydown = tool.handleKeydown
     tool.handleKeydown = function (event) {
       const turned = features.attempt('pages', () => {
-        if (Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false
+        if (!hasPageToTurnTo() || Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false
         event.preventDefault()
         turnPage(1)
         return true
@@ -2063,14 +2256,13 @@
     document.addEventListener('click', (event) => features.attempt('pages', () => {
       if (event.target.closest(`.${PAGE_BUTTON}`)) turnPage(1)
     }))
-    // `preventDefault` needs a listener that is not passive.
+    // The wheel turns the page only over the page button, as SudokuPad's color tool does over its own, and like that one it does not cancel the wheel.
     document.addEventListener('wheel', (event) => features.attempt('pages', () => {
-      if (event.deltaY === 0 || !event.target.closest('.tool-pen .controls-input') || event.target.closest(`.${SLIDERS}`)) return
-      event.preventDefault()
+      if (event.deltaY === 0 || !hasPageToTurnTo() || !event.target.closest(`.${PAGE_BUTTON}`)) return
       turnPage(event.deltaY < 0 ? -1 : 1)
-    }), { passive: false })
+    }))
     features.attempt('pages', () => {
-      if (tool.active) restoreSelectedPen(normalizePen(Framework.getData(PEN_KEY)))
+      if (tool.active) restoreSelectedPen(pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY))))
       syncPageButton()
     })
   }
@@ -2216,6 +2408,8 @@
     checkFeatures(Framework.app)
     // Read before the panel is built, which the first sync does with the pen tool already on.
     activeShow = normalizeSliderVisibility(Framework.getData(SLIDERS_SHOWN_KEY))
+    activeLineStyles = normalizeLineStyles(Framework.getData(LINE_STYLES_KEY))
+    activeArrowSpacing = normalizeArrowSpacing(Framework.getData(ARROW_SPACING_KEY))
     installHoldToEdit()
     installPenPanel()
     installOverlayPressSwallow()
@@ -2224,6 +2418,7 @@
     adoptOpacity(normalizeOpacity(Framework.getData(OPACITY_KEY)))
     adoptDash(normalizeDash(Framework.getData(DASH_KEY)))
     adoptOutline(normalizeOutline(Framework.getData(OUTLINE_KEY)), normalizeOutlineWidth(Framework.getData(OUTLINE_WIDTH_KEY)))
+    activeMiddleErase = normalizeMiddleErase(Framework.getData(MIDDLE_ERASE_KEY))
     Framework.addSetting({
       tag: 'button',
       name: 'pentoolextras',

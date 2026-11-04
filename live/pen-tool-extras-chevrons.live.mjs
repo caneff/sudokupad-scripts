@@ -15,10 +15,10 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { effectiveOpacities } from './settings.mjs'
+import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from './settings.mjs'
 
 // The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
-const { CHEVRON } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
+const { CHEVRON, ARROW_SPACING } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
@@ -26,6 +26,7 @@ const PEN_KEY = 'PenColor_pen'
 const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
+const ARROW_SPACING_KEY = 'PenColor_arrowspacing'
 const POLL_MS = 50
 const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
@@ -175,11 +176,11 @@ function group (title, mode) {
       }
       await p.goto(url, { waitUntil: 'load', timeout: 60000 })
       await boot()
-      await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, 'ToolPen_color'])
+      await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, ARROW_SPACING_KEY, 'ToolPen_color'])
       await selectChevronPen(3)
     })
     after(async () => {
-      await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, 'ToolPen_color'])
+      await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, ARROW_SPACING_KEY, 'ToolPen_color'])
       await context.close()
     })
 
@@ -360,6 +361,48 @@ function group (title, mode) {
       assert.equal(small.count, base.count)
       await slider(5)
       assert.deepEqual(await settle(sample, base), base)
+    })
+
+    it('the Arrow spacing slider (3 to 12, 5 by default) is a draft until Save, then redraws the arrow lines already drawn: wider spacing gives fewer arrows, and Restore defaults then Save gives 5 back', async () => {
+      await selectChevronPen(3)
+      await drag([[2.5, 1.5], [2.5, 4.5]])
+      const arrows = async () => (await chevronGroups()).reduce((sum, g) => sum + headings(g.chevrons).length, 0)
+      const base = await arrows()
+      assert.equal(base > 0, true)
+      const editor = () => p.locator('#pen-tool-extras-editor')
+      const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
+      const openEditor = () => openExtrasEditor(p)
+      const closeWith = (text) => closeExtrasEditorWith(p, text)
+      const setSpacing = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+      await openEditor()
+      assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), [String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), String(ARROW_SPACING.fallback)])
+      await setSpacing(12)
+      assert.equal(await editor().locator('output[data-readout="arrowSpacing"]').textContent(), '12', 'the value moves with the slider')
+      assert.equal(await arrows(), base, 'a draft changes nothing before Save')
+      await closeWith('Cancel')
+      assert.equal(await arrows(), base)
+      assert.equal(await saved(ARROW_SPACING_KEY), null)
+      await openEditor()
+      await setSpacing(12)
+      await closeWith('Save')
+      assert.equal(await saved(ARROW_SPACING_KEY), 12)
+      const wide = await settle(async () => (await arrows()) < base, true)
+      assert.equal(wide, true, `fewer arrows at spacing 12 than ${base}`)
+      const sparse = await arrows()
+      await reload()
+      await openEditor()
+      assert.equal(await slider().inputValue(), '12', 'saved over a reload')
+      await setSpacing(3)
+      await closeWith('Save')
+      assert.equal(await settle(async () => (await arrows()) > base, true), true, 'denser at spacing 3')
+      await openEditor()
+      await p.locator('.dialog button').filter({ hasText: /^\s*Restore defaults\s*$/ }).first().click()
+      assert.equal(await slider().inputValue(), '5')
+      await closeWith('Save')
+      assert.equal(await saved(ARROW_SPACING_KEY), null, 'the default spacing is not kept')
+      assert.equal(await settle(arrows, base), base)
+      assert.equal(sparse < base, true)
+      await undo()
     })
 
     it('the Opacity slider fades the chevron lines with the pen layer: the group and its parts show at the slider\'s value', async () => {

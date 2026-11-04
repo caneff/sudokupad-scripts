@@ -16,11 +16,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
-const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color']
+const MIDDLE_ERASE_KEY = 'PenColor_middleerase'
+const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', MIDDLE_ERASE_KEY]
 const POLL_MS = 50
 const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
@@ -183,6 +185,52 @@ function group (title, mode) {
         await undoAll()
       })
     }
+
+    const editor = () => p.locator('#pen-tool-extras-editor')
+    const openEditor = () => openExtrasEditor(p)
+    const closeWith = (text) => closeExtrasEditorWith(p, text)
+
+    it('with the Middle click box unticked a middle click erases nothing and prevents no default (autoscroll as stock); the box is ticked by default, saves as false, and ticking it again brings the erase back', async () => {
+      await undoAll()
+      await selectPen(1, 3)
+      await drag([[2.5, 2.5], [2.5, 4.5]])
+      const lines = await penValues()
+      await openEditor()
+      const box = editor().locator('input[data-middle-erase]')
+      assert.equal(await box.isChecked(), true, 'ticked on a fresh install')
+      assert.equal(await p.getByLabel('Middle click erases a whole line').isChecked(), true)
+      await box.uncheck()
+      await closeWith('Cancel')
+      assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), null, 'Cancel saves nothing')
+      await openEditor()
+      await box.uncheck()
+      await closeWith('Save')
+      assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), false)
+      await read(() => {
+        window.__middleLog = []
+        if (!window.__middleLogged) {
+          window.__middleLogged = true
+          for (const type of ['pointerdown', 'mousedown']) window.addEventListener(type, (e) => window.__middleLog.push([type, e.button, e.defaultPrevented]))
+        }
+      })
+      await middleClick([2.5, 3.0])
+      assert.deepEqual(await read(() => window.__middleLog), [['pointerdown', 1, false], ['mousedown', 1, false]], 'no default prevented, and the mouse events follow as in stock')
+      await sleep(150) // "nothing happened in 150 ms" check
+      assert.equal((await penValues()).filter((v) => lines.includes(v)).length, lines.length, 'the line is still there')
+      await openEditor()
+      assert.equal(await box.isChecked(), false, 'the dialog opens with the box as saved')
+      await box.check()
+      await closeWith('Save')
+      assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), null, 'ticked is the default and is not kept')
+      await undoAll()
+      await selectPen(1, 3)
+      await drag([[2.5, 2.5], [2.5, 4.5]])
+      await middleClick([2.5, 3.0])
+      assert.deepEqual(await settle(penValues, []), [], 'the erase is back')
+      // Seen live: without a click off the grid after a middle press, the next drag, started within a second, draws nothing.
+      await p.mouse.click(5, 5)
+      await undoAll()
+    })
 
     it('a middle click where there is no line does nothing and makes no mark, not in a cell\'s middle, on an edge or off the grid', async () => {
       await undoAll()
