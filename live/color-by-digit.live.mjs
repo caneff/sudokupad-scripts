@@ -439,9 +439,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
             return { x: rect(x), box: rect(box), others }
           }))
           for (const { x, box, others } of boxes) {
-            assert.equal(x.right <= box.right && x.top >= box.top, true, `inside the box's upper right at width ${width}`)
-            assert.equal(box.right - x.right < 16 && x.top - box.top < 16, true, `in the corner at width ${width}`)
-            assert.equal(others.length > 0, true)
+            assert.equal(x.right <= box.right && x.top >= box.top, true, `inside the box's upper right at width ${width}: ${JSON.stringify({ x, box })}`)
+            assert.equal(box.right - x.right < 16 && x.top - box.top < 16, true, `in the corner at width ${width}: ${JSON.stringify({ x, box })}`)
+            assert.equal(others.length > 0, true, `the box holds a pulldown and numpad to clear at width ${width}`)
             assert.deepEqual(others.filter((o) => overlap(x, o)), [], `clear of pulldown and numpad at width ${width}`)
           }
           await closeWith('Cancel')

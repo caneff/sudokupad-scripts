@@ -456,10 +456,14 @@
   const RULE_COLOR = '#e3dff0'
   const DIVIDER = `border-top:1px solid ${RULE_COLOR};margin:12px 0 0;padding-top:10px`
   const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
+  // The small × buttons: the profile row's delete and the group box's remove share the 28px square.
+  const SMALL_BUTTON_SIZE = 28
+  const SMALL_BUTTON_LOOK = `${BUTTON_LOOK};padding:0 10px;height:${SMALL_BUTTON_SIZE}px;line-height:${SMALL_BUTTON_SIZE - 2}px`
   // The red × in a group box's upper right corner. The box keeps REMOVE_ROOM of right padding (the
-  // button's 28px, its 8px inset and a 4px gap), so the button never sits over the pulldown or the numpad.
-  const REMOVE_ROOM = '40px'
-  const REMOVE_LOOK = `${BUTTON_LOOK};position:absolute;top:8px;right:8px;width:28px;height:28px;padding:0;line-height:26px;color:#c0392b;font-size:1.1rem`
+  // button, its inset and a gap), so the button never sits over the pulldown or the numpad.
+  const REMOVE_INSET = 8
+  const REMOVE_ROOM = `${SMALL_BUTTON_SIZE + REMOVE_INSET + 4}px`
+  const REMOVE_LOOK = `${SMALL_BUTTON_LOOK};position:absolute;top:${REMOVE_INSET}px;right:${REMOVE_INSET}px;width:${SMALL_BUTTON_SIZE}px;padding:0;color:#c0392b;font-size:1.1rem`
   // Percent-encoded, with no quotes, so the value sits inside a style="..." attribute.
   const PULLDOWN_ARROW = 'url(data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2710%27%20height=%276%27%3E%3Cpath%20d=%27M0%200l5%206%205-6z%27%20fill=%27%236b4fa0%27/%3E%3C/svg%3E)'
   const PULLDOWN_LOOK = important(`font-size:.95rem;padding:4px 28px 4px 10px;border:1px solid #b9b0c9;border-radius:6px;background:#fff ${PULLDOWN_ARROW} no-repeat right 10px center;appearance:none;color:#222`)
@@ -497,7 +501,7 @@
         `<span data-role="handle" data-index="${i}" title="Drag to reorder" style="cursor:grab;touch-action:none;user-select:none;color:${MUTED};font-size:18px;line-height:1">&#8942;&#8942;</span>` +
         `<span style="display:flex;gap:3px;width:100px">${renderChips(profile.groups, colorOf, 22)}</span>` +
         `<span style="flex:1;text-align:left;font-weight:${active ? 600 : 400}">${esc(profile.name)}</span>` +
-        `<button type="button" data-act="delete" data-index="${i}" style="${BUTTON_LOOK};padding:0 10px;height:28px;line-height:26px" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
+        `<button type="button" data-act="delete" data-index="${i}" style="${SMALL_BUTTON_LOOK}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
     return heading('Profiles', `<span style="font-weight:400;font-size:.8rem;color:#666">${state.profiles.length} of ${MAX_PROFILES}</span>`) +

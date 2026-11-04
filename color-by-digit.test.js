@@ -908,7 +908,7 @@ test('autoBoxHtml centers the X in its box with a flex box, both ways', () => {
   assert.match(autoBoxHtml(true), /data-role="auto-mark"[^>]*display:flex;align-items:center;justify-content:center/)
 })
 
-test('renderEditor replaces the Remove button with a red × in the group box\'s upper right corner, named "Remove group"', () => {
+test('renderEditor gives each group a red × in its box\'s upper right corner, named "Remove group", and no Remove text button', () => {
   const html = editor([{ key: 'a', digits: [] }, { key: 'b', digits: [] }], [], [0, 0])
   assert.doesNotMatch(html, />Remove</)
   const buttons = [...html.matchAll(/<button[^>]*data-act="remove"[^>]*>(.*?)<\/button>/g)]
