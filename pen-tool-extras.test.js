@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick
 } = require('./pen-tool-extras.user.js')
@@ -351,6 +351,37 @@ test('buildThicknessCss refuses a thickness it cannot save', () => {
   assert.throws(() => buildThicknessCss(13), RangeError)
   assert.throws(() => buildThicknessCss('5'), RangeError)
   assert.throws(() => buildThicknessCss(2.5), RangeError)
+})
+
+test('the opacity runs 20 to 100 percent in steps of 5 from SudokuPad\'s own pen opacity of 80', () => {
+  assert.deepEqual(OPACITY, { min: 20, max: 100, step: 5, fallback: 80 })
+})
+
+test('normalizeOpacity keeps a saved whole number from 20 to 100 on the slider\'s steps', () => {
+  for (const ok of [20, 55, 80, 100]) assert.equal(normalizeOpacity(ok), ok)
+})
+
+test('normalizeOpacity falls back to 80 for nothing saved and for anything untrusted', () => {
+  for (const bad of [null, undefined, 0, 19, 105, -80, 82, 80.5, NaN, Infinity, '70', [70], { a: 70 }, true]) {
+    assert.equal(normalizeOpacity(bad), 80, String(bad))
+  }
+})
+
+test('buildOpacityCss at 80 gives SudokuPad\'s own pen opacity of 0.8 on every pen stroke, under :root:root', () => {
+  assert.equal(buildOpacityCss(80), ':root:root .cell-pen { opacity: 0.8; }')
+})
+
+test('buildOpacityCss writes the fraction of the percent, and 1 at 100', () => {
+  assert.equal(buildOpacityCss(20), ':root:root .cell-pen { opacity: 0.2; }')
+  assert.equal(buildOpacityCss(35), ':root:root .cell-pen { opacity: 0.35; }')
+  assert.equal(buildOpacityCss(100), ':root:root .cell-pen { opacity: 1; }')
+})
+
+test('buildOpacityCss refuses an opacity it cannot save', () => {
+  assert.throws(() => buildOpacityCss(15), RangeError)
+  assert.throws(() => buildOpacityCss(105), RangeError)
+  assert.throws(() => buildOpacityCss('80'), RangeError)
+  assert.throws(() => buildOpacityCss(82), RangeError)
 })
 
 test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {

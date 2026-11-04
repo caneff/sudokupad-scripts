@@ -47,6 +47,9 @@
   cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 12, saved under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
   is always half of it, so every width scales by one factor.
+- **opacity** — the one slider setting how see-through every pen mark is (lines, cell circles and crosses, edge
+  marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved under `PenColor_opacity`. SudokuPad's
+  own is 80 (`.cell-pen { opacity: 0.8 }`), which is the default; 100 is solid.
 - **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
   another in the Dark page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
   with the color.
