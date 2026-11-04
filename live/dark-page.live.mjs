@@ -30,6 +30,8 @@ const STYLE = `#${STYLE_ID}`
 const BLACK = 'rgb(0, 0, 0)'
 const CREDIT_TEXT = 'rgb(221, 221, 221)'
 const DARK_TEXT = 'rgb(34, 34, 34)'
+// The color of the replay tool's readout, the ::after of .controls-input, on `page`.
+const readoutColor = (page) => page.evaluate(() => window.getComputedStyle(document.querySelector('.controls-input'), '::after').color)
 // The control buttons on a dark page: dark gray with light purple icons, and a purple border on
 // the selected mode button. SudokuPad's own are `#eee` with `#ccc` borders.
 const BUTTON_BG = 'rgb(42, 42, 42)'
@@ -322,6 +324,21 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await computed('.controls-footer a', 'color'), CREDIT_TEXT)
     })
 
+    // The replay tool's readout is the ::after of .controls-input. The replay tool itself is not entered
+    // here; with the script's stylesheet off the readout shows SudokuPad's own color, so the rule is
+    // seen beating it, which is what the tool's black on black needs.
+    it('the replay tool\'s readout is readable on black, where SudokuPad\'s own color is not', async () => {
+      assert.equal(await readoutColor(p), CREDIT_TEXT)
+      const own = await p.evaluate(() => {
+        const style = document.getElementById('dark-page-style')
+        style.disabled = true
+        const color = window.getComputedStyle(document.querySelector('.controls-input'), '::after').color
+        style.disabled = false
+        return color
+      })
+      assert.notEqual(own, CREDIT_TEXT)
+    })
+
     it('the control buttons are dark gray with light purple icons, the digits and backspace keep their purple with the softer border, and the selected mode button keeps its purple with a purple border', async () => {
       for (const selector of ['#control-settings', '#control-undo', '#control-corner', '#control-colour']) {
         assert.deepEqual(await readButton(selector), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER }, selector)
@@ -551,6 +568,7 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Save').click()
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     assert.equal(await footerColor(), DARK_TEXT)
+    assert.equal(await readoutColor(p), DARK_TEXT)
     assert.equal(await undoBackground(), OWN_BUTTON_BG)
     assert.equal(await saved(), '#ffcc00')
   })
@@ -592,6 +610,7 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Save').click()
     assert.equal(await bodyColor(), BLACK)
     assert.equal(await footerColor(), CREDIT_TEXT)
+    assert.equal(await readoutColor(p), CREDIT_TEXT)
     assert.equal(await undoBackground(), BUTTON_BG)
     assert.equal(await saved(), null)
     await load()

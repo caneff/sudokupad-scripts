@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.4
+// @version      0.3.5
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.4'
+  const VERSION = '0.3.5'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
@@ -95,7 +95,8 @@
   // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
   // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
   // that changes nothing.
-  // The control buttons turn dark only when the page does (the same test the footer text uses). Only
+  // The replay tool's readout ("Time: … / …") is the `::after` of `.controls-input`, drawn straight on the page, so it
+  // takes the footer's text color. The control buttons turn dark only when the page does (the same test the footer text uses). Only
   // a button's own background, text color and border change: the svg-painted icons and the fills of
   // the color swatches keep their colors.
   function buildCss (pageColor) {
@@ -110,6 +111,7 @@
       rule('body', `background-color: ${pageColor}`),
       rule(`#${RECT_ID}`, 'background-color: var(--body-bg)'),
       rule('.controls-footer, .controls-footer a', `color: ${textColor}`),
+      rule('.controls-input::after', `color: ${textColor}`),
       ...(textColor === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }
