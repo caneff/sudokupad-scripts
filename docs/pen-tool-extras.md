@@ -20,6 +20,7 @@ Lines drawn with a page 2 or page 3 pen are invisible to anyone without this scr
 Two ways to change them:
 
 - **Settings dialog:** a 3 by 3 grid of pickers in the arrangement of the pen buttons. Save keeps your colors.
+- **SudokuPad colors button**, beside the grid: sets the nine pickers to SudokuPad's own pen colors. Like the rest of the dialog it takes effect on Save, and Cancel leaves the colors as they were. Saving stores them as your colors, so they stop following the cell color page, and all three pages follow. Restore defaults is different: it goes back to colors derived from the cell color page.
 - **Hold a pen color button for a second**, with either mouse button: a picker appears over each button, as in the cell color tool. Click one to open it. The pen changes live and the set is saved. Hold again, or leave the pen tool, to close them.
 
 ## Sliders
@@ -51,8 +52,8 @@ There are three pages of nine pens, for 27, using the same nine colors.
 | Page | Draws |
 | --- | --- |
 | 1 | SudokuPad's solid lines |
-| 2 | Dotted lines, or dashes with the Dash length setting |
-| 3 | A thin line with a run of chevrons, pointing the way you dragged |
+| 2 | Dashed lines, or dots with a Dash length of 0 |
+| 3 | A line with a run of chevrons, pointing the way you dragged |
 
 Only lines change with the page. A cell circle, a cross and the edge and corner marks stay solid.
 
@@ -68,15 +69,15 @@ The same pen number stays selected across pages. The selected pen is saved under
 
 A dialog slider from 0 to 8 line widths, saved under `PenColor_dash`.
 
-- 0 is dots, and settings saved without it keep dots.
-- A dash is that many line widths long, so it scales with Thickness. It also changes lines already drawn, and it shows on the page button. The page 2 swatches stay dots.
-- Each cell's piece of a line starts and ends with half a gap, so dashes stay the same length across a cell boundary.
-- A dash too long for a cell to hold a gap is shortened to leave one, so a page 2 line is never solid.
+- The default is 3. 0 is dots, and a saved 0 stays as saved.
+- A dash is that many line widths long, so it scales with Thickness. It also changes lines already drawn, and the page button and the page 2 swatches show it.
+- Each cell's piece of a line starts and ends with half a dash, with a whole number of dash-and-gap periods fitted to the piece, whether it runs along a cell's center, its edge or a diagonal. So a line is inked at its two ends, at every turn and at every join between cells, as a solid line would be, and two pieces meet in one whole dash. Dots follow the same rule, with a dot on each of those points.
+- Every gap is at least one line width wide where it shows (two line widths between the dash patterns, since the round caps take one), on a straight and a diagonal piece alike. A dash too long for a cell to hold that gap is shortened to leave it, so a page 2 line is never solid.
 
 ### Chevrons (page 3)
 
 - Each cell's piece of a line is drawn with whole chevrons, about three to a cell at thickness 5, so a run reads as one across a cell boundary.
-- Chevrons scale with Thickness from 5 up. Below 5 they keep their size at 5, so direction stays visible, and the thin line stops thinning at a minimum that still shows.
+- The line under the chevrons is as thick as a page 1 line at every Thickness. Chevrons scale with Thickness from 5 up, and stick out past the line at every value: above 10 their wings and length also grow, to 1.35 times at 16. Below 5 they keep their size at 5, so direction stays visible.
 - They follow Opacity, and lines already drawn follow Thickness. They stay inside the rectangle Dark Page keeps at 16.
 - A drag that turns stores the right direction per segment and is one undo step. The replay and a reload keep it.
 - Dragging over a line erases it, whichever way either was drawn.
@@ -109,7 +110,7 @@ The dialog's Pen line mode (Center & Edge, Center only, Edge only) is SudokuPad'
 
 ## Restore defaults
 
-The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity and Dash length sliders and the two Show boxes back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity and Dash length (3) sliders and the two Show boxes back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 

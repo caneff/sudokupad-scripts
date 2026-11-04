@@ -1,4 +1,4 @@
-// Live check of pen-tool-extras.user.js's second page of pens (color characters a to i, drawn dotted)
+// Live check of pen-tool-extras.user.js's second page of pens (color characters a to i, drawn dashed)
 // on sudokupad.app in headless Chromium. Run with `npm run test:live`. It needs the network and a
 // Playwright Chromium, so it is not part of `npm test`.
 //
@@ -120,6 +120,15 @@ function group (title, mode, extra = []) {
       }
       assert.equal(await settle(padValues, values), values)
     }
+    // The settings dialog's editor: open it from SudokuPad's settings, press one of its buttons, and wait for it to go.
+    const editor = () => p.locator('#pen-tool-extras-editor')
+    const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
+    const openEditor = async () => {
+      await openSettings(p)
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
+      await editor().waitFor({ state: 'visible' })
+    }
+    const closeWith = async (text) => { await dialogButton(text).click(); await editor().waitFor({ state: 'detached' }) }
     const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const turnPageWithWheel = async (deltaY) => {
       const box = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
@@ -186,22 +195,25 @@ function group (title, mode, extra = []) {
       assert.equal(await saved(PEN_KEY), 'c')
     })
 
-    it('a page 2 swatch is dotted and a page 1 swatch is not', async () => {
-      const swatch = () => read(() => window.getComputedStyle(document.querySelector('.tool-pen button[data-key="2"]'), ':after').backgroundImage)
-      assert.match(await swatch(), /radial-gradient/)
+    it('a page 2 swatch is a dashed line cut out of the button\'s square, and a page 1 swatch is not', async () => {
+      const swatch = () => read(() => window.getComputedStyle(document.querySelector('.tool-pen button[data-key="2"]'), ':after').maskImage)
+      const decoded = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(await swatch())[1])
+      assert.match(decoded, /stroke-dasharray='(?!0 )[\d.]+ [\d.]+'/)
+      assert.equal((decoded.match(/<path/g) || []).length, 1, 'one line')
       await goToPage(PAGE_ONE)
       assert.equal(await swatch(), 'none')
       await goToPage(PAGE_TWO)
     })
 
-    it('a line drawn with a page 2 pen is dotted in its partner\'s color; a line with its page 1 partner stays solid', async () => {
+    it('a line drawn with a page 2 pen is dashed in its partner\'s color; a line with its page 1 partner stays solid', async () => {
       const colorOf3 = await read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
       await draw(8)
       assert.deepEqual((await penValues()).filter((v) => v.endsWith('c')), ['1c'])
-      const dotted = await styleOf('.cell-pen.pencolor-c')
-      assert.notEqual(dotted.dash, 'none')
-      assert.match(dotted.dash, /^0(px)?[ ,]+\d/)
-      assert.equal(await read((c) => { const probe = document.createElement('span'); probe.style.color = c; document.body.appendChild(probe); const v = window.getComputedStyle(probe).color; probe.remove(); return v }, colorOf3), dotted.stroke)
+      const dashed = await styleOf('.cell-pen.pencolor-c')
+      assert.notEqual(dashed.dash, 'none')
+      // 3 line widths of 5 is a dash of 15 on a cell of 64, which holds whole periods.
+      assert.match(dashed.dash, /^15(px)?[ ,]+\d/)
+      assert.equal(await read((c) => { const probe = document.createElement('span'); probe.style.color = c; document.body.appendChild(probe); const v = window.getComputedStyle(probe).color; probe.remove(); return v }, colorOf3), dashed.stroke)
       await goToPage(PAGE_ONE)
       assert.equal(await settle(selected, '3'), '3')
       await draw(7)
@@ -217,7 +229,7 @@ function group (title, mode, extra = []) {
       assert.equal((await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray)), 'none')
     })
 
-    it('undo removes the page 2 marks, and the replay draws them again, dotted', async () => {
+    it('undo removes the page 2 marks, and the replay draws them again, dashed', async () => {
       const replay = await read(() => Framework.app.getReplay())
       const total = await strokeCount()
       for (let i = await undoDepth(); i > 0; i--) await p.click('#control-undo')
@@ -228,39 +240,45 @@ function group (title, mode, extra = []) {
       assert.notEqual((await styleOf('.cell-pen.pencolor-c')).dash, 'none')
     })
 
-    it('the dialog\'s dash length lengthens the dots of page 2 lines already drawn into dashes, scaled by the thickness; Cancel leaves it, Restore defaults and Save bring the dots back', async () => {
-      const editor = () => p.locator('#pen-tool-extras-editor')
-      const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-      const openEditor = async () => {
-        await openSettings(p)
-        await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-        await editor().waitFor({ state: 'visible' })
-      }
-      const closeWith = async (text) => { await dialogButton(text).click(); await editor().waitFor({ state: 'detached' }) }
+    it('the dialog\'s dash length starts at 3, which draws dashes; 0 draws dots, and a saved 0 stays; Cancel leaves it, Restore defaults and Save bring the dashes back', async () => {
       const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')).strokeDasharray))
       const solidOn = () => read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-3')).strokeDasharray)
       const sample = () => p.locator(`${PAGE_BUTTON} [data-page-sample]`).getAttribute('data-page-sample')
       await read(([k]) => Framework.removeData(k), [DASH_KEY])
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
-      assert.equal(await settle(dashOn, 0), 0, 'dots to start with')
+      // 3 dashes of a line width of 5
+      assert.equal(await settle(dashOn, 15), 15, 'dashes to start with')
       await openEditor()
       const range = () => editor().locator('input[data-setting="dash"]')
-      assert.deepEqual(await range().evaluate((el) => [el.min, el.max, el.step, el.value]), ['0', '8', '1', '0'])
-      await range().fill('3')
+      assert.deepEqual(await range().evaluate((el) => [el.min, el.max, el.step, el.value]), ['0', '8', '1', '3'])
+      await range().fill('0')
       await closeWith('Cancel')
-      assert.equal(await dashOn(), 0, 'Cancel leaves the dots')
+      assert.equal(await dashOn(), 15, 'Cancel leaves the dashes')
       assert.equal(await saved(DASH_KEY), null)
       await openEditor()
-      await range().fill('3')
+      await range().fill('0')
       await closeWith('Save')
-      // 3 dashes of a line width of 5
-      assert.equal(await settle(dashOn, 15), 15, 'a line already drawn takes the dashes')
-      // Each segment starts half a gap in, so the halves at a cell boundary make one gap, not a double-length dash.
-      const pattern = await read(() => { const st = window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')); return { array: st.strokeDasharray.split(/[ ,]+/).map(parseFloat), offset: parseFloat(st.strokeDashoffset) } })
-      assert.equal(Math.abs(pattern.offset - (pattern.array[0] + pattern.array[1] / 2)) < 1e-6, true, JSON.stringify(pattern))
-      assert.equal(await saved(DASH_KEY), 3)
+      assert.equal(await settle(dashOn, 0), 0, 'a line already drawn takes the dots')
+      assert.equal(await saved(DASH_KEY), 0, 'a 0 is saved, not cleared as the default')
       assert.equal(await solidOn(), 'none', 'page 1 lines stay solid')
       assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray), 'none', 'a cell mark stays solid')
+      await reload()
+      assert.equal(await settle(dashOn, 0), 0, 'a saved 0 stays after a reload')
+      await selectPen()
+      await goToPage(PAGE_ONE)
+      assert.equal(await settle(sample, 'dots'), 'dots', 'the page button shows dots at 0')
+      await goToPage(PAGE_TWO)
+      assert.equal(await settle(selected, 'c'), 'c')
+      await openEditor()
+      assert.equal(await range().inputValue(), '0')
+      await dialogButton('Restore defaults').click()
+      assert.equal(await range().inputValue(), '3')
+      await closeWith('Save')
+      assert.equal(await settle(dashOn, 15), 15, 'the dashes are back')
+      assert.equal(await saved(DASH_KEY), null)
+      // Each segment starts half a dash in, so it is inked at both ends and the halves at a cell boundary make one whole dash.
+      const pattern = await read(() => { const st = window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')); return { array: st.strokeDasharray.split(/[ ,]+/).map(parseFloat), offset: parseFloat(st.strokeDashoffset) } })
+      assert.equal(Math.abs(pattern.offset - pattern.array[0] / 2) < 1e-6, true, JSON.stringify(pattern))
       await selectPen()
       // The button shows the line of the page it turns to: from page 2 the chevrons of page 3, from page 3 page 1's solid line,
       // from page 1 the dashes.
@@ -276,20 +294,54 @@ function group (title, mode, extra = []) {
       assert.equal(await settle(dashOn, 12), 12)
       await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '5'; el.dispatchEvent(new Event('input', { bubbles: true })) })
       assert.equal(await settle(dashOn, 15), 15)
-      await reload()
-      assert.equal(await settle(dashOn, 15), 15, 'after a reload')
-      await openEditor()
-      assert.equal(await range().inputValue(), '3')
-      await dialogButton('Restore defaults').click()
-      assert.equal(await range().inputValue(), '0')
-      await closeWith('Save')
-      assert.equal(await settle(dashOn, 0), 0, 'the dots are back')
-      assert.equal(await saved(DASH_KEY), null)
-      await goToPage(PAGE_ONE)
-      assert.equal(await settle(sample, 'dotted'), 'dotted')
-      await goToPage(PAGE_TWO)
-      assert.equal(await settle(selected, 'c'), 'c')
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
+    })
+
+    it('the SudokuPad colors button sets the nine pickers to SudokuPad\'s own pen colors: Cancel leaves the colors, Save stores them for all three pages, and the click marks no cell', async () => {
+      const colorOf3 = () => read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
+      const pickers = () => editor().locator('input[type="color"]').evaluateAll((els) => els.map((el) => el.value))
+      // SudokuPad's own pen colors, typed out here from tool-pen.css as the independent source.
+      const own = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
+      const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
+      // The colors in force start as the cell color page's, which are not SudokuPad's own.
+      await read((k) => Framework.removeData(k), COLORS_KEY)
+      const before = await colorOf3()
+      assert.notEqual(before, own[2], 'the colors in force are not SudokuPad\'s own')
+      const marks = await penValues()
+      const depth = await undoDepth()
+      await openEditor()
+      assert.notDeepEqual(await pickers(), own)
+      await editor().locator('button[data-sudokupad-colors]').click()
+      assert.deepEqual(await pickers(), own)
+      assert.equal(await editor().locator('button[data-sudokupad-colors]').count(), 1, 'the dialog is still open, with the button in it')
+      assert.deepEqual(await penValues(), marks, 'the click left no pen mark')
+      assert.equal(await undoDepth(), depth, 'the click is no undo step')
+      await closeWith('Cancel')
+      assert.equal(await colorOf3(), before, 'Cancel leaves the colors as they were')
+      assert.equal(await saved(COLORS_KEY), null)
+      await openEditor()
+      await editor().locator('button[data-sudokupad-colors]').click()
+      await closeWith('Save')
+      assert.equal(await settle(colorOf3, own[2]), own[2])
+      assert.deepEqual(await saved(COLORS_KEY), Object.fromEntries(own.map((c, i) => [i + 1, c])), 'all nine are saved as the user\'s colors')
+      assert.deepEqual(await penValues(), marks, 'closing the dialog left no pen mark either')
+      // Pen 3 on page 1 is 3, on page 2 c, on page 3 n and its reverse o: every page follows the color.
+      assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, rgbOf(own[2]))
+      assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, rgbOf(own[2]))
+      await reload()
+      assert.equal(await settle(colorOf3, own[2]), own[2], 'the saved colors are kept after a reload')
+      await read((k) => Framework.removeData(k), COLORS_KEY)
+      // Restore defaults and then the button: the button's colors are picked by hand, so Save stores them and does not clear the saved set.
+      await openEditor()
+      await dialogButton('Restore defaults').click()
+      await editor().locator('button[data-sudokupad-colors]').click()
+      assert.deepEqual(await pickers(), own)
+      await closeWith('Save')
+      assert.deepEqual(await saved(COLORS_KEY), Object.fromEntries(own.map((c, i) => [i + 1, c])), 'Save after Restore defaults and the button stores the colors')
+      assert.equal(await settle(colorOf3, own[2]), own[2])
+      await reload()
+      assert.equal(await settle(colorOf3, own[2]), own[2], 'and they are still there after a reload')
+      await read((k) => Framework.removeData(k), COLORS_KEY)
     })
 
     it('Tab turns the page forward through all three and round, keeping the color number, and ToolPen_color stays a digit', async () => {
@@ -313,7 +365,7 @@ function group (title, mode, extra = []) {
       assert.equal(await selected(), 'c')
     })
 
-    it('holding a page 2 button opens the pickers; recoloring pen 3 there recolors page 1\'s pen 3 and the dotted line too', async () => {
+    it('holding a page 2 button opens the pickers; recoloring pen 3 there recolors page 1\'s pen 3 and the dashed line too', async () => {
       const box = await p.locator('.tool-pen button[data-key="3"]').boundingBox()
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await p.mouse.down()
@@ -405,7 +457,7 @@ describe('injected after the pen tool is already on', { concurrency: false }, ()
     await context.close()
   })
 
-  it('the first Tab selects pen c, the dotted version of the pen already selected, and ToolPen_color stays 3', async () => {
+  it('the first Tab selects pen c, the dashed version of the pen already selected, and ToolPen_color stays 3', async () => {
     assert.equal(await p.evaluate(() => ToolPen.tool.selectedColor), 3)
     await p.addScriptTag({ content: script })
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })

@@ -16,7 +16,7 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | --- | --- | --- |
 | Color by Digit | Adds a button that colors cells by digit, using groups of palette colors you set. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js) |
 | Digit Color | Colors the digits themselves, one color per digit. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/digit-color.user.js) |
-| Pen Tool Extras | Adds pen colors, solid, dotted and chevron pens, sliders, and edge and corner marks. [Details](docs/pen-tool-extras.md) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
+| Pen Tool Extras | Adds pen colors, solid, dashed and chevron pens, sliders, and edge and corner marks. [Details](docs/pen-tool-extras.md) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
 | No Tab Letters | Stops Tab from toggling SudokuPad's letter mode. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/no-tab-letters.user.js) |
 
