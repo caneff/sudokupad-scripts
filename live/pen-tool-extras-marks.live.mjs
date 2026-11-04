@@ -24,7 +24,7 @@ const DATA_KEY = 'EdgeMarks_marks'
 const OPACITY_KEY = 'PenColor_opacity'
 const COLORS_KEY = 'PenColor_colors'
 const { SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
-const { CORNER_RADIUS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
+const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const MARK_BOXES = ['x', 'directions', 'dot', 'cornerX', 'cornerDot']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const POLL_MS = 50
@@ -529,7 +529,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await setThickness(5)
     })
 
-    it('every edge, corner and cell mark is drawn above every line, whichever cell holds it, and stays above through undo, redo and a thickness change', async () => {
+    it('every edge mark, grid-corner mark and cell circle and cross is drawn above every line, whichever cell holds it, and stays above through undo, redo, a full redraw in cell order, a reload and a thickness change', async () => {
       // Marks in an earlier cell than a line, in a later one, and on the line's own cell; the pen value goes through an act like a click's.
       const put = (row, col, values) => read(([r, c, vals]) => {
         const cell = Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c)
@@ -537,14 +537,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         vals.forEach((arg) => Framework.app.act({ type: 'pen', arg }))
         Framework.app.act({ type: 'deselect' })
       }, [row, col, values])
-      // Every mark path is after every line path in the document.
-      const marksAboveLines = () => read(() => {
-        const MARKS = '3456bchijklmnopqrstuvwxy'
-        const paths = [...document.querySelectorAll('.cell-pen')].map((e) => ({ e, mark: MARKS.includes([...e.classList].find((c) => c.startsWith('pen-')).slice(4)) }))
+      // The paths drawn, and whether every mark path follows every line path in the document, and sits in the marks layer, which is the pen layer's last child.
+      const stacking = () => read(([markValues, layerId]) => {
+        const paths = [...document.querySelectorAll('.cell-pen')].map((e) => ({ e, mark: markValues.includes([...e.classList].find((c) => c.startsWith('pen-')).slice(4)) }))
         const lines = paths.filter((x) => !x.mark).map((x) => x.e)
         const marks = paths.filter((x) => x.mark).map((x) => x.e)
-        return { lines: lines.length, marks: marks.length, ok: lines.every((l) => marks.every((m) => Boolean(l.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING))) }
-      })
+        const layer = document.getElementById(layerId)
+        const nested = Boolean(layer) && layer.parentElement.id === 'cell-pen' && layer.parentElement.lastElementChild === layer && marks.every((m) => m.parentElement === layer)
+        return { lines: lines.length, marks: marks.length, ok: nested && lines.every((l) => marks.every((m) => Boolean(l.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING))) }
+      }, [MARK_VALUES, MARKS_LAYER_ID])
+      const STACKED = { lines: 3, marks: 11, ok: true }
       await setThickness(16)
       await put(2, 2, ['3', '5', 'u'])
       await put(2, 3, ['1', '2'])
@@ -552,17 +554,19 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await put(4, 4, ['1'])
       await put(4, 3, ['b', 'k', '5'])
       await put(1, 1, ['x'])
-      const drawn = await settle(async () => { const m = await marksAboveLines(); return m.lines === 3 && m.marks === 11 }, true)
-      assert.equal(drawn, true, JSON.stringify(await marksAboveLines()))
-      assert.deepEqual(await marksAboveLines(), { lines: 3, marks: 11, ok: true })
+      assert.deepEqual(await settle(stacking, STACKED), STACKED)
       await p.click('#control-undo')
-      await settle(penCount, 13)
-      assert.equal((await marksAboveLines()).ok, true, 'after an undo')
+      assert.deepEqual(await settle(penCount, 13), 13)
+      assert.deepEqual(await stacking(), { lines: 3, marks: 10, ok: true }, 'after an undo')
       await p.click('#control-redo')
-      await settle(penCount, 14)
-      assert.deepEqual(await marksAboveLines(), { lines: 3, marks: 11, ok: true }, 'after a redo')
+      assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after a redo')
+      // Every cell drawn again in cell order, which is what a reload, a replay and the script's own install do: the later cells' lines come last.
+      await read(() => Framework.app.puzzle.cells.forEach((cell) => cell.renderContent(true)))
+      assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after every cell is drawn again in cell order')
       await setThickness(10)
-      assert.equal((await marksAboveLines()).ok, true, 'after a thickness change')
+      assert.deepEqual(await stacking(), STACKED, 'after a thickness change')
+      await reload()
+      assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after a reload')
       await clearMarks()
       assert.equal(await settle(penCount, 0), 0, 'erasing removes the marks from the marks layer too')
       await setThickness(5)

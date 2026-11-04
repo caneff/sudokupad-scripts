@@ -423,10 +423,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     it('the rectangle keeps at least a pen mark\'s reach around the cells', async () => {
       const gap = await read(() => {
         const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
-        return { left: Math.min(...cells.map((c) => c.left)), top: Math.min(...cells.map((c) => c.top)) }
+        const svg = document.querySelector('#svgrenderer').getBoundingClientRect()
+        return { left: Math.min(...cells.map((c) => c.left)), top: Math.min(...cells.map((c) => c.top)), svgLeft: svg.left, svgTop: svg.top }
       })
       const rect = await settledRectangle(p)
-      assert.equal(gap.left - rect.x >= SOLVER_REACH && gap.top - rect.y >= SOLVER_REACH, true, JSON.stringify({ gap, rect }))
+      // The rectangle is clamped to the puzzle's own svg box, which a mark cannot draw past, so the reach is kept up to that edge.
+      const keeps = (cells, svg, edge) => edge <= Math.max(Math.floor(svg), Math.ceil(cells - SOLVER_REACH))
+      assert.equal(keeps(gap.left, gap.svgLeft, rect.x) && keeps(gap.top, gap.svgTop, rect.y), true, JSON.stringify({ gap, rect }))
     })
 
     it('the controls sit in front of the page: the keypad is still what a click at its center reaches', async () => {

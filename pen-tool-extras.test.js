@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, MARKS_LAYER_ID, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -368,12 +368,10 @@ test('edge marks and corner marks keep today\'s size up to the default thickness
   assert.equal(Math.abs(markGrowthScale(10) - (1 + 0.6 * 5 / 11)) < 1e-3, true)
 })
 
-test('MARK_VALUES holds every edge, corner and cell mark value and no line value, so no line is drawn in the marks layer', () => {
-  const lines = new Set(LINE_VALUES)
-  assert.deepEqual(MARK_VALUES.filter((v) => lines.has(v)), [])
-  for (const v of ['3', '4', 'b', 'c', '5', '6', 'h', 's', 't', 'y']) assert.equal(MARK_VALUES.includes(v), true, v)
-  assert.equal(new Set(MARK_VALUES).size, MARK_VALUES.length)
-  assert.equal(MARKS_LAYER_ID, 'pen-tool-extras-marks')
+test('MARK_VALUES holds exactly the values of SudokuPad\'s edge X and cell circle and cross and of every edge mark and grid-corner mark this script adds, and no line value', () => {
+  const expected = ['3', '4', 'b', 'c', '5', '6', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
+  assert.deepEqual([...MARK_VALUES].sort(), [...expected].sort())
+  assert.deepEqual(MARK_VALUES.filter((v) => LINE_VALUES.includes(v)), [])
 })
 
 test('the scale lands on every edge and corner mark and on no line, and a mark stays centred on its edge or corner while it grows', () => {
@@ -419,15 +417,15 @@ test('normalizeOpacity falls back to 80 for nothing saved and for anything untru
   }
 })
 
-test('buildOpacityCss at 80 fades the pen layer and the marks layer above it to SudokuPad\'s own 0.8, each as one group, and leaves each stroke solid, under :root:root', () => {
-  assert.equal(buildOpacityCss(80), ':root:root .cell-pen { opacity: 1; }\n:root:root #cell-pen, :root:root #pen-tool-extras-marks { opacity: 0.8; }')
+test('buildOpacityCss at 80 fades the pen layer to SudokuPad\'s own 0.8 as one group and leaves each stroke solid, under :root:root', () => {
+  assert.equal(buildOpacityCss(80), ':root:root .cell-pen { opacity: 1; }\n:root:root #cell-pen { opacity: 0.8; }')
 })
 
 test('buildOpacityCss writes the fraction of the percent, and 1 at 100', () => {
   const layer = (css) => css.split('\n')[1]
-  assert.equal(layer(buildOpacityCss(20)), ':root:root #cell-pen, :root:root #pen-tool-extras-marks { opacity: 0.2; }')
-  assert.equal(layer(buildOpacityCss(35)), ':root:root #cell-pen, :root:root #pen-tool-extras-marks { opacity: 0.35; }')
-  assert.equal(layer(buildOpacityCss(100)), ':root:root #cell-pen, :root:root #pen-tool-extras-marks { opacity: 1; }')
+  assert.equal(layer(buildOpacityCss(20)), ':root:root #cell-pen { opacity: 0.2; }')
+  assert.equal(layer(buildOpacityCss(35)), ':root:root #cell-pen { opacity: 0.35; }')
+  assert.equal(layer(buildOpacityCss(100)), ':root:root #cell-pen { opacity: 1; }')
 })
 
 // The id, range and value of each range input in markup, in order.
