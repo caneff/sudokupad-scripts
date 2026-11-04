@@ -2,7 +2,7 @@
 
 Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
 script is one `*.user.js` file with no build step and no ties to any other repo.
-`site/` is the static homepage: GitHub Pages serves it from `main` (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`) and Netlify serves it from the `release` branch (`netlify.toml`); `git push origin main:release` publishes to Netlify at 15 credits a push; `docs/research/` holds what was read from SudokuPad's source; `GLOSSARY.md` holds
+`site/` is the static homepage and its Pen Tool Extras details page: GitHub Pages serves it from `main` (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`) and Netlify serves it from the `release` branch (`netlify.toml`); `git push origin main:release` publishes to Netlify at 15 credits a push; `docs/research/` holds what was read from SudokuPad's source; `GLOSSARY.md` holds
 the vocabulary.
 
 ## Agent skills
@@ -26,7 +26,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 ## End-to-end seam
 
 - **Seam**: `npm test` (`node --test`), against each script's pure functions and
-  against `site/index.html` (`site.test.js`: every script has an install link)
+  against every page in `site/` (`site.test.js`: every script has an install link on the homepage)
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run
   test:live` (every `live/*.live.mjs`) covers them on sudokupad.app in headless Chromium, with the script
   injected at three times (at `DOMContentLoaded`, after load before Start Puzzle,

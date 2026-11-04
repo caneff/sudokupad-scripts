@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pen Tool Extras: SudokuPad scripts</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  ul { margin: 0 0 .75rem; padding-left: 1.25rem; }
+  li { margin-bottom: .25rem; }
+  figure { margin: .75rem 0 1rem; }
+  figure img { max-width: min(100%, 30rem); height: auto; }
+  figcaption { font-size: .9rem; }
+</style>
+</head>
+<body>
+  <p><a href="index.html">&larr; All SudokuPad scripts</a></p>
+  <h1>Pen Tool Extras</h1>
+  <p>A userscript that adds colors, extra pens, sliders and edge and corner marks to <a href="https://sudokupad.app">SudokuPad</a>'s pen tool. Turn the pen tool on in SudokuPad's settings first.</p>
+  <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install Pen Tool Extras</a></p>
+
+  <h2>Features</h2>
+  <ul>
+    <li><strong>Pen colors:</strong> nine colors that match your cell colors; change them in the settings dialog or by holding a pen color button.</li>
+    <li><strong>Three pen pages:</strong> 27 pens, solid, dashed and chevron lines; click the page button, press Tab or use the mouse wheel to change page.</li>
+    <li><strong>Two sliders:</strong> Thickness and Opacity, in the pen panel.</li>
+    <li><strong>Edge marks:</strong> click a cell edge to cycle an X, direction arrows and a circle.</li>
+    <li><strong>Corner marks:</strong> click near a grid corner to cycle an X and a circle.</li>
+    <li><strong>Right click goes backwards:</strong> on an edge or a corner it steps the cycle back.</li>
+  </ul>
+  <figure>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-example.png" alt="A sudoku grid with solid, dashed and chevron pen lines in several colors, and edge and grid-corner marks: X, direction arrows and circles" width="1334" height="1334">
+    <figcaption>Solid, dashed and chevron lines, edge marks and grid-corner marks.</figcaption>
+  </figure>
+
+  <h2>Good to know</h2>
+  <ul>
+    <li>Others can't see lines from pens past the first page unless they have the script too.</li>
+    <li>It leans on SudokuPad internals, so an update can break it.</li>
+  </ul>
+  <p>More detail: <a href="https://github.com/caneff/sudokupad-scripts/blob/main/README.md">the README</a>.</p>
+  <p><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
+</body>
+</html>
