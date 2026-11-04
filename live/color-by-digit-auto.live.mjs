@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
+import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
 /* global Replay */
 
@@ -33,24 +34,9 @@ const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5
 const PROFILES_KEY = 'ColorByDigit_profiles'
 const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 
-const POLL_MS = 50
-const SETTLE_MS = 10000
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Reads until it equals `expected` (compared as JSON) or SETTLE_MS passes, and
-// returns the last reading, so the caller's assert.deepEqual names what it got.
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 // Watches `read` for QUIET_MS and returns every distinct reading.
 async function watch (read) {

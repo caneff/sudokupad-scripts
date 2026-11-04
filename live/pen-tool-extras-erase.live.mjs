@@ -16,32 +16,19 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor, restartPuzzle } from './settings.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const MIDDLE_ERASE_KEY = 'PenColor_middleerase'
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', MIDDLE_ERASE_KEY]
-const POLL_MS = 50
-const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGES = { 1: '123456789', 2: 'abcdefghi', 3: 'jlnprtvxz' }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Reads until it equals `expected` (compared as JSON) or `timeoutMs` passes, and returns the last reading.
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 async function startPuzzle (page, beforeStart = async () => {}) {
   await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
@@ -152,7 +139,7 @@ function group (title, mode) {
     // click on the row removes the row and its branch and leaves the other pen's line, in one undo step.
     for (const [page, key] of [[1, 3], [2, 3], [3, 3]]) {
       it(`page ${page}: a middle click erases the whole line with its branch, leaves a crossing from another pen, and one undo brings it all back`, async () => {
-        await undoAll()
+        await restartPuzzle(p)
         // the other pen: a vertical line through the row, drawn first with the pen on button 6 of the same page
         await selectPen(page, 6)
         await drag([[0.5, 4.5], [4.5, 4.5]])

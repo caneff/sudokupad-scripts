@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
+import { settle } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../digit-color.user.js', import.meta.url), 'utf8')
@@ -54,24 +55,6 @@ const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 5: 'rgb(0, 11
 // The colors the checks choose.
 const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
 const EIGHT = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
-
-const POLL_MS = 50
-const SETTLE_MS = 10000
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Reads until it equals `expected` (compared as JSON) or SETTLE_MS passes, and
-// returns the last reading, so the caller's assert.deepEqual names what it got.
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 const START = /Start Puzzle|Continue|Resume/i
 const STYLE = '#digit-color-style'

@@ -15,7 +15,8 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from './settings.mjs'
+import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor, restartPuzzle } from './settings.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 // The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
 const { CHEVRON, ARROW_SPACING } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
@@ -27,27 +28,10 @@ const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
 const ARROW_SPACING_KEY = 'PenColor_arrowspacing'
-const POLL_MS = 50
-const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_THREE = 'jlnprtvxz'
 const PAGE_ONE = '123456789'
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Reads until it equals `expected` (compared as JSON) or `timeoutMs` passes, and returns the last
-// reading, so the caller's assert.deepEqual names what it got.
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 // Waits for the puzzle, runs `beforeStart` (the injection that wants the page before Start Puzzle), starts it, and
 // returns once the controls exist.
@@ -435,6 +419,7 @@ function group (title, mode) {
     })
 
     it('pen 9, whose characters are z and 0, stores and replays both ways, through undo, a replay and a reload', async () => {
+      await restartPuzzle(p)
       await press(9)
       assert.equal(await selected(), 'z')
       await drag([[0.5, 0.5], [0.5, 2.5]])

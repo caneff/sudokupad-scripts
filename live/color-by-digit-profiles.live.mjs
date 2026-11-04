@@ -15,28 +15,14 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
+import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
-const POLL_MS = 50
-const SETTLE_MS = 10000
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Reads until it equals `expected` (compared as JSON) or SETTLE_MS passes, and returns the last
-// reading, so the caller's assert.deepEqual names what it got.
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 // Watches `read` for QUIET_MS and returns every distinct reading.
 async function watch (read) {

@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -22,8 +23,6 @@ const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.ur
 const OUTLINE_KEY = 'PenColor_outline'
 const OPACITY_KEY = 'PenColor_opacity'
 const THICKNESS_KEY = 'PenColor_thickness'
-const POLL_MS = 50
-const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
 // A line is 5 wide, so its edge is 2.5 units from its middle. The outline is 2 units wide by default (up to 8): 4 units out is outline at the default,
 // 5.5 is past the outline of width 1 (3.5 out, plus its soft edge), 7 is outline only from a width of 5 up, and 14 is clear of every width (the widest, 8, reaches 10.5 and fades out over about 3 units more).
@@ -33,19 +32,6 @@ const PAST_NARROW_UNITS = 5.5
 const CLEAR_UNITS = 14
 const OUTLINE_WIDTH_KEY = 'PenColor_outlinewidth'
 const DASH_KEY = 'PenColor_dash'
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-async function settle (read, expected, timeoutMs = SETTLE_MS) {
-  const want = JSON.stringify(expected)
-  const deadline = Date.now() + timeoutMs
-  let value = await read()
-  while (JSON.stringify(value) !== want && Date.now() < deadline) {
-    await sleep(POLL_MS)
-    value = await read()
-  }
-  return value
-}
 
 let browser
 before(async () => { browser = await chromium.launch() })
