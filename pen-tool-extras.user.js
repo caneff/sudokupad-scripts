@@ -1521,6 +1521,8 @@
   }
 
   Framework.getApp().then(async () => {
+    // Read before the panel is built, which the first sync does with the pen tool already on.
+    activeShow = normalizeSliderVisibility(Framework.getData(SLIDERS_SHOWN_KEY))
     installHoldToEdit()
     installPenPanel()
     installOverlayPressSwallow()
@@ -1528,7 +1530,6 @@
     adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
     adoptOpacity(normalizeOpacity(Framework.getData(OPACITY_KEY)))
     adoptDash(normalizeDash(Framework.getData(DASH_KEY)))
-    activeShow = normalizeSliderVisibility(Framework.getData(SLIDERS_SHOWN_KEY))
     Framework.addSetting({
       tag: 'button',
       name: 'pentoolextras',
