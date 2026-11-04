@@ -2,7 +2,7 @@
 // at 1200x900, the mascot hidden:
 //   pen-tool-extras-grid-dialog.png   the settings dialog: the 3x3 color grid, the slider boxes and the three sliders
 //   pen-tool-extras-grid-panel.png    the pen panel with both sliders, without the thickness one, without the opacity one, with neither
-//   pen-tool-extras-grid-dashes.png   page 2 lines at dash length 0 (the dots of today), 2 and 4, at thickness 5
+//   pen-tool-extras-grid-dashes.png   page 2 lines at dash length 0 (the dots of today), 3 and 8, the longest, at thickness 5
 //   pen-tool-extras-grid-marks.png    the edge and corner marks at thickness 5, 10 and 16, with a line for comparison
 // Run from the repo root: node docs/research/pen-tool-extras-grid-screenshot.mjs [dialog|panel|dashes|marks]
 import { chromium } from 'playwright'
@@ -37,15 +37,6 @@ const openEditor = async () => {
   await page.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
 }
 const dialogButton = (text) => page.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-const setShow = async (thickness, opacity) => {
-  await openEditor()
-  const box = (key, on) => page.locator(`input[data-show="${key}"]`).setChecked(on)
-  await box('thickness', thickness)
-  await box('opacity', opacity)
-  await dialogButton('Save').click()
-  await page.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
-  await page.waitForTimeout(300)
-}
 const panelClip = () => page.locator('.controls-buttons').boundingBox()
 const boardClip = () => page.locator('#svgrenderer').boundingBox()
 
@@ -119,7 +110,7 @@ if (wants('dashes')) {
   await drag([3, 3], [6, 6])
   await drag([8, 2], [8, 7])
   const shots = []
-  for (const dash of [0, 2, 4]) {
+  for (const dash of [0, 3, 8]) {
     await setDialog(async () => { await page.locator('input[data-setting="dash"]').fill(String(dash)) })
     shots.push({ caption: `dash length ${dash}${dash === 0 ? ' (dots)' : ''}, thickness 5`, buffer: await page.screenshot({ clip: await boardClip() }) })
   }

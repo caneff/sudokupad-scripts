@@ -20,6 +20,13 @@ export async function openSettings (p) {
   return open
 }
 
+// The scale of a computed `transform` (a `matrix(s, 0, 0, s, 0, 0)` or `none`): pen-tool-extras grows edge and corner marks
+// by a CSS scale, so a mark's width on screen is its stroke width times this.
+export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
+
+// The width a stroke draws at on screen, from its computed `strokeWidth` and `transform`, rounded to 4 places.
+export const drawnWidth = ({ strokeWidth, transform }) => Math.round(parseFloat(strokeWidth) * scaleOf(transform) * 1e4) / 1e4
+
 // The opacity each element matching `selector` shows at, in document order: its own times every ancestor's, since
 // pen-tool-extras puts the slider's value on the pen layer and leaves each stroke solid. Rounded to 3 places.
 export const effectiveOpacities = (page, selector) => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((e) => {

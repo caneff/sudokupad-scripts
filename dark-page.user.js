@@ -41,10 +41,10 @@
   const PAD = 1
   // How far a solver's pen mark reaches past the box of the cell it is on: the edge X on an outer
   // edge at Pen Tool Extras' largest thickness (16), whose edge and corner marks are then grown by 1.3,
-  // measured on sudokupad.app v0.611.0 at 15.88px (10.07px at the default thickness of 5). The rectangle
+  // measured on sudokupad.app v0.611.0 at 15.88px in a 1200x900 window (10.07px at the default thickness of 5), plus about 7% for a board drawn larger. The rectangle
   // keeps this much around the cells so the mark sits on white from the moment it is drawn, not from
   // the next measurement.
-  const SOLVER_REACH = 16
+  const SOLVER_REACH = 17
   // What the puzzle draws as leaf elements. Elements in `defs`, `marker` and the like have no box.
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
   const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']

@@ -96,7 +96,7 @@
   // a tinted dark grey such as rgb(10, 20, 30) is about 0.024; the least saturated hued colors
   // of the default pages, darkened, are above 0.08.
   const GREY_CHROMA = 0.04
-  // The one thickness slider. SudokuPad draws free lines, the cell circle and the cross 5 wide
+  // The thickness setting, which the pen tool's panel and the settings dialog both have a slider for. SudokuPad draws free lines, the cell circle and the cross 5 wide
   // (in its cell units, a cell being 64) and the edge X 2.5 wide; the slider's value is the first
   // width, and everything else scales with it, so an edge mark is always half of it.
   const THICKNESS = { min: 1, max: 16, step: 1, fallback: 5 }
@@ -107,9 +107,10 @@
   const MARK_GROWTH = 0.3
   // The length of a page 2 dash in line widths, from the dots of today (0) to longer dashes.
   const DASH = { min: 0, max: 8, step: 1, fallback: 0 }
-  // The least space between two dashes, in line widths, beyond the round caps' own half width at each end.
+  // The least space between two dashes, in line widths, measured between the round caps' ends (so the dash-to-dash
+  // gap is one line width more, the caps' two half widths).
   const MIN_DASH_GAP_PER_THICKNESS = 1.3
-  // The one opacity slider, in percent. SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }`
+  // The opacity setting, in percent, which the panel and the dialog both have a slider for. SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }`
   // (tool-pen.css), so 80 is the fallback and leaves the marks as they are; 100 is solid, and 20 is the
   // floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
@@ -503,7 +504,7 @@
 
   // How much an edge or corner mark is scaled at `thickness`: 1 up to the default thickness, then growing
   // evenly to 1 + MARK_GROWTH at THICKNESS.max.
-  function edgeMarkScale (thickness) {
+  function markGrowthScale (thickness) {
     if (thickness <= THICKNESS.fallback) return 1
     const grown = 1 + MARK_GROWTH * (thickness - THICKNESS.fallback) / (THICKNESS.max - THICKNESS.fallback)
     return Math.round(grown * 1e4) / 1e4
@@ -511,7 +512,7 @@
 
   // Sets the stroke widths, for strokes drawn already and new ones: FULL_WIDTH_VALUES at
   // `thickness`; SudokuPad's edge X marks and this script's arrows and circles at half of it. The marks
-  // are also scaled by edgeMarkScale about their middle (`fill-box` is the path's own box, which is
+  // are also scaled by markGrowthScale about their middle (`fill-box` is the path's own box, which is
   // centred on the edge midpoint or corner), and their stroke width is divided by that scale so the
   // stroke ends up as thick as it was and only the mark's length grows. Lines are never scaled.
   // `:root:root` outranks SudokuPad's `.cell-pen` and `.pen-3` width rules whichever stylesheet
@@ -520,7 +521,7 @@
     if (normalizeThickness(thickness) !== thickness) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
     const selector = (values) => values.map((v) => `:root:root .cell-pen.pen-${v}`).join(', ')
     const marks = [...EDGE_X.flatMap((edge) => [edge, ...ADDED[edge]]), ...Object.values(CORNER_VALUES).flat()]
-    const scale = edgeMarkScale(thickness)
+    const scale = markGrowthScale(thickness)
     return [
       `${selector(FULL_WIDTH_VALUES)} { stroke-width: ${thickness}; }`,
       `${selector(marks)} { stroke-width: ${thickness * MARK_PER_THICKNESS / scale}; transform: scale(${scale}); transform-box: fill-box; transform-origin: center; }`
@@ -542,21 +543,24 @@
   // the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end
   // would have no dot; this puts it a hair before the end (0.0064 of a unit on a cell of 64).
   const END_DOT_SHRINK = 0.9999
-  // The `stroke-dasharray` of a page 2 line of `length` at `thickness` and a dash of `dash` line widths: the
-  // dashes are a dash of `dash * thickness` and the space after, with their start-to-start spacing
-  // (`dash + DOT_SPACING_PER_THICKNESS` line widths) snapped so a whole number of them fits and the last dash
-  // ends where the segment does. With a dash of 0 that is the dots of today, the last one a hair before the end.
-  // Each segment of a line is its own path with its own pattern, starting on a dash, so a whole number
-  // keeps the dashes evenly spaced across a join. A line too short to hold two dashes and a gap that leaves
-  // the round caps apart is drawn solid.
-  function dashArray (thickness, dash, length) {
-    const on = dash * thickness
-    const room = length - on
-    const period = (n) => END_DOT_SHRINK * room / n
-    let n = Math.max(1, Math.round(room / ((dash + DOT_SPACING_PER_THICKNESS) * thickness)))
-    while (n > 1 && period(n) - on < MIN_DASH_GAP_PER_THICKNESS * thickness) n--
-    if (period(n) - on < MIN_DASH_GAP_PER_THICKNESS * thickness) return 'none'
-    return `${on} ${period(n) - on}`
+  // The dashes of a page 2 line of `length` at `thickness` and a dash length of `dash` line widths, as the
+  // declarations `stroke-dasharray` and (for a dash) `stroke-dashoffset`. Each segment of a line is its own
+  // path with its own pattern, so a whole number of periods is fitted to the segment's `length`: with a dash of 0
+  // that is the dots of today (a zero-length dash with the round cap, spaced DOT_SPACING_PER_THICKNESS line widths,
+  // the last dot a hair before the end, which is the segment's end where the browser draws no zero-length dash);
+  // with a dash, the pattern is shifted to start half a gap in, so a segment starts and ends with half a gap and
+  // the two halves at a cell boundary make one gap like the rest. A dash too long for the segment to hold a gap
+  // of MIN_DASH_GAP_PER_THICKNESS line widths is shortened to leave one, so a page 2 line never draws solid.
+  function dashDeclarations (thickness, dash, length) {
+    if (dash === 0) {
+      return `stroke-dasharray: 0 ${END_DOT_SHRINK * length / Math.max(1, Math.round(length / (DOT_SPACING_PER_THICKNESS * thickness)))};`
+    }
+    const minGap = MIN_DASH_GAP_PER_THICKNESS * thickness
+    let periods = Math.max(1, Math.round(length / ((dash + DOT_SPACING_PER_THICKNESS) * thickness)))
+    while (periods > 1 && length / periods - dash * thickness < minGap) periods--
+    const period = length / periods
+    const on = Math.min(dash * thickness, period - minGap)
+    return `stroke-dasharray: ${on} ${period - on}; stroke-dashoffset: ${on + (period - on) / 2};`
   }
 
   // The look of the pages after the first, which SudokuPad's own CSS knows nothing about: each pen
@@ -564,7 +568,7 @@
   // (a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so they
   // scale with the slider; the dash setting lengthens each dot into a dash), and its buttons' swatches are dots too. `:root:root` outranks SudokuPad's
   // own rules whichever stylesheet loads last.
-  function buildPagesCss (thickness, dash = DASH.fallback) {
+  function buildPagesCss (thickness, dash) {
     if (normalizeThickness(thickness) !== thickness) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
     if (normalizeDash(dash) !== dash) throw new RangeError(`pen-tool-extras: ${dash} is not a dash length from ${DASH.min} to ${DASH.max}`)
     const rules = []
@@ -573,7 +577,7 @@
       page.chars.forEach((char, i) => rules.push(`.pencolor-${char} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`))
       if (!page.dotted) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
-      const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { stroke-dasharray: ${dashArray(thickness, dash, length)}; }`
+      const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { ${dashDeclarations(thickness, dash, length)} }`
       rules.push(lines(ORTHOGONAL_LINES, CELL_UNITS), lines(DIAGONAL_LINES, CELL_UNITS * Math.SQRT2))
       PEN_COLORS.forEach((n) => rules.push(
         `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${index + 1}"]:after { background-color: transparent; background-image: radial-gradient(circle, var(--puzzle-pencolor-${n}) 0.14rem, transparent calc(0.14rem + 0.5px)); background-size: 25% 25%; background-position: center; }`))
@@ -629,7 +633,7 @@
   // do. A hidden slider is an empty row of the same height, so the other keeps its place, and with both
   // hidden there is no block at all, so the panel has nothing left over. Neither slider takes keyboard
   // focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
-  function renderPanelSliders (thickness, opacity, show = { thickness: true, opacity: true }) {
+  function renderPanelSliders (thickness, opacity, show) {
     if (!show.thickness && !show.opacity) return ''
     const row = (shown, id, label, picture, range, value) => shown
       ? `<div class="${SLIDER_ROW}" title="${label}">${picture}` +
@@ -649,7 +653,7 @@
   const SAMPLE_TO = [52, 26]
   const SAMPLE_WIDTH = 7.2
   const SAMPLE_DASH_SHARE = 0.42
-  function renderPageIcon (current, dash = DASH.fallback) {
+  function renderPageIcon (current, dash) {
     const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
     const kind = !next.dotted ? 'solid' : dash === 0 ? 'dotted' : 'dashed'
     let sample
@@ -760,7 +764,7 @@
       renderPageIcon,
       renderPanelSliders,
       renderEditor,
-      edgeMarkScale,
+      markGrowthScale,
       DASH,
       normalizeDash,
       normalizeSliderVisibility,
@@ -1107,9 +1111,8 @@
       missing = derived.missing
       edited.clear()
       reset = true
-      // The panel's sliders have no Save or Cancel, so their reset is at once, like their moves; the dash
-      // length and the slider boxes are the dialog's own and wait for Save like the colors.
-      resetSliders()
+      // The sliders and boxes are drafts like the colors: they go back to their defaults on Save, and Cancel
+      // leaves what is in force.
       thickness = THICKNESS.fallback
       opacity = OPACITY.fallback
       dash = DASH.fallback
@@ -1150,15 +1153,18 @@
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
     draw()
     // `change` fires when a color picker closes (the swatch the user sees is already the new
-    // color) and when a mark box is ticked.
+    // color), when a mark box or a slider box is ticked and when the line mode is chosen.
     // A dialog slider is a draft: its readout moves with it and nothing is applied until Save.
     box.addEventListener('input', (event) => {
       const el = event.target.closest('input[type="range"]')
       if (!el) return
       const value = Number(el.value)
-      if (el.dataset.setting === 'thickness') thickness = value
-      else if (el.dataset.setting === 'opacity') opacity = value
-      else dash = value
+      switch (el.dataset.setting) {
+        case 'thickness': thickness = value; break
+        case 'opacity': opacity = value; break
+        case 'dash': dash = value; break
+        default: throw new Error(`pen-tool-extras: the dialog has no slider named ${el.dataset.setting}`)
+      }
       box.querySelector(`output[data-readout="${el.dataset.setting}"]`).textContent = String(value)
     })
     box.addEventListener('change', (event) => {
@@ -1247,14 +1253,6 @@
       else Framework.setData(SLIDERS_SHOWN_KEY, draft.show)
       adoptShow(draft.show)
     }
-  }
-
-  // Back to SudokuPad's own thickness and opacity, with nothing saved.
-  function resetSliders () {
-    Framework.removeData(THICKNESS_KEY)
-    Framework.removeData(OPACITY_KEY)
-    adoptThickness(THICKNESS.fallback)
-    adoptOpacity(OPACITY.fallback)
   }
 
   // Moving a panel slider sets and saves its value at once. It changes no cell, so nothing goes on the

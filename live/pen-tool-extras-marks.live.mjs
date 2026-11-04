@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { effectiveOpacities, headerVersion, openSettings } from './settings.mjs'
+import { effectiveOpacities, headerVersion, openSettings, scaleOf } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -455,19 +455,21 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const reach = () => read(() => {
       const mark = document.querySelector('.cell-pen')
       if (!mark) return null
+      const style = window.getComputedStyle(mark)
       const m = mark.getBoundingClientRect()
       const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
       const left = Math.min(...cells.map((r) => r.left))
       const top = Math.min(...cells.map((r) => r.top))
       const right = Math.max(...cells.map((r) => r.right))
       const bottom = Math.max(...cells.map((r) => r.bottom))
-      // The box leaves the stroke out: half its width, in page pixels, lies beyond it. The box is the scaled one;
-      // the stroke width is the one before the scale, which the same scale grows.
-      const style = window.getComputedStyle(mark)
-      const scale = style.transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(style.transform)[1])
-      const half = parseFloat(style.strokeWidth) * scale / 2 * document.querySelector('#svgrenderer').getScreenCTM().a
-      return Math.max(left - m.left, top - m.top, m.right - right, m.bottom - bottom) + half
-    })
+      // The box leaves the stroke out, which is measured in the caller: half of its width on screen lies beyond the box.
+      return {
+        beyond: Math.max(left - m.left, top - m.top, m.right - right, m.bottom - bottom),
+        strokeWidth: parseFloat(style.strokeWidth),
+        transform: style.transform,
+        pixelsPerUnit: document.querySelector('#svgrenderer').getScreenCTM().a
+      }
+    }).then((m) => m && m.beyond + m.strokeWidth * scaleOf(m.transform) / 2 * m.pixelsPerUnit)
 
     it('every edge and corner mark on the outer edges and corners, stroke and growth included, reaches no farther past the cells than Dark Page keeps (SOLVER_REACH), at thickness 5, 10 and 16', async () => {
       for (const thickness of [5, 10, 16]) {
@@ -859,16 +861,22 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(sameAt('0.3'), true), true, 'after a reload')
       })
 
-      it('Restore defaults puts the panel slider back to 80 and clears the saved opacity at once, and Cancel afterwards does not bring it back', async () => {
+      it('Restore defaults sets the dialog\'s opacity slider to 80 for Save: Cancel afterwards leaves the saved opacity and the marks, Save clears it and draws at 0.8', async () => {
         assert.equal(await savedOpacity(), 30)
         await openEditor()
         assert.equal(await editor().locator('input[type=range]').count(), 3)
         await dialogButton('Restore defaults').click()
-        assert.equal(await settle(() => slider().inputValue(), '80'), '80')
-        assert.equal(await settle(sameAt('0.8'), true), true)
-        assert.equal(await savedOpacity(), null)
+        assert.equal(await editor().locator('input[data-setting="opacity"]').inputValue(), '80')
+        assert.equal(await savedOpacity(), 30, 'nothing is saved before Save')
+        assert.equal(await settle(sameAt('0.3'), true), true)
         await closeWith('Cancel')
+        assert.equal(await savedOpacity(), 30)
+        assert.equal(await settle(sameAt('0.3'), true), true)
+        await openEditor()
+        await dialogButton('Restore defaults').click()
+        await closeWith('Save')
         assert.equal(await savedOpacity(), null)
+        assert.equal(await settle(() => slider().inputValue(), '80'), '80')
         assert.equal(await settle(sameAt('0.8'), true), true)
       })
 

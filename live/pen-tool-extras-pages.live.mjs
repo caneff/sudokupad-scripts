@@ -248,6 +248,9 @@ function group (title, mode, extra = []) {
       await closeWith('Save')
       // 3 dashes of a line width of 5
       assert.equal(await settle(dashOn, 15), 15, 'a line already drawn takes the dashes')
+      // Each segment starts half a gap in, so the halves at a cell boundary make one gap, not a double-length dash.
+      const pattern = await read(() => { const st = window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')); return { array: st.strokeDasharray.split(/[ ,]+/).map(parseFloat), offset: parseFloat(st.strokeDashoffset) } })
+      assert.equal(Math.abs(pattern.offset - (pattern.array[0] + pattern.array[1] / 2)) < 1e-6, true, JSON.stringify(pattern))
       assert.equal(await saved(DASH_KEY), 3)
       assert.equal(await solidOn(), 'none', 'page 1 lines stay solid')
       assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray), 'none', 'a cell mark stays solid')
@@ -276,7 +279,7 @@ function group (title, mode, extra = []) {
       assert.equal(await settle(sample, 'dotted'), 'dotted')
       await p.locator(PAGE_BUTTON).click()
       assert.equal(await settle(selected, 'c'), 'c')
-      await read(() => Framework.removeData('PenColor_thickness'))
+      await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
     })
 
     it('Tab turns the page back and forth, keeping the color number, and ToolPen_color stays a digit', async () => {

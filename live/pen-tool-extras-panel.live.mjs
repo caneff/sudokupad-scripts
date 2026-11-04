@@ -22,6 +22,7 @@ const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').t
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const THICKNESS_KEY = 'PenColor_thickness'
+const SLIDERS_KEY = 'PenColor_sliders'
 const OPACITY_KEY = 'PenColor_opacity'
 const LINE_MODE_KEY = 'ToolPen_linemode'
 const THICKNESS = '#pen-tool-extras-thickness'
@@ -350,7 +351,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('the slider boxes are ticked by default, and a slider hidden in the dialog still applies: Save takes it out of the panel, Cancel leaves the panel, the other slider keeps its place, and both hidden leave no gap', async () => {
-      await read(() => Framework.removeData('PenColor_sliders'))
+      await read((k) => Framework.removeData(k), SLIDERS_KEY)
       await openEditor()
       const show = (key) => editor().locator(`input[data-show="${key}"]`)
       assert.equal(await show('thickness').isChecked(), true)
@@ -363,7 +364,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await dialogButton('Cancel').click()
       await editor().waitFor({ state: 'detached' })
       assert.equal(await p.locator(THICKNESS).count(), 1, 'Cancel leaves the panel as it was')
-      assert.equal(await saved('PenColor_sliders'), null)
+      assert.equal(await saved(SLIDERS_KEY), null)
       // Hide the thickness slider: the opacity slider keeps its place and the thickness one still applies to the marks.
       await openEditor()
       await show('thickness').uncheck()
@@ -374,7 +375,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await slidersBox(), bothAt.sliders)
       assert.deepEqual(await p.locator('.pen-tool-extras-page').boundingBox(), pageButton)
       assert.equal(await lineWidth(), 16, 'a hidden slider\'s value still applies')
-      assert.deepEqual(await read(() => Framework.getData('PenColor_sliders')), { thickness: false, opacity: true })
+      assert.deepEqual(await read((k) => Framework.getData(k), SLIDERS_KEY), { thickness: false, opacity: true })
       // Hide the opacity slider too: no block, no gap, and the page button stays put.
       await openEditor()
       await show('opacity').uncheck()
@@ -405,24 +406,32 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await dialogButton('Save').click()
       await editor().waitFor({ state: 'detached' })
       await p.locator(OPACITY).waitFor({ state: 'visible' })
-      assert.equal(await saved('PenColor_sliders'), null)
+      assert.equal(await saved(SLIDERS_KEY), null)
     })
 
-    it('Restore defaults resets the panel\'s sliders at once, and the dialog\'s sliders to the defaults for Save', async () => {
+    it('Restore defaults sets the dialog\'s sliders to the defaults for Save: Cancel afterwards leaves the panel\'s sliders, the saved values and the marks, and Save resets them', async () => {
       await dragToMax(THICKNESS)
+      const keep = { thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }
       await openEditor()
       await dialogButton('Restore defaults').click()
+      assert.deepEqual(await Promise.all(['thickness', 'opacity'].map((k) => editor().locator(`input[data-setting="${k}"]`).inputValue())), ['5', '80'])
+      assert.deepEqual({ thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }, keep, 'the panel is untouched before Save')
+      assert.equal(await saved(THICKNESS_KEY), 16)
+      await dialogButton('Cancel').click()
+      await editor().waitFor({ state: 'detached' })
+      assert.deepEqual({ thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }, keep)
+      assert.equal(await saved(THICKNESS_KEY), 16)
+      assert.equal(await lineWidth(), 16)
+      await openEditor()
+      await dialogButton('Restore defaults').click()
+      await dialogButton('Save').click()
+      await editor().waitFor({ state: 'detached' })
       assert.equal(await settle(() => sliderValue(THICKNESS), '5'), '5')
       assert.equal(await sliderValue(OPACITY), '80')
       assert.equal(await settle(lineWidth, 5), 5)
       assert.equal(await settle(lineOpacity, 0.8), 0.8)
       assert.equal(await saved(THICKNESS_KEY), null)
       assert.equal(await saved(OPACITY_KEY), null)
-      assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
-      await dialogButton('Cancel').click()
-      await editor().waitFor({ state: 'detached' })
-      assert.equal(await saved(THICKNESS_KEY), null)
-      assert.equal(await sliderValue(THICKNESS), '5')
     })
 
     it('no uncaught page errors', () => {
