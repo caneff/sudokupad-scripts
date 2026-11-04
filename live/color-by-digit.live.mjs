@@ -424,6 +424,32 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(coloredCount, 0), 0)
       })
 
+      it('each group box has a red × named "Remove group" in its upper right corner, clear of the pulldown and numpad at desktop and phone width', async () => {
+        const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+        for (const width of [1200, 390]) {
+          await p.setViewportSize({ width, height: 900 })
+          await openEditor()
+          const removes = p.getByRole('button', { name: 'Remove group' })
+          assert.equal(await removes.count(), 3)
+          assert.equal(await removes.first().getAttribute('title'), 'Remove group')
+          assert.equal(await removes.first().evaluate((e) => window.getComputedStyle(e).color), 'rgb(192, 57, 43)')
+          const boxes = await p.locator('#color-by-digit-editor button[data-act=remove]').evaluateAll((els) => els.map((x) => {
+            const rect = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+            const box = x.parentElement
+            const others = [...box.querySelectorAll('select, [data-role=numpad] button')].map(rect)
+            return { x: rect(x), box: rect(box), others }
+          }))
+          for (const { x, box, others } of boxes) {
+            assert.equal(x.right <= box.right && x.top >= box.top, true, `inside the box's upper right at width ${width}: ${JSON.stringify({ x, box })}`)
+            assert.equal(box.right - x.right < 16 && x.top - box.top < 16, true, `in the corner at width ${width}: ${JSON.stringify({ x, box })}`)
+            assert.equal(others.length > 0, true, `the box holds a pulldown and numpad to clear at width ${width}`)
+            assert.deepEqual(others.filter((o) => overlap(x, o)), [], `clear of pulldown and numpad at width ${width}`)
+          }
+          await closeWith('Cancel')
+        }
+        await p.setViewportSize({ width: 1200, height: 900 })
+      })
+
       it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a press does nothing', async () => {
         await openEditor()
         const groupCount = () => p.locator('#color-by-digit-editor button[data-act=remove]').count()

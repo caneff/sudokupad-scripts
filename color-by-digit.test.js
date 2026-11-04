@@ -907,3 +907,22 @@ test('renderEditor keeps the in-group digits bold and full opacity and the other
 test('autoBoxHtml centers the X in its box with a flex box, both ways', () => {
   assert.match(autoBoxHtml(true), /data-role="auto-mark"[^>]*display:flex;align-items:center;justify-content:center/)
 })
+
+test('renderEditor gives each group a red × in its box\'s upper right corner, named "Remove group", and no Remove text button', () => {
+  const html = editor([{ key: 'a', digits: [] }, { key: 'b', digits: [] }], [], [0, 0])
+  assert.doesNotMatch(html, />Remove</)
+  const buttons = [...html.matchAll(/<button[^>]*data-act="remove"[^>]*>(.*?)<\/button>/g)]
+  assert.equal(buttons.length, 2)
+  assert.deepEqual(buttons.map((m) => m[1]), ['&#215;', '&#215;'])
+  assert.deepEqual([...html.matchAll(/data-act="remove" data-group="(\d)"/g)].map((m) => m[1]), ['0', '1'])
+  const tag = buttons[0][0]
+  assert.match(tag, /aria-label="Remove group"/)
+  assert.match(tag, /title="Remove group"/)
+  assert.match(tag, /position:absolute;top:\d+px;right:\d+px/)
+  assert.match(tag, /color:#c0392b/)
+})
+
+test('renderEditor reserves room beside the numpad for the group\'s × so it cannot cover the pulldown or the digits', () => {
+  const html = editor([{ key: 'a', digits: [] }], [], [0])
+  assert.match(html, /position:relative;[^"]*padding:8px 40px 8px 8px/)
+})
