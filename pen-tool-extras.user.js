@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.8.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dotted (or dashed) lines and a third page of nine that draw a thin line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
+// @version      1.9.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed (or dotted) lines and a third page of nine that draw a thin line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.8.0'
+  const VERSION = '1.9.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -66,13 +66,13 @@
   // character is the one a stroke stores after its value and the replay holds (`pc:a`), which draws,
   // undoes and replays for any lowercase letter (docs/research/sudokupad-pen-tool.md, "Pen colors past
   // nine"). The first page is SudokuPad's own and must stay first: its characters are the only ones stock
-  // SudokuPad can select. A dotted page draws its lines as dots. A pen value has no direction, so a chevron page's
+  // SudokuPad can select. A dashed page draws its lines as dashes (dots at a dash length of 0). A pen value has no direction, so a chevron page's
   // pen is two characters: the one on its button (`chars`) for a line dragged the way SudokuPad draws the value, and
   // the `reverse` one at the same index for a line dragged the other way. Only the first is ever selected.
   const PEN_PAGES = [
-    { chars: PEN_COLORS, dotted: false },
-    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true },
-    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dotted: false, chevrons: true }
+    { chars: PEN_COLORS, dashed: false },
+    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dashed: true },
+    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dashed: false, chevrons: true }
   ]
   // The key the selected pen character is saved under. `ToolPen_color` is SudokuPad's own and stays a
   // digit: stock SudokuPad throws when the pen tool opens on a letter there, and this script may be
@@ -113,11 +113,11 @@
   // middle of the mark, which is the point it is centred on. At 16 an edge X then reaches 12.8 from its middle against the
   // line's half width of 8, so the whole X clears a line of the same thickness.
   const MARK_GROWTH = 0.6
-  // The length of a page 2 dash in line widths, from the dots of today (0) to longer dashes.
-  const DASH = { min: 0, max: 8, step: 1, fallback: 0 }
-  // The least space between two dashes, in line widths, measured between the round caps' ends (so the dash-to-dash
-  // gap is one line width more, the caps' two half widths).
-  const MIN_DASH_GAP_PER_THICKNESS = 1.3
+  // The length of a page 2 dash in line widths, from dots (0) to longer dashes; 3 is the default, which draws dashes.
+  const DASH = { min: 0, max: 8, step: 1, fallback: 3 }
+  // The least `stroke-dasharray` gap between two dashes, in line widths. The round caps take half a line width of it at each end, so the
+  // gap that shows is one line width less: at least one line width, on a straight and a diagonal piece alike.
+  const MIN_DASH_GAP_PER_THICKNESS = 2
   // The opacity setting, in percent, which the panel and the dialog both have a slider for. SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }`
   // (tool-pen.css), so 80 is the fallback and leaves the marks as they are; 100 is solid, and 20 is the
   // floor where a mark still shows.
@@ -127,7 +127,7 @@
   // cross). Left out on purpose: 3, 4, b and c (the edge X marks, half the width), and h to y (the
   // arrows, circles and grid-corner marks this script adds, also half).
   const FULL_WIDTH_VALUES = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
-  // The lines among them, which a dotted page draws as dots: the cell circle and cross (5 and 6) stay solid.
+  // The lines among them, which a dashed page draws as dashes: the cell circle and cross (5 and 6) stay solid.
   // The diagonal ones span a cell's diagonal, 64 * sqrt(2), the others one side, 64 (a cell is 64 units).
   const DIAGONAL_LINES = ['d', 'e', 'f', 'g']
   const ORTHOGONAL_LINES = FULL_WIDTH_VALUES.filter((v) => v !== '5' && v !== '6' && !DIAGONAL_LINES.includes(v))
@@ -259,7 +259,7 @@
   }
 
   // Saved data is untrusted: the saved dash length when it is a whole number from DASH.min to DASH.max,
-  // else DASH.fallback (the dots of today).
+  // else DASH.fallback.
   function normalizeDash (data) {
     const ok = Number.isInteger(data) && data >= DASH.min && data <= DASH.max
     return ok ? data : DASH.fallback
@@ -411,12 +411,13 @@
   }
   // The sizes of a chevron line, in line widths (the thickness setting; the line's own width follows it all the way down, but a
   // chevron is never smaller than at the default thickness, so its direction stays visible at 1): a chevron's wings reach `halfLength` back and
-  // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the thin line and the
-  // chevrons (`lineMin` units at the least, so the line shows at thickness 1); `spacing` is the distance between two chevrons'
+  // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the line (1, the same as
+  // a page 1 line at every thickness) and the chevrons; `spacing` is the distance between two chevrons'
   // middles, fitted to a whole number per segment (a run of chevrons, not a solid row of them). The furthest a
-  // chevron reaches off its line, halfWidth plus half the stroke at the largest thickness, stays inside what Dark Page keeps
-  // past a cell (its `SOLVER_REACH`; a unit test holds the two together).
-  const CHEVRON = { halfLength: 0.5, halfWidth: 0.75, stroke: 0.45, line: 0.5, lineMin: 2, spacing: 5 }
+  // chevron reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
+  // Above thickness `growFrom` a chevron's wings and length also grow, evenly to 1 + `growth` times at the largest thickness (the stroke
+  // and the spacing do not), so the chevrons still stick out clearly past a line that thick.
+  const CHEVRON = { halfLength: 0.7, halfWidth: 0.95, stroke: 0.5, line: 1, spacing: 5, growFrom: 10, growth: 0.35 }
 
   // Which way a line stored with the color character `char` was dragged: true for the character on a chevron page's button
   // (forward), false for its reverse character, null for a character no chevron page uses.
@@ -494,16 +495,17 @@
 
   // The path data of a chevron line, in the renderer's units (a cell is CELL_UNITS), for the line value `value` on the cell at
   // (row, col) dragged `forward` or not, at `thickness`: { line, chevrons, lineWidth, chevronWidth }. The line is the whole
-  // segment, thin; each chevron is wing, tip, wing, the tip toward the way it was dragged. Whole chevrons are fitted to the
+  // segment, as wide as a page 1 line; each chevron is wing, tip, wing, the tip toward the way it was dragged. Whole chevrons are fitted to the
   // segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
   function chevronLine (value, forward, row, col, thickness) {
     const [start, end] = LINE_PATHS[value]
     const [from, to] = (forward ? [start, end] : [end, start]).map(([r, c]) => [(col + c) * CELL_UNITS, (row + r) * CELL_UNITS])
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
-    // Chevrons keep the size they have at the default thickness below it; only the thin line gets thinner.
+    // Chevrons keep the size they have at the default thickness below it; only the line gets thinner.
     const size = Math.max(thickness, THICKNESS.fallback)
-    const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
+    const grown = 1 + CHEVRON.growth * Math.max(0, thickness - CHEVRON.growFrom) / (THICKNESS.max - CHEVRON.growFrom)
+    const [half, wide] = [CHEVRON.halfLength * size * grown, CHEVRON.halfWidth * size * grown]
     // The shortest segment (a cell side) holds at least one even at the largest thickness, so there is never none.
     const count = Math.round(length / (CHEVRON.spacing * size))
     let chevrons = ''
@@ -515,7 +517,7 @@
     return {
       line: `M${pointText(from)}L${pointText(to)}`,
       chevrons,
-      lineWidth: Math.max(CHEVRON.lineMin, CHEVRON.line * thickness),
+      lineWidth: CHEVRON.line * thickness,
       chevronWidth: CHEVRON.stroke * size
     }
   }
@@ -682,32 +684,50 @@
   // the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end
   // would have no dot; this puts it a hair before the end (0.0064 of a unit on a cell of 64).
   const END_DOT_SHRINK = 0.9999
-  // The dashes of a page 2 line of `length` at `thickness` and a dash length of `dash` line widths, as the
-  // declarations `stroke-dasharray` and (for a dash) `stroke-dashoffset`. Each segment of a line is its own
-  // path with its own pattern, so a whole number of periods is fitted to the segment's `length`: with a dash of 0
-  // that is the dots of today (a zero-length dash with the round cap, spaced DOT_SPACING_PER_THICKNESS line widths,
-  // the last dot a hair before the end, which is the segment's end where the browser draws no zero-length dash);
-  // with a dash, the pattern is shifted to start half a gap in, so a segment starts and ends with half a gap and
-  // the two halves at a cell boundary make one gap like the rest. A dash too long for the segment to hold a gap
-  // of MIN_DASH_GAP_PER_THICKNESS line widths is shortened to leave one, so a page 2 line never draws solid.
-  function dashDeclarations (thickness, dash, length) {
+  // The dash pattern of a page 2 line of `length` at `thickness` and a dash length of `dash` line widths: { on, gap, offset }, the
+  // `stroke-dasharray` values and the `stroke-dashoffset`. Each segment of a line is its own path with its own pattern, so a whole
+  // number of periods is fitted to the segment's `length`. A dash of 0 is dots (a zero-length dash with the round cap, spaced
+  // DOT_SPACING_PER_THICKNESS line widths, the last dot a hair before the end, which is the segment's end where the browser draws
+  // no zero-length dash), with a dot on both ends of the segment. With a dash, the pattern is shifted to start half a dash in, so a
+  // segment starts and ends with half a dash and the two halves at a cell boundary make one whole dash: the ends of a line, every
+  // turn and every join between cells are inked, as a solid line has a point there. A dash too long for the segment to hold a gap of
+  // MIN_DASH_GAP_PER_THICKNESS line widths is shortened to leave one, so a page 2 line never draws solid.
+  function dashPattern (thickness, dash, length) {
     if (dash === 0) {
-      return `stroke-dasharray: 0 ${END_DOT_SHRINK * length / Math.max(1, Math.round(length / (DOT_SPACING_PER_THICKNESS * thickness)))};`
+      return { on: 0, gap: END_DOT_SHRINK * length / Math.max(1, Math.round(length / (DOT_SPACING_PER_THICKNESS * thickness))), offset: 0 }
     }
     const minGap = MIN_DASH_GAP_PER_THICKNESS * thickness
     let periods = Math.max(1, Math.round(length / ((dash + DOT_SPACING_PER_THICKNESS) * thickness)))
     while (periods > 1 && length / periods - dash * thickness < minGap) periods--
     const period = length / periods
     const on = Math.min(dash * thickness, period - minGap)
-    return `stroke-dasharray: ${on} ${period - on}; stroke-dashoffset: ${on + (period - on) / 2};`
+    return { on, gap: period - on, offset: on / 2 }
   }
 
-  // A chevron page's swatch: a thin line and two chevrons, cut out of the button's pen-colored square, so a recolor follows.
-  const CHEVRON_SWATCH = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpath d=\'M2 12H22\' stroke-width=\'1.4\'/%3E%3Cpath d=\'M6 6L11 12L6 18M14 6L19 12L14 18\' stroke-width=\'2.6\'/%3E%3C/svg%3E") center / 100% no-repeat'
+  // The same pattern as the declarations of a CSS rule.
+  function dashDeclarations (thickness, dash, length) {
+    const { on, gap, offset } = dashPattern(thickness, dash, length)
+    return `stroke-dasharray: ${on} ${gap};${dash === 0 ? '' : ` stroke-dashoffset: ${offset};`}`
+  }
+
+  // A swatch, cut out of the button's pen-colored square by a mask so a recolor follows: the line `svg` draws.
+  const swatchMask = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, '%27')}") center / 100% no-repeat`
+  const swatchRule = (n, page, svg) =>
+    `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${page}"]:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${swatchMask(svg)}; mask: ${swatchMask(svg)}; }`
+  // A chevron page's swatch: a line and two chevrons.
+  const CHEVRON_SWATCH = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round'><path d='M2 12H22' stroke-width='1.4'/><path d='M6 6L11 12L6 18M14 6L19 12L14 18' stroke-width='2.6'/></svg>"
+  // A dashed page's swatch: one line across the 24 wide swatch, 2 wide, from x 2 to 22, dashed by the page's own rule
+  // (dashPattern) at the dash length in force, so it shows dots at 0 and longer dashes as the setting grows.
+  const DASH_SWATCH = { width: 2, from: 2, to: 22 }
+  function dashSwatch (dash) {
+    const { on, gap, offset } = dashPattern(DASH_SWATCH.width, dash, DASH_SWATCH.to - DASH_SWATCH.from)
+    const round = (x) => Math.round(x * 1000) / 1000
+    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}' stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'/></svg>`
+  }
   // The look of the pages after the first, which SudokuPad's own CSS knows nothing about: each pen
-  // character strokes in the color of its partner on the first page, a dotted page's lines are dots
-  // (a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so they
-  // scale with the slider; the dash setting lengthens each dot into a dash), and its buttons' swatches are dots too. `:root:root` outranks SudokuPad's
+  // character strokes in the color of its partner on the first page, a dashed page's lines are dashes
+  // (a dash of the dash setting, or at 0 a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so
+  // they scale with the slider), and its buttons' swatches are a dashed line. `:root:root` outranks SudokuPad's
   // own rules whichever stylesheet loads last.
   function buildPagesCss (thickness, dash) {
     if (normalizeThickness(thickness) !== thickness) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
@@ -716,13 +736,12 @@
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`)))
-      if (page.chevrons) PEN_COLORS.forEach((n) => rules.push(`.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${index + 1}"]:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${CHEVRON_SWATCH}; mask: ${CHEVRON_SWATCH}; }`))
-      if (!page.dotted) return
+      if (page.chevrons) PEN_COLORS.forEach((n) => rules.push(swatchRule(n, index + 1, CHEVRON_SWATCH)))
+      if (!page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
       const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { ${dashDeclarations(thickness, dash, length)} }`
       rules.push(lines(ORTHOGONAL_LINES, CELL_UNITS), lines(DIAGONAL_LINES, CELL_UNITS * Math.SQRT2))
-      PEN_COLORS.forEach((n) => rules.push(
-        `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${index + 1}"]:after { background-color: transparent; background-image: radial-gradient(circle, var(--puzzle-pencolor-${n}) 0.14rem, transparent calc(0.14rem + 0.5px)); background-size: 25% 25%; background-position: center; }`))
+      PEN_COLORS.forEach((n) => rules.push(swatchRule(n, index + 1, dashSwatch(dash))))
     })
     return rules.join('\n')
   }
@@ -787,31 +806,31 @@
       '</div>'
   }
 
-  // The page button's picture: a sample of the line the button turns to (dots or, with a dash length, dashes
-  // on a dotted page, else a solid line) in the panel's colour, under a dot for each page with the current one
+  // The page button's picture: a sample of the line the button turns to (dashes on a dashed page, or dots at a dash length of 0,
+  // else a solid line) in the panel's colour, under a dot for each page with the current one
   // filled, as SudokuPad's color tool's page button has. The sample line runs from (12, 54) to (52, 26); a
   // dash is drawn at each end of it, `dash` line widths long and no longer than 0.42 of the line.
   const SAMPLE_FROM = [12, 54]
   const SAMPLE_TO = [52, 26]
   const SAMPLE_WIDTH = 7.2
   const SAMPLE_DASH_SHARE = 0.42
-  // The chevron sample: its thin line and chevron widths, a chevron's half extents (as CHEVRON's), and where along the line
+  // The chevron sample: its line and chevron widths, a chevron's half extents (as CHEVRON's), and where along the line
   // the three sit, as shares of its length.
   const SAMPLE_CHEVRON = { line: 2.4, stroke: 4.4, half: 4, wide: 7, at: [0.25, 0.5, 0.75] }
   function renderPageIcon (current, dash) {
     const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
-    const kind = next.chevrons ? 'chevrons' : !next.dotted ? 'solid' : dash === 0 ? 'dotted' : 'dashed'
+    const kind = next.chevrons ? 'chevrons' : !next.dashed ? 'solid' : dash === 0 ? 'dots' : 'dashed'
     let sample
     const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
     const length = Math.hypot(dx, dy)
     if (kind === 'chevrons') {
-      // a thin line and three chevrons along it, tips toward the line's end
+      // a line and three chevrons along it, tips toward the line's end
       sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_CHEVRON.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
         SAMPLE_CHEVRON.at.map((t) => {
           const [wing, tip, other] = chevronCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, SAMPLE_CHEVRON.half, SAMPLE_CHEVRON.wide)
           return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}" stroke-width="${SAMPLE_CHEVRON.stroke}" stroke-linecap="round" stroke-linejoin="round" fill="none" data-chevron/>`
         }).join('')
-    } else if (kind === 'dotted') {
+    } else if (kind === 'dots') {
       sample = [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + 9 * k}" cy="${52 - 7 * k}" r="3.6" fill="currentColor" stroke="none"/>`).join('')
     } else if (kind === 'dashed') {
       const share = Math.min(dash * SAMPLE_WIDTH, SAMPLE_DASH_SHARE * length) / length
@@ -862,6 +881,8 @@
       `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
     ).join('')
     const grid = `<div style="display:grid;grid-template-columns: repeat(3, max-content);gap:6px 18px;margin:4px 0">${cells}</div>`
+    const colorsRow = `<div data-colors-row style="display:flex;align-items:flex-start;gap:18px">${grid}` +
+      '<button type="button" data-sudokupad-colors style="margin:4px 0;font-size:inherit;white-space:nowrap">SudokuPad colors</button></div>'
     const box = (key, label, picture = key) =>
       '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
       `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}"${state.marks[key] ? ' checked' : ''}>` +
@@ -875,7 +896,7 @@
       `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;min-width:9em;margin:0">${label}</label>` +
       `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}">` +
       `<output data-readout="${key}" style="min-width:2.4em">${value}</output></div>`
-    return '<div style="font-weight:600">Pen colors</div>' + grid +
+    return '<div style="font-weight:600">Pen colors</div>' + colorsRow +
       missingNote(state.missing) +
       '<div style="font-weight:600;margin-top:10px">Sliders</div>' +
       showBox('thickness', 'Show thickness slider') + showBox('opacity', 'Show opacity slider') +
@@ -1043,7 +1064,7 @@
   }
 
   // Draws a chevron line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
-  // eraser's lookups act on it as on any stroke) of a thin line and a path of chevrons, each with its own width.
+  // eraser's lookups act on it as on any stroke) of a line and a path of chevrons, each with its own width.
   function renderChevronLine (renderer, opts, forward) {
     const shape = chevronLine(opts.value, forward, opts.row, opts.col, activeThickness)
     const group = renderer.renderPart({ target: 'cell-pen', type: 'g', attr: { class: opts.className } })
@@ -1380,6 +1401,15 @@
         default: throw new Error(`pen-tool-extras: the dialog has no slider named ${el.dataset.setting}`)
       }
       box.querySelector(`output[data-readout="${el.dataset.setting}"]`).textContent = String(value)
+    })
+    // The button sets the nine pickers to SudokuPad's own pen colors, as if each had been picked by hand: Save keeps them as the user's
+    // colors and Cancel leaves the colors in force. It closes nothing, so the release of its press lands on the dialog.
+    box.addEventListener('click', (event) => {
+      if (!event.target.closest('button[data-sudokupad-colors]')) return
+      colors = { ...DEFAULT_COLORS }
+      PEN_COLORS.forEach((n) => edited.add(n))
+      reset = false
+      draw()
     })
     box.addEventListener('change', (event) => {
       const mode = event.target.closest('select[data-line-mode]')

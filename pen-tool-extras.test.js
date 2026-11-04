@@ -788,13 +788,13 @@ test('the corner X is two crossing diagonals of half-size s, drawn from the poin
   assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
 })
 
-// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dotted, page 3 is j to z and 0, two
+// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dashed, page 3 is j to z and 0, two
 // to a pen, drawn as chevron lines.
-test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dotted, then chevron lines with a character for each way', () => {
+test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dashed, then chevron lines with a character for each way', () => {
   assert.deepEqual(PEN_PAGES, [
-    { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dotted: false },
-    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true },
-    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dotted: false, chevrons: true }
+    { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dashed: false },
+    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dashed: true },
+    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dashed: false, chevrons: true }
   ])
 })
 
@@ -840,11 +840,11 @@ test('every page 2 color character strokes in the color of its page 1 partner, s
   }
 })
 
-test('dots are on lines only: the free lines and the edge and diagonal lines, never 5, 6 or a mark', () => {
-  const dots = rulesOf(buildPagesCss(5, 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
-  const named = dots.flatMap((r) => r.selector.match(/\.pen-([0-9a-z])/g)).map((v) => v.slice(5))
+test('dashes are on lines only: the free lines and the edge and diagonal lines, never 5, 6 or a mark', () => {
+  const dashes = rulesOf(buildPagesCss(5, 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
+  const named = dashes.flatMap((r) => r.selector.match(/\.pen-([0-9a-z])/g)).map((v) => v.slice(5))
   assert.deepEqual([...new Set(named)].sort(), ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
-  for (const r of dots) {
+  for (const r of dashes) {
     assert.match(r.selector, /^:root:root \.cell-pen:is\(/)
     assert.match(r.selector, /:is\(\.pencolor-a,\.pencolor-b,\.pencolor-c,\.pencolor-d,\.pencolor-e,\.pencolor-f,\.pencolor-g,\.pencolor-h,\.pencolor-i\)$/)
   }
@@ -868,20 +868,41 @@ test('buildPagesCss refuses a thickness it cannot save', () => {
   assert.throws(() => buildPagesCss(0, 0), RangeError)
 })
 
-test('a page 2 swatch is dotted in the pen color of its button, and a page 1 swatch is left to SudokuPad', () => {
-  const css = buildPagesCss(5, 0)
+test('a page 2 swatch is a single dashed line in the pen color of its button, as a mask so the color follows a recolor, and a page 1 swatch is left to SudokuPad', () => {
+  const css = buildPagesCss(5, 3)
   for (let n = 1; n <= 9; n++) {
     const rule = rulesOf(css).find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="2"]:after`)
     assert.ok(rule, `swatch ${n}`)
-    assert.match(rule.body, new RegExp(`radial-gradient\\(.*var\\(--puzzle-pencolor-${n}\\)`))
+    assert.match(rule.body, new RegExp(`background-color: var\\(--puzzle-pencolor-${n}\\)`))
+    assert.match(rule.body, /mask(-image)?: url\("data:image\/svg\+xml,/)
+    assert.doesNotMatch(rule.body, /radial-gradient/)
   }
   assert.equal(css.includes('data-pen-page="1"'), false)
 })
 
-test('the page button samples the page it turns to: dots on page 2, a chevron line on page 3, a solid line on page 1, and a dot for each page with the current one filled', () => {
-  const fromOne = renderPageIcon(0, 0)
-  assert.match(fromOne, /data-page-sample="dotted"/)
-  assert.equal((fromOne.match(/<circle/g) || []).length, 5 + 3)
+// The swatch of button 1 on page 2 at a dash length, decoded: its one path's stroke-dasharray and stroke-dashoffset.
+const swatchDashes = (dash) => {
+  const rule = rulesOf(buildPagesCss(5, dash)).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after')
+  const svg = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
+  const paths = svg.match(/<path[^>]*>/g)
+  assert.equal(paths.length, 1, 'one line')
+  const array = /stroke-dasharray='([\d. ]+)'/.exec(paths[0])[1].split(' ').map(Number)
+  const offset = Number((/stroke-dashoffset='([\d.]+)'/.exec(paths[0]) || [0, 0])[1])
+  return { array, offset, path: paths[0] }
+}
+
+test('the page 2 swatch follows the dash length: dots at 0, longer dashes as it grows, a dash at each end of the line', () => {
+  assert.equal(swatchDashes(0).array[0], 0)
+  const [short, long] = [swatchDashes(1), swatchDashes(5)]
+  assert.equal(short.array[0] > 0 && long.array[0] > short.array[0], true, `dashes ${short.array[0]} and ${long.array[0]}`)
+  assert.equal(long.offset, long.array[0] / 2, 'the line starts half a dash in, so it is inked at both ends')
+})
+
+test('the page button samples the page it turns to: dashes on page 2, a chevron line on page 3, a solid line on page 1, and a dot for each page with the current one filled', () => {
+  const fromOne = renderPageIcon(0, 3)
+  assert.match(fromOne, /data-page-sample="dashed"/)
+  assert.equal((fromOne.match(/<circle/g) || []).length, 3)
+  assert.equal((fromOne.match(/<path[^>]*data-dash/g) || []).length, 2)
   const fromTwo = renderPageIcon(1, 0)
   assert.match(fromTwo, /data-page-sample="chevrons"/)
   assert.equal((fromTwo.match(/<circle/g) || []).length, 3)
@@ -905,14 +926,14 @@ test('the line mode choices are SudokuPad\'s three, and anything else saved read
   for (const bad of [null, undefined, 'edge', 1, ['both'], '']) assert.equal(normalizeLineMode(bad), 'both', JSON.stringify(bad))
 })
 
-// Dash length (page 2): from the dots of today to longer dashes, in line widths.
-test('the dash length runs from 0 (today\'s dots) to 8 line widths in whole steps', () => {
-  assert.deepEqual(DASH, { min: 0, max: 8, step: 1, fallback: 0 })
+// Dash length (page 2): from dots to longer dashes, in line widths.
+test('the dash length runs from 0 (dots) to 8 line widths in whole steps, and starts at 3, which draws dashes', () => {
+  assert.deepEqual(DASH, { min: 0, max: 8, step: 1, fallback: 3 })
 })
 
-test('normalizeDash keeps a saved whole number from 0 to 8, and anything else is the dots of today', () => {
+test('normalizeDash keeps a saved whole number from 0 to 8, a saved 0 included, and anything else is 3', () => {
   for (const ok of [0, 1, 4, 8]) assert.equal(normalizeDash(ok), ok)
-  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(normalizeDash(bad), 0, String(bad))
+  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(normalizeDash(bad), 3, String(bad))
 })
 
 // The declarations of the first (orthogonal) and second (diagonal) page 2 line rule, as { dash, gap, offset } numbers
@@ -939,7 +960,7 @@ test('a dash is its setting in line widths long and scales with the thickness sl
   }
 })
 
-test('every dash length at every thickness fits whole periods in a cell and a diagonal, with half a gap at each end and a gap that leaves the round caps apart, never solid', () => {
+test('every dash length at every thickness fits whole periods in a cell and a diagonal, with half a dash at each end and a gap that leaves the round caps apart, never solid', () => {
   for (let thickness = THICKNESS.min; thickness <= THICKNESS.max; thickness++) {
     for (let dash = DASH.min + 1; dash <= DASH.max; dash++) {
       const rows = dashesOf(thickness, dash)
@@ -949,9 +970,9 @@ test('every dash length at every thickness fits whole periods in a cell and a di
         const where = `thickness ${thickness} dash ${dash} line ${i}`
         const periods = Math.round(lengths[i] / (on + gap))
         assert.equal(Math.abs(periods * (on + gap) - lengths[i]) < 1e-6, true, `${where}: ${periods} periods of ${on + gap} fill ${lengths[i]}`)
-        assert.equal(offset, on + gap / 2, `${where}: the pattern starts half a gap in`)
+        assert.equal(offset, on / 2, `${where}: the pattern starts half a dash in, so the piece is inked at both ends`)
         assert.equal(on > 0 && on <= dash * thickness + 1e-9, true, `${where}: dash ${on}`)
-        assert.equal(gap >= 1.3 * thickness - 1e-9, true, `${where}: gap ${gap} leaves the caps apart`)
+        assert.equal(gap - thickness >= thickness - 1e-9, true, `${where}: gap ${gap} leaves a visible gap of a line width between the round caps`)
       })
     }
   }
@@ -960,7 +981,7 @@ test('every dash length at every thickness fits whole periods in a cell and a di
 test('a dash too long for a cell to hold a gap is shortened to leave one, and page 2 still differs from page 1 at the longest dash and thickness', () => {
   const [ortho] = dashesOf(16, 8)
   assert.equal(ortho.dash < 8 * 16, true)
-  assert.equal(ortho.gap >= 1.3 * 16 - 1e-9, true)
+  assert.equal(ortho.gap - 16 >= 16 - 1e-9, true, 'a visible gap of a line width')
   assert.equal(Math.abs(ortho.dash + ortho.gap - 64) < 1e-9, true, 'one period in a cell')
 })
 
@@ -970,7 +991,9 @@ test('buildPagesCss refuses a dash it cannot save', () => {
 })
 
 test('the page button samples dashes as long as the setting, and dots at 0', () => {
-  assert.match(renderPageIcon(0, 0), /data-page-sample="dotted"/)
+  const dots = renderPageIcon(0, 0)
+  assert.match(dots, /data-page-sample="dots"/)
+  assert.equal((dots.match(/<circle/g) || []).length, 5 + 3)
   const dashed = renderPageIcon(0, 4)
   assert.match(dashed, /data-page-sample="dashed"/)
   const short = renderPageIcon(0, 1).match(/<path[^>]*data-dash/g)
@@ -1026,6 +1049,16 @@ test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s
   assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => DEFAULT_COLORS[n]))
 })
 
+test('the dialog has a SudokuPad colors button beside the Pen colors grid, and it is a plain button that submits nothing', () => {
+  const html = renderEditor(editorState())
+  const row = /data-colors-row[^>]*>([\s\S]*?SudokuPad colors<\/button>)<\/div>/.exec(html)
+  assert.ok(row, 'a row holding the grid and the button')
+  assert.match(row[1], /grid-template-columns: repeat\(3, /)
+  assert.match(row[1], /<button type="button" data-sudokupad-colors[^>]*>SudokuPad colors<\/button>/)
+  assert.match(row[1], /<button[^>]*style="[^"]*font-size:inherit[^"]*white-space:nowrap/, 'the text is the size of the dialog\'s other text and stays on one line')
+  assert.equal((html.match(/<button/g) || []).length, 1)
+})
+
 test('the dialog has Show thickness slider and Show opacity slider boxes, ticked as saved', () => {
   const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"( checked)?>`).exec(html)
   const both = renderEditor(editorState())
@@ -1074,7 +1107,7 @@ test('chevronWayOf reads a stored character back as the way its line was dragged
   for (const other of ['1', 'a', 'i', 'A', '', undefined, 'jk']) assert.equal(chevronWayOf(other), null, String(other))
 })
 
-test('the page 3 characters stroke in the color of their page 1 partner, both ways, and are never dotted', () => {
+test('the page 3 characters stroke in the color of their page 1 partner, both ways, and are never dashed', () => {
   const rules = rulesOf(buildPagesCss(5, 3))
   PEN_PAGES[2].chars.forEach((char, i) => {
     for (const c of [char, PEN_PAGES[2].reverse[i]]) {
@@ -1217,21 +1250,62 @@ test('the chevrons and the line scale with the thickness: wider chevrons, wider 
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
-test('below the default thickness the chevrons keep their size at the default and only the thin line gets thinner, so the direction shows at 1', () => {
+test('below the default thickness the chevrons keep their size at the default and only the line gets thinner, so the direction shows at 1', () => {
   const one = chevronLine('1', true, 0, 0, 1)
   const five = chevronLine('1', true, 0, 0, THICKNESS.fallback)
   assert.equal(one.chevrons, five.chevrons)
   assert.equal(one.chevronWidth, five.chevronWidth)
-  assert.equal(one.lineWidth, CHEVRON.lineMin, 'the line is at its minimum, which is visible')
+  assert.equal(one.lineWidth, 1, 'the line is as thick as a page 1 line, 1')
   assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
   assert.equal(one.chevronWidth >= one.lineWidth, true, `a chevron stroke of ${one.chevronWidth} is at least as thick as the line of ${one.lineWidth}`)
+})
+
+test('the line under the chevrons is as thick as a page 1 line at every slider value, and the chevrons clearly stick out past it', () => {
+  for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
+    const shape = chevronLine('a', true, 0, 0, t)
+    assert.equal(shape.lineWidth, t, `the line at thickness ${t}`)
+    // 'a' is the top edge line, so a point's distance from y 0 is its distance from the line's middle.
+    const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
+    const beyondLine = reach - t / 2
+    assert.equal(beyondLine >= Math.max(t / 2, 2), true, `at thickness ${t} the chevrons stick out ${beyondLine} past a line ${t} wide`)
+  }
+})
+
+test('up to thickness 10 the chevrons are the size they were, and above it they grow evenly to 1.35 times at 16, wings and length, not the stroke or the spacing', () => {
+  const reachOf = (t) => { const shape = chevronLine('a', true, 0, 0, t); return Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) }
+  for (const t of [5, 8, 10]) assert.equal(Math.abs(reachOf(t) - CHEVRON.halfWidth * t) < 0.01, true, `at ${t}`)
+  assert.equal(Math.abs(reachOf(13) - CHEVRON.halfWidth * 13 * 1.175) < 0.01, true, 'half way up, 1.175 times')
+  assert.equal(Math.abs(reachOf(16) - CHEVRON.halfWidth * 16 * 1.35) < 0.01, true, 'at the top, 1.35 times')
+  assert.equal(chevronLine('a', true, 0, 0, 16).chevronWidth, CHEVRON.stroke * 16)
+  assert.equal(pointsOf(chevronLine('a', true, 0, 0, 16).chevrons).length / 3, Math.round(64 / (CHEVRON.spacing * 16)) || 1)
+})
+
+test('a chevron is centered on its line, on a diagonal as on a straight line, at every thickness: its two wings mirror each other across the line', () => {
+  for (const value of ['1', '2', 'a', 'e', 'd']) {
+    for (const t of [1, 5, 10, 13, 16]) {
+      const shape = chevronLine(value, true, 3, 3, t)
+      const [[x0, y0], [x1, y1]] = pointsOf(shape.line)
+      const length = Math.hypot(x1 - x0, y1 - y0)
+      const [ux, uy] = [(x1 - x0) / length, (y1 - y0) / length]
+      const points = pointsOf(shape.chevrons)
+      for (let i = 0; i < points.length; i += 3) {
+        const [wing, tip, other] = points.slice(i, i + 3)
+        // distance of a point from the line's axis (positive on one side), and how far along the line it is
+        const across = ([x, y]) => (x - x0) * -uy + (y - y0) * ux
+        const along = ([x, y]) => (x - x0) * ux + (y - y0) * uy
+        assert.equal(Math.abs(across(tip)) < 0.02, true, `the tip is on the line: ${value} at ${t}`)
+        assert.equal(Math.abs(across(wing) + across(other)) < 0.02, true, `the wings are on opposite sides at the same distance: ${value} at ${t}`)
+        assert.equal(Math.abs(along(wing) - along(other)) < 0.02, true, `the wings are the same distance back: ${value} at ${t}`)
+      }
+    }
+  }
 })
 
 test('at the largest thickness a chevron on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
   // a top edge line, 'a', on row 0: the chevron's wings are the furthest from the edge itself
   const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
-  assert.equal(Math.abs(reach - (CHEVRON.halfWidth + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
+  assert.equal(Math.abs(reach - (CHEVRON.halfWidth * (1 + CHEVRON.growth) + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}`)
 })
 

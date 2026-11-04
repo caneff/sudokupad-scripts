@@ -211,7 +211,7 @@ function group (title, mode) {
       for (const g of groups) {
         assert.equal(g.cls, 'cell-pen pen-1 pencolor-n')
         assert.deepEqual([...new Set(headings(g.chevrons))], ['E'])
-        assert.equal(g.lineWidth, Math.max(CHEVRON.lineMin, CHEVRON.line * 5), 'the line is the line width of the default thickness')
+        assert.equal(g.lineWidth, 5, 'the line is as wide as a page 1 line at the default thickness')
         assert.equal(g.chevronWidth, CHEVRON.stroke * 5)
       }
     })
@@ -353,9 +353,9 @@ function group (title, mode) {
       const wide = await sample()
       assert.equal(wide.chevronWidth, CHEVRON.stroke * 16)
       assert.equal(wide.count < base.count, true, `${wide.count} chevrons at 16 against ${base.count} at 5`)
-      // At 1 the line is at its minimum, which shows, and the chevrons keep the size they have at 5, so the direction stays visible.
+      // At 1 the line is as wide as a page 1 line, 1, and the chevrons keep the size they have at 5, so the direction stays visible.
       await slider(1)
-      assert.equal(await settle(async () => (await sample()).lineWidth, CHEVRON.lineMin), CHEVRON.lineMin)
+      assert.equal(await settle(async () => (await sample()).lineWidth, 1), 1)
       const small = await sample()
       assert.equal(small.chevronWidth, base.chevronWidth)
       assert.equal(small.count, base.count)
