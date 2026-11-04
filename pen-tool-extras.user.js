@@ -709,19 +709,19 @@
     const box = (key, label, picture = key) =>
       '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
       `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}"${state.marks[key] ? ' checked' : ''}>` +
-      `${markPicture(picture)}<label for="pen-tool-extras-mark-${key}" style="width:auto;text-align:left">${label}</label></div>`
+      `${markPicture(picture)}<label for="pen-tool-extras-mark-${key}" style="width:auto;text-align:left;margin:0">${label}</label></div>`
     const showBox = (key, label) =>
       '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
       `<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"${state.show[key] ? ' checked' : ''}>` +
-      `<label for="pen-tool-extras-show-${key}" style="width:auto;text-align:left">${label}</label></div>`
+      `<label for="pen-tool-extras-show-${key}" style="width:auto;text-align:left;margin:0">${label}</label></div>`
     const slider = (key, label, range, value) =>
       '<div style="margin:4px 0;display:flex;align-items:center;gap:8px">' +
-      `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;min-width:9em">${label}</label>` +
+      `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;min-width:9em;margin:0">${label}</label>` +
       `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}">` +
       `<output data-readout="${key}" style="min-width:2.4em">${value}</output></div>`
     return '<div style="font-weight:600">Pen colors</div>' + grid +
       missingNote(state.missing) +
-      '<div style="font-weight:600;margin-top:10px">Pen tool panel</div>' +
+      '<div style="font-weight:600;margin-top:10px">Sliders</div>' +
       showBox('thickness', 'Show thickness slider') + showBox('opacity', 'Show transparency slider') +
       slider('thickness', 'Thickness', THICKNESS, state.thickness) +
       slider('opacity', 'Opacity (%)', OPACITY, state.opacity) +

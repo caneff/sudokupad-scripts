@@ -446,28 +446,85 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await clearMarks()
     })
 
-    it('an X on any outer corner, stroke included, reaches no farther past the cells than Dark Page keeps (SOLVER_REACH), at the default thickness', async () => {
-      for (const corner of [[0, 0], [0, SIZE], [SIZE, 0], [SIZE, SIZE]]) {
-        await clickCorner(...corner)
-        const reach = () => read(() => {
-          const mark = document.querySelector('.cell-pen')
-          if (!mark) return null
-          const m = mark.getBoundingClientRect()
-          const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
-          const left = Math.min(...cells.map((r) => r.left))
-          const top = Math.min(...cells.map((r) => r.top))
-          const right = Math.max(...cells.map((r) => r.right))
-          const bottom = Math.max(...cells.map((r) => r.bottom))
-          // the box leaves the stroke out: half its width, in page pixels, lies beyond it
-          const half = parseFloat(window.getComputedStyle(mark).strokeWidth) / 2 * document.querySelector('#svgrenderer').getScreenCTM().a
-          return Math.max(left - m.left, top - m.top, m.right - right, m.bottom - bottom) + half
-        })
-        await settle(async () => (await reach()) !== null, true)
-        const past = await reach()
-        assert.equal(typeof past, 'number', `a mark on corner ${corner}`)
-        assert.equal(past <= SOLVER_REACH, true, `corner ${corner} reaches ${past}px past the cells, more than ${SOLVER_REACH}`)
+    // The thickness slider's value set the way a drag sets it, with the pen tool on.
+    const setThickness = async (value) => {
+      await selectPen()
+      await p.locator('#pen-tool-extras-thickness').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+    }
+    // How far the first pen mark's drawn extent, stroke included and scale applied, reaches past the grid's cells, in page pixels.
+    const reach = () => read(() => {
+      const mark = document.querySelector('.cell-pen')
+      if (!mark) return null
+      const m = mark.getBoundingClientRect()
+      const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
+      const left = Math.min(...cells.map((r) => r.left))
+      const top = Math.min(...cells.map((r) => r.top))
+      const right = Math.max(...cells.map((r) => r.right))
+      const bottom = Math.max(...cells.map((r) => r.bottom))
+      // The box leaves the stroke out: half its width, in page pixels, lies beyond it. The box is the scaled one;
+      // the stroke width is the one before the scale, which the same scale grows.
+      const style = window.getComputedStyle(mark)
+      const scale = style.transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(style.transform)[1])
+      const half = parseFloat(style.strokeWidth) * scale / 2 * document.querySelector('#svgrenderer').getScreenCTM().a
+      return Math.max(left - m.left, top - m.top, m.right - right, m.bottom - bottom) + half
+    })
+
+    it('every edge and corner mark on the outer edges and corners, stroke and growth included, reaches no farther past the cells than Dark Page keeps (SOLVER_REACH), at thickness 5, 10 and 16', async () => {
+      for (const thickness of [5, 10, 16]) {
+        await setThickness(thickness)
+        for (const [name, row, col, side] of [['top', 0, 3, 'top'], ['left', 3, 0, 'left'], ['right', 3, SIZE - 1, 'right'], ['bottom', SIZE - 1, 3, 'bottom']]) {
+          for (let step = 1; step <= 4; step++) {
+            await clickEdge(row, col, side)
+            await settle(async () => (await reach()) !== null, true)
+            const past = await reach()
+            assert.equal(typeof past, 'number', `mark ${step} on the outer ${name} edge`)
+            assert.equal(past <= SOLVER_REACH, true, `thickness ${thickness}: mark ${step} on the outer ${name} edge reaches ${past}px past the cells, more than ${SOLVER_REACH}`)
+          }
+          await clearMarks()
+        }
+        for (const corner of [[0, 0], [0, SIZE], [SIZE, 0], [SIZE, SIZE]]) {
+          for (let step = 1; step <= 2; step++) {
+            await clickCorner(...corner)
+            await settle(async () => (await reach()) !== null, true)
+            const past = await reach()
+            assert.equal(typeof past, 'number', `mark ${step} on corner ${corner}`)
+            assert.equal(past <= SOLVER_REACH, true, `thickness ${thickness}: mark ${step} on corner ${corner} reaches ${past}px past the cells, more than ${SOLVER_REACH}`)
+          }
+          await clearMarks()
+        }
+      }
+      await setThickness(5)
+    })
+
+    it('edge and corner marks keep their size up to thickness 5, are about 1.14 times at 10 and 1.3 times at 16, and stay centred on their edge or corner; lines do not grow', async () => {
+      const boxOf = (selector) => read((sel) => {
+        const r = document.querySelector(sel)?.getBoundingClientRect()
+        return r ? { w: r.width, h: r.height, x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
+      }, selector)
+      // [kind of click, clicks to reach it, the mark it draws]: SudokuPad's own edge X, an arrow, the other arrow, the circle, a corner X and a corner circle.
+      const marks = [
+        ['edge', 1, '.cell-pen.pen-3'], ['edge', 2, '.cell-pen.pen-h'], ['edge', 3, '.cell-pen.pen-i'], ['edge', 4, '.cell-pen.pen-j'],
+        ['corner', 1, '.cell-pen.pen-u'], ['corner', 2, '.cell-pen.pen-x']
+      ]
+      for (const [kind, clicks, selector] of marks) {
+        const at = {}
+        await setThickness(5)
+        for (let i = 0; i < clicks; i++) await (kind === 'edge' ? clickEdge(3, 3, 'right') : clickCorner(3, 3))
+        await settle(() => boxOf(selector).then(Boolean), true)
+        // The slider's input event restyles at once, so the box is read right after it.
+        for (const thickness of [5, 10, 16]) {
+          await setThickness(thickness)
+          at[thickness] = await boxOf(selector)
+        }
+        for (const thickness of [10, 16]) {
+          const scale = 1 + 0.3 * (thickness - 5) / 11
+          assert.equal(Math.abs(at[thickness].w / at[5].w - scale) < 0.01, true, `${selector} at ${thickness}: width ${at[thickness].w} against ${at[5].w}, wanted ${scale} times`)
+          assert.equal(Math.abs(at[thickness].h / at[5].h - scale) < 0.01, true, `${selector} at ${thickness}: height`)
+          assert.equal(Math.abs(at[thickness].x - at[5].x) < 0.6 && Math.abs(at[thickness].y - at[5].y) < 0.6, true, `${selector} at ${thickness} moved its centre from ${at[5].x},${at[5].y} to ${at[thickness].x},${at[thickness].y}`)
+        }
         await clearMarks()
       }
+      await setThickness(5)
     })
 
     it('one undo reverses one click and redo restores it', async () => {
@@ -805,7 +862,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       it('Restore defaults puts the panel slider back to 80 and clears the saved opacity at once, and Cancel afterwards does not bring it back', async () => {
         assert.equal(await savedOpacity(), 30)
         await openEditor()
-        assert.equal(await editor().locator('input[type=range]').count(), 0)
+        assert.equal(await editor().locator('input[type=range]').count(), 3)
         await dialogButton('Restore defaults').click()
         assert.equal(await settle(() => slider().inputValue(), '80'), '80')
         assert.equal(await settle(sameAt('0.8'), true), true)

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.0
+// @version      0.3.1
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.0'
+  const VERSION = '0.3.1'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
@@ -40,9 +40,11 @@
   // antialiasing and a text outline filter, which the elements' boxes leave out.
   const PAD = 1
   // How far a solver's pen mark reaches past the box of the cell it is on: the edge X on an outer
-  // edge, measured on sudokupad.app v0.611.0 at 10.07px. The rectangle keeps this much around the
-  // cells so the mark sits on white from the moment it is drawn, not from the next measurement.
-  const SOLVER_REACH = 11
+  // edge at Pen Tool Extras' largest thickness (16), whose edge and corner marks are then grown by 1.3,
+  // measured on sudokupad.app v0.611.0 at 15.88px (10.07px at the default thickness of 5). The rectangle
+  // keeps this much around the cells so the mark sits on white from the moment it is drawn, not from
+  // the next measurement.
+  const SOLVER_REACH = 16
   // What the puzzle draws as leaf elements. Elements in `defs`, `marker` and the like have no box.
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
   const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']

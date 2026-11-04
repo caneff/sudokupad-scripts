@@ -422,13 +422,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // The computed stroke width of every drawn stroke of pen color `n` (a drag draws a line and a
       // cell circle), as numbers.
       const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
-      // Adds a stroke element of pen value `value` to the drawing, as SudokuPad draws it, and returns its computed width.
+      // Adds a stroke element of pen value `value` to the drawing, as SudokuPad draws it, and returns the width it draws at.
       const probeWidth = (value) => read((value) => {
         const ns = 'http://www.w3.org/2000/svg'
         const path = document.createElementNS(ns, 'path')
         path.setAttribute('class', `cell-pen pen-${value} pencolor-1`)
         document.querySelector('.cell-pen').parentNode.appendChild(path)
-        const width = parseFloat(window.getComputedStyle(path).strokeWidth)
+        const style = window.getComputedStyle(path)
+        // The width on screen: the stroke width times the scale an edge or corner mark is grown by (a matrix, or `none`).
+        const scale = style.transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(style.transform)[1])
+        const width = Math.round(parseFloat(style.strokeWidth) * scale * 1e4) / 1e4
         path.remove()
         return width
       }, value)
@@ -448,11 +451,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
       after(async () => { await read((k) => Framework.removeData(k), THICKNESS_KEY) })
 
-      it('with nothing saved lines, circles and crosses are SudokuPad\'s 5 wide and every edge mark 2.5, and the slider runs 1 to 12 at 5', async () => {
+      it('with nothing saved lines, circles and crosses are SudokuPad\'s 5 wide and every edge mark 2.5, and the slider runs 1 to 16 at 5', async () => {
         assert.deepEqual(await widths(1)(), [5])
         assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
         await selectPen()
-        assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '12', '1', '5'])
+        assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '1', '5'])
       })
 
       it('moving the slider scales lines, circles, crosses and edge marks by one factor, live, and saves it with no Save', async () => {
@@ -495,7 +498,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await setSlider(7)
         assert.equal(await savedThickness(), 7)
         await openEditor()
-        assert.equal(await editor().locator('input[type=range]').count(), 0)
+        assert.equal(await editor().locator('input[type=range]').count(), 3)
         await restoreDefaults()
         assert.equal(await settle(() => slider().inputValue(), '5'), '5')
         assert.deepEqual(await settle(widths(1), [5]), [5])
@@ -786,7 +789,10 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
         path.setAttribute('class', 'cell-pen pen-1 pencolor-1')
         document.querySelector('#svgrenderer').appendChild(path)
-        const width = parseFloat(window.getComputedStyle(path).strokeWidth)
+        const style = window.getComputedStyle(path)
+        // The width on screen: the stroke width times the scale an edge or corner mark is grown by (a matrix, or `none`).
+        const scale = style.transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(style.transform)[1])
+        const width = Math.round(parseFloat(style.strokeWidth) * scale * 1e4) / 1e4
         path.remove()
         return width
       })
