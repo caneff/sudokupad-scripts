@@ -175,7 +175,7 @@
   // <input>: a form control inside a <button> takes focus from the puzzle and is swallowed by some browsers.
   function autoBoxHtml (on) {
     return '<span data-role="auto" role="checkbox" aria-label="Auto mode" title="Auto mode" ' + `aria-checked="${Boolean(on)}" ` +
-      'style="position:absolute;top:-4px;right:-6px;box-sizing:border-box;width:16px;height:16px;border:2px solid #444;' +
+      'style="pointer-events:auto;position:absolute;top:-4px;right:-6px;box-sizing:border-box;width:16px;height:16px;border:2px solid #444;' +
       'border-radius:3px;background:#fff;color:#111;font:bold 13px/12px sans-serif;text-align:center">' +
       (on ? '&#10003;' : '') + '</span>'
   }
@@ -408,7 +408,9 @@
       return inOneUndoStep(app, () => {
         const result = act.call(this, action)
         const changed = changedIndices(before, touched.map((cell) => editSignature(toPlanCell(cell)))).map((i) => indices[i])
-        autoColor(app, loadGroups(), changed)
+        // Already inside the group this function opened: a second one would end it early.
+        const edited = allCells(app)
+        runColorOps(app, edited, planAuto(edited.map(toPlanCell), loadGroups(), changed))
         return result
       })
     }
