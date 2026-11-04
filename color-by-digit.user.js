@@ -431,13 +431,14 @@
     }, true)
   }
 
-  // Save: stores the groups, then puts the auto mode draft in force. With auto mode already on, changed
-  // groups take the old groups' colors off every cell and give every pure cell its new color; turning
-  // auto mode on colors the givens (setAutoMode); with auto mode off, nothing is colored.
+  // Save: stores the groups, then puts the auto mode draft in force. With auto mode on after the Save,
+  // changed groups take the old groups' colors off every cell and give every pure cell its new color
+  // (whether or not it was already on); turning auto mode on also colors the givens (setAutoMode);
+  // with auto mode off, nothing is colored.
   function saveDialog (app, oldGroups, groups, auto) {
     saveGroups(groups)
     const changed = JSON.stringify(oldGroups) !== JSON.stringify(groups)
-    if (autoMode && auto && changed) autoColor(app, groups, undefined, [...groupKeys(oldGroups), ...groupKeys(groups)])
+    if (auto && changed) autoColor(app, groups, undefined, [...groupKeys(oldGroups), ...groupKeys(groups)])
     setAutoMode(app, auto)
   }
 

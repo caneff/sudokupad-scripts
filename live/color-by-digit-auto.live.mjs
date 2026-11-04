@@ -14,6 +14,8 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openSettings } from './settings.mjs'
 
+/* global Replay */
+
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
@@ -247,7 +249,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // The replay holds two entered digits and no color; auto mode must add none.
       assert.deepEqual(await settle(async () => [await valueAt(0, 2), await valueAt(0, 3), await valueAt(0, 5)], ['4', '7', '']), ['4', '7', ''])
       assert.deepEqual(await watch(coloredCount), [0])
-      await read(() => Framework.app.puzzle.replayPlay(window.Replay.decode(window.__replay)))
+      await read(() => Framework.app.puzzle.replayPlay(Replay.decode(window.__replay)))
       assert.deepEqual(await watch(coloredCount), [0])
     })
 
@@ -319,9 +321,23 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await settle(async () => JSON.stringify((await cellsState()).map((x) => x.colours)), before), before)
     })
 
+    it('one Save that turns auto mode on and changes the groups recolors every pure cell, not only the givens', async () => {
+      await p.click(BOX)
+      assert.equal(await settle(boxChecked, 'false'), 'false')
+      await select(0, 6); await p.keyboard.press('8')
+      assert.equal(await settle(() => valueAt(0, 6), '8'), '8')
+      assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
+      await openEditor()
+      await dialogButton('Low/5/High').click()
+      await dialogBox().check()
+      await closeWith('Save')
+      assert.equal(await settle(boxChecked, 'true'), 'true')
+      assert.deepEqual(await settle(() => colorsAt(0, 6), ['9']), ['9'])
+    })
+
     it('a click on the box turns auto mode off again, and the colors stay', async () => {
       await p.click(BOX)
-      assert.equal(await settle(boxChecked, 'true'), 'false')
+      assert.equal(await settle(boxChecked, 'false'), 'false')
       assert.equal(await getAuto(), false)
     })
 
