@@ -32,6 +32,8 @@
   const THICKNESS_SLIDER = 'pen-tool-extras-thickness'
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
   // The block of both sliders in the pen tool's panel, and the row of each.
+  // The id of the editor inside this script's dialog.
+  const EDITOR_ID = 'pen-tool-extras-editor'
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
   // SudokuPad's line mode pulldown (`.penlinemode`, with the values `both`, `centeronly` and `edgeonly`),
@@ -676,10 +678,10 @@
   // SudokuPad also closes a dialog on a press on its overlay, which covers the page. The grid never
   // saw that press, so the release would mark the cell of the pointer's last position on the grid.
   // The overlay of this script's own dialog is told apart by the editor inside it.
-  function swallowOverlayPress () {
+  function installOverlayPressSwallow () {
     window.addEventListener('pointerdown', (event) => {
       const target = event.target
-      if (target.classList && target.classList.contains('dialog-overlay') && target.querySelector('#pen-tool-extras-editor')) swallowRelease()
+      if (target.classList && target.classList.contains('dialog-overlay') && target.querySelector(`#${EDITOR_ID}`)) swallowRelease()
     }, true)
   }
 
@@ -861,7 +863,7 @@
       centerOverBoard: true,
       parts: [
         { tag: 'text', innerHTML: `<b>Pen tool extras</b> <small style="opacity:.6">v${VERSION}</small>` },
-        { tag: 'text', innerHTML: '<div id="pen-tool-extras-editor"></div>' },
+        { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',
           options: [
@@ -885,7 +887,7 @@
         }
       ]
     })
-    box = document.getElementById('pen-tool-extras-editor')
+    box = document.getElementById(EDITOR_ID)
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
     draw()
     // `change` fires when a color picker closes (the swatch the user sees is already the new
@@ -1064,7 +1066,7 @@
   Framework.getApp().then(async () => {
     installHoldToEdit()
     installPenPanel()
-    swallowOverlayPress()
+    installOverlayPressSwallow()
     markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
     adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
     adoptOpacity(normalizeOpacity(Framework.getData(OPACITY_KEY)))

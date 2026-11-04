@@ -870,27 +870,6 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         })
       }
 
-      // The overlay is the dialog's backdrop over the whole page. SudokuPad closes the dialog on a press
-      // on it, so the grid never saw the press and the release marks wherever its stale pointer was.
-      it('a press on the overlay over the grid closes the dialog and leaves no pen mark', async () => {
-        await openEditor()
-        await clearMarks()
-        const [x, y] = await cellCentre(p, 0, 0)
-        await p.mouse.click(x, y)
-        await editor().waitFor({ state: 'detached' })
-        assert.deepEqual(await read(() => Framework.app.puzzle.cells.filter((cell) => cell.pen.length).map((cell) => [cell.row, cell.col])), [])
-      })
-
-      it('a click on the grid after the overlay press still makes a mark', async () => {
-        await openEditor()
-        const [x, y] = await cellCentre(p, 0, 0)
-        await p.mouse.click(x, y)
-        await editor().waitFor({ state: 'detached' })
-        await p.mouse.click(x, y)
-        assert.equal(await anyMark(), true)
-        await clearMarks()
-      })
-
       it('the settings entry leaves no pen mark under it', async () => {
         const open = async () => {
           await openSettings(p)
@@ -901,6 +880,65 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await editor().waitFor({ state: 'visible' })
         assert.equal(await anyMark(), false)
         await closeWith('Cancel')
+      })
+    })
+
+    // SudokuPad closes a dialog on a press on its overlay, which covers the page, so the grid never saw
+    // the press and the release marks the cell of the pointer's last position on the grid.
+    describe('a release over the grid after a press on a dialog overlay', () => {
+      const markedCells = () => read(() => Framework.app.puzzle.cells.filter((cell) => cell.pen.length).map((cell) => [cell.row, cell.col]))
+      // The pointer rests on the cell at [8, 6], so it is the cell a release with no press would mark.
+      const restPointer = async () => {
+        const [x, y] = await cellCentre(p, 8, 6)
+        await p.mouse.move(x, y)
+      }
+
+      it('a press over the grid on this script\'s dialog closes it and leaves no pen mark', async () => {
+        await openEditor()
+        await clearMarks()
+        await restPointer()
+        const [x, y] = await cellCentre(p, 0, 0)
+        await p.mouse.click(x, y)
+        await editor().waitFor({ state: 'detached' })
+        assert.deepEqual(await markedCells(), [])
+      })
+
+      it('a click on the grid after that press still makes a mark', async () => {
+        await openEditor()
+        await clearMarks()
+        const [x, y] = await cellCentre(p, 0, 0)
+        await p.mouse.click(x, y)
+        await editor().waitFor({ state: 'detached' })
+        await p.mouse.click(x, y)
+        assert.equal((await settle(async () => (await markedCells()).length > 0, true)), true)
+        await clearMarks()
+      })
+
+      // The stock settings dialog closes on a press on its overlay, but makes no mark from the release
+      // here, so the check is that the release still reaches the page: a listener in the bubble phase,
+      // after the script's capture one, counts it.
+      it('a press on a stock dialog\'s overlay leaves its release to the page', async () => {
+        await openSettings(p)
+        await read(() => {
+          window.__releases = 0
+          window.addEventListener('mouseup', () => { window.__releases++ })
+        })
+        const [x, y] = await cellCentre(p, 0, 0)
+        await p.mouse.click(x, y)
+        await p.locator('.dialog').waitFor({ state: 'detached' })
+        assert.equal(await read(() => window.__releases), 1)
+      })
+
+      it('the release of a press on this script\'s dialog does not reach the page', async () => {
+        await openEditor()
+        await read(() => {
+          window.__releases = 0
+          window.addEventListener('mouseup', () => { window.__releases++ })
+        })
+        const [x, y] = await cellCentre(p, 0, 0)
+        await p.mouse.click(x, y)
+        await editor().waitFor({ state: 'detached' })
+        assert.equal(await read(() => window.__releases), 0)
       })
     })
 
