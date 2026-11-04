@@ -28,6 +28,9 @@
   const COLORS_KEY = 'PenColor_colors'
   const THICKNESS_KEY = 'PenColor_thickness'
   const OPACITY_KEY = 'PenColor_opacity'
+  // The `id` of each slider in the dialog; the input handler tells them apart by it.
+  const THICKNESS_SLIDER = 'pen-tool-extras-thickness'
+  const OPACITY_SLIDER = 'pen-tool-extras-opacity'
   const MARKS_KEY = 'EdgeMarks_marks'
   const STYLE_ID = 'pen-tool-extras-style'
   // The element SudokuPad draws the grid in.
@@ -749,13 +752,13 @@
     return '<div style="font-weight:600">Pen colors</div>' + rows +
       missingNote(state.missing) +
       '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
-      '<label for="pen-tool-extras-thickness" style="width:5em;text-align:left">Thickness</label>' +
-      `<input type="range" id="pen-tool-extras-thickness" min="${THICKNESS.min}" max="${THICKNESS.max}" step="${THICKNESS.step}" value="${state.thickness}">` +
-      `<output for="pen-tool-extras-thickness">${state.thickness}</output></div>` +
+      `<label for="${THICKNESS_SLIDER}" style="width:5em;text-align:left">Thickness</label>` +
+      `<input type="range" id="${THICKNESS_SLIDER}" min="${THICKNESS.min}" max="${THICKNESS.max}" step="${THICKNESS.step}" value="${state.thickness}">` +
+      `<output for="${THICKNESS_SLIDER}">${state.thickness}</output></div>` +
       '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
-      '<label for="pen-tool-extras-opacity" style="width:5em;text-align:left">Opacity</label>' +
-      `<input type="range" id="pen-tool-extras-opacity" min="${OPACITY.min}" max="${OPACITY.max}" step="${OPACITY.step}" value="${state.opacity}">` +
-      `<output for="pen-tool-extras-opacity">${state.opacity}</output></div>` +
+      `<label for="${OPACITY_SLIDER}" style="width:5em;text-align:left">Opacity</label>` +
+      `<input type="range" id="${OPACITY_SLIDER}" min="${OPACITY.min}" max="${OPACITY.max}" step="${OPACITY.step}" value="${state.opacity}">` +
+      `<output for="${OPACITY_SLIDER}">${state.opacity}</output></div>` +
       '<div style="font-weight:600;margin-top:10px">Edge marks a click cycles through</div>' +
       box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle') +
       '<div style="font-weight:600;margin-top:10px">Corner marks a click near a grid corner cycles through</div>' +
@@ -847,7 +850,7 @@
     box.addEventListener('input', (event) => {
       const el = event.target.closest('input[type="range"]')
       if (!el) return
-      if (el.id === 'pen-tool-extras-opacity') {
+      if (el.id === OPACITY_SLIDER) {
         opacity = Number(el.value)
         opacityReset = false
       } else {

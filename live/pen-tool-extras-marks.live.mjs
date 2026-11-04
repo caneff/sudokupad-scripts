@@ -1,4 +1,4 @@
-// Live check of pen-tool-extras.user.js's edge marks on sudokupad.app, in headless Chromium.
+// Live check of pen-tool-extras.user.js's edge and corner marks and its opacity slider on sudokupad.app, in headless Chromium.
 // Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
@@ -698,8 +698,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const all = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [[...e.classList].find((c) => c.startsWith('pen-')).slice(4), window.getComputedStyle(e).opacity]))
         return [...new Set(all.map((x) => x.join(':')))].sort()
       }
-      // Draws a free line (a drag, which leaves a cell circle where it ends), a cell cross, an edge X
-      // and a corner X, and returns the values they were stored under.
+      // Draws a free line (a drag), a cell circle, a cell cross, an edge X and a corner X.
       const drawAll = async () => {
         // Marks outlive a reload, and the edge and corner clicks cycle from what is there.
         await clearMarks()
@@ -710,12 +709,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await p.mouse.up()
         await clickCellCentre(...CELL_MARK)
         await clickCellCentre(...CELL_MARK)
+        await clickCellCentre(...CELL_CIRCLE)
         await clickEdge(3, 3, 'right')
         await clickCorner(3, 3)
         assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
         assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
         assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['6']), ['6'])
+        assert.deepEqual(await settle(() => penValues(...CELL_CIRCLE), ['5']), ['5'])
       }
+      // The cell the cell circle is clicked into, apart from CELL_MARK.
+      const CELL_CIRCLE = [1, 1]
+      // The pen values SudokuPad draws a free line's segments with (docs/research/sudokupad-pen-edge-marks.md).
+      const LINE_VALUES = ['1', '2', 'a', 'd', 'e', 'f', 'g', '7', '8', '9']
       const grid = () => p.locator('#svgrenderer').screenshot()
       const sameAt = (opacity) => async () => {
         const seen = await opacities()
@@ -734,7 +739,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(seen.some((x) => x.startsWith('3:')), true, 'the edge X')
         assert.equal(seen.some((x) => x.startsWith('u:')), true, 'the corner X')
         assert.equal(seen.some((x) => x.startsWith('6:')), true, 'the cell cross')
-        assert.equal(seen.length >= 4, true, `a free line and the circle at its end are drawn too: ${seen}`)
+        assert.equal(seen.some((x) => x.startsWith('5:')), true, 'the cell circle')
+        assert.equal(seen.some((x) => LINE_VALUES.includes(x.split(':')[0])), true, `a free line: ${seen}`)
         assert.equal(await sameAt('0.8')(), true, seen.join(' '))
         await openEditor()
         assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
@@ -746,7 +752,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const withRule = await grid()
         await read(() => {
           const style = document.getElementById('pen-tool-extras-style')
-          style.textContent = style.textContent.split('\n').filter((line) => !line.includes('opacity')).join('\n')
+          style.textContent = style.textContent.split('\n').filter((line) => !line.startsWith(':root:root .cell-pen { opacity')).join('\n')
         })
         assert.equal(await sameAt('0.8')(), true, 'SudokuPad\'s own rule gives 0.8 alone')
         const without = await grid()

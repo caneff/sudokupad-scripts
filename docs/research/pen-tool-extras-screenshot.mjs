@@ -80,7 +80,7 @@ const openDialog = async () => {
   await page.locator('.dialog button').filter({ hasText: 'Pen tool extras' }).first().click()
   await page.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
 }
-const slide = (value) => page.locator('#pen-tool-extras-editor input[type=range]')
+const slide = (value) => page.locator('#pen-tool-extras-thickness')
   .evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 
 await openDialog()
