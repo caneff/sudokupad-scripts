@@ -9,6 +9,8 @@ Turn the pen tool on in SudokuPad's settings first.
 
 Lines drawn with a page 2 or page 3 pen are invisible to anyone without this script. SudokuPad stores them and shares them in the replay, but without the script's CSS it draws them with no color.
 
+A replay played with SudokuPad's own pen tool setting off draws page 1 and page 2 marks in pen color 1, with or without the script: a page 2 dashed line comes out solid, and edge and corner marks lose their colors. Page 3 lines keep their colors and arrows. Turn the pen tool on before playing a replay. See `docs/research/sudokupad-replay-files.md`.
+
 ## Colors
 
 - With nothing saved, the nine pen colors are your current cell color page, darkened. Each pen takes the color on the same button number, and button 0 is not used. The darkest grey becomes black.
