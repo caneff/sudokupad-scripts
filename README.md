@@ -36,7 +36,7 @@ The button colors every cell holding a digit, and every empty cell whose centre 
 - A digit or centre mark change and its color change are one undo step. Undo, redo and replays never trigger auto mode.
 - Turning auto mode on, loading a puzzle with it on, and a restart color the givens. Saving changed groups recolors the whole grid in one undo step.
 - A short press on the button still only adds colors. Turning auto mode off leaves every color in place. A group color you remove by hand stays off until that cell's digit or centre marks change.
-- With the Multi-color setting off, SudokuPad replaces a cell's color when a group color is added, so a color in no group stays only with Multi-color on.
+- With the Multi-color setting off, SudokuPad replaces a cell's color when a group color is added, so a color in no group stays only with Multi-color on. For the same reason, with Multi-color off, undoing a profile switch or an auto mode change does not bring back a color that the group color replaced.
 
 ### Digit Color
 
