@@ -64,6 +64,13 @@ test('the credit line takes the text color for the page color given', () => {
   assert.equal(credit('#000000'), '.controls-footer, .controls-footer a { color: #dddddd !important }')
 })
 
+test('the replay tool\'s readout (the ::after of .controls-input) takes the text color for the page color given', () => {
+  const readout = (color) => buildCss(color).split('\n').find((line) => line.startsWith('.controls-input::after'))
+  assert.equal(readout('#ffffff'), '.controls-input::after { color: #222222 !important }')
+  assert.equal(readout('#000000'), '.controls-input::after { color: #dddddd !important }')
+  assert.equal(readout('#ffcc00'), '.controls-input::after { color: #222222 !important }')
+})
+
 // The one-line rules of buildCss(color) whose selector mentions a control button.
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
 

@@ -322,6 +322,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await computed('.controls-footer a', 'color'), CREDIT_TEXT)
     })
 
+    it('the replay tool\'s readout is readable on black', async () => {
+      assert.equal(await p.evaluate(() => window.getComputedStyle(document.querySelector('.controls-input'), '::after').color), CREDIT_TEXT)
+    })
+
     it('the control buttons are dark gray with light purple icons, the digits and backspace keep their purple with the softer border, and the selected mode button keeps its purple with a purple border', async () => {
       for (const selector of ['#control-settings', '#control-undo', '#control-corner', '#control-colour']) {
         assert.deepEqual(await readButton(selector), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER }, selector)
@@ -510,6 +514,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 describe('the page color dialog', { concurrency: false }, () => {
   let context, p, errors
   const bodyColor = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
+  const readoutColor = () => p.evaluate(() => window.getComputedStyle(document.querySelector('.controls-input'), '::after').color)
   const footerColor = () => p.evaluate(() => window.getComputedStyle(document.querySelector('.controls-footer')).color)
   const saved = () => p.evaluate((key) => Framework.getData(key), DATA_KEY)
   const undoBackground = () => p.evaluate(() => window.getComputedStyle(document.querySelector('#control-undo')).backgroundColor)
@@ -551,6 +556,7 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Save').click()
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     assert.equal(await footerColor(), DARK_TEXT)
+    assert.equal(await readoutColor(), DARK_TEXT)
     assert.equal(await undoBackground(), OWN_BUTTON_BG)
     assert.equal(await saved(), '#ffcc00')
   })
@@ -592,6 +598,7 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Save').click()
     assert.equal(await bodyColor(), BLACK)
     assert.equal(await footerColor(), CREDIT_TEXT)
+    assert.equal(await readoutColor(), CREDIT_TEXT)
     assert.equal(await undoBackground(), BUTTON_BG)
     assert.equal(await saved(), null)
     await load()
