@@ -9,7 +9,7 @@
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
 // Every click is a real mouse click on the page at an edge's pixel position.
-/* global Replay, Framework, ToolPen, MouseEvent, createImageBitmap, OffscreenCanvas */
+/* global Replay, Framework, ToolPen, MouseEvent, Node, createImageBitmap, OffscreenCanvas */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -498,7 +498,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await setThickness(5)
     })
 
-    it('edge and corner marks keep their size up to thickness 5, are about 1.14 times at 10 and 1.3 times at 16, and stay centred on their edge or corner; lines do not grow', async () => {
+    it('edge and corner marks keep their size up to thickness 5, are about 1.27 times at 10 and 1.6 times at 16, and stay centred on their edge or corner; lines do not grow', async () => {
       const boxOf = (selector) => read((sel) => {
         const r = document.querySelector(sel)?.getBoundingClientRect()
         return r ? { w: r.width, h: r.height, x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
@@ -519,13 +519,52 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           at[thickness] = await boxOf(selector)
         }
         for (const thickness of [10, 16]) {
-          const scale = 1 + 0.3 * (thickness - 5) / 11
+          const scale = 1 + 0.6 * (thickness - 5) / 11
           assert.equal(Math.abs(at[thickness].w / at[5].w - scale) < 0.01, true, `${selector} at ${thickness}: width ${at[thickness].w} against ${at[5].w}, wanted ${scale} times`)
           assert.equal(Math.abs(at[thickness].h / at[5].h - scale) < 0.01, true, `${selector} at ${thickness}: height`)
           assert.equal(Math.abs(at[thickness].x - at[5].x) < 0.6 && Math.abs(at[thickness].y - at[5].y) < 0.6, true, `${selector} at ${thickness} moved its centre from ${at[5].x},${at[5].y} to ${at[thickness].x},${at[thickness].y}`)
         }
         await clearMarks()
       }
+      await setThickness(5)
+    })
+
+    it('every edge, corner and cell mark is drawn above every line, whichever cell holds it, and stays above through undo, redo and a thickness change', async () => {
+      // Marks in an earlier cell than a line, in a later one, and on the line's own cell; the pen value goes through an act like a click's.
+      const put = (row, col, values) => read(([r, c, vals]) => {
+        const cell = Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c)
+        Framework.app.act({ type: 'select', arg: [cell] })
+        vals.forEach((arg) => Framework.app.act({ type: 'pen', arg }))
+        Framework.app.act({ type: 'deselect' })
+      }, [row, col, values])
+      // Every mark path is after every line path in the document.
+      const marksAboveLines = () => read(() => {
+        const MARKS = '3456bchijklmnopqrstuvwxy'
+        const paths = [...document.querySelectorAll('.cell-pen')].map((e) => ({ e, mark: MARKS.includes([...e.classList].find((c) => c.startsWith('pen-')).slice(4)) }))
+        const lines = paths.filter((x) => !x.mark).map((x) => x.e)
+        const marks = paths.filter((x) => x.mark).map((x) => x.e)
+        return { lines: lines.length, marks: marks.length, ok: lines.every((l) => marks.every((m) => Boolean(l.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING))) }
+      })
+      await setThickness(16)
+      await put(2, 2, ['3', '5', 'u'])
+      await put(2, 3, ['1', '2'])
+      await put(2, 4, ['c', '6', 't', '4'])
+      await put(4, 4, ['1'])
+      await put(4, 3, ['b', 'k', '5'])
+      await put(1, 1, ['x'])
+      const drawn = await settle(async () => { const m = await marksAboveLines(); return m.lines === 3 && m.marks === 11 }, true)
+      assert.equal(drawn, true, JSON.stringify(await marksAboveLines()))
+      assert.deepEqual(await marksAboveLines(), { lines: 3, marks: 11, ok: true })
+      await p.click('#control-undo')
+      await settle(penCount, 13)
+      assert.equal((await marksAboveLines()).ok, true, 'after an undo')
+      await p.click('#control-redo')
+      await settle(penCount, 14)
+      assert.deepEqual(await marksAboveLines(), { lines: 3, marks: 11, ok: true }, 'after a redo')
+      await setThickness(10)
+      assert.equal((await marksAboveLines()).ok, true, 'after a thickness change')
+      await clearMarks()
+      assert.equal(await settle(penCount, 0), 0, 'erasing removes the marks from the marks layer too')
       await setThickness(5)
     })
 
@@ -815,7 +854,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         const withRule = await grid()
         await read(() => {
           const style = document.getElementById('pen-tool-extras-style')
-          style.textContent = style.textContent.split('\n').filter((line) => !/^:root:root (\.cell-pen|#cell-pen) \{ opacity/.test(line)).join('\n')
+          style.textContent = style.textContent.split('\n').filter((line) => !/^:root:root (\.cell-pen|#cell-pen)[ ,].*\{ opacity/.test(line)).join('\n')
         })
         assert.equal(await sameAt('0.8')(), true, 'SudokuPad\'s own rule gives 0.8 alone')
         const without = await grid()

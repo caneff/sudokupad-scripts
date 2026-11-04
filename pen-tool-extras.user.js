@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.7.0
+// @version      1.8.0
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dotted (or dashed) lines and a third page of nine that draw a thin line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.7.0'
+  const VERSION = '1.8.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -53,6 +53,9 @@
   // The group the drag highlight (`.penhint`, and the erase highlight, which is the same element) is moved
   // to while a line is dragged, so the pen layer's opacity does not fade it. It sits right above the pen layer.
   const HINT_LAYER_ID = 'pen-tool-extras-hint'
+  // The group every edge, corner and cell mark is drawn in, made beside the pen layer and above it, so a mark is over every line
+  // whichever cell holds it (SudokuPad adds a cell's strokes to the pen layer in cell order, so a later cell's line covers an earlier cell's mark).
+  const MARKS_LAYER_ID = 'pen-tool-extras-marks'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
   // `MouseEvent.button` of the right mouse button.
   const RIGHT_BUTTON = 2
@@ -106,8 +109,9 @@
   const MARK_PER_THICKNESS = 0.5
   // The edge and corner marks keep their size up to the default thickness and grow gradually above it, to
   // 1 + MARK_GROWTH times at the largest, by a CSS scale (which also changes marks already drawn) about the
-  // middle of the mark, which is the point it is centred on.
-  const MARK_GROWTH = 0.3
+  // middle of the mark, which is the point it is centred on. At 16 an edge X then reaches 12.8 from its middle against the
+  // line's half width of 8, so the whole X clears a line of the same thickness.
+  const MARK_GROWTH = 0.6
   // The length of a page 2 dash in line widths, from the dots of today (0) to longer dashes.
   const DASH = { min: 0, max: 8, step: 1, fallback: 0 }
   // The least space between two dashes, in line widths, measured between the round caps' ends (so the dash-to-dash
@@ -163,6 +167,8 @@
   // bottom row's first column, the two grid corners the other kinds cannot reach. Per kind: the X,
   // then the circle, in the order of CORNER_CYCLE.types.
   const CORNER_VALUES = { tl: ['t', 'w'], br: ['u', 'x'], far: ['v', 'y'] }
+  // The pen values drawn in the marks layer: SudokuPad's own edge X and the cell circle and cross, and every value this script adds.
+  const MARK_VALUES = [...EDGE_X, '5', '6', ...EDGE_X.flatMap((edge) => ADDED[edge]), ...Object.values(CORNER_VALUES).flat()]
   // The shape of the third mark per edge. Its checkbox is the `dot` field of the saved settings.
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
@@ -668,7 +674,7 @@
   // whichever stylesheet loads last.
   function buildOpacityCss (opacity) {
     if (normalizeOpacity(opacity) !== opacity) throw new RangeError(`pen-tool-extras: ${opacity} is not an opacity from ${OPACITY.min} to ${OPACITY.max} in steps of ${OPACITY.step}`)
-    return `:root:root .cell-pen { opacity: 1; }\n:root:root ${PEN_LAYER} { opacity: ${opacity / 100}; }`
+    return `:root:root .cell-pen { opacity: 1; }\n:root:root ${PEN_LAYER}, :root:root #${MARKS_LAYER_ID} { opacity: ${opacity / 100}; }`
   }
 
   // How much shorter than an even split of a segment the dot spacing is. With the spacing exactly `length / dots`
@@ -897,6 +903,8 @@
       buildThicknessCss,
       normalizeOpacity,
       buildOpacityCss,
+      MARK_VALUES,
+      MARKS_LAYER_ID,
       PEN_PAGES,
       LINE_VALUES,
       directionCharOf,
@@ -1048,6 +1056,13 @@
     return group
   }
 
+  // Moves a mark's path from the pen layer into the marks layer. The cell still holds the same element, so erasing, undo and a
+  // redraw remove it from wherever it is.
+  function raiseMark (part) {
+    const layer = marksLayer()
+    if (layer && part && part.parentNode !== layer) layer.appendChild(part)
+  }
+
   // Draws the values this script adds. SudokuPad's own `renderPen` has no case for them and
   // gives the path no `d`; it copies every option onto the path, so passing `d` is enough. A line in a page 3
   // pen's color is drawn as a chevron line instead.
@@ -1058,9 +1073,10 @@
       const forward = chevronOf(opts)
       if (forward !== null) return renderChevronLine(this, opts, forward)
       const mark = addedMark(opts.value, opts.row, opts.col)
-      if (mark === null) return original.call(this, opts)
-      const d = this.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125)
-      return original.call(this, Object.assign({}, opts, { d }))
+      const d = mark === null ? undefined : this.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125)
+      const part = original.call(this, mark === null ? opts : Object.assign({}, opts, { d }))
+      if (MARK_VALUES.includes(opts.value)) raiseMark(part)
+      return part
     }
   }
 
@@ -1206,10 +1222,10 @@
     }, true)
   }
 
-  // Cells drawn before the wrap hold values the old `renderPen` drew as nothing.
-  function redrawAddedMarks (app) {
+  // Cells drawn before the wrap hold values the old `renderPen` drew as nothing (this script's marks) or in the pen layer (every mark).
+  function redrawMarks (app) {
     app.puzzle.cells.forEach((cell) => {
-      if ((cell.pen || []).some((valueColor) => addedMark(valueColor[0], cell.row, cell.col) !== null)) cell.renderContent(true)
+      if ((cell.pen || []).some((valueColor) => MARK_VALUES.includes(valueColor[0]))) cell.renderContent(true)
     })
   }
 
@@ -1245,7 +1261,7 @@
     wrapClickCell(tool, original)
     trackButton()
     suppressMarkMenu(app, () => markUnderPointer(tool, original))
-    redrawAddedMarks(app)
+    redrawMarks(app)
     redrawChevronLines()
   }
 
@@ -1554,17 +1570,26 @@
     if (saved && saved !== selectedPen() && penNumber(saved) === selectedPen()) penTool.setSelectedColor(saved)
   }
 
-  // The group the drag highlight lives in, made on first use beside the pen layer; null when the page has no
-  // pen layer.
-  function hintLayer () {
-    let layer = document.getElementById(HINT_LAYER_ID)
-    const penLayer = document.querySelector(PEN_LAYER)
-    if (!layer && penLayer) {
+  // The group with `id`, made on first use right after the element `anchor` gives; null when the page has no such element.
+  function layerAfter (id, anchor) {
+    let layer = document.getElementById(id)
+    const before = anchor()
+    if (!layer && before) {
       layer = document.createElementNS(SVG_NAMESPACE, 'g')
-      layer.id = HINT_LAYER_ID
-      penLayer.after(layer)
+      layer.id = id
+      before.after(layer)
     }
     return layer
+  }
+
+  // The group the marks live in, made beside the pen layer and above it; null when the page has no pen layer.
+  function marksLayer () {
+    return layerAfter(MARKS_LAYER_ID, () => document.querySelector(PEN_LAYER))
+  }
+
+  // The group the drag highlight lives in, above the marks, made on first use; null when the page has no pen layer.
+  function hintLayer () {
+    return layerAfter(HINT_LAYER_ID, () => document.getElementById(MARKS_LAYER_ID) || document.querySelector(PEN_LAYER))
   }
 
   function installPenPages (tool) {
