@@ -9,6 +9,8 @@ Turn the pen tool on in SudokuPad's settings first.
 
 Lines drawn with a page 2 or page 3 pen are invisible to anyone without this script. SudokuPad stores them and shares them in the replay, but without the script's CSS it draws them with no color.
 
+A replay played with SudokuPad's own pen tool setting off draws page 1 and page 2 marks in pen color 1, with or without the script: a page 2 dashed line comes out solid, and edge and corner marks lose their colors. Page 3 lines keep their colors and arrows. Turn the pen tool on before playing a replay. See `docs/research/sudokupad-replay-files.md`.
+
 ## Colors
 
 - With nothing saved, the nine pen colors are your current cell color page, darkened. Each pen takes the color on the same button number, and button 0 is not used. The darkest grey becomes black.
@@ -58,7 +60,7 @@ The dialog's Outline section has a White outline box, off by default and saved u
 - The outline wraps the combined shape, so it doesn't cut across lines where they join or cross, and it follows the shape's curves with round corners. Its edge is a little soft: about 1 unit wide at width 3, wider at the top of the range.
 - It follows Opacity: the outline is part of the pen layer, so at 40% the white fades with the marks.
 - The drag and erase highlights are not outlined.
-- With Dark Page, a mark stays inside the rectangle Dark Page keeps, but its outline can reach past it. On a mark along the grid's outer edge at Thickness 13 or more with an Outline width of 5 or more, the black margin cuts the outer part of the white band.
+- With Dark Page, a mark stays inside the rectangle Dark Page keeps, but its outline can reach past it. Dark Page's rectangle also stops at the puzzle's own edge, which on a standard puzzle is a quarter of a cell (16 units) outside the grid, and nothing is drawn past that edge. At a cell width of about 70 px (measured on sudokupad.app) that edge is 17.6 px out, so the part of the white band past it is cut, whatever Dark Page's margin. Only on cells wider than 128 px does Dark Page's own 32 px margin set the cut instead.
 - Nothing about it is stored in the puzzle, so replays don't change. Like the other dialog settings it takes effect on Save, Cancel leaves it, and Restore defaults sets the box off and the width to 3 in the dialog (Save keeps them).
 
 ## Pen pages

@@ -2,6 +2,14 @@
 
 - **group** — one palette color plus the digits that get it. A digit is in at
   most one group.
+- **pure cell** — a cell that belongs to exactly one group: its given or entered digit is in that
+  group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit
+  and no centre marks, or a digit in no group, is not pure.
+- **profile** — a named list of groups in Color by Digit. Exactly one is active, and the button and
+  auto mode use its groups. There are one to four of them; Low/5/High and Odd/Even are the first two.
+- **auto mode** — Color by Digit's setting, off by default, that keeps a cell's color in step with
+  its digit and centre marks as they change: a pure cell gets its group's color and loses any other
+  group's, and a cell that is not pure loses every group's color. Colors in no group are left alone, except that with SudokuPad's Multi-color setting off, adding a group color replaces whatever color the cell held.
 - **settings group** — one of SudokuPad's collapsible sections of its settings dialog. Every
   script's settings entry goes in the Experimental one, which starts collapsed.
 - **digit color** — the fill of one digit, in entered digits, corner marks and
