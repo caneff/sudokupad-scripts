@@ -100,3 +100,12 @@ edge marks. Only the result text was read.
   at `window` in the capture phase until the next `pointerdown`, which also ends it when the close came from
   the keyboard and no release follows. Stock dialogs and every other script's dialog are unchanged.
 - Not run: a touch screen (the `touchend` swallow is by reading, not by a run), Windows, Tampermonkey.
+
+## A press on a dialog's overlay over the grid leaves a pen mark, 2026-11-03 (v0.611.0, #66; run on the page in `live/pen-tool-extras-marks.live.mjs`)
+
+- SudokuPad closes a dialog on `pointerdown` on its overlay, which covers the page. The grid never saw the press, so
+  the release (`mouseup` on the grid's `svg`) goes to `clickCell`, which hit-tests `getInputRc()`, the pointer's
+  last position the grid saw. That is why the mark was in another cell: a press at (0,0) marked (8,6) in the live run.
+- Pen Tool Extras' own dialog is fixed in v1.4.2: a `pointerdown` on its overlay (told apart by the editor inside it)
+  swallows the events that end the press, as the dialog buttons do. Stock dialogs are unchanged.
+- Not run: a touch screen, Windows, Tampermonkey.

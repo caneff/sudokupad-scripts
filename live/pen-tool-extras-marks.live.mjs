@@ -10,7 +10,7 @@
 //   after-start:   after Start Puzzle, when the controls already exist
 // Every click is a real mouse click on the page at an edge's pixel position.
 /* global Replay, Framework, ToolPen, MouseEvent */
-import { after, before, describe, it } from 'node:test'
+import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -880,6 +880,79 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await editor().waitFor({ state: 'visible' })
         assert.equal(await anyMark(), false)
         await closeWith('Cancel')
+      })
+    })
+
+    // SudokuPad closes a dialog on a press on its overlay, which covers the page, so the grid never saw
+    // the press and the release marks the cell of the pointer's last position on the grid.
+    describe('a release over the grid after a press on a dialog overlay', () => {
+      const markedCells = () => read(() => Framework.app.puzzle.cells.filter((cell) => cell.pen.length).map((cell) => [cell.row, cell.col]))
+      // Each test starts with no dialog open: an earlier test's dialog would take the press.
+      beforeEach(async () => {
+        await read(() => { if (document.querySelector('.dialog')) Framework.closeDialog() })
+        await p.locator('.dialog').waitFor({ state: 'detached' })
+      })
+      // The pointer rests on the cell at [8, 6], so it is the cell a release with no press would mark.
+      const restPointer = async () => {
+        const [x, y] = await cellCentre(p, 8, 6)
+        await p.mouse.move(x, y)
+      }
+      // A real click at (x, y), which must be on the overlay and not on the dialog's own content: a
+      // dialog can be tall enough to cover the grid's corner, and a press on it closes nothing.
+      const pressOverlay = async ([x, y]) => {
+        const box = await p.locator('.dialog').boundingBox()
+        assert.equal(x < box.x || x > box.x + box.width || y < box.y || y > box.y + box.height, true, `(${x}, ${y}) is inside the dialog`)
+        await p.mouse.click(x, y)
+      }
+      const corner = () => cellCentre(p, 0, 0)
+      // The viewport's top left, which no dialog reaches.
+      const OFF_DIALOG = [2, 2]
+      // Counts every mouseup that reaches the page's bubble phase, after the script's capture listener.
+      const countReleases = () => read(() => {
+        window.__releases = 0
+        if (!window.__countReleases) {
+          window.__countReleases = () => { window.__releases++ }
+          window.addEventListener('mouseup', window.__countReleases)
+        }
+      })
+      const releases = () => read(() => window.__releases)
+
+      it('a press over the grid on this script\'s dialog closes it and leaves no pen mark', async () => {
+        await openEditor()
+        await clearMarks()
+        await restPointer()
+        await pressOverlay(await corner())
+        await editor().waitFor({ state: 'detached' })
+        assert.deepEqual(await markedCells(), [])
+      })
+
+      it('a click on the grid after that press still makes a mark', async () => {
+        await openEditor()
+        await clearMarks()
+        const point = await corner()
+        await pressOverlay(point)
+        await editor().waitFor({ state: 'detached' })
+        await p.mouse.click(...point)
+        assert.equal((await settle(async () => (await markedCells()).length > 0, true)), true)
+        await clearMarks()
+      })
+
+      // The stock settings dialog closes on a press on its overlay, but makes no mark from the release
+      // here, so the check is that the release still reaches the page.
+      it('a press on a stock dialog\'s overlay leaves its release to the page', async () => {
+        await openSettings(p)
+        await countReleases()
+        await pressOverlay(OFF_DIALOG)
+        await p.locator('.dialog').waitFor({ state: 'detached' })
+        assert.equal(await releases(), 1)
+      })
+
+      it('the release of a press on this script\'s dialog does not reach the page', async () => {
+        await openEditor()
+        await countReleases()
+        await pressOverlay(OFF_DIALOG)
+        await editor().waitFor({ state: 'detached' })
+        assert.equal(await releases(), 0)
       })
     })
 
