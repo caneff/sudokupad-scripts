@@ -203,3 +203,16 @@ Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras-che
 - **Dark Page.** A chevron reaches half its width plus half its stroke off its line: 15.6 units at thickness 16, inside the 17 Dark
   Page keeps past a cell (`SOLVER_REACH`; a unit test holds the two together).
 - Not run: a touch screen, Windows, Tampermonkey.
+
+## Holding a modifier leaves the pen tool (run on the page 2026-11-04, SudokuPad 0.611.0, headless Chromium, no script loaded)
+
+`Framework.app.tool` while a key is held in the pen tool, and back to `pen` on release in every case:
+
+| Letter tool | Letter Tool Hotkey | Alt | Ctrl | Shift |
+| --- | --- | --- | --- | --- |
+| off | n/a | `corner` | `centre` | `corner` |
+| on | `altletter` | `pen` | `centre` | `corner` |
+| on | `nohotkey` | `corner` | `centre` | `corner` |
+
+So a click with a modifier held doesn't reach the pen tool unless the script stops the temporary switch (`App.changeTool` with
+`tempChange`, found through each tool's `tempKey`). Only the key press was run, not a click with it held.
