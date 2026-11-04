@@ -1,5 +1,6 @@
-// Live check of pen-tool-extras.user.js's thickness and opacity sliders in the pen tool's panel, and
-// of the shrunken line mode box beside them, on sudokupad.app in headless Chromium.
+// Live check of pen-tool-extras.user.js's thickness and opacity sliders in the pen tool's panel, of the
+// hidden line mode pulldown whose choice moved to the dialog, and of the opacity of the pen layer, on
+// sudokupad.app in headless Chromium.
 // Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
@@ -15,7 +16,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { openSettings } from './settings.mjs'
+import { effectiveOpacities, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -63,7 +64,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const activeElementTag = () => read(() => document.activeElement.tagName)
     // The computed stroke width and opacity of the first stroke of pen color 1, drawn by `draw`.
     const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).strokeWidth))
-    const lineOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).opacity))
+    const effectiveOpacity = async (selector) => (await effectiveOpacities(p, selector))[0]
+    const lineOpacity = () => effectiveOpacity('.cell-pen.pencolor-1')
+    const strokeOwnOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).opacity))
 
     // The pen button toggles the tool, and SudokuPad binds its handler a moment after the
     // button appears, so it is clicked again until the tool's buttons show.
@@ -152,20 +155,19 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await context.close()
     })
 
-    it('with the pen tool on, Thickness is above Opacity in the line mode row, at SudokuPad\'s own 5 and 0.8, with no pad growth', async () => {
-      const [thickness, opacity, row] = await Promise.all([THICKNESS, OPACITY, '.pen-tool-extras-sliders'].map((s) => p.locator(s).boundingBox()))
+    it('with the pen tool on, Thickness is above Opacity in the pad\'s last row beside the page button, at SudokuPad\'s own 5 and 0.8, with no pad growth', async () => {
+      const [thickness, opacity, row, page, input] = await Promise.all([THICKNESS, OPACITY, '.pen-tool-extras-sliders', '.pen-tool-extras-page', '.tool-pen .controls-input'].map((s) => p.locator(s).boundingBox()))
       assert.equal(thickness.y < opacity.y, true, 'Thickness above Opacity')
       assert.deepEqual(await p.locator(THICKNESS).evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '12', '1', '5'])
       assert.deepEqual(await p.locator(OPACITY).evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
       assert.equal(await lineWidth(), 5)
       assert.equal(await lineOpacity(), 0.8)
-      const input = await p.locator('.tool-pen .controls-input').boundingBox()
-      const modeBox = await p.locator('.penlinemode').boundingBox()
-      // Both sliders sit inside the row the line mode pulldown fills, right of the box, and the
-      // box is about one button wide (a button is 64 px at this size).
-      assert.equal(row.y >= modeBox.y - 1 && row.y + row.height <= modeBox.y + modeBox.height + 1, true, JSON.stringify({ row, modeBox }))
-      assert.equal(row.x >= modeBox.x + modeBox.width && row.x + row.width <= input.x + input.width + 1, true, JSON.stringify({ row, modeBox, input }))
-      assert.equal(modeBox.width <= 90, true, `mode box ${modeBox.width} wide`)
+      // The sliders fill the row left of the page button, which is one square button at the row's right end.
+      assert.equal(row.x + row.width <= page.x, true, JSON.stringify({ row, page }))
+      assert.equal(page.x + page.width <= input.x + input.width + 1, true, JSON.stringify({ page, input }))
+      assert.equal(Math.abs(page.width - page.height) <= 2, true, `page button ${page.width} x ${page.height}`)
+      const lastKeyRow = await p.locator('.tool-pen button[data-key="9"]').boundingBox()
+      assert.equal(row.y >= lastKeyRow.y + lastKeyRow.height && page.y >= lastKeyRow.y + lastKeyRow.height, true, 'both are below the digit rows')
       // The pad is no taller with the sliders than without.
       const height = () => p.locator('.controls-buttons').evaluate((el) => el.getBoundingClientRect().height)
       const withSliders = await height()
@@ -174,20 +176,41 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.locator('.pen-tool-extras-sliders').evaluate((el) => { el.style.display = '' })
     })
 
-    it('the line mode box is the same control: Both, Center and Edge choose the three modes SudokuPad saves, and a slider move leaves the mode alone', async () => {
-      const select = p.locator('.penlinemode select')
-      assert.deepEqual(await select.locator('option').evaluateAll((os) => os.map((o) => [o.value, o.textContent])), [['both', 'Both'], ['centeronly', 'Center'], ['edgeonly', 'Edge']])
-      for (const value of ['edgeonly', 'centeronly', 'both']) {
-        await select.selectOption(value)
-        assert.equal(await read(() => ToolPen.tool.lineMode), value)
-        assert.equal(await saved(LINE_MODE_KEY), value)
-        assert.equal(await select.inputValue(), value)
-      }
+    it('SudokuPad\'s line mode pulldown is hidden, and the dialog holds the choice: Cancel leaves the mode, Save sets and saves it, and a slider move leaves it alone', async () => {
+      assert.equal(await p.locator('.penlinemode').isVisible(), false)
+      const before = await read(() => ToolPen.tool.lineMode)
+      await openEditor()
+      const select = editor().locator('select[data-line-mode]')
+      assert.deepEqual(await select.locator('option').evaluateAll((os) => os.map((o) => [o.value, o.textContent])), [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']])
       await select.selectOption('edgeonly')
+      await dialogButton('Cancel').click()
+      assert.equal(await read(() => ToolPen.tool.lineMode), before)
+      await openEditor()
+      await editor().locator('select[data-line-mode]').selectOption('edgeonly')
+      await dialogButton('Save').click()
+      assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
+      assert.equal(await saved(LINE_MODE_KEY), 'edgeonly')
+      assert.equal(await p.locator('.penlinemode select').inputValue(), 'edgeonly')
       await dragToMax(THICKNESS)
       assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
       assert.equal(await saved(LINE_MODE_KEY), 'edgeonly')
-      await select.selectOption('both')
+      await openEditor()
+      assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
+      await editor().locator('select[data-line-mode]').selectOption('both')
+      await dialogButton('Save').click()
+      assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
+    })
+
+    it('the dialog shows the saved line mode while SudokuPad\'s pen tool still holds its default, and a change to the default saves', async () => {
+      await read((k) => Framework.setData(k, 'edgeonly'), LINE_MODE_KEY)
+      // Before SudokuPad's pen tool first opens it holds 'both' and reads the saved mode only on entry.
+      await read(() => { ToolPen.tool.lineMode = 'both' })
+      await openEditor()
+      assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
+      await editor().locator('select[data-line-mode]').selectOption('both')
+      await dialogButton('Save').click()
+      assert.equal(await saved(LINE_MODE_KEY), 'both')
+      assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
     })
 
     it('a real drag on Thickness changes the line\'s computed width and saves at once, with no Save', async () => {
@@ -209,11 +232,41 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await dragSlider(OPACITY, GRID_X)
       assert.equal(await sliderValue(OPACITY), '20')
       assert.equal(await settle(lineOpacity, 0.2), 0.2)
+      assert.equal(await strokeOwnOpacity(), 1)
       assert.equal(await saved(OPACITY_KEY), 20)
       await dragToMax(OPACITY)
       assert.equal(await sliderValue(OPACITY), '100')
       assert.equal(await settle(lineOpacity, 1), 1)
       assert.equal(await saved(OPACITY_KEY), 100)
+    })
+
+    it('the drag highlight and the erase highlight keep their own opacity at both ends of the Opacity slider, and a finished stroke shows the slider\'s value', async () => {
+      // A press exactly on an existing stroke starts no drag in SudokuPad, so the erase drag starts `offset` px off the line.
+      const dragFrom = async (row, release, offset = 0) => {
+        const [x, y] = await read((row) => {
+          const box = Framework.app.puzzle.cells.find((c) => c.row === row && c.col === 4).elem.getBoundingClientRect()
+          return [box.x + box.width / 2, box.y + box.height / 2]
+        }, row)
+        await p.mouse.move(x, y + offset)
+        await p.mouse.down()
+        await p.mouse.move(x + 110, y + 10 + offset, { steps: 6 })
+        if (release) await p.mouse.up()
+      }
+      for (const [slider, percent] of [['20', 0.2], ['100', 1]]) {
+        await p.locator(OPACITY).evaluate((el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }, slider)
+        assert.equal(await settle(lineOpacity, percent), percent)
+        // A drag over empty cells: the highlight in the pen color, 0.6 as SudokuPad's own rule gives it.
+        await dragFrom(6, false)
+        assert.equal(await effectiveOpacity('.penhint'), 0.6, `drag highlight at ${slider}`)
+        await p.mouse.up()
+        await p.mouse.move(5, 5)
+        // A drag over the line drawn in the same cells: SudokuPad's erase highlight, 0.5.
+        await dragFrom(6, false, 12)
+        assert.equal(await read(() => document.querySelector('.penhint').classList.contains('pencolor-erase')), true, 'erase mode')
+        assert.equal(await effectiveOpacity('.penhint'), 0.5, `erase highlight at ${slider}`)
+        await p.mouse.up()
+      }
+      await p.locator(OPACITY).evaluate((el) => { el.value = 80; el.dispatchEvent(new Event('input', { bubbles: true })) })
     })
 
     it('a slider drag adds nothing to the undo stack or the replay, draws no pen stroke and leaves every pen mark as it was', async () => {

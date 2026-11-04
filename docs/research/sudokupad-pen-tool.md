@@ -100,3 +100,72 @@ drew real mouse drags.
   the no-op drags in that run aren't caused by `0`, and why they happen wasn't looked into.
 - That makes 36 color characters, 1 to 9, `a` to `z` and `0`: enough for nine solid, nine dotted and nine directional pens at two
   characters each.
+
+## The second page of pens, built and run live 2026-11-04 (#71, SudokuPad 0.612.0, headless Chromium)
+
+What `pen-tool-extras.user.js` 1.5.0 does, and what running it found. Live checks: `live/pen-tool-extras-pages.live.mjs`
+(paging by button, Tab and wheel, drawing, undo, replay, reload, at the three injection times, and with No Tab Letters
+installed too) and `live/pen-tool-extras-panel.live.mjs`.
+
+- **Pages.** Page 1 is `1` to `9`, page 2 is the color characters `a` to `i`. Each color button keeps its `data-key`
+  and takes the page's character as `data-value` and title, as `ToolColor.setButtonPad` does. Page 2 strokes draw
+  and undo, and the replay draws them again. `Framework.app.getReplay()` returns a compressed `{"type":"clzw",...}`
+  string, so the replay cannot be grepped for `pc:c`; the live test loads it back and reads the stored pen values.
+- **`getData` parses what it reads.** A saved `'3'` comes back as the number 3, so `ToolPen_color` read at
+  `handleToolEnter` is a number, and a saved digit pen under the script's own key reads back as a number too.
+  `ToolPen.tool.setSelectedColor` therefore gets numbers from SudokuPad itself.
+- **`ToolPen_color` never holds a letter.** `setSelectedColor` saves whatever it is given, so the script wraps it: it
+  turns the pad to the pen's page first (stock throws when no button holds the value), calls the original, and puts
+  the pen's color number back into `ToolPen_color` in the same step; the pen itself is saved under `PenColor_pen`. A
+  fresh page without the script, with `ToolPen_color` 3 saved, opens the pen tool with no error (live, in the pages
+  test). SudokuPad's own `handleToolEnter` selects the saved number through the wrapper, which overwrites
+  `PenColor_pen`, so the saved pen is read before it runs.
+- **The buttons are shared.** One `.controls-input` serves every tool, and the digit tool reads `data-value`, so the
+  pen's `handleToolExit` is wrapped to put 1 to 9 back.
+- **Tab.** `App.handleKeydown` runs every tool's `handleKeydown` first and returns when one answers true, before
+  `keyHandlers` (where the letter tool binds Tab), so `ToolPen.tool.handleKeydown` can answer Tab (both with No Tab
+  Letters installed and without, run live). Stock SudokuPad does not toggle letter mode on Tab in the pen tool at all
+  (run live with the letter tool on: Tab sets `letterMode` on the normal tool and leaves it off with the pen tool
+  current), so the page turn costs nothing there; the live test's letter-mode check cannot go red and checks only that. Shift+Tab is left alone: with Shift+Tab also
+  turning the page, `ToolLetter_letterMode` read back as saved on in the live run. The cause was not isolated; the
+  letter tool's own `handleKeydown` switches letter mode for a held Shift (setting `toolletter_mode`), which fits.
+- **A press exactly on an existing stroke starts no drag** in stock SudokuPad (no script loaded: `penhint` stays
+  absent), so an erase drag in a test starts a few pixels off the line.
+
+### Dots and joins
+
+Page 2 draws lines as dots: `stroke-dasharray: 0 <gap>` on the line values (`1 2 7 8 9 a d e f g`, not the cell circle
+`5` or cross `6`) with the round cap `.cell-pen` already has. Each segment is its own `<path>`, so each starts its own
+pattern on a dot. The gap is two line widths snapped so a cell side (64 units) holds a whole number of dots, and the
+diagonal (64 * sqrt(2)) its own; the same is done at each thickness, so the dots stay even across a join. Picture:
+`pen-tool-extras-dots-joins.png` (center, edge and diagonal lines, one drag each with turns, at thickness 1, 5, 12;
+`pen-tool-extras-dots-joins-screenshot.mjs`).
+
+- At 5 and 12 the dots are evenly spaced through every turn and at every join between a side and a diagonal.
+- At 1 the dots are 1 unit across with 2 between, which reads as a faint line at the page's own zoom.
+- With the gap exactly an even split, the last dot fell on the segment's end and the browser drew no zero-length
+  dash there, so a line's far end had no dot; a spacing 0.01% short puts the last dot a hair before the end and every
+  line ends on a dot.
+
+### Opacity on the pen layer
+
+All pen strokes sit in `g#cell-pen`, and SudokuPad gives each path `opacity: 0.8`, so overlapping segments darken (dark
+dots at joins). Moving the opacity to the group (`:root:root .cell-pen { opacity: 1 }` and
+`:root:root #cell-pen { opacity: <slider> }`) fades the layer as one picture, so overlaps show as the rest of the
+stroke. Where two colors cross the later stroke covers the earlier one. Picture: `pen-tool-extras-pages-layer-opacity.png`
+(the first two panels are before and after; the last two are the pen panel on pages 1 and 2;
+`pen-tool-extras-pages-layer-opacity-screenshot.mjs`). This replaces the reading in `pen-tool-extras-opacity.md`
+that the slider sets `opacity` on `.cell-pen` and that overlaps darken at every value.
+
+- The drag highlight (`.penhint`, opacity 0.6) and the erase highlight (`.pencolor-erase`, 0.5) are children of the same
+  group (`penhint` is made with `renderPart({target: 'cell-pen'})`), so the layer's opacity would fade them. The script
+  moves the hint element to its own `g#pen-tool-extras-hint` right after the pen layer as soon as `drawLineHint` makes
+  it. Live: their effective opacity, the product over their ancestors, is 0.6 and 0.5 with the slider at 20 and at 100.
+
+### The panel
+
+`.penlinemode` is hidden with CSS, not removed, so SudokuPad's own handlers keep their element, and the choice moved
+into this script's dialog (it sets `ToolPen.tool.lineMode` and saves `ToolPen_linemode`, as the pulldown did). The
+freed last row holds the sliders and a square page button. The stock `.controls-input button` color and size outrank a
+plain class, so the page button's rule is `.tool-pen .controls-input button.<class>`; with a lower specificity the
+button was white on white.

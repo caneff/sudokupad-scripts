@@ -47,13 +47,24 @@
   cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 12, saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
   is always half of it, so every width scales by one factor.
-- **pen panel sliders** — Thickness and Opacity, drawn in the pen tool's panel in the row SudokuPad gives its line
-  mode pulldown (`.penlinemode`), which the script cuts to a box about one button wide with the choices Both,
-  Center and Edge. They exist only while the pen tool is on, and have no Save or Cancel. The settings dialog holds
-  neither; its Restore defaults resets both.
-- **opacity** — the one slider, in the pen tool's panel, setting how see-through every pen mark is (lines, cell circles and crosses, edge
-  marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under `PenColor_opacity`. SudokuPad's
-  own is 80 (`.cell-pen { opacity: 0.8 }`), which is the default; 100 is solid.
+- **pen panel sliders** — Thickness and Opacity, drawn in the pen tool's panel in the last row, the row SudokuPad gives its
+  line mode pulldown (`.penlinemode`), which the script hides and moves to the settings dialog (**line mode**). The row's
+  right end holds the **page button**. They exist only while the pen tool is on, and have no Save or Cancel. The settings
+  dialog holds neither slider; its Restore defaults resets both.
+- **opacity** — the one slider, in the pen tool's panel, setting how see-through the pen layer is (lines, cell circles and
+  crosses, edge marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under
+  `PenColor_opacity`. SudokuPad's own is 80, set on each stroke (`.cell-pen { opacity: 0.8 }`); the script sets it on the
+  whole pen layer (`#cell-pen`) instead, so overlapping strokes do not darken. 80 is the default; 100 is solid.
+- **pen page** — one of the lists of nine pens in `PEN_PAGES`. Page 1 is SudokuPad's own pens 1 to 9; page 2 is the same
+  nine colors drawn as dotted lines. The pen on color button N has the same color on every page, so recoloring it changes
+  it on all of them.
+- **color character** — the one character a stroke stores for its pen color, and the replay holds as `pc:<character>`: `1`
+  to `9` on page 1, `a` to `i` on page 2. The **pen color** number (1 to 9) is the button the character is on, and the
+  only part SudokuPad's own `ToolPen_color` ever holds; the selected character is saved under `PenColor_pen`.
+- **page button** — the square button at the right end of the pen panel's last row. It shows the line the next page draws,
+  with a dot for each page and the current one filled; Tab and the mouse wheel over the panel turn the page too.
+- **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
+  saved by SudokuPad under `ToolPen_linemode`; the script's settings dialog holds the choice.
 - **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
   another in the Dark page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
   with the color.

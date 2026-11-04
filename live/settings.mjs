@@ -19,3 +19,11 @@ export async function openSettings (p) {
   await open.waitFor({ state: 'visible' })
   return open
 }
+
+// The opacity each element matching `selector` shows at, in document order: its own times every ancestor's, since
+// pen-tool-extras puts the slider's value on the pen layer and leaves each stroke solid. Rounded to 3 places.
+export const effectiveOpacities = (page, selector) => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((e) => {
+  let product = 1
+  for (let el = e; el && el.nodeType === 1; el = el.parentElement) product *= parseFloat(window.getComputedStyle(el).opacity)
+  return Math.round(product * 1000) / 1000
+}), selector)

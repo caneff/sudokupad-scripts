@@ -9,13 +9,13 @@
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
 // Every click is a real mouse click on the page at an edge's pixel position.
-/* global Replay, Framework, ToolPen, MouseEvent */
+/* global Replay, Framework, ToolPen, MouseEvent, createImageBitmap, OffscreenCanvas */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { headerVersion, openSettings } from './settings.mjs'
+import { effectiveOpacities, headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -698,10 +698,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
       }
       const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
-      // The pen value (`pen-<value>` class) and computed opacity of every drawn mark, without repeats.
+      // The pen value (`pen-<value>` class) and the opacity each drawn mark shows at, without repeats.
       const opacities = async () => {
-        const all = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [[...e.classList].find((c) => c.startsWith('pen-')).slice(4), window.getComputedStyle(e).opacity]))
-        return [...new Set(all.map((x) => x.join(':')))].sort()
+        const shown = await effectiveOpacities(p, '.cell-pen')
+        const values = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
+        return [...new Set(values.map((v, i) => `${v}:${shown[i]}`))].sort()
       }
       // Draws a free line (a drag), a cell circle, a cell cross, an edge X and a corner X.
       const drawAll = async () => {
@@ -751,15 +752,26 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
       })
 
-      it('at the default the grid is the same pixels as with the script\'s opacity rule taken out', async () => {
+      it('at the default the grid matches SudokuPad\'s own per-stroke opacity to within a few levels per channel, where marks do not overlap', async () => {
         const withRule = await grid()
         await read(() => {
           const style = document.getElementById('pen-tool-extras-style')
-          style.textContent = style.textContent.split('\n').filter((line) => !line.startsWith(':root:root .cell-pen { opacity')).join('\n')
+          style.textContent = style.textContent.split('\n').filter((line) => !/^:root:root (\.cell-pen|#cell-pen) \{ opacity/.test(line)).join('\n')
         })
         assert.equal(await sameAt('0.8')(), true, 'SudokuPad\'s own rule gives 0.8 alone')
         const without = await grid()
-        assert.equal(withRule.equals(without), true)
+        // Fading the layer as one picture and fading each stroke differ only in rounding where nothing overlaps.
+        const largest = await read(async ([a, b]) => {
+          const pixels = async (base64) => {
+            const bitmap = await createImageBitmap(await (await fetch('data:image/png;base64,' + base64)).blob())
+            const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
+            context.drawImage(bitmap, 0, 0)
+            return context.getImageData(0, 0, bitmap.width, bitmap.height).data
+          }
+          const [x, y] = [await pixels(a), await pixels(b)]
+          return x.length === y.length ? x.reduce((max, v, i) => Math.max(max, Math.abs(v - y[i])), 0) : Infinity
+        }, [withRule.toString('base64'), without.toString('base64')])
+        assert.equal(largest <= 4, true, `largest channel difference ${largest}`)
         await reload()
         await drawAll()
       })
