@@ -411,7 +411,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     describe('thickness', { concurrency: false }, () => {
-      const slider = () => editor().locator('input[type=range]')
+      const slider = () => editor().locator('#pen-tool-extras-thickness')
       const setSlider = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
       const savedThickness = () => read((k) => Framework.getData(k), THICKNESS_KEY)
       // The computed stroke width of every drawn stroke of pen color `n` (a drag draws a line and a
@@ -785,7 +785,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await openSettings(p)
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
       await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
-      await p.locator('#pen-tool-extras-editor input[type=range]').evaluate((el) => { el.value = '11'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+      await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '11'; el.dispatchEvent(new Event('input', { bubbles: true })) })
       await p.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
       // The script polls every 100 ms and then applies the derived colors; wait for them.
       const pen1 = () => p.evaluate(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-1').trim())

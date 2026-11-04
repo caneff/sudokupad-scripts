@@ -1,4 +1,4 @@
-// Live check of pen-tool-extras.user.js's edge marks on sudokupad.app, in headless Chromium.
+// Live check of pen-tool-extras.user.js's edge and corner marks and its opacity slider on sudokupad.app, in headless Chromium.
 // Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
@@ -21,6 +21,8 @@ const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').t
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'EdgeMarks_marks'
+const OPACITY_KEY = 'PenColor_opacity'
+const COLORS_KEY = 'PenColor_colors'
 const { SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
 const { CORNER_RADIUS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const MARK_BOXES = ['x', 'directions', 'dot', 'cornerX', 'cornerDot']
@@ -685,6 +687,144 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen tool extras')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
       await closeWith('Cancel')
+    })
+
+    describe('opacity', { concurrency: false }, () => {
+      const slider = () => editor().locator('#pen-tool-extras-opacity')
+      const setSlider = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+      const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
+      // The pen value (`pen-<value>` class) and computed opacity of every drawn mark, without repeats.
+      const opacities = async () => {
+        const all = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [[...e.classList].find((c) => c.startsWith('pen-')).slice(4), window.getComputedStyle(e).opacity]))
+        return [...new Set(all.map((x) => x.join(':')))].sort()
+      }
+      // Draws a free line (a drag), a cell circle, a cell cross, an edge X and a corner X.
+      const drawAll = async () => {
+        // Marks outlive a reload, and the edge and corner clicks cycle from what is there.
+        await clearMarks()
+        const [x, y] = await cellCentre(p, 6, 1)
+        await p.mouse.move(x, y)
+        await p.mouse.down()
+        await p.mouse.move(x + 70, y + 5, { steps: 8 })
+        await p.mouse.up()
+        await clickCellCentre(...CELL_MARK)
+        await clickCellCentre(...CELL_MARK)
+        await clickCellCentre(...CELL_CIRCLE)
+        await clickEdge(3, 3, 'right')
+        await clickCorner(3, 3)
+        assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
+        assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
+        assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['6']), ['6'])
+        assert.deepEqual(await settle(() => penValues(...CELL_CIRCLE), ['5']), ['5'])
+      }
+      // The cell the cell circle is clicked into, apart from CELL_MARK.
+      const CELL_CIRCLE = [1, 1]
+      // The pen values SudokuPad draws a free line's segments with (docs/research/sudokupad-pen-edge-marks.md).
+      const LINE_VALUES = ['1', '2', 'a', 'd', 'e', 'f', 'g', '7', '8', '9']
+      const grid = () => p.locator('#svgrenderer').screenshot()
+      const sameAt = (opacity) => async () => {
+        const seen = await opacities()
+        return seen.length > 0 && seen.every((x) => x.endsWith(':' + opacity))
+      }
+
+      before(async () => {
+        await read((k) => Framework.removeData(k), OPACITY_KEY)
+        await reload()
+        await drawAll()
+      })
+      after(async () => { await read((k) => Framework.removeData(k), OPACITY_KEY) })
+
+      it('with nothing saved a line, a cell circle and cross, an edge mark and a corner mark are at SudokuPad\'s 0.8, and the slider runs 20 to 100 in steps of 5 at 80', async () => {
+        const seen = await opacities()
+        assert.equal(seen.some((x) => x.startsWith('3:')), true, 'the edge X')
+        assert.equal(seen.some((x) => x.startsWith('u:')), true, 'the corner X')
+        assert.equal(seen.some((x) => x.startsWith('6:')), true, 'the cell cross')
+        assert.equal(seen.some((x) => x.startsWith('5:')), true, 'the cell circle')
+        assert.equal(seen.some((x) => LINE_VALUES.includes(x.split(':')[0])), true, `a free line: ${seen}`)
+        assert.equal(await sameAt('0.8')(), true, seen.join(' '))
+        await openEditor()
+        assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
+        assert.match(await editor().innerText(), /Opacity\s*80/)
+        await closeWith('Cancel')
+      })
+
+      it('at the default the grid is the same pixels as with the script\'s opacity rule taken out', async () => {
+        const withRule = await grid()
+        await read(() => {
+          const style = document.getElementById('pen-tool-extras-style')
+          style.textContent = style.textContent.split('\n').filter((line) => !line.startsWith(':root:root .cell-pen { opacity')).join('\n')
+        })
+        assert.equal(await sameAt('0.8')(), true, 'SudokuPad\'s own rule gives 0.8 alone')
+        const without = await grid()
+        assert.equal(withRule.equals(without), true)
+        await reload()
+        await drawAll()
+      })
+
+      it('moving the slider changes every mark\'s opacity live, Cancel puts 0.8 back and saves nothing', async () => {
+        await openEditor()
+        await setSlider(40)
+        assert.equal(await settle(sameAt('0.4'), true), true, (await opacities()).join(' '))
+        assert.match(await editor().innerText(), /Opacity\s*40/)
+        await closeWith('Cancel')
+        assert.equal(await settle(sameAt('0.8'), true), true)
+        assert.equal(await savedOpacity(), null)
+      })
+
+      it('Save keeps it under its own key without saving the colors; undo, redo and replay leave it alone; a reload keeps it', async () => {
+        await openEditor()
+        await setSlider(30)
+        await closeWith('Save')
+        assert.equal(await savedOpacity(), 30)
+        assert.equal(await read((k) => Framework.getData(k), COLORS_KEY), null)
+        assert.equal(await settle(sameAt('0.3'), true), true)
+        const before = await read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])).sort())
+        await p.click('#control-undo')
+        await p.click('#control-redo')
+        assert.deepEqual(await read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])).sort()), before)
+        assert.equal(await settle(sameAt('0.3'), true), true, 'after undo and redo')
+        const replay = await read(() => Framework.app.getReplay())
+        assert.equal(await read((r) => Replay.decode(r).actions.some((a) => /opacity/i.test(a)), replay), false, 'the replay holds no opacity')
+        await clearMarks()
+        await read((r) => Framework.app.loadReplay(r), replay)
+        assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
+        assert.equal(await settle(sameAt('0.3'), true), true, 'after loading the replay')
+        await reload()
+        assert.equal(await settle(sameAt('0.3'), true), true, 'after a reload')
+      })
+
+      it('Restore defaults sets the slider to 80 and Save then clears the saved opacity; Cancel after it keeps a saved one', async () => {
+        await openEditor()
+        await restoreAndRead()
+        await closeWith('Cancel')
+        assert.equal(await savedOpacity(), 30)
+        assert.equal(await settle(sameAt('0.3'), true), true)
+        await openEditor()
+        await restoreAndRead()
+        await closeWith('Save')
+        assert.equal(await savedOpacity(), null)
+        assert.equal(await settle(sameAt('0.8'), true), true)
+        async function restoreAndRead () {
+          await dialogButton('Restore defaults').click()
+          assert.equal(await slider().inputValue(), '80')
+          assert.equal(await settle(sameAt('0.8'), true), true)
+        }
+      })
+
+      it('corrupt saved opacity falls back to 0.8 with no thrown error', async () => {
+        const errorsBefore = errors.length
+        for (const bad of ['{not json', '"40"', '99', '0', '37', '[40]', 'null', '105']) {
+          await read(([k, raw]) => { window.localStorage.setItem(Framework.makeDataKey(k), raw) }, [OPACITY_KEY, bad])
+          await reload()
+          await drawAll()
+          assert.equal(await settle(sameAt('0.8'), true), true, bad)
+          await openEditor()
+          assert.equal(await slider().inputValue(), '80', bad)
+          await closeWith('Cancel')
+          await clearMarks()
+        }
+        assert.deepEqual(errors.slice(errorsBefore), [])
+      })
     })
 
     it('no uncaught page errors', () => {

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.2.0
-// @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines, circles, crosses, edge marks and corner marks are with one slider, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks, so an update can break them.
+// @version      1.3.0
+// @description  Pen tool extras in one settings dialog: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in the dialog or by holding a pen color button), sets how thick pen lines, circles, crosses, edge marks and corner marks are with one slider and how see-through they are with another, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the edge and corner marks, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,13 +20,17 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.2.0'
+  const VERSION = '1.3.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
-  // PenColor_thickness is new.
+  // PenColor_thickness and PenColor_opacity are new.
   const COLORS_KEY = 'PenColor_colors'
   const THICKNESS_KEY = 'PenColor_thickness'
+  const OPACITY_KEY = 'PenColor_opacity'
+  // The `id` of each slider in the dialog; the input handler tells them apart by it.
+  const THICKNESS_SLIDER = 'pen-tool-extras-thickness'
+  const OPACITY_SLIDER = 'pen-tool-extras-opacity'
   const MARKS_KEY = 'EdgeMarks_marks'
   const STYLE_ID = 'pen-tool-extras-style'
   // The element SudokuPad draws the grid in.
@@ -61,6 +65,10 @@
   // width, and everything else scales with it, so an edge mark is always half of it.
   const THICKNESS = { min: 1, max: 12, step: 1, fallback: 5 }
   const MARK_PER_THICKNESS = 0.5
+  // The one opacity slider, in percent. SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }`
+  // (tool-pen.css), so 80 is the fallback and leaves the marks as they are; 100 is solid, and 20 is the
+  // floor where a mark still shows.
+  const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
   // The pen values (the `pen-<value>` class of a stroke) SudokuPad draws at the full width, from
   // `docs/research/sudokupad-pen-edge-marks.md`: the free lines, and 5 and 6 (the cell circle and
   // cross). Left out on purpose: 3, 4, b and c (the edge X marks, half the width), and h to y (the
@@ -145,6 +153,13 @@
   function normalizeThickness (data) {
     const ok = Number.isInteger(data) && data >= THICKNESS.min && data <= THICKNESS.max
     return ok ? data : THICKNESS.fallback
+  }
+
+  // Saved data is untrusted: the saved opacity when it is a whole number from OPACITY.min to
+  // OPACITY.max on the slider's steps, else OPACITY.fallback.
+  function normalizeOpacity (data) {
+    const ok = Number.isInteger(data) && data >= OPACITY.min && data <= OPACITY.max && (data - OPACITY.min) % OPACITY.step === 0
+    return ok ? data : OPACITY.fallback
   }
 
   // Saved data is untrusted: returns { x, directions, dot, cornerX, cornerDot } with the default
@@ -399,6 +414,15 @@
     return [rule(FULL_WIDTH_VALUES, thickness), rule(marks, thickness * MARK_PER_THICKNESS)].join('\n')
   }
 
+  // Sets the opacity of every pen stroke, for strokes drawn already and new ones. `opacity` (not
+  // `stroke-opacity`) is the property SudokuPad's own rule sets, so it replaces that rule and the
+  // default of 80 draws exactly what the page drew before; `:root:root` outranks it whichever
+  // stylesheet loads last.
+  function buildOpacityCss (opacity) {
+    if (normalizeOpacity(opacity) !== opacity) throw new RangeError(`pen-tool-extras: ${opacity} is not an opacity from ${OPACITY.min} to ${OPACITY.max} in steps of ${OPACITY.step}`)
+    return `:root:root .cell-pen { opacity: ${opacity / 100}; }`
+  }
+
   // Edit mode (the class is on the pen tool's panel): each color picker sits over its button
   // and the button's swatch is hidden under it. The sizes are those SudokuPad's color tool
   // uses for the same job.
@@ -427,6 +451,8 @@
       buildCss,
       normalizeThickness,
       buildThicknessCss,
+      normalizeOpacity,
+      buildOpacityCss,
       normalizeMarkSettings,
       stepType,
       planClick,
@@ -443,6 +469,7 @@
       DEFAULT_COLORS,
       DEFAULT_MARK_SETTINGS,
       THICKNESS,
+      OPACITY,
       FULL_WIDTH_VALUES,
       LIGHTNESS_FACTOR,
       GREY_CHROMA,
@@ -459,6 +486,8 @@
   let activeMissing = []
   // The thickness in force; the dialog previews another without changing it.
   let activeThickness = THICKNESS.fallback
+  // The opacity in force; the dialog previews another without changing it.
+  let activeOpacity = OPACITY.fallback
   // The edge mark types ticked in the dialog, which the edge click cycles through.
   let markSettings = normalizeMarkSettings(null)
 
@@ -679,18 +708,20 @@
     redrawAddedMarks(app)
   }
 
-  // The thickness the style shows now: the one in force, or the one a dialog is previewing.
+  // The thickness and opacity the style shows now: the ones in force, or the ones a dialog is previewing.
   let shownThickness = THICKNESS.fallback
+  let shownOpacity = OPACITY.fallback
 
-  function applyStyle (colors, thickness) {
+  function applyStyle (colors, thickness, opacity) {
     shownThickness = thickness
+    shownOpacity = opacity
     let style = document.getElementById(STYLE_ID)
     if (!style) {
       style = document.createElement('style')
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = [buildCss(colors), buildThicknessCss(thickness), EDIT_CSS].join('\n')
+    style.textContent = [buildCss(colors), buildThicknessCss(thickness), buildOpacityCss(opacity), EDIT_CSS].join('\n')
   }
 
   function missingNote (missing) {
@@ -721,9 +752,13 @@
     return '<div style="font-weight:600">Pen colors</div>' + rows +
       missingNote(state.missing) +
       '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
-      '<label for="pen-tool-extras-thickness">Thickness</label>' +
-      `<input type="range" id="pen-tool-extras-thickness" min="${THICKNESS.min}" max="${THICKNESS.max}" step="${THICKNESS.step}" value="${state.thickness}">` +
-      `<output for="pen-tool-extras-thickness">${state.thickness}</output></div>` +
+      `<label for="${THICKNESS_SLIDER}" style="width:5em;text-align:left">Thickness</label>` +
+      `<input type="range" id="${THICKNESS_SLIDER}" min="${THICKNESS.min}" max="${THICKNESS.max}" step="${THICKNESS.step}" value="${state.thickness}">` +
+      `<output for="${THICKNESS_SLIDER}">${state.thickness}</output></div>` +
+      '<div style="margin:8px 0;display:flex;align-items:center;gap:8px">' +
+      `<label for="${OPACITY_SLIDER}" style="width:5em;text-align:left">Opacity</label>` +
+      `<input type="range" id="${OPACITY_SLIDER}" min="${OPACITY.min}" max="${OPACITY.max}" step="${OPACITY.step}" value="${state.opacity}">` +
+      `<output for="${OPACITY_SLIDER}">${state.opacity}</output></div>` +
       '<div style="font-weight:600;margin-top:10px">Edge marks a click cycles through</div>' +
       box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle') +
       '<div style="font-weight:600;margin-top:10px">Corner marks a click near a grid corner cycles through</div>' +
@@ -742,11 +777,14 @@
     // since: Save then clears the saved thickness.
     let thickness = activeThickness
     let thicknessReset = false
+    // The same for the opacity slider.
+    let opacity = activeOpacity
+    let opacityReset = false
     let marks = markSettings
     let committed = false
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), thickness, marks })
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), thickness, opacity, marks })
     }
     // Reads the color tool's current page now; with no color tool, SudokuPad's own colors.
     const restoreDefaults = () => {
@@ -758,7 +796,9 @@
       reset = true
       thickness = THICKNESS.fallback
       thicknessReset = true
-      applyStyle(active, thickness)
+      opacity = OPACITY.fallback
+      opacityReset = true
+      applyStyle(active, thickness, opacity)
       draw()
     }
     Framework.showDialog({
@@ -782,6 +822,9 @@
                 if (thicknessReset) Framework.removeData(THICKNESS_KEY)
                 else if (thickness !== activeThickness) Framework.setData(THICKNESS_KEY, thickness)
                 adoptThickness(thickness)
+                if (opacityReset) Framework.removeData(OPACITY_KEY)
+                else if (opacity !== activeOpacity) Framework.setData(OPACITY_KEY, opacity)
+                adoptOpacity(opacity)
                 if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
                 Framework.closeDialog()
@@ -796,20 +839,25 @@
     box = document.getElementById('pen-tool-extras-editor')
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
     draw()
-    // Any way of closing the dialog but Save ends the thickness preview: the one in force comes back.
+    // Any way of closing the dialog but Save ends the previews: the thickness and opacity in force come back.
     const closeWatch = new window.MutationObserver(() => {
       if (box.isConnected) return
       closeWatch.disconnect()
-      if (!committed) applyStyle(active, activeThickness)
+      if (!committed) applyStyle(active, activeThickness, activeOpacity)
     })
     closeWatch.observe(document.body, { childList: true, subtree: true })
-    // `input` fires as the slider moves: the strokes change live, and Cancel undoes it.
+    // `input` fires as a slider moves: the strokes change live, and Cancel undoes it.
     box.addEventListener('input', (event) => {
       const el = event.target.closest('input[type="range"]')
       if (!el) return
-      thickness = Number(el.value)
-      thicknessReset = false
-      applyStyle(active, thickness)
+      if (el.id === OPACITY_SLIDER) {
+        opacity = Number(el.value)
+        opacityReset = false
+      } else {
+        thickness = Number(el.value)
+        thicknessReset = false
+      }
+      applyStyle(active, thickness, opacity)
       el.nextElementSibling.textContent = el.value
     })
     // `change` fires when a color picker closes (the swatch the user sees is already the new
@@ -834,15 +882,21 @@
   function adoptColors (colors, missing) {
     active = colors
     activeMissing = missing
-    // New colors keep whatever thickness the style shows, so a dialog's preview survives them.
-    applyStyle(colors, shownThickness)
+    // New colors keep whatever thickness and opacity the style shows, so a dialog's preview survives them.
+    applyStyle(colors, shownThickness, shownOpacity)
     document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
   }
 
   // Makes `thickness` the one in force.
   function adoptThickness (thickness) {
     activeThickness = thickness
-    applyStyle(active, thickness)
+    applyStyle(active, thickness, shownOpacity)
+  }
+
+  // Makes `opacity` the one in force.
+  function adoptOpacity (opacity) {
+    activeOpacity = opacity
+    applyStyle(active, shownThickness, opacity)
   }
 
   // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
@@ -924,6 +978,7 @@
     installHoldToEdit()
     markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
     adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
+    adoptOpacity(normalizeOpacity(Framework.getData(OPACITY_KEY)))
     Framework.addSetting({
       tag: 'button',
       name: 'pentoolextras',
