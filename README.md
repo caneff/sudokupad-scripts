@@ -14,7 +14,7 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 
 | Script | What it does | Install |
 | --- | --- | --- |
-| Color by Digit | Adds a button that colors cells by digit, using groups of palette colors you set. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js) |
+| Color by Digit | Adds a button that colors cells by digit, using groups of palette colors you set in profiles. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js) |
 | Digit Color | Colors the digits themselves, one color per digit. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/digit-color.user.js) |
 | Pen Tool Extras | Adds pen colors, solid, dashed and arrow pens, sliders, and edge and corner marks. [Details](docs/pen-tool-extras.md) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
@@ -30,10 +30,12 @@ Each script except No Tab Letters adds an entry to SudokuPad's settings, under t
 
 The button colors every cell holding a digit, and every empty cell whose centre marks all belong to one group. You set the groups in a settings dialog.
 
-- **Auto mode** is a small box on the button, off by default. Tick it, or tick the box in the settings dialog and Save, and the colors follow the board: a cell that holds one group's digit, or has only centre marks of one group, gets that group's color and loses any other group's; any other cell loses every group color. Corner marks are ignored, and colors in no group stay.
+- **Profiles** are named lists of groups, one to four of them, with exactly one active. A fresh install has Low/5/High (active) and Odd/Even. The button's icon shows the active profile: a cell per group color (the first four), each with the group's lowest digit. Groups you saved before profiles existed become the active profile: Low/5/High or Odd/Even if they match one, else a new first profile named Custom, with both preloads beside it.
+- **The profile menu** opens from the arrow box on the button, a right click on it, or a hold on it. Pick a profile and it becomes active at once: the old profile's group colors come off every cell and every cell that holds one group's digit (or has only that group's centre marks) gets its new color, as one undo step, whether or not auto mode is on. Edit profiles… opens the settings dialog, where you reorder profiles by dragging the handle, tick the active one, add one (a copy of the active profile), delete one, and edit its groups. Save applies every change at once; Cancel drops them. A short press on the button still colors the grid and only adds colors.
+- **Auto mode** is the AUTO box on the button, off by default (an X in the box and bold purple when on). Tick it, or tick the box in the settings dialog and Save, and the colors follow the board: a cell that holds one group's digit, or has only centre marks of one group, gets that group's color and loses any other group's; any other cell loses every group color. Corner marks are ignored, and colors in no group stay.
 - A digit or centre mark change and its color change are one undo step. Undo, redo and replays never trigger auto mode.
 - Turning auto mode on, loading a puzzle with it on, and a restart color the givens. Saving changed groups recolors the whole grid in one undo step.
-- The button still only adds colors. Turning auto mode off leaves every color in place. A group color you remove by hand stays off until that cell's digit or centre marks change.
+- A short press on the button still only adds colors. Turning auto mode off leaves every color in place. A group color you remove by hand stays off until that cell's digit or centre marks change.
 - With the Multi-color setting off, SudokuPad replaces a cell's color when a group color is added, so a color in no group stays only with Multi-color on.
 
 ### Digit Color

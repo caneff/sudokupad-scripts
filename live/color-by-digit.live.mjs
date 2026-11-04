@@ -25,6 +25,16 @@ const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 const ENTERED = { '0,2': '4', '0,3': '7' }
 const DIGIT_CELLS = GIVEN_COUNT + Object.keys(ENTERED).length
 
+// The saved profiles every session of this file starts with, so the checks below run on Odd/Even with
+// Low/5/High to switch to. The fresh install and the migration are checked in color-by-digit-profiles.live.mjs.
+const LOW_FIVE_HIGH = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
+const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
+const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
+// Framework.setData prefixes the script's key with the site's own prefix.
+// The key the script saves its profiles under, and the one Framework.setData stores it at.
+const PROFILES_KEY = 'ColorByDigit_profiles'
+const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
+
 const POLL_MS = 50
 const SETTLE_MS = 10000
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
@@ -87,7 +97,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const coloredCount = async () => (await cellsState()).filter((x) => x.colours.length).length
     const colorsAt = async (r, c) => at(await cellsState(), r, c).colours
     const digitsOnBoard = async () => (await cellsState()).map((x) => [x.given, x.value])
-    const getData = () => read(() => Framework.getData('ColorByDigit_groups'))
+    const getData = () => read((key) => Framework.getData(key), PROFILES_KEY)
+    const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
     const getSetting = () => read(() => Framework.getSetting('multicolour'))
     const editor = () => p.locator('#color-by-digit-editor')
     const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
@@ -157,6 +168,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       p = await context.newPage()
       p.on('pageerror', (e) => errors.push(String(e)))
       await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await p.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
       if (mode === 'document-idle') {
         await p.addInitScript((src) => {
           document.addEventListener('DOMContentLoaded', () => {
@@ -243,8 +255,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(look.icon || (look.text.length > 0 && look.fontSize > 4), true, JSON.stringify(look))
     })
 
-    it('a fresh install has nothing saved', async () => {
-      assert.equal(await getData(), null)
+    it('the session starts with the two seeded profiles, Odd/Even active', async () => {
+      assert.deepEqual(await getData(), SEED)
     })
 
     let baseline
@@ -360,15 +372,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('Cancel saves nothing', async () => {
       await closeWith('Cancel')
-      assert.equal(await getData(), null)
+      assert.deepEqual(await getData(), SEED)
     })
 
     describe('saved groups', { concurrency: false }, () => {
-      it('Save writes the Low/5/High list and closes the dialog', async () => {
+      it('Save with Low/5/High made the active profile writes it and closes the dialog', async () => {
         await openEditor()
-        await dialogButton('Low/5/High').click()
+        await p.check('#color-by-digit-editor input[data-act=activate][data-index="1"]')
         await closeWith('Save')
-        const expected = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
+        const expected = { ...SEED, active: 1 }
         assert.deepEqual(await settle(getData, expected), expected)
       })
 
@@ -415,16 +427,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await openEditor()
         const groupCount = () => p.locator('#color-by-digit-editor button[data-act=remove]').count()
         assert.equal(await groupCount(), 3)
-        assert.equal(await p.locator('#color-by-digit-editor button[data-act=preload]').count(), 2)
+        assert.equal(await p.locator('#color-by-digit-editor [data-role=profile-row]').count(), 2)
+        assert.equal(await p.locator('#color-by-digit-editor button[data-act=preload]').count(), 0)
         await p.click('#color-by-digit-editor button[data-act=clear]')
         assert.equal(await groupCount(), 0)
         await closeWith('Cancel')
-        assert.equal((await getData()).length, 3)
+        assert.equal((await getGroups()).length, 3)
         await openEditor()
         assert.equal(await groupCount(), 3)
         await p.click('#color-by-digit-editor button[data-act=clear]')
         await closeWith('Save')
-        assert.deepEqual(await settle(getData, []), [])
+        assert.deepEqual(await settle(getGroups, []), [])
+        assert.equal((await getData()).active, 1)
         await press()
         // "Nothing happened": no cell gets a color.
         assert.deepEqual(await watch(coloredCount), [0])
@@ -443,12 +457,12 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       const pressedKeys = (g) => p.$$eval(`${group(g)}[aria-pressed="true"]`, (es) => es.map((e) => e.dataset.key))
       const chosenKey = (g) => p.locator(`${group(g)}[data-act="page"] + [data-role="chosen"]`).getAttribute('title')
       const boxOf = (g, key) => p.locator(`#color-by-digit-editor button[data-group="${g}"][data-key="${key}"]`).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y) } })
-      let original, savedGroups
+      let original, savedState
 
       before(async () => {
-        savedGroups = await getData()
+        savedState = await getData()
         original = await read(() => JSON.parse(JSON.stringify(Framework.app.tools.colour.palette)))
-        await read((original) => {
+        await read(([original, profilesKey]) => {
           const palette = JSON.parse(JSON.stringify(original))
           palette.colors.u = 'rgb(10, 20, 30)'
           palette.colors.v = 'rgb(40, 50, 60)'
@@ -457,19 +471,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           palette.pages.push(['u', 'v', 'w', '8'])
           Framework.app.tools.colour.setPalette(palette)
           Framework.app.tools.colour.setPage(3)
-          Framework.setData('ColorByDigit_groups', [{ key: '8', digits: [] }, { key: '6', digits: [] }, { key: 'nope', digits: [] }])
-        }, original)
+          Framework.setData(profilesKey, { profiles: [{ name: 'Custom', groups: [{ key: '8', digits: [] }, { key: '6', digits: [] }, { key: 'nope', digits: [] }] }], active: 0 })
+        }, [original, PROFILES_KEY])
         await openEditor()
       })
       after(async () => {
-        await read(([original, savedGroups]) => {
+        await read(([original, savedState, profilesKey]) => {
           Framework.app.tools.colour.setPalette(original)
           Framework.app.tools.colour.setPage(0)
           Framework.removeData('ToolColor_palette')
           Framework.removeData('ToolColor_page')
-          if (savedGroups === null) Framework.removeData('ColorByDigit_groups')
-          else Framework.setData('ColorByDigit_groups', savedGroups)
-        }, [original, savedGroups])
+          Framework.setData(profilesKey, savedState)
+        }, [original, savedState, PROFILES_KEY])
         if (await editor().count()) await closeWith('Cancel')
       })
 

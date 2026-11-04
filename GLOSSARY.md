@@ -6,7 +6,12 @@
   group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit
   and no centre marks, or a digit in no group, is not pure.
 - **profile** — a named list of groups in Color by Digit. Exactly one is active, and the button and
-  auto mode use its groups. There are one to four of them; Low/5/High and Odd/Even are the first two.
+  auto mode use its groups. There are one to four of them; a fresh install has Low/5/High and Odd/Even,
+  with Low/5/High active. Groups saved before profiles existed become the active profile: the preload
+  they equal, else a profile named Custom added first, with both preloads beside it.
+- **profile menu** — the menu above the Color by Digit button, opened by its arrow box, a right click or a
+  hold: one row per profile, the active one highlighted, and Edit profiles…. Picking a row makes that profile
+  active and recolors the cells (planSwitch), as one undo step.
 - **auto mode** — Color by Digit's setting, off by default, that keeps a cell's color in step with
   its digit and centre marks as they change: a pure cell gets its group's color and loses any other
   group's, and a cell that is not pure loses every group's color. Colors in no group are left alone, except that with SudokuPad's Multi-color setting off, adding a group color replaces whatever color the cell held.
@@ -20,8 +25,8 @@
   in the `conflict` state, only while SudokuPad shows conflicts.
 - **default colors** — the digit color of each digit on a fresh install, and
   after the dialog's "Restore defaults".
-- **preload** — a settings button that overwrites the list of groups with a
-  ready-made set. It saves nothing of its own.
+- **preload** — one of the ready-made profiles a fresh install starts with, Low/5/High and Odd/Even.
+  A migrated profile is named after the preload its groups equal.
 - **pen color** — one of the pen tool's nine colors, numbered 1 to 9. It is a
   `#rrggbb` value kept in SudokuPad's `--puzzle-pencolor-N` variable, which
   strokes and the tool's color buttons both read. The eraser has no pen color. With
