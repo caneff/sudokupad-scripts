@@ -20,6 +20,19 @@ export async function openSettings (p) {
   return open
 }
 
+// Opens Pen Tool Extras' settings dialog the way a user finds it (its entry in the Experimental group) and waits for its editor.
+export async function openExtrasEditor (p) {
+  await openSettings(p)
+  await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
+  await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+}
+
+// Presses Save or Cancel in Pen Tool Extras' dialog and waits for the dialog to go.
+export async function closeExtrasEditorWith (p, text) {
+  await p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first().click()
+  await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
+}
+
 // The scale of a computed `transform` (a `matrix(s, 0, 0, s, 0, 0)` or `none`): pen-tool-extras grows edge and corner marks
 // by a CSS scale, so a mark's width on screen is its stroke width times this.
 export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
