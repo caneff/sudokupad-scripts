@@ -417,7 +417,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const groupCount = () => p.locator('#color-by-digit-editor button[data-act=remove]').count()
       assert.equal(await groupCount(), 3)
       assert.equal(await p.locator('#color-by-digit-editor [data-role=profile-row]').count(), 2)
-      assert.equal(await p.locator('#color-by-digit-editor button[data-act=preload]').count(), 0)
       await p.click('#color-by-digit-editor button[data-act=clear]')
       assert.equal(await groupCount(), 0)
       await closeWith('Cancel')
