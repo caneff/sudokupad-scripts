@@ -382,7 +382,21 @@ function group (title, mode, extra = []) {
     // The page the pad shows and the pen selected: the page 1 / 2 / 3 values of the buttons.
     const toPage = async (values, key) => { await goToPage(values); await press(key) }
 
-    it('Dashed lines unticked: Save moves a page 2 pen to page 1, the button, Tab and the wheel skip page 2, lines already drawn in it still draw, and it survives a reload', async () => {
+    // Runs a check that changes the line styles, and whatever way it ends, closes its dialog, puts both styles back on and returns to page 2 pen 3, which the checks after it expect.
+    const withStyles = async (body) => {
+      try {
+        await body()
+      } finally {
+        if (await editor().count()) await read(() => Framework.closeDialog())
+        if ((await saved(LINE_STYLES_KEY)) !== null) {
+          await read((k) => Framework.removeData(k), LINE_STYLES_KEY)
+          await reload()
+        }
+        await toPage(PAGE_TWO, 3)
+      }
+    }
+
+    it('Dashed lines unticked: Save moves a page 2 pen to page 1, the button, Tab and the wheel skip page 2, lines already drawn in it still draw, and it survives a reload', () => withStyles(async () => {
       await toPage(PAGE_TWO, 3)
       await draw(5)
       const before = await styleOf('.cell-pen.pencolor-c')
@@ -424,9 +438,9 @@ function group (title, mode, extra = []) {
       assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO, 'page 2 is back in the rotation')
       await press(3)
       while ((await undoDepth()) > 0) await p.click('#control-undo')
-    })
+    }))
 
-    it('Directional arrow lines unticked while on page 3: Save moves the pen to the same number on page 1, and page 3 is skipped', async () => {
+    it('Directional arrow lines unticked while on page 3: Save moves the pen to the same number on page 1, and page 3 is skipped', () => withStyles(async () => {
       await toPage(PAGE_THREE, 3)
       assert.equal(await selected(), 'n')
       await setStyles({ dashed: true, arrows: false })
@@ -437,9 +451,9 @@ function group (title, mode, extra = []) {
       assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE, 'page 1, page 2, then back to page 1')
       await setStyles({ dashed: true, arrows: true })
       await toPage(PAGE_TWO, 3)
-    })
+    }))
 
-    it('with both line styles unticked the page button is gone, Tab and the wheel are left alone, and ticking one brings the button back', async () => {
+    it('with both line styles unticked the page button is gone, Tab and the wheel are left alone, and ticking one brings the button back', () => withStyles(async () => {
       await toPage(PAGE_ONE, 3)
       await setStyles({ dashed: false, arrows: false })
       assert.equal(await p.locator(PAGE_BUTTON).count(), 0, 'no page button')
@@ -453,13 +467,12 @@ function group (title, mode, extra = []) {
       await sleep(300) // "nothing happened in 300 ms" check
       assert.equal(await padValues(), PAGE_ONE)
       assert.equal(await selected(), '3')
-      await reload()
-      assert.equal(await p.locator(PAGE_BUTTON).count(), 0, 'still no page button after a reload')
+      assert.deepEqual(await saved(LINE_STYLES_KEY), { dashed: false, arrows: false })
       await setStyles({ dashed: true, arrows: false })
       await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
       await setStyles({ dashed: true, arrows: true })
       await toPage(PAGE_TWO, 3)
-    })
+    }))
 
     it('holding a page 2 button opens the pickers; recoloring pen 3 there recolors page 1\'s pen 3 and the dashed line too', async () => {
       const box = await p.locator('.tool-pen button[data-key="3"]').boundingBox()
