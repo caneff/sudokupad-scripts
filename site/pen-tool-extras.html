@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pen Tool Extras: SudokuPad scripts</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    /* SudokuPad's own button purple, read from its controls: rgb(106, 27, 154). */
+    --accent: #6a1b9a; --on-accent: #fff; --rule: #bbb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --accent: #d2a8f0; --on-accent: #1a0a24; --rule: #555; }
+  }
+  body { max-width: 68rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
+  a { color: var(--accent); }
+  h1, h2 { margin: 0 0 .5rem; }
+  h2 { font-size: 1.2rem; }
+  p { margin: 0 0 .5rem; }
+  .install { display: inline-block; padding: .2rem .7rem; border-radius: 3px; background: var(--accent); color: var(--on-accent); font-size: .9rem; text-decoration: none; }
+  .install:hover, .install:focus-visible { text-decoration: underline; }
+  h2 { margin-top: 1.5rem; }
+  ul { margin: 0 0 .5rem; padding-left: 1.25rem; }
+  li { margin-bottom: .25rem; }
+  figure { margin: .75rem 0 1rem; }
+  figure img { max-width: 100%; height: auto; }
+  figcaption { font-size: .9rem; }
+</style>
+</head>
+<body>
+  <p><a href="index.html">&larr; All SudokuPad scripts</a></p>
+  <h1>Pen Tool Extras</h1>
+  <p>A userscript that adds colors, extra pens, two sliders and edge and corner marks to <a href="https://sudokupad.app">SudokuPad</a>'s pen tool. Turn the pen tool on in SudokuPad's settings first.</p>
+  <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install Pen Tool Extras</a></p>
+  <p><strong>Others can't see lines from pens past the first page unless they have the script too.</strong> SudokuPad stores those lines and shares them in the replay, but without this script it draws them with no color, so a viewer without it sees the marks missing.</p>
+
+  <h2>Pen colors</h2>
+  <p>The pen's nine colors match your cell colors, a little darker, so installing changes them straight away. Change them in the settings dialog, or hold a pen color button for a second to put a color picker over each button. Strokes already drawn change with them. Recoloring a pen changes it on every page.</p>
+  <figure>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-grid-dialog.png" alt="The Pen tool extras settings dialog: pen colors, slider options, mark checkboxes and the pen line mode" width="442" height="744">
+    <figcaption>The settings dialog, found under the Experimental group in SudokuPad's settings.</figcaption>
+  </figure>
+
+  <h2>Pen pages</h2>
+  <p>Three pages of nine pens, 27 in all. A page button at the right end of the pen panel's last row shows what the next page draws. Click it, press Tab, or turn the mouse wheel over the pen buttons to change page. The same pen number stays selected, so Tab turns a green line into a dotted green one, and the pen you chose is still there after a reload.</p>
+  <ul>
+    <li><strong>Page 1</strong> is SudokuPad's own solid pens.</li>
+    <li><strong>Page 2</strong> draws the same colors as dotted lines. The dialog's dash length slider turns the dots into dashes.</li>
+    <li><strong>Page 3</strong> draws a thin line with a run of chevrons pointing the way you dragged.</li>
+  </ul>
+  <p>Only lines change with the page: a cell circle, a cross and the edge and corner marks stay solid.</p>
+  <figure>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-grid-dashes.png" alt="Green dotted lines, then dashed lines at two dash lengths, on a sudoku grid" width="600" height="1053">
+    <figcaption>Page 2 at dash length 0 (dots), 3 and 8.</figcaption>
+  </figure>
+  <figure>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-chevrons.png" alt="Colored chevron lines on a sudoku grid at four thicknesses, beside the pen panel on page 3" width="1000" height="269">
+    <figcaption>Page 3 at thickness 1, 5, 10 and 16, and the pen panel on page 3.</figcaption>
+  </figure>
+
+  <h2>Panel sliders and settings</h2>
+  <p>Two sliders sit in the pen tool's panel, so you can change them during play:</p>
+  <ul>
+    <li><strong>Thickness</strong> scales pen lines, the pen's cell circles and crosses, and the edge and corner marks together.</li>
+    <li><strong>Opacity</strong> sets how see-through every pen mark is, so dense marks stop hiding the digits and overlapping lines no longer darken.</li>
+  </ul>
+  <p>A move changes the marks live and is saved at once. The settings dialog holds both sliders too, a dash length slider for page 2, a checkbox to hide each panel slider, and the pen line mode (SudokuPad's pulldown, moved into the dialog). The dialog's Restore defaults goes back to the defaults, and waits for Save.</p>
+  <figure>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-grid-panel.png" alt="The pen panel with both sliders, with the thickness slider hidden, with the opacity slider hidden, and with both hidden" width="1200" height="946">
+    <figcaption>The pen panel with both sliders showing, and with one or both hidden.</figcaption>
+  </figure>
+
+  <h2>Edge and corner marks</h2>
+  <p>Click a cell edge with the pen to cycle an X, direction arrows and a circle. Click near a grid corner to cycle an X and a circle. Each mark is a checkbox in the dialog, so you choose which ones the click cycles through.</p>
+  <figure>
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-corners-grid.png" alt="Colored X and circle marks on grid corners" width="667" height="667">
+    <figcaption>Corner marks.</figcaption>
+  </figure>
+
+  <h2>Right click goes backwards</h2>
+  <p>A right click on an edge or a grid corner steps the same cycle backwards, and keeps the browser's menu closed there. A right click anywhere else keeps its menu. Touch has no right click, so it only steps forward.</p>
+
+  <h2>Good to know</h2>
+  <ul>
+    <li>It leans on SudokuPad internals, so an update can break it.</li>
+    <li>It replaces Pen Color and Edge Marks, which you remove by hand in Tampermonkey. Your saved colors and edge marks carry over.</li>
+  </ul>
+  <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install Pen Tool Extras</a></p>
+  <p><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
+</body>
+</html>
