@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, normalizeOutline, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_RADIUS,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -1038,6 +1038,7 @@ const editorState = (over = {}) => ({
   opacity: 80,
   show: { thickness: true, opacity: true },
   dash: 0,
+  outline: false,
   ...over
 })
 
@@ -1243,21 +1244,20 @@ test('the chevrons and the line scale with the thickness: wider chevrons, wider 
   const thin = chevronLine('1', true, 0, 0, 2)
   const thick = chevronLine('1', true, 0, 0, 12)
   assert.equal(thick.lineWidth > thin.lineWidth && thick.chevronWidth > thin.chevronWidth, true, `widths ${thin.lineWidth}/${thin.chevronWidth} at 2, ${thick.lineWidth}/${thick.chevronWidth} at 12`)
-  assert.equal(thin.chevronWidth >= thin.lineWidth, true, `a chevron is as thick as the line at the small end: ${thin.lineWidth} against ${thin.chevronWidth}`)
+  assert.equal(thin.chevronWidth, thin.lineWidth, 'a chevron is as thick as its line')
   assert.equal(chevronLine('1', true, 0, 0, 10).lineWidth / chevronLine('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
   assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} chevrons at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
   const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
-test('below the default thickness the chevrons keep their size at the default and only the line gets thinner, so the direction shows at 1', () => {
+test('below the default thickness the chevrons keep their size at the default and only the strokes get thinner, so the direction shows at 1', () => {
   const one = chevronLine('1', true, 0, 0, 1)
   const five = chevronLine('1', true, 0, 0, THICKNESS.fallback)
   assert.equal(one.chevrons, five.chevrons)
-  assert.equal(one.chevronWidth, five.chevronWidth)
   assert.equal(one.lineWidth, 1, 'the line is as thick as a page 1 line, 1')
   assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
-  assert.equal(one.chevronWidth >= one.lineWidth, true, `a chevron stroke of ${one.chevronWidth} is at least as thick as the line of ${one.lineWidth}`)
+  assert.equal(one.chevronWidth, one.lineWidth, 'the chevron stroke is as thick as the line, 1')
 })
 
 test('the line under the chevrons is as thick as a page 1 line at every slider value, and the chevrons clearly stick out past it', () => {
@@ -1271,11 +1271,9 @@ test('the line under the chevrons is as thick as a page 1 line at every slider v
   }
 })
 
-test('up to thickness 10 a chevron\'s wings reach 0.95 of the thickness, and above it they grow evenly to 1.35 times at 16, wings and length, not the stroke or the spacing', () => {
+test('from thickness 5 up a chevron\'s wings reach the thickness times CHEVRON.halfWidth (1), the stroke is the thickness, and the spacing scales with it', () => {
   const reachOf = (t) => { const shape = chevronLine('a', true, 0, 0, t); return Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) }
-  for (const t of [5, 8, 10]) assert.equal(Math.abs(reachOf(t) - CHEVRON.halfWidth * t) < 0.01, true, `at ${t}`)
-  assert.equal(Math.abs(reachOf(13) - CHEVRON.halfWidth * 13 * 1.175) < 0.01, true, 'half way up, 1.175 times')
-  assert.equal(Math.abs(reachOf(16) - CHEVRON.halfWidth * 16 * 1.35) < 0.01, true, 'at the top, 1.35 times')
+  for (const t of [5, 8, 10, 13, 16]) assert.equal(Math.abs(reachOf(t) - t) < 0.01, true, `at ${t}`)
   assert.equal(chevronLine('a', true, 0, 0, 16).chevronWidth, CHEVRON.stroke * 16)
   assert.equal(pointsOf(chevronLine('a', true, 0, 0, 16).chevrons).length / 3, Math.round(64 / (CHEVRON.spacing * 16)) || 1)
 })
@@ -1305,7 +1303,7 @@ test('at the largest thickness a chevron on a grid\'s outer edge reaches no furt
   // a top edge line, 'a', on row 0: the chevron's wings are the furthest from the edge itself
   const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
-  assert.equal(Math.abs(reach - (CHEVRON.halfWidth * (1 + CHEVRON.growth) + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
+  assert.equal(Math.abs(reach - (CHEVRON.halfWidth + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
 })
 
@@ -1315,4 +1313,35 @@ test('a chevron line has at least one chevron on any segment at any thickness, s
       assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 3, true, `at least one chevron: ${value} at ${t}`)
     }
   }
+})
+
+// The white outline.
+test('normalizeOutline is on only for a saved true: nothing saved and anything untrusted is off', () => {
+  assert.equal(normalizeOutline(true), true)
+  for (const bad of [undefined, null, false, 'true', 1, 0, {}, []]) assert.equal(normalizeOutline(bad), false, JSON.stringify(bad))
+})
+
+test('buildOutlineCss is empty when the outline is off and filters the pen layer, and only it, when on', () => {
+  assert.equal(buildOutlineCss(false), '')
+  assert.equal(buildOutlineCss(true), `:root:root #cell-pen { filter: url(#${OUTLINE_FILTER_ID}); }`)
+  assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
+})
+
+test('buildOutlineCss refuses a value that is not a boolean', () => {
+  assert.throws(() => buildOutlineCss('on'), RangeError)
+})
+
+test('the outline filter dilates the layer\'s combined shape by the fixed radius, fills it white and draws the layer over it', () => {
+  const svg = renderOutlineFilter()
+  assert.match(svg, new RegExp(`<filter id="${OUTLINE_FILTER_ID}"`))
+  assert.match(svg, new RegExp(`<feMorphology in="SourceAlpha" operator="dilate" radius="${OUTLINE_RADIUS}"`))
+  assert.match(svg, /<feFlood flood-color="#ffffff"/)
+  assert.ok(svg.indexOf('<feMergeNode') < svg.lastIndexOf('in="SourceGraphic"'), 'the layer is merged over the white')
+})
+
+test('the dialog has a White outline box, off unless the outline is on', () => {
+  const box = (html) => /<input type="checkbox" id="pen-tool-extras-outline" data-outline( checked)?>/.exec(html)
+  assert.equal(box(renderEditor(editorState()))[1], undefined)
+  assert.equal(box(renderEditor(editorState({ outline: true })))[1], ' checked')
+  assert.match(renderEditor(editorState()), /<label for="pen-tool-extras-outline"[^>]*>White outline<\/label>/)
 })

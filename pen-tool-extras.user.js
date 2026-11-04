@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.9.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed (or dotted) lines and a third page of nine that draw a line as wide as a page 1 line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
+// @version      1.10.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, adds an optional white outline around every pen mark, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.9.0'
+  const VERSION = '1.10.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -31,6 +31,8 @@
   // The dash length of page 2 and which panel sliders show are the script's own keys too.
   const DASH_KEY = 'PenColor_dash'
   const SLIDERS_SHOWN_KEY = 'PenColor_sliders'
+  // Whether the pen layer has a white outline: saved as true, and the key is removed when it is off.
+  const OUTLINE_KEY = 'PenColor_outline'
   // The `id` of each slider in the pen tool's panel; the input handler tells them apart by it.
   const THICKNESS_SLIDER = 'pen-tool-extras-thickness'
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
@@ -122,6 +124,15 @@
   // (tool-pen.css), so 80 is the fallback and leaves the marks as they are; 100 is solid, and 20 is the
   // floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
+  // The white outline's width on each side of the pen layer's shape, in cell units (a cell is 64): a bit under half of a default 5 wide line, so the
+  // outline shows on any thickness without drowning a thin line. It is one fixed width: the setting is a box, not a slider.
+  const OUTLINE_RADIUS = 2
+  const OUTLINE_FILTER_ID = 'pen-tool-extras-outline-filter'
+  // The element that holds the outline's filter, which a CSS `filter: url(#id)` needs in the document.
+  const OUTLINE_HOLDER_ID = 'pen-tool-extras-outline-holder'
+  // The filter's region, in cell units: far past any grid (a cell is 64, so 100000 is over 1500 cells), because the default region is a margin of the
+  // layer's own bounding box, which a lone horizontal line gives no height to hold an outline in.
+  const OUTLINE_REGION = { min: -100000, size: 200000 }
   // The pen values (the `pen-<value>` class of a stroke) SudokuPad draws at the full width, from
   // `docs/research/sudokupad-pen-edge-marks.md`: the free lines, and 5 and 6 (the cell circle and
   // cross). Left out on purpose: 3, 4, b and c (the edge X marks, half the width), and h to y (the
@@ -256,6 +267,11 @@
   function normalizeOpacity (data) {
     const ok = Number.isInteger(data) && data >= OPACITY.min && data <= OPACITY.max && (data - OPACITY.min) % OPACITY.step === 0
     return ok ? data : OPACITY.fallback
+  }
+
+  // Saved data is untrusted: the outline is on only for a saved true, so data saved before the setting existed has it off.
+  function normalizeOutline (data) {
+    return data === true
   }
 
   // Saved data is untrusted: the saved dash length when it is a whole number from DASH.min to DASH.max,
@@ -409,15 +425,13 @@
     f: [[0, 1], [1, 0]],
     g: [[0, 0], [1, 1]]
   }
-  // The sizes of a chevron line, in line widths (the thickness setting; the line's own width follows it all the way down, but a
-  // chevron is never smaller than at the default thickness, so its direction stays visible at 1): a chevron's wings reach `halfLength` back and
-  // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the line (1, the same as
-  // a page 1 line at every thickness) and the chevrons; `spacing` is the distance between two chevrons'
+  // The sizes of a chevron line, in line widths (the thickness setting; the line's and the chevrons' stroke widths follow it all the way down, but a
+  // chevron's size is never smaller than at the default thickness, so its direction stays visible at 1): a chevron's wings reach `halfLength` back and
+  // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the line and the chevrons (1, the same as
+  // a page 1 line at every thickness); `spacing` is the distance between two chevrons'
   // middles, fitted to a whole number per segment (a run of chevrons, not a solid row of them). The furthest a
   // chevron reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
-  // Above thickness `growFrom` a chevron's wings and length also grow, evenly to 1 + `growth` times at the largest thickness (the stroke
-  // and the spacing do not), so the chevrons still stick out clearly past a line that thick.
-  const CHEVRON = { halfLength: 0.7, halfWidth: 0.95, stroke: 0.5, line: 1, spacing: 5, growFrom: 10, growth: 0.35 }
+  const CHEVRON = { halfLength: 0.7368, halfWidth: 1, stroke: 1, line: 1, spacing: 5 }
 
   // Which way a line stored with the color character `char` was dragged: true for the character on a chevron page's button
   // (forward), false for its reverse character, null for a character no chevron page uses.
@@ -504,8 +518,7 @@
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
     // Chevrons keep the size they have at the default thickness below it; only the line gets thinner.
     const size = Math.max(thickness, THICKNESS.fallback)
-    const grown = 1 + CHEVRON.growth * Math.max(0, thickness - CHEVRON.growFrom) / (THICKNESS.max - CHEVRON.growFrom)
-    const [half, wide] = [CHEVRON.halfLength * size * grown, CHEVRON.halfWidth * size * grown]
+    const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
     // The shortest segment (a cell side) holds at least one even at the largest thickness, so there is never none.
     const count = Math.round(length / (CHEVRON.spacing * size))
     let chevrons = ''
@@ -518,7 +531,7 @@
       line: `M${pointText(from)}L${pointText(to)}`,
       chevrons,
       lineWidth: CHEVRON.line * thickness,
-      chevronWidth: CHEVRON.stroke * size
+      chevronWidth: CHEVRON.stroke * thickness
     }
   }
 
@@ -678,6 +691,25 @@
   function buildOpacityCss (opacity) {
     if (normalizeOpacity(opacity) !== opacity) throw new RangeError(`pen-tool-extras: ${opacity} is not an opacity from ${OPACITY.min} to ${OPACITY.max} in steps of ${OPACITY.step}`)
     return `:root:root .cell-pen { opacity: 1; }\n:root:root ${PEN_LAYER} { opacity: ${opacity / 100}; }`
+  }
+
+  // Puts a white outline round the pen layer's combined shape, for strokes drawn already and new ones: a filter on the layer, the same element that carries
+  // the opacity. A filter runs on the layer's picture before its opacity does, so the outline fades with the marks. The highlight (`.penhint`) is in its
+  // own group beside the layer, so it is not outlined. Empty when the outline is off.
+  function buildOutlineCss (outline) {
+    if (typeof outline !== 'boolean') throw new RangeError(`pen-tool-extras: ${outline} is not true or false`)
+    return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
+  }
+
+  // The markup of a hidden SVG holding the outline's filter: the layer's alpha grown by OUTLINE_RADIUS in every direction (one shape, so the
+  // outline does not cut across where lines join or cross), filled white, with the layer drawn over it.
+  function renderOutlineFilter () {
+    const { min, size } = OUTLINE_REGION
+    return `<svg id="${OUTLINE_HOLDER_ID}" width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="${OUTLINE_FILTER_ID}" filterUnits="userSpaceOnUse" x="${min}" y="${min}" width="${size}" height="${size}">` +
+      `<feMorphology in="SourceAlpha" operator="dilate" radius="${OUTLINE_RADIUS}" result="grown"/>` +
+      '<feFlood flood-color="#ffffff" result="white"/>' +
+      '<feComposite in="white" in2="grown" operator="in" result="halo"/>' +
+      '<feMerge><feMergeNode in="halo"/><feMergeNode in="SourceGraphic"/></feMerge></filter></svg>'
   }
 
   // How much shorter than an even split of a segment the dot spacing is. With the spacing exactly `length / dots`
@@ -909,6 +941,10 @@
       box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle') +
       '<div style="font-weight:600;margin-top:10px">Corner marks a click near a grid corner cycles through</div>' +
       box('cornerX', 'X', 'x') + box('cornerDot', 'Circle', 'dot') +
+      '<div style="font-weight:600;margin-top:10px">Outline</div>' +
+      '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
+      `<input type="checkbox" id="pen-tool-extras-outline" data-outline${state.outline ? ' checked' : ''}>` +
+      '<label for="pen-tool-extras-outline" style="width:auto;text-align:left;margin:0">White outline</label></div>' +
       lineModeChoice(state.lineMode)
   }
 
@@ -927,6 +963,11 @@
       buildThicknessCss,
       normalizeOpacity,
       buildOpacityCss,
+      normalizeOutline,
+      buildOutlineCss,
+      renderOutlineFilter,
+      OUTLINE_FILTER_ID,
+      OUTLINE_RADIUS,
       MARK_VALUES,
       MARKS_LAYER_ID,
       PEN_PAGES,
@@ -987,6 +1028,7 @@
   let activeThickness = THICKNESS.fallback
   let activeOpacity = OPACITY.fallback
   let activeDash = DASH.fallback
+  let activeOutline = false
   let activeShow = normalizeSliderVisibility(null)
   // The edge mark types ticked in the dialog, which the edge click cycles through.
   let markSettings = normalizeMarkSettings(null)
@@ -1303,7 +1345,7 @@
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = [buildCss(active), buildThicknessCss(activeThickness), buildOpacityCss(activeOpacity), buildPagesCss(activeThickness, activeDash), EDIT_CSS, PANEL_CSS].join('\n')
+    style.textContent = [buildCss(active), buildThicknessCss(activeThickness), buildOpacityCss(activeOpacity), buildOutlineCss(activeOutline), buildPagesCss(activeThickness, activeDash), EDIT_CSS, PANEL_CSS].join('\n')
   }
 
   // The pen's line mode now, or undefined with no pen tool. It is the saved one: SudokuPad's pen tool holds its
@@ -1335,10 +1377,11 @@
     let thickness = activeThickness
     let opacity = activeOpacity
     let dash = activeDash
+    let outline = activeOutline
     let show = activeShow
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, thickness, opacity, dash, show })
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, thickness, opacity, dash, show, outline })
     }
     // Reads the color tool's current page now; with no color tool, SudokuPad's own colors.
     const restoreDefaults = () => {
@@ -1353,6 +1396,7 @@
       thickness = THICKNESS.fallback
       opacity = OPACITY.fallback
       dash = DASH.fallback
+      outline = false
       show = normalizeSliderVisibility(null)
       draw()
     }
@@ -1375,7 +1419,7 @@
                 }
                 if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
-                saveDialogSliders({ thickness, opacity, dash, show })
+                saveDialogSliders({ thickness, opacity, dash, show, outline })
                 if (lineMode !== undefined && lineMode !== currentLineMode()) applyLineMode(lineMode)
                 closeDialogKeepingGrid()
               }
@@ -1417,6 +1461,11 @@
       const mode = event.target.closest('select[data-line-mode]')
       if (mode) {
         lineMode = normalizeLineMode(mode.value)
+        return
+      }
+      const outlined = event.target.closest('input[data-outline]')
+      if (outlined) {
+        outline = outlined.checked
         return
       }
       const shown = event.target.closest('input[data-show]')
@@ -1469,6 +1518,15 @@
     syncPageButton()
   }
 
+  // Makes `outline` the one in force: the style, and the filter it points at.
+  function adoptOutline (outline) {
+    activeOutline = outline
+    const holder = document.getElementById(OUTLINE_HOLDER_ID)
+    if (outline && !holder) document.body.insertAdjacentHTML('beforeend', renderOutlineFilter())
+    else if (!outline && holder) holder.remove()
+    applyStyle()
+  }
+
   // Makes `show` the set of panel sliders that show: the sliders in the panel are rebuilt (or taken away).
   function adoptShow (show) {
     activeShow = show
@@ -1494,6 +1552,10 @@
     if (draft.dash !== activeDash) {
       save(DASH_KEY, draft.dash, DASH.fallback)
       adoptDash(draft.dash)
+    }
+    if (draft.outline !== activeOutline) {
+      save(OUTLINE_KEY, draft.outline, false)
+      adoptOutline(draft.outline)
     }
     if (draft.show.thickness !== activeShow.thickness || draft.show.opacity !== activeShow.opacity) {
       if (draft.show.thickness && draft.show.opacity) Framework.removeData(SLIDERS_SHOWN_KEY)
@@ -1802,6 +1864,7 @@
     adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
     adoptOpacity(normalizeOpacity(Framework.getData(OPACITY_KEY)))
     adoptDash(normalizeDash(Framework.getData(DASH_KEY)))
+    adoptOutline(normalizeOutline(Framework.getData(OUTLINE_KEY)))
     Framework.addSetting({
       tag: 'button',
       name: 'pentoolextras',

@@ -45,6 +45,16 @@ Both sliders sit in the pen tool's panel, each with a small line icon, so you ca
 - A dialog slider takes effect on Save, and Cancel leaves it. It opens at the value in force, so it matches the panel.
 - With one slider hidden, the other keeps its place. With both hidden, the panel's last row holds only the page button.
 
+## White outline
+
+The dialog's Outline section has a White outline box, off by default and saved under `PenColor_outline` (the saved value is removed when it is off, so settings saved before the box existed load with it off).
+
+- On, every pen mark on every page gets a white outline 2 units wide (a cell is 64), lines and marks already drawn included. There is one width and no slider.
+- The outline wraps the combined shape, so it doesn't cut across lines where they join or cross.
+- It follows Opacity: the outline is part of the pen layer, so at 40% the white fades with the marks.
+- The drag and erase highlights are not outlined.
+- Nothing about it is stored in the puzzle, so replays don't change. Like the other dialog settings it takes effect on Save, Cancel leaves it, and Restore defaults turns it off.
+
 ## Pen pages
 
 There are three pages of nine pens, for 27, using the same nine colors.
@@ -77,7 +87,7 @@ A dialog slider from 0 to 8 line widths, saved under `PenColor_dash`.
 ### Chevrons (page 3)
 
 - Each cell's piece of a line is drawn with whole chevrons, about three to a cell at thickness 5, so a run reads as one across a cell boundary.
-- The line under the chevrons is as thick as a page 1 line at every Thickness. Chevrons scale with Thickness from 5 up, and stick out past the line at every value: above 10 their wings and length also grow, to 1.35 times at 16. Below 5 they keep their size at 5, so direction stays visible.
+- The line under the chevrons is as thick as a page 1 line at every Thickness, and each chevron's stroke is as thick as the line. Chevrons scale with Thickness from 5 up, their wings reaching 1 line width out from the line's middle, so they stick out past the line at every value. Below 5 they keep their size at 5, with thinner strokes, so direction stays visible.
 - They follow Opacity, and lines already drawn follow Thickness. They stay inside the rectangle Dark Page keeps at 16.
 - A drag that turns stores the right direction per segment and is one undo step. The replay and a reload keep it.
 - Dragging over a line erases it, whichever way either was drawn.
@@ -110,7 +120,7 @@ The dialog's Pen line mode (Center & Edge, Center only, Edge only) is SudokuPad'
 
 ## Restore defaults
 
-The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity and Dash length (3) sliders and the two Show boxes back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity and Dash length (3) sliders, the two Show boxes and the White outline box back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 
