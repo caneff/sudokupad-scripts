@@ -63,14 +63,15 @@ describe('cleanHar', () => {
     assert.deepEqual(clean([entry('https://a/1', { status: -1 }), entry('https://a/2')]).map((e) => e.request.url), ['https://a/2'])
   })
 
-  it('keeps one entry per request, the one that kept its bytes (base64) over the one that did not', () => {
+  it('keeps one entry per request, the one that kept its bytes (base64) over the one that did not, in either order', () => {
     const font = 'https://sudokupad.app/assets/fonts/SevenSegment.ttf'
-    const kept = clean([
-      entry(font, { mimeType: 'text/html', text: '��' }),
-      entry(font, { mimeType: 'application/octet-stream', text: 'AAEAAA==', encoding: 'base64' })
-    ])
-    assert.equal(kept.length, 1)
-    assert.equal(kept[0].response.content.encoding, 'base64')
+    const lost = entry(font, { mimeType: 'text/html', text: '\ufffd\ufffd' })
+    const kept = entry(font, { mimeType: 'application/octet-stream', text: 'AAEAAA==', encoding: 'base64' })
+    for (const entries of [[lost, kept], [kept, lost]]) {
+      const cleaned = clean(entries)
+      assert.equal(cleaned.length, 1)
+      assert.equal(cleaned[0].response.content.encoding, 'base64')
+    }
   })
 
   it('keeps the later of two entries for one request when neither kept bytes', () => {
