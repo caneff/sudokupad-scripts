@@ -14,6 +14,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -21,6 +22,8 @@ const noTabLetters = readFileSync(new URL('../no-tab-letters.user.js', import.me
 
 const PEN_KEY = 'PenColor_pen'
 const COLORS_KEY = 'PenColor_colors'
+const DASH_KEY = 'PenColor_dash'
+const THICKNESS_KEY = 'PenColor_thickness'
 const POLL_MS = 50
 const SETTLE_MS = 10000
 const START = /Start Puzzle|Continue|Resume/i
@@ -216,6 +219,67 @@ function group (title, mode, extra = []) {
       assert.equal(await settle(strokeCount, total), total)
       assert.deepEqual((await penValues()).filter((v) => v.endsWith('c')), ['1c', '5c'])
       assert.notEqual((await styleOf('.cell-pen.pencolor-c')).dash, 'none')
+    })
+
+    it('the dialog\'s dash length lengthens the dots of page 2 lines already drawn into dashes, scaled by the thickness; Cancel leaves it, Restore defaults and Save bring the dots back', async () => {
+      const editor = () => p.locator('#pen-tool-extras-editor')
+      const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
+      const openEditor = async () => {
+        await openSettings(p)
+        await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
+        await editor().waitFor({ state: 'visible' })
+      }
+      const closeWith = async (text) => { await dialogButton(text).click(); await editor().waitFor({ state: 'detached' }) }
+      const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')).strokeDasharray))
+      const solidOn = () => read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-3')).strokeDasharray)
+      const sample = () => p.locator(`${PAGE_BUTTON} [data-page-sample]`).getAttribute('data-page-sample')
+      await read(([k]) => Framework.removeData(k), [DASH_KEY])
+      await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
+      assert.equal(await settle(dashOn, 0), 0, 'dots to start with')
+      await openEditor()
+      const range = () => editor().locator('input[data-setting="dash"]')
+      assert.deepEqual(await range().evaluate((el) => [el.min, el.max, el.step, el.value]), ['0', '8', '1', '0'])
+      await range().fill('3')
+      await closeWith('Cancel')
+      assert.equal(await dashOn(), 0, 'Cancel leaves the dots')
+      assert.equal(await saved(DASH_KEY), null)
+      await openEditor()
+      await range().fill('3')
+      await closeWith('Save')
+      // 3 dashes of a line width of 5
+      assert.equal(await settle(dashOn, 15), 15, 'a line already drawn takes the dashes')
+      // Each segment starts half a gap in, so the halves at a cell boundary make one gap, not a double-length dash.
+      const pattern = await read(() => { const st = window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')); return { array: st.strokeDasharray.split(/[ ,]+/).map(parseFloat), offset: parseFloat(st.strokeDashoffset) } })
+      assert.equal(Math.abs(pattern.offset - (pattern.array[0] + pattern.array[1] / 2)) < 1e-6, true, JSON.stringify(pattern))
+      assert.equal(await saved(DASH_KEY), 3)
+      assert.equal(await solidOn(), 'none', 'page 1 lines stay solid')
+      assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray), 'none', 'a cell mark stays solid')
+      await selectPen()
+      // The button shows the line of the page it turns to, so from page 2 it shows page 1's solid line; page 1 shows the dashes.
+      assert.equal(await settle(sample, 'solid'), 'solid')
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(sample, 'dashed'), 'dashed', 'the page button shows dashes')
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(selected, 'c'), 'c')
+      // The dash scales with the thickness slider.
+      await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+      assert.equal(await settle(dashOn, 12), 12)
+      await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '5'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+      assert.equal(await settle(dashOn, 15), 15)
+      await reload()
+      assert.equal(await settle(dashOn, 15), 15, 'after a reload')
+      await openEditor()
+      assert.equal(await range().inputValue(), '3')
+      await dialogButton('Restore defaults').click()
+      assert.equal(await range().inputValue(), '0')
+      await closeWith('Save')
+      assert.equal(await settle(dashOn, 0), 0, 'the dots are back')
+      assert.equal(await saved(DASH_KEY), null)
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(sample, 'dotted'), 'dotted')
+      await p.locator(PAGE_BUTTON).click()
+      assert.equal(await settle(selected, 'c'), 'c')
+      await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
     })
 
     it('Tab turns the page back and forth, keeping the color number, and ToolPen_color stays a digit', async () => {

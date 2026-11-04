@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES
@@ -300,16 +300,16 @@ test('editedColors refuses a pen color or a value it cannot save, rather than sa
   assert.throws(() => editedColors(TABLE, '4', '#abc'), RangeError)
 })
 
-test('the thickness runs 1 to 12 in whole steps from SudokuPad\'s own pen width of 5', () => {
-  assert.deepEqual(THICKNESS, { min: 1, max: 12, step: 1, fallback: 5 })
+test('the thickness runs 1 to 16 in whole steps from SudokuPad\'s own pen width of 5', () => {
+  assert.deepEqual(THICKNESS, { min: 1, max: 16, step: 1, fallback: 5 })
 })
 
-test('normalizeThickness keeps a saved whole number from 1 to 12', () => {
-  for (const ok of [1, 5, 8, 12]) assert.equal(normalizeThickness(ok), ok)
+test('normalizeThickness keeps a saved whole number from 1 to 16', () => {
+  for (const ok of [1, 5, 8, 12, 16]) assert.equal(normalizeThickness(ok), ok)
 })
 
 test('normalizeThickness falls back to 5 for nothing saved and for anything untrusted', () => {
-  for (const bad of [null, undefined, 0, 13, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
+  for (const bad of [null, undefined, 0, 17, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
     assert.equal(normalizeThickness(bad), 5, String(bad))
   }
 })
@@ -318,15 +318,26 @@ test('the full width values are the free lines and the cell circle and cross, no
   assert.deepEqual(FULL_WIDTH_VALUES, ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
 })
 
-// The width each pen value gets from the CSS, read back from the rules.
-function widthsOf (css) {
-  const widths = {}
+// The stroke width and scale each pen value's rule gives it, read back from the CSS, as { value: { width, scale } }
+// (a rule with no transform has scale 1).
+function rulesByValue (css) {
+  const byValue = {}
   for (const rule of css.split('\n')) {
     const [selector, body] = rule.split(' { ')
-    for (const part of selector.split(', ')) widths[part.replace(':root:root .cell-pen.pen-', '')] = body.replace('stroke-width: ', '').replace('; }', '')
+    const scale = /transform: scale\(([\d.]+)\)/.exec(body)
+    const entry = { width: Number(/stroke-width: ([\d.]+);/.exec(body)[1]), scale: scale ? Number(scale[1]) : 1 }
+    for (const part of selector.split(', ')) byValue[part.replace(':root:root .cell-pen.pen-', '')] = entry
   }
-  return widths
+  return byValue
 }
+
+// The width each pen value draws at: its stroke width times its scale, as a string.
+function widthsOf (css) {
+  return Object.fromEntries(Object.entries(rulesByValue(css)).map(([v, { width, scale }]) => [v, String(Math.round(width * scale * 1e6) / 1e6)]))
+}
+
+// The scale each pen value's rule gives it, 1 where it has none.
+const scalesOf = (css) => Object.fromEntries(Object.entries(rulesByValue(css)).map(([v, { scale }]) => [v, scale]))
 
 test('buildThicknessCss at 5 gives the widths the pen had before: free lines, circle and cross 5; edge X marks, arrows and edge circles 2.5', () => {
   const widths = widthsOf(buildThicknessCss(5))
@@ -347,9 +358,39 @@ test('every selector sits under :root:root, and no value gets two width rules', 
   assert.equal(new Set(selectors).size, selectors.length)
 })
 
+test('edge marks and corner marks keep today\'s size up to the default thickness of 5 and grow gradually above it, to 1.3 times at 16', () => {
+  for (const t of [1, 3, 5]) assert.equal(markGrowthScale(t), 1, String(t))
+  assert.equal(markGrowthScale(16), 1.3)
+  const grown = [6, 10, 16].map(markGrowthScale)
+  assert.equal(grown[0] > 1 && grown[0] < grown[1] && grown[1] < grown[2], true, grown.join(' < '))
+  assert.equal(Math.abs(markGrowthScale(10) - (1 + 0.3 * 5 / 11)) < 1e-3, true)
+})
+
+test('the scale lands on every edge and corner mark and on no line, and a mark stays centred on its edge or corner while it grows', () => {
+  const css = buildThicknessCss(16)
+  const scales = scalesOf(css)
+  const marks = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y']
+  for (const v of marks) assert.equal(scales[v], 1.3, v)
+  for (const v of FULL_WIDTH_VALUES) assert.equal(scales[v], 1, v)
+  const rule = css.split('\n').find((r) => r.includes('.pen-3,'))
+  assert.match(rule, /transform-box: fill-box; transform-origin: center;/)
+})
+
+test('a grown mark is as thick as before: its stroke width is shrunk by the scale, so only its length grows', () => {
+  const widths = widthsOf(buildThicknessCss(16))
+  for (const v of ['3', 'h', 'o', 's', 't', 'y']) assert.equal(widths[v], '8', v)
+  const rule = buildThicknessCss(16).split('\n').find((r) => r.includes('.pen-3,'))
+  assert.match(rule, /stroke-width: 6\.1538\d*;/)
+})
+
+test('lines are never scaled', () => {
+  const lines = buildThicknessCss(16).split('\n').find((r) => r.includes('.pen-1,'))
+  assert.equal(lines.includes('transform'), false)
+})
+
 test('buildThicknessCss refuses a thickness it cannot save', () => {
   assert.throws(() => buildThicknessCss(0), RangeError)
-  assert.throws(() => buildThicknessCss(13), RangeError)
+  assert.throws(() => buildThicknessCss(17), RangeError)
   assert.throws(() => buildThicknessCss('5'), RangeError)
   assert.throws(() => buildThicknessCss(2.5), RangeError)
 })
@@ -383,7 +424,7 @@ test('buildOpacityCss writes the fraction of the percent, and 1 at 100', () => {
 const slidersIn = (html) => [...html.matchAll(/<input type="range" id="([^"]+)"[^>]* min="([^"]+)" max="([^"]+)" step="([^"]+)" value="([^"]+)"/g)].map((m) => m.slice(1))
 
 test('the panel markup has Thickness above Opacity, each with the range and value of its setting, and neither takes focus by tabbing', () => {
-  const html = renderPanelSliders(9, 35)
+  const html = renderPanelSliders(9, 35, { thickness: true, opacity: true })
   assert.deepEqual(slidersIn(html), [
     ['pen-tool-extras-thickness', String(THICKNESS.min), String(THICKNESS.max), String(THICKNESS.step), '9'],
     ['pen-tool-extras-opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35']
@@ -567,7 +608,8 @@ test('the edge circle is an open ring closed back at the edge midpoint, about 1.
 })
 
 test('the edge circle\'s hole stays clearly open at the largest thickness', () => {
-  const rx = Number(/ a ([\d.]+),/.exec(shapePath('o', 8))[1])
+  // The ring grows with the mark's scale and keeps its stroke width, so the radius on screen is the scaled one.
+  const rx = Number(/ a ([\d.]+),/.exec(shapePath('o', 8))[1]) * markGrowthScale(THICKNESS.max)
   const stroke = THICKNESS.max * 0.5
   // The inner radius is the path radius less half the stroke: more than a stroke's width.
   assert.equal(rx - stroke / 2 > stroke / 2, true, `${rx} ${stroke}`)
@@ -777,7 +819,7 @@ test('stepPage goes round the pages in either direction, whatever the count', ()
 const rulesOf = (css) => css.split('\n').filter(Boolean).map((rule) => { const i = rule.indexOf(' { '); return { selector: rule.slice(0, i), body: rule.slice(i + 3, -2) } })
 
 test('every page 2 color character strokes in the color of its page 1 partner, so one recolor changes both', () => {
-  const rules = rulesOf(buildPagesCss(5))
+  const rules = rulesOf(buildPagesCss(5, 0))
   for (let i = 0; i < 9; i++) {
     const rule = rules.find((r) => r.selector === `.pencolor-${PEN_PAGES[1].chars[i]}`)
     assert.equal(rule && rule.body, `stroke: var(--puzzle-pencolor-${i + 1});`)
@@ -785,7 +827,7 @@ test('every page 2 color character strokes in the color of its page 1 partner, s
 })
 
 test('dots are on lines only: the free lines and the edge and diagonal lines, never 5, 6 or a mark', () => {
-  const dots = rulesOf(buildPagesCss(5)).filter((r) => r.body.startsWith('stroke-dasharray'))
+  const dots = rulesOf(buildPagesCss(5, 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
   const named = dots.flatMap((r) => r.selector.match(/\.pen-([0-9a-z])/g)).map((v) => v.slice(5))
   assert.deepEqual([...new Set(named)].sort(), ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
   for (const r of dots) {
@@ -795,7 +837,7 @@ test('dots are on lines only: the free lines and the edge and diagonal lines, ne
 })
 
 test('the dot spacing is two line widths, snapped so a cell of 64 holds whole dots and a diagonal cell of 90.51 does too, the last dot a hair before the segment\'s end', () => {
-  const gaps = (t) => rulesOf(buildPagesCss(t)).filter((r) => r.body.startsWith('stroke-dasharray')).map((r) => Number(r.body.match(/^stroke-dasharray: 0 ([\d.]+);$/)[1]))
+  const gaps = (t) => rulesOf(buildPagesCss(t, 0)).filter((r) => r.body.startsWith('stroke-dasharray')).map((r) => Number(r.body.match(/^stroke-dasharray: 0 ([\d.]+);$/)[1]))
   const [ortho, diagonal] = [64, 64 * Math.SQRT2]
   // [thickness, dots in a cell, dots in a diagonal]: 64 / 10 = 6.4 -> 6 and 90.51 / 10 = 9.05 -> 9; 64 / 24 = 2.67 -> 3 and 90.51 / 24 = 3.77 -> 4; 32 dots at 1
   for (const [thickness, cell, diag] of [[5, 6, 9], [12, 3, 4], [1, 32, 45]]) {
@@ -809,11 +851,11 @@ test('the dot spacing is two line widths, snapped so a cell of 64 holds whole do
 })
 
 test('buildPagesCss refuses a thickness it cannot save', () => {
-  assert.throws(() => buildPagesCss(0), RangeError)
+  assert.throws(() => buildPagesCss(0, 0), RangeError)
 })
 
 test('a page 2 swatch is dotted in the pen color of its button, and a page 1 swatch is left to SudokuPad', () => {
-  const css = buildPagesCss(5)
+  const css = buildPagesCss(5, 0)
   for (let n = 1; n <= 9; n++) {
     const rule = rulesOf(css).find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="2"]:after`)
     assert.ok(rule, `swatch ${n}`)
@@ -823,10 +865,10 @@ test('a page 2 swatch is dotted in the pen color of its button, and a page 1 swa
 })
 
 test('the page button samples the page it turns to: dots on page 2, a solid line on page 1, and a dot for each page with the current one filled', () => {
-  const fromOne = renderPageIcon(0)
+  const fromOne = renderPageIcon(0, 0)
   assert.match(fromOne, /data-page-sample="dotted"/)
   assert.equal((fromOne.match(/<circle/g) || []).length, 5 + 2)
-  const fromTwo = renderPageIcon(1)
+  const fromTwo = renderPageIcon(1, 0)
   assert.match(fromTwo, /data-page-sample="solid"/)
   assert.equal((fromTwo.match(/<circle/g) || []).length, 2)
   assert.equal((fromTwo.match(/<path/g) || []).length, 1)
@@ -842,6 +884,148 @@ test('the line mode choices are SudokuPad\'s three, and anything else saved read
   assert.deepEqual(LINE_MODES.map(([value]) => value), ['both', 'centeronly', 'edgeonly'])
   for (const ok of ['both', 'centeronly', 'edgeonly']) assert.equal(normalizeLineMode(ok), ok)
   for (const bad of [null, undefined, 'edge', 1, ['both'], '']) assert.equal(normalizeLineMode(bad), 'both', JSON.stringify(bad))
+})
+
+// Dash length (page 2): from the dots of today to longer dashes, in line widths.
+test('the dash length runs from 0 (today\'s dots) to 8 line widths in whole steps', () => {
+  assert.deepEqual(DASH, { min: 0, max: 8, step: 1, fallback: 0 })
+})
+
+test('normalizeDash keeps a saved whole number from 0 to 8, and anything else is the dots of today', () => {
+  for (const ok of [0, 1, 4, 8]) assert.equal(normalizeDash(ok), ok)
+  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(normalizeDash(bad), 0, String(bad))
+})
+
+// The declarations of the first (orthogonal) and second (diagonal) page 2 line rule, as { dash, gap, offset } numbers
+// (offset 0 where a rule has no dashoffset).
+const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).filter((r) => r.body.startsWith('stroke-dasharray'))
+  .map((r) => {
+    const [, on, gap] = /^stroke-dasharray: ([\d.]+) ([\d.]+);/.exec(r.body)
+    const offset = /stroke-dashoffset: ([\d.]+);$/.exec(r.body)
+    return { dash: Number(on), gap: Number(gap), offset: offset ? Number(offset[1]) : 0 }
+  })
+
+test('at dash 0 the page 2 lines are the dots they were: the spacing origin/main gave, as literals', () => {
+  // The dasharray of the orthogonal and the diagonal rule at thicknesses 1, 5 and 12, from the script before dash lengths existed.
+  const before = { 1: ['0 1.9998', '0 2.011124822779531'], 5: ['0 10.6656', '0 10.055624113897656'], 12: ['0 21.3312', '0 22.625154256269724'] }
+  for (const [thickness, want] of Object.entries(before)) {
+    const got = rulesOf(buildPagesCss(Number(thickness), 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
+    assert.deepEqual(got.map((r) => r.body), want.map((d) => `stroke-dasharray: ${d};`), `thickness ${thickness}`)
+  }
+})
+
+test('a dash is its setting in line widths long and scales with the thickness slider, until a cell\'s line is too short for it', () => {
+  for (const [thickness, dash] of [[5, 3], [10, 2], [4, 4], [2, 8]]) {
+    for (const { dash: on } of dashesOf(thickness, dash)) assert.equal(on, thickness * dash, `thickness ${thickness} dash ${dash}`)
+  }
+})
+
+test('every dash length at every thickness fits whole periods in a cell and a diagonal, with half a gap at each end and a gap that leaves the round caps apart, never solid', () => {
+  for (let thickness = THICKNESS.min; thickness <= THICKNESS.max; thickness++) {
+    for (let dash = DASH.min + 1; dash <= DASH.max; dash++) {
+      const rows = dashesOf(thickness, dash)
+      assert.equal(rows.length, 2)
+      const lengths = [64, 64 * Math.SQRT2]
+      rows.forEach(({ dash: on, gap, offset }, i) => {
+        const where = `thickness ${thickness} dash ${dash} line ${i}`
+        const periods = Math.round(lengths[i] / (on + gap))
+        assert.equal(Math.abs(periods * (on + gap) - lengths[i]) < 1e-6, true, `${where}: ${periods} periods of ${on + gap} fill ${lengths[i]}`)
+        assert.equal(offset, on + gap / 2, `${where}: the pattern starts half a gap in`)
+        assert.equal(on > 0 && on <= dash * thickness + 1e-9, true, `${where}: dash ${on}`)
+        assert.equal(gap >= 1.3 * thickness - 1e-9, true, `${where}: gap ${gap} leaves the caps apart`)
+      })
+    }
+  }
+})
+
+test('a dash too long for a cell to hold a gap is shortened to leave one, and page 2 still differs from page 1 at the longest dash and thickness', () => {
+  const [ortho] = dashesOf(16, 8)
+  assert.equal(ortho.dash < 8 * 16, true)
+  assert.equal(ortho.gap >= 1.3 * 16 - 1e-9, true)
+  assert.equal(Math.abs(ortho.dash + ortho.gap - 64) < 1e-9, true, 'one period in a cell')
+})
+
+test('buildPagesCss refuses a dash it cannot save', () => {
+  assert.throws(() => buildPagesCss(5, 9), RangeError)
+  assert.throws(() => buildPagesCss(5, 1.5), RangeError)
+})
+
+test('the page button samples dashes as long as the setting, and dots at 0', () => {
+  assert.match(renderPageIcon(0, 0), /data-page-sample="dotted"/)
+  const dashed = renderPageIcon(0, 4)
+  assert.match(dashed, /data-page-sample="dashed"/)
+  const short = renderPageIcon(0, 1).match(/<path[^>]*data-dash/g)
+  const long = dashed.match(/<path[^>]*data-dash/g)
+  assert.equal(short.length >= 2 && long.length >= 2, true)
+  const span = (path) => { const [x1, y1, x2, y2] = path.match(/M([\d.]+) ([\d.]+) L([\d.]+) ([\d.]+)/).slice(1).map(Number); return Math.hypot(x2 - x1, y2 - y1) }
+  assert.equal(span(long[0]) > span(short[0]), true)
+})
+
+// Showing the sliders in the pen tool's panel.
+test('both sliders show unless saved as hidden, and saved data without the setting shows both', () => {
+  assert.deepEqual(normalizeSliderVisibility(undefined), { thickness: true, opacity: true })
+  assert.deepEqual(normalizeSliderVisibility(null), { thickness: true, opacity: true })
+  assert.deepEqual(normalizeSliderVisibility({}), { thickness: true, opacity: true })
+  assert.deepEqual(normalizeSliderVisibility({ thickness: false }), { thickness: false, opacity: true })
+  assert.deepEqual(normalizeSliderVisibility({ opacity: false, thickness: false }), { thickness: false, opacity: false })
+  assert.deepEqual(normalizeSliderVisibility({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
+  assert.deepEqual(normalizeSliderVisibility([false, false]), { thickness: true, opacity: true })
+})
+
+test('a hidden slider has no input, and the other keeps its place beside an empty row of the same height', () => {
+  const only = (id) => slidersIn(renderPanelSliders(9, 35, { thickness: id === 'thickness', opacity: id === 'opacity' })).map((s) => s[0])
+  assert.deepEqual(only('thickness'), ['pen-tool-extras-thickness'])
+  assert.deepEqual(only('opacity'), ['pen-tool-extras-opacity'])
+  const html = renderPanelSliders(9, 35, { thickness: false, opacity: true })
+  assert.match(html, /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider" data-empty><\/div><div class="pen-tool-extras-slider"/)
+  const low = renderPanelSliders(9, 35, { thickness: true, opacity: false })
+  assert.match(low, /<div class="pen-tool-extras-slider" data-empty><\/div><\/div>$/)
+})
+
+test('with both sliders hidden the panel has no slider block at all, so no gap is left', () => {
+  assert.equal(renderPanelSliders(9, 35, { thickness: false, opacity: false }), '')
+})
+
+// The dialog.
+const editorState = (over = {}) => ({
+  colors: DEFAULT_COLORS,
+  missing: [],
+  marks: DEFAULT_MARK_SETTINGS,
+  lineMode: 'both',
+  thickness: 5,
+  opacity: 80,
+  show: { thickness: true, opacity: true },
+  dash: 0,
+  ...over
+})
+
+test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s buttons, each keeping its number', () => {
+  const html = renderEditor(editorState())
+  assert.match(html, /grid-template-columns: repeat\(3, /)
+  const cells = [...html.matchAll(/<b[^>]*>(\d)<\/b><input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})">/g)].map((m) => m.slice(1))
+  assert.deepEqual(cells.map(([label, pen]) => [label, pen]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [String(n), String(n)]))
+  assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => DEFAULT_COLORS[n]))
+})
+
+test('the dialog has Show thickness slider and Show transparency slider boxes, ticked as saved', () => {
+  const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"( checked)?>`).exec(html)
+  const both = renderEditor(editorState())
+  assert.equal(Boolean(box(both, 'thickness')[1]) && Boolean(box(both, 'opacity')[1]), true)
+  assert.match(both, /Show thickness slider/)
+  assert.match(both, /Show transparency slider/)
+  const none = renderEditor(editorState({ show: { thickness: false, opacity: true } }))
+  assert.equal(box(none, 'thickness')[1], undefined)
+  assert.equal(Boolean(box(none, 'opacity')[1]), true)
+})
+
+test('the dialog always holds the thickness and opacity sliders, at the values in force, whether or not the panel shows them', () => {
+  const html = renderEditor(editorState({ thickness: 9, opacity: 35, show: { thickness: false, opacity: false } }))
+  const ranges = [...html.matchAll(/<input type="range" data-setting="(\w+)" min="(\d+)" max="(\d+)" step="(\d+)" value="(\d+)"/g)].map((m) => m.slice(1))
+  assert.deepEqual(ranges, [
+    ['thickness', String(THICKNESS.min), String(THICKNESS.max), String(THICKNESS.step), '9'],
+    ['opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35'],
+    ['dash', String(DASH.min), String(DASH.max), String(DASH.step), '0']
+  ])
 })
 
 test('VERSION is the @version in the script header', () => {

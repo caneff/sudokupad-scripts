@@ -13,7 +13,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { headerVersion, openSettings } from './settings.mjs'
+import { drawnWidth, headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -195,6 +195,29 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await openEditor()
       assert.deepEqual(await pickerValues(), PAGE_PENS[0])
       await closeWith('Cancel')
+    })
+
+    it('the dialog lays the nine pen colors out as a 3 by 3 grid like the pen tool\'s buttons, each keeping its number', async () => {
+      await openEditor()
+      const cells = await editor().locator('input[type=color][data-pen]').evaluateAll((els) => els.map((el) => {
+        const r = el.getBoundingClientRect()
+        return { pen: el.dataset.pen, x: r.x, y: r.y, label: el.previousElementSibling.textContent }
+      }))
+      assert.deepEqual(cells.map((c) => c.pen), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+      assert.deepEqual(cells.map((c) => c.label), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+      const rows = [cells.slice(0, 3), cells.slice(3, 6), cells.slice(6)]
+      for (const row of rows) {
+        assert.equal(row.every((c) => Math.abs(c.y - row[0].y) < 2), true, `one row: ${JSON.stringify(row)}`)
+        assert.equal(row[0].x < row[1].x && row[1].x < row[2].x, true, 'left to right')
+      }
+      assert.equal(rows[0][0].y < rows[1][0].y && rows[1][0].y < rows[2][0].y, true, 'top to bottom')
+      for (const col of [0, 1, 2]) assert.equal(Math.abs(rows[0][col].x - rows[2][col].x) < 2, true, `column ${col} lines up`)
+      // The pen tool's own buttons are in the same arrangement.
+      await closeWith('Cancel')
+      await selectPen()
+      const buttons = await p.locator('.tool-pen button[data-key]').evaluateAll((els) => els.filter((el) => el.dataset.key !== '0').map((el) => { const r = el.getBoundingClientRect(); return [el.dataset.key, Math.round(r.x), Math.round(r.y)] }))
+      assert.deepEqual(buttons.map((b) => b[0]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+      assert.equal(buttons[0][1] < buttons[1][1] && buttons[3][2] > buttons[0][2], true, 'the panel runs left to right, then down')
     })
 
     it('Cancel saves nothing and changes no color', async () => {
@@ -422,16 +445,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // The computed stroke width of every drawn stroke of pen color `n` (a drag draws a line and a
       // cell circle), as numbers.
       const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
-      // Adds a stroke element of pen value `value` to the drawing, as SudokuPad draws it, and returns its computed width.
+      // Adds a stroke element of pen value `value` to the drawing, as SudokuPad draws it, and returns the width it draws at.
       const probeWidth = (value) => read((value) => {
         const ns = 'http://www.w3.org/2000/svg'
         const path = document.createElementNS(ns, 'path')
         path.setAttribute('class', `cell-pen pen-${value} pencolor-1`)
         document.querySelector('.cell-pen').parentNode.appendChild(path)
-        const width = parseFloat(window.getComputedStyle(path).strokeWidth)
+        const style = window.getComputedStyle(path)
+        const computed = { strokeWidth: style.strokeWidth, transform: style.transform }
         path.remove()
-        return width
-      }, value)
+        return computed
+      }, value).then(drawnWidth)
       const FULL = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
       const HALF = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
       // Every pen value's width, as { full: [...], half: [...] } of distinct numbers.
@@ -448,11 +472,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       })
       after(async () => { await read((k) => Framework.removeData(k), THICKNESS_KEY) })
 
-      it('with nothing saved lines, circles and crosses are SudokuPad\'s 5 wide and every edge mark 2.5, and the slider runs 1 to 12 at 5', async () => {
+      it('with nothing saved lines, circles and crosses are SudokuPad\'s 5 wide and every edge mark 2.5, and the slider runs 1 to 16 at 5', async () => {
         assert.deepEqual(await widths(1)(), [5])
         assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
         await selectPen()
-        assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '12', '1', '5'])
+        assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '1', '5'])
       })
 
       it('moving the slider scales lines, circles, crosses and edge marks by one factor, live, and saves it with no Save', async () => {
@@ -491,17 +515,24 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.deepEqual(await allWidths(), { full: [9], half: [4.5] })
       })
 
-      it('Restore defaults puts the panel slider back to 5 and clears the saved thickness at once, and Cancel afterwards does not bring it back', async () => {
+      it('Restore defaults sets the dialog\'s thickness slider to 5 for Save: Cancel afterwards leaves the saved thickness and the marks, Save clears it and draws at 5', async () => {
         await setSlider(7)
         assert.equal(await savedThickness(), 7)
         await openEditor()
-        assert.equal(await editor().locator('input[type=range]').count(), 0)
+        assert.equal(await editor().locator('input[type=range]').count(), 3)
         await restoreDefaults()
-        assert.equal(await settle(() => slider().inputValue(), '5'), '5')
-        assert.deepEqual(await settle(widths(1), [5]), [5])
-        assert.equal(await savedThickness(), null)
+        assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
+        assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
+        assert.deepEqual(await widths(1)(), [7])
         await closeWith('Cancel')
+        assert.equal(await savedThickness(), 7)
+        assert.deepEqual(await allWidths(), { full: [7], half: [3.5] })
+        await openEditor()
+        await restoreDefaults()
+        await closeWith('Save')
         assert.equal(await savedThickness(), null)
+        assert.deepEqual(await settle(widths(1), [5]), [5])
+        assert.equal(await slider().inputValue(), '5')
         assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
       })
 
@@ -786,10 +817,11 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
         path.setAttribute('class', 'cell-pen pen-1 pencolor-1')
         document.querySelector('#svgrenderer').appendChild(path)
-        const width = parseFloat(window.getComputedStyle(path).strokeWidth)
+        const style = window.getComputedStyle(path)
+        const computed = { strokeWidth: style.strokeWidth, transform: style.transform }
         path.remove()
-        return width
-      })
+        return computed
+      }).then(drawnWidth)
       assert.equal(await probe(), 11)
     } finally {
       await context.close()
