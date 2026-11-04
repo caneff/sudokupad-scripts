@@ -99,10 +99,10 @@ function group (title, mode) {
     // The pen entries of every cell as `row,col:value+color`, sorted.
     const penValues = () => read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
     const penOf = async (cells) => (await penValues()).filter((v) => cells.some((c) => v.startsWith(`${c}:`)))
-    // Every chevron line group in the pen layer: its class, the way its chevrons point, and the widths of its two parts.
+    // Every arrow line group in the pen layer: its class, the way its arrows point, and the width of its line.
     const chevronGroups = () => read(() => [...document.querySelectorAll('#cell-pen > g.cell-pen')].map((g) => {
       const [line, chevrons] = ['line', 'chevrons'].map((name) => g.querySelector(`[data-chevron-part="${name}"]`))
-      return { cls: g.getAttribute('class'), chevrons: chevrons.getAttribute('d'), line: line.getAttribute('d'), lineWidth: Number(line.getAttribute('stroke-width')), chevronWidth: Number(chevrons.getAttribute('stroke-width')) }
+      return { cls: g.getAttribute('class'), chevrons: chevrons.getAttribute('d'), line: line.getAttribute('d'), lineWidth: Number(line.getAttribute('stroke-width')) }
     }))
     const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
     const pageErrors = () => errors.slice()
@@ -212,7 +212,6 @@ function group (title, mode) {
         assert.equal(g.cls, 'cell-pen pen-1 pencolor-n')
         assert.deepEqual([...new Set(headings(g.chevrons))], ['E'])
         assert.equal(g.lineWidth, 5, 'the line is as wide as a page 1 line at the default thickness')
-        assert.equal(g.chevronWidth, CHEVRON.stroke * 5)
       }
     })
 
@@ -272,11 +271,12 @@ function group (title, mode) {
       assert.deepEqual(headingOf('cell-pen pen-g pencolor-o'), ['NW'])
     })
 
-    it('the chevrons are drawn in the pen\'s page 1 partner color, and a recolor changes them', async () => {
-      const strokeOf = () => read(() => { const g = document.querySelector('#cell-pen > g.cell-pen.pencolor-n'); return [window.getComputedStyle(g).stroke, window.getComputedStyle(g.querySelector('[data-chevron-part="chevrons"]')).stroke, window.getComputedStyle(g.querySelector('[data-chevron-part="line"]')).stroke] })
-      const [group, chevrons, line] = await strokeOf()
-      assert.equal(chevrons, group)
+    it('the arrows are filled in the pen\'s page 1 partner color and not stroked, and a recolor changes them', async () => {
+      const strokeOf = () => read(() => { const g = document.querySelector('#cell-pen > g.cell-pen.pencolor-n'); const arrows = window.getComputedStyle(g.querySelector('[data-chevron-part="chevrons"]')); return [window.getComputedStyle(g).stroke, arrows.fill, window.getComputedStyle(g.querySelector('[data-chevron-part="line"]')).stroke, arrows.stroke] })
+      const [group, fill, line, arrowStroke] = await strokeOf()
+      assert.equal(fill, group)
       assert.equal(line, group)
+      assert.equal(arrowStroke, 'none')
       await read((k) => Framework.setData(k, { 3: '#123456' }), COLORS_KEY)
       await reload()
       assert.equal(await settle(async () => (await strokeOf())[0], 'rgb(18, 52, 86)'), 'rgb(18, 52, 86)')
@@ -340,9 +340,9 @@ function group (title, mode) {
       assert.deepEqual(await penOf(['2,2', '2,3']), ['2,2:1o', '2,3:1o'])
     })
 
-    it('the Thickness slider scales the chevron lines already drawn: wider strokes and fewer chevrons; 5 gives them back', async () => {
+    it('the Thickness slider scales the arrow lines already drawn: a wider line and fewer arrows; 5 gives them back', async () => {
       const slider = (value) => p.locator('#pen-tool-extras-thickness').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-      const sample = async () => { const [g] = (await chevronGroups()).filter((x) => x.cls === 'cell-pen pen-1 pencolor-o'); return { lineWidth: g.lineWidth, chevronWidth: g.chevronWidth, count: headings(g.chevrons).length } }
+      const sample = async () => { const [g] = (await chevronGroups()).filter((x) => x.cls === 'cell-pen pen-1 pencolor-o'); return { lineWidth: g.lineWidth, count: headings(g.chevrons).length } }
       await slider(5)
       const normal = await settle(async () => (await sample()).lineWidth, CHEVRON.line * 5)
       assert.equal(normal, CHEVRON.line * 5)
@@ -351,13 +351,11 @@ function group (title, mode) {
       const big = await settle(async () => (await sample()).lineWidth, CHEVRON.line * 16)
       assert.equal(big, CHEVRON.line * 16)
       const wide = await sample()
-      assert.equal(wide.chevronWidth, CHEVRON.stroke * 16)
-      assert.equal(wide.count < base.count, true, `${wide.count} chevrons at 16 against ${base.count} at 5`)
-      // At 1 the line is as wide as a page 1 line, 1, and the chevrons keep the size they have at 5, so the direction stays visible.
+      assert.equal(wide.count < base.count, true, `${wide.count} arrows at 16 against ${base.count} at 5`)
+      // At 1 the line is as wide as a page 1 line, 1, while the arrows keep the size they have at 5, so the direction stays visible.
       await slider(1)
       assert.equal(await settle(async () => (await sample()).lineWidth, 1), 1)
       const small = await sample()
-      assert.equal(small.chevronWidth, base.chevronWidth)
       assert.equal(small.count, base.count)
       await slider(5)
       assert.deepEqual(await settle(sample, base), base)

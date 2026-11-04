@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.9.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed (or dotted) lines and a third page of nine that draw a line as wide as a page 1 line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
+// @version      1.10.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, adds an optional white outline around every pen mark, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.9.0'
+  const VERSION = '1.10.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -31,6 +31,10 @@
   // The dash length of page 2 and which panel sliders show are the script's own keys too.
   const DASH_KEY = 'PenColor_dash'
   const SLIDERS_SHOWN_KEY = 'PenColor_sliders'
+  // Whether the pen layer has a white outline: saved as true, and the key is removed when it is off.
+  const OUTLINE_KEY = 'PenColor_outline'
+  // The outline's width, in cell units: saved when it is not the default.
+  const OUTLINE_WIDTH_KEY = 'PenColor_outlinewidth'
   // The `id` of each slider in the pen tool's panel; the input handler tells them apart by it.
   const THICKNESS_SLIDER = 'pen-tool-extras-thickness'
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
@@ -66,7 +70,7 @@
   // character is the one a stroke stores after its value and the replay holds (`pc:a`), which draws,
   // undoes and replays for any lowercase letter (docs/research/sudokupad-pen-tool.md, "Pen colors past
   // nine"). The first page is SudokuPad's own and must stay first: its characters are the only ones stock
-  // SudokuPad can select. A dashed page draws its lines as dashes (dots at a dash length of 0). A pen value has no direction, so a chevron page's
+  // SudokuPad can select. A dashed page draws its lines as dashes (dots at a dash length of 0). A pen value has no direction, so an arrow page's
   // pen is two characters: the one on its button (`chars`) for a line dragged the way SudokuPad draws the value, and
   // the `reverse` one at the same index for a line dragged the other way. Only the first is ever selected.
   const PEN_PAGES = [
@@ -122,6 +126,25 @@
   // (tool-pen.css), so 80 is the fallback and leaves the marks as they are; 100 is solid, and 20 is the
   // floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
+  // The white outline's width on each side of the pen layer's shape, in cell units (a cell is 64; a default line is 5 wide), set by a slider in the dialog. It
+  // does not scale with the thickness. 3 shows over a colored cell and a digit as well as over white without covering the digits beside a line.
+  const OUTLINE_WIDTH = { min: 1, max: 8, step: 1, fallback: 3 }
+  // The outline is made in two steps. The layer's alpha is first grown square by OUTLINE_SQUARE_SHARE of the width, so a thin shape (a one-wide
+  // dot) is already wide enough for the second step to keep; then it is blurred and cut at OUTLINE_CUT, which rounds the corners (a square dilation
+  // alone steps round every corner) and grows it by the rest of the width. Along a straight edge the blurred alpha falls to OUTLINE_CUT at
+  // OUTLINE_CUT_SIGMAS blur widths (the normal curve's 95th percentile, 1.645) out, so the blur width is the rest of the width over that. The cut is a
+  // steep ramp (OUTLINE_SOFTNESS per unit of alpha) so the edge is not jagged. A blur alone, with no first step, dims a thin shape below the cut at
+  // the largest widths, and its outline fades to a faint halo.
+  const OUTLINE_SQUARE_SHARE = 1 / 3
+  const OUTLINE_CUT = 0.05
+  const OUTLINE_CUT_SIGMAS = 1.645
+  const OUTLINE_SOFTNESS = 16
+  const OUTLINE_FILTER_ID = 'pen-tool-extras-outline-filter'
+  // The element that holds the outline's filter, which a CSS `filter: url(#id)` needs in the document.
+  const OUTLINE_HOLDER_ID = 'pen-tool-extras-outline-holder'
+  // The filter's region, in cell units: far past any grid (a cell is 64, so 100000 is over 1500 cells), because the default region is a margin of the
+  // layer's own bounding box, which a lone horizontal line gives no height to hold an outline in.
+  const OUTLINE_REGION = { min: -100000, size: 200000 }
   // The pen values (the `pen-<value>` class of a stroke) SudokuPad draws at the full width, from
   // `docs/research/sudokupad-pen-edge-marks.md`: the free lines, and 5 and 6 (the cell circle and
   // cross). Left out on purpose: 3, 4, b and c (the edge X marks, half the width), and h to y (the
@@ -215,7 +238,7 @@
     return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
   }
 
-  // The index of the page whose button holds the color character `pen` (a chevron page's reverse characters are on no
+  // The index of the page whose button holds the color character `pen` (an arrow page's reverse characters are on no
   // button, so they are no pen), or -1.
   function penPageOf (pen) {
     return PEN_PAGES.findIndex((page) => page.chars.includes(pen))
@@ -256,6 +279,17 @@
   function normalizeOpacity (data) {
     const ok = Number.isInteger(data) && data >= OPACITY.min && data <= OPACITY.max && (data - OPACITY.min) % OPACITY.step === 0
     return ok ? data : OPACITY.fallback
+  }
+
+  // Saved data is untrusted: the outline is on only for a saved true, so data saved before the setting existed has it off.
+  function normalizeOutline (data) {
+    return data === true
+  }
+
+  // Saved data is untrusted: the saved outline width when it is a whole number from OUTLINE_WIDTH.min to OUTLINE_WIDTH.max, else OUTLINE_WIDTH.fallback.
+  function normalizeOutlineWidth (data) {
+    const ok = Number.isInteger(data) && data >= OUTLINE_WIDTH.min && data <= OUTLINE_WIDTH.max
+    return ok ? data : OUTLINE_WIDTH.fallback
   }
 
   // Saved data is untrusted: the saved dash length when it is a whole number from DASH.min to DASH.max,
@@ -409,18 +443,16 @@
     f: [[0, 1], [1, 0]],
     g: [[0, 0], [1, 1]]
   }
-  // The sizes of a chevron line, in line widths (the thickness setting; the line's own width follows it all the way down, but a
-  // chevron is never smaller than at the default thickness, so its direction stays visible at 1): a chevron's wings reach `halfLength` back and
-  // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the line (1, the same as
-  // a page 1 line at every thickness) and the chevrons; `spacing` is the distance between two chevrons'
-  // middles, fitted to a whole number per segment (a run of chevrons, not a solid row of them). The furthest a
-  // chevron reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
-  // Above thickness `growFrom` a chevron's wings and length also grow, evenly to 1 + `growth` times at the largest thickness (the stroke
-  // and the spacing do not), so the chevrons still stick out clearly past a line that thick.
-  const CHEVRON = { halfLength: 0.7, halfWidth: 0.95, stroke: 0.5, line: 1, spacing: 5, growFrom: 10, growth: 0.35 }
+  // The sizes of an arrow line (page 3), in line widths (the thickness setting; the line's width follows it all the way down, but an arrow's size
+  // is never smaller than at the default thickness, so its direction stays visible at 1): an arrow is a filled triangle on the line, its base
+  // `halfWidth` out to each side of the line's middle and `halfLength` back from it, and its tip `halfLength` forward (so it is twice `halfLength`
+  // long); `line` is the width of the line (1, the same as a page 1 line at every thickness); `spacing` is the distance between two arrows'
+  // middles, fitted to a whole number per segment (a run of arrows, not a solid row of them). The furthest an
+  // arrow reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
+  const CHEVRON = { halfLength: 1.125, halfWidth: 1.5, line: 1, spacing: 5 }
 
-  // Which way a line stored with the color character `char` was dragged: true for the character on a chevron page's button
-  // (forward), false for its reverse character, null for a character no chevron page uses.
+  // Which way a line stored with the color character `char` was dragged: true for the character on an arrow page's button
+  // (forward), false for its reverse character, null for a character no arrow page uses.
   function chevronWayOf (char) {
     for (const page of PEN_PAGES) {
       if (!page.chevrons) continue
@@ -431,7 +463,7 @@
   }
 
   // The color character a line dragged `forward` (or not) is stored with when pen `pen` is selected: the pen's own character,
-  // except on a chevron page for a line dragged the other way.
+  // except on an arrow page for a line dragged the other way.
   function directionCharOf (pen, forward) {
     const page = PEN_PAGES[penPageOf(pen)]
     return !page || !page.chevrons || forward ? pen : page.reverse[page.chars.indexOf(pen)]
@@ -484,8 +516,8 @@
     return out
   }
 
-  // The corners of a chevron, wing, tip, wing, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
-  // its wings `half` back and `wide` out from the middle and its tip `half` forward.
+  // The corners of a triangle (an arrow of an arrow line, and the page button's sample of one), base corner, tip, base corner, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
+  // its base `half` back and `wide` out from the middle and its tip `half` forward.
   function chevronCorners (x, y, ux, uy, half, wide) {
     return [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
   }
@@ -493,32 +525,30 @@
   // A point as path data text, to 2 places.
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
-  // The path data of a chevron line, in the renderer's units (a cell is CELL_UNITS), for the line value `value` on the cell at
-  // (row, col) dragged `forward` or not, at `thickness`: { line, chevrons, lineWidth, chevronWidth }. The line is the whole
-  // segment, as wide as a page 1 line; each chevron is wing, tip, wing, the tip toward the way it was dragged. Whole chevrons are fitted to the
-  // segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
+  // The path data of an arrow line, in the renderer's units (a cell is CELL_UNITS), for the line value `value` on the cell at
+  // (row, col) dragged `forward` or not, at `thickness`: { line, chevrons, lineWidth }. The line is the whole
+  // segment, as wide as a page 1 line; each arrow in `chevrons` is a closed triangle, base corner, tip, base corner, the tip toward the way it was
+  // dragged. Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
   function chevronLine (value, forward, row, col, thickness) {
     const [start, end] = LINE_PATHS[value]
     const [from, to] = (forward ? [start, end] : [end, start]).map(([r, c]) => [(col + c) * CELL_UNITS, (row + r) * CELL_UNITS])
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
-    // Chevrons keep the size they have at the default thickness below it; only the line gets thinner.
+    // Arrows keep the size they have at the default thickness below it; only the line gets thinner.
     const size = Math.max(thickness, THICKNESS.fallback)
-    const grown = 1 + CHEVRON.growth * Math.max(0, thickness - CHEVRON.growFrom) / (THICKNESS.max - CHEVRON.growFrom)
-    const [half, wide] = [CHEVRON.halfLength * size * grown, CHEVRON.halfWidth * size * grown]
+    const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
     // The shortest segment (a cell side) holds at least one even at the largest thickness, so there is never none.
     const count = Math.round(length / (CHEVRON.spacing * size))
     let chevrons = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
       const [wing, tip, other] = chevronCorners(from[0] + ux * along, from[1] + uy * along, ux, uy, half, wide)
-      chevrons += `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}`
+      chevrons += `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}Z`
     }
     return {
       line: `M${pointText(from)}L${pointText(to)}`,
       chevrons,
-      lineWidth: CHEVRON.line * thickness,
-      chevronWidth: CHEVRON.stroke * size
+      lineWidth: CHEVRON.line * thickness
     }
   }
 
@@ -680,6 +710,30 @@
     return `:root:root .cell-pen { opacity: 1; }\n:root:root ${PEN_LAYER} { opacity: ${opacity / 100}; }`
   }
 
+  // Puts a white outline round the pen layer's combined shape, for strokes drawn already and new ones: a filter on the layer, the same element that carries
+  // the opacity. A filter runs on the layer's picture before its opacity does, so the outline fades with the marks. The highlight (`.penhint`) is in its
+  // own group beside the layer, so it is not outlined. Empty when the outline is off.
+  function buildOutlineCss (outline) {
+    if (typeof outline !== 'boolean') throw new RangeError(`pen-tool-extras: ${outline} is not true or false`)
+    return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
+  }
+
+  // The markup of a hidden SVG holding the outline's filter: the layer's alpha grown by about `width` (an outline width) in every direction with round corners, in the two steps described at OUTLINE_SQUARE_SHARE (one
+  // shape, so the outline does not cut across where lines join or cross), filled white, with the layer drawn over it. The filter works in sRGB so
+  // the layer's own colors pass through unchanged.
+  function renderOutlineFilter (width) {
+    if (normalizeOutlineWidth(width) !== width) throw new RangeError(`pen-tool-extras: ${width} is not an outline width from ${OUTLINE_WIDTH.min} to ${OUTLINE_WIDTH.max}`)
+    const { min, size } = OUTLINE_REGION
+    const square = Math.round(width * OUTLINE_SQUARE_SHARE * 1000) / 1000
+    return `<svg id="${OUTLINE_HOLDER_ID}" width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="${OUTLINE_FILTER_ID}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB" x="${min}" y="${min}" width="${size}" height="${size}">` +
+      `<feMorphology in="SourceAlpha" operator="dilate" radius="${square}" result="squared"/>` +
+      `<feGaussianBlur in="squared" stdDeviation="${Math.round((width - square) / OUTLINE_CUT_SIGMAS * 1000) / 1000}" result="blurred"/>` +
+      `<feComponentTransfer in="blurred" result="grown"><feFuncA type="linear" slope="${OUTLINE_SOFTNESS}" intercept="${Math.round((0.5 - OUTLINE_SOFTNESS * OUTLINE_CUT) * 1000) / 1000}"/></feComponentTransfer>` +
+      '<feFlood flood-color="#ffffff" result="white"/>' +
+      '<feComposite in="white" in2="grown" operator="in" result="halo"/>' +
+      '<feMerge><feMergeNode in="halo"/><feMergeNode in="SourceGraphic"/></feMerge></filter></svg>'
+  }
+
   // How much shorter than an even split of a segment the dot spacing is. With the spacing exactly `length / dots`
   // the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end
   // would have no dot; this puts it a hair before the end (0.0064 of a unit on a cell of 64).
@@ -716,8 +770,8 @@
     const mask = swatchMask(svg)
     return `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${page}"]:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${mask}; mask: ${mask}; }`
   }
-  // A chevron page's swatch: a line and two chevrons.
-  const CHEVRON_SWATCH = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round'><path d='M2 12H22' stroke-width='1.4'/><path d='M6 6L11 12L6 18M14 6L19 12L14 18' stroke-width='2.6'/></svg>"
+  // An arrow page's swatch: a line and two filled arrows.
+  const CHEVRON_SWATCH = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M2 12H22' stroke-width='2'/><path d='M5 6.5L12 12L5 17.5ZM13 6.5L20 12L13 17.5Z' fill='#000' stroke='none'/></svg>"
   // A dashed page's swatch: one line across the 24 wide swatch, 2 wide, from x 2 to 22, dashed by the page's own rule
   // (dashPattern) at the dash length in force, so it shows dots at 0 and longer dashes as the setting grows.
   const DASH_SWATCH = { width: 2, from: 2, to: 22 }
@@ -737,7 +791,11 @@
     const rules = []
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
-      page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`)))
+      page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
+        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`)
+        // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
+        if (page.chevrons) rules.push(`:root:root .pencolor-${c} [data-chevron-part="chevrons"] { fill: var(--puzzle-pencolor-${PEN_COLORS[i]}); stroke: none; }`)
+      }))
       if (page.chevrons) PEN_COLORS.forEach((n) => rules.push(swatchRule(n, index + 1, CHEVRON_SWATCH)))
       if (!page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
@@ -816,9 +874,9 @@
   const SAMPLE_TO = [52, 26]
   const SAMPLE_WIDTH = 7.2
   const SAMPLE_DASH_SHARE = 0.42
-  // The chevron sample: its line and chevron widths, a chevron's half extents (as CHEVRON's), and where along the line
+  // The arrow sample: its line width, an arrow's half extents (CHEVRON's proportions of the line width), and where along the line
   // the three sit, as shares of its length.
-  const SAMPLE_CHEVRON = { line: 2.4, stroke: 4.4, half: 4, wide: 7, at: [0.25, 0.5, 0.75] }
+  const SAMPLE_CHEVRON = { line: 3.2, at: [0.25, 0.5, 0.75] }
   function renderPageIcon (current, dash) {
     const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
     const kind = next.chevrons ? 'chevrons' : !next.dashed ? 'solid' : dash === 0 ? 'dots' : 'dashed'
@@ -826,11 +884,11 @@
     const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
     const length = Math.hypot(dx, dy)
     if (kind === 'chevrons') {
-      // a line and three chevrons along it, tips toward the line's end
+      // a line and three arrows along it, tips toward the line's end
       sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_CHEVRON.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
         SAMPLE_CHEVRON.at.map((t) => {
-          const [wing, tip, other] = chevronCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, SAMPLE_CHEVRON.half, SAMPLE_CHEVRON.wide)
-          return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}" stroke-width="${SAMPLE_CHEVRON.stroke}" stroke-linecap="round" stroke-linejoin="round" fill="none" data-chevron/>`
+          const [wing, tip, other] = chevronCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, CHEVRON.halfLength * SAMPLE_CHEVRON.line, CHEVRON.halfWidth * SAMPLE_CHEVRON.line)
+          return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}Z" stroke="none" data-chevron/>`
         }).join('')
     } else if (kind === 'dots') {
       sample = [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + 9 * k}" cy="${52 - 7 * k}" r="3.6" fill="currentColor" stroke="none"/>`).join('')
@@ -909,6 +967,11 @@
       box('x', 'X') + box('directions', 'Directions (&gt; &lt; ^ v)') + box('dot', 'Circle') +
       '<div style="font-weight:600;margin-top:10px">Corner marks a click near a grid corner cycles through</div>' +
       box('cornerX', 'X', 'x') + box('cornerDot', 'Circle', 'dot') +
+      '<div style="font-weight:600;margin-top:10px">Outline</div>' +
+      '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
+      `<input type="checkbox" id="pen-tool-extras-outline" data-outline${state.outline ? ' checked' : ''}>` +
+      '<label for="pen-tool-extras-outline" style="width:auto;text-align:left;margin:0">White outline</label></div>' +
+      slider('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth) +
       lineModeChoice(state.lineMode)
   }
 
@@ -927,6 +990,12 @@
       buildThicknessCss,
       normalizeOpacity,
       buildOpacityCss,
+      normalizeOutline,
+      buildOutlineCss,
+      renderOutlineFilter,
+      OUTLINE_FILTER_ID,
+      normalizeOutlineWidth,
+      OUTLINE_WIDTH,
       MARK_VALUES,
       MARKS_LAYER_ID,
       PEN_PAGES,
@@ -987,6 +1056,8 @@
   let activeThickness = THICKNESS.fallback
   let activeOpacity = OPACITY.fallback
   let activeDash = DASH.fallback
+  let activeOutline = false
+  let activeOutlineWidth = OUTLINE_WIDTH.fallback
   let activeShow = normalizeSliderVisibility(null)
   // The edge mark types ticked in the dialog, which the edge click cycles through.
   let markSettings = normalizeMarkSettings(null)
@@ -1058,22 +1129,22 @@
     return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
   }
 
-  // Whether the chevron line `opts` asks `renderPen` for was dragged forward (true or false), when its value is a line and its
+  // Whether the arrow line `opts` asks `renderPen` for was dragged forward (true or false), when its value is a line and its
   // class holds a page 3 color character (`cell-pen pen-1 pencolor-j`); null for anything else.
   function chevronOf (opts) {
     const match = /(?:^|\s)pencolor-(\S+)$/.exec(opts.className || '')
     return match && LINE_VALUES.includes(opts.value) ? chevronWayOf(match[1]) : null
   }
 
-  // Draws a chevron line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
-  // eraser's lookups act on it as on any stroke) of a line and a path of chevrons, each with its own width.
+  // Draws an arrow line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
+  // eraser's lookups act on it as on any stroke) of a line and a path of filled arrows (the fill is set in CSS, with the group's color).
   function renderChevronLine (renderer, opts, forward) {
     const shape = chevronLine(opts.value, forward, opts.row, opts.col, activeThickness)
     const group = renderer.renderPart({ target: 'cell-pen', type: 'g', attr: { class: opts.className } })
-    ;[['line', shape.line, shape.lineWidth], ['chevrons', shape.chevrons, shape.chevronWidth]].forEach(([name, d, width]) => {
+    ;[['line', shape.line], ['chevrons', shape.chevrons]].forEach(([name, d]) => {
       const path = document.createElementNS(SVG_NAMESPACE, 'path')
       path.setAttribute('d', d)
-      path.setAttribute('stroke-width', String(width))
+      if (name === 'line') path.setAttribute('stroke-width', String(shape.lineWidth))
       path.setAttribute('data-chevron-part', name)
       group.appendChild(path)
     })
@@ -1092,7 +1163,7 @@
 
   // Draws the values this script adds, and keeps every mark above the lines. SudokuPad's own `renderPen` has no case for the values
   // and gives the path no `d`; it copies every option onto the path, so passing `d` is enough. A line in a page 3
-  // pen's color is drawn as a chevron line instead.
+  // pen's color is drawn as an arrow line instead.
   function wrapRenderPen (proto, renderer) {
     const original = proto.renderPen
     const size = renderer.constructor.CellSize
@@ -1259,11 +1330,11 @@
     })
   }
 
-  // Whether the wrap on `renderPen` is in, so a chevron line is drawn by this script.
+  // Whether the wrap on `renderPen` is in, so an arrow line is drawn by this script.
   let chevronsDrawn = false
 
-  // Draws every chevron line again: a chevron's size and spacing are fixed when it is drawn, so a change of thickness, and a
-  // wrap that came after the cell was drawn, need it. Cells with no chevron line are left alone.
+  // Draws every arrow line again: an arrow's size and spacing are fixed when it is drawn, so a change of thickness, and a
+  // wrap that came after the cell was drawn, need it. Cells with no arrow line are left alone.
   function redrawChevronLines () {
     if (!chevronsDrawn) return
     Framework.app.puzzle.cells.forEach((cell) => {
@@ -1303,7 +1374,7 @@
       style.id = STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = [buildCss(active), buildThicknessCss(activeThickness), buildOpacityCss(activeOpacity), buildPagesCss(activeThickness, activeDash), EDIT_CSS, PANEL_CSS].join('\n')
+    style.textContent = [buildCss(active), buildThicknessCss(activeThickness), buildOpacityCss(activeOpacity), buildOutlineCss(activeOutline), buildPagesCss(activeThickness, activeDash), EDIT_CSS, PANEL_CSS].join('\n')
   }
 
   // The pen's line mode now, or undefined with no pen tool. It is the saved one: SudokuPad's pen tool holds its
@@ -1335,10 +1406,12 @@
     let thickness = activeThickness
     let opacity = activeOpacity
     let dash = activeDash
+    let outline = activeOutline
+    let outlineWidth = activeOutlineWidth
     let show = activeShow
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, thickness, opacity, dash, show })
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, thickness, opacity, dash, show, outline, outlineWidth })
     }
     // Reads the color tool's current page now; with no color tool, SudokuPad's own colors.
     const restoreDefaults = () => {
@@ -1353,6 +1426,8 @@
       thickness = THICKNESS.fallback
       opacity = OPACITY.fallback
       dash = DASH.fallback
+      outline = false
+      outlineWidth = OUTLINE_WIDTH.fallback
       show = normalizeSliderVisibility(null)
       draw()
     }
@@ -1375,7 +1450,7 @@
                 }
                 if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
-                saveDialogSliders({ thickness, opacity, dash, show })
+                saveDialogSliders({ thickness, opacity, dash, show, outline, outlineWidth })
                 if (lineMode !== undefined && lineMode !== currentLineMode()) applyLineMode(lineMode)
                 closeDialogKeepingGrid()
               }
@@ -1400,6 +1475,7 @@
         case 'thickness': thickness = value; break
         case 'opacity': opacity = value; break
         case 'dash': dash = value; break
+        case 'outlineWidth': outlineWidth = value; break
         default: throw new Error(`pen-tool-extras: the dialog has no slider named ${el.dataset.setting}`)
       }
       box.querySelector(`output[data-readout="${el.dataset.setting}"]`).textContent = String(value)
@@ -1417,6 +1493,11 @@
       const mode = event.target.closest('select[data-line-mode]')
       if (mode) {
         lineMode = normalizeLineMode(mode.value)
+        return
+      }
+      const outlined = event.target.closest('input[data-outline]')
+      if (outlined) {
+        outline = outlined.checked
         return
       }
       const shown = event.target.closest('input[data-show]')
@@ -1469,6 +1550,16 @@
     syncPageButton()
   }
 
+  // Makes `outline` and `width` the ones in force: the style, and the filter it points at (rebuilt at the width, or taken away with the outline off).
+  function adoptOutline (outline, width) {
+    activeOutline = outline
+    activeOutlineWidth = width
+    const holder = document.getElementById(OUTLINE_HOLDER_ID)
+    if (holder) holder.remove()
+    if (outline) document.body.insertAdjacentHTML('beforeend', renderOutlineFilter(width))
+    applyStyle()
+  }
+
   // Makes `show` the set of panel sliders that show: the sliders in the panel are rebuilt (or taken away).
   function adoptShow (show) {
     activeShow = show
@@ -1494,6 +1585,11 @@
     if (draft.dash !== activeDash) {
       save(DASH_KEY, draft.dash, DASH.fallback)
       adoptDash(draft.dash)
+    }
+    if (draft.outline !== activeOutline || draft.outlineWidth !== activeOutlineWidth) {
+      save(OUTLINE_KEY, draft.outline, false)
+      save(OUTLINE_WIDTH_KEY, draft.outlineWidth, OUTLINE_WIDTH.fallback)
+      adoptOutline(draft.outline, draft.outlineWidth)
     }
     if (draft.show.thickness !== activeShow.thickness || draft.show.opacity !== activeShow.opacity) {
       if (draft.show.thickness && draft.show.opacity) Framework.removeData(SLIDERS_SHOWN_KEY)
@@ -1802,6 +1898,7 @@
     adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
     adoptOpacity(normalizeOpacity(Framework.getData(OPACITY_KEY)))
     adoptDash(normalizeDash(Framework.getData(DASH_KEY)))
+    adoptOutline(normalizeOutline(Framework.getData(OUTLINE_KEY)), normalizeOutlineWidth(Framework.getData(OUTLINE_WIDTH_KEY)))
     Framework.addSetting({
       tag: 'button',
       name: 'pentoolextras',

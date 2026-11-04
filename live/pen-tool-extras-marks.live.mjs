@@ -917,7 +917,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       it('Restore defaults sets the dialog\'s opacity slider to 80 for Save: Cancel afterwards leaves the saved opacity and the marks, Save clears it and draws at 0.8', async () => {
         assert.equal(await savedOpacity(), 30)
         await openEditor()
-        assert.equal(await editor().locator('input[type=range]').count(), 3)
+        assert.equal(await editor().locator('input[type=range]').count(), 4)
         await dialogButton('Restore defaults').click()
         assert.equal(await editor().locator('input[data-setting="opacity"]').inputValue(), '80')
         assert.equal(await savedOpacity(), 30, 'nothing is saved before Save')
