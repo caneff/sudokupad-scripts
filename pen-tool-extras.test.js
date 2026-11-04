@@ -10,7 +10,8 @@ const {
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
-  LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine
+  LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
+  linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
@@ -1392,4 +1393,118 @@ test('the dialog has an Outline width slider from 1 to 8 beside the White outlin
   assert.match(html, /<input type="range" data-setting="outlineWidth" min="1" max="8" step="1" value="6"/)
   assert.match(html, /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
   assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"'), true, 'the slider follows the box')
+})
+
+// A segment as the line erase reads it off a cell: its value, cell and color character.
+const seg = (value, row, col, color = '1') => ({ value, row, col, color })
+
+test('linePoints gives the two grid points of every line value, in cell units from the grid top left', () => {
+  const want = {
+    1: [[2.5, 3.5], [2.5, 4.5]],
+    2: [[2.5, 3.5], [3.5, 3.5]],
+    7: [[2, 4], [3, 4]],
+    8: [[3, 3], [3, 4]],
+    9: [[2, 3], [3, 3]],
+    a: [[2, 3], [2, 4]],
+    d: [[2.5, 3.5], [1.5, 4.5]],
+    e: [[2.5, 3.5], [3.5, 4.5]],
+    f: [[2, 4], [3, 3]],
+    g: [[2, 3], [3, 4]]
+  }
+  assert.deepEqual(Object.keys(want).sort(), [...LINE_VALUES].sort())
+  for (const [value, points] of Object.entries(want)) assert.deepEqual(linePoints(value, 2, 3), points, value)
+})
+
+test('the right edge of one cell and the left edge of the next are the same two points', () => {
+  assert.deepEqual(linePoints('7', 4, 4), linePoints('9', 4, 5))
+  assert.deepEqual(linePoints('8', 4, 4), linePoints('a', 5, 4))
+})
+
+test('lineIdentityOf makes both direction characters of an arrow pen one pen, and keeps other pens apart', () => {
+  assert.equal(lineIdentityOf('k'), lineIdentityOf('j'))
+  assert.equal(lineIdentityOf('0'), lineIdentityOf('z'))
+  assert.notEqual(lineIdentityOf('j'), lineIdentityOf('l'))
+  assert.notEqual(lineIdentityOf('1'), lineIdentityOf('a'), 'a page 2 pen is not the page 1 pen of its color')
+  assert.equal(lineIdentityOf('3'), '3')
+})
+
+test('segmentNear picks the segment closest to a point, and none beyond the hit radius', () => {
+  const across = seg('1', 0, 0)
+  const below = seg('1', 1, 0)
+  assert.equal(segmentNear([0.5, 1.0], [across, below], LINE_HIT_RADIUS), across)
+  assert.equal(segmentNear([1.5, 0.9], [across, below], LINE_HIT_RADIUS), below)
+  assert.equal(segmentNear([0.5 + LINE_HIT_RADIUS * 0.9, 1.0], [across], LINE_HIT_RADIUS), across)
+  assert.equal(segmentNear([0.5 + LINE_HIT_RADIUS * 1.5, 0.5], [across], LINE_HIT_RADIUS), null)
+  assert.equal(segmentNear([0.5, 2.5], [across], LINE_HIT_RADIUS), null, 'past the segment end')
+  assert.equal(segmentNear([0.5, 1.0], [], LINE_HIT_RADIUS), null)
+})
+
+test('segmentNear picks the nearer of two segments both within reach, whichever comes first in the list', () => {
+  // The center line 1 of cell (0,0) runs along row 0.5, the center line 2 down column 0.5; both are within the radius of this point.
+  const along = seg('1', 0, 0)
+  const down = seg('2', 0, 0)
+  assert.equal(segmentNear([0.55, 0.58], [down, along], LINE_HIT_RADIUS), along)
+  assert.equal(segmentNear([0.55, 0.58], [along, down], LINE_HIT_RADIUS), along)
+  assert.equal(segmentNear([0.58, 0.55], [along, down], LINE_HIT_RADIUS), down)
+  assert.equal(segmentNear([0.58, 0.55], [down, along], LINE_HIT_RADIUS), down)
+})
+
+test('connectedLine follows shared points through a bend and a branch', () => {
+  // Row 0: 1 at col 0, 1 at col 1 (a straight run), a branch down from col 1's end, an unrelated far segment.
+  const a = seg('1', 0, 0)
+  const b = seg('1', 0, 1)
+  const down = seg('2', 0, 2)
+  const branch = seg('1', 1, 2)
+  const far = seg('1', 5, 5)
+  const all = [far, branch, down, b, a]
+  assert.deepEqual(new Set(connectedLine(all, a)), new Set([a, b, down, branch]))
+  assert.deepEqual(connectedLine(all, far), [far])
+})
+
+test('connectedLine joins an edge line stored on two cells and a diagonal through a cell middle', () => {
+  const right = seg('7', 0, 0)
+  const nextTop = seg('a', 1, 0)
+  // 7 of (0,0) runs (0,1)-(1,1); a of (1,0) runs (1,0)-(1,1): they meet at (1,1).
+  assert.deepEqual(new Set(connectedLine([right, nextTop], right)), new Set([right, nextTop]))
+  const centre = seg('1', 0, 0)
+  const diagonal = seg('e', 0, 1)
+  // 1 of (0,0) ends at the middle of (0,1); e of (0,1) starts there.
+  assert.deepEqual(new Set(connectedLine([centre, diagonal], centre)), new Set([centre, diagonal]))
+})
+
+test('connectedLine stops at a segment of another pen, and a crossing of the same pen is connected', () => {
+  const a = seg('1', 0, 0, '1')
+  const other = seg('1', 0, 1, '2')
+  const beyond = seg('1', 0, 2, '1')
+  assert.deepEqual(connectedLine([a, other, beyond], a), [a])
+  const same = seg('1', 0, 1, '1')
+  assert.deepEqual(new Set(connectedLine([a, same, beyond], a)), new Set([a, same, beyond]))
+})
+
+test('connectedLine counts both direction characters of an arrow pen as one pen', () => {
+  const forward = seg('1', 0, 0, 'j')
+  const backward = seg('1', 0, 1, 'k')
+  assert.deepEqual(new Set(connectedLine([forward, backward], forward)), new Set([forward, backward]))
+  const otherPen = seg('1', 0, 2, 'l')
+  assert.deepEqual(new Set(connectedLine([forward, backward, otherPen], forward)), new Set([forward, backward]))
+})
+
+test('connectedLine does not join lines that only touch at different kinds of point', () => {
+  // A center line ends at a cell middle; an edge line runs corner to corner; they share no point.
+  const centre = seg('1', 0, 0)
+  const edge = seg('a', 0, 1)
+  assert.deepEqual(connectedLine([centre, edge], centre), [centre])
+})
+
+test('eraseLineActs removes each value from its own cells as one select and one bare pen action per value', () => {
+  const cellAt = (row, col) => ({ row, col })
+  const acts = eraseLineActs([seg('1', 0, 0, 'j'), seg('2', 0, 1), seg('1', 0, 2, 'k')], cellAt)
+  assert.deepEqual(acts, [
+    { type: 'select', arg: [{ row: 0, col: 0 }, { row: 0, col: 2 }] },
+    { type: 'pen', arg: '1' },
+    { type: 'deselect' },
+    { type: 'select', arg: [{ row: 0, col: 1 }] },
+    { type: 'pen', arg: '2' }
+  ])
+  assert.deepEqual(eraseLineActs([], cellAt), [])
 })

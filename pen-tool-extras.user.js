@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.10.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, adds an optional white outline around every pen mark, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
+// @version      1.11.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, adds an optional white outline around every pen mark, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click. Relies on SudokuPad internals for the pages, the edge and corner marks, the middle click line erase and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.10.0'
+  const VERSION = '1.11.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -62,7 +62,8 @@
   // pen layer's opacity fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
-  // `MouseEvent.button` of the right mouse button.
+  // `MouseEvent.button` of the middle and right mouse buttons.
+  const MIDDLE_BUTTON = 1
   const RIGHT_BUTTON = 2
   const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // The pages of pens, in paging order. Each page's characters line up with PEN_COLORS: the pen on button
@@ -514,6 +515,88 @@
       i++
     }
     return out
+  }
+
+  // How far from a line, in cells, a middle click still hits it.
+  const LINE_HIT_RADIUS = 0.2
+
+  // The two grid points of the line `value` stored on the cell (row, col), as [row, col] in cell units from the grid's top left. Two
+  // segments are joined when they share a point: a cell's middle for a center or diagonal line, a cell corner for an edge line.
+  function linePoints (value, row, col) {
+    return LINE_PATHS[value].map(([r, c]) => [row + r, col + c])
+  }
+
+  // What makes two line colors one pen: the color character itself, except that an arrow pen's two direction characters are one pen.
+  function lineIdentityOf (color) {
+    for (const page of PEN_PAGES) {
+      if (page.reverse && page.reverse.includes(color)) return page.chars[page.reverse.indexOf(color)]
+    }
+    return color
+  }
+
+  // The distance from `point` to the segment from `a` to `b` (all [row, col]).
+  function distanceToSegment (point, a, b) {
+    const [dr, dc] = [b[0] - a[0], b[1] - a[1]]
+    const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * dr + (point[1] - a[1]) * dc) / (dr * dr + dc * dc)))
+    return Math.hypot(point[0] - (a[0] + t * dr), point[1] - (a[1] + t * dc))
+  }
+
+  // The segment of `segments` ({ value, row, col, color }) nearest `point` ([row, col] in cell units) and within `radius` of it; null for none.
+  function segmentNear (point, segments, radius) {
+    let best = null
+    let bestDistance = radius
+    for (const segment of segments) {
+      const distance = distanceToSegment(point, ...linePoints(segment.value, segment.row, segment.col))
+      if (distance <= bestDistance) {
+        best = segment
+        bestDistance = distance
+      }
+    }
+    return best
+  }
+
+  // Every segment of `segments` joined to `start` through shared points and drawn with the same pen (a segment of another pen stops it; a
+  // branch is joined), `start` included.
+  function connectedLine (segments, start) {
+    const pen = lineIdentityOf(start.color)
+    const key = (point) => point.join(',')
+    const at = new Map()
+    for (const segment of segments) {
+      if (lineIdentityOf(segment.color) !== pen) continue
+      for (const point of linePoints(segment.value, segment.row, segment.col)) {
+        if (!at.has(key(point))) at.set(key(point), [])
+        at.get(key(point)).push(segment)
+      }
+    }
+    const found = new Set([start])
+    const queue = [start]
+    while (queue.length) {
+      const segment = queue.pop()
+      for (const point of linePoints(segment.value, segment.row, segment.col)) {
+        for (const next of at.get(key(point)) || []) {
+          if (found.has(next)) continue
+          found.add(next)
+          queue.push(next)
+        }
+      }
+    }
+    return [...found]
+  }
+
+  // The actions that erase `segments`: for each value, one select of the cells that hold it and the bare value, which toggles it off
+  // whichever color character it was stored with. `cellAt(row, col)` gives SudokuPad's cell. One group sends them, so one undo restores the line.
+  function eraseLineActs (segments, cellAt) {
+    const cellsOf = new Map()
+    for (const { value, row, col } of segments) {
+      if (!cellsOf.has(value)) cellsOf.set(value, [])
+      cellsOf.get(value).push(cellAt(row, col))
+    }
+    const acts = []
+    for (const [value, cells] of cellsOf) {
+      if (acts.length) acts.push({ type: 'deselect' })
+      acts.push({ type: 'select', arg: cells }, { type: 'pen', arg: value })
+    }
+    return acts
   }
 
   // The corners of a triangle (an arrow of an arrow line, and the page button's sample of one), base corner, tip, base corner, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
@@ -1005,6 +1088,12 @@
       CHEVRON,
       lineSegment,
       splitLineActs,
+      linePoints,
+      lineIdentityOf,
+      segmentNear,
+      connectedLine,
+      eraseLineActs,
+      LINE_HIT_RADIUS,
       chevronLine,
       penPageOf,
       penNumber,
@@ -1283,6 +1372,39 @@
     tool.actSend()
   }
 
+  // Every pen line on the grid as { value, row, col, color }, read off the cells; marks are not lines and are left out.
+  function lineSegmentsOf (cells) {
+    return cells.flatMap((cell) => (cell.pen || [])
+      .filter((valueColor) => LINE_VALUES.includes(valueColor[0]))
+      .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
+  }
+
+  // Erases the whole line under `point` ({ r, c } in cells from the grid's top left): every segment joined to the one nearest it and
+  // drawn with the same pen, in one group, so one undo restores it. A point that is not near a line sends nothing.
+  function eraseLineAt (tool, { r, c }) {
+    const segments = lineSegmentsOf(Framework.app.puzzle.cells)
+    const hit = segmentNear([r, c], segments, LINE_HIT_RADIUS)
+    if (hit === null) return
+    tool.actStart()
+    eraseLineActs(connectedLine(segments, hit), (row, col) => Framework.app.grid.getCell(row, col)).forEach((act) => tool.actAdd(act))
+    tool.actSend()
+  }
+
+  // A middle press over the grid in the pen tool erases the line under the pointer and has its default prevented, which stops the
+  // browser's autoscroll. A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's
+  // `clickCell` (checked live), so the erase runs from the press itself and no pen mark or drag follows. `mousedown` is prevented
+  // too for a browser that still sends it, which stops only the autoscroll: SudokuPad's own `mousedown` handler still runs there.
+  // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
+  function installMiddleClickErase (app, tool) {
+    const middlePress = (event) => event.button === MIDDLE_BUTTON && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
+    window.addEventListener('pointerdown', (event) => {
+      if (!middlePress(event)) return
+      event.preventDefault()
+      eraseLineAt(tool, app.xyToRCExact(event.clientX, event.clientY))
+    }, true)
+    window.addEventListener('mousedown', (event) => { if (middlePress(event)) event.preventDefault() }, true)
+  }
+
   // Chooses the mark for a click. A click within CORNER_RADIUS of a grid corner is a corner
   // click, checked first. Otherwise the original `clickCell` runs unchanged, so its
   // edge-versus-cell hit test decides what was clicked; its `actSend` is held back to see
@@ -1291,6 +1413,8 @@
   // `actSend`, one group per click, so one undo reverses one click.
   function wrapClickCell (tool, original) {
     tool.clickCell = function () {
+      // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
+      if (lastButton === MIDDLE_BUTTON) return
       const corner = cornerUnderPointer(this)
       if (corner !== null) return clickCorner(this, corner)
       const queued = queuedActs(this, original, arguments)
@@ -1351,9 +1475,9 @@
       Array.isArray(tool._actList) &&
       grid && typeof grid.getCell === 'function' && Number.isInteger(grid.rows) && Number.isInteger(grid.cols) &&
       proto && typeof proto.renderPen === 'function' &&
-      typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
+      typeof app.xyToRCExact === 'function' && typeof renderer.constructor.rcToPathData === 'function' && typeof renderer.constructor.CellSize === 'number'
     if (!found) {
-      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge and corner marks are not installed')
+      console.warn('pen-tool-extras: the pen tool or its renderer was not found, so the edge and corner marks and the middle click line erase are not installed')
       return
     }
     wrapRenderPen(proto, renderer)
@@ -1361,6 +1485,7 @@
     const original = tool.clickCell
     wrapClickCell(tool, original)
     trackButton()
+    installMiddleClickErase(app, tool)
     suppressMarkMenu(app, () => markUnderPointer(tool, original))
     redrawMarks(app)
     redrawChevronLines()

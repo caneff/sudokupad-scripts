@@ -120,6 +120,10 @@ A click within 0.2 of a cell of a grid corner, inner or outer, cycles an X, then
 
 A right click on an edge or a grid corner steps the same cycle backwards, from empty to the last ticked mark and from the X to empty. It keeps the browser's menu closed there. A right click anywhere else keeps the menu. Touch has no right click, so it only steps forward.
 
+## Middle click
+
+With the pen tool on, a middle click on a line erases the whole line as one undo step: every piece joined to it where two pieces meet at a cell middle or a cell corner, and drawn with the same pen, so a branch or a crossing of that pen at such a point is included (two diagonals of one pen that cross mid-cell meet at no point and stay separate), but not a piece of another pen (on page 3, both direction characters of a pen count as one pen) and no mark; a middle click where there is no line does nothing and makes no mark. A middle click leaves the browser's autoscroll off over the grid in the pen tool, and outside the pen tool it is left alone.
+
 ## Line mode
 
 The dialog's Pen line mode (Center & Edge, Center only, Edge only) is SudokuPad's own setting, saved where its pulldown saved it. Save applies it. SudokuPad's pulldown is hidden from the panel, and the sliders take its row.
@@ -132,6 +136,6 @@ The dialog's Restore defaults goes back to the darkened cell color page. It also
 
 | If an update changes | What happens |
 | --- | --- |
-| The pen tool or its renderer | Edge and corner marks are left off, and page 3 lines draw as plain lines with no arrows |
+| The pen tool or its renderer | Edge and corner marks and the middle click line erase are left off, and page 3 lines draw as plain lines with no arrows |
 | SudokuPad's line mode pulldown | The sliders and the page button don't appear. Saved thickness and opacity still apply, but can't be changed until the script is updated |
 | Either of these | The colors still work |
