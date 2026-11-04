@@ -2,7 +2,7 @@
 // room for a loaded box: the lower one is the rule, the upper one only tells a stop at the rule from a wait for the backstop.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { FLOOR_MS, STABLE_MS, settle } from './settle.mjs'
+import { FLOOR_MS, STABLE_MS, settle, stable } from './settle.mjs'
 
 const timed = async (fn) => { const t = Date.now(); const value = await fn(); return { value, ms: Date.now() - t } }
 // A read whose value is `steps[i].value` from `steps[i].at` milliseconds after the first call.
@@ -58,5 +58,30 @@ describe('settle', () => {
     const { value, ms } = await timed(() => settle(async () => 'old', 'new', FLOOR_MS + 800, Infinity))
     assert.equal(value, 'old')
     assert.equal(ms >= FLOOR_MS + 800, true, `took ${ms} ms`)
+  })
+})
+
+describe('stable', () => {
+  it('returns a value that has not changed for the quiet window, measured from the start', async () => {
+    const { value, ms } = await timed(() => stable(async () => 'still'))
+    assert.equal(value, 'still')
+    assert.equal(ms >= STABLE_MS && ms < 5000, true, `took ${ms} ms`)
+  })
+
+  it('does not return a value that paused for less than the quiet window and then moved', async () => {
+    const read = scripted([{ at: 0, value: 'a' }, { at: STABLE_MS - 100, value: 'b' }])
+    const { value, ms } = await timed(() => stable(read))
+    assert.equal(value, 'b')
+    assert.equal(ms >= STABLE_MS - 100 + STABLE_MS, true, `took ${ms} ms`)
+  })
+
+  it('compares as JSON, so a fresh array each read counts as the same value', async () => {
+    const { value } = await timed(() => stable(async () => [1, 2]))
+    assert.deepEqual(value, [1, 2])
+  })
+
+  it('throws, naming the last value, when the value keeps moving until the timeout', async () => {
+    let n = 0
+    await assert.rejects(() => stable(async () => n++, STABLE_MS, 700), /did not stop changing.*\d/)
   })
 })

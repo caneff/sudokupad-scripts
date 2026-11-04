@@ -39,3 +39,23 @@ export async function settle (read, expected, timeoutMs = SETTLE_MS, quietMs = S
   }
   return value
 }
+
+// Reads until the value (compared as JSON) has held for `quietMs` and returns it: for a value with no
+// expected answer, such as a button's point while its dialog lays out. A value that holds from the first
+// read is returned after `quietMs`. Throws, naming the last value, when it is still changing at `timeoutMs`.
+export async function stable (read, quietMs = STABLE_MS, timeoutMs = SETTLE_MS) {
+  const deadline = Date.now() + timeoutMs
+  let value = await read()
+  let seen = JSON.stringify(value)
+  let changedAt = Date.now()
+  while (Date.now() - changedAt < quietMs) {
+    if (Date.now() > deadline) throw new Error(`the value did not stop changing in ${timeoutMs} ms; last ${seen}`)
+    await sleep(POLL_MS)
+    value = await read()
+    if (JSON.stringify(value) !== seen) {
+      seen = JSON.stringify(value)
+      changedAt = Date.now()
+    }
+  }
+  return value
+}

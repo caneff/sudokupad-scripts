@@ -14,7 +14,7 @@ import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { effectiveOpacities, headerVersion, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
-import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
+import { settle, SETTLE_MS, stable } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -945,17 +945,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const b = await locator.boundingBox()
       return [Math.round(b.x + b.width / 2), Math.round(b.y + b.height / 2)]
     }
-    // The button's point once two readings in a row agree: a dialog may still be sliding or scrolling.
-    const centreOf = async (locator) => {
-      let last = await pointOf(locator)
-      const deadline = Date.now() + SETTLE_MS
-      for (;;) {
-        await sleep(POLL_MS)
-        const now = await pointOf(locator)
-        if (now.join() === last.join() || Date.now() > deadline) return now
-        last = now
-      }
-    }
+    // The button's point once it has held for the shared quiet window: a dialog may still be sliding or
+    // scrolling, and on a loaded box two readings a poll apart can agree while the layout is stalled.
+    const centreOf = (locator) => stable(() => pointOf(locator))
     const closeNow = async () => {
       await read(() => Framework.closeDialog())
       await p.locator('.dialog').waitFor({ state: 'detached' })
