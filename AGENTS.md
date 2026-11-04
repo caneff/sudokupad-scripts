@@ -2,7 +2,7 @@
 
 Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
 script is one `*.user.js` file with no build step and no ties to any other repo.
-`site/` is the static homepage Netlify serves (`netlify.toml`); `docs/research/` holds what was read from SudokuPad's source; `GLOSSARY.md` holds
+`site/` is the static homepage: GitHub Pages serves it from `main` (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`) and Netlify serves it from the `release` branch (`netlify.toml`); `git push origin main:release` publishes to Netlify at 15 credits a push; `docs/research/` holds what was read from SudokuPad's source; `GLOSSARY.md` holds
 the vocabulary.
 
 ## Agent skills

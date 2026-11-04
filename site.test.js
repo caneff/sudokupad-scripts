@@ -46,3 +46,8 @@ test('netlify.toml publishes only site/', () => {
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)
 })
+
+test('the Pages workflow publishes only site/', () => {
+  const workflow = fs.readFileSync(path.join(__dirname, '.github', 'workflows', 'pages.yml'), 'utf8')
+  assert.match(workflow, /^\s*path:\s*['"]?site\/?['"]?\s*$/m)
+})
