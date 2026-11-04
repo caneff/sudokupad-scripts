@@ -216,3 +216,16 @@ Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras-che
 
 So a click with a modifier held doesn't reach the pen tool unless the script stops the temporary switch (`App.changeTool` with
 `tempChange`, found through each tool's `tempKey`). Only the key press was run, not a click with it held.
+
+## Middle click (run on the page 2026-11-04, SudokuPad 0.612.0, headless Chromium, `live/pen-tool-extras-erase.live.mjs`)
+
+- A real middle press raises `pointerdown`, `pointerup` and `auxclick` with button 1 and, when `pointerdown` is not prevented, `mousedown`
+  and `mouseup`, which end in `clickCell` as for a left click.
+- `preventDefault` on `pointerdown` stops `mousedown`, `mouseup` and so `clickCell` altogether: with the script's handler a middle press
+  shows only `pointerdown` and `auxclick`, and the pen tool starts no drag. The script erases from the `pointerdown` itself, at the pointer
+  position `getInputRc()` holds (the last one SudokuPad saw on a move).
+- A middle press just off the grid is not over `#svgrenderer`, so it is not prevented, and its release reached `clickCell` and stored an edge
+  mark (`0,2:c3` for a press above the top edge). The script's `clickCell` ignores a release whose button was the middle one.
+- Erasing is a `select` of the cells holding a value and a bare `pen` action for it, per value, in one group; one undo brings the whole line back
+  (the undo stack holds one entry per action, so its length is not a count of undo steps).
+- Not run: a real middle button on Windows, where autoscroll shows; headless Chromium cannot show it, so the test reads `defaultPrevented`.
