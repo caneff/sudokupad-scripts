@@ -379,7 +379,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     describe('saved groups', { concurrency: false }, () => {
       it('Save with Low/5/High made the active profile writes it and closes the dialog', async () => {
         await openEditor()
-        await p.check('#color-by-digit-editor input[data-act=activate][data-index="1"]')
+        await p.click('#color-by-digit-editor [data-act=activate][data-index="1"]')
         await closeWith('Save')
         const expected = { ...SEED, active: 1 }
         assert.deepEqual(await settle(getData, expected), expected)

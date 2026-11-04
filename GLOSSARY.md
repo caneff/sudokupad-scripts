@@ -9,6 +9,10 @@
   auto mode use its groups. There are one to four of them; a fresh install has Low/5/High and Odd/Even,
   with Low/5/High active. Groups saved before profiles existed become the active profile: the preload
   they equal, else a profile named Custom added first, with both preloads beside it.
+- **shown digit** — the one digit that stands for a group on its colored cell in the Color by Digit icon,
+  the profile menu and the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
+  are below 5, the highest if all are above 5, else the middle (the lower of the two middle ones on an even
+  count). A group of only 0 shows 0; a group with no digits shows none.
 - **profile menu** — the menu above the Color by Digit button, opened by its arrow box, a right click or a
   hold: one row per profile, the active one highlighted, and Edit profiles…. Picking a row makes that profile
   active and recolors the cells (planSwitch), as one undo step.
