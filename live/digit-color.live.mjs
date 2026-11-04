@@ -4,10 +4,7 @@
 //
 // The script is injected into the page, not installed through Tampermonkey, so
 // Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// Each injection time runs the same checks:
-//   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
-//   before-start:  after the page loads, before Start Puzzle
-//   after-start:   after Start Puzzle, when the controls already exist
+// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -63,519 +60,498 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-for (const mode of ['document-idle', 'before-start', 'after-start']) {
-  describe(`injected ${mode}`, { concurrency: false }, () => {
-    let context, p, decoder, errors
+describe('injected after Start Puzzle', { concurrency: false }, () => {
+  let context, p, decoder, errors
 
-    const read = (fn, arg) => p.evaluate(fn, arg)
-    const editor = () => p.locator('#digit-color-editor')
-    const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-    const startButton = () => p.getByRole('button', { name: START }).first()
+  const read = (fn, arg) => p.evaluate(fn, arg)
+  const editor = () => p.locator('#digit-color-editor')
+  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
+  const startButton = () => p.getByRole('button', { name: START }).first()
 
-    // One computed style property of the elements that show `digit`, per place on the board.
-    // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
-    const styleOf = (property, place, digit, conflict = false) => read(([property, place, digit, conflict]) => {
-      const sel = {
-        given: '#cell-givens text.cell-given',
-        entered: '#cell-values text.cell-value',
-        corner: '#cell-pencilmarks text.cell-pencilmark',
-        centre: '#cell-candidates tspan'
-      }[place]
-      return [...document.querySelectorAll(sel)]
-        .filter((e) => (place === 'given' || place === 'entered' ? e.textContent.trim() : e.dataset.val) === digit)
-        .filter((e) => e.classList.contains('conflict') === conflict)
-        .map((e) => window.getComputedStyle(e)[property])
-    }, [property, place, digit, conflict])
-    const fills = (place, digit, conflict) => styleOf('fill', place, digit, conflict)
-    const allOf = (property) => (place, digit, conflict) => async () => [...new Set(await styleOf(property, place, digit, conflict))]
-    const allFills = allOf('fill')
+  // One computed style property of the elements that show `digit`, per place on the board.
+  // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
+  const styleOf = (property, place, digit, conflict = false) => read(([property, place, digit, conflict]) => {
+    const sel = {
+      given: '#cell-givens text.cell-given',
+      entered: '#cell-values text.cell-value',
+      corner: '#cell-pencilmarks text.cell-pencilmark',
+      centre: '#cell-candidates tspan'
+    }[place]
+    return [...document.querySelectorAll(sel)]
+      .filter((e) => (place === 'given' || place === 'entered' ? e.textContent.trim() : e.dataset.val) === digit)
+      .filter((e) => e.classList.contains('conflict') === conflict)
+      .map((e) => window.getComputedStyle(e)[property])
+  }, [property, place, digit, conflict])
+  const fills = (place, digit, conflict) => styleOf('fill', place, digit, conflict)
+  const allOf = (property) => (place, digit, conflict) => async () => [...new Set(await styleOf(property, place, digit, conflict))]
+  const allFills = allOf('fill')
 
-    // Every circle in the group, as it is drawn: its centre in screen pixels and radius, and whether it paints at all.
-    const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
-      const centre = new window.DOMPoint(Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))).matrixTransform(c.getScreenCTM())
-      return { cx: centre.x, cy: centre.y, r: Number(c.getAttribute('r')), shown: window.getComputedStyle(c.parentNode).display !== 'none' }
-    }), CIRCLES)
-    // Circles drawn beyond one per conflicting mark on the board: zero when each mark has its own and no other stands.
-    const extraCircles = () => read(([circles, conflicting]) => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length, [CIRCLES, Object.values(CONFLICTING).join(',')])
-    // The middle of each conflicting mark of `digit` in `place` and the middle of every circle, both
-    // in screen pixels so the board's own transforms are the page's to apply. A mark's middle here is
-    // the middle of the box the browser reports for it: close enough to tell which circle is whose,
-    // not to judge the centring, which `inkCentring` does from pixels.
-    const middles = (place, digit) => read(([sel, digit]) => {
-      return [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit).map((e) => {
-        const box = e.getBoundingClientRect()
-        return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 }
-      })
-    }, [CONFLICTING[place], digit])
-    // How many conflicting marks of `digit` in `place` there are, how many of them have a shown circle
-    // beside them, and how many circles are drawn beyond one per conflicting mark on the board.
-    const circleState = (place, digit) => async () => {
-      const marks = await middles(place, digit)
-      const drawn = await circles()
-      const withCircle = marks.filter((m) => drawn.some((c) => c.shown && Math.hypot(c.cx - m.cx, c.cy - m.cy) <= NEAR))
-      return { marks: marks.length, withCircle: withCircle.length, extra: await extraCircles() }
+  // Every circle in the group, as it is drawn: its centre in screen pixels and radius, and whether it paints at all.
+  const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
+    const centre = new window.DOMPoint(Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))).matrixTransform(c.getScreenCTM())
+    return { cx: centre.x, cy: centre.y, r: Number(c.getAttribute('r')), shown: window.getComputedStyle(c.parentNode).display !== 'none' }
+  }), CIRCLES)
+  // Circles drawn beyond one per conflicting mark on the board: zero when each mark has its own and no other stands.
+  const extraCircles = () => read(([circles, conflicting]) => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length, [CIRCLES, Object.values(CONFLICTING).join(',')])
+  // The middle of each conflicting mark of `digit` in `place` and the middle of every circle, both
+  // in screen pixels so the board's own transforms are the page's to apply. A mark's middle here is
+  // the middle of the box the browser reports for it: close enough to tell which circle is whose,
+  // not to judge the centring, which `inkCentring` does from pixels.
+  const middles = (place, digit) => read(([sel, digit]) => {
+    return [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit).map((e) => {
+      const box = e.getBoundingClientRect()
+      return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 }
+    })
+  }, [CONFLICTING[place], digit])
+  // How many conflicting marks of `digit` in `place` there are, how many of them have a shown circle
+  // beside them, and how many circles are drawn beyond one per conflicting mark on the board.
+  const circleState = (place, digit) => async () => {
+    const marks = await middles(place, digit)
+    const drawn = await circles()
+    const withCircle = marks.filter((m) => drawn.some((c) => c.shown && Math.hypot(c.cx - m.cx, c.cy - m.cy) <= NEAR))
+    return { marks: marks.length, withCircle: withCircle.length, extra: await extraCircles() }
+  }
+  const circled = (marks) => ({ marks, withCircle: marks, extra: 0 })
+
+  // The centre, in screen pixels, of the ink of the conflicting `digit` mark in `place`, and of the
+  // circle nearest it. The ink is the box of pixels that differ between two screenshots at real size
+  // taken with every mark and circle hidden, one with this mark shown: grid lines and neighbouring
+  // marks cancel out. A pixel counts as ink when it differs by at least half the largest difference.
+  const inkCentring = async (place, digit, index) => {
+    const box = await read(([sel, digit, index]) => {
+      const mark = [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit)[index]
+      mark.setAttribute('data-ink-probe', '')
+      const { x, y, width, height } = mark.getBoundingClientRect()
+      return { x, y, width, height }
+    }, [CONFLICTING[place], digit, index])
+    const clip = { x: Math.floor(box.x) - CLIP_BEFORE, y: Math.floor(box.y) - CLIP_BEFORE, width: Math.ceil(box.width) + CLIP_BEFORE + CLIP_AFTER, height: Math.ceil(box.height) + CLIP_BEFORE + CLIP_AFTER }
+    const drawn = (await circles()).filter((c) => c.shown)
+    const probeStyle = await p.addStyleTag({ content: INK_PROBE_CSS })
+    let shown, hidden
+    try {
+      shown = (await p.screenshot({ clip })).toString('base64')
+      await read(() => document.querySelector('[data-ink-probe]').removeAttribute('data-ink-probe'))
+      hidden = (await p.screenshot({ clip })).toString('base64')
+    } finally {
+      await read(() => document.querySelectorAll('[data-ink-probe]').forEach((e) => e.removeAttribute('data-ink-probe')))
+      await probeStyle.evaluate((e) => e.remove())
     }
-    const circled = (marks) => ({ marks, withCircle: marks, extra: 0 })
-
-    // The centre, in screen pixels, of the ink of the conflicting `digit` mark in `place`, and of the
-    // circle nearest it. The ink is the box of pixels that differ between two screenshots at real size
-    // taken with every mark and circle hidden, one with this mark shown: grid lines and neighbouring
-    // marks cancel out. A pixel counts as ink when it differs by at least half the largest difference.
-    const inkCentring = async (place, digit, index) => {
-      const box = await read(([sel, digit, index]) => {
-        const mark = [...document.querySelectorAll(sel)].filter((e) => e.dataset.val === digit)[index]
-        mark.setAttribute('data-ink-probe', '')
-        const { x, y, width, height } = mark.getBoundingClientRect()
-        return { x, y, width, height }
-      }, [CONFLICTING[place], digit, index])
-      const clip = { x: Math.floor(box.x) - CLIP_BEFORE, y: Math.floor(box.y) - CLIP_BEFORE, width: Math.ceil(box.width) + CLIP_BEFORE + CLIP_AFTER, height: Math.ceil(box.height) + CLIP_BEFORE + CLIP_AFTER }
-      const drawn = (await circles()).filter((c) => c.shown)
-      const probeStyle = await p.addStyleTag({ content: INK_PROBE_CSS })
-      let shown, hidden
-      try {
-        shown = (await p.screenshot({ clip })).toString('base64')
-        await read(() => document.querySelector('[data-ink-probe]').removeAttribute('data-ink-probe'))
-        hidden = (await p.screenshot({ clip })).toString('base64')
-      } finally {
-        await read(() => document.querySelectorAll('[data-ink-probe]').forEach((e) => e.removeAttribute('data-ink-probe')))
-        await probeStyle.evaluate((e) => e.remove())
+    const ink = await decoder.evaluate(async ([a, b, fraction]) => {
+      const pixels = async (base64) => {
+        const bitmap = await window.createImageBitmap(await (await fetch('data:image/png;base64,' + base64)).blob())
+        const ctx = new window.OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
+        ctx.drawImage(bitmap, 0, 0)
+        return ctx.getImageData(0, 0, bitmap.width, bitmap.height)
       }
-      const ink = await decoder.evaluate(async ([a, b, fraction]) => {
-        const pixels = async (base64) => {
-          const bitmap = await window.createImageBitmap(await (await fetch('data:image/png;base64,' + base64)).blob())
-          const ctx = new window.OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')
-          ctx.drawImage(bitmap, 0, 0)
-          return ctx.getImageData(0, 0, bitmap.width, bitmap.height)
-        }
-        const [one, two] = [await pixels(a), await pixels(b)]
-        const diff = []
-        for (let i = 0; i < one.data.length; i += 4) diff.push(Math.max(...[0, 1, 2].map((k) => Math.abs(one.data[i + k] - two.data[i + k]))))
-        const top = Math.max(...diff)
-        const inked = diff.map((d, i) => [d, i]).filter(([d]) => d >= fraction * top).map(([, i]) => [i % one.width, Math.floor(i / one.width)])
-        const xs = inked.map(([x]) => x)
-        const ys = inked.map(([, y]) => y)
-        return { top, left: Math.min(...xs), right: Math.max(...xs) + 1, up: Math.min(...ys), down: Math.max(...ys) + 1 }
-      }, [shown, hidden, INK_FRACTION])
-      assert.ok(ink.top > 0, `${place} ${digit}: the screenshots with and without the mark are identical`)
-      const cx = clip.x + (ink.left + ink.right) / 2
-      const cy = clip.y + (ink.up + ink.down) / 2
-      return drawn.map((c) => ({ dx: c.cx - cx, dy: c.cy - cy })).sort((m, n) => Math.hypot(m.dx, m.dy) - Math.hypot(n.dx, n.dy))[0]
-    }
+      const [one, two] = [await pixels(a), await pixels(b)]
+      const diff = []
+      for (let i = 0; i < one.data.length; i += 4) diff.push(Math.max(...[0, 1, 2].map((k) => Math.abs(one.data[i + k] - two.data[i + k]))))
+      const top = Math.max(...diff)
+      const inked = diff.map((d, i) => [d, i]).filter(([d]) => d >= fraction * top).map(([, i]) => [i % one.width, Math.floor(i / one.width)])
+      const xs = inked.map(([x]) => x)
+      const ys = inked.map(([, y]) => y)
+      return { top, left: Math.min(...xs), right: Math.max(...xs) + 1, up: Math.min(...ys), down: Math.max(...ys) + 1 }
+    }, [shown, hidden, INK_FRACTION])
+    assert.ok(ink.top > 0, `${place} ${digit}: the screenshots with and without the mark are identical`)
+    const cx = clip.x + (ink.left + ink.right) / 2
+    const cy = clip.y + (ink.up + ink.down) / 2
+    return drawn.map((c) => ({ dx: c.cx - cx, dy: c.cy - cy })).sort((m, n) => Math.hypot(m.dx, m.dy) - Math.hypot(n.dx, n.dy))[0]
+  }
 
-    const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-    const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
-    const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
-    const undo = () => p.click('#control-undo')
-    const redo = () => p.click('#control-redo')
-    const saved = () => read((k) => Framework.getData(k), DATA_KEY)
+  const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
+  const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
+  const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
+  const undo = () => p.click('#control-undo')
+  const redo = () => p.click('#control-redo')
+  const saved = () => read((k) => Framework.getData(k), DATA_KEY)
 
-    const boot = async () => {
-      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-      await startButton().waitFor({ state: 'visible' })
-      if (mode === 'before-start') await p.addScriptTag({ content: script })
-      await startButton().click()
-      await startButton().waitFor({ state: 'hidden' })
-      await p.locator('#control-undo').waitFor({ state: 'visible' })
-      if (mode === 'after-start') await p.addScriptTag({ content: script })
-      await p.locator(STYLE).waitFor({ state: 'attached' })
-    }
-    const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-    const openEditor = async () => {
-      await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Digit color' }).first().click()
-      await editor().waitFor({ state: 'visible' })
-    }
-    const closeWith = async (text) => {
-      await dialogButton(text).click()
-      await editor().waitFor({ state: 'detached' })
-    }
-    const pick = (digit, hex) => editor().locator(`input[data-digit="${digit}"]`).fill(hex)
+  const boot = async () => {
+    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
+    await startButton().waitFor({ state: 'visible' })
+    await startButton().click()
+    await startButton().waitFor({ state: 'hidden' })
+    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    await p.addScriptTag({ content: script })
+    await p.locator(STYLE).waitFor({ state: 'attached' })
+  }
+  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+  const openEditor = async () => {
+    await openSettings(p)
+    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Digit color' }).first().click()
+    await editor().waitFor({ state: 'visible' })
+  }
+  const closeWith = async (text) => {
+    await dialogButton(text).click()
+    await editor().waitFor({ state: 'detached' })
+  }
+  const pick = (digit, hex) => editor().locator(`input[data-digit="${digit}"]`).fill(hex)
 
-    before(async () => {
-      context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-      errors = []
-      p = await context.newPage()
-      // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
-      decoder = await context.newPage()
-      p.on('pageerror', (e) => errors.push(String(e)))
-      await routeSudokuPad(p)
-      if (mode === 'document-idle') {
-        await p.addInitScript((src) => {
-          document.addEventListener('DOMContentLoaded', () => {
-            window.__fwAtIdle = typeof Framework + '/' + (typeof Framework !== 'undefined' && typeof Framework.getApp)
-            const s = document.createElement('script')
-            s.textContent = src
-            document.documentElement.appendChild(s)
-          })
-        }, script)
+  before(async () => {
+    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    errors = []
+    p = await context.newPage()
+    // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
+    decoder = await context.newPage()
+    p.on('pageerror', (e) => errors.push(String(e)))
+    await routeSudokuPad(p)
+    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    await boot()
+  })
+  after(async () => { await context.close() })
+
+  it('a fresh install has nothing saved, and entered digits show the default colors', async () => {
+    assert.equal(await saved(), null)
+    await enter(0, 2, '4')
+    assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
+  })
+
+  it('givens keep their color on a fresh install', async () => {
+    assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
+  })
+
+  it('the dialog has a Digit color entry in settings with a picker for each digit, set to the defaults', async () => {
+    await openEditor()
+    const values = await editor().locator('input[type=color]').evaluateAll((es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.value])))
+    assert.deepEqual(values, DEFAULTS)
+    await closeWith('Cancel')
+  })
+
+  it('Cancel saves nothing and changes no color', async () => {
+    await openEditor()
+    await pick('4', FOUR.hex)
+    await closeWith('Cancel')
+    assert.equal(await saved(), null)
+    assert.deepEqual(await allFills('entered', '4')(), [DEFAULT_RGB[4]])
+  })
+
+  it('Save colors an entered digit, and each digit has its color saved', async () => {
+    await openEditor()
+    await pick('4', FOUR.hex)
+    await pick('8', EIGHT.hex)
+    await editor().locator('button[data-act=own][data-digit="6"]').click()
+    await editor().locator('button[data-act=own][data-digit="7"]').click()
+    await closeWith('Save')
+    assert.deepEqual(await saved(), { ...DEFAULTS, 4: FOUR.hex, 8: EIGHT.hex, 6: null, 7: null })
+    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
+  })
+
+  it('givens keep their color, with a color set for the same digit', async () => {
+    assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
+  })
+
+  it('corner marks and centre marks take the digit\'s color; a digit on SudokuPad\'s own color keeps it', async () => {
+    // Cells chosen so none of these marks conflicts with a given: (0,5) takes 8 and 6, (1,6) takes 8 and 7.
+    await markMode('#control-corner', async () => { await enter(0, 5, '8'); await enter(0, 5, '6') })
+    await markMode('#control-centre', async () => { await enter(1, 6, '8'); await enter(1, 6, '7') })
+    assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
+    assert.deepEqual(await settle(allFills('centre', '8'), [EIGHT.rgb]), [EIGHT.rgb])
+    assert.deepEqual(await settle(allFills('corner', '6'), [DEFAULT_FILL]), [DEFAULT_FILL])
+    assert.deepEqual(await settle(allFills('centre', '7'), [DEFAULT_FILL]), [DEFAULT_FILL])
+  })
+
+  it('conflicting marks keep the digit color and get a red circle beside them', async () => {
+    await markMode('#control-corner', async () => { await enter(0, 5, '5') })
+    await markMode('#control-centre', async () => { await enter(1, 6, '5') })
+    // 5 conflicts with the given 5 in row 1, so both marks are in the conflict state.
+    for (const place of ['corner', 'centre']) {
+      assert.deepEqual(await settle(allFills(place, '5', true), [DEFAULT_RGB[5]]), [DEFAULT_RGB[5]], place)
+      assert.deepEqual(await settle(circleState(place, '5'), circled(1)), circled(1), place)
+    }
+  })
+
+  it('every digit 1-9, as a corner mark and a centre mark, has its circle centred on the ink of the digit', async () => {
+    const marksOnBoard = () => read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark, #cell-candidates tspan').length)
+    const before = await marksOnBoard()
+    let entries = 0
+    try {
+      for (const [digit, [row, cornerColumn, centreColumn]] of Object.entries(CONFLICT_CELLS)) {
+        await markMode('#control-corner', async () => { await enter(row, cornerColumn, digit); entries++ })
+        await markMode('#control-centre', async () => { await enter(row, centreColumn, digit); entries++ })
       }
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await boot()
-    })
-    after(async () => { await context.close() })
-
-    // Only this mode runs the script before the page's own scripts have finished;
-    // the other two wait for Framework before injecting, so the check would be vacuous.
-    if (mode === 'document-idle') {
-      it('Framework and getApp exist when the script runs', async () => {
-        assert.equal(await read(() => window.__fwAtIdle), 'function/function')
-      })
-    }
-
-    it('a fresh install has nothing saved, and entered digits show the default colors', async () => {
-      assert.equal(await saved(), null)
-      await enter(0, 2, '4')
-      assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
-    })
-
-    it('givens keep their color on a fresh install', async () => {
-      assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
-    })
-
-    it('the dialog has a Digit color entry in settings with a picker for each digit, set to the defaults', async () => {
-      await openEditor()
-      const values = await editor().locator('input[type=color]').evaluateAll((es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.value])))
-      assert.deepEqual(values, DEFAULTS)
-      await closeWith('Cancel')
-    })
-
-    it('Cancel saves nothing and changes no color', async () => {
-      await openEditor()
-      await pick('4', FOUR.hex)
-      await closeWith('Cancel')
-      assert.equal(await saved(), null)
-      assert.deepEqual(await allFills('entered', '4')(), [DEFAULT_RGB[4]])
-    })
-
-    it('Save colors an entered digit, and each digit has its color saved', async () => {
-      await openEditor()
-      await pick('4', FOUR.hex)
-      await pick('8', EIGHT.hex)
-      await editor().locator('button[data-act=own][data-digit="6"]').click()
-      await editor().locator('button[data-act=own][data-digit="7"]').click()
-      await closeWith('Save')
-      assert.deepEqual(await saved(), { ...DEFAULTS, 4: FOUR.hex, 8: EIGHT.hex, 6: null, 7: null })
-      assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-    })
-
-    it('givens keep their color, with a color set for the same digit', async () => {
-      assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
-    })
-
-    it('corner marks and centre marks take the digit\'s color; a digit on SudokuPad\'s own color keeps it', async () => {
-      // Cells chosen so none of these marks conflicts with a given: (0,5) takes 8 and 6, (1,6) takes 8 and 7.
-      await markMode('#control-corner', async () => { await enter(0, 5, '8'); await enter(0, 5, '6') })
-      await markMode('#control-centre', async () => { await enter(1, 6, '8'); await enter(1, 6, '7') })
-      assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
-      assert.deepEqual(await settle(allFills('centre', '8'), [EIGHT.rgb]), [EIGHT.rgb])
-      assert.deepEqual(await settle(allFills('corner', '6'), [DEFAULT_FILL]), [DEFAULT_FILL])
-      assert.deepEqual(await settle(allFills('centre', '7'), [DEFAULT_FILL]), [DEFAULT_FILL])
-    })
-
-    it('conflicting marks keep the digit color and get a red circle beside them', async () => {
-      await markMode('#control-corner', async () => { await enter(0, 5, '5') })
-      await markMode('#control-centre', async () => { await enter(1, 6, '5') })
-      // 5 conflicts with the given 5 in row 1, so both marks are in the conflict state.
+      // No deselect here: it is an undo step of its own, so the undos below would stop one short.
       for (const place of ['corner', 'centre']) {
-        assert.deepEqual(await settle(allFills(place, '5', true), [DEFAULT_RGB[5]]), [DEFAULT_RGB[5]], place)
-        assert.deepEqual(await settle(circleState(place, '5'), circled(1)), circled(1), place)
-      }
-    })
-
-    it('every digit 1-9, as a corner mark and a centre mark, has its circle centred on the ink of the digit', async () => {
-      const marksOnBoard = () => read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark, #cell-candidates tspan').length)
-      const before = await marksOnBoard()
-      let entries = 0
-      try {
-        for (const [digit, [row, cornerColumn, centreColumn]] of Object.entries(CONFLICT_CELLS)) {
-          await markMode('#control-corner', async () => { await enter(row, cornerColumn, digit); entries++ })
-          await markMode('#control-centre', async () => { await enter(row, centreColumn, digit); entries++ })
-        }
-        // No deselect here: it is an undo step of its own, so the undos below would stop one short.
-        for (const place of ['corner', 'centre']) {
-          for (const digit of Object.keys(CONFLICT_CELLS)) {
-            // Earlier checks leave their own conflicting marks of some digits, which count too.
-            const marks = (await middles(place, digit)).length
-            assert.equal(marks >= 1, true, `${place} ${digit}: a conflicting mark was entered`)
-            assert.deepEqual(await settle(circleState(place, digit), circled(marks)), circled(marks), `${place} ${digit}`)
-            for (let index = 0; index < marks; index++) {
-              const { dx, dy } = await inkCentring(place, digit, index)
-              const distance = Math.hypot(dx, dy)
-              assert.equal(distance <= INK_TOLERANCE, true, `${place} ${digit} #${index}: the circle's centre is (${dx.toFixed(2)}, ${dy.toFixed(2)}) px, ${distance.toFixed(2)} px, from the ink's`)
-            }
+        for (const digit of Object.keys(CONFLICT_CELLS)) {
+          // Earlier checks leave their own conflicting marks of some digits, which count too.
+          const marks = (await middles(place, digit)).length
+          assert.equal(marks >= 1, true, `${place} ${digit}: a conflicting mark was entered`)
+          assert.deepEqual(await settle(circleState(place, digit), circled(marks)), circled(marks), `${place} ${digit}`)
+          for (let index = 0; index < marks; index++) {
+            const { dx, dy } = await inkCentring(place, digit, index)
+            const distance = Math.hypot(dx, dy)
+            assert.equal(distance <= INK_TOLERANCE, true, `${place} ${digit} #${index}: the circle's centre is (${dx.toFixed(2)}, ${dy.toFixed(2)}) px, ${distance.toFixed(2)} px, from the ink's`)
           }
         }
-      } finally {
-        // Each undo waits for its mark to go, so a click is never lost to the one before it.
-        for (let i = entries - 1; i >= 0; i--) {
-          await undo()
-          assert.equal(await settle(marksOnBoard, before + i), before + i, 'undo removes the mark')
-        }
       }
-    })
-
-    // SudokuPad's own layers already pass `pointer-events: none` down, so this cannot go red if the
-    // script's rule is removed; the unit test reads that rule. It does fail if a rule gave a circle events.
-    it('a circle takes no pointer events: a click at its edge reaches the board', async () => {
-      // The circle's right edge, where no digit sits on top of it.
-      const hit = await read(([circles]) => {
-        const circle = document.querySelector(circles + ' circle')
-        const edge = new window.DOMPoint(Number(circle.getAttribute('cx')) + 0.9 * Number(circle.getAttribute('r')), Number(circle.getAttribute('cy')))
-        const pt = edge.matrixTransform(circle.getScreenCTM())
-        const el = document.elementFromPoint(pt.x, pt.y)
-        return { pointerEvents: window.getComputedStyle(circle).pointerEvents, hit: el && el.closest(circles) ? 'circle' : 'board' }
-      }, [CIRCLES])
-      assert.deepEqual(hit, { pointerEvents: 'none', hit: 'board' })
-    })
-
-    // The page's clock changes text every second and redraws the circles anyway, so this reads the
-    // circles two frames after the class change, before a tick is likely.
-    it('a mark entering or leaving the conflict state with no other change on the page gets or loses its circle at once', async () => {
-      // Circles drawn beyond one per conflicting mark, read two frames after each class change.
-      const extraAfterToggle = await read(async ([circles, conflicting]) => {
-        const extra = () => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length
-        const twoFrames = () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
-        const mark = document.querySelector('#cell-pencilmarks .cell-pencilmark:not(.conflict)')
-        mark.classList.add('conflict')
-        await twoFrames()
-        const entered = extra()
-        mark.classList.remove('conflict')
-        await twoFrames()
-        return [entered, extra()]
-      }, [CIRCLES, Object.values(CONFLICTING).join(',')])
-      assert.deepEqual(extraAfterToggle, [0, 0])
-    })
-
-    it('no circle shows while SudokuPad\'s check pencil marks setting is off, and the marks keep their color', async () => {
-      await read(() => Framework.setSetting('checkpencilmarks', false))
-      try {
-        for (const place of ['corner', 'centre']) {
-          assert.deepEqual(await settle(async () => (await circles()).filter((c) => c.shown).length, 0), 0, place)
-          assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
-        }
-      } finally {
-        await read(() => Framework.setSetting('checkpencilmarks', true))
-      }
-      assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
-    })
-
-    it('a mark that does not conflict has no circle, and a corner mark entering and leaving the conflict state, through undo and redo, gets and loses its circle', async () => {
-      assert.deepEqual(await circleState('corner', '8')(), { marks: 0, withCircle: 0, extra: 0 })
-      // (0,6) is in row 1 with the given 5.
-      await markMode('#control-corner', async () => { await enter(0, 6, '5') })
-      assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
-      await undo()
-      assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
-      await redo()
-      assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
-      await undo()
-      assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
-    })
-
-    // The circles' own redraw must not queue another redraw. Drawing is counted as childList records
-    // on the group over 20 frames; the page clock may cause one honest redraw (two records) in that
-    // window, and a loop would cause one every frame.
-    it('drawing the circles does not retrigger the drawing', async () => {
-      const records = await read(async ([circles]) => {
-        let count = 0
-        const observer = new window.MutationObserver((list) => { count += list.length })
-        observer.observe(document.querySelector(circles), { childList: true })
-        for (let i = 0; i < 20; i++) await new Promise((resolve) => window.requestAnimationFrame(resolve))
-        observer.disconnect()
-        return count
-      }, [CIRCLES])
-      assert.ok(records <= 6, `${records} childList records on the circles in 20 frames`)
-    })
-
-    // (8,2) takes a 1 mark with no conflict; a 1 entered at (8,0), in the same row, puts it in conflict.
-    it('a circle goes when SudokuPad clears a conflict and the mark stays, and returns with it', async () => {
-      await markMode('#control-corner', async () => { await enter(8, 2, '1') })
-      assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
-      await enter(8, 0, '1')
-      assert.deepEqual(await settle(circleState('corner', '1'), circled(1)), circled(1))
-      await p.keyboard.press('Delete')
-      assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
-      assert.equal(await read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark[data-val="1"]').length), 1)
-      await undo()
-      assert.deepEqual(await settle(circleState('corner', '1'), circled(1)), circled(1))
-      await undo()
-      await undo()
-      assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
-    })
-
-    // SudokuPad's replay encodes its undo stack, so the string is not the same after an undo and a
-    // redo; this checks that it still encodes the moves, not that playback works (playback stays owed).
-    it('SudokuPad\'s own undo and replay are unaffected: the replay still encodes the moves and tracks undo', async () => {
-      const replay = () => read(() => Framework.app.getReplay())
-      await markMode('#control-corner', async () => { await enter(0, 6, '5') })
-      try {
-        const recorded = await replay()
-        assert.match(recorded, /^\{"type":"clzw"/)
+    } finally {
+      // Each undo waits for its mark to go, so a click is never lost to the one before it.
+      for (let i = entries - 1; i >= 0; i--) {
         await undo()
-        const undone = await replay()
-        assert.match(undone, /^\{"type":"clzw"/)
-        assert.notEqual(undone, recorded)
-        assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
-        await redo()
-        assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
-      } finally {
-        await undo()
+        assert.equal(await settle(marksOnBoard, before + i), before + i, 'undo removes the mark')
       }
-    })
-
-    it('undo, redo and a changed digit keep the colors right', async () => {
-      const count = (digit) => async () => (await fills('entered', digit)).length
-      await enter(0, 8, '4')
-      assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-      assert.equal(await settle(count('4'), 2), 2)
-      await undo()
-      assert.equal(await settle(count('4'), 1), 1)
-      await redo()
-      assert.equal(await settle(count('4'), 2), 2)
-      assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-      await enter(0, 8, '2')
-      assert.deepEqual(await settle(allFills('entered', '2'), [DEFAULT_RGB[2]]), [DEFAULT_RGB[2]])
-      assert.equal(await settle(count('4'), 1), 1)
-    })
-
-    // (7,1) shares no row, column or box with a given 8 or another 8 mark, so the new mark is not in conflict.
-    it('undo and redo keep a corner mark\'s color right', async () => {
-      const count = async () => (await fills('corner', '8')).length
-      const before = await count()
-      await markMode('#control-corner', async () => { await enter(7, 1, '8') })
-      assert.equal(await settle(count, before + 1), before + 1)
-      assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
-      await undo()
-      assert.equal(await settle(count, before), before)
-      await redo()
-      assert.equal(await settle(count, before + 1), before + 1)
-      assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
-    })
-
-    const expectColorsAfterEntry = async () => {
-      assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-      assert.deepEqual(await allFills('entered', '2')(), [DEFAULT_RGB[2]])
-      assert.deepEqual(await allFills('corner', '8')(), [EIGHT.rgb])
-      assert.deepEqual(await allFills('centre', '8')(), [EIGHT.rgb])
-      assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_FILL])
-      assert.deepEqual(await allFills('centre', '7')(), [DEFAULT_FILL])
-      for (const place of ['corner', 'centre']) {
-        assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
-        assert.deepEqual(await settle(circleState(place, '5'), circled(1)), circled(1), place)
-      }
-      assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
     }
+  })
 
-    it('the colors survive a reload', async () => {
-      await reload()
-      await expectColorsAfterEntry()
-    })
+  // SudokuPad's own layers already pass `pointer-events: none` down, so this cannot go red if the
+  // script's rule is removed; the unit test reads that rule. It does fail if a rule gave a circle events.
+  it('a circle takes no pointer events: a click at its edge reaches the board', async () => {
+    // The circle's right edge, where no digit sits on top of it.
+    const hit = await read(([circles]) => {
+      const circle = document.querySelector(circles + ' circle')
+      const edge = new window.DOMPoint(Number(circle.getAttribute('cx')) + 0.9 * Number(circle.getAttribute('r')), Number(circle.getAttribute('cy')))
+      const pt = edge.matrixTransform(circle.getScreenCTM())
+      const el = document.elementFromPoint(pt.x, pt.y)
+      return { pointerEvents: window.getComputedStyle(circle).pointerEvents, hit: el && el.closest(circles) ? 'circle' : 'board' }
+    }, [CIRCLES])
+    assert.deepEqual(hit, { pointerEvents: 'none', hit: 'board' })
+  })
 
-    describe('cases beyond the plain board', { concurrency: false }, () => {
-      it('outlines on digits: the colors still apply', async () => {
-        await read(() => Framework.setSetting('outlinesondigits', true))
-        try {
-          await expectColorsAfterEntry()
-        } finally {
-          await read(() => Framework.setSetting('outlinesondigits', false))
-        }
-      })
+  // The page's clock changes text every second and redraws the circles anyway, so this reads the
+  // circles two frames after the class change, before a tick is likely.
+  it('a mark entering or leaving the conflict state with no other change on the page gets or loses its circle at once', async () => {
+    // Circles drawn beyond one per conflicting mark, read two frames after each class change.
+    const extraAfterToggle = await read(async ([circles, conflicting]) => {
+      const extra = () => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length
+      const twoFrames = () => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
+      const mark = document.querySelector('#cell-pencilmarks .cell-pencilmark:not(.conflict)')
+      mark.classList.add('conflict')
+      await twoFrames()
+      const entered = extra()
+      mark.classList.remove('conflict')
+      await twoFrames()
+      return [entered, extra()]
+    }, [CIRCLES, Object.values(CONFLICTING).join(',')])
+    assert.deepEqual(extraAfterToggle, [0, 0])
+  })
 
-      it('dark mode (prefers-color-scheme: dark): the colors still apply', async () => {
-        await p.emulateMedia({ colorScheme: 'dark' })
-        try {
-          await expectColorsAfterEntry()
-        } finally {
-          await p.emulateMedia({ colorScheme: 'light' })
-        }
-      })
-
-      it('a digit on a colored cell keeps its color', async () => {
-        await read(() => {
-          const a = Framework.app
-          a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'colour', arg: '3' }); a.deselect()
-        })
-        assert.equal(await settle(() => read(() => Framework.app.grid.getCell(0, 2).colours.length), 1), 1)
-        assert.deepEqual(await allFills('entered', '4')(), [FOUR.rgb])
-      })
-
-      // Loads through the page's own loader (fetchPuzzle, parsePuzzleData, loadCTCPuzzle), which
-      // rebuilds the board in place. The repo holds one puzzle URL, so it is the same puzzle again.
-      it('the board rebuilt in the page without a reload still gets the colors', async () => {
-        // PuzzleLoader is a top-level binding of the page's script, not a window property.
-        await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
-        await read(() => document.querySelectorAll('#cell-givens text').forEach((e) => e.setAttribute('data-old-board', '')))
-        await read(async (id) => {
-          const { parsePuzzleData, fetchPuzzle } = window.pageLoader
-          await Framework.app.loadCTCPuzzle(await parsePuzzleData(await fetchPuzzle(id)))
-        }, url.replace(/^https?:\/\/[^/]+\//, ''))
-        // The old givens are gone once the new board is drawn.
-        await p.waitForFunction(() => document.querySelectorAll('#cell-givens text:not([data-old-board])').length > 0)
-        await enter(0, 3, '4')
-        assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-        assert.equal(await p.locator(STYLE).count(), 1)
-        // The rebuilt board gets one circle group, and a conflicting mark on it gets its circle.
-        await markMode('#control-corner', async () => { await enter(0, 7, '5') })
-        // The corner 5 at (0,5) survived the rebuild, so two conflicting corner 5s each have a circle.
-        assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
-        assert.equal(await p.locator(CIRCLES).count(), 1)
-        await undo()
-      })
-    })
-
-    it('a digit can be set back to SudokuPad\'s own color from the dialog', async () => {
-      await openEditor()
-      await editor().locator('button[data-act=own][data-digit="4"]').click()
-      await closeWith('Save')
-      assert.deepEqual(await saved(), { ...DEFAULTS, 4: null, 8: EIGHT.hex, 6: null, 7: null })
-      assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
-    })
-
-    // The given 4 at row 5 makes a 4 mark at (4,1) conflict; the fill stays SudokuPad's red.
-    it('a conflicting mark of a digit on SudokuPad\'s own color keeps the red fill and still gets the circle', async () => {
-      await markMode('#control-corner', async () => { await enter(4, 1, '4') })
-      assert.deepEqual(await settle(circleState('corner', '4'), circled(1)), circled(1))
-      assert.deepEqual(await allFills('corner', '4', true)(), [CONFLICT_RED])
-      await undo()
-      assert.deepEqual(await settle(circleState('corner', '4'), circled(0)), circled(0))
-    })
-
-    it('Restore defaults brings back every default color', async () => {
-      await openEditor()
-      await dialogButton('Restore defaults').click()
-      await closeWith('Save')
-      assert.deepEqual(await saved(), DEFAULTS)
-      assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
-      assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_RGB[6]])
-    })
-
-    it('corrupt saved settings fall back to the default colors with no thrown error', async () => {
-      const errorsBefore = errors.length
-      for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
-        await read(([k, raw]) => {
-          const key = Object.keys(window.localStorage).find((n) => n.endsWith(k))
-          if (!key) throw new Error('no stored key for ' + k)
-          window.localStorage.setItem(key, raw)
-        }, [DATA_KEY, bad])
-        await reload()
-        assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]], bad)
+  it('no circle shows while SudokuPad\'s check pencil marks setting is off, and the marks keep their color', async () => {
+    await read(() => Framework.setSetting('checkpencilmarks', false))
+    try {
+      for (const place of ['corner', 'centre']) {
+        assert.deepEqual(await settle(async () => (await circles()).filter((c) => c.shown).length, 0), 0, place)
+        assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
       }
-      assert.deepEqual(errors.slice(errorsBefore), [])
+    } finally {
+      await read(() => Framework.setSetting('checkpencilmarks', true))
+    }
+    assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
+  })
+
+  it('a mark that does not conflict has no circle, and a corner mark entering and leaving the conflict state, through undo and redo, gets and loses its circle', async () => {
+    assert.deepEqual(await circleState('corner', '8')(), { marks: 0, withCircle: 0, extra: 0 })
+    // (0,6) is in row 1 with the given 5.
+    await markMode('#control-corner', async () => { await enter(0, 6, '5') })
+    assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
+    await undo()
+    assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
+    await redo()
+    assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
+    await undo()
+    assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
+  })
+
+  // The circles' own redraw must not queue another redraw. Drawing is counted as childList records
+  // on the group over 20 frames; the page clock may cause one honest redraw (two records) in that
+  // window, and a loop would cause one every frame.
+  it('drawing the circles does not retrigger the drawing', async () => {
+    const records = await read(async ([circles]) => {
+      let count = 0
+      const observer = new window.MutationObserver((list) => { count += list.length })
+      observer.observe(document.querySelector(circles), { childList: true })
+      for (let i = 0; i < 20; i++) await new Promise((resolve) => window.requestAnimationFrame(resolve))
+      observer.disconnect()
+      return count
+    }, [CIRCLES])
+    assert.ok(records <= 6, `${records} childList records on the circles in 20 frames`)
+  })
+
+  // (8,2) takes a 1 mark with no conflict; a 1 entered at (8,0), in the same row, puts it in conflict.
+  it('a circle goes when SudokuPad clears a conflict and the mark stays, and returns with it', async () => {
+    await markMode('#control-corner', async () => { await enter(8, 2, '1') })
+    assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
+    await enter(8, 0, '1')
+    assert.deepEqual(await settle(circleState('corner', '1'), circled(1)), circled(1))
+    await p.keyboard.press('Delete')
+    assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
+    assert.equal(await read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark[data-val="1"]').length), 1)
+    await undo()
+    assert.deepEqual(await settle(circleState('corner', '1'), circled(1)), circled(1))
+    await undo()
+    await undo()
+    assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
+  })
+
+  // SudokuPad's replay encodes its undo stack, so the string is not the same after an undo and a
+  // redo; this checks that it still encodes the moves, not that playback works (playback stays owed).
+  it('SudokuPad\'s own undo and replay are unaffected: the replay still encodes the moves and tracks undo', async () => {
+    const replay = () => read(() => Framework.app.getReplay())
+    await markMode('#control-corner', async () => { await enter(0, 6, '5') })
+    try {
+      const recorded = await replay()
+      assert.match(recorded, /^\{"type":"clzw"/)
+      await undo()
+      const undone = await replay()
+      assert.match(undone, /^\{"type":"clzw"/)
+      assert.notEqual(undone, recorded)
+      assert.deepEqual(await settle(circleState('corner', '5'), circled(1)), circled(1))
+      await redo()
+      assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
+    } finally {
+      await undo()
+    }
+  })
+
+  it('undo, redo and a changed digit keep the colors right', async () => {
+    const count = (digit) => async () => (await fills('entered', digit)).length
+    await enter(0, 8, '4')
+    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
+    assert.equal(await settle(count('4'), 2), 2)
+    await undo()
+    assert.equal(await settle(count('4'), 1), 1)
+    await redo()
+    assert.equal(await settle(count('4'), 2), 2)
+    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
+    await enter(0, 8, '2')
+    assert.deepEqual(await settle(allFills('entered', '2'), [DEFAULT_RGB[2]]), [DEFAULT_RGB[2]])
+    assert.equal(await settle(count('4'), 1), 1)
+  })
+
+  // (7,1) shares no row, column or box with a given 8 or another 8 mark, so the new mark is not in conflict.
+  it('undo and redo keep a corner mark\'s color right', async () => {
+    const count = async () => (await fills('corner', '8')).length
+    const before = await count()
+    await markMode('#control-corner', async () => { await enter(7, 1, '8') })
+    assert.equal(await settle(count, before + 1), before + 1)
+    assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
+    await undo()
+    assert.equal(await settle(count, before), before)
+    await redo()
+    assert.equal(await settle(count, before + 1), before + 1)
+    assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
+  })
+
+  const expectColorsAfterEntry = async () => {
+    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
+    assert.deepEqual(await allFills('entered', '2')(), [DEFAULT_RGB[2]])
+    assert.deepEqual(await allFills('corner', '8')(), [EIGHT.rgb])
+    assert.deepEqual(await allFills('centre', '8')(), [EIGHT.rgb])
+    assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_FILL])
+    assert.deepEqual(await allFills('centre', '7')(), [DEFAULT_FILL])
+    for (const place of ['corner', 'centre']) {
+      assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
+      assert.deepEqual(await settle(circleState(place, '5'), circled(1)), circled(1), place)
+    }
+    assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
+  }
+
+  it('the colors survive a reload', async () => {
+    await reload()
+    await expectColorsAfterEntry()
+  })
+
+  describe('cases beyond the plain board', { concurrency: false }, () => {
+    it('outlines on digits: the colors still apply', async () => {
+      await read(() => Framework.setSetting('outlinesondigits', true))
+      try {
+        await expectColorsAfterEntry()
+      } finally {
+        await read(() => Framework.setSetting('outlinesondigits', false))
+      }
     })
 
-    it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
-      const group = await openSettings(p)
-      const entry = group.locator('button').filter({ hasText: 'Digit color' })
-      assert.equal((await entry.textContent()).trim(), 'Digit color')
-      await entry.click()
-      await editor().waitFor({ state: 'visible' })
-      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit color')
-      assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-      await closeWith('Cancel')
+    it('dark mode (prefers-color-scheme: dark): the colors still apply', async () => {
+      await p.emulateMedia({ colorScheme: 'dark' })
+      try {
+        await expectColorsAfterEntry()
+      } finally {
+        await p.emulateMedia({ colorScheme: 'light' })
+      }
     })
 
-    it('no uncaught page errors', () => {
-      assert.deepEqual(errors, [])
+    it('a digit on a colored cell keeps its color', async () => {
+      await read(() => {
+        const a = Framework.app
+        a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'colour', arg: '3' }); a.deselect()
+      })
+      assert.equal(await settle(() => read(() => Framework.app.grid.getCell(0, 2).colours.length), 1), 1)
+      assert.deepEqual(await allFills('entered', '4')(), [FOUR.rgb])
+    })
+
+    // Loads through the page's own loader (fetchPuzzle, parsePuzzleData, loadCTCPuzzle), which
+    // rebuilds the board in place. The repo holds one puzzle URL, so it is the same puzzle again.
+    it('the board rebuilt in the page without a reload still gets the colors', async () => {
+      // PuzzleLoader is a top-level binding of the page's script, not a window property.
+      await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
+      await read(() => document.querySelectorAll('#cell-givens text').forEach((e) => e.setAttribute('data-old-board', '')))
+      await read(async (id) => {
+        const { parsePuzzleData, fetchPuzzle } = window.pageLoader
+        await Framework.app.loadCTCPuzzle(await parsePuzzleData(await fetchPuzzle(id)))
+      }, url.replace(/^https?:\/\/[^/]+\//, ''))
+      // The old givens are gone once the new board is drawn.
+      await p.waitForFunction(() => document.querySelectorAll('#cell-givens text:not([data-old-board])').length > 0)
+      await enter(0, 3, '4')
+      assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
+      assert.equal(await p.locator(STYLE).count(), 1)
+      // The rebuilt board gets one circle group, and a conflicting mark on it gets its circle.
+      await markMode('#control-corner', async () => { await enter(0, 7, '5') })
+      // The corner 5 at (0,5) survived the rebuild, so two conflicting corner 5s each have a circle.
+      assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
+      assert.equal(await p.locator(CIRCLES).count(), 1)
+      await undo()
     })
   })
-}
+
+  it('a digit can be set back to SudokuPad\'s own color from the dialog', async () => {
+    await openEditor()
+    await editor().locator('button[data-act=own][data-digit="4"]').click()
+    await closeWith('Save')
+    assert.deepEqual(await saved(), { ...DEFAULTS, 4: null, 8: EIGHT.hex, 6: null, 7: null })
+    assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
+  })
+
+  // The given 4 at row 5 makes a 4 mark at (4,1) conflict; the fill stays SudokuPad's red.
+  it('a conflicting mark of a digit on SudokuPad\'s own color keeps the red fill and still gets the circle', async () => {
+    await markMode('#control-corner', async () => { await enter(4, 1, '4') })
+    assert.deepEqual(await settle(circleState('corner', '4'), circled(1)), circled(1))
+    assert.deepEqual(await allFills('corner', '4', true)(), [CONFLICT_RED])
+    await undo()
+    assert.deepEqual(await settle(circleState('corner', '4'), circled(0)), circled(0))
+  })
+
+  it('Restore defaults brings back every default color', async () => {
+    await openEditor()
+    await dialogButton('Restore defaults').click()
+    await closeWith('Save')
+    assert.deepEqual(await saved(), DEFAULTS)
+    assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
+    assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_RGB[6]])
+  })
+
+  it('corrupt saved settings fall back to the default colors with no thrown error', async () => {
+    const errorsBefore = errors.length
+    for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
+      await read(([k, raw]) => {
+        const key = Object.keys(window.localStorage).find((n) => n.endsWith(k))
+        if (!key) throw new Error('no stored key for ' + k)
+        window.localStorage.setItem(key, raw)
+      }, [DATA_KEY, bad])
+      await reload()
+      assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]], bad)
+    }
+    assert.deepEqual(errors.slice(errorsBefore), [])
+  })
+
+  it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
+    const group = await openSettings(p)
+    const entry = group.locator('button').filter({ hasText: 'Digit color' })
+    assert.equal((await entry.textContent()).trim(), 'Digit color')
+    await entry.click()
+    await editor().waitFor({ state: 'visible' })
+    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit color')
+    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
+    await closeWith('Cancel')
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})

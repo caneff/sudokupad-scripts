@@ -4,10 +4,7 @@
 //
 // The script is injected into the page, not installed through Tampermonkey, so
 // Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// Each injection time runs the same checks:
-//   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
-//   before-start:  after the page loads, before Start Puzzle
-//   after-start:   after Start Puzzle, when the controls already exist
+// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 // The letter tool is switched on through its setting after the script is in, as a player does.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -47,100 +44,86 @@ async function newPage (context) {
   return p
 }
 
-for (const mode of ['document-idle', 'before-start', 'after-start']) {
-  describe(`injected ${mode}`, { concurrency: false }, () => {
-    let context, p, errors
+describe('injected after Start Puzzle', { concurrency: false }, () => {
+  let context, p, errors
 
-    // The tests below are one ordered sequence on one page: each starts from the letter mode the one
-    // before left (digits, with the saved mode null, then false once a toggle has saved it).
-    // The number pad's keys as typed on the page, and the letter mode SudokuPad saved.
-    const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
-    const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
-    // Presses `key` and returns whether the page left the keydown's default alone.
-    const press = async (key) => {
-      await p.evaluate(() => {
-        window.__keydowns = []
-        window.addEventListener('keydown', (e) => window.__keydowns.push(e.defaultPrevented), { once: true })
-      })
-      await p.keyboard.press(key)
-      return p.evaluate(() => window.__keydowns)
-    }
-
-    before(async () => {
-      context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-      errors = []
-      p = await newPage(context)
-      p.on('pageerror', (e) => errors.push(String(e)))
-      if (mode === 'document-idle') {
-        await p.addInitScript((src) => {
-          document.addEventListener('DOMContentLoaded', () => {
-            const s = document.createElement('script')
-            s.textContent = src
-            document.documentElement.appendChild(s)
-          })
-        }, script)
-      }
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await openPuzzle(p, {
-        beforeStart: async () => { if (mode === 'before-start') await p.addScriptTag({ content: script }) },
-        afterStart: async () => { if (mode === 'after-start') await p.addScriptTag({ content: script }) }
-      })
-      // Enable Letter Tool, switched on after the page and the script are in.
-      await p.evaluate(() => Framework.setSetting('toolletter', true))
-      await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
+  // The tests below are one ordered sequence on one page: each starts from the letter mode the one
+  // before left (digits, with the saved mode null, then false once a toggle has saved it).
+  // The number pad's keys as typed on the page, and the letter mode SudokuPad saved.
+  const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
+  const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
+  // Presses `key` and returns whether the page left the keydown's default alone.
+  const press = async (key) => {
+    await p.evaluate(() => {
+      window.__keydowns = []
+      window.addEventListener('keydown', (e) => window.__keydowns.push(e.defaultPrevented), { once: true })
     })
-    after(async () => { await context.close() })
+    await p.keyboard.press(key)
+    return p.evaluate(() => window.__keydowns)
+  }
 
-    const focused = () => p.evaluate(() => { const a = document.activeElement; return `${a.tagName}#${a.id}.${a.className}|${a.textContent.slice(0, 30)}` })
-
-    it('Tab in play leaves the number pad on digits, saves nothing, and leaves focus where it is', async () => {
-      assert.equal(await pad(), DIGITS, 'before')
-      assert.equal(await saved(), null, 'saved before')
-      const focus = await focused()
-      assert.deepEqual(await press('Tab'), [true], 'Tab was prevented, as with SudokuPad\'s own toggle')
-      assert.equal(await focused(), focus, 'focus did not move')
-      assert.equal(await pad(), DIGITS, 'after')
-      assert.equal(await saved(), null, 'saved after')
-    })
-
-    it('"/" and the letter button still toggle letter mode and save it', async () => {
-      await press('/')
-      assert.equal(await pad(), LETTERS, 'after "/"')
-      assert.equal(await saved(), true, 'saved after "/"')
-      await p.click(TOGGLE_BUTTON)
-      assert.equal(await pad(), DIGITS, 'after the button')
-      assert.equal(await saved(), false, 'saved after the button')
-      await p.click(TOGGLE_BUTTON)
-      assert.equal(await pad(), LETTERS, 'after the button again')
-      await press('/')
-      assert.equal(await pad(), DIGITS, 'after "/" again')
-    })
-
-    it('Tab in play leaves letter mode on while it is on', async () => {
-      await press('/')
-      assert.equal(await pad(), LETTERS, 'on')
-      await press('Tab')
-      assert.equal(await pad(), LETTERS, 'still on after Tab')
-      assert.equal(await saved(), true, 'saved stays true')
-      await press('/')
-      assert.equal(await pad(), DIGITS, 'off')
-    })
-
-    it('Tab still moves focus in a dialog, and is not prevented there', async () => {
-      await p.click('#control-settings')
-      await p.locator('.dialog').waitFor({ state: 'visible' })
-      const before = await focused()
-      assert.deepEqual(await press('Tab'), [false], 'Tab was not prevented')
-      assert.notEqual(await focused(), before, 'focus moved')
-      assert.equal(await pad(), DIGITS, 'pad')
-      assert.equal(await saved(), false, 'saved')
-    })
-
-    it('the page raised no error', () => {
-      assert.deepEqual(errors, [])
-    })
+  before(async () => {
+    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    errors = []
+    p = await newPage(context)
+    p.on('pageerror', (e) => errors.push(String(e)))
+    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    await openPuzzle(p, { afterStart: () => p.addScriptTag({ content: script }) })
+    // Enable Letter Tool, switched on after the page and the script are in.
+    await p.evaluate(() => Framework.setSetting('toolletter', true))
+    await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
   })
-}
+  after(async () => { await context.close() })
+
+  const focused = () => p.evaluate(() => { const a = document.activeElement; return `${a.tagName}#${a.id}.${a.className}|${a.textContent.slice(0, 30)}` })
+
+  it('Tab in play leaves the number pad on digits, saves nothing, and leaves focus where it is', async () => {
+    assert.equal(await pad(), DIGITS, 'before')
+    assert.equal(await saved(), null, 'saved before')
+    const focus = await focused()
+    assert.deepEqual(await press('Tab'), [true], 'Tab was prevented, as with SudokuPad\'s own toggle')
+    assert.equal(await focused(), focus, 'focus did not move')
+    assert.equal(await pad(), DIGITS, 'after')
+    assert.equal(await saved(), null, 'saved after')
+  })
+
+  it('"/" and the letter button still toggle letter mode and save it', async () => {
+    await press('/')
+    assert.equal(await pad(), LETTERS, 'after "/"')
+    assert.equal(await saved(), true, 'saved after "/"')
+    await p.click(TOGGLE_BUTTON)
+    assert.equal(await pad(), DIGITS, 'after the button')
+    assert.equal(await saved(), false, 'saved after the button')
+    await p.click(TOGGLE_BUTTON)
+    assert.equal(await pad(), LETTERS, 'after the button again')
+    await press('/')
+    assert.equal(await pad(), DIGITS, 'after "/" again')
+  })
+
+  it('Tab in play leaves letter mode on while it is on', async () => {
+    await press('/')
+    assert.equal(await pad(), LETTERS, 'on')
+    await press('Tab')
+    assert.equal(await pad(), LETTERS, 'still on after Tab')
+    assert.equal(await saved(), true, 'saved stays true')
+    await press('/')
+    assert.equal(await pad(), DIGITS, 'off')
+  })
+
+  it('Tab still moves focus in a dialog, and is not prevented there', async () => {
+    await p.click('#control-settings')
+    await p.locator('.dialog').waitFor({ state: 'visible' })
+    const before = await focused()
+    assert.deepEqual(await press('Tab'), [false], 'Tab was not prevented')
+    assert.notEqual(await focused(), before, 'focus moved')
+    assert.equal(await pad(), DIGITS, 'pad')
+    assert.equal(await saved(), false, 'saved')
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
 
 describe('the Tab binding is not found', () => {
   it('warns in the console and changes nothing', async () => {

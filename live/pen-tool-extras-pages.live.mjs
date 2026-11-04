@@ -3,11 +3,7 @@
 // Playwright Chromium, so it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
-// injection time and crackingthecryptic.com stay untested, and so does a touch screen. Each injection
-// time runs the same checks:
-//   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
-//   before-start:  after the page loads, before Start Puzzle
-//   after-start:   after Start Puzzle, when the controls already exist
+// injection time and crackingthecryptic.com stay untested, and so does a touch screen. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 // Every press, wheel turn and line is real input. A last group runs with No Tab Letters installed too.
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
@@ -34,13 +30,11 @@ const PAGE_ONE = '123456789'
 const PAGE_TWO = 'abcdefghi'
 const PAGE_THREE = 'jlnprtvxz'
 
-// Waits for the puzzle, runs `beforeStart` (the injection that wants the page before Start Puzzle), starts it, and
-// returns once the controls exist.
-async function startPuzzle (page, beforeStart = async () => {}) {
+// Waits for the puzzle, starts it, and returns once the controls exist.
+async function startPuzzle (page) {
   await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
   const start = page.getByRole('button', { name: START }).first()
   await start.waitFor({ state: 'visible' })
-  await beforeStart()
   await start.click()
   await start.waitFor({ state: 'hidden' })
   await page.locator('#control-undo').waitFor({ state: 'visible' })
@@ -63,7 +57,7 @@ after(async () => { await browser?.close() })
 
 // One browser context per group: its page, its page errors, and the checks. `extra` is the scripts
 // injected besides pen-tool-extras, for the group that has No Tab Letters installed.
-function group (title, mode, extra = []) {
+function group (title, extra = []) {
   describe(title, { concurrency: false }, () => {
     let context, p, errors
 
@@ -124,8 +118,8 @@ function group (title, mode, extra = []) {
     }
 
     const boot = async () => {
-      await startPuzzle(p, async () => { if (mode === 'before-start') for (const src of [script, ...extra]) await p.addScriptTag({ content: src }) })
-      if (mode === 'after-start') for (const src of [script, ...extra]) await p.addScriptTag({ content: src })
+      await startPuzzle(p)
+      for (const src of [script, ...extra]) await p.addScriptTag({ content: src })
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await read(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolletter', true) })
       await p.locator('#control-pen').waitFor({ state: 'visible' })
@@ -139,17 +133,6 @@ function group (title, mode, extra = []) {
       p = await context.newPage()
       p.on('pageerror', (e) => errors.push(String(e)))
       await routeSudokuPad(p)
-      if (mode === 'document-idle') {
-        await p.addInitScript((sources) => {
-          document.addEventListener('DOMContentLoaded', () => {
-            for (const src of sources) {
-              const s = document.createElement('script')
-              s.textContent = src
-              document.documentElement.appendChild(s)
-            }
-          })
-        }, [script, ...extra])
-      }
       await p.goto(url, { waitUntil: 'load', timeout: 60000 })
       await boot()
       await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, LINE_STYLES_KEY, 'ToolPen_color', 'ToolLetter_letterMode'])
@@ -536,8 +519,8 @@ function group (title, mode, extra = []) {
   })
 }
 
-for (const mode of ['document-idle', 'before-start', 'after-start']) group(`injected ${mode}`, mode)
-group('injected after-start, with No Tab Letters installed too', 'after-start', [noTabLetters])
+group('injected after Start Puzzle')
+group('injected after Start Puzzle, with No Tab Letters installed too', [noTabLetters])
 
 // The script installed while the pen tool is already on, with SudokuPad's own selection of pen 3 read from storage
 // as the number 3: the first page turn must keep color number 3.
