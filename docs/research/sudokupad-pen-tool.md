@@ -92,6 +92,15 @@ drew real mouse drags.
   they are invisible to anyone without the script.
 - Not run: a page reload, custom buttons in the panel, Windows, Tampermonkey.
 
+### Color character `0` (run on the page 2026-11-04, same setup)
+
+- `0` works as a color. A stroke stores as `10` and draws with class `pencolor-0`. `getReplay()` holds `pc:0`, and undo, redo,
+  `loadReplay` and a page reload all keep it. Only a mark value of `0` clears a cell, so a color of `0` doesn't. No page errors.
+- Repeated drags over one spot in one run gave the same results for colors `1`, `a` and `0`: drawn, unchanged, erased, nothing. So
+  the no-op drags in that run aren't caused by `0`, and why they happen wasn't looked into.
+- That makes 36 color characters, 1 to 9, `a` to `z` and `0`: enough for nine solid, nine dotted and nine directional pens at two
+  characters each.
+
 ## The second page of pens, built and run live 2026-11-04 (#71, SudokuPad 0.612.0, headless Chromium)
 
 What `pen-tool-extras.user.js` 1.5.0 does, and what running it found. Live checks: `live/pen-tool-extras-pages.live.mjs`
