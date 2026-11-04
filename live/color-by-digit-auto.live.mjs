@@ -134,7 +134,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const getAuto = () => read((key) => Framework.getData(key), AUTO_KEY)
     const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
     // Makes the profile at `index` of SEED the active one in the open dialog.
-    const chooseProfile = (index) => p.check(`#color-by-digit-editor input[data-act=activate][data-index="${index}"]`)
+    const chooseProfile = (index) => p.click(`#color-by-digit-editor [data-act=activate][data-index="${index}"]`)
     const boxChecked = () => boxCheckedOn(p)
     const dialogBox = () => p.locator('#color-by-digit-editor input[data-role="auto-draft"]')
     const editor = () => p.locator('#color-by-digit-editor')

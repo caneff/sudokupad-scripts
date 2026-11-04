@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.0
+// @version      0.5.0
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.4.0'
+  const VERSION = '0.5.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
@@ -30,6 +30,10 @@
   const CUSTOM_NAME = 'Custom'
   // Whether auto mode is on: true or false, absent until first set.
   const AUTO_KEY = 'ColorByDigit_auto'
+  // SudokuPad's numpad order for the digit buttons of the dialog: 1 to 9 in rows of three, then 0 alone
+  // in the middle column.
+  const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+  const NUMPAD_KEY = '2.4em'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
   // A group is one palette key plus the digits that get it.
@@ -242,11 +246,23 @@
   const ARROW_START = 78
   const ICON_MAX_GROUPS = 4
 
+  // The digit that stands for a group on its colored cell, over its digits with 0 left out: the lowest
+  // when all are below 5, the highest when all are above 5, else the middle (the lower of the two middle
+  // ones on an even count). A group of only 0 shows 0, and a group with no digits shows ''.
+  function shownDigit (digits) {
+    const sorted = [...digits].sort()
+    const nonZero = sorted.filter((d) => d !== '0')
+    if (nonZero.length === 0) return sorted[0] || ''
+    if (nonZero.every((d) => d < '5')) return nonZero[0]
+    if (nonZero.every((d) => d > '5')) return nonZero[nonZero.length - 1]
+    return nonZero[Math.ceil(nonZero.length / 2) - 1]
+  }
+
   // The cells of the button's icon for the first ICON_MAX_GROUPS groups: [{ key, digit, x, y, size }] in
-  // the icon's units, `digit` the group's lowest or '' when it has none. Up to three go in a row and four
+  // the icon's units, `digit` the group's shownDigit. Up to three go in a row and four
   // as 2 by 2; none of them reaches the AUTO label or the arrow box.
   function iconLayout (groups) {
-    const shown = groups.slice(0, ICON_MAX_GROUPS).map((g) => ({ key: g.key, digit: [...g.digits].sort()[0] || '' }))
+    const shown = groups.slice(0, ICON_MAX_GROUPS).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
     const gap = 3
     if (shown.length === ICON_MAX_GROUPS) {
       const top = ICON_TOP + 5
@@ -307,8 +323,8 @@
     return '<span data-role="auto" role="checkbox" aria-label="Auto mode" title="Auto mode" ' + `aria-checked="${Boolean(on)}" ` +
       'style="pointer-events:auto;position:absolute;left:-3px;top:-2px;display:flex;align-items:center;gap:2px;' +
       `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${color}">` +
-      `<span data-role="auto-mark" style="box-sizing:border-box;display:block;width:10px;height:10px;border:1.5px solid ${color};border-radius:2px;` +
-      `font:700 8px/7px sans-serif;text-align:center">${on ? 'X' : ''}</span>AUTO</span>`
+      `<span data-role="auto-mark" style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:10px;height:10px;border:1.5px solid ${color};border-radius:2px;` +
+      `font:700 8px/1 sans-serif">${on ? 'X' : ''}</span>AUTO</span>`
   }
 
   // The menu arrow box in the button's lower right.
@@ -318,7 +334,7 @@
 
   const UNREADABLE_FILL = '#ccc'
 
-  // One cell of the icon: the group's color with its lowest digit in the ink that reads on it.
+  // One cell of the icon: the group's color with its shown digit in the ink that reads on it.
   function iconCellSvg ({ key, digit, x, y, size }, colorOf) {
     const color = colorOf(key)
     const fill = color || UNREADABLE_FILL
@@ -326,7 +342,7 @@
       `<text x="${x + size / 2}" y="${y + size * 0.72}" fill="${inkFor(color)}" font-family="sans-serif" font-size="${Math.round(size * 0.7)}" font-weight="bold" text-anchor="middle">${esc(digit)}</text>`
   }
 
-  // The button's icon: one cell per group of the active profile (at most four) with its lowest digit,
+  // The button's icon: one cell per group of the active profile (at most four) with its shown digit,
   // the AUTO box upper left and the menu arrow box lower right. SudokuPad's own app buttons put their
   // icon in <div class="icon">. `colorOf(key)` gives a palette key's CSS color, or '' when unreadable.
   const iconHtml = (autoOn, groups, colorOf) =>
@@ -418,11 +434,11 @@
     const swatches = page.rows.flat().map((slot) => renderSwatch(slot, groupIndex, key)).join('')
     const zero = page.zero ? `<div style="${grid};margin-top:6px">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
     return '<div style="margin-bottom:6px">' +
-      `<select data-act="page" data-group="${groupIndex}" aria-label="Palette page" style="font-size:1em;padding:2px">${options}</select> ${renderChosen(colors, key)}</div>` +
+      `<select data-act="page" data-group="${groupIndex}" aria-label="Palette page" style="${PULLDOWN_LOOK}">${options}</select> ${renderChosen(colors, key)}</div>` +
       `<div style="${grid}">${swatches}</div>${zero}`
   }
 
-  // The groups of a profile as small squares in their palette colors, each with its lowest digit.
+  // The groups of a profile as small squares in their palette colors, each with its shown digit.
   function renderChips (groups, colorOf, size) {
     return iconLayout(groups).map(({ key, digit }) => {
       const color = colorOf(key)
@@ -432,6 +448,32 @@
     }).join('')
   }
 
+  // `css` with every declaration important: SudokuPad's own rules for the dialog's selects, buttons and
+  // labels size them otherwise.
+  const important = (css) => css.split(';').map((d) => `${d} !important`).join(';')
+  // The dialog's look: a light grey button with a rounded border, a divider between sections, a purple
+  // Save, and a pulldown with a purple arrow.
+  const RULE_COLOR = '#e3dff0'
+  const DIVIDER = `border-top:1px solid ${RULE_COLOR};margin:12px 0 0;padding-top:10px`
+  const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
+  // Percent-encoded, with no quotes, so the value sits inside a style="..." attribute.
+  const PULLDOWN_ARROW = 'url(data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2710%27%20height=%276%27%3E%3Cpath%20d=%27M0%200l5%206%205-6z%27%20fill=%27%236b4fa0%27/%3E%3C/svg%3E)'
+  const PULLDOWN_LOOK = important(`font-size:.95rem;padding:4px 28px 4px 10px;border:1px solid #b9b0c9;border-radius:6px;background:#fff ${PULLDOWN_ARROW} no-repeat right 10px center;appearance:none;color:#222`)
+  const heading = (text, extra = '') => `<div style="display:flex;align-items:center;justify-content:space-between;font-weight:600;margin:0 0 6px">${text}${extra}</div>`
+  const SAVE_LABEL = 'Save'
+  const DIALOG_BUTTON_LOOK = 'border-radius:8px;font-size:1rem;padding:0 22px;height:38px;line-height:36px;margin:0;width:auto;min-width:0;flex:none;cursor:pointer'
+  const SAVE_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#6b3fa0;color:#fff;border:1px solid #5a3489;font-weight:600`
+  const CANCEL_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#f1eff5;color:#333;border:1px solid #cfc9db`
+  // The bottom row under a divider, Cancel then Save at the right. The dialog builds the row; this styles it.
+  function styleDialogButtons (dialog) {
+    const row = dialog.querySelector('.dialog-options')
+    if (!row) return
+    row.style.cssText = important(`display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid ${RULE_COLOR};padding:14px 4px 2px;margin-top:8px;box-sizing:border-box;width:100%`)
+    row.querySelectorAll('button').forEach((b) => {
+      b.style.cssText = important(b.textContent.trim() === SAVE_LABEL ? SAVE_BUTTON_LOOK : CANCEL_BUTTON_LOOK)
+    })
+  }
+
   const MUTED = '#8a8496'
   // The active profile's row, in the dialog and in the menu, and an idle row's ring.
   const ACTIVE_FILL = '#f1ebfb'
@@ -439,26 +481,26 @@
   const ACTIVE_INK = '#5b2a9a'
   const IDLE_RING = '#e2dcea'
 
-  // The dialog's profile list: per row a drag handle, a checkbox for the active profile, the colors, the
-  // name and a delete button; then the name field and Add. `newName` is the text in the name field.
+  // The dialog's profile list, a radio group: per row a drag handle, the colors, the name and a delete
+  // button, and a click on the row makes it the active profile; then the name field and Add. `newName`
+  // is the text in the name field.
   function renderProfiles (state, colorOf, newName) {
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
-      return `<div data-role="profile-row" data-index="${i}" style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;` +
+      return `<div data-role="profile-row" data-act="activate" data-index="${i}" role="radio" aria-checked="${active}" tabindex="${active ? 0 : -1}" aria-label="${esc(profile.name)}" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;` +
         (active ? `background:${ACTIVE_FILL};box-shadow:inset 0 0 0 1.5px ${ACTIVE_RING}` : `box-shadow:inset 0 0 0 1px ${IDLE_RING}`) + '">' +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder" style="cursor:grab;touch-action:none;user-select:none;color:${MUTED};font-size:18px;line-height:1">&#8942;&#8942;</span>` +
-        `<input type="checkbox" data-act="activate" data-index="${i}"${active ? ' checked' : ''} aria-label="Active profile: ${esc(profile.name)}">` +
         `<span style="display:flex;gap:3px;width:100px">${renderChips(profile.groups, colorOf, 22)}</span>` +
         `<span style="flex:1;text-align:left;font-weight:${active ? 600 : 400}">${esc(profile.name)}</span>` +
-        `<button type="button" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
+        `<button type="button" data-act="delete" data-index="${i}" style="${BUTTON_LOOK};padding:0 10px;height:28px;line-height:26px" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
-    return `<div style="font-size:12px;color:${MUTED};margin:6px 0">PROFILES (${state.profiles.length} of ${MAX_PROFILES})</div>` +
-      `<div style="display:flex;flex-direction:column;gap:6px">${rows}</div>` +
+    return heading('Profiles', `<span style="font-weight:400;font-size:.8rem;color:#666">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
+      `<div role="radiogroup" aria-label="Active profile" style="display:flex;flex-direction:column;gap:6px">${rows}</div>` +
       '<div style="display:flex;gap:8px;margin:8px 0">' +
       `<input type="text" data-role="new-name" maxlength="${MAX_NAME_LENGTH}" placeholder="New profile name" value="${esc(newName)}" aria-label="New profile name" style="flex:1;padding:6px 8px">` +
-      `<button type="button" data-act="add"${full ? ' disabled' : ''}>+ Add</button></div>`
+      `<button type="button" data-act="add" style="${BUTTON_LOOK}"${full ? ' disabled' : ''}>+ Add</button></div>`
   }
 
   // The menu above the button: its heading, a row per profile in the dialog's order (the active one
@@ -480,18 +522,23 @@
   function renderEditor (groups, pages, shown, auto, profilesHtml) {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
-      const digits = DIGITS.map((d) =>
+      const digits = NUMPAD_DIGITS.map((d) =>
         `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
-        `style="width:1.8em;margin:1px;font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
+        `style="${BUTTON_LOOK};width:${NUMPAD_KEY};padding:0;${d === '0' ? 'grid-column:2;' : ''}font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
         `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
-      return '<div style="margin:6px 0;padding:6px;border:1px solid #888;border-radius:4px">' +
-        `${renderPalette(pages, colors, i, g.key, shown[i])}<div style="margin-top:8px">${digits} ` +
-        `<button type="button" data-act="remove" data-group="${i}">Remove</button></div></div>`
+      return `<div style="margin:8px 0;padding:8px;border:1px solid ${RULE_COLOR};border-radius:8px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">` +
+        `<div>${renderPalette(pages, colors, i, g.key, shown[i])}</div>` +
+        `<div style="display:flex;flex-direction:column;gap:8px"><div data-role="numpad" style="display:grid;grid-template-columns:repeat(3,${NUMPAD_KEY});gap:4px">${digits}</div>` +
+        `<button type="button" data-act="remove" data-group="${i}" style="${BUTTON_LOOK}">Remove</button></div></div>`
     }).join('')
     const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
-    const autoBox = `<label style="display:block;margin:6px 0"><input type="checkbox" data-role="auto-draft"${auto ? ' checked' : ''}> Auto mode: keep colors in step with digits and centre marks</label>`
-    return `${autoBox}${profilesHtml}<div style="margin-top:10px">Groups of the active profile: <button type="button" data-act="clear">Clear all</button></div>${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
-      '<button type="button" data-act="add-group">Add group</button>'
+    const autoBox = '<div style="display:flex;align-items:center;gap:8px;margin:0 0 4px">' +
+      `<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"${auto ? ' checked' : ''} style="margin:0">` +
+      '<label for="color-by-digit-auto-draft" style="width:auto !important;min-width:0 !important;margin:0 !important;text-align:left !important">Auto mode: keep colors in step with digits and centre marks</label></div>'
+    const clear = `<button type="button" data-act="clear" style="${BUTTON_LOOK}">Clear all</button>`
+    return `${heading('Auto mode')}${autoBox}<div style="${DIVIDER}">${profilesHtml}</div>` +
+      `<div style="${DIVIDER}">${heading('Groups of the active profile', clear)}${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
+      `<button type="button" data-act="add-group" style="${BUTTON_LOOK}">Add group</button></div>`
   }
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -813,14 +860,16 @@
         {
           tag: 'options',
           options: [
-            { tag: 'button', content: 'Save', handler: () => { saveDialog(app, savedState, draft, auto); Framework.closeDialog() } },
-            { tag: 'button', content: 'Cancel', action: 'close' }
+            { tag: 'button', content: 'Cancel', action: 'close' },
+            { tag: 'button', content: SAVE_LABEL, handler: () => { saveDialog(app, savedState, draft, auto); Framework.closeDialog() } }
           ]
         }
       ]
     })
     const box = document.getElementById('color-by-digit-editor')
     if (!box) return
+    const dialog = box.closest('.dialog')
+    if (dialog) styleDialogButtons(dialog)
     // The page each group of the active profile shows, by group index; a group not yet shown opens on its color's page.
     let shown = []
     const draw = () => {
@@ -852,8 +901,6 @@
     box.addEventListener('change', (event) => {
       const draftBox = event.target.closest('input[data-role="auto-draft"]')
       if (draftBox) { auto = draftBox.checked; return }
-      const active = event.target.closest('input[data-act="activate"]')
-      if (active) { reshow(setActive(draft, Number(active.dataset.index))); draw(); return }
       const el = event.target.closest('select[data-act="page"]')
       if (!el) return
       shown[Number(el.dataset.group)] = Number(el.value)
@@ -886,7 +933,36 @@
       handle.addEventListener('pointerup', finish)
       handle.addEventListener('pointercancel', finish)
     })
+    // A click on a profile row, off its handle and its buttons, or a key on the focused row (below),
+    // makes that profile the active one; the redrawn row takes the focus back for the keyboard.
+    const activateRow = (index, refocus) => {
+      reshow(setActive(draft, index))
+      draw()
+      if (refocus) box.querySelector(`[data-act="activate"][data-index="${index}"]`).focus()
+    }
+    // Enter and Space activate the focused row; the arrow keys move the choice to the next or previous row,
+    // wrapping, as a radio group does. Only the active row is a tab stop.
+    const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
+    box.addEventListener('keydown', (event) => {
+      if (!event.target.matches('[data-act="activate"]')) return
+      const count = draft.profiles.length
+      const index = Number(event.target.dataset.index)
+      let target
+      if (event.key === 'Enter' || event.key === ' ') target = index
+      else if (ARROW_STEP[event.key]) target = (index + ARROW_STEP[event.key] + count) % count
+      else return
+      event.preventDefault()
+      event.stopPropagation()
+      activateRow(target, true)
+    })
     box.addEventListener('click', (event) => {
+      const row = event.target.closest('[data-act="activate"]')
+      if (row && !event.target.closest('[data-role="handle"], button')) {
+        event.preventDefault()
+        event.stopPropagation()
+        activateRow(Number(row.dataset.index), false)
+        return
+      }
       const el = event.target.closest('button[data-act]')
       if (!el) return
       event.preventDefault()

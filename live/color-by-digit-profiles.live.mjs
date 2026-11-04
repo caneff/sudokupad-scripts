@@ -159,8 +159,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await dialogButton(text).click()
       await editor().waitFor({ state: 'detached' })
     }
-    const rowNames = () => p.$$eval(ROWS, (rows) => rows.map((r) => r.querySelector('[data-act=activate]').getAttribute('aria-label').replace('Active profile: ', '')))
-    const activeRow = () => p.$$eval(`${ROWS} [data-act=activate]`, (es) => es.findIndex((e) => e.checked))
+    const rowNames = () => p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label')))
+    const activeRow = () => p.$$eval(ROWS, (es) => es.findIndex((e) => e.getAttribute('aria-checked') === 'true'))
     // A click on the button proper, away from the AUTO box and the arrow box. The first moments after
     // injection can be dead while SudokuPad binds its handlers, so it clicks until `read` shows `expected`.
     const pressUntil = async (read, expected) => {
@@ -201,8 +201,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.keyboard.press('Escape')
     })
 
-    it('the icon shows Low/5/High: three cells with the lowest digits 0, 5 and 6', async () => {
-      assert.deepEqual(await t.iconDigits(), ['0', '5', '6'])
+    it('the icon shows Low/5/High: three cells with the shown digits 1, 5 and 9', async () => {
+      assert.deepEqual(await t.iconDigits(), ['1', '5', '9'])
       assert.deepEqual(await t.iconKeys(), ['1', '5', '9'])
     })
 
@@ -244,7 +244,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     }
 
     it('saved groups equal to a preload make that preload the active profile, beside the other', async () => {
-      await migrate(ODD_EVEN, [{ name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: true }], ['1', '0'])
+      await migrate(ODD_EVEN, [{ name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: true }], ['5', '4'])
     })
 
     it('saved groups equal to no preload become the active profile named Custom, first, beside both preloads', async () => {
@@ -319,14 +319,14 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await t.pick('Low/5/High')
       assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
       assert.equal((await t.getState()).active, 1)
-      assert.deepEqual(await settle(t.iconDigits, ['0', '5', '6']), ['0', '5', '6'])
+      assert.deepEqual(await settle(t.iconDigits, ['1', '5', '9']), ['1', '5', '9'])
       await t.undo()
       assert.equal(await settle(t.coloursOf, before), before)
     })
 
     it('the undo left the profile switched: the saved profile and the icon stay Low/5/High', async () => {
       assert.equal((await t.getState()).active, 1)
-      assert.deepEqual(await t.iconDigits(), ['0', '5', '6'])
+      assert.deepEqual(await t.iconDigits(), ['1', '5', '9'])
     })
 
     it('a pick with auto mode on does the same, as one undo step', async () => {
@@ -399,7 +399,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(seen, [['Odd/Even', { cells: 2, hits: 0 }], ['Low/5/High', { cells: 3, hits: 0 }], ['Four', { cells: 4, hits: 0 }], ['Six', { cells: 4, hits: 0 }]])
     })
 
-    it('a group of the icon shows its lowest digit: Six shows 0 to 3 on its first four groups', async () => {
+    it('a group of the icon shows its digit: Six shows 0 to 3 on its first four groups', async () => {
       assert.deepEqual(await t.iconDigits(), ['0', '1', '2', '3'])
     })
 
@@ -523,20 +523,88 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     }
 
-    it('the dialog lists each profile with its colors and lowest digits, a count and the active checkbox', async () => {
+    it('the dialog lists each profile with its colors and shown digits, a count and the active radio', async () => {
       await t.openEditor()
       assert.deepEqual(await t.rowNames(), ['Odd/Even', 'Low/5/High', 'Four'])
       assert.equal(await t.activeRow(), 0)
-      assert.match(await heading(), /\(3 of 4\)/)
-      assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['1', '0', '0', '5', '6', '1', '3', '5', '7'])
+      assert.match(await heading(), /3 of 4/)
+      assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4', '1', '5', '9', '1', '3', '5', '9'])
       assert.equal(await p.locator(`${EDITOR} button[data-act=preload]`).count(), 0)
     })
 
-    it('only one profile is active at a time: ticking another unticks the first, and the groups below follow it', async () => {
-      await p.check(`${EDITOR} input[data-act=activate][data-index="1"]`)
+    const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()
+
+    it('a click anywhere on a row but its handle and × makes it the active one: one row is highlighted, and the groups below follow it', async () => {
+      assert.equal(await p.locator(`${EDITOR} input[type=checkbox][data-act=activate]`).count(), 0)
+      assert.equal(await groupCount(), 2)
+      await p.click(`${ROWS}:nth-child(2) [data-role=chip]`)
       assert.equal(await t.activeRow(), 1)
-      assert.equal(await p.locator(`${EDITOR} input[data-act=activate]:checked`).count(), 1)
-      assert.equal(await p.locator(`${EDITOR} button[data-act=remove]`).count(), 3)
+      assert.equal(await p.locator(`${ROWS}[aria-checked=true]`).count(), 1)
+      assert.equal(await groupCount(), 3)
+      await p.click(`${ROWS}:nth-child(3)`, { position: { x: 4, y: 4 } })
+      assert.equal(await t.activeRow(), 2)
+      assert.equal(await groupCount(), 4)
+    })
+
+    it('Enter on a focused row makes it the active one, and the row keeps the focus', async () => {
+      await p.focus(`${ROWS}:nth-child(1)`)
+      await p.keyboard.press('Enter')
+      assert.equal(await t.activeRow(), 0)
+      assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-index')), '0')
+      assert.equal(await groupCount(), 2)
+    })
+
+    it('Space on a focused row makes it the active one, and the arrow keys move the choice, wrapping', async () => {
+      await p.focus(`${ROWS}:nth-child(2)`)
+      await p.keyboard.press(' ')
+      assert.equal(await t.activeRow(), 1)
+      await p.keyboard.press('ArrowDown')
+      assert.equal(await t.activeRow(), 2)
+      await p.keyboard.press('ArrowDown')
+      assert.equal(await t.activeRow(), 0)
+      await p.keyboard.press('ArrowUp')
+      assert.equal(await t.activeRow(), 2)
+      assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-index')), '2')
+      assert.deepEqual(await p.$$eval(ROWS, (rows) => rows.map((r) => r.tabIndex)), [-1, -1, 0])
+      await p.click(`${ROWS}:nth-child(1)`)
+    })
+
+    it('the buttons row is Cancel then Save, Save filled purple, and the page pulldown has the dialog\'s own look', async () => {
+      assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Cancel', 'Save'])
+      assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
+      assert.match(await p.$eval(`${EDITOR} select[data-act=page]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
+    })
+
+    it('a click on a handle or on × does not make that row the active one', async () => {
+      // A click event aimed at the handle itself: a real press on it starts a drag, whose release redraws the list.
+      await p.dispatchEvent(`${ROWS}:nth-child(2) [data-role=handle]`, 'click')
+      assert.equal(await t.activeRow(), 0)
+      await p.click(`${ROWS}:nth-child(3) button[data-act=delete]`)
+      assert.deepEqual(await t.rowNames(), ['Odd/Even', 'Low/5/High'])
+      assert.equal(await t.activeRow(), 0)
+    })
+
+    it('Cancel drops the clicked row and the delete', async () => {
+      await p.click(`${ROWS}:nth-child(2)`)
+      await t.closeWith('Cancel')
+      assert.equal((await t.getState()).active, 0)
+      assert.equal((await t.names()).length, 3)
+      await t.openEditor()
+      // The drag tests below start with Low/5/High, the second row, active in the draft.
+      await p.click(`${ROWS}:nth-child(2)`)
+      assert.equal(await t.activeRow(), 1)
+    })
+
+    it('the numpad: 1 2 3 over 4 5 6 over 7 8 9, with 0 alone under 8', async () => {
+      const box = async (d) => p.locator(`${EDITOR} [data-act=digit][data-group="0"][data-digit="${d}"]`).boundingBox()
+      const at = {}
+      for (const d of '0123456789') at[d] = await box(d)
+      assert.ok(at[1].x < at[2].x && at[2].x < at[3].x)
+      assert.equal(at[1].y, at[3].y)
+      assert.ok(at[1].y < at[4].y && at[4].y < at[7].y)
+      assert.deepEqual([at[4].x, at[7].x], [at[1].x, at[1].x])
+      assert.equal(at[0].x, at[8].x)
+      assert.ok(at[0].y > at[8].y, JSON.stringify([at[0], at[8]]))
     })
 
     it('a drag of the handle with the mouse reorders the draft, and Cancel drops it', async () => {
@@ -566,10 +634,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.click(`${EDITOR} button[data-act=add]`)
       assert.deepEqual(await t.rowNames(), ['Four', 'Odd/Even', 'Low/5/High', 'Mine'])
       assert.equal(await t.activeRow(), 1)
-      assert.match(await heading(), /\(4 of 4\)/)
+      assert.match(await heading(), /4 of 4/)
       assert.equal(await p.inputValue(`${EDITOR} [data-role=new-name]`), '')
-      // A copy of the active profile, Odd/Even: its lowest digits are 1 and 0.
-      assert.deepEqual(await p.$$eval(`${ROWS}:nth-child(4) [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['1', '0'])
+      // A copy of the active profile, Odd/Even: its shown digits are 5 and 4.
+      assert.deepEqual(await p.$$eval(`${ROWS}:nth-child(4) [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4'])
       await t.closeWith('Cancel')
       assert.deepEqual(await t.names(), ['Four', 'Odd/Even', 'Low/5/High'])
     })
