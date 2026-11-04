@@ -252,7 +252,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['3', ['1']]), ['3', ['1']])
     })
 
-    it('a cell that is not pure loses its color when its digit goes, and a color in no group stays', async () => {
+    it('a cell that is not pure loses its color when its digit goes', async () => {
       await select(0, 5); await p.keyboard.press('Delete')
       assert.deepEqual(await settle(async () => [await valueAt(0, 5), await colorsAt(0, 5)], ['', []]), ['', []])
       await undo()
