@@ -547,29 +547,39 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         return { lines: lines.length, marks: marks.length, ok: nested && lines.every((l) => marks.every((m) => Boolean(l.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING))) }
       }, [MARK_VALUES, MARKS_LAYER_ID])
       const STACKED = { lines: 3, marks: 11, ok: true }
-      await setThickness(16)
-      await put(2, 2, ['3', '5', 'u'])
-      await put(2, 3, ['1', '2'])
-      await put(2, 4, ['c', '6', 't', '4'])
-      await put(4, 4, ['1'])
-      await put(4, 3, ['b', 'k', '5'])
-      await put(1, 1, ['x'])
-      assert.deepEqual(await settle(stacking, STACKED), STACKED)
-      await p.click('#control-undo')
-      assert.deepEqual(await settle(penCount, 13), 13)
-      assert.deepEqual(await stacking(), { lines: 3, marks: 10, ok: true }, 'after an undo')
-      await p.click('#control-redo')
-      assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after a redo')
-      // Every cell drawn again in cell order, which is what a reload, a replay and the script's own install do: the later cells' lines come last.
-      await read(() => Framework.app.puzzle.cells.forEach((cell) => cell.renderContent(true)))
-      assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after every cell is drawn again in cell order')
-      await setThickness(10)
-      assert.deepEqual(await stacking(), STACKED, 'after a thickness change')
-      await reload()
-      assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after a reload')
-      await clearMarks()
+      try {
+        await setThickness(16)
+        await put(2, 2, ['3', '5', 'u'])
+        await put(2, 3, ['1', '2'])
+        await put(2, 4, ['c', '6', 't', '4'])
+        await put(4, 4, ['1'])
+        await put(4, 3, ['b', 'k', '5'])
+        await put(1, 1, ['x'])
+        assert.deepEqual(await settle(stacking, STACKED), STACKED)
+        const drawn = await penCount()
+        // The acts above are not grouped like a click's, so an undo may first undo a selection: undo until a stroke goes, then redo as often.
+        let undone = 0
+        while ((await penCount()) >= drawn && undone < 6) {
+          await p.click('#control-undo')
+          undone++
+          await settle(async () => (await penCount()) < drawn, true, 500)
+        }
+        assert.equal((await penCount()) < drawn, true, 'an undo removes a stroke')
+        assert.equal((await stacking()).ok, true, 'after an undo')
+        for (let i = 0; i < undone; i++) await p.click('#control-redo')
+        assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after a redo')
+        // Every cell drawn again in cell order, which is what a reload, a replay and the script's own install do: the later cells' lines come last.
+        await read(() => Framework.app.puzzle.cells.forEach((cell) => cell.renderContent(true)))
+        assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after every cell is drawn again in cell order')
+        await setThickness(10)
+        assert.deepEqual(await stacking(), STACKED, 'after a thickness change')
+        await reload()
+        assert.deepEqual(await settle(stacking, STACKED), STACKED, 'after a reload')
+      } finally {
+        await clearMarks()
+        await setThickness(5)
+      }
       assert.equal(await settle(penCount, 0), 0, 'erasing removes the marks from the marks layer too')
-      await setThickness(5)
     })
 
     it('one undo reverses one click and redo restores it', async () => {
