@@ -9,7 +9,7 @@ const {
   HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
-  PEN_PAGES, penPageOf, penSlot, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES
+  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES
 } = require('./pen-tool-extras.user.js')
 
 // The edge cycle, a step forward and a step back.
@@ -746,13 +746,13 @@ test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dotted', () =
   ])
 })
 
-test('penPageOf, penSlot and penCharOn move between a color character, its page and its button number', () => {
+test('penPageOf, penNumber and penCharOn move between a color character, its page and its button number', () => {
   assert.equal(penPageOf('3'), 0)
   assert.equal(penPageOf('c'), 1)
   assert.equal(penPageOf('z'), -1)
-  assert.equal(penSlot('c'), '3')
-  assert.equal(penSlot('3'), '3')
-  assert.equal(penSlot('i'), '9')
+  assert.equal(penNumber('c'), '3')
+  assert.equal(penNumber('3'), '3')
+  assert.equal(penNumber('i'), '9')
   assert.equal(penCharOn(1, '1'), 'a')
   assert.equal(penCharOn(0, '9'), '9')
   assert.equal(penCharOn(1, '9'), 'i')

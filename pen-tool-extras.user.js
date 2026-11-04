@@ -199,14 +199,14 @@
   }
 
   // The number of the color (and of the button) of the pen `pen`, as PEN_COLORS names it; undefined for no pen.
-  function penSlot (pen) {
+  function penNumber (pen) {
     const page = PEN_PAGES[penPageOf(pen)]
     return page ? PEN_COLORS[page.chars.indexOf(pen)] : undefined
   }
 
-  // The color character of the pen with color `slot` on page `page`.
-  function penCharOn (page, slot) {
-    return PEN_PAGES[page].chars[PEN_COLORS.indexOf(slot)]
+  // The color character of the pen with color number `number` on page `page`.
+  function penCharOn (page, number) {
+    return PEN_PAGES[page].chars[PEN_COLORS.indexOf(number)]
   }
 
   // Saved data is untrusted: the saved pen character when it is one of a page, else null. SudokuPad's
@@ -500,7 +500,7 @@
 
   // How much shorter than an even split of a segment the dot spacing is. With the spacing exactly `length / dots`
   // the last dot falls on the segment's end, where the browser draws no zero-length dash, so a line's far end
-  // had no dot; this puts it a hair before the end (0.0064 of a unit on a cell of 64).
+  // would have no dot; this puts it a hair before the end (0.0064 of a unit on a cell of 64).
   const END_DOT_SHRINK = 0.9999
   // A line's dot spacing: DOT_SPACING_PER_THICKNESS line widths, snapped so `length` holds a whole number
   // of dots. Each segment of a line is its own path with its own pattern, starting on a dot, so a
@@ -613,7 +613,7 @@
       buildOpacityCss,
       PEN_PAGES,
       penPageOf,
-      penSlot,
+      penNumber,
       penCharOn,
       normalizePen,
       stepPage,
@@ -955,8 +955,8 @@
       lineModeChoice(state.lineMode)
   }
 
-  // The pen's line mode, which SudokuPad's own pulldown in the panel (hidden by this script) used to set.
-  // `lineMode` is undefined when the pen tool was not found, and the choice is left out.
+  // The pen's line mode choice, in place of SudokuPad's own pulldown in the panel, which this script hides.
+  // `lineMode` is undefined when the page has no pen tool, and the choice is left out.
   function lineModeChoice (lineMode) {
     if (lineMode === undefined) return ''
     const options = LINE_MODES.map(([value, label]) => `<option value="${value}"${value === lineMode ? ' selected' : ''}>${label}</option>`).join('')
@@ -964,14 +964,16 @@
       `<select data-line-mode style="margin:4px 0;font-size:1rem">${options}</select>`
   }
 
-  // The pen tool's line mode now, or undefined with no pen tool.
+  // The pen's line mode now, or undefined with no pen tool. It is the saved one: SudokuPad's pen tool holds its
+  // default until it first opens and reads the saved mode then, and with the pulldown hidden only this dialog
+  // changes it. It does not depend on the page support in `installPenPages`.
   function currentLineMode () {
-    return penTool ? normalizeLineMode(penTool.lineMode) : undefined
+    return typeof ToolPen === 'undefined' ? undefined : normalizeLineMode(Framework.getData(LINE_MODE_KEY))
   }
 
   // Sets the line mode and saves it where SudokuPad does, so its hidden pulldown, when the pen tool is on, shows it too.
   function applyLineMode (lineMode) {
-    penTool.lineMode = lineMode
+    ToolPen.tool.lineMode = lineMode
     Framework.setData(LINE_MODE_KEY, lineMode)
     const select = document.querySelector(`${LINE_MODE_BOX} select`)
     if (select) select.value = lineMode
@@ -1140,9 +1142,13 @@
   // The pen tool, once its selection is wrapped for pages; null until then, and when it cannot be.
   let penTool = null
 
+  // The selected pen's color character. SudokuPad's own selection reads `ToolPen_color` with `getData`, which
+  // parses a saved '3' into the number 3, so the selection can be a number.
+  const selectedPen = () => String(penTool.selectedColor)
+
   // The index of the page the selected pen is on; the first page before any pen is selected.
   function currentPage () {
-    return Math.max(0, penPageOf(penTool.selectedColor))
+    return Math.max(0, penPageOf(selectedPen()))
   }
 
   // Gives the panel's nine color buttons the pens of page `page`: each keeps its `data-key` and takes the
@@ -1150,9 +1156,9 @@
   // button press and the selection both read `data-value`. Button 0 is not a pen.
   function setPadPage (page) {
     document.querySelectorAll('.controls-input button[data-key]').forEach((button) => {
-      const slot = PEN_COLORS.indexOf(button.dataset.key)
-      if (slot === -1) return
-      const pen = PEN_PAGES[page].chars[slot]
+      const index = PEN_COLORS.indexOf(button.dataset.key)
+      if (index === -1) return
+      const pen = PEN_PAGES[page].chars[index]
       button.dataset.value = pen
       button.setAttribute('title', pen)
       button.setAttribute(PAGE_ATTRIBUTE, String(page + 1))
@@ -1178,18 +1184,16 @@
   // Selects the pen on the page `delta` pages from the selected one with the same color number: a page
   // turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
   function turnPage (delta) {
-    const slot = penSlot(penTool.selectedColor) || PEN_COLORS[0]
-    penTool.setSelectedColor(penCharOn(stepPage(currentPage(), delta, PEN_PAGES.length), slot))
+    const number = penNumber(selectedPen()) || PEN_COLORS[0]
+    penTool.setSelectedColor(penCharOn(stepPage(currentPage(), delta, PEN_PAGES.length), number))
   }
 
   // The selected pen is saved under PEN_KEY, and `ToolPen_color` keeps only its color number. After a
   // reload SudokuPad has selected that number on the first page; the saved pen replaces it when its color
   // number is that one, so a number changed by stock SudokuPad (the script removed for a while) wins.
   function restoreSelectedPen (saved) {
-    if (saved && saved !== String(penTool.selectedColor) && penSlot(saved) === String(penTool.selectedColor)) penTool.setSelectedColor(saved)
+    if (saved && saved !== selectedPen() && penNumber(saved) === selectedPen()) penTool.setSelectedColor(saved)
   }
-
-  const PAGE_TURN_SKIPS = `.${SLIDERS}`
 
   // The group the drag highlight lives in, made on first use beside the pen layer; null when the page has no
   // pen layer.
@@ -1221,7 +1225,7 @@
       if (page === -1) return select.call(this, color)
       setPadPage(page)
       select.call(this, pen)
-      Framework.setData('ToolPen_color', penSlot(pen))
+      Framework.setData('ToolPen_color', penNumber(pen))
       Framework.setData(PEN_KEY, pen)
       syncPageButton()
     }
@@ -1246,11 +1250,15 @@
       const layer = hintLayer()
       if (layer && this.linePart && this.linePart.parentNode !== layer) layer.appendChild(this.linePart)
     }
-    // SudokuPad's key handlers run after the tools' own, and stop at the first that answers, so answering Tab
-    // here keeps the letter tool's Tab binding from running, with No Tab Letters installed or not. Shift+Tab is
-    // left alone: a held Shift is the letter tool's own temporary switch.
+    // SudokuPad asks every tool's `handleKeydown` before its key handlers, and stops at the first that answers, so
+    // answering Tab here also keeps it from the letter tool's Tab binding (which does nothing in the pen tool in
+    // SudokuPad now, with No Tab Letters installed or not), and the key's default of moving the focus is stopped.
+    // Shift+Tab is left alone: a held Shift is the letter tool's own temporary switch.
+    const keydown = tool.handleKeydown
     tool.handleKeydown = function (event) {
-      if (Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false
+      if (Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
+        return typeof keydown === 'function' ? keydown.call(this, event) : false
+      }
       event.preventDefault()
       turnPage(1)
       return true
@@ -1260,7 +1268,7 @@
     })
     // `preventDefault` needs a listener that is not passive.
     document.addEventListener('wheel', (event) => {
-      if (event.deltaY === 0 || !event.target.closest('.tool-pen .controls-input') || event.target.closest(PAGE_TURN_SKIPS)) return
+      if (event.deltaY === 0 || !event.target.closest('.tool-pen .controls-input') || event.target.closest(`.${SLIDERS}`)) return
       event.preventDefault()
       turnPage(event.deltaY < 0 ? -1 : 1)
     }, { passive: false })

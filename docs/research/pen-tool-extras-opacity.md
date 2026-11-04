@@ -1,5 +1,9 @@
 # Pen mark opacity (SudokuPad, 2026-11-03)
 
+Superseded in part by #71: Pen Tool Extras 1.5.0 sets the slider's opacity on the pen layer (`#cell-pen`), not on each
+`.cell-pen`, so overlaps no longer darken. See "Opacity on the pen layer" in `sudokupad-pen-tool.md`. What follows is
+the reading of SudokuPad's own rule and the measurements of the per-stroke version.
+
 Read from `tool-pen.css` and from the computed style on sudokupad.app.
 
 - Every pen mark (`.cell-pen`) is drawn with `opacity: 0.8`, so pen marks are already slightly see-through.

@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { headerVersion, openSettings } from './settings.mjs'
+import { effectiveOpacities, headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -698,15 +698,11 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
       }
       const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
-      // The pen value (`pen-<value>` class) and the opacity each drawn mark shows at, without repeats. The pen layer
-      // carries the slider's value and each stroke is solid, so a mark's opacity is the product over it and its ancestors.
+      // The pen value (`pen-<value>` class) and the opacity each drawn mark shows at, without repeats.
       const opacities = async () => {
-        const all = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => {
-          let product = 1
-          for (let el = e; el && el.nodeType === 1; el = el.parentElement) product *= parseFloat(window.getComputedStyle(el).opacity)
-          return [[...e.classList].find((c) => c.startsWith('pen-')).slice(4), String(Math.round(product * 1000) / 1000)]
-        }))
-        return [...new Set(all.map((x) => x.join(':')))].sort()
+        const shown = await effectiveOpacities(p, '.cell-pen')
+        const values = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
+        return [...new Set(values.map((v, i) => `${v}:${shown[i]}`))].sort()
       }
       // Draws a free line (a drag), a cell circle, a cell cross, an edge X and a corner X.
       const drawAll = async () => {

@@ -123,8 +123,10 @@ installed too) and `live/pen-tool-extras-panel.live.mjs`.
 - **The buttons are shared.** One `.controls-input` serves every tool, and the digit tool reads `data-value`, so the
   pen's `handleToolExit` is wrapped to put 1 to 9 back.
 - **Tab.** `App.handleKeydown` runs every tool's `handleKeydown` first and returns when one answers true, before
-  `keyHandlers` (where the letter tool binds Tab), so `ToolPen.tool.handleKeydown` answering Tab keeps the letter
-  mode from toggling with No Tab Letters installed or not (both run live). Shift+Tab is left alone: with Shift+Tab also
+  `keyHandlers` (where the letter tool binds Tab), so `ToolPen.tool.handleKeydown` can answer Tab (both with No Tab
+  Letters installed and without, run live). Stock SudokuPad does not toggle letter mode on Tab in the pen tool at all
+  (run live with the letter tool on: Tab sets `letterMode` on the normal tool and leaves it off with the pen tool
+  current), so the page turn costs nothing there; the live test's letter-mode check cannot go red and checks only that. Shift+Tab is left alone: with Shift+Tab also
   turning the page, `ToolLetter_letterMode` read back as saved on in the live run. The cause was not isolated; the
   letter tool's own `handleKeydown` switches letter mode for a held Shift (setting `toolletter_mode`), which fits.
 - **A press exactly on an existing stroke starts no drag** in stock SudokuPad (no script loaded: `penhint` stays

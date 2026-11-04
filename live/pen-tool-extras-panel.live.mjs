@@ -16,7 +16,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { openSettings } from './settings.mjs'
+import { effectiveOpacities, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -64,12 +64,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const activeElementTag = () => read(() => document.activeElement.tagName)
     // The computed stroke width and opacity of the first stroke of pen color 1, drawn by `draw`.
     const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).strokeWidth))
-    // What a stroke shows at: the product of its own opacity and every ancestor's, since the pen layer carries the slider's value.
-    const effectiveOpacity = (selector) => read((s) => {
-      let product = 1
-      for (let el = document.querySelector(s); el && el.nodeType === 1; el = el.parentElement) product *= parseFloat(window.getComputedStyle(el).opacity)
-      return Math.round(product * 1000) / 1000
-    }, selector)
+    const effectiveOpacity = async (selector) => (await effectiveOpacities(p, selector))[0]
     const lineOpacity = () => effectiveOpacity('.cell-pen.pencolor-1')
     const strokeOwnOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).opacity))
 
@@ -203,6 +198,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
       await editor().locator('select[data-line-mode]').selectOption('both')
       await dialogButton('Save').click()
+      assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
+    })
+
+    it('the dialog shows the saved line mode while SudokuPad\'s pen tool still holds its default, and a change to the default saves', async () => {
+      await read((k) => Framework.setData(k, 'edgeonly'), LINE_MODE_KEY)
+      // Before SudokuPad's pen tool first opens it holds 'both' and reads the saved mode only on entry.
+      await read(() => { ToolPen.tool.lineMode = 'both' })
+      await openEditor()
+      assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
+      await editor().locator('select[data-line-mode]').selectOption('both')
+      await dialogButton('Save').click()
+      assert.equal(await saved(LINE_MODE_KEY), 'both')
       assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
     })
 
