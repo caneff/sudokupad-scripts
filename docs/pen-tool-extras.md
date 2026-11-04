@@ -1,13 +1,13 @@
 # Pen Tool Extras
 
+> [!WARNING]
+> **This script can break at any time, and there are no guarantees.** It relies on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break it without notice. See [If SudokuPad changes](#if-sudokupad-changes).
+
 The full reference. For a quick look, see the [details page](https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html).
 
 Turn the pen tool on in SudokuPad's settings first.
 
-**Warnings**
-
-- Lines drawn with a page 2 or page 3 pen are invisible to anyone without this script. SudokuPad stores them and shares them in the replay, but without the script's CSS it draws them with no color.
-- The script wraps SudokuPad's pen tool and renderer, which are internals, so an update can break it. See [If SudokuPad changes](#if-sudokupad-changes).
+Lines drawn with a page 2 or page 3 pen are invisible to anyone without this script. SudokuPad stores them and shares them in the replay, but without the script's CSS it draws them with no color.
 
 ## Colors
 
