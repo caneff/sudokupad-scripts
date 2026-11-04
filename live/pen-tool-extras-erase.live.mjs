@@ -1,5 +1,5 @@
 // Live check of pen-tool-extras.user.js's whole-line erase (a middle click in the pen tool) on sudokupad.app in headless Chromium.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of `npm test`.
+// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real injection time and
 // crackingthecryptic.com stay untested. A real mouse's middle button on Windows is still owed: headless Chromium draws no
@@ -15,6 +15,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -127,7 +128,7 @@ function group (title, mode) {
       p = await context.newPage()
       p.on('pageerror', (e) => errors.push(String(e)))
       p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console.error: ${m.text()}`) })
-      await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await routeSudokuPad(p)
       if (mode === 'document-idle') {
         await p.addInitScript((source) => {
           document.addEventListener('DOMContentLoaded', () => {

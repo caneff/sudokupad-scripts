@@ -10,6 +10,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -43,7 +44,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     errors = []
     p = await context.newPage()
     p.on('pageerror', (e) => errors.push(String(e)))
-    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+    await routeSudokuPad(p)
     await p.goto(url, { waitUntil: 'load', timeout: 60000 })
     await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
     const start = p.getByRole('button', { name: START }).first()

@@ -1,5 +1,5 @@
 // Live check of pen-tool-extras.user.js's edge and corner marks and its opacity slider on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
+// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so
@@ -15,6 +15,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { effectiveOpacities, headerVersion, openSettings, scaleOf } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -86,7 +87,7 @@ after(async () => { await browser?.close() })
 async function newPage (context, errors) {
   const p = await context.newPage()
   p.on('pageerror', (e) => errors.push(String(e)))
-  await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+  await routeSudokuPad(p)
   return p
 }
 

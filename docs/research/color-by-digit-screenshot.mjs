@@ -1,6 +1,5 @@
 // Takes docs/research/site-color-by-digit.png: the sample puzzle's grid after one press of the
-// Color by digit button with its Low/5/High preload saved, since the default Odd/Even colors are two greys,
-// the mascot hidden. Run from the repo root:
+// Color by digit button on a fresh install, whose active profile is Low/5/High, the mascot hidden. Run from the repo root:
 // node docs/research/color-by-digit-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
@@ -17,11 +16,6 @@ await page.waitForFunction(() => Framework.app && Framework.app.puzzle && Framew
 await page.getByRole('button', { name: /Start Puzzle|Continue|Resume/i }).first().click()
 await page.locator('#control-undo').waitFor()
 await page.addStyleTag({ content: '#svenpeek { display: none !important }' })
-await page.evaluate((groups) => Framework.setData('ColorByDigit_groups', groups), [
-  { key: '1', digits: ['0', '1', '2', '3', '4'] },
-  { key: '5', digits: ['5'] },
-  { key: '9', digits: ['6', '7', '8', '9'] }
-])
 await page.addScriptTag({ content: script })
 await page.locator('#control-colorbydigit').waitFor({ state: 'visible' })
 // SudokuPad binds the button's handler a moment after it appears: click until a cell is colored.

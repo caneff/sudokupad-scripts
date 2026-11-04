@@ -1,5 +1,5 @@
 // Live check of Color by Digit's auto mode on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
+// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so
@@ -12,6 +12,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
 
 /* global Replay */
@@ -22,6 +23,15 @@ const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url
 // The puzzle's givens, row by row, 0 for empty; the same board as color-by-digit.live.mjs.
 const GIVENS = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
 const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
+
+// The saved profiles every session starts with: Odd/Even active, Low/5/High to switch to. The fresh
+// install and the migration are checked in color-by-digit-profiles.live.mjs.
+const LOW_FIVE_HIGH = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
+const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
+const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
+// The key the script saves its profiles under, and the one Framework.setData stores it at.
+const PROFILES_KEY = 'ColorByDigit_profiles'
+const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 
 const POLL_MS = 50
 const SETTLE_MS = 10000
@@ -93,7 +103,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const errors = []
     const p = await context.newPage()
     p.on('pageerror', (e) => errors.push(String(e)))
-    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+    await routeSudokuPad(p)
+    await p.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
     if (seedAuto) await p.addInitScript(([key]) => window.localStorage.setItem(key, 'true'), [AUTO_STORAGE_KEY])
     if (mode === 'document-idle') {
       await p.addInitScript((src) => {
@@ -122,7 +133,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const colorsAt = async (r, c) => (await cellAt(r, c)).colours
     const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
     const getAuto = () => read((key) => Framework.getData(key), AUTO_KEY)
-    const getGroups = () => read(() => Framework.getData('ColorByDigit_groups'))
+    const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
+    // Makes the profile at `index` of SEED the active one in the open dialog.
+    const chooseProfile = (index) => p.click(`#color-by-digit-editor [data-act=activate][data-index="${index}"]`)
     const boxChecked = () => boxCheckedOn(p)
     const dialogBox = () => p.locator('#color-by-digit-editor input[data-role="auto-draft"]')
     const editor = () => p.locator('#color-by-digit-editor')
@@ -328,6 +341,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     it('the dialog box opens at the value in force, and Cancel leaves auto mode as it was', async () => {
       await openEditor()
       assert.equal(await dialogBox().isChecked(), true)
+      assert.equal(await editor().locator('label[for="color-by-digit-auto-draft"]').innerText(), 'Keep colors in step with digits and centre marks')
+      assert.equal(await dialogBox().getAttribute('aria-label'), 'Auto mode')
       await dialogBox().uncheck()
       await closeWith('Cancel')
       assert.equal(await boxChecked(), 'true')
@@ -352,10 +367,9 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('with auto mode off, Save with changed groups colors nothing', async () => {
       await openEditor()
-      await dialogButton('Low/5/High').click()
+      await chooseProfile(1)
       await closeWith('Save')
-      const lowFiveHigh = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
-      assert.deepEqual(await settle(getGroups, lowFiveHigh), lowFiveHigh)
+      assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH)
       const colors = JSON.stringify((await cellsState()).map((x) => x.colours))
       assert.deepEqual(await watch(async () => JSON.stringify((await cellsState()).map((x) => x.colours))), [colors])
     })
@@ -376,7 +390,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // Low/5/High is saved; switch to Odd/Even.
       const before = JSON.stringify((await cellsState()).map((x) => x.colours))
       await openEditor()
-      await dialogButton('Odd/Even').click()
+      await chooseProfile(0)
       await closeWith('Save')
       const oddEven = (x) => {
         const digit = x.given || x.value
@@ -395,7 +409,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await settle(() => valueAt(0, 6), '8'), '8')
       assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
       await openEditor()
-      await dialogButton('Low/5/High').click()
+      await chooseProfile(1)
       await dialogBox().check()
       await closeWith('Save')
       assert.equal(await settle(boxChecked, 'true'), 'true')

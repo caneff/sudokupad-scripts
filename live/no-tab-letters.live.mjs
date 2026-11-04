@@ -1,5 +1,5 @@
 // Live check of no-tab-letters.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
+// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so
@@ -13,6 +13,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../no-tab-letters.user.js', import.meta.url), 'utf8')
@@ -42,7 +43,7 @@ async function openPuzzle (p, { beforeStart = async () => {}, afterStart = async
 
 async function newPage (context) {
   const p = await context.newPage()
-  await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+  await routeSudokuPad(p)
   return p
 }
 

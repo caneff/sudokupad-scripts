@@ -1,5 +1,5 @@
 // Live check of pen-tool-extras.user.js's third page of pens (chevron lines) on sudokupad.app in headless Chromium.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of `npm test`.
+// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real injection time and
 // crackingthecryptic.com stay untested, and so does a touch screen. Each injection time runs the same checks:
@@ -14,6 +14,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { effectiveOpacities, openSettings } from './settings.mjs'
 
 // The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
@@ -163,7 +164,7 @@ function group (title, mode) {
       p.on('pageerror', (e) => errors.push(String(e)))
       // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
       p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console.error: ${m.text()}`) })
-      await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await routeSudokuPad(p)
       if (mode === 'document-idle') {
         await p.addInitScript((source) => {
           document.addEventListener('DOMContentLoaded', () => {
