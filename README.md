@@ -30,6 +30,12 @@ Each script except No Tab Letters adds an entry to SudokuPad's settings, under t
 
 The button colors every cell holding a digit, and every empty cell whose centre marks all belong to one group. You set the groups in a settings dialog.
 
+- **Auto mode** is a small box on the button, off by default. Tick it, or tick the box in the settings dialog and Save, and the colors follow the board: a cell that holds one group's digit, or has only centre marks of one group, gets that group's color and loses any other group's; any other cell loses every group color. Corner marks are ignored, and colors in no group stay.
+- A digit or centre mark change and its color change are one undo step. Undo, redo and replays never trigger auto mode.
+- Turning auto mode on, loading a puzzle with it on, and a restart color the givens. Saving changed groups recolors the whole grid in one undo step.
+- The button still only adds colors. Turning auto mode off leaves every color in place. A group color you remove by hand stays off until that cell's digit or centre marks change.
+- With the Multi-color setting off, SudokuPad replaces a cell's color when a group color is added, so a color in no group stays only with Multi-color on.
+
 ### Digit Color
 
 Colors entered digits, corner marks and centre marks. It starts from default colors, which you can change in a settings dialog. Givens keep their color. A conflicting mark keeps its digit color and gets a small red circle behind it.
