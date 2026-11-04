@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, NUMPAD_DIGITS, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -262,7 +262,7 @@ test('iconLayout shows at most four groups: up to three in one row, four as 2 by
   assert.deepEqual(iconLayout(g(6)).map((c) => c.key), ['k0', 'k1', 'k2', 'k3'])
 })
 
-test('iconLayout labels each cell with its group\'s most extreme digit: the lowest if all are below 5, the highest if all are above 5, else the middle', () => {
+test('iconLayout labels each cell with its group\'s shown digit: the lowest if all are below 5, the highest if all are above 5, else the middle', () => {
   const digitOf = (digits) => iconLayout([{ key: 'a', digits }])[0].digit
   assert.equal(digitOf(['0', '1', '2', '3', '4']), '1')
   assert.equal(digitOf(['5']), '5')
@@ -506,7 +506,9 @@ test('renderProfiles lists each profile as a radio row with its handle, colors w
   assert.equal(count(html, /aria-checked="true"/g), 1)
   assert.match(html, /data-index="1"[^>]*aria-checked="true"/)
   assert.match(html, /data-index="0"[^>]*aria-checked="false"/)
-  assert.equal(count(html, /role="radio"[^>]*tabindex="0"/g), 2)
+  assert.equal(count(html, /role="radio"[^>]*tabindex="0"/g), 1)
+  assert.match(html, /data-index="1"[^>]*tabindex="0"/)
+  assert.match(html, /data-index="0"[^>]*tabindex="-1"/)
   assert.equal(count(html, /data-act="delete"/g), 2)
   assert.match(html, />2 of 4</)
   assert.match(html, /Low &lt;b&gt;/)
@@ -884,7 +886,6 @@ test('VERSION is the @version in the script header', () => {
 test('renderEditor lays each group\'s digits out as a numpad: 1 to 9 in SudokuPad\'s order with 0 alone under 8', () => {
   const html = editor([{ key: 'a', digits: ['1', '0'] }], [], [0])
   assert.deepEqual([...html.matchAll(/data-act="digit"[^>]*data-digit="(\d)"/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
-  assert.deepEqual(NUMPAD_DIGITS, ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
   assert.match(html, /grid-template-columns:repeat\(3,/)
   assert.match(html, /data-digit="0"[^>]*grid-column:2/)
   assert.doesNotMatch(html, /data-digit="[1-9]"[^>]*grid-column/)

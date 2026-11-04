@@ -554,8 +554,30 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await groupCount(), 2)
     })
 
+    it('Space on a focused row makes it the active one, and the arrow keys move the choice, wrapping', async () => {
+      await p.focus(`${ROWS}:nth-child(2)`)
+      await p.keyboard.press(' ')
+      assert.equal(await t.activeRow(), 1)
+      await p.keyboard.press('ArrowDown')
+      assert.equal(await t.activeRow(), 2)
+      await p.keyboard.press('ArrowDown')
+      assert.equal(await t.activeRow(), 0)
+      await p.keyboard.press('ArrowUp')
+      assert.equal(await t.activeRow(), 2)
+      assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-index')), '2')
+      assert.deepEqual(await p.$$eval(ROWS, (rows) => rows.map((r) => r.tabIndex)), [-1, -1, 0])
+      await p.click(`${ROWS}:nth-child(1)`)
+    })
+
+    it('the buttons row is Cancel then Save, Save filled purple, and the page pulldown has the dialog\'s own look', async () => {
+      assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Cancel', 'Save'])
+      assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
+      assert.match(await p.$eval(`${EDITOR} select[data-act=page]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
+    })
+
     it('a click on a handle or on × does not make that row the active one', async () => {
-      await p.click(`${ROWS}:nth-child(2) [data-role=handle]`)
+      // A click event aimed at the handle itself: a real press on it starts a drag, whose release redraws the list.
+      await p.dispatchEvent(`${ROWS}:nth-child(2) [data-role=handle]`, 'click')
       assert.equal(await t.activeRow(), 0)
       await p.click(`${ROWS}:nth-child(3) button[data-act=delete]`)
       assert.deepEqual(await t.rowNames(), ['Odd/Even', 'Low/5/High'])
@@ -577,8 +599,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       const box = async (d) => p.locator(`${EDITOR} [data-act=digit][data-group="0"][data-digit="${d}"]`).boundingBox()
       const at = {}
       for (const d of '0123456789') at[d] = await box(d)
-      assert.ok(at[1].x < at[2].x && at[2].x < at[3].x && at[1].y === at[3].y)
-      assert.ok(at[1].y < at[4].y && at[4].y < at[7].y && at[4].x === at[1].x && at[7].x === at[1].x)
+      assert.ok(at[1].x < at[2].x && at[2].x < at[3].x)
+      assert.equal(at[1].y, at[3].y)
+      assert.ok(at[1].y < at[4].y && at[4].y < at[7].y)
+      assert.deepEqual([at[4].x, at[7].x], [at[1].x, at[1].x])
       assert.equal(at[0].x, at[8].x)
       assert.ok(at[0].y > at[8].y, JSON.stringify([at[0], at[8]]))
     })

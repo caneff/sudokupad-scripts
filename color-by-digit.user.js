@@ -30,9 +30,10 @@
   const CUSTOM_NAME = 'Custom'
   // Whether auto mode is on: true or false, absent until first set.
   const AUTO_KEY = 'ColorByDigit_auto'
-  // SudokuPad's number pad order for the digit buttons of the dialog: 1 to 9 in rows of three, then 0 alone
+  // SudokuPad's numpad order for the digit buttons of the dialog: 1 to 9 in rows of three, then 0 alone
   // in the middle column.
   const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+  const NUMPAD_KEY = '2.4em'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
   // A group is one palette key plus the digits that get it.
@@ -447,24 +448,29 @@
     }).join('')
   }
 
-  // The dialog's look, copied from Pen Tool Extras' dialog: a light grey button with a rounded border, a
-  // divider between sections, a purple Save, and a pulldown with a purple arrow.
-  const DIVIDER = 'border-top:1px solid #e3dff0;margin:12px 0 0;padding-top:10px'
-  const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
-  const PULLDOWN_ARROW = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E\")"
-  const PULLDOWN_LOOK = `font-size:.95rem;padding:4px 28px 4px 10px;border:1px solid #b9b0c9;border-radius:6px;background:#fff ${PULLDOWN_ARROW} no-repeat right 10px center;appearance:none;color:#222`
-  const heading = (text, extra = '') => `<div style="display:flex;align-items:center;justify-content:space-between;font-weight:600;margin:0 0 6px">${text}${extra}</div>`
-  const SAVE_BUTTON_LOOK = 'background:#6b3fa0;color:#fff;border:1px solid #5a3489;border-radius:8px;font-size:1rem;font-weight:600;padding:0 22px;height:38px;line-height:36px;margin:0;width:auto;min-width:0;flex:none;cursor:pointer'
-  const CANCEL_BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:1rem;padding:0 22px;height:38px;line-height:36px;margin:0;width:auto;min-width:0;flex:none;cursor:pointer'
-  // `css` with every declaration important: SudokuPad's own rules for the dialog's buttons and labels size them otherwise.
+  // `css` with every declaration important: SudokuPad's own rules for the dialog's selects, buttons and
+  // labels size them otherwise.
   const important = (css) => css.split(';').map((d) => `${d} !important`).join(';')
+  // The dialog's look: a light grey button with a rounded border, a divider between sections, a purple
+  // Save, and a pulldown with a purple arrow.
+  const RULE_COLOR = '#e3dff0'
+  const DIVIDER = `border-top:1px solid ${RULE_COLOR};margin:12px 0 0;padding-top:10px`
+  const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
+  // Percent-encoded, with no quotes, so the value sits inside a style="..." attribute.
+  const PULLDOWN_ARROW = 'url(data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2710%27%20height=%276%27%3E%3Cpath%20d=%27M0%200l5%206%205-6z%27%20fill=%27%236b4fa0%27/%3E%3C/svg%3E)'
+  const PULLDOWN_LOOK = important(`font-size:.95rem;padding:4px 28px 4px 10px;border:1px solid #b9b0c9;border-radius:6px;background:#fff ${PULLDOWN_ARROW} no-repeat right 10px center;appearance:none;color:#222`)
+  const heading = (text, extra = '') => `<div style="display:flex;align-items:center;justify-content:space-between;font-weight:600;margin:0 0 6px">${text}${extra}</div>`
+  const SAVE_LABEL = 'Save'
+  const DIALOG_BUTTON_LOOK = 'border-radius:8px;font-size:1rem;padding:0 22px;height:38px;line-height:36px;margin:0;width:auto;min-width:0;flex:none;cursor:pointer'
+  const SAVE_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#6b3fa0;color:#fff;border:1px solid #5a3489;font-weight:600`
+  const CANCEL_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#f1eff5;color:#333;border:1px solid #cfc9db`
   // The bottom row under a divider, Cancel then Save at the right. The dialog builds the row; this styles it.
   function styleDialogButtons (dialog) {
     const row = dialog.querySelector('.dialog-options')
     if (!row) return
-    row.style.cssText = important('display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid #e3dff0;padding:14px 4px 2px;margin-top:8px;box-sizing:border-box;width:100%')
+    row.style.cssText = important(`display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid ${RULE_COLOR};padding:14px 4px 2px;margin-top:8px;box-sizing:border-box;width:100%`)
     row.querySelectorAll('button').forEach((b) => {
-      b.style.cssText = important(b.textContent.trim() === 'Save' ? SAVE_BUTTON_LOOK : CANCEL_BUTTON_LOOK)
+      b.style.cssText = important(b.textContent.trim() === SAVE_LABEL ? SAVE_BUTTON_LOOK : CANCEL_BUTTON_LOOK)
     })
   }
 
@@ -482,7 +488,7 @@
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
-      return `<div data-role="profile-row" data-act="activate" data-index="${i}" role="radio" aria-checked="${active}" tabindex="0" aria-label="${esc(profile.name)}" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;` +
+      return `<div data-role="profile-row" data-act="activate" data-index="${i}" role="radio" aria-checked="${active}" tabindex="${active ? 0 : -1}" aria-label="${esc(profile.name)}" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;` +
         (active ? `background:${ACTIVE_FILL};box-shadow:inset 0 0 0 1.5px ${ACTIVE_RING}` : `box-shadow:inset 0 0 0 1px ${IDLE_RING}`) + '">' +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder" style="cursor:grab;touch-action:none;user-select:none;color:${MUTED};font-size:18px;line-height:1">&#8942;&#8942;</span>` +
         `<span style="display:flex;gap:3px;width:100px">${renderChips(profile.groups, colorOf, 22)}</span>` +
@@ -518,11 +524,11 @@
     const rows = groups.map((g, i) => {
       const digits = NUMPAD_DIGITS.map((d) =>
         `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
-        `style="${BUTTON_LOOK};width:2.4em;padding:0;${d === '0' ? 'grid-column:2;' : ''}font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
+        `style="${BUTTON_LOOK};width:${NUMPAD_KEY};padding:0;${d === '0' ? 'grid-column:2;' : ''}font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
         `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
-      return '<div style="margin:8px 0;padding:8px;border:1px solid #e3dff0;border-radius:8px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">' +
+      return `<div style="margin:8px 0;padding:8px;border:1px solid ${RULE_COLOR};border-radius:8px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">` +
         `<div>${renderPalette(pages, colors, i, g.key, shown[i])}</div>` +
-        `<div style="display:flex;flex-direction:column;gap:8px"><div data-role="numpad" style="display:grid;grid-template-columns:repeat(3,2.4em);gap:4px">${digits}</div>` +
+        `<div style="display:flex;flex-direction:column;gap:8px"><div data-role="numpad" style="display:grid;grid-template-columns:repeat(3,${NUMPAD_KEY});gap:4px">${digits}</div>` +
         `<button type="button" data-act="remove" data-group="${i}" style="${BUTTON_LOOK}">Remove</button></div></div>`
     }).join('')
     const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
@@ -536,7 +542,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, NUMPAD_DIGITS, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -855,14 +861,15 @@
           tag: 'options',
           options: [
             { tag: 'button', content: 'Cancel', action: 'close' },
-            { tag: 'button', content: 'Save', handler: () => { saveDialog(app, savedState, draft, auto); Framework.closeDialog() } }
+            { tag: 'button', content: SAVE_LABEL, handler: () => { saveDialog(app, savedState, draft, auto); Framework.closeDialog() } }
           ]
         }
       ]
     })
     const box = document.getElementById('color-by-digit-editor')
     if (!box) return
-    styleDialogButtons(box.closest('.dialog') || document)
+    const dialog = box.closest('.dialog')
+    if (dialog) styleDialogButtons(dialog)
     // The page each group of the active profile shows, by group index; a group not yet shown opens on its color's page.
     let shown = []
     const draw = () => {
@@ -926,25 +933,34 @@
       handle.addEventListener('pointerup', finish)
       handle.addEventListener('pointercancel', finish)
     })
-    // A click on a profile row, off its handle and its buttons, or Enter or Space on the focused row,
+    // A click on a profile row, off its handle and its buttons, or a key on the focused row (below),
     // makes that profile the active one; the redrawn row takes the focus back for the keyboard.
-    const activateRow = (row, refocus) => {
-      reshow(setActive(draft, Number(row.dataset.index)))
+    const activateRow = (index, refocus) => {
+      reshow(setActive(draft, index))
       draw()
-      if (refocus) box.querySelector(`[data-act="activate"][data-index="${row.dataset.index}"]`).focus()
+      if (refocus) box.querySelector(`[data-act="activate"][data-index="${index}"]`).focus()
     }
+    // Enter and Space activate the focused row; the arrow keys move the choice to the next or previous row,
+    // wrapping, as a radio group does. Only the active row is a tab stop.
+    const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
     box.addEventListener('keydown', (event) => {
-      if ((event.key !== 'Enter' && event.key !== ' ') || !event.target.matches('[data-act="activate"]')) return
+      if (!event.target.matches('[data-act="activate"]')) return
+      const count = draft.profiles.length
+      const index = Number(event.target.dataset.index)
+      let target
+      if (event.key === 'Enter' || event.key === ' ') target = index
+      else if (ARROW_STEP[event.key]) target = (index + ARROW_STEP[event.key] + count) % count
+      else return
       event.preventDefault()
       event.stopPropagation()
-      activateRow(event.target, true)
+      activateRow(target, true)
     })
     box.addEventListener('click', (event) => {
       const row = event.target.closest('[data-act="activate"]')
       if (row && !event.target.closest('[data-role="handle"], button')) {
         event.preventDefault()
         event.stopPropagation()
-        activateRow(row, false)
+        activateRow(Number(row.dataset.index), false)
         return
       }
       const el = event.target.closest('button[data-act]')
