@@ -28,7 +28,9 @@ const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 const LOW_FIVE_HIGH = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
 const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
 const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
-const PROFILES_STORAGE_KEY = 'svencodes_ColorByDigit_profiles'
+// The key the script saves its profiles under, and the one Framework.setData stores it at.
+const PROFILES_KEY = 'ColorByDigit_profiles'
+const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 
 const POLL_MS = 50
 const SETTLE_MS = 10000
@@ -130,7 +132,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const colorsAt = async (r, c) => (await cellAt(r, c)).colours
     const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
     const getAuto = () => read((key) => Framework.getData(key), AUTO_KEY)
-    const getGroups = () => read(() => { const d = Framework.getData('ColorByDigit_profiles'); return d.profiles[d.active].groups })
+    const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
     // Makes the profile at `index` of SEED the active one in the open dialog.
     const chooseProfile = (index) => p.check(`#color-by-digit-editor input[data-act=activate][data-index="${index}"]`)
     const boxChecked = () => boxCheckedOn(p)

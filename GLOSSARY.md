@@ -7,8 +7,8 @@
   and no centre marks, or a digit in no group, is not pure.
 - **profile** — a named list of groups in Color by Digit. Exactly one is active, and the button and
   auto mode use its groups. There are one to four of them; a fresh install has Low/5/High and Odd/Even,
-  with Low/5/High active. Groups saved before profiles existed become the active profile, named after the
-  preload they equal, else Custom.
+  with Low/5/High active. Groups saved before profiles existed become the active profile: the preload
+  they equal, else a profile named Custom added first, with both preloads beside it.
 - **profile menu** — the menu above the Color by Digit button, opened by its arrow box, a right click or a
   hold: one row per profile, the active one highlighted, and Edit profiles…. Picking a row makes that profile
   active and recolors the cells (planSwitch), as one undo step.

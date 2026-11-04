@@ -57,7 +57,9 @@ const MENU = '#color-by-digit-menu'
 const EDITOR = '#color-by-digit-editor'
 const ROWS = `${EDITOR} [data-role=profile-row]`
 // Framework.setData prefixes the script's key with the site's own prefix.
-const PROFILES_STORAGE_KEY = 'svencodes_ColorByDigit_profiles'
+// The key the script saves its profiles under, and the one Framework.setData stores it at.
+const PROFILES_KEY = 'ColorByDigit_profiles'
+const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 const LEGACY_STORAGE_KEY = 'svencodes_ColorByDigit_groups'
 // The script's own hold time on the button.
 const HOLD_MS = 500
@@ -137,7 +139,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const digitOf = (x) => String(x.given || x.value || '')
     // The cells whose colors are not what `groups` gives their digit.
     const wrongCount = async (groups) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(digitOf(x) === '' ? [] : [keyOf(groups, digitOf(x))])).length
-    const getState = () => read(() => Framework.getData('ColorByDigit_profiles'))
+    const getState = () => read((key) => Framework.getData(key), PROFILES_KEY)
     const names = async () => (await getState()).profiles.map((x) => x.name)
     const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
     const valueAt = (r, c) => read(([r, c]) => String(Framework.app.grid.getCell(r, c).value || ''), [r, c])
@@ -193,7 +195,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('the menu lists Low/5/High then Odd/Even, Low/5/High highlighted, under its heading', async () => {
       await t.openMenuByArrow()
-      assert.deepEqual(await t.menuRows(), [{ name: 'Low/5/High', active: true }, { name: 'Odd/Even', active: false }].map((r) => ({ ...r, name: r.name })))
+      assert.deepEqual(await t.menuRows(), [{ name: 'Low/5/High', active: true }, { name: 'Odd/Even', active: false }])
       assert.match(await t.menu().innerText(), /color by digit profile/i)
       assert.match(await t.menu().innerText(), /Edit profiles…/)
       await p.keyboard.press('Escape')
@@ -207,11 +209,15 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     it('a short press colors every given by Low/5/High, as the active profile', async () => {
       const low = LOW_FIVE_HIGH
       assert.equal(await t.pressUntil(() => t.wrongCount(low), 0), 0)
-      assert.equal(await t.coloredCount() > 0, true)
+      assert.notEqual(await t.coloredCount(), 0)
     })
 
-    it('nothing is saved until a profile is picked or the dialog saved', async () => {
+    it('a fresh install has nothing saved, and a pick saves the profiles', async () => {
       assert.equal(await t.getState(), null)
+      await t.openMenuByArrow()
+      await t.pick('Odd/Even')
+      assert.deepEqual((await t.getState()).profiles.map((x) => x.name), ['Low/5/High', 'Odd/Even'])
+      assert.equal((await t.getState()).active, 1)
     })
 
     it('no uncaught page errors', () => {
@@ -220,12 +226,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
   })
 
   describe(`migration from saved groups, injected ${mode}`, { concurrency: false }, () => {
-    const migrate = async (groups, expectedName, expectedDigits) => {
+    // `rows` are the menu's rows after the migration: the active profile is the one in `activeName`.
+    const migrate = async (groups, rows, expectedDigits) => {
       const { context, p, errors } = await openSession({ [LEGACY_STORAGE_KEY]: groups })
       try {
         const t = tools(p)
         await t.openMenuByArrow()
-        assert.deepEqual(await t.menuRows(), [{ name: expectedName, active: true }])
+        assert.deepEqual(await t.menuRows(), rows)
         assert.deepEqual(await t.iconDigits(), expectedDigits)
         await p.keyboard.press('Escape')
         // Nothing saved is lost: the groups are still where they were, and a switch writes the new key.
@@ -236,12 +243,12 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       }
     }
 
-    it('saved groups equal to a preload become the active profile, named after it', async () => {
-      await migrate(ODD_EVEN, 'Odd/Even', ['1', '0'])
+    it('saved groups equal to a preload make that preload the active profile, beside the other', async () => {
+      await migrate(ODD_EVEN, [{ name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: true }], ['1', '0'])
     })
 
-    it('saved groups equal to no preload become the active profile named Custom', async () => {
-      await migrate([group('3', ['2', '4']), group('7', ['9'])], 'Custom', ['2', '9'])
+    it('saved groups equal to no preload become the active profile named Custom, first, beside both preloads', async () => {
+      await migrate([group('3', ['2', '4']), group('7', ['9'])], [{ name: 'Custom', active: true }, { name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: false }], ['2', '9'])
     })
   })
 
@@ -335,6 +342,20 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await settle(() => p.locator(BOX).getAttribute('aria-checked'), 'false')
     })
 
+    it('with Multi-color off, a pick that takes one color off a cell holding two leaves it its group color, and one undo brings both back', async () => {
+      // r2c4 is a given 1: key 1 in Odd/Even and in Low/5/High. It holds that and the even color 2.
+      const colours = () => t.read(() => [...Framework.app.grid.getCell(1, 3).colours].sort())
+      await t.read(() => { Framework.setSetting('multicolour', true); const a = Framework.app; a.deselect(); a.select(a.grid.getCell(1, 3)); a.act({ type: 'colour', arg: '2' }); a.deselect() })
+      assert.deepEqual(await settle(colours, ['1', '2']), ['1', '2'])
+      await t.read(() => Framework.setSetting('multicolour', false))
+      await t.openMenuByArrow()
+      await t.pick('Low/5/High')
+      assert.deepEqual(await settle(colours, ['1']), ['1'])
+      await t.undo()
+      assert.deepEqual(await settle(colours, ['1', '2']), ['1', '2'])
+      await t.read(() => Framework.setSetting('multicolour', true))
+    })
+
     it('a pick by right click works too, and a cell entered by hand keeps its digit: the keyboard stays with the puzzle', async () => {
       const box = await p.locator(BUTTON).boundingBox()
       await p.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.55, { button: 'right' })
@@ -417,6 +438,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       const box = await p.locator(BUTTON).boundingBox()
       const x = box.x + box.width * 0.5
       const y = box.y + box.height * 0.55
+      await t.undo() // the pick's colors, so a press that wrongly colored the grid would show
+      assert.equal(await settle(t.coloredCount, 0), 0)
       const before = await t.coloursOf()
       await touch('touchStart', x, y)
       await t.menu().waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
@@ -427,8 +450,6 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('a short tap on the button colors the grid', async () => {
-      await t.undo() // the pick's colors, so the grid starts clear
-      assert.equal(await settle(t.coloredCount, 0), 0)
       const box = await p.locator(BUTTON).boundingBox()
       const x = box.x + box.width * 0.5
       const y = box.y + box.height * 0.55
@@ -439,7 +460,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await touch('touchEnd', x, y)
         colored = await settle(t.coloredCount, 1, 300)
       }
-      assert.equal(colored > 0, true)
+      assert.notEqual(colored, 0)
     })
 
     it('no uncaught page errors', () => {
@@ -457,17 +478,27 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
     after(async () => { await context.close() })
 
+    // Real key presses into the name field: SudokuPad listens for keys on the page, and a digit or letter
+    // must reach the field.
+    const typeName = async (text) => {
+      await p.locator(`${EDITOR} [data-role=new-name]`).pressSequentially(text)
+      assert.equal(await p.inputValue(`${EDITOR} [data-role=new-name]`), text)
+    }
     const handle = (i) => p.locator(`${ROWS} [data-role=handle]`).nth(i)
     const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
     const count = () => p.locator(ROWS).count()
     const heading = () => p.locator(EDITOR).innerText()
-    // Drags a handle to the vertical middle of row `to` with the mouse.
-    const dragWithMouse = async (from, to) => {
+    // Where a drag of the handle of row `from` starts and ends: the end is just past the middle of row `to`,
+    // where the dragged row lands beyond it.
+    const dragPoints = async (from, to) => {
       await p.locator(ROWS).first().scrollIntoViewIfNeeded()
       const start = await center(handle(from))
       const end = await center(p.locator(ROWS).nth(to))
-      // Past the row's middle, where the dragged row lands after it.
       end.y += to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX
+      return { start, end }
+    }
+    const dragWithMouse = async (from, to) => {
+      const { start, end } = await dragPoints(from, to)
       await p.mouse.move(start.x, start.y)
       await p.mouse.down()
       await p.mouse.move(start.x, (start.y + end.y) / 2, { steps: 4 })
@@ -476,10 +507,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     }
     // The same drag with a finger.
     const dragWithTouch = async (from, to) => {
-      await p.locator(ROWS).first().scrollIntoViewIfNeeded()
-      const start = await center(handle(from))
-      const end = await center(p.locator(ROWS).nth(to))
-      end.y += to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX
+      const { start, end } = await dragPoints(from, to)
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x, y: start.y }] })
       for (let step = 1; step <= 6; step++) {
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x, y: start.y + ((end.y - start.y) * step) / 6 }] })
@@ -526,7 +554,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
 
     it('a name and Add append a copy of the active profile, which is not made active; Cancel drops it', async () => {
       await t.openEditor()
-      await p.fill(`${EDITOR} [data-role=new-name]`, 'Mine')
+      await typeName('Mine')
       await p.click(`${EDITOR} button[data-act=add]`)
       assert.deepEqual(await t.rowNames(), ['Four', 'Odd/Even', 'Low/5/High', 'Mine'])
       assert.equal(await t.activeRow(), 1)
@@ -542,7 +570,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await t.openEditor()
       await p.click(`${EDITOR} button[data-act=add]`)
       assert.equal(await count(), 3)
-      await p.fill(`${EDITOR} [data-role=new-name]`, 'Mine')
+      await typeName('Mine')
       await p.press(`${EDITOR} [data-role=new-name]`, 'Enter')
       assert.equal(await count(), 4)
       assert.equal(await p.locator(`${EDITOR} button[data-act=add]`).isDisabled(), true)

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -129,19 +129,27 @@ test('a fresh install returns copies, so editing one never edits the presets', (
   assert.deepEqual(stateFromStored(null, null).profiles[0].groups, LOW)
 })
 
-test('saved groups with no saved profiles become the one profile, named after the preload they equal', () => {
-  const state = stateFromStored(null, cloneOf(LOW))
-  assert.deepEqual(state, { profiles: [{ name: 'Low/5/High', groups: LOW }], active: 0 })
-  assert.deepEqual(stateFromStored(undefined, cloneOf(ODD)).profiles.map((p) => p.name), ['Odd/Even'])
+test('saved groups equal to a preload make that preload the active profile, beside the other preload', () => {
+  const state = stateFromStored(null, cloneOf(ODD))
+  assert.deepEqual(names(state), ['Low/5/High', 'Odd/Even'])
+  assert.equal(state.active, 1)
+  assert.deepEqual(activeGroups(stateFromStored(undefined, cloneOf(LOW))), LOW)
+  assert.equal(stateFromStored(undefined, cloneOf(LOW)).active, 0)
 })
 
-test('saved groups that equal no preload become a profile named Custom, whatever they hold, even none', () => {
+test('saved groups that equal no preload become the active profile named Custom, first, beside both preloads, even when empty', () => {
   const mine = [{ key: '3', digits: ['1', '2'] }]
-  assert.deepEqual(stateFromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }], active: 0 })
-  assert.deepEqual(stateFromStored(null, []), { profiles: [{ name: 'Custom', groups: [] }], active: 0 })
+  assert.deepEqual(stateFromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }, { name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 0 })
+  assert.deepEqual(stateFromStored(null, []).profiles[0], { name: 'Custom', groups: [] })
 })
 
-test('malformed saved groups and no profiles fall back to a fresh install', () => {
+test('saved groups are cleaned on the way in: a digit in two groups stays in the first, a stray digit drops, and an unequal result is Custom', () => {
+  const messy = [{ key: '1', digits: ['1', '2', 'x'] }, { key: '2', digits: ['2', '3'] }]
+  assert.deepEqual(stateFromStored(null, messy).profiles[0], { name: 'Custom', groups: [{ key: '1', digits: ['1', '2'] }, { key: '2', digits: ['3'] }] })
+  assert.deepEqual(stateFromStored(null, [{ key: '1', digits: ['1', '3', '5', '7', '9', 'x'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]).active, 1)
+})
+
+test('saved groups that are not a list of groups, and no profiles, fall back to a fresh install', () => {
   assert.deepEqual(stateFromStored(null, { key: 'a' }), stateFromStored(null, null))
 })
 
@@ -150,15 +158,27 @@ test('saved profiles win over saved groups, keeping their order and active one',
   assert.deepEqual(stateFromStored(saved, cloneOf(ODD)), saved)
 })
 
-test('saved profiles are untrusted: bad ones fall back, an out-of-range active becomes the first, extras past four drop', () => {
+test('saved profiles are untrusted: with none usable they fall back, and an extra past four drops', () => {
   const fresh = stateFromStored(null, null)
   for (const bad of [{}, { profiles: [] }, { profiles: 'x', active: 0 }, { profiles: [{ name: 3, groups: [] }], active: 0 }, { profiles: [{ name: 'A', groups: 'x' }], active: 0 }, { profiles: [{ name: '  ', groups: [] }], active: 0 }]) {
     assert.deepEqual(stateFromStored(bad, null), fresh)
   }
   const five = ['a', 'b', 'c', 'd', 'e'].map((name) => ({ name, groups: [] }))
-  assert.deepEqual(names(stateFromStored({ profiles: five, active: 9 }, null)), ['a', 'b', 'c', 'd'])
-  assert.equal(stateFromStored({ profiles: five, active: 9 }, null).active, 0)
-  assert.equal(stateFromStored({ profiles: five, active: 1.5 }, null).active, 0)
+  assert.deepEqual(names(stateFromStored({ profiles: five, active: 3 }, null)), ['a', 'b', 'c', 'd'])
+})
+
+test('one unusable saved profile drops out and the others are kept, the active one staying the same profile', () => {
+  const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }, { name: 'D', groups: 'x' }], active: 2 }
+  const state = stateFromStored(saved, cloneOf(ODD))
+  assert.deepEqual(names(state), ['A', 'C'])
+  assert.equal(state.active, 1)
+  assert.equal(stateFromStored({ ...saved, active: 1 }, null).active, 0)
+})
+
+test('an active index that is no profile becomes the first: out of range, negative, fractional or missing', () => {
+  const two = [{ name: 'A', groups: [] }, { name: 'B', groups: [] }]
+  for (const active of [9, -1, 1.5, undefined, '1']) assert.equal(stateFromStored({ profiles: two, active }, null).active, 0, String(active))
+  assert.equal(stateFromStored({ profiles: two, active: 1 }, null).active, 1)
 })
 
 function cloneOf (value) { return JSON.parse(JSON.stringify(value)) }
@@ -231,29 +251,28 @@ test('dropIndex gives the position the dragged row lands in, counting the rows a
   assert.equal(dropIndex(mids, 1, 31), 1)
 })
 
-test('iconLayout shows at most four groups: two or three in a row, one alone, four as 2 by 2', () => {
+test('iconLayout shows at most four groups: up to three in one row, four as 2 by 2', () => {
   const g = (n) => Array.from({ length: n }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1), '9'] }))
-  assert.deepEqual(iconLayout(g(0)), { layout: 'row', cells: [] })
-  assert.equal(iconLayout(g(1)).layout, 'row')
-  assert.equal(iconLayout(g(3)).layout, 'row')
-  assert.equal(iconLayout(g(4)).layout, 'grid')
-  assert.equal(iconLayout(g(6)).layout, 'grid')
-  assert.deepEqual(iconLayout(g(6)).cells.map((c) => c.key), ['k0', 'k1', 'k2', 'k3'])
+  const rows = (n) => new Set(iconLayout(g(n)).map((c) => c.y)).size
+  assert.deepEqual(iconLayout(g(0)), [])
+  assert.equal(ICON_MAX_GROUPS, 4)
+  for (const n of [1, 2, 3]) assert.equal(rows(n), 1, `${n} groups`)
+  assert.equal(rows(4), 2)
+  assert.equal(rows(6), 2)
+  assert.deepEqual(iconLayout(g(6)).map((c) => c.key), ['k0', 'k1', 'k2', 'k3'])
 })
 
 test('iconLayout labels each cell with its group\'s lowest digit, empty for a group with none', () => {
-  const layout = iconLayout([{ key: 'a', digits: ['6', '7', '9'] }, { key: 'b', digits: [] }, { key: 'c', digits: ['0', '5'] }])
-  assert.deepEqual(layout.cells.map((c) => c.digit), ['6', '', '0'])
+  const layout = iconLayout([{ key: 'a', digits: ['6', '7', '9'] }, { key: 'b', digits: [] }, { key: 'c', digits: ['5', '0'] }])
+  assert.deepEqual(layout.map((c) => c.digit), ['6', '', '0'])
 })
 
-test('iconLayout puts every cell inside the icon and clear of the corner boxes', () => {
-  // The AUTO label takes the top 22 and the menu arrow the bottom right square from 78, of the 100 by 100 icon.
+test('iconLayout puts every cell inside the icon and clear of the corner boxes, whatever the group count', () => {
   for (let n = 1; n <= 6; n++) {
-    const { cells } = iconLayout(Array.from({ length: n }, (_, i) => ({ key: 'k' + i, digits: [String(i)] })))
+    const cells = iconLayout(Array.from({ length: n }, (_, i) => ({ key: 'k' + i, digits: [String(i)] })))
     cells.forEach((c) => {
-      assert.ok(c.x >= 0 && c.y >= 22 && c.x + c.size <= 100 && c.y + c.size <= 100, `cell of ${n} outside`)
-      const overArrow = c.x + c.size > 78 && c.y + c.size > 78
-      assert.equal(overArrow, false, `a cell of ${n} reaches the arrow box`)
+      assert.equal(c.x >= 0 && c.y >= ICON_TOP && c.x + c.size <= 100 && c.y + c.size <= 100, true, `cell of ${n} outside the icon: ${JSON.stringify(c)}`)
+      assert.equal(c.x + c.size > ARROW_START && c.y + c.size > ARROW_START, false, `a cell of ${n} reaches the arrow box: ${JSON.stringify(c)}`)
     })
   }
 })
@@ -439,8 +458,8 @@ test('auto: installButton draws the box at the value it is given', () => {
 })
 
 test('auto: the dialog box opens at the draft it is given', () => {
-  assert.match(renderEditor([], [], [], true), /data-role="auto-draft" checked/)
-  assert.doesNotMatch(renderEditor([], [], []), /data-role="auto-draft" checked/)
+  assert.match(editor([], [], [], true), /data-role="auto-draft" checked/)
+  assert.doesNotMatch(editor([], [], []), /data-role="auto-draft" checked/)
 })
 
 test('iconHtml draws one cell per group, at most four, each with its lowest digit in the ink that reads on its color', () => {
@@ -571,7 +590,9 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
 
 // A SudokuPad stand-in for the auto mode wrapper: cells hold a digit and colors, `act` applies
 // value/clear/colour/select/deselect/group actions and records every call, and `puzzle.inGroup` follows the group actions.
-function autoMockApp (cellDefs) {
+// `single` mimics SudokuPad with Multi-color off: a color toggle acts on the whole cell, so taking one
+// color off a cell that holds two clears both, and adding one replaces what the cell held.
+function autoMockApp (cellDefs, { single = false } = {}) {
   const calls = []
   const cells = cellDefs.map((def, i) => {
     const cell = { row: 0, col: i, given: def.given || '', value: def.value || '', colours: [...(def.colours || [])] }
@@ -592,7 +613,8 @@ function autoMockApp (cellDefs) {
       if (action.type === 'clear') sel.forEach((c) => { c.value = '' })
       if (action.type === 'colour') {
         const all = sel.every((c) => c.colours.includes(action.arg))
-        sel.forEach((c) => { c.colours = all ? c.colours.filter((k) => k !== action.arg) : [...c.colours, action.arg] })
+        if (single) sel.forEach((c) => { c.colours = all ? [] : [action.arg] })
+        else sel.forEach((c) => { c.colours = all ? c.colours.filter((k) => k !== action.arg) : [...c.colours, action.arg] })
       }
     },
     select (list) { puzzle.selectedCells = [...[].concat(list)] },
@@ -643,6 +665,15 @@ test('auto wrapper: a digit entry is one group with its color change inside it',
   })
 })
 
+test('auto wrapper: with Multi-color off, taking a second color off a cell that clears it still leaves the cell its group color', async () => {
+  await withAutoMode(autoMockApp([{ colours: ['1', '2'] }], { single: true }), async (app) => {
+    select(app, 0)
+    app.act({ type: 'value', arg: '3' })
+    assert.deepEqual(app.puzzle.cells[0].colours, ['1'])
+    assert.equal(app.puzzle.inGroup, false)
+  })
+})
+
 test('auto wrapper: an entry SudokuPad already runs in a group adds its colors to that group, never opens another', async () => {
   await withAutoMode(autoMockApp([{}]), async (app) => {
     select(app, 0)
@@ -687,6 +718,8 @@ test('auto wrapper: a restart colors the givens again', async () => {
 })
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
+// The editor without a profile list.
+const editor = (groups, pages, shown, auto = false) => renderEditor(groups, pages, shown, auto, '')
 const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
 const keys = (names) => names.split(' ')
 const slotKeys = (slots) => slots.map((s) => (s ? s.key : null))
@@ -759,55 +792,55 @@ test('initialPage opens on the current page when no page holds the key, and on t
 const options = (html) => [...html.matchAll(/<option value="(\d+)"( selected)?>([^<]*)<\/option>/g)].map((m) => [m[1], Boolean(m[2]), m[3]])
 
 test('renderEditor gives each group a page pulldown labelled Page 1, Page 2 (current), with the shown page selected', () => {
-  const html = renderEditor([{ key: 'a2', digits: [] }], twoPages(), [0])
+  const html = editor([{ key: 'a2', digits: [] }], twoPages(), [0])
   assert.deepEqual(options(html), [['0', true, 'Page 1'], ['1', false, 'Page 2 (current)']])
   assert.equal(count(html, /<select data-act="page" data-group="0"/g), 1)
 })
 
 test('renderEditor draws only the shown page of a group, keeping data-act and data-key on every swatch', () => {
-  const first = renderEditor([{ key: 'a2', digits: [] }], twoPages(), [0])
+  const first = editor([{ key: 'a2', digits: [] }], twoPages(), [0])
   assert.equal(count(first, /data-act="color"/g), 10)
   assert.equal(count(first, /data-act="color"[^>]*data-key="z"/g), 1)
   assert.equal(count(first, /data-key="b1"/g), 0)
-  const second = renderEditor([{ key: 'a2', digits: [] }], twoPages(), [1])
+  const second = editor([{ key: 'a2', digits: [] }], twoPages(), [1])
   assert.equal(count(second, /data-act="color"/g), 9)
   assert.equal(count(second, /data-key="b1"/g), 1)
   assert.equal(count(second, /data-key="a1"/g), 0)
 })
 
 test('renderEditor shows each group on its own page', () => {
-  const html = renderEditor([{ key: 'a2', digits: [] }, { key: 'b2', digits: [] }], twoPages(), [0, 1])
+  const html = editor([{ key: 'a2', digits: [] }, { key: 'b2', digits: [] }], twoPages(), [0, 1])
   assert.equal(count(html, /data-group="0"[^>]*data-key="a1"/g), 1)
   assert.equal(count(html, /data-group="1"[^>]*data-key="b1"/g), 1)
   assert.equal(count(html, /data-group="0"[^>]*data-key="b1"/g), 0)
 })
 
 test('renderEditor shows the group\'s color beside the pulldown even when its page is not shown', () => {
-  const html = renderEditor([{ key: 'b2', digits: [] }], twoPages(), [0])
+  const html = editor([{ key: 'b2', digits: [] }], twoPages(), [0])
   assert.match(html, /data-role="chosen"[^>]*title="b2"[^>]*background:#b2/)
   assert.equal(count(html, /aria-pressed="true"/g), 0)
 })
 
 test('renderEditor draws an empty slot as a spacer with no button, so nothing shifts', () => {
   const pages = layoutPages([keys('clear a1 clear a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
-  const html = renderEditor([{ key: 'a1', digits: [] }], pages, [0])
+  const html = editor([{ key: 'a1', digits: [] }], pages, [0])
   assert.equal(count(html, /data-act="color"/g), 8)
   assert.equal(count(html, /data-empty="slot"/g), 1)
 })
 
 test('renderEditor marks only the group\'s own color as selected', () => {
   const pages = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
-  const html = renderEditor([{ key: 'a2', digits: [] }], pages, [0])
+  const html = editor([{ key: 'a2', digits: [] }], pages, [0])
   assert.equal(count(html, /aria-pressed="true"/g), 1)
   assert.match(html, /data-key="a2"[^>]*aria-pressed="true"/)
 })
 
 test('renderEditor keeps the "No palette colors found" note, and draws no pulldown, when no page has a color', () => {
-  const html = renderEditor([], layoutPages([], 0, colorOf), [])
+  const html = editor([], layoutPages([], 0, colorOf), [])
   assert.match(html, /No palette colors found/)
   assert.equal(count(html, /data-act="color"/g), 0)
-  assert.equal(count(renderEditor([], layoutPages([keys('a b')], 0, colorOf), []), /No palette colors found/g), 0)
-  assert.equal(count(renderEditor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0]), /<select/g), 0)
+  assert.equal(count(editor([], layoutPages([keys('a b')], 0, colorOf), []), /No palette colors found/g), 0)
+  assert.equal(count(editor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0]), /<select/g), 0)
 })
 
 test('the editor has no Preload buttons, keeps a Clear all button, and shows the profile list it is given above the groups', () => {

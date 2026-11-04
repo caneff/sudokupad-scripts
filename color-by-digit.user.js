@@ -166,31 +166,35 @@
     return groups && { name: data.name.trim().slice(0, MAX_NAME_LENGTH), groups }
   }
 
-  // Saved profiles are untrusted: a clean state, or null when there is no usable profile. More than
-  // MAX_PROFILES drop off the end, a profile that is not usable fails the lot, and an active index
-  // that is no profile becomes the first.
+  // Saved profiles are untrusted: a clean state, or null when no profile is usable. A profile that is
+  // not usable drops out and the rest are kept; more than MAX_PROFILES drop off the end. The active index
+  // follows its profile, and is the first when that profile is gone or the index is no profile.
   function normalizeState (data) {
-    if (!data || !Array.isArray(data.profiles) || data.profiles.length === 0) return null
-    const profiles = data.profiles.slice(0, MAX_PROFILES).map(normalizeProfile)
-    if (profiles.includes(null)) return null
-    return { profiles, active: Number.isInteger(data.active) && data.active < profiles.length && data.active >= 0 ? data.active : 0 }
+    if (!data || !Array.isArray(data.profiles)) return null
+    const kept = data.profiles.slice(0, MAX_PROFILES).map((profile, index) => ({ profile: normalizeProfile(profile), index })).filter((entry) => entry.profile)
+    if (kept.length === 0) return null
+    const active = kept.findIndex((entry) => entry.index === data.active)
+    return { profiles: kept.map((entry) => entry.profile), active: Math.max(active, 0) }
   }
 
   const sameGroups = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
   const cloneProfile = (profile) => ({ name: profile.name, groups: cloneGroups(profile.groups) })
 
-  // What the profiles start as: the saved profiles; else the saved groups of before profiles, as the one
-  // profile, named after the preload they equal or Custom; else both preloads with Low/5/High active.
+  const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
+
+  // What the profiles start as: the saved profiles; else the preloads with Low/5/High active; else, for
+  // groups saved before profiles existed, those groups as the active profile (named after the preload they
+  // equal, which they replace in the list, else Custom, first) with the other preloads beside it.
   function stateFromStored (data, legacyGroups) {
     const saved = normalizeState(data)
     if (saved) return saved
+    const preloads = preloadProfiles()
     const legacy = normalizeGroups(legacyGroups)
-    if (legacy) {
-      const preload = Object.keys(PRELOADS).find((name) => sameGroups(PRELOADS[name], legacy))
-      return { profiles: [{ name: preload || CUSTOM_NAME, groups: legacy }], active: 0 }
-    }
-    return { profiles: Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) })), active: 0 }
+    if (!legacy) return { profiles: preloads, active: 0 }
+    const equal = preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
+    if (equal >= 0) return { profiles: preloads, active: equal }
+    return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
   }
 
   const activeGroups = (state) => state.profiles[state.active].groups
@@ -215,11 +219,9 @@
   // Moves the profile at `from` so it ends at index `to`; the active profile stays the same profile.
   function moveProfile (state, from, to) {
     if (from === to) return state
-    const profiles = state.profiles.map(cloneProfile)
-    const [moved] = profiles.splice(from, 1)
-    profiles.splice(to, 0, moved)
-    const follow = (i) => (i === from ? to : (from < to && i > from && i <= to ? i - 1 : (from > to && i >= to && i < from ? i + 1 : i)))
-    return { profiles, active: follow(state.active) }
+    const order = state.profiles.map((_, i) => i)
+    order.splice(to, 0, ...order.splice(from, 1))
+    return { profiles: order.map((i) => cloneProfile(state.profiles[i])), active: order.indexOf(state.active) }
   }
 
   function setActive (state, index) {
@@ -235,24 +237,26 @@
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
 
   // The button's icon is drawn in 100 by 100 units; the AUTO label takes its top ICON_TOP, and the menu
-  // arrow box its bottom right corner below 78.
+  // arrow box its bottom right corner below ARROW_START.
   const ICON_TOP = 22
+  const ARROW_START = 78
+  const ICON_MAX_GROUPS = 4
 
-  // The cells of the button's icon for the first four groups: [{ key, digit, x, y, size }] in the icon's
-  // 100 by 100 units, `digit` the group's lowest or '' when it has none. Up to three go in a row, four
+  // The cells of the button's icon for the first ICON_MAX_GROUPS groups: [{ key, digit, x, y, size }] in
+  // the icon's units, `digit` the group's lowest or '' when it has none. Up to three go in a row and four
   // as 2 by 2; none of them reaches the AUTO label or the arrow box.
   function iconLayout (groups) {
-    const shown = groups.slice(0, 4).map((g) => ({ key: g.key, digit: [...g.digits].sort()[0] || '' }))
-    if (shown.length === 4) {
-      const size = 22
-      const gap = 3
+    const shown = groups.slice(0, ICON_MAX_GROUPS).map((g) => ({ key: g.key, digit: [...g.digits].sort()[0] || '' }))
+    const gap = 3
+    if (shown.length === ICON_MAX_GROUPS) {
+      const top = ICON_TOP + 5
+      const size = Math.min(22, (ARROW_START - top - gap) / 2)
       const start = (100 - 2 * size - gap) / 2
-      return { layout: 'grid', cells: shown.map((c, i) => ({ ...c, x: start + (i % 2) * (size + gap), y: ICON_TOP + 5 + Math.floor(i / 2) * (size + gap), size })) }
+      return shown.map((c, i) => ({ ...c, x: start + (i % 2) * (size + gap), y: top + Math.floor(i / 2) * (size + gap), size }))
     }
     const size = 30
-    const gap = 3
     const start = (100 - shown.length * size - (shown.length - 1) * gap) / 2
-    return { layout: 'row', cells: shown.map((c, i) => ({ ...c, x: start + i * (size + gap), y: ICON_TOP + 10, size })) }
+    return shown.map((c, i) => ({ ...c, x: start + i * (size + gap), y: ICON_TOP + 10, size }))
   }
 
   // Black or white, whichever reads on `color` (a `#rgb`, `#rrggbb` or `rgb(a)` value); black when unreadable.
@@ -327,13 +331,14 @@
   // icon in <div class="icon">. `colorOf(key)` gives a palette key's CSS color, or '' when unreadable.
   const iconHtml = (autoOn, groups, colorOf) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
-    iconLayout(groups).cells.map((cell) => iconCellSvg(cell, colorOf)).join('') +
+    iconLayout(groups).map((cell) => iconCellSvg(cell, colorOf)).join('') +
     '</svg>' + autoBoxHtml(autoOn) + ARROW_BOX_HTML + '</div>'
 
   // The button goes in the bottom row (.controls-aux) beside Undo, Redo, Check and Select, where
   // SudokuPad lays it out and wraps it like theirs. SudokuPad binds button handlers only to
   // buttons present when the controls were built, so a button added later needs refreshControls
-  // to get its onClick.
+  // to get its onClick. A press on the button proper is handled by listenForButton before SudokuPad's
+  // handler sees it, so `onClick` is what SudokuPad would run on a press that does reach it.
   function installButton (framework, app, onClick, autoOn, groups, colorOf) {
     framework.addAuxButton({ name: 'colorbydigit', title: 'Color by digit', content: iconHtml(autoOn, groups, colorOf), onClick })
     app.refreshControls()
@@ -419,7 +424,7 @@
 
   // The groups of a profile as small squares in their palette colors, each with its lowest digit.
   function renderChips (groups, colorOf, size) {
-    return iconLayout(groups).cells.map(({ key, digit }) => {
+    return iconLayout(groups).map(({ key, digit }) => {
       const color = colorOf(key)
       return `<span data-role="chip" title="${esc(key)}" style="display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:${size}px;height:${size}px;` +
         `border-radius:4px;background:${esc(color || UNREADABLE_FILL)};color:${inkFor(color)};box-shadow:inset 0 0 0 1px rgba(0,0,0,.25);` +
@@ -428,6 +433,11 @@
   }
 
   const MUTED = '#8a8496'
+  // The active profile's row, in the dialog and in the menu, and an idle row's ring.
+  const ACTIVE_FILL = '#f1ebfb'
+  const ACTIVE_RING = '#b79be0'
+  const ACTIVE_INK = '#5b2a9a'
+  const IDLE_RING = '#e2dcea'
 
   // The dialog's profile list: per row a drag handle, a checkbox for the active profile, the colors, the
   // name and a delete button; then the name field and Add. `newName` is the text in the name field.
@@ -436,7 +446,7 @@
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
       return `<div data-role="profile-row" data-index="${i}" style="display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;` +
-        (active ? 'background:#f1ebfb;box-shadow:inset 0 0 0 1.5px #b79be0' : 'box-shadow:inset 0 0 0 1px #e2dcea') + '">' +
+        (active ? `background:${ACTIVE_FILL};box-shadow:inset 0 0 0 1.5px ${ACTIVE_RING}` : `box-shadow:inset 0 0 0 1px ${IDLE_RING}`) + '">' +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder" style="cursor:grab;touch-action:none;user-select:none;color:${MUTED};font-size:18px;line-height:1">&#8942;&#8942;</span>` +
         `<input type="checkbox" data-act="activate" data-index="${i}"${active ? ' checked' : ''} aria-label="Active profile: ${esc(profile.name)}">` +
         `<span style="display:flex;gap:3px;width:100px">${renderChips(profile.groups, colorOf, 22)}</span>` +
@@ -457,7 +467,7 @@
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
       return `<div role="menuitemradio" data-act="pick" data-index="${i}" aria-checked="${active}" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;` +
-        `${active ? 'background:#f1ebfb;color:#5b2a9a;font-weight:600' : ''}">` +
+        `${active ? `background:${ACTIVE_FILL};color:${ACTIVE_INK};font-weight:600` : ''}">` +
         `<span style="display:flex;gap:3px;width:92px">${renderChips(profile.groups, colorOf, 20)}</span><span data-role="name" style="flex:1">${esc(profile.name)}</span></div>`
     }).join('')
     return `<div style="font:600 11px/1 sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px">Color by digit profile</div>${rows}` +
@@ -467,7 +477,7 @@
 
   // `shown[i]` is the page index group i shows; `auto` is the draft of the auto mode box; `profilesHtml`
   // is the profile list (renderProfiles), which goes above the groups.
-  function renderEditor (groups, pages, shown, auto = false, profilesHtml = '') {
+  function renderEditor (groups, pages, shown, auto, profilesHtml) {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
       const digits = DIGITS.map((d) =>
@@ -485,7 +495,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -555,10 +565,20 @@
   }
 
   // Runs the ops `makeOps` plans from the plan cells as one undo step, and nothing when there are none.
+  // The plan is made again from the cells as the first ops left them and what it still lists is run too:
+  // with Multi-color off, taking one color off a cell that held two clears both, and the cell's own group
+  // color, planned as already there, must go back on. Called inside a group, it adds to that group.
   function recolor (app, makeOps) {
-    const cells = allCells(app)
-    const ops = makeOps(cells.map(toPlanCell))
-    if (ops.length > 0) inOneUndoStep(app, () => runColorOps(app, cells, ops))
+    const first = allCells(app)
+    const ops = makeOps(first.map(toPlanCell))
+    if (ops.length === 0) return
+    const run = () => {
+      runColorOps(app, first, ops)
+      const cells = allCells(app)
+      runColorOps(app, cells, makeOps(cells.map(toPlanCell)))
+    }
+    if (app.puzzle.inGroup) run()
+    else inOneUndoStep(app, run)
   }
 
   // The button: adds each pure cell's group color, never removes one.
@@ -623,8 +643,7 @@
       const enter = () => {
         const result = act.call(this, action)
         const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
-        const entered = allCells(app)
-        runColorOps(app, entered, planAuto(entered.map(toPlanCell), loadGroups(), changed))
+        recolor(app, (plans) => planAuto(plans, loadGroups(), changed))
         return result
       }
       return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
@@ -643,6 +662,8 @@
   // Opens the profile menu above the button, its right edge by the arrow box. The rows take no focus.
   function openMenu () {
     closeMenu()
+    // The palette can change after the button was drawn, so the icon is drawn again with the menu.
+    showButton()
     const button = document.querySelector(BUTTON)
     if (!button) return
     menu = document.createElement('div')
@@ -908,6 +929,8 @@
     installButton(Framework, app, () => colorCells(app), autoMode, loadGroups(), readColor)
     installAutoMode(app)
     listenForButton(app, openEditor)
+    // The puzzle's own palette is in the page's colors once it has loaded: the icon shows those.
+    whenProgressLoaded(app, showButton)
     if (autoMode) whenProgressLoaded(app, () => colorGivens(app))
   })
 })()

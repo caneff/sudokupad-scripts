@@ -31,7 +31,9 @@ const LOW_FIVE_HIGH = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '
 const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
 const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 // Framework.setData prefixes the script's key with the site's own prefix.
-const PROFILES_STORAGE_KEY = 'svencodes_ColorByDigit_profiles'
+// The key the script saves its profiles under, and the one Framework.setData stores it at.
+const PROFILES_KEY = 'ColorByDigit_profiles'
+const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 
 const POLL_MS = 50
 const SETTLE_MS = 10000
@@ -95,8 +97,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     const coloredCount = async () => (await cellsState()).filter((x) => x.colours.length).length
     const colorsAt = async (r, c) => at(await cellsState(), r, c).colours
     const digitsOnBoard = async () => (await cellsState()).map((x) => [x.given, x.value])
-    const getData = () => read(() => Framework.getData('ColorByDigit_profiles'))
-    const getGroups = () => read(() => { const d = Framework.getData('ColorByDigit_profiles'); return d.profiles[d.active].groups })
+    const getData = () => read((key) => Framework.getData(key), PROFILES_KEY)
+    const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
     const getSetting = () => read(() => Framework.getSetting('multicolour'))
     const editor = () => p.locator('#color-by-digit-editor')
     const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
@@ -460,7 +462,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       before(async () => {
         savedState = await getData()
         original = await read(() => JSON.parse(JSON.stringify(Framework.app.tools.colour.palette)))
-        await read((original) => {
+        await read(([original, profilesKey]) => {
           const palette = JSON.parse(JSON.stringify(original))
           palette.colors.u = 'rgb(10, 20, 30)'
           palette.colors.v = 'rgb(40, 50, 60)'
@@ -469,18 +471,18 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           palette.pages.push(['u', 'v', 'w', '8'])
           Framework.app.tools.colour.setPalette(palette)
           Framework.app.tools.colour.setPage(3)
-          Framework.setData('ColorByDigit_profiles', { profiles: [{ name: 'Custom', groups: [{ key: '8', digits: [] }, { key: '6', digits: [] }, { key: 'nope', digits: [] }] }], active: 0 })
-        }, original)
+          Framework.setData(profilesKey, { profiles: [{ name: 'Custom', groups: [{ key: '8', digits: [] }, { key: '6', digits: [] }, { key: 'nope', digits: [] }] }], active: 0 })
+        }, [original, PROFILES_KEY])
         await openEditor()
       })
       after(async () => {
-        await read(([original, savedState]) => {
+        await read(([original, savedState, profilesKey]) => {
           Framework.app.tools.colour.setPalette(original)
           Framework.app.tools.colour.setPage(0)
           Framework.removeData('ToolColor_palette')
           Framework.removeData('ToolColor_page')
-          Framework.setData('ColorByDigit_profiles', savedState)
-        }, [original, savedState])
+          Framework.setData(profilesKey, savedState)
+        }, [original, savedState, PROFILES_KEY])
         if (await editor().count()) await closeWith('Cancel')
       })
 
