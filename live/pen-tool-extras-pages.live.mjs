@@ -1,5 +1,5 @@
 // Live check of pen-tool-extras.user.js's second page of pens (color characters a to i, drawn dashed)
-// on sudokupad.app in headless Chromium. Run with `npm run test:live`. It needs the network and a
+// on sudokupad.app in headless Chromium. Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a
 // Playwright Chromium, so it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
@@ -14,6 +14,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -151,7 +152,7 @@ function group (title, mode, extra = []) {
       errors = []
       p = await context.newPage()
       p.on('pageerror', (e) => errors.push(String(e)))
-      await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await routeSudokuPad(p)
       if (mode === 'document-idle') {
         await p.addInitScript((sources) => {
           document.addEventListener('DOMContentLoaded', () => {
@@ -407,7 +408,7 @@ function group (title, mode, extra = []) {
       const bare = await context.newPage()
       const bareErrors = []
       bare.on('pageerror', (e) => bareErrors.push(String(e)))
-      await bare.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await routeSudokuPad(bare)
       await bare.goto(url, { waitUntil: 'load', timeout: 60000 })
       await startPuzzle(bare)
       await bare.evaluate(() => Framework.setSetting('toolpen', true))
@@ -445,7 +446,7 @@ describe('injected after the pen tool is already on', { concurrency: false }, ()
     errors = []
     p = await context.newPage()
     p.on('pageerror', (e) => errors.push(String(e)))
-    await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+    await routeSudokuPad(p)
     await p.goto(url, { waitUntil: 'load', timeout: 60000 })
     await startPuzzle(p)
     await p.evaluate(() => { Framework.setData('ToolPen_color', '3'); Framework.setSetting('toolpen', true) })

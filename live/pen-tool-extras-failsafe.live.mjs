@@ -1,5 +1,5 @@
 // Live check that pen-tool-extras.user.js loses one feature, not the whole pen tool, when an internal of SudokuPad it relies on is gone, on
-// sudokupad.app in headless Chromium. Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of `npm test`.
+// sudokupad.app in headless Chromium. Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
 //
 // Each case breaks one SudokuPad internal before the script's startup check reads it (a snippet run on `Framework.getApp()`, ahead of the
 // script's own), then checks that the settings dialog names the features that are off, that the other features and SudokuPad's own pen
@@ -17,6 +17,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -169,7 +170,7 @@ function group (title, mode) {
             if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(m.text())) logged.push(m.text())
             else errors.push(`console.error: ${m.text()}`)
           })
-          await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+          await routeSudokuPad(p)
           const source = withBreak(kase.breaks)
           if (mode === 'document-idle') {
             await p.addInitScript((code) => {

@@ -30,7 +30,11 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run
   test:live` (every `live/*.live.mjs`) covers them on sudokupad.app in headless Chromium, with the script
   injected at three times (at `DOMContentLoaded`, after load before Start Puzzle,
-  after Start Puzzle). It needs the network and a Playwright Chromium
+  after Start Puzzle). SudokuPad is served from a recording (`live/cache.mjs`, kept in
+  `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`, shared by every worktree): the first run
+  of a day, or after `LIVE_REFRESH=1`, needs the network to record it, and the rest replay it;
+  `LIVE_OFFLINE=1` never touches the network and fails naming any request the recording lacks.
+  It also needs a Playwright Chromium
   (`npx playwright install chromium`), so it stays out of `npm test` and
   `land.testcmd`; run it when a change touches a `Framework` call, rendering or
   undo. While you iterate, run only the changed script's files (`live/<script name>*.live.mjs`);

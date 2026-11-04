@@ -1,5 +1,5 @@
 // Live check of digit-color.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so
+// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
 // it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so
@@ -12,6 +12,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { routeSudokuPad } from './cache.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -214,7 +215,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
       decoder = await context.newPage()
       p.on('pageerror', (e) => errors.push(String(e)))
-      await p.route(/cookiebot|googletagmanager|plausible/, (r) => r.abort())
+      await routeSudokuPad(p)
       if (mode === 'document-idle') {
         await p.addInitScript((src) => {
           document.addEventListener('DOMContentLoaded', () => {
