@@ -47,3 +47,15 @@ Read 2026-11-03 from `tool-letter.js` and `script.js` of v0.611.0, and run live.
 
 `no-tab-letters.user.js` sets `ToolLetter.tool.keyHandlers` to the list with the Tab entry's handler
 replaced by one that only calls `preventDefault`.
+
+## Holding Alt for letters is SudokuPad's own setting (read 2026-11-04 from `tool-letter.js`; not run)
+
+- The setting `toolletter_mode`, shown as "Letter Tool Hotkey" in the `advanced` settings group, defaults to `altletter`,
+  "1. ALT for letters (SHIFT for corner marks)". In that mode, `canTempSwitch` makes holding Alt switch to letters for as
+  long as it's held. A temporary switch isn't saved.
+- Only `altletter` switches on Alt. `shiftletter` switches on Shift. `althotkey`, `shifthotkey` and `nohotkey` ("5. Toggle
+  ("/") for letters") don't switch on either.
+- `handleKey` gates letter entry only for `althotkey` and `shifthotkey`, so `nohotkey` enters letters the same way as
+  `altletter` once letter mode is on.
+- The setting also moves the corner mark modifier (`getAltShift`): Shift in `altletter` and `althotkey`, Alt in `shiftletter`
+  and `shifthotkey`, and either in `nohotkey`. So in `nohotkey`, holding Alt gives temporary corner marks.
