@@ -34,7 +34,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   (`npx playwright install chromium`), so it stays out of `npm test` and
   `land.testcmd`; run it when a change touches a `Framework` call, rendering or
   undo. While you iterate, run only the changed script's files (`live/<script name>*.live.mjs`);
-  the full suite runs once, at the controller's merge check. It does not cover a real Tampermonkey install or `crackingthecryptic.com`:
+  the full suite runs once, at the controller's merge check. When your change alters behavior on purpose,
+  first change the live tests that check the old behavior, then run them: a wrong expectation waits out its time limit. It does not cover a real Tampermonkey install or `crackingthecryptic.com`:
   a PR names those as still owed
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`.
