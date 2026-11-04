@@ -519,7 +519,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await setSlider(7)
         assert.equal(await savedThickness(), 7)
         await openEditor()
-        assert.equal(await editor().locator('input[type=range]').count(), 3)
+        assert.equal(await editor().locator('input[type=range]').count(), 4)
         await restoreDefaults()
         assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
         assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
