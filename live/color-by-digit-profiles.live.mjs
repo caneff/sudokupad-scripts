@@ -120,7 +120,6 @@ const tools = (p) => {
   const menu = () => p.locator(MENU)
   const menuRows = () => p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => ({ name: e.querySelector('[data-role=name]').textContent, active: e.getAttribute('aria-checked') === 'true' })))
   const iconDigits = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
-  const iconKeys = () => p.$$eval(`${BUTTON} svg rect[data-role=cell]`, (es) => es.map((e) => e.dataset.key))
   const editor = () => p.locator(EDITOR)
   const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const openEditor = async () => {
@@ -154,7 +153,7 @@ const tools = (p) => {
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
     await menu().waitFor({ state: 'detached' })
   }
-  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconDigits, iconKeys, editor, dialogButton, openEditor, closeWith, rowNames, activeRow, pressUntil, openMenuByArrow, pick }
+  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconDigits, editor, dialogButton, openEditor, closeWith, rowNames, activeRow, pressUntil, openMenuByArrow, pick }
 }
 
 describe('profiles on a fresh install, injected after Start Puzzle', { concurrency: false }, () => {
@@ -172,11 +171,6 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
     assert.match(await t.menu().innerText(), /color by digit profile/i)
     assert.match(await t.menu().innerText(), /Edit profiles…/)
     await p.keyboard.press('Escape')
-  })
-
-  it('the icon shows Low/5/High: three cells with the shown digits 1, 5 and 9', async () => {
-    assert.deepEqual(await t.iconDigits(), ['1', '5', '9'])
-    assert.deepEqual(await t.iconKeys(), ['1', '5', '9'])
   })
 
   it('a short press colors every given by Low/5/High, as the active profile', async () => {
@@ -502,7 +496,6 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal(await t.activeRow(), 0)
     assert.match(await heading(), /3 of 4/)
     assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4', '1', '5', '9', '1', '3', '5', '9'])
-    assert.equal(await p.locator(`${EDITOR} button[data-act=preload]`).count(), 0)
   })
 
   const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()

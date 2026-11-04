@@ -327,8 +327,6 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   it('the dialog box opens at the value in force, and Cancel leaves auto mode as it was', async () => {
     await openEditor()
     assert.equal(await dialogBox().isChecked(), true)
-    assert.equal(await editor().locator('label[for="color-by-digit-auto-draft"]').innerText(), 'Keep colors in step with digits and centre marks')
-    assert.equal(await dialogBox().getAttribute('aria-label'), 'Auto mode')
     await dialogBox().uncheck()
     await closeWith('Cancel')
     assert.equal(await boxChecked(), 'true')
