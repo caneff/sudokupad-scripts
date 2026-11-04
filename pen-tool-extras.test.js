@@ -9,8 +9,10 @@ const {
   HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES
+  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
+  LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine
 } = require('./pen-tool-extras.user.js')
+const { SOLVER_REACH } = require('./dark-page.user.js')
 
 // The edge cycle, a step forward and a step back.
 const nextType = (current, settings) => stepType(current, settings, 1, EDGE_CYCLE)
@@ -780,31 +782,37 @@ test('the corner X is two crossing diagonals of half-size s, drawn from the poin
   assert.equal(shapePath('x', 8), ' m -8,-8 l16,16 m -16,0 l16,-16')
 })
 
-// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dotted.
-test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dotted', () => {
+// Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dotted, page 3 is j to z and 0, two
+// to a pen, drawn as chevron lines.
+test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dotted, then chevron lines with a character for each way', () => {
   assert.deepEqual(PEN_PAGES, [
     { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dotted: false },
-    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true }
+    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true },
+    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dotted: false, chevrons: true }
   ])
 })
 
 test('penPageOf, penNumber and penCharOn move between a color character, its page and its button number', () => {
   assert.equal(penPageOf('3'), 0)
   assert.equal(penPageOf('c'), 1)
-  assert.equal(penPageOf('z'), -1)
+  assert.equal(penPageOf('z'), 2)
+  assert.equal(penPageOf('k'), -1, 'the reverse character of a chevron pen is not a pen to select')
+  assert.equal(penPageOf('A'), -1)
   assert.equal(penNumber('c'), '3')
   assert.equal(penNumber('3'), '3')
   assert.equal(penNumber('i'), '9')
   assert.equal(penCharOn(1, '1'), 'a')
   assert.equal(penCharOn(0, '9'), '9')
   assert.equal(penCharOn(1, '9'), 'i')
+  assert.equal(penCharOn(2, '1'), 'j')
+  assert.equal(penCharOn(2, '9'), 'z')
 })
 
 test('normalizePen keeps a saved color character of any page and nothing else', () => {
-  for (const ok of ['1', '9', 'a', 'i']) assert.equal(normalizePen(ok), ok)
+  for (const ok of ['1', '9', 'a', 'i', 'j', 'z']) assert.equal(normalizePen(ok), ok)
   // SudokuPad's getData parses a saved '3' into the number 3
   assert.equal(normalizePen(3), '3')
-  for (const bad of [null, undefined, 0, 10, 3.5, 'j', 'z', '0', '', 'ab', ['a'], { a: 1 }]) assert.equal(normalizePen(bad), null, JSON.stringify(bad))
+  for (const bad of [null, undefined, 0, 10, 3.5, 'k', '0', 'A', '', 'ab', ['a'], { a: 1 }]) assert.equal(normalizePen(bad), null, JSON.stringify(bad))
 })
 
 test('stepPage goes round the pages in either direction, whatever the count', () => {
@@ -864,20 +872,25 @@ test('a page 2 swatch is dotted in the pen color of its button, and a page 1 swa
   assert.equal(css.includes('data-pen-page="1"'), false)
 })
 
-test('the page button samples the page it turns to: dots on page 2, a solid line on page 1, and a dot for each page with the current one filled', () => {
+test('the page button samples the page it turns to: dots on page 2, a chevron line on page 3, a solid line on page 1, and a dot for each page with the current one filled', () => {
   const fromOne = renderPageIcon(0, 0)
   assert.match(fromOne, /data-page-sample="dotted"/)
-  assert.equal((fromOne.match(/<circle/g) || []).length, 5 + 2)
+  assert.equal((fromOne.match(/<circle/g) || []).length, 5 + 3)
   const fromTwo = renderPageIcon(1, 0)
-  assert.match(fromTwo, /data-page-sample="solid"/)
-  assert.equal((fromTwo.match(/<circle/g) || []).length, 2)
-  assert.equal((fromTwo.match(/<path/g) || []).length, 1)
-  for (const icon of [fromOne, fromTwo]) {
+  assert.match(fromTwo, /data-page-sample="chevrons"/)
+  assert.equal((fromTwo.match(/<circle/g) || []).length, 3)
+  assert.equal((fromTwo.match(/<path[^>]*data-chevron/g) || []).length, 3)
+  assert.equal((fromTwo.match(/<path[^>]*data-sample-line/g) || []).length, 1)
+  const fromThree = renderPageIcon(2, 0)
+  assert.match(fromThree, /data-page-sample="solid"/)
+  assert.equal((fromThree.match(/<circle/g) || []).length, 3)
+  assert.equal((fromThree.match(/<path/g) || []).length, 1)
+  for (const icon of [fromOne, fromTwo, fromThree]) {
     assert.equal((icon.match(/data-page-dot="filled"/g) || []).length, 1)
-    assert.equal((icon.match(/data-page-dot="outline"/g) || []).length, 1)
+    assert.equal((icon.match(/data-page-dot="outline"/g) || []).length, 2)
   }
   assert.match(fromOne, /<circle[^>]*data-page-dot="filled"[^>]*\/>[^]*<circle[^>]*data-page-dot="outline"/)
-  assert.match(fromTwo, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
+  assert.match(fromThree, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
 })
 
 test('the line mode choices are SudokuPad\'s three, and anything else saved reads as both', () => {
@@ -1007,12 +1020,12 @@ test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s
   assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => DEFAULT_COLORS[n]))
 })
 
-test('the dialog has Show thickness slider and Show transparency slider boxes, ticked as saved', () => {
+test('the dialog has Show thickness slider and Show opacity slider boxes, ticked as saved', () => {
   const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"( checked)?>`).exec(html)
   const both = renderEditor(editorState())
   assert.equal(Boolean(box(both, 'thickness')[1]) && Boolean(box(both, 'opacity')[1]), true)
   assert.match(both, /Show thickness slider/)
-  assert.match(both, /Show transparency slider/)
+  assert.match(both, /Show opacity slider/)
   const none = renderEditor(editorState({ show: { thickness: false, opacity: true } }))
   assert.equal(box(none, 'thickness')[1], undefined)
   assert.equal(Boolean(box(none, 'opacity')[1]), true)
@@ -1030,4 +1043,196 @@ test('the dialog always holds the thickness and opacity sliders, at the values i
 
 test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8')))
+})
+
+// Page 3: chevron lines. A page 3 pen is two color characters; the one a line stores says which way it was dragged.
+test('a page 3 pen\'s two characters are the 18 from j to z and 0, two to a pen, the first for the way a line is stored', () => {
+  const page = PEN_PAGES[2]
+  assert.deepEqual([...page.chars, ...page.reverse].sort(), 'jklmnopqrstuvwxyz0'.split('').sort())
+  assert.equal(new Set([...PEN_PAGES.flatMap((p) => [...p.chars, ...(p.reverse || [])])]).size, 36, 'no character is on two pages')
+})
+
+test('directionCharOf gives a page 3 pen\'s character for the way a line is dragged, and any other pen its own', () => {
+  assert.equal(directionCharOf('j', true), 'j')
+  assert.equal(directionCharOf('j', false), 'k')
+  assert.equal(directionCharOf('z', false), '0')
+  assert.equal(directionCharOf('c', false), 'c')
+  assert.equal(directionCharOf('3', false), '3')
+})
+
+test('chevronWayOf reads a stored character back as the way its line was dragged, and is null for any other character', () => {
+  assert.equal(chevronWayOf('j'), true)
+  assert.equal(chevronWayOf('k'), false)
+  assert.equal(chevronWayOf('0'), false)
+  assert.equal(chevronWayOf('z'), true)
+  for (const other of ['1', 'a', 'i', 'A', '', undefined, 'jk']) assert.equal(chevronWayOf(other), null, String(other))
+})
+
+test('the page 3 characters stroke in the color of their page 1 partner, both ways, and are never dotted', () => {
+  const rules = rulesOf(buildPagesCss(5, 3))
+  PEN_PAGES[2].chars.forEach((char, i) => {
+    for (const c of [char, PEN_PAGES[2].reverse[i]]) {
+      const rule = rules.find((r) => r.selector === `.pencolor-${c}`)
+      assert.equal(rule && rule.body, `stroke: var(--puzzle-pencolor-${i + 1});`, c)
+    }
+  })
+  for (const r of rules.filter((r) => r.body.startsWith('stroke-dasharray'))) assert.doesNotMatch(r.selector, /pencolor-[j-z0]/)
+})
+
+test('a page 3 swatch is a chevron in the pen color of its button, as a mask so the color follows a recolor', () => {
+  const rules = rulesOf(buildPagesCss(5, 0))
+  for (let n = 1; n <= 9; n++) {
+    const rule = rules.find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="3"]:after`)
+    assert.ok(rule, `swatch ${n}`)
+    assert.match(rule.body, new RegExp(`background-color: var\\(--puzzle-pencolor-${n}\\)`))
+    assert.match(rule.body, /mask(-image)?: url\("data:image\/svg\+xml,/)
+  }
+})
+
+// The segments a drag is made of, as SudokuPad's own pen tool stores them: the value, the cell that holds it,
+// and whether the drag ran along the line the way renderPen draws it. Each row: from [r, c], to [r, c], then the result.
+test('lineSegment names the value, cell and way of every kind of segment, as SudokuPad stores it', () => {
+  const rc = ([r, c]) => ({ r, c })
+  const cases = [
+    // center lines: 1 runs right, 2 runs down, d runs up and right, e runs down and right
+    [[2.5, 2.5], [2.5, 3.5], { value: '1', row: 2, col: 2, forward: true }],
+    [[2.5, 3.5], [2.5, 2.5], { value: '1', row: 2, col: 2, forward: false }],
+    [[2.5, 2.5], [3.5, 2.5], { value: '2', row: 2, col: 2, forward: true }],
+    [[3.5, 2.5], [2.5, 2.5], { value: '2', row: 2, col: 2, forward: false }],
+    [[3.5, 2.5], [2.5, 3.5], { value: 'd', row: 3, col: 2, forward: true }],
+    [[2.5, 3.5], [3.5, 2.5], { value: 'd', row: 3, col: 2, forward: false }],
+    [[2.5, 2.5], [3.5, 3.5], { value: 'e', row: 2, col: 2, forward: true }],
+    [[3.5, 3.5], [2.5, 2.5], { value: 'e', row: 2, col: 2, forward: false }],
+    // edge lines: 8 and 7 are the bottom and right edge of a cell, 9 and a the left and top edge, used only on the grid's own left and top
+    [[3, 2], [3, 3], { value: '8', row: 2, col: 2, forward: true }],
+    [[3, 3], [3, 2], { value: '8', row: 2, col: 2, forward: false }],
+    [[2, 3], [3, 3], { value: '7', row: 2, col: 2, forward: true }],
+    [[3, 3], [2, 3], { value: '7', row: 2, col: 2, forward: false }],
+    [[0, 4], [0, 5], { value: 'a', row: 0, col: 4, forward: true }],
+    [[0, 5], [0, 4], { value: 'a', row: 0, col: 4, forward: false }],
+    [[4, 0], [5, 0], { value: '9', row: 4, col: 0, forward: true }],
+    [[5, 0], [4, 0], { value: '9', row: 4, col: 0, forward: false }],
+    // edge diagonals: f runs from the top right of its cell to the bottom left, g from the top left to the bottom right
+    [[2, 3], [3, 2], { value: 'f', row: 2, col: 2, forward: true }],
+    [[3, 2], [2, 3], { value: 'f', row: 2, col: 2, forward: false }],
+    [[2, 2], [3, 3], { value: 'g', row: 2, col: 2, forward: true }],
+    [[3, 3], [2, 2], { value: 'g', row: 2, col: 2, forward: false }]
+  ]
+  for (const [from, to, want] of cases) assert.deepEqual(lineSegment(rc(from), rc(to)), want, JSON.stringify([from, to]))
+  assert.equal(lineSegment(rc([2.5, 2.5]), rc([2.5, 4.5])), null, 'a step of two is not a segment')
+  assert.deepEqual(LINE_VALUES, ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
+})
+
+const cellAt = (row, col) => ({ row, col })
+const pt = (r, c) => ({ r, c })
+
+test('splitLineActs gives a drag that runs one way a single action whose pen value carries the pen\'s character', () => {
+  const cells = [cellAt(2, 2), cellAt(2, 3)]
+  const acts = [{ type: 'select', arg: cells }, { type: 'pen', arg: '1' }]
+  const out = splitLineActs(acts, [pt(2.5, 2.5), pt(2.5, 3.5), pt(2.5, 4.5)], 'j')
+  assert.deepEqual(out, [{ type: 'select', arg: cells }, { type: 'pen', arg: '1j' }])
+  const back = splitLineActs(acts, [pt(2.5, 4.5), pt(2.5, 3.5), pt(2.5, 2.5)], 'j')
+  assert.deepEqual(back, [{ type: 'select', arg: cells }, { type: 'pen', arg: '1k' }])
+})
+
+test('splitLineActs splits one value that was dragged both ways into two actions, in the same group, each with its own character', () => {
+  // right along row 2, down, then left along row 3: SudokuPad queues the four '1' cells as one action
+  const acts = [
+    { type: 'select', arg: [cellAt(2, 2), cellAt(2, 3), cellAt(3, 3), cellAt(3, 2)] }, { type: 'pen', arg: '1' }, { type: 'deselect' },
+    { type: 'select', arg: [cellAt(2, 4)] }, { type: 'pen', arg: '2' }
+  ]
+  const path = [pt(2.5, 2.5), pt(2.5, 3.5), pt(2.5, 4.5), pt(3.5, 4.5), pt(3.5, 3.5), pt(3.5, 2.5)]
+  assert.deepEqual(splitLineActs(acts, path, 'l'), [
+    { type: 'select', arg: [cellAt(2, 2), cellAt(2, 3)] }, { type: 'pen', arg: '1l' }, { type: 'deselect' },
+    { type: 'select', arg: [cellAt(3, 3), cellAt(3, 2)] }, { type: 'pen', arg: '1m' }, { type: 'deselect' },
+    { type: 'select', arg: [cellAt(2, 4)] }, { type: 'pen', arg: '2l' }
+  ])
+})
+
+test('splitLineActs leaves actions that are not line values alone, and refuses a cell no segment of the drag draws', () => {
+  const mark = [{ type: 'select', arg: [cellAt(1, 1)] }, { type: 'pen', arg: '5' }, { type: 'deselect' }]
+  assert.deepEqual(splitLineActs(mark, [], 'j'), mark)
+  assert.throws(() => splitLineActs([{ type: 'select', arg: [cellAt(7, 7)] }, { type: 'pen', arg: '1' }], [pt(2.5, 2.5), pt(2.5, 3.5)], 'j'), RangeError)
+})
+
+// Chevron geometry. A page 3 line is a thin line and a run of chevrons along it.
+const numbersOf = (d) => d.match(/-?\d+(?:\.\d+)?/g).map(Number)
+const pointsOf = (d) => { const n = numbersOf(d); const out = []; for (let i = 0; i < n.length; i += 2) out.push([n[i], n[i + 1]]); return out }
+
+test('a chevron line draws the line along the whole segment and the chevrons as triples of points: wing, tip, wing', () => {
+  const { line, chevrons } = chevronLine('1', true, 2, 3, 5)
+  // the cell at row 2, col 3 is at x 192, y 128; the center line runs right from its middle
+  assert.deepEqual(pointsOf(line), [[224, 160], [288, 160]])
+  const points = pointsOf(chevrons)
+  assert.equal(points.length % 3, 0)
+  for (let i = 0; i < points.length; i += 3) {
+    const [wing, tip, other] = points.slice(i, i + 3)
+    assert.equal(tip[0] > wing[0] && tip[0] > other[0], true, `the tip points the way the line was dragged (right): wing ${wing}, tip ${tip}, wing ${other}`)
+    assert.equal(wing[1] - tip[1], tip[1] - other[1], 'the wings are either side of the line')
+    assert.equal(tip[1], 160)
+  }
+})
+
+test('a chevron line dragged the other way has its chevrons pointing back and the same line', () => {
+  const forward = chevronLine('1', true, 0, 0, 5)
+  const back = chevronLine('1', false, 0, 0, 5)
+  assert.deepEqual(pointsOf(back.line).slice().reverse(), pointsOf(forward.line))
+  const [wing, tip] = pointsOf(back.chevrons)
+  assert.equal(tip[0] < wing[0], true, `dragged left, the tip is left of the wings: wing ${wing}, tip ${tip}`)
+})
+
+test('chevrons point along a diagonal and along a vertical line as well', () => {
+  const [wing, tip, other] = pointsOf(chevronLine('e', true, 0, 0, 5).chevrons).slice(0, 3)
+  // down and right: the tip is the furthest of the three along (1, 1)
+  const along = ([x, y]) => x + y
+  assert.equal(along(tip) > along(wing) && along(tip) > along(other), true, `down and right, the tip is furthest along (1, 1): ${wing} ${tip} ${other}`)
+  const [w2, t2] = pointsOf(chevronLine('2', false, 0, 0, 5).chevrons)
+  assert.equal(t2[1] < w2[1], true, `dragged up, the tip is above the wings: wing ${w2}, tip ${t2}`)
+})
+
+test('the chevrons are evenly spaced along the line, half a space in from each end, so two cells in a row read as one run', () => {
+  // a chevron's middle is halfway between its wings and its tip
+  const middles = (d) => { const p = pointsOf(d); const out = []; for (let i = 0; i < p.length; i += 3) out.push((p[i][0] + p[i + 1][0]) / 2); return out }
+  for (const thickness of [1, 5, 12, 16]) {
+    const xs = middles(chevronLine('1', true, 0, 0, thickness).chevrons)
+    const space = 64 / xs.length
+    xs.forEach((x, i) => assert.equal(Math.abs(x - (32 + (i + 0.5) * space)) < 0.01, true, `chevron ${i} of ${xs.length} at thickness ${thickness}: ${x}`))
+  }
+})
+
+test('the chevrons and the line scale with the thickness: wider chevrons, wider strokes, fewer chevrons', () => {
+  const thin = chevronLine('1', true, 0, 0, 2)
+  const thick = chevronLine('1', true, 0, 0, 12)
+  assert.equal(thick.lineWidth > thin.lineWidth && thick.chevronWidth > thin.chevronWidth, true, `widths ${thin.lineWidth}/${thin.chevronWidth} at 2, ${thick.lineWidth}/${thick.chevronWidth} at 12`)
+  assert.equal(thin.chevronWidth >= thin.lineWidth, true, `a chevron is as thick as the line at the small end: ${thin.lineWidth} against ${thin.chevronWidth}`)
+  assert.equal(chevronLine('1', true, 0, 0, 10).lineWidth / chevronLine('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
+  assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} chevrons at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
+  const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
+  assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
+})
+
+test('below the default thickness the chevrons keep their size at the default and only the thin line gets thinner, so the direction shows at 1', () => {
+  const one = chevronLine('1', true, 0, 0, 1)
+  const five = chevronLine('1', true, 0, 0, THICKNESS.fallback)
+  assert.equal(one.chevrons, five.chevrons)
+  assert.equal(one.chevronWidth, five.chevronWidth)
+  assert.equal(one.lineWidth, CHEVRON.lineMin, 'the line is at its minimum, which is visible')
+  assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
+  assert.equal(one.chevronWidth >= one.lineWidth, true, `a chevron stroke of ${one.chevronWidth} is at least as thick as the line of ${one.lineWidth}`)
+})
+
+test('at the largest thickness a chevron on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
+  // a top edge line, 'a', on row 0: the chevron's wings are the furthest from the edge itself
+  const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
+  const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
+  assert.equal(Math.abs(reach - (CHEVRON.halfWidth + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
+  assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}`)
+})
+
+test('a chevron line has at least one chevron on any segment at any thickness, so a run never has none', () => {
+  for (const value of LINE_VALUES) {
+    for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
+      assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 3, true, `at least one chevron: ${value} at ${t}`)
+    }
+  }
 })

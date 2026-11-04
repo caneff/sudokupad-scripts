@@ -51,7 +51,7 @@
   line mode pulldown (`.penlinemode`), which the script hides and moves to the settings dialog (**line mode**). The row's
   right end holds the **page button**. They exist only while the pen tool is on, and have no Save or Cancel. The settings
   dialog also holds both sliders (drafts, applied on Save) and two **slider boxes**, Show thickness slider and Show
-  transparency slider, saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
+  opacity slider, saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
   its row stays as an empty row of the same height, and with both hidden the block is not drawn. Its Restore defaults
   sets both dialog sliders back to their defaults for Save, like the colors.
 - **opacity** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting how see-through the pen layer is (lines, cell circles and
@@ -59,14 +59,24 @@
   `PenColor_opacity`. SudokuPad's own is 80, set on each stroke (`.cell-pen { opacity: 0.8 }`); the script sets it on the
   whole pen layer (`#cell-pen`) instead, so overlapping strokes do not darken. 80 is the default; 100 is solid.
 - **pen page** — one of the lists of nine pens in `PEN_PAGES`. Page 1 is SudokuPad's own pens 1 to 9; page 2 is the same
-  nine colors drawn as dotted lines, or dashes of the **dash length**. The pen on color button N has the same color on every page, so recoloring it changes
+  nine colors drawn as dotted lines, or dashes of the **dash length**; page 3 is the same nine as **chevron lines**. The pen on color button N has the same color on every page, so recoloring it changes
   it on all of them.
 - **dash length** — the dialog's slider, 0 to 8 line widths, saved under `PenColor_dash`, giving how long each dash of a dotted
   page's lines is. 0 is the dots of today; a dash scales with the thickness and changes lines already drawn. A dash too long for a cell's line to hold a gap
   is shortened to leave one, so a page 2 line is never solid; each cell's segment starts and ends with half a gap, so the
   dashes are the same length across a cell boundary.
+- **chevron line** — a line drawn with a page 3 pen: a thin line with a run of chevrons along it, pointing the way the line was
+  dragged. Only lines are chevron lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Its size and
+  spacing scale with the thickness from the default up (a chevron is never smaller than at 5, while the line under them thins only
+  down to a minimum that shows), and it follows the opacity. Each cell's segment fits whole chevrons, half a space in from
+  each end, so a run reads as one across a cell boundary.
+- **direction character** — a page 3 pen is two color characters, since a pen value has no direction: the one on its button
+  (`j`, `l`, `n`, `p`, `r`, `t`, `v`, `x`, `z`) for a line dragged the way SudokuPad draws the value (right, down, up and right for `d`,
+  down and left for `f`), and the **reverse character** (`k`, `m`, `o`, `q`, `s`, `u`, `w`, `y`, `0`) for the other way. The pen action
+  of a line carries it (`1k` is the line `1` in pen 1's reverse character), so each segment of one drag stores its own way.
+  Only the first is ever selected.
 - **color character** — the one character a stroke stores for its pen color, and the replay holds as `pc:<character>`: `1`
-  to `9` on page 1, `a` to `i` on page 2. The **pen color** number (1 to 9) is the button the character is on, and the
+  to `9` on page 1, `a` to `i` on page 2, `j` to `z` and `0` on page 3 (two to a pen, see **direction character**). The **pen color** number (1 to 9) is the button the character is on, and the
   only part SudokuPad's own `ToolPen_color` ever holds; the selected character is saved under `PenColor_pen`.
 - **page button** — the square button at the right end of the pen panel's last row. It shows the line the next page draws,
   with a dot for each page and the current one filled; Tab and the mouse wheel over the panel turn the page too.

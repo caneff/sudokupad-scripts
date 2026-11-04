@@ -169,3 +169,37 @@ into this script's dialog (it sets `ToolPen.tool.lineMode` and saves `ToolPen_li
 freed last row holds the sliders and a square page button. The stock `.controls-input button` color and size outrank a
 plain class, so the page button's rule is `.tool-pen .controls-input button.<class>`; with a lower specificity the
 button was white on white.
+
+## The third page, chevron lines, built and run live 2026-11-04 (#73, SudokuPad as served that day, headless Chromium)
+
+What `pen-tool-extras.user.js` 1.7.0 does and what reading and running SudokuPad found. Live checks:
+`live/pen-tool-extras-chevrons.live.mjs` (both drag directions, a drag with turns, center, edge and diagonal lines, undo and redo,
+replay, reload, erasing either way, thickness, opacity, pen 9 with the characters `z` and `0`, at the three injection times).
+Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras-chevrons.png`
+(`pen-tool-extras-chevrons-screenshot.mjs`).
+
+- **A pen action can carry its own color.** `Cell.togglePen` splits its argument into value and color (`1j` is value `1`, color
+  `j`) and only reads the pen tool's state color when there is none. `propContains('pen', '1j')` is `pen.includes('1j')`, an exact
+  match, while `togglePen` removes any entry with the same value whatever its color, so a line stored with one character is removed
+  by an action naming the other. `Puzzle.toggleGroup` runs `propSet` or `propUnset` on every selected cell, and both end in `togglePen`.
+- **Undo and replay need nothing special.** `execUndo` clears the puzzle and executes the remaining actions again, so an action with an
+  explicit color replays exactly as it was queued. Run live: `1n`, `1o`, `2n` and `10` (a pen value with the color `0`) survive undo,
+  redo, `loadReplay` and a page reload, with no page errors.
+- **A drag queues one `select` and one `pen` action per value, over every cell that holds it.** `ToolPen.actSend` wraps them in a group
+  (`groupstart`, `deselect`, a `pencolor` action only when the pen changed, the queued actions, `deselect`, `groupend`). Right along
+  a row, down, then left along the next row queues one action for `1` over all four cells. In a drawing drag the cells are the ones
+  that lack the value; in an erasing drag (the first segment already has the value, `getEraseMode`) they are the ones that hold it,
+  and the action is the bare value, which removes the line whichever character it was stored with. So an erase drag in either
+  direction works with no change.
+- **Direction.** The tool's `currentPath` is still set when `actSend` runs, and each step of it is one segment, so the script rewrites the
+  queued list there: it names each segment's value, cell and way from the path (`lineSegment`; the value on an edge shared by two
+  cells is the right or bottom edge of the cell before it, and the left or top edge only on the grid's own border, which is what
+  SudokuPad stores) and splits the one action into one per way, in the same group, so one undo takes the whole drag back.
+- **A chevron line is one element.** `Cell.renderPropPen` keeps what `renderPen` returns in `childElems` under the stroke's class and
+  removes it from there, so the wrapped `renderPen` returns a `<g class="cell-pen pen-1 pencolor-j">` holding two paths: a thin line
+  and the chevrons. The color, the layer's opacity and the eraser all act on the group, and the paths inherit the stroke color.
+  Chevron size and spacing are fixed when drawn, so a thickness change draws the cells that hold a chevron line again
+  (`cell.renderContent(true)`).
+- **Dark Page.** A chevron reaches half its width plus half its stroke off its line: 15.6 units at thickness 16, inside the 17 Dark
+  Page keeps past a cell (`SOLVER_REACH`; a unit test holds the two together).
+- Not run: a touch screen, Windows, Tampermonkey.

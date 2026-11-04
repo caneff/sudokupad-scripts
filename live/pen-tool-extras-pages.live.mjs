@@ -30,6 +30,7 @@ const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_ONE = '123456789'
 const PAGE_TWO = 'abcdefghi'
+const PAGE_THREE = 'jlnprtvxz'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -111,6 +112,14 @@ function group (title, mode, extra = []) {
       assert.equal(await settle(async () => (await strokeCount()) > before, true), true, 'a stroke appeared')
     }
 
+    // The page button turns one page forward, so a page two turns away takes two presses.
+    const goToPage = async (values) => {
+      for (let i = 0; i < 3 && (await padValues()) !== values; i++) {
+        await p.locator(PAGE_BUTTON).click()
+        await settle(padValues, values, 500)
+      }
+      assert.equal(await settle(padValues, values), values)
+    }
     const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const turnPageWithWheel = async (deltaY) => {
       const box = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
@@ -180,11 +189,9 @@ function group (title, mode, extra = []) {
     it('a page 2 swatch is dotted and a page 1 swatch is not', async () => {
       const swatch = () => read(() => window.getComputedStyle(document.querySelector('.tool-pen button[data-key="2"]'), ':after').backgroundImage)
       assert.match(await swatch(), /radial-gradient/)
-      await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      await goToPage(PAGE_ONE)
       assert.equal(await swatch(), 'none')
-      await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO)
+      await goToPage(PAGE_TWO)
     })
 
     it('a line drawn with a page 2 pen is dotted in its partner\'s color; a line with its page 1 partner stays solid', async () => {
@@ -195,14 +202,14 @@ function group (title, mode, extra = []) {
       assert.notEqual(dotted.dash, 'none')
       assert.match(dotted.dash, /^0(px)?[ ,]+\d/)
       assert.equal(await read((c) => { const probe = document.createElement('span'); probe.style.color = c; document.body.appendChild(probe); const v = window.getComputedStyle(probe).color; probe.remove(); return v }, colorOf3), dotted.stroke)
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_ONE)
       assert.equal(await settle(selected, '3'), '3')
       await draw(7)
       assert.equal((await styleOf('.cell-pen.pencolor-3')).dash, 'none')
     })
 
     it('a cell mark drawn with a page 2 pen stays solid', async () => {
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
       const [x, y] = await cellCentre(2, 2)
       await p.mouse.click(x, y)
@@ -255,11 +262,14 @@ function group (title, mode, extra = []) {
       assert.equal(await solidOn(), 'none', 'page 1 lines stay solid')
       assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray), 'none', 'a cell mark stays solid')
       await selectPen()
-      // The button shows the line of the page it turns to, so from page 2 it shows page 1's solid line; page 1 shows the dashes.
+      // The button shows the line of the page it turns to: from page 2 the chevrons of page 3, from page 3 page 1's solid line,
+      // from page 1 the dashes.
+      assert.equal(await settle(sample, 'chevrons'), 'chevrons')
+      await goToPage(PAGE_THREE)
       assert.equal(await settle(sample, 'solid'), 'solid')
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_ONE)
       assert.equal(await settle(sample, 'dashed'), 'dashed', 'the page button shows dashes')
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
       // The dash scales with the thickness slider.
       await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })) })
@@ -275,14 +285,16 @@ function group (title, mode, extra = []) {
       await closeWith('Save')
       assert.equal(await settle(dashOn, 0), 0, 'the dots are back')
       assert.equal(await saved(DASH_KEY), null)
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_ONE)
       assert.equal(await settle(sample, 'dotted'), 'dotted')
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
     })
 
-    it('Tab turns the page back and forth, keeping the color number, and ToolPen_color stays a digit', async () => {
+    it('Tab turns the page forward through all three and round, keeping the color number, and ToolPen_color stays a digit', async () => {
+      await p.keyboard.press('Tab')
+      assert.equal(await settle(selected, 'n'), 'n')
       await p.keyboard.press('Tab')
       assert.equal(await settle(selected, '3'), '3')
       await p.keyboard.press('Tab')
@@ -292,7 +304,7 @@ function group (title, mode, extra = []) {
 
     it('the mouse wheel over the panel turns the page: down forward, up back; over a slider it does not', async () => {
       await turnPageWithWheel(100)
-      assert.equal(await settle(selected, '3'), '3')
+      assert.equal(await settle(selected, 'n'), 'n')
       await turnPageWithWheel(-100)
       assert.equal(await settle(selected, 'c'), 'c')
       const box = await p.locator('#pen-tool-extras-thickness').boundingBox()
@@ -311,10 +323,10 @@ function group (title, mode, extra = []) {
       await picker.fill('#123456')
       assert.deepEqual(await saved(COLORS_KEY).then((c) => c && c[3]), '#123456')
       assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, 'rgb(18, 52, 86)')
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_ONE)
       assert.equal(await settle(selected, '3'), '3')
       assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, 'rgb(18, 52, 86)')
-      await p.locator(PAGE_BUTTON).click()
+      await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
       await read((k) => Framework.removeData(k), COLORS_KEY)
     })

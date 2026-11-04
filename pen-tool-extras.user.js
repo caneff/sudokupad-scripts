@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.6.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dotted (or dashed) lines (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
+// @version      1.7.0
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dotted (or dashed) lines and a third page of nine that draw a thin line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.6.0'
+  const VERSION = '1.7.0'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under;
@@ -62,10 +62,13 @@
   // character is the one a stroke stores after its value and the replay holds (`pc:a`), which draws,
   // undoes and replays for any lowercase letter (docs/research/sudokupad-pen-tool.md, "Pen colors past
   // nine"). The first page is SudokuPad's own and must stay first: its characters are the only ones stock
-  // SudokuPad can select. A dotted page draws its lines as dots.
+  // SudokuPad can select. A dotted page draws its lines as dots. A pen value has no direction, so a chevron page's
+  // pen is two characters: the one on its button (`chars`) for a line dragged the way SudokuPad draws the value, and
+  // the `reverse` one at the same index for a line dragged the other way. Only the first is ever selected.
   const PEN_PAGES = [
     { chars: PEN_COLORS, dotted: false },
-    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true }
+    { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dotted: true },
+    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dotted: false, chevrons: true }
   ]
   // The key the selected pen character is saved under. `ToolPen_color` is SudokuPad's own and stays a
   // digit: stock SudokuPad throws when the pen tool opens on a letter there, and this script may be
@@ -205,7 +208,8 @@
     return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
   }
 
-  // The index of the page that holds the color character `pen`, or -1.
+  // The index of the page whose button holds the color character `pen` (a chevron page's reverse characters are on no
+  // button, so they are no pen), or -1.
   function penPageOf (pen) {
     return PEN_PAGES.findIndex((page) => page.chars.includes(pen))
   }
@@ -378,6 +382,134 @@
       case 'x': return ` m ${-s},${-s} l${2 * s},${2 * s} m ${-2 * s},0 l${2 * s},${-2 * s}`
       case CIRCLE: return ` m ${-r},0 a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0`
       default: throw new Error(`pen-tool-extras: no shape named ${shape}`)
+    }
+  }
+
+  // The ten line values in the order lineSegment prefers them: SudokuPad stores a segment on an edge shared by two cells as
+  // the right (7) or bottom (8) edge of the cell before it, and as the left (9) or top (a) edge only on the grid's own border.
+  const LINE_VALUES = [...ORTHOGONAL_LINES, ...DIAGONAL_LINES]
+  // Where `renderPen` starts and ends each line value, as [row, col] offsets in cells from its cell's top left corner. A line
+  // dragged from the start to the end is dragged the way SudokuPad draws it (forward); from the end to the start, the other way.
+  const LINE_PATHS = {
+    1: [[0.5, 0.5], [0.5, 1.5]],
+    2: [[0.5, 0.5], [1.5, 0.5]],
+    7: [[0, 1], [1, 1]],
+    8: [[1, 0], [1, 1]],
+    9: [[0, 0], [1, 0]],
+    a: [[0, 0], [0, 1]],
+    d: [[0.5, 0.5], [-0.5, 1.5]],
+    e: [[0.5, 0.5], [1.5, 1.5]],
+    f: [[0, 1], [1, 0]],
+    g: [[0, 0], [1, 1]]
+  }
+  // The sizes of a chevron line, in line widths (the thickness setting; the line's own width follows it all the way down, but a
+  // chevron is never smaller than at the default thickness, so its direction stays visible at 1): a chevron's wings reach `halfLength` back and
+  // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the thin line and the
+  // chevrons (`lineMin` units at the least, so the line shows at thickness 1); `spacing` is the distance between two chevrons'
+  // middles, fitted to a whole number per segment (a run of chevrons, not a solid row of them). The furthest a
+  // chevron reaches off its line, halfWidth plus half the stroke at the largest thickness, stays inside what Dark Page keeps
+  // past a cell (its `SOLVER_REACH`; a unit test holds the two together).
+  const CHEVRON = { halfLength: 0.5, halfWidth: 0.75, stroke: 0.45, line: 0.5, lineMin: 2, spacing: 5 }
+
+  // Which way a line stored with the color character `char` was dragged: true for the character on a chevron page's button
+  // (forward), false for its reverse character, null for a character no chevron page uses.
+  function chevronWayOf (char) {
+    for (const page of PEN_PAGES) {
+      if (!page.chevrons) continue
+      if (page.chars.includes(char)) return true
+      if (page.reverse.includes(char)) return false
+    }
+    return null
+  }
+
+  // The color character a line dragged `forward` (or not) is stored with when pen `pen` is selected: the pen's own character,
+  // except on a chevron page for a line dragged the other way.
+  function directionCharOf (pen, forward) {
+    const page = PEN_PAGES[penPageOf(pen)]
+    return !page || !page.chevrons || forward ? pen : page.reverse[page.chars.indexOf(pen)]
+  }
+
+  // The value, cell and way of the segment of a drag from `from` to `to` (each { r, c }, in cells from the grid's top left, the
+  // way SudokuPad's pen tool holds its path), as SudokuPad stores it; null for two points that are not a segment.
+  function lineSegment (from, to) {
+    for (const value of LINE_VALUES) {
+      const [start, end] = LINE_PATHS[value]
+      for (const forward of [true, false]) {
+        const [a, b] = forward ? [start, end] : [end, start]
+        const row = from.r - a[0]
+        const col = from.c - a[1]
+        if (row >= 0 && col >= 0 && Number.isInteger(row) && Number.isInteger(col) && row + b[0] === to.r && col + b[1] === to.c) return { value, row, col, forward }
+      }
+    }
+    return null
+  }
+
+  // The actions of a drag with the pen `pen` selected, in place of the ones SudokuPad's pen tool queued: a pen action for a
+  // line value gets the color character of the way its cells were dragged, so a drag with turns stores each segment's way. The
+  // tool queues one select and one pen action for each value over all the cells that hold it, whichever way each was dragged;
+  // here the cells of the two ways are split into two actions of the same group, so one undo still takes the whole drag back.
+  // `path` is the tool's path of the drag. Throws RangeError for a cell the path has no segment for.
+  function splitLineActs (acts, path, pen) {
+    const ways = new Map()
+    for (let i = 1; i < path.length; i++) {
+      const segment = lineSegment(path[i - 1], path[i])
+      if (segment) ways.set(`${segment.row},${segment.col},${segment.value}`, segment.forward)
+    }
+    const out = []
+    for (let i = 0; i < acts.length; i++) {
+      const [select, draw] = [acts[i], acts[i + 1]]
+      if (!(select.type === 'select' && draw && draw.type === 'pen' && LINE_VALUES.includes(draw.arg))) {
+        out.push(select)
+        continue
+      }
+      const cellsOf = (forward) => select.arg.filter((cell) => {
+        const way = ways.get(`${cell.row},${cell.col},${draw.arg}`)
+        if (way === undefined) throw new RangeError(`pen-tool-extras: no segment of the drag draws ${draw.arg} on row ${cell.row}, col ${cell.col}`)
+        return way === forward
+      })
+      ;[true, false].map((forward) => [forward, cellsOf(forward)]).filter(([, cells]) => cells.length).forEach(([forward, cells], k) => {
+        if (k) out.push({ type: 'deselect' })
+        out.push({ type: 'select', arg: cells }, { type: 'pen', arg: draw.arg + directionCharOf(pen, forward) })
+      })
+      i++
+    }
+    return out
+  }
+
+  // The corners of a chevron, wing, tip, wing, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
+  // its wings `half` back and `wide` out from the middle and its tip `half` forward.
+  function chevronCorners (x, y, ux, uy, half, wide) {
+    return [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
+  }
+
+  // A point as path data text, to 2 places.
+  const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
+
+  // The path data of a chevron line, in the renderer's units (a cell is CELL_UNITS), for the line value `value` on the cell at
+  // (row, col) dragged `forward` or not, at `thickness`: { line, chevrons, lineWidth, chevronWidth }. The line is the whole
+  // segment, thin; each chevron is wing, tip, wing, the tip toward the way it was dragged. Whole chevrons are fitted to the
+  // segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
+  function chevronLine (value, forward, row, col, thickness) {
+    const [start, end] = LINE_PATHS[value]
+    const [from, to] = (forward ? [start, end] : [end, start]).map(([r, c]) => [(col + c) * CELL_UNITS, (row + r) * CELL_UNITS])
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1])
+    const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
+    // Chevrons keep the size they have at the default thickness below it; only the thin line gets thinner.
+    const size = Math.max(thickness, THICKNESS.fallback)
+    const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
+    // The shortest segment (a cell side) holds at least one even at the largest thickness, so there is never none.
+    const count = Math.round(length / (CHEVRON.spacing * size))
+    let chevrons = ''
+    for (let i = 0; i < count; i++) {
+      const along = (i + 0.5) * length / count
+      const [wing, tip, other] = chevronCorners(from[0] + ux * along, from[1] + uy * along, ux, uy, half, wide)
+      chevrons += `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}`
+    }
+    return {
+      line: `M${pointText(from)}L${pointText(to)}`,
+      chevrons,
+      lineWidth: Math.max(CHEVRON.lineMin, CHEVRON.line * thickness),
+      chevronWidth: CHEVRON.stroke * size
     }
   }
 
@@ -563,6 +695,8 @@
     return `stroke-dasharray: ${on} ${period - on}; stroke-dashoffset: ${on + (period - on) / 2};`
   }
 
+  // A chevron page's swatch: a thin line and two chevrons, cut out of the button's pen-colored square, so a recolor follows.
+  const CHEVRON_SWATCH = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23000\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpath d=\'M2 12H22\' stroke-width=\'1.4\'/%3E%3Cpath d=\'M6 6L11 12L6 18M14 6L19 12L14 18\' stroke-width=\'2.6\'/%3E%3C/svg%3E") center / 100% no-repeat'
   // The look of the pages after the first, which SudokuPad's own CSS knows nothing about: each pen
   // character strokes in the color of its partner on the first page, a dotted page's lines are dots
   // (a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so they
@@ -574,7 +708,8 @@
     const rules = []
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
-      page.chars.forEach((char, i) => rules.push(`.pencolor-${char} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`))
+      page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`)))
+      if (page.chevrons) PEN_COLORS.forEach((n) => rules.push(`.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${index + 1}"]:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${CHEVRON_SWATCH}; mask: ${CHEVRON_SWATCH}; }`))
       if (!page.dotted) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
       const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { ${dashDeclarations(thickness, dash, length)} }`
@@ -653,15 +788,25 @@
   const SAMPLE_TO = [52, 26]
   const SAMPLE_WIDTH = 7.2
   const SAMPLE_DASH_SHARE = 0.42
+  // The chevron sample: its thin line and chevron widths, a chevron's half extents (as CHEVRON's), and where along the line
+  // the three sit, as shares of its length.
+  const SAMPLE_CHEVRON = { line: 2.4, stroke: 4.4, half: 4, wide: 7, at: [0.25, 0.5, 0.75] }
   function renderPageIcon (current, dash) {
     const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
-    const kind = !next.dotted ? 'solid' : dash === 0 ? 'dotted' : 'dashed'
+    const kind = next.chevrons ? 'chevrons' : !next.dotted ? 'solid' : dash === 0 ? 'dotted' : 'dashed'
     let sample
-    if (kind === 'dotted') {
+    const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
+    const length = Math.hypot(dx, dy)
+    if (kind === 'chevrons') {
+      // a thin line and three chevrons along it, tips toward the line's end
+      sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_CHEVRON.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
+        SAMPLE_CHEVRON.at.map((t) => {
+          const [wing, tip, other] = chevronCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, SAMPLE_CHEVRON.half, SAMPLE_CHEVRON.wide)
+          return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}" stroke-width="${SAMPLE_CHEVRON.stroke}" stroke-linecap="round" stroke-linejoin="round" fill="none" data-chevron/>`
+        }).join('')
+    } else if (kind === 'dotted') {
       sample = [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + 9 * k}" cy="${52 - 7 * k}" r="3.6" fill="currentColor" stroke="none"/>`).join('')
     } else if (kind === 'dashed') {
-      const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
-      const length = Math.hypot(dx, dy)
       const share = Math.min(dash * SAMPLE_WIDTH, SAMPLE_DASH_SHARE * length) / length
       const point = (t) => `${(SAMPLE_FROM[0] + dx * t).toFixed(1)} ${(SAMPLE_FROM[1] + dy * t).toFixed(1)}`
       sample = [[0, share], [1 - share, 1]].map(([a, b]) =>
@@ -726,7 +871,7 @@
     return '<div style="font-weight:600">Pen colors</div>' + grid +
       missingNote(state.missing) +
       '<div style="font-weight:600;margin-top:10px">Sliders</div>' +
-      showBox('thickness', 'Show thickness slider') + showBox('opacity', 'Show transparency slider') +
+      showBox('thickness', 'Show thickness slider') + showBox('opacity', 'Show opacity slider') +
       slider('thickness', 'Thickness', THICKNESS, state.thickness) +
       slider('opacity', 'Opacity (%)', OPACITY, state.opacity) +
       slider('dash', 'Dash length (page 2)', DASH, state.dash) +
@@ -753,6 +898,13 @@
       normalizeOpacity,
       buildOpacityCss,
       PEN_PAGES,
+      LINE_VALUES,
+      directionCharOf,
+      chevronWayOf,
+      CHEVRON,
+      lineSegment,
+      splitLineActs,
+      chevronLine,
       penPageOf,
       penNumber,
       penCharOn,
@@ -874,12 +1026,37 @@
     return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
   }
 
+  // Whether the chevron line `opts` asks `renderPen` for was dragged forward (true or false), when its value is a line and its
+  // class holds a page 3 color character (`cell-pen pen-1 pencolor-j`); null for anything else.
+  function chevronOf (opts) {
+    const match = /(?:^|\s)pencolor-(\S+)$/.exec(opts.className || '')
+    return match && LINE_VALUES.includes(opts.value) ? chevronWayOf(match[1]) : null
+  }
+
+  // Draws a chevron line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
+  // eraser's lookups act on it as on any stroke) of a thin line and a path of chevrons, each with its own width.
+  function renderChevronLine (renderer, opts, forward) {
+    const shape = chevronLine(opts.value, forward, opts.row, opts.col, activeThickness)
+    const group = renderer.renderPart({ target: 'cell-pen', type: 'g', attr: { class: opts.className } })
+    ;[['line', shape.line, shape.lineWidth], ['chevrons', shape.chevrons, shape.chevronWidth]].forEach(([name, d, width]) => {
+      const path = document.createElementNS(SVG_NAMESPACE, 'path')
+      path.setAttribute('d', d)
+      path.setAttribute('stroke-width', String(width))
+      path.setAttribute('data-chevron-part', name)
+      group.appendChild(path)
+    })
+    return group
+  }
+
   // Draws the values this script adds. SudokuPad's own `renderPen` has no case for them and
-  // gives the path no `d`; it copies every option onto the path, so passing `d` is enough.
+  // gives the path no `d`; it copies every option onto the path, so passing `d` is enough. A line in a page 3
+  // pen's color is drawn as a chevron line instead.
   function wrapRenderPen (proto, renderer) {
     const original = proto.renderPen
     const size = renderer.constructor.CellSize
     proto.renderPen = function (opts = {}) {
+      const forward = chevronOf(opts)
+      if (forward !== null) return renderChevronLine(this, opts, forward)
       const mark = addedMark(opts.value, opts.row, opts.col)
       if (mark === null) return original.call(this, opts)
       const d = this.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125)
@@ -1036,6 +1213,18 @@
     })
   }
 
+  // Whether the wrap on `renderPen` is in, so a chevron line is drawn by this script.
+  let chevronsDrawn = false
+
+  // Draws every chevron line again: a chevron's size and spacing are fixed when it is drawn, so a change of thickness, and a
+  // wrap that came after the cell was drawn, need it. Cells with no chevron line are left alone.
+  function redrawChevronLines () {
+    if (!chevronsDrawn) return
+    Framework.app.puzzle.cells.forEach((cell) => {
+      if ((cell.pen || []).some((valueColor) => LINE_VALUES.includes(valueColor[0]) && chevronWayOf(valueColor[1]) !== null)) cell.renderContent(true)
+    })
+  }
+
   function installEdgeMarks (app) {
     const tool = typeof ToolPen !== 'undefined' ? ToolPen.tool : undefined
     const renderer = app.svgRenderer
@@ -1051,11 +1240,13 @@
       return
     }
     wrapRenderPen(proto, renderer)
+    chevronsDrawn = true
     const original = tool.clickCell
     wrapClickCell(tool, original)
     trackButton()
     suppressMarkMenu(app, () => markUnderPointer(tool, original))
     redrawAddedMarks(app)
+    redrawChevronLines()
   }
 
   // Writes the style for the colors, thickness and opacity in force.
@@ -1205,6 +1396,7 @@
   function adoptThickness (thickness) {
     activeThickness = thickness
     applyStyle()
+    redrawChevronLines()
     document.querySelectorAll(`#${THICKNESS_SLIDER}`).forEach((el) => { el.value = thickness })
   }
 
@@ -1376,9 +1568,9 @@
   }
 
   function installPenPages (tool) {
-    const found = tool && ['setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint'].every((name) => typeof tool[name] === 'function')
+    const found = tool && ['setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint', 'actSend'].every((name) => typeof tool[name] === 'function')
     if (!found) {
-      console.warn('pen-tool-extras: the pen tool has no setSelectedColor, drawLineHint or tool enter and exit handler, so the second page of pens is not installed')
+      console.warn('pen-tool-extras: the pen tool has no setSelectedColor, drawLineHint, actSend or tool enter and exit handler, so the extra pages of pens are not installed')
       return
     }
     penTool = tool
@@ -1416,6 +1608,21 @@
       drawHint.call(this, path)
       const layer = hintLayer()
       if (layer && this.linePart && this.linePart.parentNode !== layer) layer.appendChild(this.linePart)
+    }
+    // A line dragged with a page 3 pen is stored with the character of the way each segment was dragged. The tool queues its
+    // actions (and its path) before `actSend` sends them, so they are rewritten there. A drag that erases queues the value
+    // alone, which removes the line whichever way it was stored, and is left as it is.
+    const send = tool.actSend
+    tool.actSend = function () {
+      if (!this.eraseMode && Array.isArray(this.currentPath) && chevronWayOf(selectedPen()) !== null) {
+        try {
+          this._actList.splice(0, this._actList.length, ...splitLineActs(this._actList, this.currentPath, selectedPen()))
+        } catch (error) {
+          // The drag is sent as SudokuPad queued it, every line in the pen's own character, rather than lost.
+          console.error(error)
+        }
+      }
+      return send.apply(this, arguments)
     }
     // SudokuPad asks every tool's `handleKeydown` before its key handlers, and stops at the first that answers, so
     // answering Tab here also keeps it from the letter tool's Tab binding (which does nothing in the pen tool in
