@@ -2,7 +2,7 @@
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      1.9.0
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed (or dotted) lines and a third page of nine that draw a thin line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed (or dotted) lines and a third page of nine that draw a line as wide as a page 1 line with a run of chevrons pointing the way the line was dragged (a page button, Tab or the mouse wheel changes page; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, and adds direction arrows and a circle to the marks a click on a cell edge cycles through, plus an X and a circle for a click near a grid corner. Relies on SudokuPad internals for the pages, the edge and corner marks and the panel's two sliders, so an update can break them.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -712,8 +712,10 @@
 
   // A swatch, cut out of the button's pen-colored square by a mask so a recolor follows: the line `svg` draws.
   const swatchMask = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, '%27')}") center / 100% no-repeat`
-  const swatchRule = (n, page, svg) =>
-    `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${page}"]:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${swatchMask(svg)}; mask: ${swatchMask(svg)}; }`
+  const swatchRule = (n, page, svg) => {
+    const mask = swatchMask(svg)
+    return `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${page}"]:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${mask}; mask: ${mask}; }`
+  }
   // A chevron page's swatch: a line and two chevrons.
   const CHEVRON_SWATCH = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round'><path d='M2 12H22' stroke-width='1.4'/><path d='M6 6L11 12L6 18M14 6L19 12L14 18' stroke-width='2.6'/></svg>"
   // A dashed page's swatch: one line across the 24 wide swatch, 2 wide, from x 2 to 22, dashed by the page's own rule

@@ -42,10 +42,10 @@
   // How far a solver's pen mark reaches past the box of the cell it is on: the farther of two marks at Pen Tool Extras' largest thickness
   // (16). One is the edge X on an outer edge, whose edge and corner marks are then grown by 1.6, measured on sudokupad.app v0.611.0 at
   // 18.53px in a 1200x900 window (10.07px at the default thickness of 5). The other is a chevron on a page 3 line along an outer edge,
-  // which reaches 24.5 cell units (a cell is 64) there, about 22px at a cell 57px wide. 25 covers both, and a board drawn larger. The rectangle
+  // which reaches 24.52 cell units (a cell is 64) there: 22px at a cell 57px wide, 24.5px at 64px. 28 covers both on a board with cells up to about 73px wide. The rectangle
   // keeps this much around the cells so the mark sits on white from the moment it is drawn, not from
   // the next measurement.
-  const SOLVER_REACH = 25
+  const SOLVER_REACH = 28
   // What the puzzle draws as leaf elements. Elements in `defs`, `marker` and the like have no box.
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
   const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']

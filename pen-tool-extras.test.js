@@ -1194,7 +1194,7 @@ test('splitLineActs leaves actions that are not line values alone, and refuses a
   assert.throws(() => splitLineActs([{ type: 'select', arg: [cellAt(7, 7)] }, { type: 'pen', arg: '1' }], [pt(2.5, 2.5), pt(2.5, 3.5)], 'j'), RangeError)
 })
 
-// Chevron geometry. A page 3 line is a thin line and a run of chevrons along it.
+// Chevron geometry. A page 3 line is a line as wide as a page 1 line and a run of chevrons along it.
 const numbersOf = (d) => d.match(/-?\d+(?:\.\d+)?/g).map(Number)
 const pointsOf = (d) => { const n = numbersOf(d); const out = []; for (let i = 0; i < n.length; i += 2) out.push([n[i], n[i + 1]]); return out }
 
@@ -1271,7 +1271,7 @@ test('the line under the chevrons is as thick as a page 1 line at every slider v
   }
 })
 
-test('up to thickness 10 the chevrons are the size they were, and above it they grow evenly to 1.35 times at 16, wings and length, not the stroke or the spacing', () => {
+test('up to thickness 10 a chevron\'s wings reach 0.95 of the thickness, and above it they grow evenly to 1.35 times at 16, wings and length, not the stroke or the spacing', () => {
   const reachOf = (t) => { const shape = chevronLine('a', true, 0, 0, t); return Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) }
   for (const t of [5, 8, 10]) assert.equal(Math.abs(reachOf(t) - CHEVRON.halfWidth * t) < 0.01, true, `at ${t}`)
   assert.equal(Math.abs(reachOf(13) - CHEVRON.halfWidth * 13 * 1.175) < 0.01, true, 'half way up, 1.175 times')
@@ -1280,9 +1280,9 @@ test('up to thickness 10 the chevrons are the size they were, and above it they 
   assert.equal(pointsOf(chevronLine('a', true, 0, 0, 16).chevrons).length / 3, Math.round(64 / (CHEVRON.spacing * 16)) || 1)
 })
 
-test('a chevron is centered on its line, on a diagonal as on a straight line, at every thickness: its two wings mirror each other across the line', () => {
+test('a chevron is centered on its line, on a diagonal as on a straight line, at every thickness from 1 to 16: its two wings mirror each other across the line', () => {
   for (const value of ['1', '2', 'a', 'e', 'd']) {
-    for (const t of [1, 5, 10, 13, 16]) {
+    for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
       const shape = chevronLine(value, true, 3, 3, t)
       const [[x0, y0], [x1, y1]] = pointsOf(shape.line)
       const length = Math.hypot(x1 - x0, y1 - y0)
@@ -1306,7 +1306,7 @@ test('at the largest thickness a chevron on a grid\'s outer edge reaches no furt
   const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y))) + shape.chevronWidth / 2
   assert.equal(Math.abs(reach - (CHEVRON.halfWidth * (1 + CHEVRON.growth) + CHEVRON.stroke / 2) * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON sizes at the largest thickness`)
-  assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}`)
+  assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
 })
 
 test('a chevron line has at least one chevron on any segment at any thickness, so a run never has none', () => {

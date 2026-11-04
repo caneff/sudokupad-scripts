@@ -91,7 +91,7 @@
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
   rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is the chosen page color (black by default) outside it.
-- **swatch** — one square button in the Color by Digit dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
+- **swatch** — also, in Pen Tool Extras, the picture on a pen color button of page 2 (a dashed line) or page 3 (a line and chevrons), cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
 - **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per

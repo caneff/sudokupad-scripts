@@ -120,6 +120,15 @@ function group (title, mode, extra = []) {
       }
       assert.equal(await settle(padValues, values), values)
     }
+    // The settings dialog's editor: open it from SudokuPad's settings, press one of its buttons, and wait for it to go.
+    const editor = () => p.locator('#pen-tool-extras-editor')
+    const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
+    const openEditor = async () => {
+      await openSettings(p)
+      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
+      await editor().waitFor({ state: 'visible' })
+    }
+    const closeWith = async (text) => { await dialogButton(text).click(); await editor().waitFor({ state: 'detached' }) }
     const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const turnPageWithWheel = async (deltaY) => {
       const box = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
@@ -232,14 +241,6 @@ function group (title, mode, extra = []) {
     })
 
     it('the dialog\'s dash length starts at 3, which draws dashes; 0 draws dots, and a saved 0 stays; Cancel leaves it, Restore defaults and Save bring the dashes back', async () => {
-      const editor = () => p.locator('#pen-tool-extras-editor')
-      const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-      const openEditor = async () => {
-        await openSettings(p)
-        await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-        await editor().waitFor({ state: 'visible' })
-      }
-      const closeWith = async (text) => { await dialogButton(text).click(); await editor().waitFor({ state: 'detached' }) }
       const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')).strokeDasharray))
       const solidOn = () => read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-3')).strokeDasharray)
       const sample = () => p.locator(`${PAGE_BUTTON} [data-page-sample]`).getAttribute('data-page-sample')
@@ -297,29 +298,22 @@ function group (title, mode, extra = []) {
     })
 
     it('the SudokuPad colors button sets the nine pickers to SudokuPad\'s own pen colors: Cancel leaves the colors, Save stores them for all three pages, and the click marks no cell', async () => {
-      const editor = () => p.locator('#pen-tool-extras-editor')
-      const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-      const openEditor = async () => {
-        await openSettings(p)
-        await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-        await editor().waitFor({ state: 'visible' })
-      }
-      const closeWith = async (text) => { await dialogButton(text).click(); await editor().waitFor({ state: 'detached' }) }
       const colorOf3 = () => read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
       const pickers = () => editor().locator('input[type="color"]').evaluateAll((els) => els.map((el) => el.value))
       // SudokuPad's own pen colors, typed out here from tool-pen.css as the independent source.
       const own = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
+      const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
       // The colors in force start as the cell color page's, which are not SudokuPad's own.
       await read((k) => Framework.removeData(k), COLORS_KEY)
       const before = await colorOf3()
-      assert.notEqual(before, '#e49632', 'the colors in force are not SudokuPad\'s own')
+      assert.notEqual(before, own[2], 'the colors in force are not SudokuPad\'s own')
       const marks = await penValues()
       const depth = await undoDepth()
       await openEditor()
       assert.notDeepEqual(await pickers(), own)
       await editor().locator('button[data-sudokupad-colors]').click()
       assert.deepEqual(await pickers(), own)
-      assert.equal(await editor().locator('button[data-sudokupad-colors]').count(), 1, 'the dialog stays open and redraws')
+      assert.equal(await editor().locator('button[data-sudokupad-colors]').count(), 1, 'the dialog is still open, with the button in it')
       assert.deepEqual(await penValues(), marks, 'the click left no pen mark')
       assert.equal(await undoDepth(), depth, 'the click is no undo step')
       await closeWith('Cancel')
@@ -328,14 +322,25 @@ function group (title, mode, extra = []) {
       await openEditor()
       await editor().locator('button[data-sudokupad-colors]').click()
       await closeWith('Save')
-      assert.equal(await settle(colorOf3, '#e49632'), '#e49632')
+      assert.equal(await settle(colorOf3, own[2]), own[2])
       assert.deepEqual(await saved(COLORS_KEY), Object.fromEntries(own.map((c, i) => [i + 1, c])), 'all nine are saved as the user\'s colors')
       assert.deepEqual(await penValues(), marks, 'closing the dialog left no pen mark either')
       // Pen 3 on page 1 is 3, on page 2 c, on page 3 n and its reverse o: every page follows the color.
-      assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, 'rgb(228, 150, 50)')
-      assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, 'rgb(228, 150, 50)')
+      assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, rgbOf(own[2]))
+      assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, rgbOf(own[2]))
       await reload()
-      assert.equal(await settle(colorOf3, '#e49632'), '#e49632', 'the saved colors are kept after a reload')
+      assert.equal(await settle(colorOf3, own[2]), own[2], 'the saved colors are kept after a reload')
+      await read((k) => Framework.removeData(k), COLORS_KEY)
+      // Restore defaults and then the button: the button's colors are picked by hand, so Save stores them and does not clear the saved set.
+      await openEditor()
+      await dialogButton('Restore defaults').click()
+      await editor().locator('button[data-sudokupad-colors]').click()
+      assert.deepEqual(await pickers(), own)
+      await closeWith('Save')
+      assert.deepEqual(await saved(COLORS_KEY), Object.fromEntries(own.map((c, i) => [i + 1, c])), 'Save after Restore defaults and the button stores the colors')
+      assert.equal(await settle(colorOf3, own[2]), own[2])
+      await reload()
+      assert.equal(await settle(colorOf3, own[2]), own[2], 'and they are still there after a reload')
       await read((k) => Framework.removeData(k), COLORS_KEY)
     })
 
