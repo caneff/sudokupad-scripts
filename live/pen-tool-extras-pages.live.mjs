@@ -1,5 +1,5 @@
 // Live check of pen-tool-extras.user.js's second page of pens (color characters a to i, drawn dashed)
-// on sudokupad.app in headless Chromium. Run with `npm run test:live`. It needs the network and a
+// on sudokupad.app in headless Chromium. Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a
 // Playwright Chromium, so it is not part of `npm test`.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real

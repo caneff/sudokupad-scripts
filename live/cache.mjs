@@ -1,13 +1,15 @@
 // Shared by the live checks: SudokuPad served from a recording (a HAR) instead of sudokupad.app on every
 // page load. Test code only; no userscript reads it, and it is not a check, so `live/*.live.mjs` skips it.
 //
-// `routeSudokuPad(page or context)` replaces the tracker-abort line every live file used to carry. The first
-// call of a run with no recording, one older than 24 hours, or `LIVE_REFRESH=1` records SudokuPad's app from
-// sudokupad.app, once, under a lock; every other call replays it. The recording is SudokuPad's own code, so it
-// lives outside the repo, shared by every worktree: `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`.
+// `routeSudokuPad(page or context)` aborts the trackers and serves everything else from a recording of
+// SudokuPad's app. The first call with no recording, one older than 24 hours, or `LIVE_REFRESH=1` records it
+// from sudokupad.app, once per run, under a lock; every other call replays it. The recording is SudokuPad's
+// own code, so it lives outside the repo, shared by every worktree:
+// `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`.
 //   LIVE_REFRESH=1  record again now, whatever the recording's age
 //   LIVE_OFFLINE=1  never touch the network: replay what is there, and fail when there is no recording
-// A replayed request the recording lacks is aborted and named on stderr; `LIVE_REFRESH=1` records it.
+// A replayed request the recording lacks is aborted, and the process then exits 1 naming each such URL, so a
+// recording with gaps cannot pass; `LIVE_REFRESH=1` records again.
 // Snags this works around are in docs/research/2026-10-04-offline-render-har.md of sudokupad-art, which
 // records the same app the same way.
 
@@ -16,10 +18,13 @@ import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, renameSync } 
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
+import { openSettings } from './settings.mjs'
 
 export const MAX_AGE_MS = 24 * 60 * 60 * 1000
 const LOCK_STALE_MS = 10 * 60 * 1000
 const LOCK_WAIT_MS = 15 * 60 * 1000
+// How long a refresh marker (below) names its runner: a full run takes minutes, so an older one is another run's.
+const REFRESH_MARKER_MAX_AGE_MS = 60 * 60 * 1000
 
 const SUDOKUPAD_ORIGIN = 'https://sudokupad.app'
 // Hosts and paths the live checks never want: consent and analytics, and the solve counter, whose URL is
@@ -33,14 +38,15 @@ const puzzleUrl = () => readFileSync(new URL('./puzzle-url.txt', import.meta.url
 
 export const harPath = (env, home) => join(env.XDG_CACHE_HOME || join(home, '.cache'), 'sudokupad-scripts', 'live', 'sudokupad.har')
 
-// 'record' or 'replay'. LIVE_OFFLINE=1 never records, so it throws when there is nothing to replay.
-export function modeFor ({ env, exists, mtimeMs, now }) {
+// 'record' or 'replay'. LIVE_REFRESH=1 records once per run, so a run that has already refreshed replays.
+// LIVE_OFFLINE=1 never records, so it throws when there is nothing to replay.
+export function modeFor ({ env, exists, mtimeMs, now, refreshedThisRun }) {
   if (env.LIVE_OFFLINE === '1') {
     if (env.LIVE_REFRESH === '1') throw new Error('LIVE_OFFLINE=1 and LIVE_REFRESH=1 contradict: one never touches the network, the other records from it')
     if (!exists) throw new Error('LIVE_OFFLINE=1 but there is no recording to replay: run once without it to record')
     return 'replay'
   }
-  if (env.LIVE_REFRESH === '1' || !exists || now - mtimeMs > MAX_AGE_MS) return 'record'
+  if ((env.LIVE_REFRESH === '1' && !refreshedThisRun) || !exists || now - mtimeMs > MAX_AGE_MS) return 'record'
   return 'replay'
 }
 
@@ -50,7 +56,7 @@ export function modeFor ({ env, exists, mtimeMs, now }) {
 export function cleanHar (har) {
   const byRequest = new Map()
   for (const e of har.log.entries.filter((x) => x.response.status > 0)) {
-    const key = `${e.request.method} ${e.request.url}`
+    const key = `${e.request.method} ${e.request.url} ${e.request.postData?.text ?? ''}`
     const held = byRequest.get(key)
     const keptBytes = (x) => x.response.content.encoding === 'base64'
     if (!(held && keptBytes(held) && !keptBytes(e))) byRequest.set(key, e)
@@ -70,8 +76,6 @@ const recordingState = (file) => {
   }
 }
 
-const currentMode = (file) => modeFor({ env: process.env, ...recordingState(file), now: Date.now() })
-
 // Holds `<file>.lock` (a directory, since mkdir fails when it exists) while `fn` runs, so test files started
 // together record once. A lock older than LOCK_STALE_MS belongs to a recorder that was killed and is taken over.
 async function withLock (file, fn) {
@@ -81,7 +85,10 @@ async function withLock (file, fn) {
     try { mkdirSync(lock); break } catch (e) {
       if (e.code !== 'EEXIST') throw e
       let age
-      try { age = Date.now() - statSync(lock).mtimeMs } catch { continue } // released while we looked
+      try { age = Date.now() - statSync(lock).mtimeMs } catch (err) {
+        if (err.code === 'ENOENT') continue // released while we looked
+        throw err
+      }
       if (age > LOCK_STALE_MS) { rmSync(lock, { recursive: true, force: true }); continue }
       if (Date.now() > until) throw new Error(`${lock} is held by another recorder; delete it if none is running`)
       await sleep(250)
@@ -121,8 +128,7 @@ async function record (file) {
     await start.waitFor({ state: 'visible' })
     await start.click()
     await p.locator('#control-undo').waitFor({ state: 'visible' })
-    await p.click('#control-settings')
-    await p.locator('.dialog .setting-group').first().waitFor({ state: 'visible' })
+    await openSettings(p)
     await p.waitForLoadState('networkidle')
     await loadEveryWebFont(p, stylesheet)
     await context.close()
@@ -134,37 +140,61 @@ async function record (file) {
   }
 }
 
-let ready
-// Resolves to the recording's path once it is fit to replay: recorded now, or already recent. One recording
-// per process; the lock and the mode re-read after it keep processes from recording twice.
-function ensureRecording () {
-  const file = harPath(process.env, homedir())
-  ready ??= (async () => {
-    if (currentMode(file) === 'record') {
-      mkdirSync(dirname(file), { recursive: true })
-      await withLock(file, async () => {
-        const before = recordingState(file)
-        const recordedMeanwhile = before.exists && Date.now() - before.mtimeMs < 60 * 1000
-        if (!recordedMeanwhile) {
-          console.error(`live cache: recording SudokuPad's app from ${SUDOKUPAD_ORIGIN} into ${file}`)
-          await record(file)
-        }
-      })
-    }
-    return file
-  })()
-  return ready
+// The runner a test file belongs to, or null outside `node --test`: its files run as children of one runner
+// process, which is what makes them one run.
+const runnerKey = (env, ppid) => env.NODE_TEST_CONTEXT ? String(ppid) : null
+
+// Whether this runner already refreshed the recording: `<file>.refresh-run` names the runner that did, and is
+// ignored once it is too old to be the same run.
+function refreshedBy (file, key) {
+  if (key === null) return false
+  const marker = `${file}.refresh-run`
+  try {
+    return Date.now() - statSync(marker).mtimeMs < REFRESH_MARKER_MAX_AGE_MS && readFileSync(marker, 'utf8') === key
+  } catch (e) {
+    if (e.code === 'ENOENT') return false
+    throw e
+  }
 }
 
+// The recording's path once it is fit to replay. When the mode says record, it records under the lock and
+// first re-reads the mode there, since another process may have recorded while this one waited. `record` is
+// handed the path and writes the recording there.
+export async function ensureRecording ({ env, home, ppid, record }) {
+  const file = harPath(env, home)
+  const key = runnerKey(env, ppid)
+  const mode = () => modeFor({ env, ...recordingState(file), now: Date.now(), refreshedThisRun: refreshedBy(file, key) })
+  if (mode() === 'replay') return file
+  mkdirSync(dirname(file), { recursive: true })
+  await withLock(file, async () => {
+    if (mode() === 'replay') return
+    console.error(`live cache: recording SudokuPad's app from ${SUDOKUPAD_ORIGIN} into ${file}`)
+    await record(file)
+    if (key !== null) writeFileSync(`${file}.refresh-run`, key)
+  })
+  return file
+}
+
+// Every URL a replay aborted for want of a recording. The process exits 1 naming them, so a recording with
+// gaps fails the run instead of drawing a page with a font or an image missing.
+export const misses = new Set()
+process.on('exit', () => {
+  if (misses.size === 0) return
+  console.error(`live cache: ${misses.size} request(s) not in the recording; LIVE_REFRESH=1 records again:\n  ${[...misses].join('\n  ')}`)
+  process.exitCode = 1
+})
+
+let ready
 // Aborts the trackers and serves everything else a page makes from the recording. `target` is a page or a
 // context. Playwright runs the most recently registered matching route first, so the order below is the
 // reverse of the order a request meets them: trackers, then any sudokupad.app document rewritten to the
 // recorded puzzle's URL (one page document serves every path; the page keeps its own location), then the
 // recording, then the abort of whatever it lacks.
 export async function routeSudokuPad (target) {
-  const file = await ensureRecording()
+  ready ??= ensureRecording({ env: process.env, home: homedir(), ppid: process.ppid, record })
+  const file = await ready
   await target.route('**/*', (route) => {
-    console.error(`live cache: not in the recording, aborted: ${route.request().url()} (LIVE_REFRESH=1 records it)`)
+    misses.add(route.request().url())
     return route.abort()
   })
   await target.routeFromHAR(file, { notFound: 'fallback' })
