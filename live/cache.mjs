@@ -90,12 +90,12 @@ async function withLock (file, fn) {
   try { return await fn() } finally { rmSync(lock, { recursive: true, force: true }) }
 }
 
-// Loads every font file the page's Google Fonts stylesheet names. Each is split by unicode range and loads
-// only when the page draws a glyph in its range, so a visit records the subsets it happened to draw and a
-// replay would lack the rest. The stylesheet is read outside the page, which its CSP would not let fetch it.
-async function loadEveryWebFont (context, p) {
-  const href = await p.locator('link[rel="stylesheet"][href*="fonts.googleapis.com"]').getAttribute('href')
-  const css = await (await context.request.get(href)).text()
+// Loads every font file a Google Fonts stylesheet names, given the response the page got for it. Each is
+// split by unicode range and loads only when the page draws a glyph in its range, so a visit records the
+// subsets it happened to draw and a replay would lack the rest. The stylesheet is the page's own response:
+// a request made outside the page is answered in another format, with other font URLs.
+async function loadEveryWebFont (p, stylesheet) {
+  const css = await (await stylesheet).text()
   const urls = [...css.matchAll(/url\((https:[^)]+)\)/g)].map((m) => m[1])
   await p.evaluate((list) => Promise.all(list.map((u) => new window.FontFace('recorded', `url(${u})`).load())), urls)
 }
@@ -115,6 +115,7 @@ async function record (file) {
     })
     await context.route(TRACKERS, (r) => r.abort())
     const p = await context.newPage()
+    const stylesheet = p.waitForResponse(/fonts\.googleapis\.com\/css/)
     await p.goto(puzzleUrl(), { waitUntil: 'load', timeout: 60000 })
     const start = p.getByRole('button', { name: START }).first()
     await start.waitFor({ state: 'visible' })
@@ -123,7 +124,7 @@ async function record (file) {
     await p.click('#control-settings')
     await p.locator('.dialog .setting-group').first().waitFor({ state: 'visible' })
     await p.waitForLoadState('networkidle')
-    await loadEveryWebFont(context, p)
+    await loadEveryWebFont(p, stylesheet)
     await context.close()
     mkdirSync(dirname(file), { recursive: true })
     writeAtomic(file, JSON.stringify(cleanHar(JSON.parse(readFileSync(tmp, 'utf8')))))
