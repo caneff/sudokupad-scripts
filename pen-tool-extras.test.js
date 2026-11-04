@@ -789,7 +789,7 @@ test('the corner X is two crossing diagonals of half-size s, drawn from the poin
 })
 
 // Pen pages: page 1 is SudokuPad's own 1 to 9, page 2 is the color characters a to i, drawn dashed, page 3 is j to z and 0, two
-// to a pen, drawn as chevron lines.
+// to a pen, drawn as arrow lines.
 test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dashed, then arrow lines with a character for each way', () => {
   assert.deepEqual(PEN_PAGES, [
     { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dashed: false },
@@ -1087,7 +1087,7 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8')))
 })
 
-// Page 3: chevron lines. A page 3 pen is two color characters; the one a line stores says which way it was dragged.
+// Page 3: arrow lines (`chevron` in the code's names). A page 3 pen is two color characters; the one a line stores says which way it was dragged.
 test('a page 3 pen\'s two characters are the 18 from j to z and 0, two to a pen, the first for the way a line is stored', () => {
   const page = PEN_PAGES[2]
   assert.deepEqual([...page.chars, ...page.reverse].sort(), 'jklmnopqrstuvwxyz0'.split('').sort())
@@ -1137,6 +1137,12 @@ test('a page 3 swatch is an arrow in the pen color of its button, as a mask so t
     assert.match(rule.body, new RegExp(`background-color: var\\(--puzzle-pencolor-${n}\\)`))
     assert.match(rule.body, /mask(-image)?: url\("data:image\/svg\+xml,/)
   }
+  // The picture itself: a stroked line and two closed triangles that are filled, since an unfilled triangle is an outline of an arrow, not one.
+  const mask = rules.find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="3"]:after').body
+  const svg = decodeURIComponent(/url\("data:image\/svg\+xml,([^"]+)"\)/.exec(mask)[1])
+  const triangles = /<path d='([^']+)' fill='#000' stroke='none'\/>/.exec(svg)
+  assert.ok(triangles, `the arrows are filled paths with no stroke: ${svg}`)
+  assert.equal(triangles[1].split('Z').length - 1, 2, 'two closed arrows')
 })
 
 // The segments a drag is made of, as SudokuPad's own pen tool stores them: the value, the cell that holds it,
@@ -1205,7 +1211,7 @@ test('splitLineActs leaves actions that are not line values alone, and refuses a
   assert.throws(() => splitLineActs([{ type: 'select', arg: [cellAt(7, 7)] }, { type: 'pen', arg: '1' }], [pt(2.5, 2.5), pt(2.5, 3.5)], 'j'), RangeError)
 })
 
-// Chevron geometry. A page 3 line is a line as wide as a page 1 line and a run of chevrons along it.
+// Arrow line geometry (`chevronLine` in the code). A page 3 line is a line as wide as a page 1 line and a run of arrows along it.
 const numbersOf = (d) => d.match(/-?\d+(?:\.\d+)?/g).map(Number)
 const pointsOf = (d) => { const n = numbersOf(d); const out = []; for (let i = 0; i < n.length; i += 2) out.push([n[i], n[i + 1]]); return out }
 
@@ -1242,7 +1248,7 @@ test('arrows point along a diagonal and along a vertical line as well', () => {
 })
 
 test('the arrows are evenly spaced along the line, half a space in from each end, so two cells in a row read as one run', () => {
-  // a chevron's middle is halfway between its wings and its tip
+  // an arrow's middle is halfway between its base corners and its tip
   const middles = (d) => { const p = pointsOf(d); const out = []; for (let i = 0; i < p.length; i += 3) out.push((p[i][0] + p[i + 1][0]) / 2); return out }
   for (const thickness of [1, 5, 12, 16]) {
     const xs = middles(chevronLine('1', true, 0, 0, thickness).chevrons)
@@ -1279,13 +1285,17 @@ test('the line under the arrows is as thick as a page 1 line at every slider val
   }
 })
 
+test('the arrow sizes are the ruled ones: base 1.5 line widths out to each side, 2.25 long, one spacing of 5', () => {
+  assert.deepEqual([CHEVRON.halfWidth, 2 * CHEVRON.halfLength, CHEVRON.line, CHEVRON.spacing], [1.5, 2.25, 1, 5])
+})
+
 test('from thickness 5 up an arrow\'s base reaches CHEVRON.halfWidth (1.5) times the thickness to each side, it is twice CHEVRON.halfLength (1.125) times the thickness long, and the spacing scales with it', () => {
   for (const t of [5, 8, 10, 13, 16]) {
     const shape = chevronLine('a', true, 0, 0, t)
     const points = pointsOf(shape.chevrons)
     const [first, tip] = points
     assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - CHEVRON.halfWidth * t) < 0.01, true, `reach at ${t}`)
-    assert.equal(Math.abs(Math.hypot(tip[0] - first[0], 0) - 2 * CHEVRON.halfLength * t) < 0.01, true, `length at ${t}`)
+    assert.equal(Math.abs(Math.abs(tip[0] - first[0]) - 2 * CHEVRON.halfLength * t) < 0.01, true, `length at ${t}`)
     assert.equal(points.length / 3, Math.round(64 / (CHEVRON.spacing * t)) || 1, `count at ${t}`)
   }
 })
@@ -1312,7 +1322,7 @@ test('an arrow is centered on its line, on a diagonal as on a straight line, at 
 })
 
 test('at the largest thickness an arrow on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
-  // a top edge line, 'a', on row 0: the chevron's wings are the furthest from the edge itself
+  // a top edge line, 'a', on row 0: the arrow's base corners are the furthest from the edge itself
   const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y)))
   assert.equal(Math.abs(reach - CHEVRON.halfWidth * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON size at the largest thickness`)
@@ -1343,15 +1353,17 @@ test('buildOutlineCss refuses a value that is not a boolean', () => {
   assert.throws(() => buildOutlineCss('on'), RangeError)
 })
 
-test('the outline filter grows the layer\'s combined shape by the fixed radius with a blur and a cut (round corners), fills it white and draws the layer over it', () => {
+test('the outline filter grows the layer\'s combined shape by the default width with a square growth then a blur and a cut (round corners), fills it white and draws the layer over it', () => {
   const svg = renderOutlineFilter(OUTLINE_WIDTH.fallback)
   assert.match(svg, new RegExp(`<filter id="${OUTLINE_FILTER_ID}"`))
-  const blur = /<feGaussianBlur in="SourceAlpha" stdDeviation="([\d.]+)"/.exec(svg)
-  assert.ok(blur, 'the layer\'s alpha is blurred')
-  assert.equal(Math.abs(Number(blur[1]) * 1.645 - OUTLINE_WIDTH.fallback) < 0.01, true, `a blur of ${blur[1]} reaches ${OUTLINE_WIDTH.fallback} units out at the cut`)
+  const square = /<feMorphology in="SourceAlpha" operator="dilate" radius="([\d.]+)" result="squared"\/>/.exec(svg)
+  assert.ok(square, 'the layer\'s alpha is first grown square, so a thin shape survives the blur')
+  const blur = /<feGaussianBlur in="squared" stdDeviation="([\d.]+)"/.exec(svg)
+  assert.ok(blur, 'the grown alpha is then blurred')
+  assert.equal(Math.abs(Number(square[1]) + Number(blur[1]) * 1.645 - OUTLINE_WIDTH.fallback) < 0.01, true, `a square growth of ${square[1]} and a blur of ${blur[1]} reach ${OUTLINE_WIDTH.fallback} units out at the cut`)
   assert.match(svg, /<feComponentTransfer in="blurred" result="grown"><feFuncA type="linear" slope="16" intercept="-0\.3"\/>/)
-  assert.match(svg, /<feFlood flood-color="#ffffff"/)
-  assert.ok(svg.indexOf('<feMergeNode') < svg.lastIndexOf('in="SourceGraphic"'), 'the layer is merged over the white')
+  assert.match(svg, /<feFlood flood-color="#ffffff" result="white"\/><feComposite in="white" in2="grown" operator="in" result="halo"\/>/, 'the white is kept where the grown shape is')
+  assert.match(svg, /<feMerge><feMergeNode in="halo"\/><feMergeNode in="SourceGraphic"\/><\/feMerge>/, 'the layer is merged over the white')
 })
 
 test('the dialog has a White outline box, off unless the outline is on', () => {
@@ -1367,9 +1379,11 @@ test('normalizeOutlineWidth keeps a saved whole number from 1 to 8 and reads any
   for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(normalizeOutlineWidth(bad), 3, JSON.stringify(bad))
 })
 
-test('the outline filter blurs wider for a wider outline, and refuses a width it cannot save', () => {
+test('the outline filter grows and blurs more for a wider outline, and refuses a width it cannot save', () => {
   const blurOf = (width) => Number(/stdDeviation="([\d.]+)"/.exec(renderOutlineFilter(width))[1])
+  const squareOf = (width) => Number(/radius="([\d.]+)"/.exec(renderOutlineFilter(width))[1])
   assert.equal(blurOf(1) < blurOf(3) && blurOf(3) < blurOf(8), true, `${blurOf(1)}, ${blurOf(3)}, ${blurOf(8)}`)
+  assert.equal(squareOf(1) < squareOf(3) && squareOf(3) < squareOf(8), true, `${squareOf(1)}, ${squareOf(3)}, ${squareOf(8)}`)
   for (const bad of [0, 9, 2.5, '3']) assert.throws(() => renderOutlineFilter(bad), RangeError)
 })
 

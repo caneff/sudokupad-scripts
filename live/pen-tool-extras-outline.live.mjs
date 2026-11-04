@@ -31,6 +31,7 @@ const WIDE_UNITS = 7
 const PAST_NARROW_UNITS = 5.5
 const CLEAR_UNITS = 14
 const OUTLINE_WIDTH_KEY = 'PenColor_outlinewidth'
+const DASH_KEY = 'PenColor_dash'
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -71,9 +72,10 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     }
 
     // One horizontal line in pen color 1 through the middle of grid row `row`, from column 3 to column 5 (a drag between cell
-    // centers in the center-only mode, so it is straight).
-    const draw = async (row = 8) => {
+    // centers in the center-only mode, so it is straight), on pen page `page` (0 is the first).
+    const draw = async (row = 8, page = 0) => {
       await selectPen()
+      for (let i = 0; i < page; i++) await p.click('.pen-tool-extras-page')
       await read(() => { ToolPen.tool.lineMode = 'centeronly' })
       await p.locator('.tool-pen button[data-key="1"]').click()
       const [x, y, cell] = await read((row) => {
@@ -144,7 +146,7 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
       await editor().waitFor({ state: 'visible' })
     }
-    const clearSaved = () => read((keys) => keys.forEach((k) => Framework.removeData(k)), [OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY, THICKNESS_KEY])
+    const clearSaved = () => read((keys) => keys.forEach((k) => Framework.removeData(k)), [OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY, THICKNESS_KEY, DASH_KEY])
     const widthSlider = () => editor().locator('input[data-setting="outlineWidth"]')
     const setWidth = (value) => widthSlider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 
@@ -241,7 +243,6 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     it('the outline fades with the opacity slider: the pixel beside a line is brighter at 100 than at 40', async () => {
-      await back()
       await read(([k]) => Framework.setData(k, 100), [OPACITY_KEY])
       await reload()
       await back()
@@ -298,6 +299,22 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
       assert.equal(await widthSlider().inputValue(), '3')
       await dialogButton('Cancel').click()
       await editor().waitFor({ state: 'detached' })
+      await clearSaved()
+    })
+
+    it('a mark much thinner than the outline still gets the full outline: page 2 dots at Thickness 1 are white 4 and 7 units out at width 8 and 2 units out at width 3', async () => {
+      await read(([t, d, o, w, op]) => { Framework.setData(t, 1); Framework.setData(d, 0); Framework.setData(o, true); Framework.setData(w, 8); Framework.setData(op, 100) }, [THICKNESS_KEY, DASH_KEY, OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY])
+      await reload()
+      await draw(6, 1)
+      await back()
+      assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS, 6).then((v) => v > 200), true), true, 'white 4 units above the dots at width 8')
+      assert.equal(await brightnessAbove(WIDE_UNITS, 6) > 200, true, 'white 7 units above the dots at width 8')
+      await unback()
+      await read(([w]) => Framework.setData(w, 3), [OUTLINE_WIDTH_KEY])
+      await reload()
+      await back()
+      assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS - 2, 6).then((v) => v > 200), true), true, 'white 2 units above the dots at width 3 (a dot edge is 0.5 out, so the outline reaches 3.5 from its middle, and the pixel may sit between two dots 5 units apart)')
+      await unback()
       await clearSaved()
     })
 

@@ -70,7 +70,7 @@
   // character is the one a stroke stores after its value and the replay holds (`pc:a`), which draws,
   // undoes and replays for any lowercase letter (docs/research/sudokupad-pen-tool.md, "Pen colors past
   // nine"). The first page is SudokuPad's own and must stay first: its characters are the only ones stock
-  // SudokuPad can select. A dashed page draws its lines as dashes (dots at a dash length of 0). A pen value has no direction, so a arrow page's
+  // SudokuPad can select. A dashed page draws its lines as dashes (dots at a dash length of 0). A pen value has no direction, so an arrow page's
   // pen is two characters: the one on its button (`chars`) for a line dragged the way SudokuPad draws the value, and
   // the `reverse` one at the same index for a line dragged the other way. Only the first is ever selected.
   const PEN_PAGES = [
@@ -129,10 +129,13 @@
   // The white outline's width on each side of the pen layer's shape, in cell units (a cell is 64; a default line is 5 wide), set by a slider in the dialog. It
   // does not scale with the thickness. 3 shows over a colored cell and a digit as well as over white without covering the digits beside a line.
   const OUTLINE_WIDTH = { min: 1, max: 8, step: 1, fallback: 3 }
-  // The outline is the layer's alpha blurred and cut at OUTLINE_CUT, which follows the shape in round curves (a square dilation steps round every corner).
-  // Along a straight edge the blurred alpha falls to OUTLINE_CUT at OUTLINE_CUT_SIGMAS blur widths (the normal curve's 95th percentile, 1.645) out, so
-  // the blur width is the outline width over that. The cut is a steep ramp (OUTLINE_SOFTNESS per unit of alpha) so the edge is not jagged, and the low cut
-  // keeps the outline of a thin line close to that of a thick one.
+  // The outline is made in two steps. The layer's alpha is first grown square by OUTLINE_SQUARE_SHARE of the width, so a thin shape (a one-wide
+  // dot) is already wide enough for the second step to keep; then it is blurred and cut at OUTLINE_CUT, which rounds the corners (a square dilation
+  // alone steps round every corner) and grows it by the rest of the width. Along a straight edge the blurred alpha falls to OUTLINE_CUT at
+  // OUTLINE_CUT_SIGMAS blur widths (the normal curve's 95th percentile, 1.645) out, so the blur width is the rest of the width over that. The cut is a
+  // steep ramp (OUTLINE_SOFTNESS per unit of alpha) so the edge is not jagged. A blur alone, with no first step, dims a thin shape below the cut at
+  // the largest widths, and its outline fades to a faint halo.
+  const OUTLINE_SQUARE_SHARE = 1 / 3
   const OUTLINE_CUT = 0.05
   const OUTLINE_CUT_SIGMAS = 1.645
   const OUTLINE_SOFTNESS = 16
@@ -235,7 +238,7 @@
     return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
   }
 
-  // The index of the page whose button holds the color character `pen` (a arrow page's reverse characters are on no
+  // The index of the page whose button holds the color character `pen` (an arrow page's reverse characters are on no
   // button, so they are no pen), or -1.
   function penPageOf (pen) {
     return PEN_PAGES.findIndex((page) => page.chars.includes(pen))
@@ -448,7 +451,7 @@
   // arrow reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
   const CHEVRON = { halfLength: 1.125, halfWidth: 1.5, line: 1, spacing: 5 }
 
-  // Which way a line stored with the color character `char` was dragged: true for the character on a arrow page's button
+  // Which way a line stored with the color character `char` was dragged: true for the character on an arrow page's button
   // (forward), false for its reverse character, null for a character no arrow page uses.
   function chevronWayOf (char) {
     for (const page of PEN_PAGES) {
@@ -460,7 +463,7 @@
   }
 
   // The color character a line dragged `forward` (or not) is stored with when pen `pen` is selected: the pen's own character,
-  // except on a arrow page for a line dragged the other way.
+  // except on an arrow page for a line dragged the other way.
   function directionCharOf (pen, forward) {
     const page = PEN_PAGES[penPageOf(pen)]
     return !page || !page.chevrons || forward ? pen : page.reverse[page.chars.indexOf(pen)]
@@ -513,7 +516,7 @@
     return out
   }
 
-  // The corners of a triangle (an arrow of an arrow line, or an edge mark's direction arrow), base corner, tip, base corner, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
+  // The corners of a triangle (an arrow of an arrow line, and the page button's sample of one), base corner, tip, base corner, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
   // its base `half` back and `wide` out from the middle and its tip `half` forward.
   function chevronCorners (x, y, ux, uy, half, wide) {
     return [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
@@ -715,14 +718,16 @@
     return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
   }
 
-  // The markup of a hidden SVG holding the outline's filter: the layer's alpha grown by about `width` (an outline width) in every direction with round corners (one
+  // The markup of a hidden SVG holding the outline's filter: the layer's alpha grown by about `width` (an outline width) in every direction with round corners, in the two steps described at OUTLINE_SQUARE_SHARE (one
   // shape, so the outline does not cut across where lines join or cross), filled white, with the layer drawn over it. The filter works in sRGB so
   // the layer's own colors pass through unchanged.
   function renderOutlineFilter (width) {
     if (normalizeOutlineWidth(width) !== width) throw new RangeError(`pen-tool-extras: ${width} is not an outline width from ${OUTLINE_WIDTH.min} to ${OUTLINE_WIDTH.max}`)
     const { min, size } = OUTLINE_REGION
+    const square = Math.round(width * OUTLINE_SQUARE_SHARE * 1000) / 1000
     return `<svg id="${OUTLINE_HOLDER_ID}" width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="${OUTLINE_FILTER_ID}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB" x="${min}" y="${min}" width="${size}" height="${size}">` +
-      `<feGaussianBlur in="SourceAlpha" stdDeviation="${Math.round(width / OUTLINE_CUT_SIGMAS * 1000) / 1000}" result="blurred"/>` +
+      `<feMorphology in="SourceAlpha" operator="dilate" radius="${square}" result="squared"/>` +
+      `<feGaussianBlur in="squared" stdDeviation="${Math.round((width - square) / OUTLINE_CUT_SIGMAS * 1000) / 1000}" result="blurred"/>` +
       `<feComponentTransfer in="blurred" result="grown"><feFuncA type="linear" slope="${OUTLINE_SOFTNESS}" intercept="${Math.round((0.5 - OUTLINE_SOFTNESS * OUTLINE_CUT) * 1000) / 1000}"/></feComponentTransfer>` +
       '<feFlood flood-color="#ffffff" result="white"/>' +
       '<feComposite in="white" in2="grown" operator="in" result="halo"/>' +
@@ -786,12 +791,12 @@
     const rules = []
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
-      page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`)))
-      if (page.chevrons) {
+      page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
+        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`)
         // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
-        page.chars.forEach((char, i) => [char, page.reverse[i]].forEach((c) => rules.push(`:root:root .pencolor-${c} [data-chevron-part="chevrons"] { fill: var(--puzzle-pencolor-${PEN_COLORS[i]}); stroke: none; }`)))
-        PEN_COLORS.forEach((n) => rules.push(swatchRule(n, index + 1, CHEVRON_SWATCH)))
-      }
+        if (page.chevrons) rules.push(`:root:root .pencolor-${c} [data-chevron-part="chevrons"] { fill: var(--puzzle-pencolor-${PEN_COLORS[i]}); stroke: none; }`)
+      }))
+      if (page.chevrons) PEN_COLORS.forEach((n) => rules.push(swatchRule(n, index + 1, CHEVRON_SWATCH)))
       if (!page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
       const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { ${dashDeclarations(thickness, dash, length)} }`
@@ -871,7 +876,7 @@
   const SAMPLE_DASH_SHARE = 0.42
   // The arrow sample: its line width, an arrow's half extents (CHEVRON's proportions of the line width), and where along the line
   // the three sit, as shares of its length.
-  const SAMPLE_CHEVRON = { line: 3.2, half: 3.6, wide: 4.8, at: [0.25, 0.5, 0.75] }
+  const SAMPLE_CHEVRON = { line: 3.2, at: [0.25, 0.5, 0.75] }
   function renderPageIcon (current, dash) {
     const next = PEN_PAGES[stepPage(current, 1, PEN_PAGES.length)]
     const kind = next.chevrons ? 'chevrons' : !next.dashed ? 'solid' : dash === 0 ? 'dots' : 'dashed'
@@ -882,7 +887,7 @@
       // a line and three arrows along it, tips toward the line's end
       sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_CHEVRON.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
         SAMPLE_CHEVRON.at.map((t) => {
-          const [wing, tip, other] = chevronCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, SAMPLE_CHEVRON.half, SAMPLE_CHEVRON.wide)
+          const [wing, tip, other] = chevronCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, CHEVRON.halfLength * SAMPLE_CHEVRON.line, CHEVRON.halfWidth * SAMPLE_CHEVRON.line)
           return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}Z" stroke="none" data-chevron/>`
         }).join('')
     } else if (kind === 'dots') {
@@ -1325,7 +1330,7 @@
     })
   }
 
-  // Whether the wrap on `renderPen` is in, so a arrow line is drawn by this script.
+  // Whether the wrap on `renderPen` is in, so an arrow line is drawn by this script.
   let chevronsDrawn = false
 
   // Draws every arrow line again: an arrow's size and spacing are fixed when it is drawn, so a change of thickness, and a

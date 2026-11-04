@@ -1,4 +1,4 @@
-// Takes docs/research/pen-tool-extras-outline.png: the White outline off (left) and on (right), on solid, dashed and chevron lines and on every kind of
+// Takes docs/research/pen-tool-extras-outline.png: the White outline off (left) and on (right), on solid, dashed and arrow lines and on every kind of
 // mark (edge X, direction arrows and circle, grid-corner X and circle), over the digits, at a thin and a thick Thickness, and at the thick one
 // with Dark Page on (the black page shows the outline beyond the grid). The same lines and marks are drawn in each of the six shots, every line a
 // real mouse drag and every mark a real click. It fails, writing nothing, when a line or mark does not land.
@@ -88,7 +88,7 @@ async function shoot (thickness, outline, dark) {
   await pageButton.click()
   await pick(9); await drag([[4.5, 3.5], [4.5, 6.5], [6.5, 6.5]])
   await pick(5); await drag([[2.5, 6.5], [2.5, 8.5]])
-  // Page 3: chevron lines. Pen 6 is orange, 5 purple.
+  // Page 3: arrow lines. Pen 6 is orange, 5 purple.
   await pageButton.click()
   await pick(6); await drag([[7.5, 2.5], [7.5, 6.5]])
   await pick(5); await drag([[8.5, 8.5], [6.5, 8.5], [6.5, 7.5]])
