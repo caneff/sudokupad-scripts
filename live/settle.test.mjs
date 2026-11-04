@@ -1,4 +1,4 @@
-// The shared `settle` of the live checks, run against a fake read so no browser is needed. Each bound on elapsed time has
+// The shared `settle` and `stable` of the live checks, run against a fake read so no browser is needed. Each bound on elapsed time has
 // room for a loaded box: the lower one is the rule, the upper one only tells a stop at the rule from a wait for the backstop.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -62,7 +62,7 @@ describe('settle', () => {
 })
 
 describe('stable', () => {
-  it('returns a value that has not changed for the quiet window, measured from the start', async () => {
+  it('returns a value that has not changed for the quiet window', async () => {
     const { value, ms } = await timed(() => stable(async () => 'still'))
     assert.equal(value, 'still')
     assert.equal(ms >= STABLE_MS && ms < 5000, true, `took ${ms} ms`)
@@ -75,13 +75,23 @@ describe('stable', () => {
     assert.equal(ms >= STABLE_MS - 100 + STABLE_MS, true, `took ${ms} ms`)
   })
 
+  it('does not count slow reads as a held value: two samples a poll apart that each took longer than the quiet window', async () => {
+    const t0 = Date.now()
+    // samples at its start, then takes longer than the quiet window to return; the value flips while the second read is out
+    const read = async () => {
+      const sampled = Date.now() - t0 >= 500 ? 'b' : 'a'
+      await new Promise((resolve) => setTimeout(resolve, STABLE_MS + 100))
+      return sampled
+    }
+    assert.equal(await stable(read), 'b')
+  })
+
   it('compares as JSON, so a fresh array each read counts as the same value', async () => {
-    const { value } = await timed(() => stable(async () => [1, 2]))
-    assert.deepEqual(value, [1, 2])
+    assert.deepEqual(await stable(async () => [1, 2]), [1, 2])
   })
 
   it('throws, naming the last value, when the value keeps moving until the timeout', async () => {
     let n = 0
-    await assert.rejects(() => stable(async () => n++, STABLE_MS, 700), /did not stop changing.*\d/)
+    await assert.rejects(() => stable(async () => ({ n: n++ }), 700), /did not stop changing in 700 ms; last \{"n":\d+\}/)
   })
 })
