@@ -1205,7 +1205,7 @@ test('the chevrons and the line scale with the thickness: wider chevrons, wider 
   const thick = chevronLine('1', true, 0, 0, 12)
   assert.equal(thick.lineWidth > thin.lineWidth && thick.chevronWidth > thin.chevronWidth, true, `widths ${thin.lineWidth}/${thin.chevronWidth} at 2, ${thick.lineWidth}/${thick.chevronWidth} at 12`)
   assert.equal(thin.chevronWidth > thin.lineWidth, true, `the line is the thin part: ${thin.lineWidth} against ${thin.chevronWidth}`)
-  assert.equal(thick.lineWidth / thin.lineWidth, 6)
+  assert.equal(chevronLine('1', true, 0, 0, 10).lineWidth / chevronLine('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
   assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} chevrons at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
   const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
@@ -1216,9 +1216,9 @@ test('below the default thickness the chevrons keep their size at the default an
   const five = chevronLine('1', true, 0, 0, THICKNESS.fallback)
   assert.equal(one.chevrons, five.chevrons)
   assert.equal(one.chevronWidth, five.chevronWidth)
-  assert.equal(one.lineWidth, CHEVRON.line)
+  assert.equal(one.lineWidth, CHEVRON.lineMin, 'the line is at its minimum, which is visible')
   assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
-  assert.equal(one.chevronWidth > one.lineWidth * 5, true, `a chevron stroke of ${one.chevronWidth} stands clear of a line of ${one.lineWidth}`)
+  assert.equal(one.chevronWidth > one.lineWidth * 2, true, `a chevron stroke of ${one.chevronWidth} stands clear of a line of ${one.lineWidth}`)
 })
 
 test('at the largest thickness a chevron on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
@@ -1229,10 +1229,10 @@ test('at the largest thickness a chevron on a grid\'s outer edge reaches no furt
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}`)
 })
 
-test('a chevron line has at least two chevrons on any segment at any thickness, so a run never has none', () => {
+test('a chevron line has at least one chevron on any segment at any thickness, so a run never has none', () => {
   for (const value of LINE_VALUES) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-      assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 6, true, `at least two chevrons: ${value} at ${t}`)
+      assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 3, true, `at least one chevron: ${value} at ${t}`)
     }
   }
 })

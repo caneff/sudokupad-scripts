@@ -405,10 +405,11 @@
   // The sizes of a chevron line, in line widths (the thickness setting; the line's own width follows it all the way down, but a
   // chevron is never smaller than at the default thickness, so its direction stays visible at 1): a chevron's wings reach `halfLength` back and
   // `halfWidth` out from its middle and its tip `halfLength` forward; `line` and `stroke` are the widths of the thin line and the
-  // chevrons; `spacing` is the distance between two chevrons' middles, fitted to a whole number per segment. The furthest a
+  // chevrons (`lineMin` units at the least, so the line shows at thickness 1); `spacing` is the distance between two chevrons'
+  // middles, fitted to a whole number per segment (a run of chevrons, not a solid row of them). The furthest a
   // chevron reaches off its line, halfWidth plus half the stroke at the largest thickness, stays inside what Dark Page keeps
   // past a cell (its `SOLVER_REACH`; a unit test holds the two together).
-  const CHEVRON = { halfLength: 0.5, halfWidth: 0.75, stroke: 0.45, line: 0.25, spacing: 2.6 }
+  const CHEVRON = { halfLength: 0.5, halfWidth: 0.75, stroke: 0.45, line: 0.3, lineMin: 1, spacing: 5 }
 
   // Which way a line stored with the color character `char` was dragged: true for the character on a chevron page's button
   // (forward), false for its reverse character, null for a character no chevron page uses.
@@ -496,7 +497,7 @@
     // Chevrons keep the size they have at the default thickness below it; only the thin line gets thinner.
     const size = Math.max(thickness, THICKNESS.fallback)
     const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
-    // The shortest segment (a cell side) holds at least two even at the largest thickness, so there is never none.
+    // The shortest segment (a cell side) holds at least one even at the largest thickness, so there is never none.
     const count = Math.round(length / (CHEVRON.spacing * size))
     let chevrons = ''
     for (let i = 0; i < count; i++) {
@@ -507,7 +508,7 @@
     return {
       line: `M${pointText(from)}L${pointText(to)}`,
       chevrons,
-      lineWidth: CHEVRON.line * thickness,
+      lineWidth: Math.max(CHEVRON.lineMin, CHEVRON.line * thickness),
       chevronWidth: CHEVRON.stroke * size
     }
   }

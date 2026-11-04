@@ -352,9 +352,9 @@ function group (title, mode) {
       const wide = await sample()
       assert.equal(wide.chevronWidth, CHEVRON.stroke * 16)
       assert.equal(wide.count < base.count, true, `${wide.count} chevrons at 16 against ${base.count} at 5`)
-      // At 1 the line is the thinnest but the chevrons keep the size they have at 5, so the direction stays visible.
+      // At 1 the line is at its minimum, which shows, and the chevrons keep the size they have at 5, so the direction stays visible.
       await slider(1)
-      assert.equal(await settle(async () => (await sample()).lineWidth, CHEVRON.line), CHEVRON.line)
+      assert.equal(await settle(async () => (await sample()).lineWidth, CHEVRON.lineMin), CHEVRON.lineMin)
       const small = await sample()
       assert.equal(small.chevronWidth, base.chevronWidth)
       assert.equal(small.count, base.count)
