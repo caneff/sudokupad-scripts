@@ -409,7 +409,7 @@
   // middles, fitted to a whole number per segment (a run of chevrons, not a solid row of them). The furthest a
   // chevron reaches off its line, halfWidth plus half the stroke at the largest thickness, stays inside what Dark Page keeps
   // past a cell (its `SOLVER_REACH`; a unit test holds the two together).
-  const CHEVRON = { halfLength: 0.5, halfWidth: 0.75, stroke: 0.45, line: 0.3, lineMin: 1, spacing: 5 }
+  const CHEVRON = { halfLength: 0.5, halfWidth: 0.75, stroke: 0.45, line: 0.5, lineMin: 2, spacing: 5 }
 
   // Which way a line stored with the color character `char` was dragged: true for the character on a chevron page's button
   // (forward), false for its reverse character, null for a character no chevron page uses.

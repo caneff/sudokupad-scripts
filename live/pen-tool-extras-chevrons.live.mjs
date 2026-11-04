@@ -211,7 +211,8 @@ function group (title, mode) {
       for (const g of groups) {
         assert.equal(g.cls, 'cell-pen pen-1 pencolor-n')
         assert.deepEqual([...new Set(headings(g.chevrons))], ['E'])
-        assert.equal(g.lineWidth < g.chevronWidth, true, 'the line is thin beside the chevrons')
+        assert.equal(g.lineWidth, Math.max(CHEVRON.lineMin, CHEVRON.line * 5), 'the line is the line width of the default thickness')
+        assert.equal(g.chevronWidth, CHEVRON.stroke * 5)
       }
     })
 

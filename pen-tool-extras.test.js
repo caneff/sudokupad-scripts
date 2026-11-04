@@ -1204,7 +1204,7 @@ test('the chevrons and the line scale with the thickness: wider chevrons, wider 
   const thin = chevronLine('1', true, 0, 0, 2)
   const thick = chevronLine('1', true, 0, 0, 12)
   assert.equal(thick.lineWidth > thin.lineWidth && thick.chevronWidth > thin.chevronWidth, true, `widths ${thin.lineWidth}/${thin.chevronWidth} at 2, ${thick.lineWidth}/${thick.chevronWidth} at 12`)
-  assert.equal(thin.chevronWidth > thin.lineWidth, true, `the line is the thin part: ${thin.lineWidth} against ${thin.chevronWidth}`)
+  assert.equal(thin.chevronWidth >= thin.lineWidth, true, `a chevron is as thick as the line at the small end: ${thin.lineWidth} against ${thin.chevronWidth}`)
   assert.equal(chevronLine('1', true, 0, 0, 10).lineWidth / chevronLine('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
   assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} chevrons at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
   const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
@@ -1218,7 +1218,7 @@ test('below the default thickness the chevrons keep their size at the default an
   assert.equal(one.chevronWidth, five.chevronWidth)
   assert.equal(one.lineWidth, CHEVRON.lineMin, 'the line is at its minimum, which is visible')
   assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
-  assert.equal(one.chevronWidth > one.lineWidth * 2, true, `a chevron stroke of ${one.chevronWidth} stands clear of a line of ${one.lineWidth}`)
+  assert.equal(one.chevronWidth >= one.lineWidth, true, `a chevron stroke of ${one.chevronWidth} is at least as thick as the line of ${one.lineWidth}`)
 })
 
 test('at the largest thickness a chevron on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
