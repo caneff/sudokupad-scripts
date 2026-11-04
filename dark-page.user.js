@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.3
+// @version      0.3.5
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.3'
+  const VERSION = '0.3.5'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
@@ -42,10 +42,10 @@
   // How far a solver's pen mark reaches past the box of the cell it is on: the farther of two marks at Pen Tool Extras' largest thickness
   // (16). One is the edge X on an outer edge, whose edge and corner marks are then grown by 1.6, measured on sudokupad.app v0.611.0 at
   // 18.53px in a 1200x900 window (10.07px at the default thickness of 5). The other is an arrow on a page 3 line along an outer edge,
-  // which reaches 24 cell units (a cell is 64) there, its base 1.5 line widths out: 21.4px at a cell 57px wide, 24px at 64px. 28 covers both on a board with cells up to about 73px wide. The rectangle
+  // which reaches 24 cell units (a cell is 64) there, its base 1.5 line widths out: 21.4px at a cell 57px wide, 24px at 64px. 28 covers both on a board with cells up to about 73px wide; the reach is 32 so Pen Tool Extras' White outline has a little more room where this margin is what limits the rectangle. That is only where the puzzle's own edge, a quarter of a cell outside the cells, is farther out than this: cells wider than 128px. The rectangle
   // keeps this much around the cells so the mark sits on white from the moment it is drawn, not from
   // the next measurement.
-  const SOLVER_REACH = 28
+  const SOLVER_REACH = 32
   // What the puzzle draws as leaf elements. Elements in `defs`, `marker` and the like have no box.
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
   const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']
@@ -95,7 +95,8 @@
   // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
   // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
   // that changes nothing.
-  // The control buttons turn dark only when the page does (the same test the footer text uses). Only
+  // The replay tool's readout ("Time: … / …") is the `::after` of `.controls-input`, drawn straight on the page, so it
+  // takes the footer's text color. The control buttons turn dark only when the page does (the same test the footer text uses). Only
   // a button's own background, text color and border change: the svg-painted icons and the fills of
   // the color swatches keep their colors.
   function buildCss (pageColor) {
@@ -110,6 +111,7 @@
       rule('body', `background-color: ${pageColor}`),
       rule(`#${RECT_ID}`, 'background-color: var(--body-bg)'),
       rule('.controls-footer, .controls-footer a', `color: ${textColor}`),
+      rule('.controls-input::after', `color: ${textColor}`),
       ...(textColor === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }
