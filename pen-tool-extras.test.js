@@ -11,6 +11,7 @@ const {
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
+  ARROW_SPACING, normalizeArrowSpacing, normalizeMiddleErase, normalizeLineStyles, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
   createFeatures, inStock, FEATURE_LABELS, FEATURE_NEEDS
 } = require('./pen-tool-extras.user.js')
@@ -473,18 +474,20 @@ test('a saved boolean is kept and a non-boolean entry takes its default', () => 
   assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', dot: false, cornerX: 'no', cornerDot: false }), { x: false, directions: true, dot: false, cornerX: true, cornerDot: false })
 })
 
-test('with everything ticked the cycle is X, direction, other direction, circle, empty', () => {
+test('with everything ticked the cycle is X, circle, direction, other direction, empty', () => {
   const seen = []
   let type = 'empty'
   for (let i = 0; i < 5; i++) {
     type = nextType(type, ALL)
     seen.push(type)
   }
-  assert.deepEqual(seen, ['x', 'dirA', 'dirB', 'dot', 'empty'])
+  assert.deepEqual(seen, ['x', 'dot', 'dirA', 'dirB', 'empty'])
 })
 
 test('an unticked type is skipped', () => {
-  assert.equal(nextType('empty', { x: false, directions: true, dot: true }), 'dirA')
+  assert.equal(nextType('empty', { x: false, directions: true, dot: true }), 'dot')
+  assert.equal(nextType('dot', { x: true, directions: true, dot: false }), 'dirA')
+  assert.equal(nextType('x', { x: true, directions: true, dot: false }), 'dirA')
   assert.equal(nextType('dirB', { x: true, directions: true, dot: false }), 'empty')
   assert.equal(nextType('x', { x: true, directions: false, dot: true }), 'dot')
   assert.equal(nextType('empty', { x: false, directions: false, dot: true }), 'dot')
@@ -499,45 +502,48 @@ test('Directions is one box: both directions or neither', () => {
 })
 
 test('a mark whose type is unticked moves to the next ticked mark, or to empty', () => {
-  assert.equal(nextType('x', { x: false, directions: false, dot: true }), 'dot')
+  assert.equal(nextType('x', { x: false, directions: true, dot: false }), 'dirA')
   assert.equal(nextType('x', { x: false, directions: false, dot: false }), 'empty')
   assert.equal(nextType('dot', { x: true, directions: false, dot: false }), 'empty')
 })
 
-test('with everything ticked the backward cycle is empty, circle, other direction, direction, X, empty', () => {
+test('with everything ticked the backward cycle is empty, other direction, direction, circle, X, empty', () => {
   const seen = []
   let type = 'empty'
   for (let i = 0; i < 5; i++) {
     type = previousType(type, ALL)
     seen.push(type)
   }
-  assert.deepEqual(seen, ['dot', 'dirB', 'dirA', 'x', 'empty'])
+  assert.deepEqual(seen, ['dirB', 'dirA', 'dot', 'x', 'empty'])
 })
 
 test('going backwards from empty lands on the last ticked mark, and from the X on empty', () => {
   assert.equal(previousType('empty', { x: true, directions: true, dot: false }), 'dirB')
+  assert.equal(previousType('empty', { x: true, directions: false, dot: true }), 'dot')
   assert.equal(previousType('empty', { x: true, directions: false, dot: false }), 'x')
   assert.equal(previousType('x', ALL), 'empty')
   assert.equal(previousType('empty', NONE), 'empty')
 })
 
 test('going backwards skips an unticked type', () => {
-  assert.equal(previousType('dot', { x: true, directions: false, dot: true }), 'x')
-  assert.equal(previousType('dirA', { x: false, directions: true, dot: true }), 'empty')
-  assert.equal(previousType('dot', { x: false, directions: true, dot: true }), 'dirB')
+  assert.equal(previousType('dirA', { x: true, directions: true, dot: false }), 'x')
+  assert.equal(previousType('dot', { x: false, directions: true, dot: true }), 'empty')
+  assert.equal(previousType('empty', { x: true, directions: false, dot: true }), 'dot')
+  assert.equal(previousType('dirA', { x: true, directions: true, dot: true }), 'dot')
 })
 
 test('a mark whose type is unticked moves back to the previous ticked mark, or to empty', () => {
-  assert.equal(previousType('dot', { x: true, directions: false, dot: false }), 'x')
-  assert.equal(previousType('dirB', { x: false, directions: false, dot: true }), 'empty')
+  assert.equal(previousType('dirA', { x: true, directions: false, dot: false }), 'x')
+  assert.equal(previousType('dirB', { x: false, directions: false, dot: true }), 'dot')
+  assert.equal(previousType('dot', { x: false, directions: false, dot: true }), 'empty')
   assert.equal(previousType('dirA', NONE), 'empty')
 })
 
-test('backwards on a right edge goes empty, j, i, h, 3, empty', () => {
-  assert.deepEqual(planClick('3', [], ALL, true), { remove: [], add: 'j' })
-  assert.deepEqual(planClick('3', ['j'], ALL, true), { remove: ['j'], add: 'i' })
+test('backwards on a right edge goes empty, i, h, j, 3, empty', () => {
+  assert.deepEqual(planClick('3', [], ALL, true), { remove: [], add: 'i' })
   assert.deepEqual(planClick('3', ['i'], ALL, true), { remove: ['i'], add: 'h' })
-  assert.deepEqual(planClick('3', ['h'], ALL, true), { remove: ['h'], add: '3' })
+  assert.deepEqual(planClick('3', ['h'], ALL, true), { remove: ['h'], add: 'j' })
+  assert.deepEqual(planClick('3', ['j'], ALL, true), { remove: ['j'], add: '3' })
   assert.deepEqual(planClick('3', ['3'], ALL, true), { remove: ['3'], add: null })
 })
 
@@ -549,11 +555,11 @@ test('a click on an empty right edge adds the X, which is the character 3', () =
   assert.deepEqual(planClick('3', [], ALL), { remove: [], add: '3' })
 })
 
-test('the cycle on a right edge uses 3, h, i, j then clears', () => {
-  assert.deepEqual(planClick('3', ['3'], ALL), { remove: ['3'], add: 'h' })
+test('the cycle on a right edge uses 3, j (circle), h, i then clears', () => {
+  assert.deepEqual(planClick('3', ['3'], ALL), { remove: ['3'], add: 'j' })
+  assert.deepEqual(planClick('3', ['j'], ALL), { remove: ['j'], add: 'h' })
   assert.deepEqual(planClick('3', ['h'], ALL), { remove: ['h'], add: 'i' })
-  assert.deepEqual(planClick('3', ['i'], ALL), { remove: ['i'], add: 'j' })
-  assert.deepEqual(planClick('3', ['j'], ALL), { remove: ['j'], add: null })
+  assert.deepEqual(planClick('3', ['i'], ALL), { remove: ['i'], add: null })
 })
 
 test('each edge has its own characters, none shared with another edge or with SudokuPad\'s lines', () => {
@@ -573,7 +579,7 @@ test('each edge has its own characters, none shared with another edge or with Su
 
 test('a mark on another edge of the same cell is left alone', () => {
   // the cell has the right-edge X and the bottom-edge circle; a click on the right edge sees only its own
-  assert.deepEqual(planClick('3', ['3', 'm', '5'], ALL), { remove: ['3'], add: 'h' })
+  assert.deepEqual(planClick('3', ['3', 'm', '5'], ALL), { remove: ['3'], add: 'j' })
 })
 
 test('with nothing ticked the click does nothing, and an existing mark stays', () => {
@@ -587,7 +593,7 @@ test('an unticked mark already on the grid moves to the next ticked mark', () =>
 })
 
 test('two marks on one edge, as a replay can hold, both go on the next click', () => {
-  assert.deepEqual(planClick('3', ['3', 'j'], ALL), { remove: ['3', 'j'], add: 'h' })
+  assert.deepEqual(planClick('3', ['3', 'i'], ALL), { remove: ['3', 'i'], add: 'j' })
 })
 
 test('shapeOf names the arrow each character draws, per edge', () => {
@@ -900,17 +906,18 @@ test('the page 2 swatch follows the dash length: dots at 0, longer dashes as it 
   assert.equal(long.offset, long.array[0] / 2, 'the line starts half a dash in, so it is inked at both ends')
 })
 
+const BOTH_STYLES = { dashed: true, arrows: true }
 test('the page button samples the page it turns to: dashes on page 2, an arrow line on page 3, a solid line on page 1, and a dot for each page with the current one filled', () => {
-  const fromOne = renderPageIcon(0, 3)
+  const fromOne = renderPageIcon(0, 3, BOTH_STYLES)
   assert.match(fromOne, /data-page-sample="dashed"/)
   assert.equal((fromOne.match(/<circle/g) || []).length, 3)
   assert.equal((fromOne.match(/<path[^>]*data-dash/g) || []).length, 2)
-  const fromTwo = renderPageIcon(1, 0)
+  const fromTwo = renderPageIcon(1, 0, BOTH_STYLES)
   assert.match(fromTwo, /data-page-sample="chevrons"/)
   assert.equal((fromTwo.match(/<circle/g) || []).length, 3)
   assert.equal((fromTwo.match(/<path[^>]*data-chevron/g) || []).length, 3)
   assert.equal((fromTwo.match(/<path[^>]*data-sample-line/g) || []).length, 1)
-  const fromThree = renderPageIcon(2, 0)
+  const fromThree = renderPageIcon(2, 0, BOTH_STYLES)
   assert.match(fromThree, /data-page-sample="solid"/)
   assert.equal((fromThree.match(/<circle/g) || []).length, 3)
   assert.equal((fromThree.match(/<path/g) || []).length, 1)
@@ -993,12 +1000,12 @@ test('buildPagesCss refuses a dash it cannot save', () => {
 })
 
 test('the page button samples dashes as long as the setting, and dots at 0', () => {
-  const dots = renderPageIcon(0, 0)
+  const dots = renderPageIcon(0, 0, BOTH_STYLES)
   assert.match(dots, /data-page-sample="dots"/)
   assert.equal((dots.match(/<circle/g) || []).length, 5 + 3)
-  const dashed = renderPageIcon(0, 4)
+  const dashed = renderPageIcon(0, 4, BOTH_STYLES)
   assert.match(dashed, /data-page-sample="dashed"/)
-  const short = renderPageIcon(0, 1).match(/<path[^>]*data-dash/g)
+  const short = renderPageIcon(0, 1, BOTH_STYLES).match(/<path[^>]*data-dash/g)
   const long = dashed.match(/<path[^>]*data-dash/g)
   assert.equal(short.length >= 2 && long.length >= 2, true)
   const span = (path) => { const [x1, y1, x2, y2] = path.match(/M([\d.]+) ([\d.]+) L([\d.]+) ([\d.]+)/).slice(1).map(Number); return Math.hypot(x2 - x1, y2 - y1) }
@@ -1040,8 +1047,11 @@ const editorState = (over = {}) => ({
   opacity: 80,
   show: { thickness: true, opacity: true },
   dash: 0,
-  outline: false,
-  outlineWidth: 3,
+  arrowSpacing: 7,
+  lineStyles: { dashed: true, arrows: true },
+  middleErase: true,
+  outline: true,
+  outlineWidth: 2,
   ...over
 })
 
@@ -1063,26 +1073,121 @@ test('the dialog has a SudokuPad colors button beside the Pen colors grid, and i
   assert.equal((html.match(/<button/g) || []).length, 1)
 })
 
-test('the dialog has Show thickness slider and Show opacity slider boxes, ticked as saved', () => {
-  const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"( checked)?>`).exec(html)
-  const both = renderEditor(editorState())
-  assert.equal(Boolean(box(both, 'thickness')[1]) && Boolean(box(both, 'opacity')[1]), true)
-  assert.match(both, /Show thickness slider/)
-  assert.match(both, /Show opacity slider/)
-  const none = renderEditor(editorState({ show: { thickness: false, opacity: true } }))
-  assert.equal(box(none, 'thickness')[1], undefined)
-  assert.equal(Boolean(box(none, 'opacity')[1]), true)
+test('the page button turns to the next enabled page and has a dot for each enabled page only', () => {
+  const noDash = renderPageIcon(0, 3, { dashed: false, arrows: true })
+  assert.match(noDash, /data-page-sample="chevrons"/)
+  assert.equal((noDash.match(/<circle/g) || []).length, 2)
+  assert.equal((noDash.match(/data-page-dot="filled"/g) || []).length, 1)
+  const noArrows = renderPageIcon(1, 3, { dashed: true, arrows: false })
+  assert.match(noArrows, /data-page-sample="solid"/)
+  assert.equal((noArrows.match(/<circle/g) || []).length, 2)
+  assert.match(noArrows, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
 })
 
-test('the dialog always holds the thickness, opacity, dash and outline width sliders, at the values in force, whether or not the panel shows them', () => {
+// The row of a slider in the dialog, by its setting name.
+const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?</div>`).exec(html)[0]
+
+test('Line settings: Thickness and Opacity are one row each, with a Slider in panel box at the right end that is ticked as saved', () => {
+  const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"( checked)?`).exec(rowOf(html, key))
+  const both = renderEditor(editorState())
+  assert.equal(Boolean(box(both, 'thickness')[1]) && Boolean(box(both, 'opacity')[1]), true)
+  assert.match(both, />Slider in panel</)
+  assert.doesNotMatch(both, /Show thickness slider|Show opacity slider/)
+  const none = renderEditor(editorState({ show: { thickness: false, opacity: true } }))
+  assert.equal(box(none, 'thickness')[1], undefined, 'unticked, and the slider is still in the dialog')
+  assert.match(none, /data-setting="thickness"/)
+  assert.equal(Boolean(box(none, 'opacity')[1]), true)
+  const row = rowOf(both, 'thickness')
+  assert.equal(row.indexOf('data-setting="thickness"') < row.indexOf('data-readout="thickness"') && row.indexOf('data-readout="thickness"') < row.indexOf('data-show="thickness"'), true, 'label, slider, value, then the box')
+})
+
+test('the dialog always holds the thickness, opacity, dash, arrow spacing and outline width sliders, at the values in force, whether or not the panel shows them', () => {
   const html = renderEditor(editorState({ thickness: 9, opacity: 35, show: { thickness: false, opacity: false } }))
   const ranges = [...html.matchAll(/<input type="range" data-setting="(\w+)" min="(\d+)" max="(\d+)" step="(\d+)" value="(\d+)"/g)].map((m) => m.slice(1))
   assert.deepEqual(ranges, [
     ['thickness', String(THICKNESS.min), String(THICKNESS.max), String(THICKNESS.step), '9'],
     ['opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35'],
     ['dash', String(DASH.min), String(DASH.max), String(DASH.step), '0'],
-    ['outlineWidth', String(OUTLINE_WIDTH.min), String(OUTLINE_WIDTH.max), String(OUTLINE_WIDTH.step), '3']
+    ['arrow', '3', '12', '1', '7'],
+    ['outlineWidth', String(OUTLINE_WIDTH.min), String(OUTLINE_WIDTH.max), String(OUTLINE_WIDTH.step), '2']
   ])
+})
+
+test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
+  const html = renderEditor(editorState())
+  const columns = ['thickness', 'opacity', 'dash', 'arrow', 'outlineWidth'].map((key) => /grid-template-columns:([^;]+);/.exec(rowOf(html, key))[1])
+  assert.equal(new Set(columns).size, 1, columns.join(' | '))
+  assert.equal(columns[0].trim().split(/ (?![^(]*\))/).length, 4)
+})
+
+test('Line styles: Dashed lines and Directional arrow lines each have an Enable box, with Dash length and Arrow spacing indented under them', () => {
+  const html = renderEditor(editorState())
+  assert.match(html, />Line styles</)
+  assert.match(html, />Enable</)
+  const dashed = /<input type="checkbox" id="pen-tool-extras-style-dashed" data-style="dashed" aria-label="Enable Dashed lines"( checked)?/.exec(html)
+  const arrows = /<input type="checkbox" id="pen-tool-extras-style-arrows" data-style="arrows" aria-label="Enable Directional arrow lines"( checked)?/.exec(html)
+  assert.equal(Boolean(dashed[1]) && Boolean(arrows[1]), true)
+  assert.match(html, />Dashed lines<[\s\S]*data-style="dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-style="arrows"[\s\S]*>Arrow spacing</)
+  assert.match(rowOf(html, 'dash'), /padding-left:1\.2em/)
+  assert.match(rowOf(html, 'arrow'), /padding-left:1\.2em/)
+  assert.doesNotMatch(rowOf(html, 'dash'), /display:none/)
+})
+
+test('an unticked line style is drawn unticked and its slider row is hidden, the other is untouched; the slider keeps its value', () => {
+  const html = renderEditor(editorState({ dash: 6, lineStyles: { dashed: false, arrows: true } }))
+  assert.doesNotMatch(html, /data-style="dashed"[^>]* checked/)
+  assert.match(rowOf(html, 'dash'), /display:none/)
+  assert.match(rowOf(html, 'dash'), /value="6"/)
+  assert.doesNotMatch(rowOf(html, 'arrow'), /display:none/)
+})
+
+test('Marks a click cycles through is one table: columns X Mark, Circle, Directions; rows Edge (three boxes) and Corner (X Mark and Circle)', () => {
+  const html = renderEditor(editorState())
+  assert.match(html, />Marks a click cycles through</)
+  assert.doesNotMatch(html, /Edge marks a click|Corner marks a click/)
+  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-mark="x"[\s\S]*data-mark="dot"[\s\S]*data-mark="directions"[\s\S]*>Corner<[\s\S]*data-mark="cornerX"[\s\S]*data-mark="cornerDot"/)
+  const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-mark-(\w+)" data-mark="\w+" aria-label="([^"]+)" title="([^"]+)"( checked)?>/g)]
+  assert.deepEqual(boxes.map((m) => [m[1], m[2], m[3]]), [
+    ['x', 'Edge X Mark', 'Edge X Mark'], ['dot', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
+    ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerDot', 'Corner Circle', 'Corner Circle']
+  ])
+  assert.equal(boxes.every((m) => m[4] === ' checked'), true)
+})
+
+test('a mark box shows its picture only: no word label beside it, and Directions is one picture of all four arrows', () => {
+  const html = renderEditor(editorState())
+  assert.doesNotMatch(html, /<label for="pen-tool-extras-mark-/)
+  const label = (key) => new RegExp(`<label[^>]*>(<input[^>]*data-mark="${key}"[^>]*>)(.*?)</label>`).exec(html)[2]
+  assert.equal((label('directions').match(/<svg/g) || []).length, 1)
+  assert.equal(label('directions').match(/M\d+ \d+ L\d+ \d+ L\d+ \d+/g).length, 4, 'four arrow heads')
+  assert.doesNotMatch(label('x') + label('dot') + label('directions'), />[A-Za-z]/, 'no text')
+})
+
+test('Other: the White outline box has its own line with Outline width under it, hidden while the box is unticked, and the middle click box follows', () => {
+  const html = renderEditor(editorState())
+  assert.match(html, />Other</)
+  assert.match(html, /<input type="checkbox" id="pen-tool-extras-outline" data-outline checked[^>]*>\s*<label for="pen-tool-extras-outline"[^>]*>White outline on lines and marks<\/label>/)
+  assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-middle-erase'), true)
+  assert.match(rowOf(html, 'outlineWidth'), /padding-left:1\.2em/)
+  assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
+  assert.doesNotMatch(rowOf(html, 'outlineWidth'), /display:none/)
+  const off = renderEditor(editorState({ outline: false, outlineWidth: 5 }))
+  assert.doesNotMatch(off, /data-outline checked/)
+  assert.match(rowOf(off, 'outlineWidth'), /display:none/)
+  assert.match(rowOf(off, 'outlineWidth'), /value="5"/)
+})
+
+test('the middle click box is ticked unless the setting is off', () => {
+  const box = (html) => /<input type="checkbox" id="pen-tool-extras-middle-erase" data-middle-erase( checked)?[^>]*>\s*<label for="pen-tool-extras-middle-erase"[^>]*>Middle click erases a whole line<\/label>/.exec(html)
+  assert.equal(box(renderEditor(editorState()))[1], ' checked')
+  assert.equal(box(renderEditor(editorState({ middleErase: false })))[1], undefined)
+})
+
+test('every section after the first has a divider above it, and Pen line mode is the last', () => {
+  const html = renderEditor(editorState({ lineMode: 'both' }))
+  const heads = ['Line settings', 'Line styles', 'Marks a click cycles through', 'Other', 'Pen line mode']
+  heads.forEach((head) => assert.match(html, new RegExp(`border-top:1px solid #e3dff0[^>]*></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
+  assert.equal(html.lastIndexOf('Pen line mode') > html.indexOf('Other'), true)
 })
 
 test('VERSION is the @version in the script header', () => {
@@ -1214,11 +1319,12 @@ test('splitLineActs leaves actions that are not line values alone, and refuses a
 })
 
 // Arrow line geometry (`chevronLine` in the code). A page 3 line is a line as wide as a page 1 line and a run of arrows along it.
+const chevronAt = (value, forward, row, col, thickness, spacing = ARROW_SPACING.fallback) => chevronLine(value, forward, row, col, thickness, spacing)
 const numbersOf = (d) => d.match(/-?\d+(?:\.\d+)?/g).map(Number)
 const pointsOf = (d) => { const n = numbersOf(d); const out = []; for (let i = 0; i < n.length; i += 2) out.push([n[i], n[i + 1]]); return out }
 
 test('an arrow line draws the line along the whole segment and the arrows as closed triangles of three points: base corner, tip, base corner', () => {
-  const { line, chevrons } = chevronLine('1', true, 2, 3, 5)
+  const { line, chevrons } = chevronAt('1', true, 2, 3, 5)
   // the cell at row 2, col 3 is at x 192, y 128; the center line runs right from its middle
   assert.deepEqual(pointsOf(line), [[224, 160], [288, 160]])
   const points = pointsOf(chevrons)
@@ -1233,19 +1339,19 @@ test('an arrow line draws the line along the whole segment and the arrows as clo
 })
 
 test('an arrow line dragged the other way has its arrows pointing back and the same line', () => {
-  const forward = chevronLine('1', true, 0, 0, 5)
-  const back = chevronLine('1', false, 0, 0, 5)
+  const forward = chevronAt('1', true, 0, 0, 5)
+  const back = chevronAt('1', false, 0, 0, 5)
   assert.deepEqual(pointsOf(back.line).slice().reverse(), pointsOf(forward.line))
   const [wing, tip] = pointsOf(back.chevrons)
   assert.equal(tip[0] < wing[0], true, `dragged left, the tip is left of the wings: wing ${wing}, tip ${tip}`)
 })
 
 test('arrows point along a diagonal and along a vertical line as well', () => {
-  const [wing, tip, other] = pointsOf(chevronLine('e', true, 0, 0, 5).chevrons).slice(0, 3)
+  const [wing, tip, other] = pointsOf(chevronAt('e', true, 0, 0, 5).chevrons).slice(0, 3)
   // down and right: the tip is the furthest of the three along (1, 1)
   const along = ([x, y]) => x + y
   assert.equal(along(tip) > along(wing) && along(tip) > along(other), true, `down and right, the tip is furthest along (1, 1): ${wing} ${tip} ${other}`)
-  const [w2, t2] = pointsOf(chevronLine('2', false, 0, 0, 5).chevrons)
+  const [w2, t2] = pointsOf(chevronAt('2', false, 0, 0, 5).chevrons)
   assert.equal(t2[1] < w2[1], true, `dragged up, the tip is above the wings: wing ${w2}, tip ${t2}`)
 })
 
@@ -1253,25 +1359,25 @@ test('the arrows are evenly spaced along the line, half a space in from each end
   // an arrow's middle is halfway between its base corners and its tip
   const middles = (d) => { const p = pointsOf(d); const out = []; for (let i = 0; i < p.length; i += 3) out.push((p[i][0] + p[i + 1][0]) / 2); return out }
   for (const thickness of [1, 5, 12, 16]) {
-    const xs = middles(chevronLine('1', true, 0, 0, thickness).chevrons)
+    const xs = middles(chevronAt('1', true, 0, 0, thickness).chevrons)
     const space = 64 / xs.length
     xs.forEach((x, i) => assert.equal(Math.abs(x - (32 + (i + 0.5) * space)) < 0.01, true, `chevron ${i} of ${xs.length} at thickness ${thickness}: ${x}`))
   }
 })
 
 test('the arrows and the line scale with the thickness: larger arrows, a wider line, fewer arrows', () => {
-  const thin = chevronLine('1', true, 0, 0, 2)
-  const thick = chevronLine('1', true, 0, 0, 12)
+  const thin = chevronAt('1', true, 0, 0, 2)
+  const thick = chevronAt('1', true, 0, 0, 12)
   assert.equal(thick.lineWidth > thin.lineWidth, true, `line widths ${thin.lineWidth} at 2, ${thick.lineWidth} at 12`)
-  assert.equal(chevronLine('1', true, 0, 0, 10).lineWidth / chevronLine('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
+  assert.equal(chevronAt('1', true, 0, 0, 10).lineWidth / chevronAt('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
   assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} arrows at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
   const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
 test('below the default thickness the arrows keep their size at the default and only the line gets thinner, so the direction shows at 1', () => {
-  const one = chevronLine('1', true, 0, 0, 1)
-  const five = chevronLine('1', true, 0, 0, THICKNESS.fallback)
+  const one = chevronAt('1', true, 0, 0, 1)
+  const five = chevronAt('1', true, 0, 0, THICKNESS.fallback)
   assert.equal(one.chevrons, five.chevrons)
   assert.equal(one.lineWidth, 1, 'the line is as thick as a page 1 line, 1')
   assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
@@ -1279,7 +1385,7 @@ test('below the default thickness the arrows keep their size at the default and 
 
 test('the line under the arrows is as thick as a page 1 line at every slider value, and the arrows clearly stick out past it', () => {
   for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-    const shape = chevronLine('a', true, 0, 0, t)
+    const shape = chevronAt('a', true, 0, 0, t)
     assert.equal(shape.lineWidth, t, `the line at thickness ${t}`)
     // 'a' is the top edge line, so a point's distance from y 0 is its distance from the line's middle.
     const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y)))
@@ -1288,24 +1394,24 @@ test('the line under the arrows is as thick as a page 1 line at every slider val
 })
 
 test('the arrow sizes are the ruled ones: base 1.5 line widths out to each side, 2.25 long, one spacing of 5', () => {
-  assert.deepEqual([CHEVRON.halfWidth, 2 * CHEVRON.halfLength, CHEVRON.line, CHEVRON.spacing], [1.5, 2.25, 1, 5])
+  assert.deepEqual([CHEVRON.halfWidth, 2 * CHEVRON.halfLength, CHEVRON.line, ARROW_SPACING.fallback], [1.5, 2.25, 1, 5])
 })
 
 test('from thickness 5 up an arrow\'s base reaches CHEVRON.halfWidth (1.5) times the thickness to each side, it is twice CHEVRON.halfLength (1.125) times the thickness long, and the spacing scales with it', () => {
   for (const t of [5, 8, 10, 13, 16]) {
-    const shape = chevronLine('a', true, 0, 0, t)
+    const shape = chevronAt('a', true, 0, 0, t)
     const points = pointsOf(shape.chevrons)
     const [first, tip] = points
     assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - CHEVRON.halfWidth * t) < 0.01, true, `reach at ${t}`)
     assert.equal(Math.abs(Math.abs(tip[0] - first[0]) - 2 * CHEVRON.halfLength * t) < 0.01, true, `length at ${t}`)
-    assert.equal(points.length / 3, Math.round(64 / (CHEVRON.spacing * t)) || 1, `count at ${t}`)
+    assert.equal(points.length / 3, Math.round(64 / (ARROW_SPACING.fallback * t)) || 1, `count at ${t}`)
   }
 })
 
 test('an arrow is centered on its line, on a diagonal as on a straight line, at every thickness from 1 to 16: its two base corners mirror each other across the line', () => {
   for (const value of ['1', '2', 'a', 'e', 'd']) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-      const shape = chevronLine(value, true, 3, 3, t)
+      const shape = chevronAt(value, true, 3, 3, t)
       const [[x0, y0], [x1, y1]] = pointsOf(shape.line)
       const length = Math.hypot(x1 - x0, y1 - y0)
       const [ux, uy] = [(x1 - x0) / length, (y1 - y0) / length]
@@ -1325,7 +1431,7 @@ test('an arrow is centered on its line, on a diagonal as on a straight line, at 
 
 test('at the largest thickness an arrow on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
   // a top edge line, 'a', on row 0: the arrow's base corners are the furthest from the edge itself
-  const shape = chevronLine('a', true, 0, 0, THICKNESS.max)
+  const shape = chevronAt('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y)))
   assert.equal(Math.abs(reach - CHEVRON.halfWidth * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON size at the largest thickness`)
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
@@ -1334,15 +1440,15 @@ test('at the largest thickness an arrow on a grid\'s outer edge reaches no furth
 test('an arrow line has at least one arrow on any segment at any thickness, so a run never has none', () => {
   for (const value of LINE_VALUES) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-      assert.equal(pointsOf(chevronLine(value, true, 4, 4, t).chevrons).length >= 3, true, `at least one chevron: ${value} at ${t}`)
+      assert.equal(pointsOf(chevronAt(value, true, 4, 4, t).chevrons).length >= 3, true, `at least one chevron: ${value} at ${t}`)
     }
   }
 })
 
 // The white outline.
-test('normalizeOutline is on only for a saved true: nothing saved and anything untrusted is off', () => {
-  assert.equal(normalizeOutline(true), true)
-  for (const bad of [undefined, null, false, 'true', 1, 0, {}, []]) assert.equal(normalizeOutline(bad), false, JSON.stringify(bad))
+test('normalizeOutline is off only for a saved false: nothing saved and anything untrusted is on', () => {
+  assert.equal(normalizeOutline(false), false)
+  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(normalizeOutline(ok), true, JSON.stringify(ok))
 })
 
 test('buildOutlineCss is empty when the outline is off and filters the pen layer, and only it, when on', () => {
@@ -1368,17 +1474,10 @@ test('the outline filter grows the layer\'s combined shape by the default width 
   assert.match(svg, /<feMerge><feMergeNode in="halo"\/><feMergeNode in="SourceGraphic"\/><\/feMerge>/, 'the layer is merged over the white')
 })
 
-test('the dialog has a White outline box, off unless the outline is on', () => {
-  const box = (html) => /<input type="checkbox" id="pen-tool-extras-outline" data-outline( checked)?>/.exec(html)
-  assert.equal(box(renderEditor(editorState()))[1], undefined)
-  assert.equal(box(renderEditor(editorState({ outline: true })))[1], ' checked')
-  assert.match(renderEditor(editorState()), /<label for="pen-tool-extras-outline"[^>]*>White outline<\/label>/)
-})
-
-test('normalizeOutlineWidth keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 3', () => {
-  assert.deepEqual(OUTLINE_WIDTH, { min: 1, max: 8, step: 1, fallback: 3 })
+test('normalizeOutlineWidth keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 2', () => {
+  assert.deepEqual(OUTLINE_WIDTH, { min: 1, max: 8, step: 1, fallback: 2 })
   for (const ok of [1, 3, 8]) assert.equal(normalizeOutlineWidth(ok), ok)
-  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(normalizeOutlineWidth(bad), 3, JSON.stringify(bad))
+  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(normalizeOutlineWidth(bad), 2, JSON.stringify(bad))
 })
 
 test('the outline filter grows and blurs more for a wider outline, and refuses a width it cannot save', () => {
@@ -1389,11 +1488,58 @@ test('the outline filter grows and blurs more for a wider outline, and refuses a
   for (const bad of [0, 9, 2.5, '3']) assert.throws(() => renderOutlineFilter(bad), RangeError)
 })
 
-test('the dialog has an Outline width slider from 1 to 8 beside the White outline box, at the width in force', () => {
-  const html = renderEditor(editorState({ outlineWidth: 6 }))
-  assert.match(html, /<input type="range" data-setting="outlineWidth" min="1" max="8" step="1" value="6"/)
-  assert.match(html, /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
-  assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"'), true, 'the slider follows the box')
+test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and normalizeArrowSpacing keeps a saved whole number in range', () => {
+  assert.deepEqual(ARROW_SPACING, { min: 3, max: 12, step: 1, fallback: 5 })
+  for (const ok of [3, 5, 12]) assert.equal(normalizeArrowSpacing(ok), ok)
+  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(normalizeArrowSpacing(bad), 5, JSON.stringify(bad))
+})
+
+test('middle click erase is on unless saved as the boolean false', () => {
+  assert.equal(normalizeMiddleErase(false), false)
+  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(normalizeMiddleErase(ok), true, JSON.stringify(ok))
+})
+
+test('both line styles are enabled unless saved as the boolean false, each on its own; saved junk enables both', () => {
+  assert.deepEqual(normalizeLineStyles(undefined), { dashed: true, arrows: true })
+  assert.deepEqual(normalizeLineStyles({ dashed: false }), { dashed: false, arrows: true })
+  assert.deepEqual(normalizeLineStyles({ arrows: false }), { dashed: true, arrows: false })
+  assert.deepEqual(normalizeLineStyles({ dashed: false, arrows: false }), { dashed: false, arrows: false })
+  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(normalizeLineStyles(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
+})
+
+test('a wider arrow spacing gives fewer arrows on the same segment and the spacing sets their distance', () => {
+  const count = (spacing) => pointsOf(chevronAt('1', true, 0, 0, 5, spacing).chevrons).length / 3
+  assert.equal(count(3), Math.round(64 / (3 * 5)))
+  assert.equal(count(12), Math.round(64 / (12 * 5)) || 1)
+  assert.equal(count(3) > count(5) && count(5) > count(12), true, `${count(3)}, ${count(5)}, ${count(12)}`)
+})
+
+test('the pages in the rotation are page 1 always, page 2 with dashed lines enabled and page 3 with arrow lines enabled', () => {
+  assert.deepEqual(enabledPages({ dashed: true, arrows: true }), [0, 1, 2])
+  assert.deepEqual(enabledPages({ dashed: false, arrows: true }), [0, 2])
+  assert.deepEqual(enabledPages({ dashed: true, arrows: false }), [0, 1])
+  assert.deepEqual(enabledPages({ dashed: false, arrows: false }), [0])
+})
+
+test('a page turn skips a page that is not enabled, in either direction, and stays on page 1 when it is the only one', () => {
+  const noDash = { dashed: false, arrows: true }
+  assert.equal(stepEnabledPage(0, 1, noDash), 2)
+  assert.equal(stepEnabledPage(2, 1, noDash), 0)
+  assert.equal(stepEnabledPage(0, -1, noDash), 2)
+  assert.equal(stepEnabledPage(2, -1, noDash), 0)
+  assert.equal(stepEnabledPage(0, 1, { dashed: false, arrows: false }), 0)
+  // a pen left on a page that is no longer enabled still moves on to the next enabled one
+  assert.equal(stepEnabledPage(1, 1, noDash), 2)
+  assert.equal(stepEnabledPage(1, -1, noDash), 0)
+})
+
+test('after Save a selected pen on a page that is not enabled moves to the same number on page 1, and any other pen stays', () => {
+  assert.equal(pageAfterSave('b', { dashed: false, arrows: true }), '2')
+  assert.equal(pageAfterSave('k', { dashed: true, arrows: false }), 'k', 'k is a reverse character and no pen, so it stays')
+  assert.equal(pageAfterSave('l', { dashed: true, arrows: false }), '2')
+  assert.equal(pageAfterSave('b', { dashed: true, arrows: false }), 'b')
+  assert.equal(pageAfterSave('r', { dashed: false, arrows: false }), '5')
+  assert.equal(pageAfterSave('3', { dashed: false, arrows: false }), '3')
 })
 
 // A segment as the line erase reads it off a cell: its value, cell and color character.
@@ -1597,8 +1743,13 @@ test('the dialog leaves out the controls of a feature that is off', () => {
   const html = (off) => renderEditor(editorState({ off }))
   assert.match(html([]), /data-setting="thickness"/)
   assert.doesNotMatch(html(['sliders']), /data-setting="thickness"|data-setting="opacity"|data-show=/)
-  assert.doesNotMatch(html(['dashes']), /data-setting="dash"/)
-  assert.doesNotMatch(html(['marks']), /data-mark=/)
+  assert.doesNotMatch(html(['dashes']), /data-setting="dash"|data-style="dashed"/)
+  assert.match(html(['dashes']), /data-style="arrows"/)
+  assert.doesNotMatch(html(['chevrons']), /data-setting="arrow"|data-style="arrows"/)
+  assert.doesNotMatch(html(['dashes', 'chevrons']), /Line styles/)
+  assert.doesNotMatch(html(['marks']), /data-mark=|Marks a click/)
   assert.doesNotMatch(html(['outline']), /data-outline|outlineWidth/)
+  assert.doesNotMatch(html(['lineErase']), /data-middle-erase/)
+  assert.doesNotMatch(html(['outline', 'lineErase']), />Other</)
   assert.match(html(['colors']), /data-pen="1"/, 'the pickers set a saved color and need no SudokuPad internal')
 })

@@ -241,7 +241,7 @@ function group (title, mode) {
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'the X on the bottom edge of the cell above')
           await clickEdge()
-          const second = kase.edgeAgain === null ? [] : ['k']
+          const second = kase.edgeAgain === null ? [] : ['m']
           assert.deepEqual(await settle(edgeValues, second), second)
           while ((await penValues()).length) await p.click('#control-undo')
         })
