@@ -690,8 +690,13 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
     })
 
     describe('opacity', { concurrency: false }, () => {
-      const slider = () => editor().locator('#pen-tool-extras-opacity')
-      const setSlider = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+      // The slider in the pen tool's panel. The real drag is checked in pen-tool-extras-panel.live.mjs;
+      // these checks only need the value set, with the same `input` event a drag fires.
+      const slider = () => p.locator('#pen-tool-extras-opacity')
+      const setSlider = async (value) => {
+        await selectPen()
+        await slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+      }
       const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
       // The pen value (`pen-<value>` class) and computed opacity of every drawn mark, without repeats.
       const opacities = async () => {
@@ -742,10 +747,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(seen.some((x) => x.startsWith('5:')), true, 'the cell circle')
         assert.equal(seen.some((x) => LINE_VALUES.includes(x.split(':')[0])), true, `a free line: ${seen}`)
         assert.equal(await sameAt('0.8')(), true, seen.join(' '))
-        await openEditor()
+        await selectPen()
         assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
-        assert.match(await editor().innerText(), /Opacity\s*80/)
-        await closeWith('Cancel')
       })
 
       it('at the default the grid is the same pixels as with the script\'s opacity rule taken out', async () => {
@@ -761,22 +764,16 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         await drawAll()
       })
 
-      it('moving the slider changes every mark\'s opacity live, Cancel puts 0.8 back and saves nothing', async () => {
-        await openEditor()
+      it('moving the slider changes every mark\'s opacity live and saves it at once, without saving the colors', async () => {
         await setSlider(40)
         assert.equal(await settle(sameAt('0.4'), true), true, (await opacities()).join(' '))
-        assert.match(await editor().innerText(), /Opacity\s*40/)
-        await closeWith('Cancel')
-        assert.equal(await settle(sameAt('0.8'), true), true)
-        assert.equal(await savedOpacity(), null)
+        assert.equal(await savedOpacity(), 40)
+        assert.equal(await read((k) => Framework.getData(k), COLORS_KEY), null)
       })
 
-      it('Save keeps it under its own key without saving the colors; undo, redo and replay leave it alone; a reload keeps it', async () => {
-        await openEditor()
+      it('undo, redo and replay leave the opacity alone, and a reload keeps it', async () => {
         await setSlider(30)
-        await closeWith('Save')
         assert.equal(await savedOpacity(), 30)
-        assert.equal(await read((k) => Framework.getData(k), COLORS_KEY), null)
         assert.equal(await settle(sameAt('0.3'), true), true)
         const before = await read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])).sort())
         await p.click('#control-undo')
@@ -793,22 +790,17 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
         assert.equal(await settle(sameAt('0.3'), true), true, 'after a reload')
       })
 
-      it('Restore defaults sets the slider to 80 and Save then clears the saved opacity; Cancel after it keeps a saved one', async () => {
-        await openEditor()
-        await restoreAndRead()
-        await closeWith('Cancel')
+      it('Restore defaults puts the panel slider back to 80 and clears the saved opacity at once, and Cancel afterwards does not bring it back', async () => {
         assert.equal(await savedOpacity(), 30)
-        assert.equal(await settle(sameAt('0.3'), true), true)
         await openEditor()
-        await restoreAndRead()
-        await closeWith('Save')
+        assert.equal(await editor().locator('input[type=range]').count(), 0)
+        await dialogButton('Restore defaults').click()
+        assert.equal(await settle(() => slider().inputValue(), '80'), '80')
+        assert.equal(await settle(sameAt('0.8'), true), true)
+        assert.equal(await savedOpacity(), null)
+        await closeWith('Cancel')
         assert.equal(await savedOpacity(), null)
         assert.equal(await settle(sameAt('0.8'), true), true)
-        async function restoreAndRead () {
-          await dialogButton('Restore defaults').click()
-          assert.equal(await slider().inputValue(), '80')
-          assert.equal(await settle(sameAt('0.8'), true), true)
-        }
       })
 
       it('corrupt saved opacity falls back to 0.8 with no thrown error', async () => {
@@ -818,9 +810,8 @@ for (const mode of ['document-idle', 'before-start', 'after-start']) {
           await reload()
           await drawAll()
           assert.equal(await settle(sameAt('0.8'), true), true, bad)
-          await openEditor()
+          await selectPen()
           assert.equal(await slider().inputValue(), '80', bad)
-          await closeWith('Cancel')
           await clearMarks()
         }
         assert.deepEqual(errors.slice(errorsBefore), [])

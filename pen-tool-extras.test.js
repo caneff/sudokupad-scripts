@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
+  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick
 } = require('./pen-tool-extras.user.js')
@@ -375,6 +375,19 @@ test('buildOpacityCss writes the fraction of the percent, and 1 at 100', () => {
   assert.equal(buildOpacityCss(20), ':root:root .cell-pen { opacity: 0.2; }')
   assert.equal(buildOpacityCss(35), ':root:root .cell-pen { opacity: 0.35; }')
   assert.equal(buildOpacityCss(100), ':root:root .cell-pen { opacity: 1; }')
+})
+
+// The id, range and value of each range input in markup, in order.
+const slidersIn = (html) => [...html.matchAll(/<input type="range" id="([^"]+)"[^>]* min="([^"]+)" max="([^"]+)" step="([^"]+)" value="([^"]+)"/g)].map((m) => m.slice(1))
+
+test('the panel markup has Thickness above Opacity, each with the range and value of its setting, and neither takes focus by tabbing', () => {
+  const html = renderPanelSliders(9, 35)
+  assert.deepEqual(slidersIn(html), [
+    ['pen-tool-extras-thickness', String(THICKNESS.min), String(THICKNESS.max), String(THICKNESS.step), '9'],
+    ['pen-tool-extras-opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35']
+  ])
+  assert.deepEqual([...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]), ['Thickness', 'Opacity'])
+  assert.equal(html.match(/tabindex="-1"/g).length, 2)
 })
 
 test('buildOpacityCss refuses an opacity it cannot save', () => {
