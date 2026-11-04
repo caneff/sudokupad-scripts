@@ -665,8 +665,8 @@
     // Arrows keep the size they have at the default thickness below it; only the line gets thinner.
     const size = Math.max(thickness, THICKNESS.fallback)
     const [half, wide] = [CHEVRON.halfLength * size, CHEVRON.halfWidth * size]
-    // The shortest segment (a cell side) holds at least one even at the largest thickness, so there is never none.
-    const count = Math.round(length / (spacing * size))
+    // Every segment holds at least one arrow, however wide the spacing and thick the pen (the shortest segment, a cell side, rounds to none at the top of both), so a line never loses its direction.
+    const count = Math.max(1, Math.round(length / (spacing * size)))
     let chevrons = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
@@ -1058,12 +1058,15 @@
     return `<div style="margin:6px 0;max-width:20em">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
+  // The heading of a dialog section after the first: the divider line above it, then the title.
+  const sectionHeading = (text) => `${DIVIDER}<div style="font-weight:600;margin-top:10px">${text}</div>`
+
   // The pen's line mode choice, in place of SudokuPad's own pulldown in the panel, which this script hides.
   // `lineMode` is undefined when the page has no pen tool, and the choice is left out.
   function lineModeChoice (lineMode) {
     if (lineMode === undefined) return ''
     const options = LINE_MODES.map(([value, label]) => `<option value="${value}"${value === lineMode ? ' selected' : ''}>${label}</option>`).join('')
-    return `${DIVIDER}<div style="font-weight:600;margin-top:10px">Pen line mode</div>` +
+    return sectionHeading('Pen line mode') +
       `<select data-line-mode style="margin:4px 0;font-size:1rem">${options}</select>`
   }
 
@@ -1073,10 +1076,10 @@
   const COLUMN_HEADING = 'font-size:.8rem;color:#666;font-weight:400;justify-self:center;white-space:nowrap'
   // The thin line above every section but the first.
   const DIVIDER = '<div style="border-top:1px solid #e3dff0;margin:12px 0 0"></div>'
-  // The class of the dialog's button row and editor, which DIALOG_CSS styles.
+  // The class of the dialog's button row, which DIALOG_CSS styles.
   const DIALOG_CLASS = 'pen-tool-extras-dialog'
   // The slider row under each line style's Enable box.
-  const STYLE_SLIDERS = { dashed: 'dash', arrows: 'arrow' }
+  const STYLE_SLIDERS = { dashed: 'dash', arrows: 'arrowSpacing' }
 
   // The look of the dialog's button row (Restore defaults as small underlined text at the left, Cancel and Save at the right, under a
   // divider), of the SudokuPad colors button and of the pen line mode pulldown. Scoped by DIALOG_CLASS, so SudokuPad's other dialogs are left alone.
@@ -1126,7 +1129,6 @@
     const heading = (text, caption) =>
       DIVIDER + `<div style="${SLIDER_COLUMNS};margin:10px 0 4px"><span style="font-weight:600;grid-column:1 / 4">${text}</span>` +
       `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>`
-    const plainHeading = (text) => `${DIVIDER}<div style="font-weight:600;margin-top:10px">${text}</div>`
     const markRow = (label, cellsMarkup) => `<div>${label}</div>${cellsMarkup}`
     const columnHead = (text) => `<div style="font-size:.85rem;color:#666">${text}</div>`
     const marksTable = '<div style="display:grid;grid-template-columns:max-content repeat(3, max-content);column-gap:28px;row-gap:6px;align-items:center;margin:4px 0">' +
@@ -1148,12 +1150,12 @@
       (dashed || arrows
         ? heading('Line styles', 'Enable') +
           (dashed ? styleBlock('dashed', 'Dashed lines', state.lineStyles.dashed, slider('dash', 'Dash length', DASH, state.dash, { indented: true, shown: state.lineStyles.dashed })) : '') +
-          (arrows ? styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, slider('arrow', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) : '')
+          (arrows ? styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, slider('arrowSpacing', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) : '')
         : '') +
-      when('marks', plainHeading('Marks a click cycles through') + marksTable) +
+      when('marks', sectionHeading('Marks a click cycles through') + marksTable) +
       (off.has('outline') && off.has('lineErase')
         ? ''
-        : plainHeading('Other') +
+        : sectionHeading('Other') +
           when('outline', labelled('pen-tool-extras-outline', 'data-outline', state.outline, 'White outline on lines and marks') +
             slider('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth, { indented: true, shown: state.outline })) +
           when('lineErase', labelled('pen-tool-extras-middle-erase', 'data-middle-erase', state.middleErase, 'Middle click erases a whole line'))) +
@@ -1621,8 +1623,12 @@
       inStock(() => self.actSend())
     }
     tool.clickCell = function () {
-      // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
-      if (activeMiddleErase && lastButton === MIDDLE_BUTTON && !features.isOff('lineErase')) return
+      if (lastButton === MIDDLE_BUTTON && !features.isOff('lineErase')) {
+        // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
+        if (activeMiddleErase) return
+        // With the erase unticked a middle click is SudokuPad's own, not this script's mark cycle.
+        return original.apply(this, arguments)
+      }
       // A click that failed half way leaves actions queued, which the original click must not send as its own.
       return features.attempt('marks', () => clickMark(this, arguments), (error) => {
         if (error && Array.isArray(this._actList)) this._actList.length = 0
@@ -1751,8 +1757,9 @@
     const byRole = {}
     options.querySelectorAll('button').forEach((button) => {
       const role = roles[button.textContent.trim()]
-      if (role) byRole[role] = button
-      if (role) button.dataset.role = role
+      if (!role) return
+      byRole[role] = button
+      button.dataset.role = role
     })
     if (Object.keys(byRole).length !== Object.keys(roles).length) return
     options.classList.add(DIALOG_CLASS)
@@ -1823,7 +1830,7 @@
                 }
                 if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
-                saveDialogSliders({ thickness, opacity, dash, arrowSpacing, lineStyles, middleErase, show, outline, outlineWidth })
+                saveDialogDrafts({ thickness, opacity, dash, arrowSpacing, lineStyles, middleErase, show, outline, outlineWidth })
                 if (lineMode !== undefined && lineMode !== currentLineMode()) features.attempt('lineMode', () => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
               }
@@ -1851,7 +1858,7 @@
         case 'thickness': thickness = value; break
         case 'opacity': opacity = value; break
         case 'dash': dash = value; break
-        case 'arrow': arrowSpacing = value; break
+        case 'arrowSpacing': arrowSpacing = value; break
         case 'outlineWidth': outlineWidth = value; break
         default: throw new Error(`pen-tool-extras: the dialog has no slider named ${el.dataset.setting}`)
       }
@@ -1978,7 +1985,7 @@
 
   // What Save does with the dialog's sliders and boxes: each that differs from what is in force is applied and
   // saved, and one back at its default clears its saved value.
-  function saveDialogSliders (draft) {
+  function saveDialogDrafts (draft) {
     const save = (key, value, fallback) => {
       if (value === fallback) Framework.removeData(key)
       else Framework.setData(key, value)
@@ -2000,7 +2007,7 @@
       adoptArrowSpacing(draft.arrowSpacing)
     }
     if (draft.middleErase !== activeMiddleErase) {
-      save(MIDDLE_ERASE_KEY, draft.middleErase, true)
+      save(MIDDLE_ERASE_KEY, draft.middleErase, normalizeMiddleErase(null))
       activeMiddleErase = draft.middleErase
     }
     if (draft.lineStyles.dashed !== activeLineStyles.dashed || draft.lineStyles.arrows !== activeLineStyles.arrows) {
@@ -2249,12 +2256,11 @@
     document.addEventListener('click', (event) => features.attempt('pages', () => {
       if (event.target.closest(`.${PAGE_BUTTON}`)) turnPage(1)
     }))
-    // The wheel turns the page only over the page button, as SudokuPad's color tool does over its own. `preventDefault` needs a listener that is not passive.
+    // The wheel turns the page only over the page button, as SudokuPad's color tool does over its own, and like that one it does not cancel the wheel.
     document.addEventListener('wheel', (event) => features.attempt('pages', () => {
       if (event.deltaY === 0 || !hasPageToTurnTo() || !event.target.closest(`.${PAGE_BUTTON}`)) return
-      event.preventDefault()
       turnPage(event.deltaY < 0 ? -1 : 1)
-    }), { passive: false })
+    }))
     features.attempt('pages', () => {
       if (tool.active) restoreSelectedPen(pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY))))
       syncPageButton()

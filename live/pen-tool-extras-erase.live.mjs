@@ -16,7 +16,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { openSettings } from './settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -187,15 +187,8 @@ function group (title, mode) {
     }
 
     const editor = () => p.locator('#pen-tool-extras-editor')
-    const openEditor = async () => {
-      await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-      await editor().waitFor({ state: 'visible' })
-    }
-    const closeWith = async (text) => {
-      await p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first().click()
-      await editor().waitFor({ state: 'detached' })
-    }
+    const openEditor = () => openExtrasEditor(p)
+    const closeWith = (text) => closeExtrasEditorWith(p, text)
 
     it('with the Middle click box unticked a middle click erases nothing and prevents no default (autoscroll as stock); the box is ticked by default, saves as false, and ticking it again brings the erase back', async () => {
       await undoAll()
@@ -222,6 +215,7 @@ function group (title, mode) {
       })
       await middleClick([2.5, 3.0])
       assert.deepEqual(await read(() => window.__middleLog), [['pointerdown', 1, false], ['mousedown', 1, false]], 'no default prevented, and the mouse events follow as in stock')
+      await sleep(150) // "nothing happened in 150 ms" check
       assert.equal((await penValues()).filter((v) => lines.includes(v)).length, lines.length, 'the line is still there')
       await openEditor()
       assert.equal(await box.isChecked(), false, 'the dialog opens with the box as saved')

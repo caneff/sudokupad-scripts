@@ -50,13 +50,13 @@
   circle, first direction, second direction, empty, skipping any type unticked in
   the settings dialog. A right click steps the same cycle backwards.
 - **grid-corner mark** — a pen mark Pen Tool Extras draws centred on a corner of the grid, inner or outer: an
-  X or a circle, the same shapes as the edge marks. The dialog calls the group "Corner marks"; SudokuPad's own
+  X or a circle, the same shapes as the edge marks. The dialog's Marks table has a Corner row for them; SudokuPad's own
   "corner marks" are the small digits in a cell's corners, which this is not. Stored as one character in the pen
   value of one cell: a corner with a cell up and left of it is the bottom right of that cell, so a shared corner
   is stored once; the rest are stored on the top left of the cell they touch, except the grid's top right and
   bottom left corners.
 - **corner zone** — the part of a cell within 0.2 of a cell (by distance) of a grid corner. A click there is a
-  grid-corner mark click, decided before SudokuPad's own edge-or-cell test; with both Corner marks boxes unticked
+  grid-corner mark click, decided before SudokuPad's own edge-or-cell test; with both boxes of the Marks table's Corner row unticked
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type. A right click steps it backwards.
@@ -81,7 +81,7 @@
   already drawn get it, it fades with the opacity, and the drag highlight, which sits in its own group beside the layer, is left out. Nothing is stored in the puzzle.
 - **pen page** — one of the lists of nine pens in `PEN_PAGES`. Page 1 is SudokuPad's own pens 1 to 9; page 2 is the same
   nine colors drawn as dashed lines (dots at a **dash length** of 0); page 3 is the same nine as **arrow lines**. The pen on color button N has the same color on every page, so recoloring it changes
-  it on all of them.
+  it on all of them. A page 2 or 3 whose **line style** is not enabled is out of the rotation.
 - **line style** — one of the two kinds of line the extra pen pages draw: dashed lines (page 2) and directional arrow lines (page 3). Each has an
   **Enable** box in the dialog's Line styles section, both ticked by default, saved together under `PenColor_linestyles`. An unticked style's page is out of the
   rotation: the page button, Tab and the wheel skip it, saving with its pen selected moves the selection to the same number on page 1, and with both unticked the

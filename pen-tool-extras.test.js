@@ -1108,14 +1108,14 @@ test('the dialog always holds the thickness, opacity, dash, arrow spacing and ou
     ['thickness', String(THICKNESS.min), String(THICKNESS.max), String(THICKNESS.step), '9'],
     ['opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35'],
     ['dash', String(DASH.min), String(DASH.max), String(DASH.step), '0'],
-    ['arrow', '3', '12', '1', '7'],
+    ['arrowSpacing', String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), '7'],
     ['outlineWidth', String(OUTLINE_WIDTH.min), String(OUTLINE_WIDTH.max), String(OUTLINE_WIDTH.step), '2']
   ])
 })
 
 test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
   const html = renderEditor(editorState())
-  const columns = ['thickness', 'opacity', 'dash', 'arrow', 'outlineWidth'].map((key) => /grid-template-columns:([^;]+);/.exec(rowOf(html, key))[1])
+  const columns = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => /grid-template-columns:([^;]+);/.exec(rowOf(html, key))[1])
   assert.equal(new Set(columns).size, 1, columns.join(' | '))
   assert.equal(columns[0].trim().split(/ (?![^(]*\))/).length, 4)
 })
@@ -1129,7 +1129,7 @@ test('Line styles: Dashed lines and Directional arrow lines each have an Enable 
   assert.equal(Boolean(dashed[1]) && Boolean(arrows[1]), true)
   assert.match(html, />Dashed lines<[\s\S]*data-style="dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-style="arrows"[\s\S]*>Arrow spacing</)
   assert.match(rowOf(html, 'dash'), /padding-left:1\.2em/)
-  assert.match(rowOf(html, 'arrow'), /padding-left:1\.2em/)
+  assert.match(rowOf(html, 'arrowSpacing'), /padding-left:1\.2em/)
   assert.doesNotMatch(rowOf(html, 'dash'), /display:none/)
 })
 
@@ -1138,7 +1138,7 @@ test('an unticked line style is drawn unticked and its slider row is hidden, the
   assert.doesNotMatch(html, /data-style="dashed"[^>]* checked/)
   assert.match(rowOf(html, 'dash'), /display:none/)
   assert.match(rowOf(html, 'dash'), /value="6"/)
-  assert.doesNotMatch(rowOf(html, 'arrow'), /display:none/)
+  assert.doesNotMatch(rowOf(html, 'arrowSpacing'), /display:none/)
 })
 
 test('Marks a click cycles through is one table: columns X Mark, Circle, Directions; rows Edge (three boxes) and Corner (X Mark and Circle)', () => {
@@ -1437,10 +1437,12 @@ test('at the largest thickness an arrow on a grid\'s outer edge reaches no furth
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
 })
 
-test('an arrow line has at least one arrow on any segment at any thickness, so a run never has none', () => {
+test('an arrow line has at least one arrow on any segment at any thickness and any arrow spacing, so a run never has none', () => {
   for (const value of LINE_VALUES) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-      assert.equal(pointsOf(chevronAt(value, true, 4, 4, t).chevrons).length >= 3, true, `at least one chevron: ${value} at ${t}`)
+      for (let spacing = ARROW_SPACING.min; spacing <= ARROW_SPACING.max; spacing++) {
+        assert.equal(pointsOf(chevronAt(value, true, 4, 4, t, spacing).chevrons).length >= 3, true, `at least one chevron: ${value} at thickness ${t}, spacing ${spacing}`)
+      }
     }
   }
 })
@@ -1745,7 +1747,7 @@ test('the dialog leaves out the controls of a feature that is off', () => {
   assert.doesNotMatch(html(['sliders']), /data-setting="thickness"|data-setting="opacity"|data-show=/)
   assert.doesNotMatch(html(['dashes']), /data-setting="dash"|data-style="dashed"/)
   assert.match(html(['dashes']), /data-style="arrows"/)
-  assert.doesNotMatch(html(['chevrons']), /data-setting="arrow"|data-style="arrows"/)
+  assert.doesNotMatch(html(['chevrons']), /data-setting="arrowSpacing"|data-style="arrows"/)
   assert.doesNotMatch(html(['dashes', 'chevrons']), /Line styles/)
   assert.doesNotMatch(html(['marks']), /data-mark=|Marks a click/)
   assert.doesNotMatch(html(['outline']), /data-outline|outlineWidth/)

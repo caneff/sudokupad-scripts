@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { openSettings } from './settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -26,15 +26,8 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   let context, p, errors
 
   const editor = () => p.locator('#pen-tool-extras-editor')
-  const openEditor = async () => {
-    await openSettings(p)
-    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first().click()
-    await editor().waitFor({ state: 'detached' })
-  }
+  const openEditor = () => openExtrasEditor(p)
+  const closeWith = (text) => closeExtrasEditorWith(p, text)
   // The horizontal middle of an element, rounded to a pixel.
   const centreX = (locator) => locator.evaluate((el) => { const box = el.getBoundingClientRect(); return Math.round(box.x + box.width / 2) })
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
@@ -81,7 +74,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
 
   it('the sliders of Line settings, Line styles and the outline are in one column, and the Slider in panel, Enable and outline boxes are in another', async () => {
     await openEditor()
-    const sliders = ['thickness', 'opacity', 'dash', 'arrow', 'outlineWidth'].map((key) => editor().locator(`input[data-setting="${key}"]`))
+    const sliders = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => editor().locator(`input[data-setting="${key}"]`))
     const lefts = await Promise.all(sliders.map(left))
     assert.equal(new Set(lefts).size, 1, `slider columns ${lefts}`)
     const boxes = [editor().locator('input[data-show="thickness"]'), editor().locator('input[data-show="opacity"]'), editor().locator('input[data-style="dashed"]'), editor().locator('input[data-style="arrows"]')]
@@ -100,7 +93,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     const name = (text) => editor().locator('span', { hasText: new RegExp('^' + text + '$') }).first()
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
     assert.equal(await left(name('Dashed lines')) <= await left(label('dash')), true)
-    for (const [style, row] of [['dashed', 'dash'], ['arrows', 'arrow']]) {
+    for (const [style, row] of [['dashed', 'dash'], ['arrows', 'arrowSpacing']]) {
       await editor().locator(`input[data-style="${style}"]`).uncheck()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), false, `${row} hidden`)
       await editor().locator(`input[data-style="${style}"]`).check()

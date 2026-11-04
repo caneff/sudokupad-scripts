@@ -367,10 +367,9 @@ function group (title, mode, extra = []) {
       // The color buttons and the panel's margin are the panel but not the page button.
       const colour = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
       await p.mouse.move(colour.x + colour.width / 2, colour.y + colour.height / 2)
+      // One turn forward only: the old anywhere-in-the-panel wheel moved the pen to page 3 and this leaves it on page 2.
       await p.mouse.wheel(0, 100)
-      await p.mouse.wheel(0, -100)
-      // "nothing happened in 500 ms" check
-      await sleep(500)
+      await sleep(500) // "nothing happened in 500 ms" check
       assert.equal(await selected(), 'c')
     })
 
@@ -458,9 +457,19 @@ function group (title, mode, extra = []) {
       await setStyles({ dashed: false, arrows: false })
       assert.equal(await p.locator(PAGE_BUTTON).count(), 0, 'no page button')
       assert.equal(await selected(), '3')
+      // The script's Tab turn selects a pen through the tool's setSelectedColor, even on the one page there is; counting those calls sees a Tab it took.
+      await read(() => {
+        window.__selectCalls = 0
+        const select = ToolPen.tool.setSelectedColor
+        ToolPen.tool.setSelectedColor = function (...args) { window.__selectCalls++; return select.apply(this, args) }
+        window.__stockSelect = select
+      })
       await p.keyboard.press('Tab')
       await p.keyboard.press('Tab')
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE, 'the script turned no page on Tab')
+      await sleep(300) // "nothing happened in 300 ms" check
+      assert.equal(await read(() => window.__selectCalls), 0, 'the script took no Tab')
+      assert.equal(await padValues(), PAGE_ONE, 'the script turned no page on Tab')
+      await read(() => { ToolPen.tool.setSelectedColor = window.__stockSelect })
       const colour = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
       await p.mouse.move(colour.x + colour.width / 2, colour.y + colour.height / 2)
       await p.mouse.wheel(0, 100)

@@ -15,10 +15,10 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { effectiveOpacities, openSettings } from './settings.mjs'
+import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from './settings.mjs'
 
 // The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
-const { CHEVRON } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
+const { CHEVRON, ARROW_SPACING } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
@@ -370,21 +370,14 @@ function group (title, mode) {
       const base = await arrows()
       assert.equal(base > 0, true)
       const editor = () => p.locator('#pen-tool-extras-editor')
-      const slider = () => editor().locator('input[data-setting="arrow"]')
-      const openEditor = async () => {
-        await openSettings(p)
-        await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-        await editor().waitFor({ state: 'visible' })
-      }
-      const closeWith = async (text) => {
-        await p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first().click()
-        await editor().waitFor({ state: 'detached' })
-      }
+      const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
+      const openEditor = () => openExtrasEditor(p)
+      const closeWith = (text) => closeExtrasEditorWith(p, text)
       const setSpacing = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
       await openEditor()
-      assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['3', '12', '1', '5'])
+      assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), [String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), String(ARROW_SPACING.fallback)])
       await setSpacing(12)
-      assert.equal(await editor().locator('output[data-readout="arrow"]').textContent(), '12', 'the value moves with the slider')
+      assert.equal(await editor().locator('output[data-readout="arrowSpacing"]').textContent(), '12', 'the value moves with the slider')
       assert.equal(await arrows(), base, 'a draft changes nothing before Save')
       await closeWith('Cancel')
       assert.equal(await arrows(), base)
