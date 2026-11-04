@@ -79,6 +79,30 @@ test('the details page links back to the homepage and carries the Pen Tool Extra
   assert.ok(scriptLinks(page).includes(RAW + 'pen-tool-extras.user.js'), `site/${DETAILS} has no Pen Tool Extras install link`)
 })
 
+// The warning sits directly under the page title, so it is read before any install link.
+const WARNING = /<\/h1>\s*<p class="warning">([\s\S]*?)<\/p>/
+const WARNINGS = {
+  [HOME]: "These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.",
+  [DETAILS]: "This script can break at any time, and there are no guarantees. It relies on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break it without notice. It isn't made or supported by SudokuPad."
+}
+
+for (const [name, text] of Object.entries(WARNINGS)) {
+  test(`${name} has its warning directly under the title, above the first install link`, () => {
+    const page = read(name)
+    const m = page.match(WARNING)
+    assert.ok(m, `site/${name} has no <p class="warning"> directly after its <h1>`)
+    assert.equal(m[1].replace(/<[^>]*>/g, ''), text)
+    // Install links are found as the rest of this file finds them: by the script they point at.
+    const firstInstall = page.search(/href="[^"]*\.user\.js"/)
+    assert.notEqual(firstInstall, -1, `site/${name} has no install link`)
+    assert.ok(m.index < firstInstall, `site/${name} has an install link above its warning`)
+  })
+}
+
+test('the details page leaves the SudokuPad-internals caveat to its warning', () => {
+  assert.doesNotMatch(read(DETAILS), /leans on SudokuPad internals/)
+})
+
 test('netlify.toml publishes only site/', () => {
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)

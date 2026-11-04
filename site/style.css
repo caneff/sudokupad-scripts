@@ -3,9 +3,10 @@
   color-scheme: light dark;
   /* SudokuPad's own button purple, read from its controls: rgb(106, 27, 154). */
   --accent: #6a1b9a; --on-accent: #fff;
+  --warn-edge: #b26a00; --warn-bg: #fff4d6; --warn-text: #3d2600;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --accent: #d2a8f0; --on-accent: #1a0a24; }
+  :root { --accent: #d2a8f0; --on-accent: #1a0a24; --warn-edge: #e0a030; --warn-bg: #3a2a08; --warn-text: #ffe9b8; }
 }
 body { max-width: 68rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
 a { color: var(--accent); }
@@ -14,3 +15,4 @@ h2 { font-size: 1.2rem; }
 p { margin: 0 0 .5rem; }
 .install { display: inline-block; padding: .2rem .7rem; border-radius: 3px; background: var(--accent); color: var(--on-accent); font-size: .9rem; text-decoration: none; }
 .install:hover, .install:focus-visible { text-decoration: underline; }
+.warning { margin: .5rem 0 1rem; padding: .6rem .9rem; border: 2px solid var(--warn-edge); border-left-width: .5rem; border-radius: 3px; background: var(--warn-bg); color: var(--warn-text); font-weight: 600; }
