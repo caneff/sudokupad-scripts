@@ -2,7 +2,8 @@
 // Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium.
 //
 // The script is injected into the page after Start Puzzle, not installed through Tampermonkey, so Tampermonkey's real injection time,
-// crackingthecryptic.com and a touch screen stay untested. Every click is real mouse input.
+// crackingthecryptic.com and a real touch screen stay untested. The clicks are real mouse input; the tap is Chromium's emulated touch.
+// That the gear sits clear of the pen icon is judged on the screenshot in the PR, not here.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -52,7 +53,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   })
   after(async () => { await context.close() })
 
-  it('the gear sits inside the button box, in its upper right corner, clear of the pen icon', async () => {
+  it('the gear is 13 px and sits 2 px in from the upper right corner of the button', async () => {
     const gear = p.locator(GEAR)
     await gear.waitFor({ state: 'visible' })
     // SudokuPad scales its controls, so the sizes are read in the button's own layout pixels; the insets are from the button's padding edge, which an absolute box is placed against.
@@ -73,11 +74,10 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
     const other = await p.evaluate(() => { const b = [...document.querySelectorAll('.controls-tool button, .controls-tool [role=button]')].find((e) => e.id && e.id !== 'control-pen'); return b ? b.id : null })
     assert.notEqual(other, null, 'another tool button exists')
     await p.click(`#${other}`)
-    const before = await selectedId()
+    assert.equal(await selectedId(), other, 'the other tool is selected before the gear is clicked')
     await p.locator(GEAR).click()
     await p.locator(EDITOR).waitFor({ state: 'visible' })
-    assert.equal(await selectedId(), before)
-    assert.notEqual(before, 'control-pen')
+    assert.equal(await selectedId(), other)
     await closeDialog()
   })
 
@@ -88,12 +88,18 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
     assert.equal(await p.locator(EDITOR).count(), 0)
   })
 
+  it('the gear is put back when SudokuPad rebuilds the button', async () => {
+    await p.evaluate((gear) => document.querySelector(gear).remove(), GEAR)
+    await p.locator(GEAR).waitFor({ state: 'visible' })
+  })
+
   it('the gear is present after a reload', async () => {
     await load(p)
     await p.locator(GEAR).waitFor({ state: 'visible' })
   })
 
-  // SudokuPad cancels a touchstart on a tool button, which stops the browser sending the click; the gear keeps its touchstart from SudokuPad.
+  // SudokuPad cancels the touch events of a tap on a tool button, which stops the browser sending the click; the gear keeps its touchstart and
+  // touchend from SudokuPad. A mouse press needs no such check: SudokuPad ignores a press whose target is not the button.
   it('a tap on the gear opens the dialog', async () => {
     const touch = await browser.newContext({ viewport: { width: 1200, height: 1000 }, hasTouch: true })
     try {

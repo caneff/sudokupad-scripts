@@ -111,6 +111,8 @@
 - **page button** — the square button at the right end of the pen panel's last row. It shows the line the next enabled page draws,
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
+- **settings gear** — the small white box with a purple gear in the upper right corner of SudokuPad's pen tool button. A click or tap opens
+  Pen Tool Extras' settings dialog and leaves the selected tool alone. It shows whenever SudokuPad shows the pen tool button.
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
   saved by SudokuPad under `ToolPen_linemode`; the script's settings dialog holds the choice.
 - **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks

@@ -2113,6 +2113,8 @@
       event.stopPropagation()
       openDialog()
     }, true)
+    // SudokuPad builds its controls after Start Puzzle and can rebuild them, so the gear is put back whenever it is missing.
+    new window.MutationObserver(syncGear).observe(document.body, { childList: true, subtree: true })
     syncGear()
   }
 
@@ -2123,9 +2125,8 @@
   // A drag on a slider leaves the focus on it, and then the arrow and paging keys would move the slider
   // and not reach the puzzle; the focus goes back to the page when the pointer is released.
   function installPenPanel () {
-    new window.MutationObserver(() => { syncPenPanel(); syncGear() }).observe(document.body, { childList: true, subtree: true })
+    new window.MutationObserver(syncPenPanel).observe(document.body, { childList: true, subtree: true })
     syncPenPanel()
-    installGear()
     document.addEventListener('input', (event) => {
       if (event.target.matches(`.${SLIDERS} input`)) features.attempt('sliders', () => saveSlider(event.target))
     })
@@ -2452,6 +2453,7 @@
     activeArrowSpacing = normalizeArrowSpacing(Framework.getData(ARROW_SPACING_KEY))
     installHoldToEdit()
     installPenPanel()
+    installGear()
     installOverlayPressSwallow()
     markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
     adoptThickness(normalizeThickness(Framework.getData(THICKNESS_KEY)))
