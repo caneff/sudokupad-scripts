@@ -2100,14 +2100,15 @@
     }, () => document.querySelectorAll(`.${GEAR_CLASS}`).forEach((el) => el.remove()))
   }
 
-  // SudokuPad runs a tool button's action on the press, so a press on the gear is kept from its handlers (the capture phase on the document
-  // runs before the button's own); the click then opens the dialog and selects nothing.
+  // SudokuPad runs a tool button's action on the press and cancels the touch events of a tap, which stops the browser sending the click. A press
+  // or touch on the gear is kept from SudokuPad's handlers (the capture phase on the window runs before the document's and the button's own); the
+  // click then opens the dialog and selects nothing.
   function installGear () {
     const onGear = (event) => event.target.closest && event.target.closest(`.${GEAR_CLASS}`)
-    ;['mousedown', 'touchstart', 'pointerdown'].forEach((type) => {
-      document.addEventListener(type, (event) => { if (onGear(event)) event.stopPropagation() }, true)
+    ;['mousedown', 'touchstart', 'touchend', 'pointerdown'].forEach((type) => {
+      window.addEventListener(type, (event) => { if (onGear(event)) event.stopPropagation() }, true)
     })
-    document.addEventListener('click', (event) => {
+    window.addEventListener('click', (event) => {
       if (!onGear(event)) return
       event.stopPropagation()
       openDialog()

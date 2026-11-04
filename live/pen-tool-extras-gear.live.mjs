@@ -25,7 +25,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   let context, p
 
   // Loads the puzzle with the pen tool on, starts it and injects the script.
-  const load = async () => {
+  const load = async (p) => {
     await p.goto(url, { waitUntil: 'load', timeout: 60000 })
     await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
     await p.evaluate(() => Framework.setSetting('toolpen', true))
@@ -48,7 +48,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
     context = await browser.newContext({ viewport: { width: 1200, height: 1000 } })
     p = await context.newPage()
     await routeSudokuPad(p)
-    await load()
+    await load(p)
   })
   after(async () => { await context.close() })
 
@@ -89,7 +89,22 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   })
 
   it('the gear is present after a reload', async () => {
-    await load()
+    await load(p)
     await p.locator(GEAR).waitFor({ state: 'visible' })
+  })
+
+  // SudokuPad cancels a touchstart on a tool button, which stops the browser sending the click; the gear keeps its touchstart from SudokuPad.
+  it('a tap on the gear opens the dialog', async () => {
+    const touch = await browser.newContext({ viewport: { width: 1200, height: 1000 }, hasTouch: true })
+    try {
+      const tp = await touch.newPage()
+      await routeSudokuPad(tp)
+      await load(tp)
+      const box = await tp.locator(GEAR).boundingBox()
+      await tp.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
+      await tp.locator(EDITOR).waitFor({ state: 'visible' })
+    } finally {
+      await touch.close()
+    }
   })
 })
