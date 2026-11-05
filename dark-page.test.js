@@ -197,3 +197,38 @@ test('halfStroke is half the stroke width in page pixels, and 0 when there is no
 test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'dark-page.user.js'), 'utf8')))
 })
+
+test('a Framework without getApp warns that the settings entry was skipped, and the page still darkens', () => {
+  const file = require.resolve('./dark-page.user.js')
+  const appended = []
+  const element = () => ({ style: { setProperty () {} } })
+  const saved = { document: global.document, window: global.window, Framework: global.Framework }
+  global.document = {
+    createElement: element,
+    head: { appendChild: (el) => appended.push(el) },
+    body: { appendChild: (el) => appended.push(el) },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    fonts: null
+  }
+  global.window = { MutationObserver: class { observe () {} }, addEventListener () {}, requestAnimationFrame () {} }
+  global.Framework = {}
+  const warnings = []
+  const realWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = realWarn
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete global[name]
+      else global[name] = value
+    }
+    delete require.cache[file]
+  }
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0], /^dark-page: .*getApp/)
+  const style = appended.find((el) => el.id === 'dark-page-style')
+  assert.equal(style.textContent, buildCss(DEFAULT_COLOR))
+})

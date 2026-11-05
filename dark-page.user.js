@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.5
+// @version      0.3.6
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.5'
+  const VERSION = '0.3.6'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
@@ -127,10 +127,14 @@
     }))
   }
 
+  // Grows a box by `amount` on every side.
+  const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
+
   // Grows the box by `pad`, then rounds every edge away from it, so a partly covered pixel at the
   // rim is inside the box and not left dark.
   function snapOutward (box, pad) {
-    return { left: Math.floor(box.left - pad), top: Math.floor(box.top - pad), right: Math.ceil(box.right + pad), bottom: Math.ceil(box.bottom + pad) }
+    const grown = growBox(box, pad)
+    return { left: Math.floor(grown.left), top: Math.floor(grown.top), right: Math.ceil(grown.right), bottom: Math.ceil(grown.bottom) }
   }
 
   // The alpha of a computed color, or of `none`; a paint server such as a url() counts as opaque.
@@ -178,9 +182,6 @@
     bottom: Math.min(box.bottom, limit.bottom)
   })
 
-  // Grows a box by `amount` on every side.
-  const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
-
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, DATA_KEY, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
@@ -203,7 +204,7 @@
   // The box of everything the puzzle visibly draws, with each element's stroke and markers, joined
   // with every cell's box grown by what a solver's pen marks reach, padded and rounded outward;
   // limited to the svg's own box, which clips what lies outside it. Null when there is no board.
-  function measure () {
+  function keptRectangle () {
     const svg = document.querySelector('#svgrenderer')
     const ctm = svg && svg.getScreenCTM()
     if (!ctm) return null
@@ -244,15 +245,15 @@
   // With no board on the page (before a puzzle loads, or on a page of the site that is not a
   // puzzle) the page is left as it is: the page color would otherwise hide white the board has not drawn.
   function updateRect () {
-    const box = measure()
-    style.disabled = !box
+    const kept = keptRectangle()
+    style.disabled = !kept
     const set = (name, value) => rect.style.setProperty(name, value, 'important')
-    if (!box) return set('display', 'none')
+    if (!kept) return set('display', 'none')
     set('display', 'block')
-    set('left', `${box.left}px`)
-    set('top', `${box.top}px`)
-    set('width', `${box.right - box.left}px`)
-    set('height', `${box.bottom - box.top}px`)
+    set('left', `${kept.left}px`)
+    set('top', `${kept.top}px`)
+    set('width', `${kept.right - kept.left}px`)
+    set('height', `${kept.bottom - kept.top}px`)
   }
 
   // Recomputes before the next paint, once however many changes arrive.
@@ -320,20 +321,25 @@
     })
   }
 
-  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), and
-  // the darkening above needs no Framework; without it the page keeps the default.
-  if (typeof Framework !== 'undefined' && Framework.getApp) {
-    Framework.getApp().then(() => {
-      Framework.addSetting({
-        tag: 'button',
-        name: 'darkpage',
-        group: SETTINGS_GROUP,
-        content: 'Dark page',
-        handler: () => {
-          Framework.closeDialog()
-          setTimeout(openDialog, 0)
-        }
-      })
-    })
+  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
+  // has no Framework and keeps the default color. A Framework without `getApp` is a SudokuPad this
+  // script cannot hook for its settings entry: the darkening above still applies, and the skip is
+  // reported.
+  if (typeof Framework === 'undefined') return
+  if (!Framework.getApp) {
+    console.warn('dark-page: SudokuPad\'s Framework has no getApp, so the settings entry was skipped')
+    return
   }
+  Framework.getApp().then(() => {
+    Framework.addSetting({
+      tag: 'button',
+      name: 'darkpage',
+      group: SETTINGS_GROUP,
+      content: 'Dark page',
+      handler: () => {
+        Framework.closeDialog()
+        setTimeout(openDialog, 0)
+      }
+    })
+  })
 })()
