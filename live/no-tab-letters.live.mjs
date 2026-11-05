@@ -11,6 +11,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
+import { keydownDefaults } from './pen.mjs'
 
 const script = readFileSync(new URL('../no-tab-letters.user.js', import.meta.url), 'utf8')
 
@@ -32,15 +33,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // The number pad's keys as typed on the page, and the letter mode SudokuPad saved.
   const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
   const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
-  // Presses `key` and returns whether the page left the keydown's default alone.
-  const press = async (key) => {
-    await p.evaluate(() => {
-      window.__keydowns = []
-      window.addEventListener('keydown', (e) => window.__keydowns.push(e.defaultPrevented), { once: true })
-    })
-    await p.keyboard.press(key)
-    return p.evaluate(() => window.__keydowns)
-  }
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -58,14 +50,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await pad(), DIGITS, 'before')
     assert.equal(await saved(), null, 'saved before')
     const focus = await focused()
-    assert.deepEqual(await press('Tab'), [true], 'Tab was prevented, as with SudokuPad\'s own toggle')
+    assert.deepEqual(await keydownDefaults(p, 'Tab'), [true], 'Tab was prevented, as with SudokuPad\'s own toggle')
     assert.equal(await focused(), focus, 'focus did not move')
     assert.equal(await pad(), DIGITS, 'after')
     assert.equal(await saved(), null, 'saved after')
   })
 
   it('"/" and the letter button still toggle letter mode and save it', async () => {
-    await press('/')
+    await keydownDefaults(p, '/')
     assert.equal(await pad(), LETTERS, 'after "/"')
     assert.equal(await saved(), true, 'saved after "/"')
     await p.click(TOGGLE_BUTTON)
@@ -73,17 +65,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(), false, 'saved after the button')
     await p.click(TOGGLE_BUTTON)
     assert.equal(await pad(), LETTERS, 'after the button again')
-    await press('/')
+    await keydownDefaults(p, '/')
     assert.equal(await pad(), DIGITS, 'after "/" again')
   })
 
   it('Tab in play leaves letter mode on while it is on', async () => {
-    await press('/')
+    await keydownDefaults(p, '/')
     assert.equal(await pad(), LETTERS, 'on')
-    await press('Tab')
+    await keydownDefaults(p, 'Tab')
     assert.equal(await pad(), LETTERS, 'still on after Tab')
     assert.equal(await saved(), true, 'saved stays true')
-    await press('/')
+    await keydownDefaults(p, '/')
     assert.equal(await pad(), DIGITS, 'off')
   })
 
@@ -91,7 +83,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.click('#control-settings')
     await p.locator('.dialog').waitFor({ state: 'visible' })
     const before = await focused()
-    assert.deepEqual(await press('Tab'), [false], 'Tab was not prevented')
+    assert.deepEqual(await keydownDefaults(p, 'Tab'), [false], 'Tab was not prevented')
     assert.notEqual(await focused(), before, 'focus moved')
     assert.equal(await pad(), DIGITS, 'pad')
     assert.equal(await saved(), false, 'saved')

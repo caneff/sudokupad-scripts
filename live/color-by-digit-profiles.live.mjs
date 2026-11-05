@@ -9,28 +9,13 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
+import { group, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, watch } from './color-by-digit-fixtures.mjs'
+import { startPuzzle } from './page.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
-import { clickUntil, POLL_MS, settle, SETTLE_MS } from './settle.mjs'
+import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
-
-// How long a "nothing happened" check watches. A fixed sleep is correct only here.
-const QUIET_MS = 500
-
-// Watches `read` for QUIET_MS and returns every distinct reading.
-async function watch (read) {
-  const seen = [JSON.stringify(await read())]
-  const deadline = Date.now() + QUIET_MS
-  while (Date.now() < deadline) {
-    await sleep(POLL_MS)
-    const now = JSON.stringify(await read())
-    if (now !== seen[seen.length - 1]) seen.push(now)
-  }
-  return seen.map((s) => JSON.parse(s))
-}
 
 const BUTTON = '#control-colorbydigit'
 const BOX = `${BUTTON} [data-role="auto"]`
@@ -38,19 +23,11 @@ const ARROW = `${BUTTON} [data-role="menu"]`
 const MENU = '#color-by-digit-menu'
 const EDITOR = '#color-by-digit-editor'
 const ROWS = `${EDITOR} [data-role=profile-row]`
-// Framework.setData prefixes the script's key with the site's own prefix.
-// The key the script saves its profiles under, and the one Framework.setData stores it at.
-const PROFILES_KEY = 'ColorByDigit_profiles'
-const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
-const LEGACY_STORAGE_KEY = 'svencodes_ColorByDigit_groups'
 // The script's own hold time on the button.
 const HOLD_MS = 500
 // How far past a row's middle a drag ends to land beyond it.
 const DROP_PAST_MIDDLE_PX = 8
 
-const group = (key, digits) => ({ key, digits })
-const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0', '2', '4', '6', '8'])]
-const LOW_FIVE_HIGH = [group('1', ['0', '1', '2', '3', '4']), group('5', ['5']), group('9', ['6', '7', '8', '9'])]
 const FOUR = [group('1', ['1', '2']), group('3', ['3', '4']), group('5', ['5', '6']), group('9', ['7', '8', '9'])]
 const SIX = ['1', '2', '3', '5', '7', '9'].map((key, i) => group(key, [String(i)]))
 // Four profiles of one to six groups, to show every icon layout: Odd/Even active.
@@ -73,18 +50,8 @@ const bootPage = async (p) => {
   await p.locator(BUTTON).waitFor({ state: 'visible' })
 }
 
-// A page. `seed` maps a localStorage key to a JSON value, written before the
-// page's own scripts run, and only while the key is absent so a reload keeps what was saved.
-const openSession = async (seed, contextOptions = {}) => {
-  const opened = await openPage(browser, {
-    contextOptions,
-    seed: (page) => page.addInitScript((entries) => {
-      entries.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
-    }, Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]))
-  })
-  await bootPage(opened.p)
-  return opened
-}
+// A page with the script injected; `seed` maps a localStorage key to a JSON value, saved before the page loads.
+const openProfiles = (seed, contextOptions = {}) => openSession(browser, script, { seed, contextOptions })
 
 // The reads and moves every group of checks below uses, bound to a page.
 const tools = (p) => {
@@ -130,7 +97,7 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
   let context, p, errors, t
 
   before(async () => {
-    ({ context, p, errors } = await openSession({}))
+    ({ context, p, errors } = await openProfiles({}))
     t = tools(p)
   })
   after(async () => { await context.close() })
@@ -165,7 +132,7 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
 describe('migration from saved groups, injected after Start Puzzle', { concurrency: false }, () => {
   // `rows` are the menu's rows after the migration: the active profile is the one in `activeName`.
   const migrate = async (groups, rows, expectedDigits) => {
-    const { context, p, errors } = await openSession({ [LEGACY_STORAGE_KEY]: groups })
+    const { context, p, errors } = await openProfiles({ [LEGACY_STORAGE_KEY]: groups })
     try {
       const t = tools(p)
       await t.openMenuByArrow()
@@ -193,7 +160,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   let context, p, errors, t
 
   before(async () => {
-    ({ context, p, errors } = await openSession({ [PROFILES_STORAGE_KEY]: FOUR_PROFILES }))
+    ({ context, p, errors } = await openProfiles({ [PROFILES_STORAGE_KEY]: FOUR_PROFILES }))
     t = tools(p)
   })
   after(async () => { await context.close() })
@@ -363,7 +330,7 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
   let context, p, errors, t, cdp
 
   before(async () => {
-    ({ context, p, errors } = await openSession({ [PROFILES_STORAGE_KEY]: TWO_PROFILES }, { hasTouch: true }))
+    ({ context, p, errors } = await openProfiles({ [PROFILES_STORAGE_KEY]: TWO_PROFILES }, { hasTouch: true }))
     t = tools(p)
     cdp = await context.newCDPSession(p)
   })
@@ -415,7 +382,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   let context, p, errors, t, cdp
 
   before(async () => {
-    ({ context, p, errors } = await openSession({ [PROFILES_STORAGE_KEY]: { ...FOUR_PROFILES, profiles: FOUR_PROFILES.profiles.slice(0, 3) } }, { hasTouch: true }))
+    ({ context, p, errors } = await openProfiles({ [PROFILES_STORAGE_KEY]: { ...FOUR_PROFILES, profiles: FOUR_PROFILES.profiles.slice(0, 3) } }, { hasTouch: true }))
     t = tools(p)
     cdp = await context.newCDPSession(p)
   })

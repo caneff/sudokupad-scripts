@@ -12,7 +12,8 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { draw as drawLine, openPenTool } from './pen.mjs'
+import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
@@ -43,32 +44,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const layerFilter = () => read(() => window.getComputedStyle(document.querySelector('#cell-pen')).filter)
   const FILTER_ON = 'url("#pen-tool-extras-outline-filter")'
 
-  const selectPen = async () => {
-    const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-    const deadline = Date.now() + SETTLE_MS
-    while (!(await shown()) && Date.now() < deadline) {
-      await p.click('#control-pen')
-      await settle(shown, true, 500)
-    }
-  }
-
   // One horizontal line in pen color 1 through the middle of grid row `row`, from column 3 to column 5 (a drag between cell
   // centers in the center-only mode, so it is straight), on pen page `page` (0 is the first).
-  const draw = async (row = 8, page = 0) => {
-    await selectPen()
+  const drawCenterOnlyLine = async (row = 8, page = 0) => {
+    await openPenTool(p)
     for (let i = 0; i < page; i++) await p.click('.pen-tool-extras-page')
     await read(() => { ToolPen.tool.lineMode = 'centeronly' })
-    await p.locator('.tool-pen button[data-key="1"]').click()
-    const [x, y, cell] = await read((row) => {
-      const box = Framework.app.puzzle.cells.find((c) => c.row === row && c.col === 3).elem.getBoundingClientRect()
-      return [box.x + box.width / 2, box.y + box.height / 2, box.width]
-    }, row)
-    await p.mouse.move(x, y)
-    await p.mouse.down()
-    await p.mouse.move(x + 2 * cell, y, { steps: 8 })
-    await p.mouse.up()
+    await drawLine(p, row, { col: 3, dx: (width) => 2 * width, dy: 0, steps: 8 })
     await p.mouse.move(5, 5)
-    await p.locator('.cell-pen.pencolor-1').first().waitFor({ state: 'attached' })
   }
 
   // A black backing under the pen layer, so a white outline shows against it; removed with `unback`.
@@ -86,7 +69,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const unback = () => read(() => document.getElementById('live-backing')?.remove())
 
   // The brightness (0 to 255, red channel) of the pixel `units` above the middle of the drawn line, read off a screenshot loaded
-  // into a second page's canvas. The line is the one `draw` made in the middle of its row.
+  // into a second page's canvas. The line is the one `drawCenterOnlyLine` made in the middle of its row.
   const brightnessAbove = async (units, row = 8) => {
     const geometry = await read((row) => {
       const box = Framework.app.puzzle.cells.find((c) => c.row === row && c.col === 4).elem.getBoundingClientRect()
@@ -113,7 +96,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
     await read(() => Framework.setSetting('toolpen', true))
     await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await selectPen()
+    await openPenTool(p)
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
   const openEditor = () => openExtrasEditor(p)
@@ -126,7 +109,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     reader = await context.newPage()
     await boot()
     await clearSaved()
-    await draw()
+    await drawCenterOnlyLine()
   })
   after(async () => {
     await clearSaved()
@@ -242,7 +225,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('stays on over a reload, and the drag highlight is not in the outlined layer', async () => {
     await reload()
     assert.equal(await settle(layerFilter, FILTER_ON), FILTER_ON)
-    await selectPen()
+    await openPenTool(p)
     await p.locator('.tool-pen button[data-key="1"]').click()
     const [x, y] = await read(() => {
       const box = Framework.app.puzzle.cells.find((c) => c.row === 6 && c.col === 4).elem.getBoundingClientRect()
@@ -292,7 +275,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const DOT_ROW = 3
     await read(([t, d, o, w, op]) => { Framework.setData(t, 1); Framework.setData(d, 0); Framework.setData(o, true); Framework.setData(w, 8); Framework.setData(op, 100) }, [THICKNESS_KEY, DASH_KEY, OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY])
     await reload()
-    await draw(DOT_ROW, 1)
+    await drawCenterOnlyLine(DOT_ROW, 1)
     await back()
     assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS, DOT_ROW).then((v) => v > 200), true), true, 'white 4 units above the dots at width 8')
     assert.equal(await brightnessAbove(WIDE_UNITS, DOT_ROW) > 200, true, 'white 7 units above the dots at width 8')
