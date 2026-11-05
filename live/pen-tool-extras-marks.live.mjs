@@ -10,7 +10,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, newPage, openPage, restartPuzzle, scaleOf, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, dialogButton, effectiveOpacities, openExtrasEditor, openSettings } from './settings.mjs'
-import { cellCentre, openPenTool, penValuesAt, plantSaved, plantUnchecked, setSlider } from './pen.mjs'
+import { cellCentre, openPenTool, penValuesAt, plantUnchecked, setSlider } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -687,7 +687,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('corrupt saved settings fall back to every mark ticked with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"x":"no"}']) {
-      await plantSaved(p, DATA_KEY, bad)
+      // All five ticked is the default, which saves no key; the save tests above read DATA_KEY back, so it is the live key.
+      await plantUnchecked(p, DATA_KEY, bad)
       await reload()
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
