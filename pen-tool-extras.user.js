@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.5
+// @version      1.14.6
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.5'
+  const VERSION = '1.14.6'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
@@ -159,21 +159,23 @@
   // SudokuPad lowercases a pen value when it undoes or replays one.
   const ADDED = { 3: ['h', 'i', 'j'], 4: ['k', 'l', 'm'], b: ['n', 'o', 'p'], c: ['q', 'r', 's'] }
   // The type each of an edge's ADDED values is, in the same order.
-  const ADDED_ORDER = ['dirA', 'dirB', 'dot']
+  const ADDED_ORDER = ['dirA', 'dirB', 'circle']
   // The two directions of a vertical edge, then of a horizontal one.
   const SHAPES = { 3: ['>', '<'], 4: ['^', 'v'], b: ['>', '<'], c: ['^', 'v'] }
   // The types of mark in cycle order (X, circle, first direction, second direction), and the setting that ticks each. `directions` is the one
   // checkbox for dirA and dirB.
   const EDGE_CYCLE = {
-    types: ['x', 'dot', 'dirA', 'dirB'],
-    setting: { x: 'x', dirA: 'directions', dirB: 'directions', dot: 'dot' }
+    types: ['x', 'circle', 'dirA', 'dirB'],
+    setting: { x: 'x', dirA: 'directions', dirB: 'directions', circle: 'circle' }
   }
   // A grid corner has no edge direction for an arrow to name, so it cycles an X and a circle.
   const CORNER_CYCLE = {
-    types: ['x', 'dot'],
-    setting: { x: 'cornerX', dot: 'cornerDot' }
+    types: ['x', 'circle'],
+    setting: { x: 'cornerX', circle: 'cornerCircle' }
   }
-  const DEFAULT_MARK_SETTINGS = { x: true, directions: true, dot: true, cornerX: true, cornerDot: true }
+  const DEFAULT_MARK_SETTINGS = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
+  // The names the scripts this one replaced saved the two circle boxes under, by the name each is saved under now.
+  const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
   // How far from a grid corner, in cells, a click still counts as on the corner. An edge's midpoint
   // is 0.5 from its corners and a cell's middle 0.71, so neither comes near it; the 0.2 is a circle
   // about 12 px across the radius at a cell 60 px wide, and it takes the corner-end of an edge
@@ -188,7 +190,7 @@
   const CORNER_VALUES = { tl: ['t', 'w'], br: ['u', 'x'], far: ['v', 'y'] }
   // The pen values drawn in the marks layer: SudokuPad's own edge X and cell circle and cross, and every edge mark and grid-corner mark value this script adds.
   const MARK_VALUES = [...EDGE_X, '5', '6', ...EDGE_X.flatMap((edge) => ADDED[edge]), ...Object.values(CORNER_VALUES).flat()]
-  // The shape of the third mark per edge. Its checkbox is the `dot` field of the saved settings.
+  // The shape of the third mark per edge. Its checkbox is the `circle` field of the saved settings.
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
   const COLOR_TOOL_WAIT_MS = 10000
@@ -349,10 +351,13 @@
     else store.setData(setting.key, value)
   }
 
-  // Saved data is untrusted: returns { x, directions, dot, cornerX, cornerDot }, each ticked unless saved as false. Data saved before the corner boxes
-  // existed has no corner entry, so both read as ticked.
+  // Saved data is untrusted: returns { x, directions, circle, cornerX, cornerCircle }, each ticked unless saved as false. Data saved before the corner boxes
+  // existed has no corner entry, so both read as ticked. A circle box saved under its old name reads as the new one, which wins when both are there;
+  // the result holds only the new names, so the next save writes those.
   function normalizeMarkSettings (data) {
-    return decodeFlags(Object.keys(DEFAULT_MARK_SETTINGS), data)
+    const saved = isPlainObject(data) ? data : {}
+    const underOldNames = Object.fromEntries(Object.entries(OLD_MARK_NAMES).map(([name, old]) => [name, saved[old]]))
+    return decodeFlags(Object.keys(DEFAULT_MARK_SETTINGS), { ...underOldNames, ...saved })
   }
 
   // The pen value of each type on the edge whose X value is `edge`.
@@ -423,7 +428,7 @@
     }
   }
 
-  // The kind and type ('x' or 'dot') of a value this script adds on a grid corner, or null for any
+  // The kind and type ('x' or 'circle') of a value this script adds on a grid corner, or null for any
   // other value.
   function cornerMarkOf (value) {
     for (const kind of Object.keys(CORNER_VALUES)) {
@@ -1042,7 +1047,7 @@
   const MARK_PICTURES = {
     x: ['16', '<path d="M3 3 L13 13 M13 3 L3 13"/>'],
     directions: ['64', '<path d="M3 3 L9 8 L3 13 M25 3 L19 8 L25 13 M36 11 L41 5 L46 11 M54 5 L59 11 L64 5"/>'],
-    dot: ['16', '<circle cx="8" cy="8" r="5.2"/>']
+    circle: ['16', '<circle cx="8" cy="8" r="5.2"/>']
   }
   const markPicture = (key) => {
     const [width, shapes] = MARK_PICTURES[key]
@@ -1136,8 +1141,8 @@
     const columnHead = (text) => `<div style="font-size:.85rem;color:#666">${text}</div>`
     const marksTable = '<div style="display:grid;grid-template-columns:max-content repeat(3, max-content);column-gap:28px;row-gap:6px;align-items:center;margin:4px 0">' +
       '<div></div>' + columnHead('X Mark') + columnHead('Circle') + columnHead('Directions') +
-      markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('dot', 'Edge Circle', 'dot') + markBox('directions', 'Edge Directions', 'directions')) +
-      markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerDot', 'Corner Circle', 'dot') + '<div></div>') +
+      markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('circle', 'Edge Circle', 'circle') + markBox('directions', 'Edge Directions', 'directions')) +
+      markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerCircle', 'Corner Circle', 'circle') + '<div></div>') +
       '</div>'
     const dashed = !off.has('dashes')
     const arrows = !off.has('chevrons')
@@ -1599,7 +1604,7 @@
   // boxes are unticked, so the original hit test handles every click as it did before. SudokuPad's
   // `clickCell` hit-tests `getInputRc()`, the pointer in cell units, and so does this.
   function cornerUnderPointer (tool) {
-    if (!markSettings.cornerX && !markSettings.cornerDot) return null
+    if (!markSettings.cornerX && !markSettings.cornerCircle) return null
     const { r, c } = tool.getInputRc()
     const { rows, cols } = Framework.app.grid
     return cornerAt(r, c, rows, cols)

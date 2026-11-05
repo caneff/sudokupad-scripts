@@ -20,7 +20,7 @@ const OPACITY_KEY = 'PenColor_opacity'
 const COLORS_KEY = 'PenColor_colors'
 const { SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
 const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
-const MARK_BOXES = ['x', 'directions', 'dot', 'cornerX', 'cornerDot']
+const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const SIZE = 9
 const CELL_MARK = [5, 5]
@@ -516,7 +516,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await pickColor(1)
   })
 
-  it('the edge circle (stored under the dot value) is an open ring with a round stroke at half the pen width, and no fill', async () => {
+  it('the edge circle is an open ring with a round stroke at half the pen width, and no fill', async () => {
     for (let i = 0; i < 2; i++) await clickEdge(3, 3, 'right')
     const ring = () => read(() => {
       // Two arcs of one radius r, from the left end of a diameter round to the right end and back: `m -r,0 a r,r 0 1,0 2r,0 a r,r 0 1,0 -2r,0`.
@@ -538,7 +538,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openExtrasEditor(p)
     const labels = editor().locator('label:has(> input[data-mark])')
     assert.equal(await labels.count(), 5)
-    const names = { x: 'Edge X Mark', dot: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerDot: 'Corner Circle' }
+    const names = { x: 'Edge X Mark', circle: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerCircle: 'Corner Circle' }
     for (const mark of MARK_BOXES) {
       assert.equal(await editor().locator(`label:has(> input[data-mark="${mark}"]) > svg`).count(), 1, mark)
       assert.equal(await box(mark).getAttribute('title'), names[mark], mark)
@@ -607,7 +607,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openExtrasEditor(p)
     assert.equal(await box('x').isChecked(), true)
     assert.equal(await box('directions').isChecked(), false)
-    assert.equal(await box('dot').isChecked(), true)
+    assert.equal(await box('circle').isChecked(), true)
     await closeExtrasEditorWith(p, 'Cancel')
     for (const value of ['3', 'j', null]) {
       await clickEdge(3, 3, 'right')
@@ -623,13 +623,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clickEdge(3, 3, 'right')
     assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['j']), ['j'])
     await openExtrasEditor(p)
-    await box('dot').uncheck()
+    await box('circle').uncheck()
     await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await penValuesAt(p, 3, 3), ['j'])
     await clickEdge(3, 3, 'right')
     assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['h']), ['h'])
     await openExtrasEditor(p)
-    await box('dot').check()
+    await box('circle').check()
     await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
   })
@@ -637,7 +637,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('with both corner boxes unticked a click on a corner is the edge click it was before, and one box ticked cycles only that mark', async () => {
     await openExtrasEditor(p)
     await box('cornerX').uncheck()
-    await box('cornerDot').uncheck()
+    await box('cornerCircle').uncheck()
     await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
     await clickCorner(3, 3, 'left', 0, 0.01)
@@ -647,7 +647,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(['3', '4'].includes((await penValuesAt(p, 2, 2))[0]), true, `got ${await penValuesAt(p, 2, 2)}`)
     await clearMarks()
     await openExtrasEditor(p)
-    await box('cornerDot').check()
+    await box('cornerCircle').check()
     await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
     await clickCorner(3, 3)
@@ -699,6 +699,25 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await closeExtrasEditorWith(p, 'Cancel')
     }
     assert.deepEqual(errors.slice(errorsBefore), [])
+  })
+
+  it('settings saved under the old names dot and cornerDot tick the dialog\'s Circle boxes after a reload, and the next save writes the new names', async () => {
+    const oldNames = (dot, cornerDot) => JSON.stringify({ x: true, directions: true, dot, cornerX: true, cornerDot })
+    for (const [dot, cornerDot] of [[false, true], [true, false]]) {
+      await plantUnchecked(p, DATA_KEY, oldNames(dot, cornerDot))
+      await reload()
+      await openExtrasEditor(p)
+      assert.equal(await box('circle').isChecked(), dot, `Edge Circle with dot ${dot}`)
+      assert.equal(await box('cornerCircle').isChecked(), cornerDot, `Corner Circle with cornerDot ${cornerDot}`)
+      await closeExtrasEditorWith(p, 'Cancel')
+    }
+    await openExtrasEditor(p)
+    await box('x').uncheck()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), { x: false, directions: true, circle: true, cornerX: true, cornerCircle: false })
+    await openExtrasEditor(p)
+    for (const mark of MARK_BOXES) await box(mark).check()
+    await closeExtrasEditorWith(p, 'Save')
   })
 
   describe('opacity', { concurrency: false }, () => {
