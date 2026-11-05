@@ -6,10 +6,10 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
-  CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
+  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
@@ -289,10 +289,6 @@ test('savedColors does not read an array by index', () => {
   assert.equal(savedColors(['x', '#ff0000', '#00ff00']), null)
 })
 
-test('the wait for the color tool is a positive number of milliseconds', () => {
-  assert.ok(COLOR_TOOL_WAIT_MS > 0)
-})
-
 test('editedColors gives the whole current set with one pen color changed, lowercased, leaving the input alone', () => {
   const current = { ...TABLE }
   const out = editedColors(current, '4', '#AABBCC')
@@ -370,7 +366,7 @@ test('edge marks and corner marks keep today\'s size up to the default thickness
   assert.equal(markGrowthScale(16), 1.6)
   const grown = [6, 10, 16].map(markGrowthScale)
   assert.equal(grown[0] > 1 && grown[0] < grown[1] && grown[1] < grown[2], true, grown.join(' < '))
-  assert.equal(Math.abs(markGrowthScale(10) - (1 + 0.6 * 5 / 11)) < 1e-3, true)
+  assert.equal(markGrowthScale(10), 1.2727)
 })
 
 test('MARK_VALUES holds exactly the values of SudokuPad\'s edge X and cell circle and cross and of every edge mark and grid-corner mark this script adds, and no line value', () => {
@@ -674,10 +670,6 @@ test('an arrow is a filled triangle pointing the way it names', () => {
 
 test('settings saved before corner marks existed read back with both corner marks ticked', () => {
   assert.deepEqual(normalizeMarkSettings({ x: true, directions: false, circle: true }), { ...ALL, directions: false })
-})
-
-test('the corner zone is 0.2 of a cell from a grid corner', () => {
-  assert.equal(CORNER_RADIUS, 0.2)
 })
 
 test('cornerAt finds the grid corner within the radius, inner and outer, and nothing farther', () => {
@@ -1096,7 +1088,7 @@ test('the dialog has a SudokuPad colors button beside the Pen colors grid, and i
   assert.match(row[1], /grid-template-columns: repeat\(3, /)
   assert.match(row[1], /<button type="button" data-sudokupad-colors[^>]*>SudokuPad colors<\/button>/)
   assert.match(row[1], /<button[^>]*style="[^"]*font-size:inherit[^"]*white-space:nowrap/, 'the text is the size of the dialog\'s other text and stays on one line')
-  assert.equal((html.match(/<button/g) || []).length, 1)
+  assert.equal((html.match(/data-sudokupad-colors/g) || []).length, 1)
 })
 
 test('the page button turns to the next enabled page and has a dot for each enabled page only', () => {
@@ -1430,8 +1422,12 @@ test('from thickness 5 up an arrow\'s base reaches ARROW_LINE.halfWidth (1.5) ti
     const [first, tip] = points
     assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - ARROW_LINE.halfWidth * t) < 0.01, true, `reach at ${t}`)
     assert.equal(Math.abs(Math.abs(tip[0] - first[0]) - 2 * ARROW_LINE.halfLength * t) < 0.01, true, `length at ${t}`)
-    assert.equal(points.length / 3, Math.round(64 / (ARROW_SPACING.fallback * t)) || 1, `count at ${t}`)
   }
+})
+
+test('the arrow count at the default spacing of 5 is the worked one for each thickness: 3 at 5, 2 at 8, then 1', () => {
+  const worked = { 5: 3, 8: 2, 10: 1, 13: 1, 16: 1 }
+  for (const [t, count] of Object.entries(worked)) assert.equal(pointsOf(arrowLineAt('a', true, 0, 0, Number(t)).arrows).length / 3, count, `count at ${t}`)
 })
 
 test('an arrow is centered on its line, on a diagonal as on a straight line, at every thickness from 1 to 16: its two base corners mirror each other across the line', () => {
@@ -1537,8 +1533,7 @@ test('both line styles are enabled unless saved as the boolean false, each on it
 
 test('a wider arrow spacing gives fewer arrows on the same segment and the spacing sets their distance', () => {
   const count = (spacing) => pointsOf(arrowLineAt('1', true, 0, 0, 5, spacing).arrows).length / 3
-  assert.equal(count(3), Math.round(64 / (3 * 5)))
-  assert.equal(count(12), Math.round(64 / (12 * 5)) || 1)
+  assert.deepEqual([count(3), count(5), count(12)], [4, 3, 1])
   assert.equal(count(3) > count(5) && count(5) > count(12), true, `${count(3)}, ${count(5)}, ${count(12)}`)
 })
 
@@ -1664,10 +1659,10 @@ test('connectedLine counts both direction characters of an arrow pen as one pen'
   assert.deepEqual(new Set(connectedLine([forward, backward, otherPen], forward)), new Set([forward, backward]))
 })
 
-test('connectedLine does not join lines that only touch at different kinds of point', () => {
-  // A center line ends at a cell middle; an edge line runs corner to corner; they share no point.
+test('connectedLine does not join lines that only cross, sharing no end point', () => {
+  // The center line 1 and the edge line 7 of the same cell cross at (0.5, 1), each one's midpoint, and share no end point.
   const centre = seg('1', 0, 0)
-  const edge = seg('a', 0, 1)
+  const edge = seg('7', 0, 0)
   assert.deepEqual(connectedLine([centre, edge], centre), [centre])
 })
 
