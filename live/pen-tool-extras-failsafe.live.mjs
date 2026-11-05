@@ -60,7 +60,7 @@ const CASES = [
   },
   // The arrows' own group is the only thing the script asks the renderer for that SudokuPad's pen does not.
   {
-    name: 'chevrons',
+    name: 'arrowLines',
     off: 'arrow lines',
     breaks: `const renderPart = Framework.app.svgRenderer.renderPart
       Framework.app.svgRenderer.renderPart = function (opts) { if (opts && opts.type === 'g') throw new TypeError('renderPart has no group'); return renderPart.apply(this, arguments) }`
@@ -155,12 +155,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         if (kase.name === 'panel row') assert.equal(await settle(async () => logged.length, 1, 5000, Infinity), 1, 'the panel check ended')
         if (kase.name === 'colors') assert.equal(await settle(async () => logged.length, 1, 20000, Infinity), 1, 'the wait for the color tool ended')
         if (kase.warns) assert.equal(await settle(async () => warned.length, 1, 20000, Infinity), 1, 'the wait for the color tool ended')
-        if (kase.name === 'chevrons') {
+        if (kase.name === 'arrowLines') {
           await p.locator(PAGE_BUTTON).click()
           await p.locator(PAGE_BUTTON).click()
           await p.locator('.tool-pen button[data-key="3"]').click()
           await drag(p, [[2.5, 2.5], [2.5, 4.5]])
-          assert.equal(await read(() => document.querySelectorAll('#cell-pen [data-chevron-part]').length), 0, 'no arrow group')
+          assert.equal(await read(() => document.querySelectorAll('#cell-pen [data-arrow-line-part]').length), 0, 'no arrow group')
           assert.ok(await read(() => document.querySelectorAll('#cell-pen path.cell-pen').length) > 0, 'SudokuPad\'s plain line is drawn')
           await p.locator(PAGE_BUTTON).click()
         }
