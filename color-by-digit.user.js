@@ -365,13 +365,9 @@
 
   // The group's color is ringed twice (white inside, black outside) so it shows on any swatch color.
   function renderSwatch (slot, groupIndex, selectedKey) {
-    if (!slot) return `<span data-empty="slot" style="display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE}"></span>`
-    const selected = slot.key === selectedKey
+    if (!slot) return '<span data-empty="slot"></span>'
     return `<button type="button" data-act="color" data-group="${groupIndex}" data-key="${esc(slot.key)}" ` +
-      `title="${esc(slot.key)}" aria-pressed="${selected}" ` +
-      `style="box-sizing:border-box;display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE};margin:0;padding:0;border-radius:3px;` +
-      `background:${esc(slot.value)};` +
-      (selected ? 'border:2px solid #fff;outline:3px solid #000' : 'border:1px solid #888') + '"></button>'
+      `title="${esc(slot.key)}" aria-pressed="${slot.key === selectedKey}" style="background:${esc(slot.value)}"></button>`
   }
 
   const pageLabel = (page) => `Page ${page.page + 1}${page.current ? ' (current)' : ''}`
@@ -384,59 +380,39 @@
 
   function renderChosen (colors, key) {
     const color = colors.find((c) => c.key === key)
-    const look = color ? `background:${esc(color.value)};border:1px solid #888` : 'border:1px dashed #888'
-    return `<span data-role="chosen" title="${esc(key)}" style="display:inline-block;box-sizing:border-box;width:1.6em;height:1.6em;` +
-      `border-radius:3px;vertical-align:middle;${look}"></span>`
+    return color ? `<span data-role="chosen" title="${esc(key)}" style="background:${esc(color.value)}"></span>` : `<span data-role="chosen" class="cbd-unset" title="${esc(key)}"></span>`
   }
 
   function renderPalette (pages, colors, groupIndex, key, shownPage) {
     if (pages.length === 0) return ''
     const page = pages[shownPage] || pages[0]
     const options = pages.map((p) => `<option value="${p.page}"${p === page ? ' selected' : ''}>${pageLabel(p)}</option>`).join('')
-    const grid = 'display:grid;gap:6px;grid-template-columns:repeat(' + PAGE_COLUMNS + ',' + SWATCH_SIZE + ')'
     const swatches = page.rows.flat().map((slot) => renderSwatch(slot, groupIndex, key)).join('')
-    const zero = page.zero ? `<div style="${grid};margin-top:6px">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
-    return '<div style="margin-bottom:6px">' +
-      `<select data-act="page" data-group="${groupIndex}" aria-label="Cell color page" style="${PULLDOWN_LOOK}">${options}</select> ${renderChosen(colors, key)}</div>` +
-      `<div style="${grid}">${swatches}</div>${zero}`
+    const zero = page.zero ? `<div class="cbd-swatches cbd-zero">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
+    return '<div class="cbd-palette-head">' +
+      `<select data-act="page" data-group="${groupIndex}" aria-label="Cell color page">${options}</select> ${renderChosen(colors, key)}</div>` +
+      `<div class="cbd-swatches">${swatches}</div>${zero}`
   }
 
   function renderChips (groups, colorOf, size) {
     return iconLayout(groups).map(({ key, digit }) => {
       const color = colorOf(key)
-      return `<span data-role="chip" title="${esc(key)}" style="display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:${size}px;height:${size}px;` +
-        `border-radius:4px;background:${esc(color || UNREADABLE_FILL)};color:${inkFor(color)};box-shadow:inset 0 0 0 1px rgba(0,0,0,.25);` +
-        `font:600 ${Math.round(size * 0.6)}px/1 sans-serif">${esc(digit)}</span>`
+      return `<span data-role="chip" title="${esc(key)}" class="cbd-chip" style="width:${size}px;height:${size}px;` +
+        `background:${esc(color || UNREADABLE_FILL)};color:${inkFor(color)};font-size:${Math.round(size * 0.6)}px">${esc(digit)}</span>`
     }).join('')
   }
 
-  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise.
-  const important = (css) => css.split(';').map((d) => `${d} !important`).join(';')
   const RULE_COLOR = '#e3dff0'
-  const DIVIDER = `border-top:1px solid ${RULE_COLOR};margin:12px 0 0;padding-top:10px`
-  const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
   const SMALL_BUTTON_SIZE = 28
-  const SMALL_BUTTON_LOOK = `${BUTTON_LOOK};padding:0 10px;height:${SMALL_BUTTON_SIZE}px;line-height:${SMALL_BUTTON_SIZE - 2}px`
   // REMOVE_ROOM keeps the × off the pulldown and the numpad.
   const REMOVE_INSET = 8
   const REMOVE_ROOM = `${SMALL_BUTTON_SIZE + REMOVE_INSET + 4}px`
-  const REMOVE_LOOK = `${SMALL_BUTTON_LOOK};position:absolute;top:${REMOVE_INSET}px;right:${REMOVE_INSET}px;width:${SMALL_BUTTON_SIZE}px;padding:0;color:#c0392b;font-size:1.1rem`
-  // Percent-encoded, with no quotes, so it fits inside a style="..." attribute.
-  const PULLDOWN_ARROW = 'url(data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2710%27%20height=%276%27%3E%3Cpath%20d=%27M0%200l5%206%205-6z%27%20fill=%27%236b4fa0%27/%3E%3C/svg%3E)'
-  const PULLDOWN_LOOK = important(`font-size:.95rem;padding:4px 28px 4px 10px;border:1px solid #b9b0c9;border-radius:6px;background:#fff ${PULLDOWN_ARROW} no-repeat right 10px center;appearance:none;color:#222`)
-  const heading = (text, extra = '') => `<div style="display:flex;align-items:center;justify-content:space-between;font-weight:600;margin:0 0 6px">${text}${extra}</div>`
+  const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
   const SAVE_LABEL = 'Save'
-  const DIALOG_BUTTON_LOOK = 'border-radius:8px;font-size:1rem;padding:0 22px;height:38px;line-height:36px;margin:0;width:auto;min-width:0;flex:none;cursor:pointer'
-  const SAVE_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#6b3fa0;color:#fff;border:1px solid #5a3489;font-weight:600`
-  const CANCEL_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#f1eff5;color:#333;border:1px solid #cfc9db`
-  function styleDialogButtons (dialog) {
-    const row = dialog.querySelector('.dialog-options')
-    if (!row) return
-    row.style.cssText = important(`display:flex;flex-direction:row;align-items:center;justify-content:flex-end;gap:10px;border-top:1px solid ${RULE_COLOR};padding:14px 4px 2px;margin-top:8px;box-sizing:border-box;width:100%`)
-    row.querySelectorAll('button').forEach((b) => {
-      b.style.cssText = important(b.textContent.trim() === SAVE_LABEL ? SAVE_BUTTON_LOOK : CANCEL_BUTTON_LOOK)
-    })
-  }
+  const EDITOR_ID = 'color-by-digit-editor'
+  const MENU = '#color-by-digit-menu'
+  const DIALOG_CLASS = 'color-by-digit-dialog'
+  const STYLE_ID = 'color-by-digit-style'
 
   const MUTED = '#8a8496'
   const ACTIVE_FILL = '#f1ebfb'
@@ -448,19 +424,18 @@
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
-      return `<div data-role="profile-row" data-act="activate" data-index="${i}" role="radio" aria-checked="${active}" tabindex="${active ? 0 : -1}" aria-label="${esc(profile.name)}" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:8px;` +
-        (active ? `background:${ACTIVE_FILL};box-shadow:inset 0 0 0 1.5px ${ACTIVE_RING}` : `box-shadow:inset 0 0 0 1px ${IDLE_RING}`) + '">' +
-        `<span data-role="handle" data-index="${i}" title="Drag to reorder" style="cursor:grab;touch-action:none;user-select:none;color:${MUTED};font-size:18px;line-height:1">&#8942;&#8942;</span>` +
-        `<span style="display:flex;gap:3px;width:100px">${renderChips(profile.groups, colorOf, 22)}</span>` +
-        `<span style="flex:1;text-align:left;font-weight:${active ? 600 : 400}">${esc(profile.name)}</span>` +
-        `<button type="button" data-act="delete" data-index="${i}" style="${SMALL_BUTTON_LOOK}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
+      return `<div class="cbd-profile" data-role="profile-row" data-act="activate" data-index="${i}" role="radio" aria-checked="${active}" tabindex="${active ? 0 : -1}" aria-label="${esc(profile.name)}">` +
+        `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
+        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, 22)}</span>` +
+        `<span class="cbd-name">${esc(profile.name)}</span>` +
+        `<button type="button" class="cbd-button cbd-small" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
-    return heading('Profiles', `<span style="font-weight:400;font-size:.8rem;color:#666">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
-      `<div role="radiogroup" aria-label="Active profile" style="display:flex;flex-direction:column;gap:6px">${rows}</div>` +
-      '<div style="display:flex;gap:8px;margin:8px 0">' +
-      `<input type="text" data-role="new-name" maxlength="${MAX_NAME_LENGTH}" placeholder="New profile name" value="${esc(newName)}" aria-label="New profile name" style="flex:1;padding:6px 8px">` +
-      `<button type="button" data-act="add" style="${BUTTON_LOOK}"${full ? ' disabled' : ''}>+ Add</button></div>`
+    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
+      `<div role="radiogroup" aria-label="Active profile">${rows}</div>` +
+      '<div class="cbd-add-row">' +
+      `<input type="text" data-role="new-name" maxlength="${MAX_NAME_LENGTH}" placeholder="New profile name" value="${esc(newName)}" aria-label="New profile name">` +
+      `<button type="button" class="cbd-button" data-act="add"${full ? ' disabled' : ''}>+ Add</button></div>`
   }
 
   // Rows are not focusable, so the keyboard stays with the puzzle.
@@ -480,26 +455,71 @@
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
       const digits = NUMPAD_DIGITS.map((d) =>
-        `<button type="button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
-        `style="${BUTTON_LOOK};width:${NUMPAD_KEY};padding:0;${d === '0' ? 'grid-column:2;' : ''}font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};` +
-        `opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
-      return `<div style="position:relative;margin:8px 0;padding:8px ${REMOVE_ROOM} 8px 8px;border:1px solid ${RULE_COLOR};border-radius:8px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start">` +
+        `<button type="button" class="cbd-button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
+        `style="font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
+      return '<div class="cbd-group">' +
         `<div>${renderPalette(pages, colors, i, g.key, shown[i])}</div>` +
-        `<div data-role="numpad" style="display:grid;grid-template-columns:repeat(3,${NUMPAD_KEY});gap:4px">${digits}</div>` +
-        `<button type="button" data-act="remove" data-group="${i}" title="Remove group" aria-label="Remove group" style="${REMOVE_LOOK}">&#215;</button></div>`
+        `<div data-role="numpad">${digits}</div>` +
+        `<button type="button" class="cbd-button cbd-small" data-act="remove" data-group="${i}" title="Remove group" aria-label="Remove group">&#215;</button></div>`
     }).join('')
-    const note = colors.length === 0 ? '<div style="margin:6px 0">No palette colors found: groups cannot be added.</div>' : ''
-    const autoBox = '<div style="display:flex;align-items:center;gap:8px;margin:0 0 4px">' +
-      `<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"${auto ? ' checked' : ''} aria-label="Auto mode" style="margin:0">` +
-      '<label for="color-by-digit-auto-draft" style="width:auto !important;min-width:0 !important;margin:0 !important;text-align:left !important">Keep colors in step with digits and centre marks</label></div>'
-    const clear = `<button type="button" data-act="clear" style="${BUTTON_LOOK}">Clear all</button>`
-    return `${heading('Auto mode')}${autoBox}<div style="${DIVIDER}">${profilesHtml}</div>` +
-      `<div style="${DIVIDER}">${heading('Groups of the active profile', clear)}${note}${rows || '<div style="margin:6px 0">No groups.</div>'}` +
-      `<button type="button" data-act="add-group" style="${BUTTON_LOOK}">Add group</button></div>`
+    const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
+    const autoBox = '<div class="cbd-auto">' +
+      `<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"${auto ? ' checked' : ''} aria-label="Auto mode">` +
+      '<label for="color-by-digit-auto-draft">Keep colors in step with digits and centre marks</label></div>'
+    const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
+    return `${heading('Auto mode')}${autoBox}<div class="cbd-divider">${profilesHtml}</div>` +
+      `<div class="cbd-divider">${heading('Groups of the active profile', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
+      '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div>'
   }
 
+  // One stylesheet, every rule scoped to the editor, the profile menu (for the chips), or the dialog's options row.
+  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id and the options row's two classes outrank those rules, so none needs !important.
+  const EDITOR = `#${EDITOR_ID}`
+  const OPTIONS = `.dialog-options.${DIALOG_CLASS}`
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const PULLDOWN_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
+  const STYLE_CSS = [
+    ['.cbd-version', 'opacity: .6'],
+    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
+    [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
+    [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
+    [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
+    [`${EDITOR} .cbd-auto`, 'display: flex; align-items: center; gap: 8px; margin: 0 0 4px'],
+    [`${EDITOR} .cbd-auto input`, 'margin: 0'],
+    [`${EDITOR} .cbd-auto label`, 'width: auto; min-width: 0; margin: 0; text-align: left'],
+    [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
+    [`${EDITOR} .cbd-small`, `padding: 0 10px; height: ${SMALL_BUTTON_SIZE}px; line-height: ${SMALL_BUTTON_SIZE - 2}px`],
+    [`${EDITOR} [data-act="remove"]`, `position: absolute; top: ${REMOVE_INSET}px; right: ${REMOVE_INSET}px; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
+    [`${EDITOR} [data-act="digit"]`, `width: ${NUMPAD_KEY}; padding: 0`],
+    [`${EDITOR} [data-digit="0"]`, 'grid-column: 2'],
+    [`${EDITOR} .cbd-group`, `position: relative; margin: 8px 0; padding: 8px ${REMOVE_ROOM} 8px 8px; border: 1px solid ${RULE_COLOR}; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start`],
+    [`${EDITOR} [data-role="numpad"]`, `display: grid; grid-template-columns: repeat(3, ${NUMPAD_KEY}); gap: 4px`],
+    [`${EDITOR} .cbd-palette-head`, 'margin-bottom: 6px'],
+    [`${EDITOR} select[data-act="page"]`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
+    [`${EDITOR} .cbd-swatches`, `display: grid; gap: 6px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${SWATCH_SIZE})`],
+    [`${EDITOR} .cbd-zero`, 'margin-top: 6px'],
+    [`${EDITOR} [data-empty="slot"]`, `display: block; width: ${SWATCH_SIZE}; height: ${SWATCH_SIZE}`],
+    [`${EDITOR} [data-act="color"]`, `box-sizing: border-box; display: block; width: ${SWATCH_SIZE}; height: ${SWATCH_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888`],
+    [`${EDITOR} [data-act="color"][aria-pressed="true"]`, 'border: 2px solid #fff; outline: 3px solid #000'],
+    [`${EDITOR} [data-role="chosen"]`, 'display: inline-block; box-sizing: border-box; width: 1.6em; height: 1.6em; border-radius: 3px; vertical-align: middle; border: 1px solid #888'],
+    [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
+    [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 6px'],
+    [`${EDITOR} .cbd-profile`, `cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px ${IDLE_RING}`],
+    [`${EDITOR} .cbd-profile[aria-checked="true"]`, `background: ${ACTIVE_FILL}; box-shadow: inset 0 0 0 1.5px ${ACTIVE_RING}`],
+    [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
+    [`${EDITOR} .cbd-chips`, 'display: flex; gap: 3px; width: 100px'],
+    [`${EDITOR} .cbd-name`, 'flex: 1; text-align: left; font-weight: 400'],
+    [`${EDITOR} [aria-checked="true"] .cbd-name`, 'font-weight: 600'],
+    [`${EDITOR} .cbd-add-row`, 'display: flex; gap: 8px; margin: 8px 0'],
+    [`${EDITOR} [data-role="new-name"]`, 'flex: 1; padding: 6px 8px'],
+    [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
+    [OPTIONS, `display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
+    [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
+    [`${OPTIONS} button[data-role="save"]`, 'background: #6b3fa0; color: #fff; border: 1px solid #5a3489; font-weight: 600']
+  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -592,8 +612,6 @@
   const BUTTON = '#control-colorbydigit'
   const BOX = `${BUTTON} [data-role="auto"]`
   const ARROW = `${BUTTON} [data-role="menu"]`
-  const MENU = '#color-by-digit-menu'
-
   // Loading progress resets the board, so a pass before it would be wiped.
   function whenProgressLoaded (app, fn) {
     if (allCells(app).length > 0) fn()
@@ -646,6 +664,14 @@
 
   let menu = null
 
+  function addStyle () {
+    if (document.getElementById(STYLE_ID)) return
+    const style = document.createElement('style')
+    style.id = STYLE_ID
+    style.textContent = STYLE_CSS
+    document.head.appendChild(style)
+  }
+
   const closeMenu = () => {
     if (menu) menu.remove()
     menu = null
@@ -657,6 +683,7 @@
     showButton()
     const button = document.querySelector(BUTTON)
     if (!button) return
+    addStyle()
     menu = document.createElement('div')
     menu.id = MENU.slice(1)
     menu.setAttribute('role', 'menu')
@@ -783,11 +810,12 @@
     let draft = savedState
     let auto = autoMode
     let newName = ''
+    addStyle()
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Color by digit</b> <small style="opacity:.6">v${VERSION}</small>` },
-        { tag: 'text', innerHTML: '<div id="color-by-digit-editor"></div>' },
+        { tag: 'text', innerHTML: `<b>Color by digit</b> <small class="cbd-version">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',
           options: [
@@ -797,10 +825,13 @@
         }
       ]
     })
-    const box = document.getElementById('color-by-digit-editor')
+    const box = document.getElementById(EDITOR_ID)
     if (!box) return
-    const dialog = box.closest('.dialog')
-    if (dialog) styleDialogButtons(dialog)
+    const row = box.closest('.dialog') && box.closest('.dialog').querySelector('.dialog-options')
+    if (row) {
+      row.classList.add(DIALOG_CLASS)
+      row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
+    }
     let shown = []
     const draw = () => {
       const groups = activeGroups(draft)

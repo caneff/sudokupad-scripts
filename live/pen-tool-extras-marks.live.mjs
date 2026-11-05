@@ -10,7 +10,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, newPage, openPage, restartPuzzle, scaleOf, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, dialogButton, effectiveOpacities, openExtrasEditor, openSettings } from './settings.mjs'
-import { cellCentre, openPenTool, penValuesAt, plantSaved, plantUnchecked, setSlider } from './pen.mjs'
+import { cellCentre, openPenTool, penValuesAt, plantUnchecked, setSlider } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -687,7 +687,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('corrupt saved settings fall back to every mark ticked with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"x":"no"}']) {
-      await plantSaved(p, DATA_KEY, bad)
+      // All five ticked is the default, which saves no key; the save tests above read DATA_KEY back, so it is the live key.
+      await plantUnchecked(p, DATA_KEY, bad)
       await reload()
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
@@ -715,6 +716,27 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await box('x').uncheck()
     await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await saved(), { x: false, directions: true, circle: true, cornerX: true, cornerCircle: false })
+    await openExtrasEditor(p)
+    for (const mark of MARK_BOXES) await box(mark).check()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.equal(await saved(), null, 'all five ticked is the default, so Save removes the key')
+  })
+
+  it('Restore defaults leaves the mark boxes as they are: Save after it keeps the saved marks, and they survive a reload', async () => {
+    const custom = { ...ALL_TICKED, directions: false, cornerCircle: false }
+    await openExtrasEditor(p)
+    await box('directions').uncheck()
+    await box('cornerCircle').uncheck()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), custom)
+    await openExtrasEditor(p)
+    await dialogButton(p, 'Restore defaults').click()
+    assert.equal(await box('directions').isChecked(), false, 'Restore defaults left Directions unticked')
+    assert.equal(await box('cornerCircle').isChecked(), false, 'Restore defaults left the corner Circle unticked')
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), custom)
+    await reload()
+    assert.deepEqual(await saved(), custom)
     await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).check()
     await closeExtrasEditorWith(p, 'Save')

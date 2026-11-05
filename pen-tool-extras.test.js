@@ -7,10 +7,10 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS,
-  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
-  stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
-  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
+  stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
+  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
@@ -513,7 +513,7 @@ const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCirc
 const NONE = { x: false, directions: false, circle: false, cornerX: false, cornerCircle: false }
 
 test('fresh install has every mark ticked', () => {
-  assert.deepEqual(DEFAULT_MARK_SETTINGS, ALL)
+  assert.deepEqual(SETTINGS.marks.fallback, ALL)
   assert.deepEqual(normalizeMarkSettings(null), ALL)
   assert.deepEqual(normalizeMarkSettings(undefined), ALL)
 })
@@ -673,13 +673,14 @@ test('two marks on one edge, as a replay can hold, both go on the next click', (
   assert.deepEqual(planClick('3', ['3', 'i'], ALL), { remove: ['3', 'i'], add: 'j' })
 })
 
-test('shapeOf names the arrow each character draws, per edge', () => {
-  assert.deepEqual(['h', 'i', 'j'].map(shapeOf), ['>', '<', 'o'])
-  assert.deepEqual(['k', 'l', 'm'].map(shapeOf), ['^', 'v', 'o'])
-  assert.deepEqual(['n', 'o', 'p'].map(shapeOf), ['>', '<', 'o'])
-  assert.deepEqual(['q', 'r', 's'].map(shapeOf), ['^', 'v', 'o'])
-  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 't', 'z']) {
-    assert.equal(shapeOf(other), null, other)
+test('addedMark draws the arrow each edge character names, per edge, and nothing for a value it does not add', () => {
+  const shapes = (values) => values.map((v) => addedMark(v, 3, 4, 9).shape)
+  assert.deepEqual(shapes(['h', 'i', 'j']), ['>', '<', 'o'])
+  assert.deepEqual(shapes(['k', 'l', 'm']), ['^', 'v', 'o'])
+  assert.deepEqual(shapes(['n', 'o', 'p']), ['>', '<', 'o'])
+  assert.deepEqual(shapes(['q', 'r', 's']), ['^', 'v', 'o'])
+  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'z']) {
+    assert.equal(addedMark(other, 3, 4, 9), null, other)
   }
 })
 
@@ -812,7 +813,7 @@ test('the corner characters are lowercase letters SudokuPad does not use and the
     assert.equal(CORNER_VALUES[kind].length, 2)
     for (const value of CORNER_VALUES[kind]) {
       assert.match(value, /^[h-z]$/)
-      assert.equal(shapeOf(value), null, `${value} is an edge character`)
+      assert.deepEqual(addedMark(value, 3, 4, 9).point, cornerPoint(kind, 3, 4, 9), `${value} is drawn at its corner, not an edge`)
       assert.equal(used.has(value), false, value)
       used.add(value)
     }
@@ -820,11 +821,10 @@ test('the corner characters are lowercase letters SudokuPad does not use and the
   assert.equal(used.size, 6)
 })
 
-test('cornerMarkOf names the kind and type a corner character draws, and nothing for another character', () => {
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[0]), { kind: 'br', type: 'x' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[1]), { kind: 'br', type: 'circle' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.far[1]), { kind: 'far', type: 'circle' })
-  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'h', 's', 'z']) assert.equal(cornerMarkOf(other), null, other)
+test('addedMark draws a corner character at its kind\'s corner, the X as x and the circle as o', () => {
+  assert.deepEqual(addedMark(CORNER_VALUES.br[0], 3, 4, 9), { point: cornerPoint('br', 3, 4, 9), shape: 'x' })
+  assert.deepEqual(addedMark(CORNER_VALUES.br[1], 3, 4, 9), { point: cornerPoint('br', 3, 4, 9), shape: 'o' })
+  assert.deepEqual(addedMark(CORNER_VALUES.far[1], 0, 8, 9), { point: cornerPoint('far', 0, 8, 9), shape: 'o' })
 })
 
 test('the corner cycle is X, circle, empty, and a click on an empty corner adds the X', () => {
@@ -1126,7 +1126,7 @@ const editorState = (over = {}) => ({
   missingPage: 1,
   preset: 'page-1',
   presets: ['page-1', 'page-2', 'page-3', 'sudokupad'],
-  marks: DEFAULT_MARK_SETTINGS,
+  marks: ALL,
   lineMode: 'both',
   thickness: 5,
   opacity: 80,
@@ -1143,7 +1143,8 @@ const editorState = (over = {}) => ({
 
 test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s buttons, each keeping its number', () => {
   const html = renderEditor(editorState())
-  assert.match(html, /grid-template-columns: repeat\(3, /)
+  assert.match(html, /<div class="pen-tool-extras-pen-grid">/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-pen-grid \{[^}]*grid-template-columns: repeat\(3, /)
   const cells = [...html.matchAll(/<b[^>]*>(\d)<\/b><input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})">/g)].map((m) => m.slice(1))
   assert.deepEqual(cells.map(([label, pen]) => [label, pen]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [String(n), String(n)]))
   assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
@@ -1237,21 +1238,22 @@ test('every slider in the settings table has one dialog row, with the label and 
   assert.equal((html.match(/<input type="range"/g) || []).length, sliders.length)
 })
 
-test('a box ticked in the dialog sets its setting in the draft through the table; a mark box is not a table row', () => {
+test('a box ticked in the dialog sets its setting in the draft through the table, a mark box included', () => {
   const draft = editorState()
   assert.equal(draftWithBox(draft, { outline: '' }, false).outline, false)
   assert.equal(draftWithBox(draft, { middleErase: '' }, false).middleErase, false)
   assert.deepEqual(draftWithBox(draft, { style: 'dashed' }, false).lineStyles, { dashed: false, arrows: true })
   assert.deepEqual(draftWithBox(draft, { show: 'opacity' }, false).show, { thickness: true, opacity: false })
   assert.deepEqual(draft.lineStyles, { dashed: true, arrows: true }, 'the draft given is left alone')
-  assert.equal(draftWithBox(draft, { mark: 'x' }, false), undefined)
+  assert.deepEqual(draftWithBox(draft, { mark: 'cornerX' }, false).marks, { ...ALL, cornerX: false })
 })
 
 test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
   const html = renderEditor(editorState())
-  const columns = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => /grid-template-columns:([^;]+);/.exec(rowOf(html, key))[1])
-  assert.equal(new Set(columns).size, 1, columns.join(' | '))
-  assert.equal(columns[0].trim().split(/ (?![^(]*\))/).length, 4)
+  const classes = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => /^<div data-row="[^"]+" class="([^"]+)"/.exec(rowOf(html, key))[1])
+  assert.equal(new Set(classes).size, 1, classes.join(' | '))
+  const columns = new RegExp(`\\.${classes[0]} \\{[^}]*grid-template-columns: ([^;]+);`).exec(DIALOG_CSS)[1]
+  assert.equal(columns.trim().split(/ (?![^(]*\))/).length, 4)
 })
 
 test('Line styles: Dashed lines and Directional arrow lines each have an Enable box, with Dash length and Arrow spacing indented under them', () => {
@@ -1262,8 +1264,9 @@ test('Line styles: Dashed lines and Directional arrow lines each have an Enable 
   const arrows = /<input type="checkbox" id="pen-tool-extras-style-arrows" data-style="arrows" aria-label="Enable Directional arrow lines"( checked)?/.exec(html)
   assert.equal(Boolean(dashed[1]) && Boolean(arrows[1]), true)
   assert.match(html, />Dashed lines<[\s\S]*data-style="dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-style="arrows"[\s\S]*>Arrow spacing</)
-  assert.match(rowOf(html, 'dash'), /padding-left:1\.2em/)
-  assert.match(rowOf(html, 'arrowSpacing'), /padding-left:1\.2em/)
+  assert.match(rowOf(html, 'dash'), /class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(rowOf(html, 'arrowSpacing'), /class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.doesNotMatch(rowOf(html, 'dash'), /display:none/)
 })
 
@@ -1302,7 +1305,8 @@ test('Other: the White outline box has its own line with Outline width under it,
   assert.match(html, />Other</)
   assert.match(html, /<input type="checkbox" id="pen-tool-extras-outline" data-outline checked[^>]*>\s*<label for="pen-tool-extras-outline"[^>]*>White outline on lines and marks<\/label>/)
   assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-middle-erase'), true)
-  assert.match(rowOf(html, 'outlineWidth'), /padding-left:1\.2em/)
+  assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
   assert.doesNotMatch(rowOf(html, 'outlineWidth'), /display:none/)
   const off = renderEditor(editorState({ outline: false, outlineWidth: 5 }))
@@ -1320,7 +1324,8 @@ test('the middle click box is ticked unless the setting is off', () => {
 test('every section after the first has a divider above it, and Pen line mode is the last', () => {
   const html = renderEditor(editorState({ lineMode: 'both' }))
   const heads = ['Line settings', 'Line styles', 'Marks a click cycles through', 'Other', 'Pen line mode']
-  heads.forEach((head) => assert.match(html, new RegExp(`border-top:1px solid #e3dff0[^>]*></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
+  heads.forEach((head) => assert.match(html, new RegExp(`<div class="pen-tool-extras-divider"></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #e3dff0;/)
   assert.equal(html.lastIndexOf('Pen line mode') > html.indexOf('Other'), true)
 })
 
@@ -1954,8 +1959,34 @@ test('the table holds each setting\'s saved key and default', () => {
     outline: ['PenColor_outline', true],
     middleErase: ['PenColor_middleerase', true],
     lineStyles: ['PenColor_linestyles', { dashed: true, arrows: true }],
-    show: ['PenColor_sliders', { thickness: true, opacity: true }]
+    show: ['PenColor_sliders', { thickness: true, opacity: true }],
+    marks: ['EdgeMarks_marks', ALL]
   })
+})
+
+// A store that keeps what is saved, as SudokuPad's own does between a save and the next read.
+function memoryStore (saved = {}) {
+  return { saved, getData: (key) => saved[key], setData: (key, value) => { saved[key] = value }, removeData: (key) => { delete saved[key] } }
+}
+
+test('the marks a save writes read back the same, and so do marks saved under the old circle names', () => {
+  const unticked = { ...ALL, circle: false, cornerCircle: false }
+  const store = memoryStore()
+  const current = settingDefaults()
+  saveChangedSettings(store, { ...current, marks: unticked }, current)
+  assert.deepEqual(readSettings(store).marks, unticked)
+  const oldSave = memoryStore({ EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } })
+  assert.deepEqual(readSettings(oldSave).marks, unticked)
+})
+
+test('saving one mark unticked writes the key, and saving all five ticked removes it so the next read is all ticked', () => {
+  const store = memoryStore()
+  const current = settingDefaults()
+  assert.deepEqual(saveChangedSettings(store, { ...current, marks: { ...ALL, directions: false } }, current), ['marks'])
+  assert.deepEqual(store.saved, { EdgeMarks_marks: { ...ALL, directions: false } })
+  assert.deepEqual(saveChangedSettings(store, { ...current, marks: ALL }, current), ['marks'])
+  assert.deepEqual(store.saved, {})
+  assert.deepEqual(readSettings(store).marks, ALL)
 })
 
 test('a slider row built from a range normalizes and saves by that range alone', () => {
@@ -2026,7 +2057,7 @@ test('readSettings normalizes what is saved under each key and falls back for th
 })
 
 test('settingDefaults holds every row\'s default', () => {
-  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, middleErase: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true } })
+  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, middleErase: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true }, marks: ALL })
 })
 
 test('changedSettings names only the settings whose value differs, reading flags by value', () => {
