@@ -1052,8 +1052,8 @@ describe('without the script', { concurrency: false }, () => {
 })
 
 describe('with a SudokuPad internal missing', { concurrency: false }, () => {
-  // Each is read by the corner click or its hit test; with one gone the click wrap would throw on every pen click, so the script turns marks off alone and logs it once.
-  const TURNED_OFF = /^pen-tool-extras: .*marks.* turned off because SudokuPad changed:/
+  // Each is read by the corner click or its hit test; with one gone the click wrap would throw on every pen click, so the script skips the marks step and warns once.
+  const TURNED_OFF = /^pen-tool-extras: .*marks.* skipped because SudokuPad /
   const REMOVALS = {
     'ToolPen.tool.actStart': () => { ToolPen.tool.actStart = undefined },
     'ToolPen.tool.getInputRc': () => { ToolPen.tool.getInputRc = undefined },
@@ -1062,10 +1062,10 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
     'Framework.app.grid.cols': () => { Framework.app.grid.cols = undefined }
   }
   for (const [member, remove] of Object.entries(REMOVALS)) {
-    it(`${member} gone: one report that marks are off`, async () => {
+    it(`${member} gone: one warning that marks are skipped`, async () => {
       const warnings = []
       const { context, p } = await openPage(browser, {
-        seed: (page) => page.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+        seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
       })
       try {
         await startPuzzle(p)
@@ -1079,10 +1079,10 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
     })
   }
 
-  it('logs one report, turns marks off, and the pen tool still works', async () => {
+  it('warns once, skips marks, and the pen tool still works', async () => {
     const warnings = []
     const { context, p, errors } = await openPage(browser, {
-      seed: (page) => page.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
     })
     try {
       await startPuzzle(p)
