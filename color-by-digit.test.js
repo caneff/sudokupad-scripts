@@ -122,7 +122,7 @@ test('a fresh install has Low/5/High then Odd/Even, with Low/5/High active', () 
   assert.deepEqual(activeGroups(state), LOW)
 })
 
-test('a fresh install returns copies, so editing one never preloads', () => {
+test('a fresh install returns copies, so editing one never edits the preloads', () => {
   const state = stateFromStored(null, null)
   state.profiles[0].groups[0].digits.push('x')
   assert.deepEqual(PRELOADS['Low/5/High'][0].digits, ['0', '1', '2', '3', '4'])
