@@ -16,6 +16,7 @@ const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
+const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 const targets = page => [...page.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m => m[1])
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
 const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length))
@@ -89,7 +90,7 @@ for (const [name, text] of Object.entries(WARNINGS)) {
     const page = read(name)
     const m = page.match(WARNING)
     assert.ok(m, `site/${name} has no <p class="warning"> directly after its <h1>`)
-    assert.equal(m[1].replace(/<[^>]*>/g, ''), text)
+    assert.equal(plain(m[1]), text)
     // Install links are found as the rest of this file finds them: by the script they point at.
     const firstInstall = page.search(/href="[^"]*\.user\.js"/)
     assert.notEqual(firstInstall, -1, `site/${name} has no install link`)
@@ -97,13 +98,14 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
-// The details page says what the script lets you do, word for word as Chris approved it (#197).
-const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+// The details page text is pinned word for word: each feature says what you can do, not which control the script adds.
 const section = (page, heading) => {
   const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
   assert.ok(m, `site/${DETAILS} has no <h2>${heading}</h2> followed by a list`)
   return [...m[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map(li => plain(li[1]))
 }
+// An item's opening words are its bold lead-in: the first <strong> of the item.
+const leadIns = page => [...page.matchAll(/<li><strong>([^<]*)<\/strong>/g)].map(m => m[1])
 
 test(`${DETAILS} intro says what the script adds`, () => {
   const m = read(DETAILS).match(/<\/p>\s*<p>(Pen Tool Extras makes[\s\S]*?)<\/p>/)
@@ -120,6 +122,18 @@ test(`${DETAILS} lists what the script adds, one item per feature`, () => {
     'Erase a whole line in one click. A middle click removes the line under the pointer, branches and all, in one undo step. An arrow line goes in one click from either end. You can turn this off in the settings.',
     'Thicker, fainter or outlined lines. Thickness and opacity sliders sit in the pen panel, and you can hide either one. A white outline, on by default, keeps lines readable over colored cells. You can set its width.',
     'Settings one click away. A small gear on the pen tool button opens the settings dialog.'
+  ])
+})
+
+test(`${DETAILS} opens each feature with its bold lead-in`, () => {
+  assert.deepEqual(leadIns(read(DETAILS)).slice(0, 7), [
+    'Pen colors that match your cell colors.',
+    'Dashed lines and arrow lines.',
+    'Marks on cell edges.',
+    'Marks on grid corners.',
+    'Erase a whole line in one click.',
+    'Thicker, fainter or outlined lines.',
+    'Settings one click away.'
   ])
 })
 
