@@ -84,6 +84,13 @@ const CASES = [
     breaks: `const insert = Element.prototype.insertAdjacentHTML
       Element.prototype.insertAdjacentHTML = function (where, html) { if (String(html).includes('pen-tool-extras-gear')) throw new TypeError('no gear'); return insert.apply(this, arguments) }`
   },
+  // The color tool never holds a palette, so the wait for it ends at the 10 s limit with a warning, not a turned-off feature (nothing in the script fails).
+  {
+    name: 'color tool never ready',
+    off: NOTHING_OFF,
+    warns: /^pen-tool-extras: the color tool was not ready after 10 s, so the pen keeps SudokuPad's own colors$/,
+    breaks: 'Framework.app.tools.colour.palette = null'
+  },
   { name: 'nothing broken', off: NOTHING_OFF, breaks: '' }
 ]
 
@@ -116,7 +123,7 @@ const withBreak = (breaks) => `;Framework.getApp().then(() => { ${breaks} });\n$
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   for (const kase of CASES) {
     describe(kase.name, { concurrency: false }, () => {
-      let context, p, logged, errors
+      let context, p, logged, errors, warned
 
       const read = (fn, arg) => p.evaluate(fn, arg)
       const penValues = () => read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
@@ -152,9 +159,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
         errors = []
         logged = []
+        warned = []
         p = await context.newPage()
         p.on('pageerror', (e) => errors.push(String(e)))
         p.on('console', (m) => {
+          if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
           if (m.type() !== 'error' || /Failed to load resource/.test(m.text())) return
           if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(m.text())) logged.push(m.text())
           else errors.push(`console.error: ${m.text()}`)
@@ -179,6 +188,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const triggerFailure = async () => {
         if (kase.name === 'panel row') assert.equal(await settle(async () => logged.length, 1, 5000, Infinity), 1, 'the panel check ended')
         if (kase.name === 'colors') assert.equal(await settle(async () => logged.length, 1, 20000, Infinity), 1, 'the wait for the color tool ended')
+        if (kase.warns) assert.equal(await settle(async () => warned.length, 1, 20000, Infinity), 1, 'the wait for the color tool ended')
         if (kase.name === 'chevrons') {
           await p.locator(PAGE_BUTTON).click()
           await p.locator(PAGE_BUTTON).click()
@@ -267,6 +277,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       it('the failure is logged once with the script\'s name, and nothing else throws', async () => {
         assert.equal(logged.length, kase.off === NOTHING_OFF ? 0 : 1, logged.join('\n'))
         assert.deepEqual(errors, [])
+      })
+
+      it('the script\'s own warning is logged once when the case calls for one, and not otherwise', () => {
+        if (kase.warns) {
+          assert.equal(warned.length, 1, warned.join('\n'))
+          assert.match(warned[0], kase.warns)
+        } else assert.deepEqual(warned, [])
       })
     })
   }

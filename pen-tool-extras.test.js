@@ -2000,3 +2000,29 @@ test('without a pen tool, every feature that needs it is reported under the firs
     ['ToolPen.tool', ['lineMode']]
   ]))
 })
+
+// The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp is a SudokuPad the script cannot hook, which it reports.
+function loadWithFramework (framework) {
+  const file = require.resolve('./pen-tool-extras.user.js')
+  const warnings = []
+  const warn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  if (framework !== undefined) global.Framework = framework
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = warn
+    delete global.Framework
+    delete require.cache[file]
+  }
+  return warnings
+}
+
+test('a Framework with no getApp is reported once, naming the script', () => {
+  assert.deepEqual(loadWithFramework({}), ['pen-tool-extras: SudokuPad\'s Framework has no getApp, so nothing was changed'])
+})
+
+test('a page with no Framework is left alone without a word', () => {
+  assert.deepEqual(loadWithFramework(undefined), [])
+})
