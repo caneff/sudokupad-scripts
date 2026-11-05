@@ -119,7 +119,7 @@ const tools = (p) => {
   const undo = () => p.click('#control-undo')
   const menu = () => p.locator(MENU)
   const menuRows = () => p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => ({ name: e.querySelector('[data-role=name]').textContent, active: e.getAttribute('aria-checked') === 'true' })))
-  const iconDigits = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
+  const iconShownDigits = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
   const editor = () => p.locator(EDITOR)
   const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const openEditor = async () => {
@@ -153,7 +153,7 @@ const tools = (p) => {
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
     await menu().waitFor({ state: 'detached' })
   }
-  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconDigits, editor, dialogButton, openEditor, closeWith, rowNames, activeRow, pressUntil, openMenuByArrow, pick }
+  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, dialogButton, openEditor, closeWith, rowNames, activeRow, pressUntil, openMenuByArrow, pick }
 }
 
 describe('profiles on a fresh install, injected after Start Puzzle', { concurrency: false }, () => {
@@ -200,7 +200,7 @@ describe('migration from saved groups, injected after Start Puzzle', { concurren
       const t = tools(p)
       await t.openMenuByArrow()
       assert.deepEqual(await t.menuRows(), rows)
-      assert.deepEqual(await t.iconDigits(), expectedDigits)
+      assert.deepEqual(await t.iconShownDigits(), expectedDigits)
       await p.keyboard.press('Escape')
       // Nothing saved is lost: the groups are still where they were, and a switch writes the new key.
       assert.deepEqual(JSON.parse(await p.evaluate((k) => window.localStorage.getItem(k), LEGACY_STORAGE_KEY)), groups)
@@ -286,14 +286,14 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await t.pick('Low/5/High')
     assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
     assert.equal((await t.getState()).active, 1)
-    assert.deepEqual(await settle(t.iconDigits, ['1', '5', '9']), ['1', '5', '9'])
+    assert.deepEqual(await settle(t.iconShownDigits, ['1', '5', '9']), ['1', '5', '9'])
     await t.undo()
     assert.equal(await settle(t.coloursOf, before), before)
   })
 
   it('the undo left the profile switched: the saved profile and the icon stay Low/5/High', async () => {
     assert.equal((await t.getState()).active, 1)
-    assert.deepEqual(await t.iconDigits(), ['1', '5', '9'])
+    assert.deepEqual(await t.iconShownDigits(), ['1', '5', '9'])
   })
 
   it('a pick with auto mode on does the same, as one undo step', async () => {
@@ -367,7 +367,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   })
 
   it('a group of the icon shows its digit: Six shows 0 to 3 on its first four groups', async () => {
-    assert.deepEqual(await t.iconDigits(), ['0', '1', '2', '3'])
+    assert.deepEqual(await t.iconShownDigits(), ['0', '1', '2', '3'])
   })
 
   it('Edit profiles… opens the dialog', async () => {
@@ -381,7 +381,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await p.reload({ waitUntil: 'load' })
     await bootPage(p)
     assert.equal((await t.getState()).active, 3)
-    assert.deepEqual(await t.iconDigits(), ['0', '1', '2', '3'])
+    assert.deepEqual(await t.iconShownDigits(), ['0', '1', '2', '3'])
   })
 
   it('no uncaught page errors', () => {

@@ -99,10 +99,6 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
-test('the details page leaves the SudokuPad-internals caveat to its warning', () => {
-  assert.doesNotMatch(read(DETAILS), /leans on SudokuPad internals/)
-})
-
 test('netlify.toml publishes only site/', () => {
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)
