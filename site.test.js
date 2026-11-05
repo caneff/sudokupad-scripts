@@ -99,13 +99,15 @@ for (const [name, text] of Object.entries(WARNINGS)) {
 }
 
 // The details page text is pinned word for word: each feature says what you can do, not which control the script adds.
+const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
 const section = (page, heading) => {
   const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
   assert.ok(m, `site/${DETAILS} has no <h2>${heading}</h2> followed by a list`)
-  return [...m[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map(li => plain(li[1]))
+  return items(m[1]).map(plain)
 }
 // An item's opening words are its bold lead-in: the first <strong> of the item.
-const leadIns = page => [...page.matchAll(/<li><strong>([^<]*)<\/strong>/g)].map(m => m[1])
+const leadIn = li => (li.match(/^<strong>([^<]*)<\/strong>/) || [])[1]
+const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
 test(`${DETAILS} intro says what the script adds`, () => {
   const m = read(DETAILS).match(/<\/p>\s*<p>(Pen Tool Extras makes[\s\S]*?)<\/p>/)
@@ -135,6 +137,38 @@ test(`${DETAILS} opens each feature with its bold lead-in`, () => {
     'Thicker, fainter or outlined lines.',
     'Settings one click away.'
   ])
+})
+
+// Each feature a still picture can show has one picture inside its item; the erase item has none, since a
+// middle click does not show in a still picture. The page has no figure.
+const PICTURES = {
+  'Pen colors that match your cell colors.': 'colors',
+  'Dashed lines and arrow lines.': 'lines',
+  'Marks on cell edges.': 'edges',
+  'Marks on grid corners.': 'corners',
+  'Thicker, fainter or outlined lines.': 'sliders',
+  'Settings one click away.': 'gear'
+}
+const NO_PICTURE = 'Erase a whole line in one click.'
+const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
+
+test(`${DETAILS} puts one picture with alt text on each feature a picture can show`, () => {
+  const byLeadIn = new Map(items(read(DETAILS)).map(li => [leadIn(li), li]))
+  for (const [leadIn, name] of Object.entries(PICTURES)) {
+    const found = imgs(byLeadIn.get(leadIn) || '')
+    assert.equal(found.length, 1, `"${leadIn}" has ${found.length} images, not 1`)
+    assert.ok(found[0].includes(`src="${RAW}docs/research/pen-tool-extras-bullet-${name}.png"`), `"${leadIn}" does not show pen-tool-extras-bullet-${name}.png`)
+    assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${leadIn}" has an image with no alt text`)
+  }
+})
+
+test(`${DETAILS} has no picture on the erase item and no large example figure`, () => {
+  const page = read(DETAILS)
+  const erase = items(page).find(li => leadIn(li) === NO_PICTURE)
+  assert.ok(erase, `site/${DETAILS} has no "${NO_PICTURE}" item`)
+  assert.deepEqual(imgs(erase), [])
+  assert.doesNotMatch(page, /<figure\b/)
+  assert.equal(imgs(page).length, Object.keys(PICTURES).length)
 })
 
 test(`${DETAILS} good to know names the dashed and arrow pages`, () => {
