@@ -137,6 +137,39 @@ test(`${DETAILS} opens each feature with its bold lead-in`, () => {
   ])
 })
 
+// Each feature a still picture can show has one small picture inside its item; the erase item has none, since a
+// middle click does not show in a still picture. The one large example figure is gone.
+const PICTURES = {
+  'Pen colors that match your cell colors.': 'colors',
+  'Dashed lines and arrow lines.': 'lines',
+  'Marks on cell edges.': 'edges',
+  'Marks on grid corners.': 'corners',
+  'Thicker, fainter or outlined lines.': 'sliders',
+  'Settings one click away.': 'gear'
+}
+const NO_PICTURE = 'Erase a whole line in one click.'
+const items = page => [...page.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
+const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
+
+test(`${DETAILS} puts one small picture with alt text on each feature a picture can show`, () => {
+  const byLeadIn = new Map(items(read(DETAILS)).map(li => [(li.match(/<strong>([^<]*)<\/strong>/) || [])[1], li]))
+  for (const [leadIn, name] of Object.entries(PICTURES)) {
+    const found = imgs(byLeadIn.get(leadIn) || '')
+    assert.equal(found.length, 1, `"${leadIn}" has ${found.length} images, not 1`)
+    assert.ok(found[0].includes(`src="${RAW}docs/research/pen-tool-extras-bullet-${name}.png"`), `"${leadIn}" does not show pen-tool-extras-bullet-${name}.png`)
+    assert.match(found[0], /\balt="[^"]*\S[^"]*"/, `"${leadIn}" has an image with no alt text`)
+  }
+})
+
+test(`${DETAILS} has no picture on the erase item and no large example figure`, () => {
+  const page = read(DETAILS)
+  const erase = items(page).find(li => li.includes(`<strong>${NO_PICTURE}</strong>`))
+  assert.ok(erase, `site/${DETAILS} has no "${NO_PICTURE}" item`)
+  assert.deepEqual(imgs(erase), [])
+  assert.doesNotMatch(page, /<figure\b/)
+  assert.equal(imgs(page).length, Object.keys(PICTURES).length)
+})
+
 test(`${DETAILS} good to know names the dashed and arrow pages`, () => {
   assert.deepEqual(section(read(DETAILS), 'Good to know'), ["Other people can't see lines from the dashed or arrow pages unless they have the script too."])
 })
