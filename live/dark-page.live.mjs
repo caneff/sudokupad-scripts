@@ -1,11 +1,4 @@
 // Live check of dark-page.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist, except in the page color dialog group at the end, which
-// injects at DOMContentLoaded; startup.live.mjs checks the other injection times.
 //
 // The reference for every board check is the same page with the script switched off (its
 // stylesheet's media set to `not all`): a separate page that never had the script rasterizes the
@@ -15,14 +8,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { gotoPuzzle, openPage, START, startPuzzle } from './page.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
+import { readUntil, SETTLE_MS, stable } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
 const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
 
-// Dark Page's button among the entries of the Experimental group.
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ })
 const RECT = `#${RECT_ID}`
 const STYLE = `#${STYLE_ID}`
@@ -42,28 +34,9 @@ const OWN_PURPLE = 'rgb(106, 27, 154)'
 const PICKER = 'input[type=color]'
 // SudokuPad's red accent (`--main-color` of `.setting-uitheme-red`), read with no script installed.
 const ACCENT_RED = 'rgb(212, 17, 89)'
-const START = /Start Puzzle|Continue|Resume/i
 // The most white the rectangle may keep past the drawing on a side that has text on it, in page
 // pixels: the text's box is taller than its glyphs. The whole svg box leaves 20 or more.
 const TIGHT_SLACK_PX = 12
-const POLL_MS = 50
-const SETTLE_MS = 10000
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-// Runs `read` until two readings in a row agree, and returns that reading. A page that never
-// settles within SETTLE_MS fails with what was being waited on, not with its last reading.
-async function untilSettled (what, read, same = (a, b) => JSON.stringify(a) === JSON.stringify(b)) {
-  const deadline = Date.now() + SETTLE_MS
-  let previous = await read()
-  for (;;) {
-    await sleep(POLL_MS)
-    const next = await read()
-    if (same(previous, next)) return next
-    if (Date.now() > deadline) throw new Error(`${what} did not settle within ${SETTLE_MS} ms`)
-    previous = next
-  }
-}
 
 // Boards of other sizes, in the page's own puzzle format. Outside text is drawn the way little
 // killer and sandwich clues are: text beyond the grid lines.
@@ -92,16 +65,6 @@ const OTHER_BOARDS = {
   'an 11x11 board whose outer ring of cells is outside every region': board({ size: 11, boxHeight: 3, boxWidth: 3, offset: 1 })
 }
 
-// Loads the puzzle and clicks Start Puzzle.
-async function openPuzzle (p) {
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = p.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-}
-
 // Enters digits, corner marks, centre marks and colored cells, then deselects, so the board holds
 // every kind of entry the script could disturb and no selection highlight.
 async function fillBoard (p) {
@@ -120,7 +83,6 @@ async function fillBoard (p) {
   })
 }
 
-// Selects the cells in order, leaving them all selected.
 const selectCells = (p, cells) => p.evaluate((cells) => {
   const a = Framework.app
   a.deselect()
@@ -140,34 +102,31 @@ const regionOf = (p) => p.evaluate(() => {
   return { x, y, width: Math.ceil(b.right) - x, height: Math.ceil(b.bottom) - y }
 })
 
-// The kept rectangle in page pixels, once two readings in a row agree: the script moves it on the
+// The kept rectangle in page pixels, once it has held still: the script moves it on the
 // next frame after a change.
-const settledRectangle = (p) => untilSettled('the kept rectangle', () => p.evaluate((selector) => {
+const settledRectangle = (p) => stable(() => p.evaluate((selector) => {
   const el = document.querySelector(selector)
   if (!el || window.getComputedStyle(el).display === 'none') return null
   const b = el.getBoundingClientRect()
   return { x: b.x, y: b.y, width: b.width, height: b.height }
 }, RECT))
 
-// A PNG of `clip`, taken until two in a row agree, so a fade or a late repaint is waited on by
+// A PNG of `clip`, taken until its bytes have held still, so a fade or a late repaint is waited on by
 // its condition and not by a sleep.
-const settledShot = (p, clip) => untilSettled('the page image', () => p.screenshot({ clip, animations: 'disabled' }), (a, b) => a.equals(b))
+const settledShot = (p, clip) => stable(() => p.screenshot({ clip, animations: 'disabled' }), SETTLE_MS, (a, b) => a.equals(b))
 
 // The board region now, with the kept rectangle relative to it (null for a page with no board).
-// The region is read again after the shot, and the shot repeated until both agree, so a relayout
-// still under way (a resize, a puzzle just loaded) is waited on by its condition.
-async function boardShot (p) {
-  const deadline = Date.now() + SETTLE_MS
-  for (;;) {
-    const region = await regionOf(p)
-    const png = await settledShot(p, region)
-    const rect = await settledRectangle(p)
-    if (JSON.stringify(await regionOf(p)) === JSON.stringify(region)) {
-      return { png, region, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
-    }
-    if (Date.now() > deadline) throw new Error(`the board region did not settle within ${SETTLE_MS} ms`)
-  }
-}
+// Each read takes the region, a settled shot of it, the settled rectangle and the region again, and the reads
+// repeat until the region is the same before and after, so a relayout still under way (a resize, a puzzle just
+// loaded) is waited on by its condition and a shot it moved during is not returned. The two regions come first
+// in the read so a timeout's message, cut to its first characters, shows them and not the shot's bytes.
+const boardShot = (p) => readUntil(async () => {
+  const region = await regionOf(p)
+  const png = await settledShot(p, region)
+  const rect = await settledRectangle(p)
+  const regionAfter = await regionOf(p)
+  return { region, regionAfter, png, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
+}, (r) => JSON.stringify(r.region) === JSON.stringify(r.regionAfter))
 
 // A PNG's pixels: { width, height, data } with `data` the RGBA bytes, carried out of the page as
 // base64 because a plain array of them is slow to serialize.
@@ -221,7 +180,6 @@ async function compareBoards (p, off, on) {
   return { changed, clipped, slack }
 }
 
-// The unique colors in a strip of the page, as `r,g,b`.
 async function colorsIn (p, clip) {
   const image = await decode(p, await settledShot(p, clip))
   const seen = new Set()
@@ -229,7 +187,6 @@ async function colorsIn (p, clip) {
   return [...seen]
 }
 
-// `off` and `on` are boardShot results.
 async function expectKept (p, off, on) {
   const result = await compareBoards(p, off, on)
   assert.notEqual(result, null, 'the board region has the same size with the script on and off')
@@ -267,18 +224,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const boot = async () => {
-    await openPuzzle(p)
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator(STYLE).waitFor({ state: 'attached' })
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser))
     await boot()
     await p.addStyleTag({ content: HIDE_PAGE_UI })
   })
@@ -522,30 +474,30 @@ describe('the page color dialog', { concurrency: false }, () => {
     await p.locator(`.dialog ${PICKER}`).waitFor({ state: 'visible' })
   }
   const dialogButton = (name) => p.locator('.dialog').getByRole('button', { name, exact: true })
-  const load = async () => {
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-    await openPuzzle(p)
+  const started = async () => {
+    await startPuzzle(p)
     await p.locator(STYLE).waitFor({ state: 'attached' })
+  }
+  const load = async () => {
+    await gotoPuzzle(p)
+    await started()
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    // Records the script's CSS the moment its style first exists, before any frame paints with it.
-    // The style stays disabled until a board is on the page, so only its text says which color the
-    // first paint will use.
-    await p.addInitScript(([src, styleId]) => {
-      document.addEventListener('DOMContentLoaded', () => {
-        const s = document.createElement('script')
-        s.textContent = src
-        document.documentElement.appendChild(s)
-        window.__firstCss = document.getElementById(styleId).textContent
-      })
-    }, [script, STYLE_ID])
-    await load()
+    ;({ context, p, errors } = await openPage(browser, {
+      // Records the script's CSS the moment its style first exists, before any frame paints with it.
+      // The style stays disabled until a board is on the page, so only its text says which color the
+      // first paint will use.
+      seed: (page) => page.addInitScript(([src, styleId]) => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const s = document.createElement('script')
+          s.textContent = src
+          document.documentElement.appendChild(s)
+          window.__firstCss = document.getElementById(styleId).textContent
+        })
+      }, [script, STYLE_ID])
+    }))
+    await started()
   })
   after(async () => { await context.close() })
 

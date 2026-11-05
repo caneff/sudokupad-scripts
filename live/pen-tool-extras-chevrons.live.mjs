@@ -1,9 +1,5 @@
 // Live check of pen-tool-extras.user.js's third page of pens (chevron lines) on sudokupad.app in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real injection time and
-// crackingthecryptic.com stay untested, and so does a touch screen.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// A touch screen stays untested.
 // Every drag, press and click is real input. A line's direction is stored in its color character (a page 3 pen is two
 // characters), so the checks read both what is stored (`cell.pen`) and what is drawn (the way each chevron points).
 /* global Framework, ToolPen */
@@ -12,13 +8,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor, restartPuzzle } from './settings.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from './page.mjs'
+import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from './settings.mjs'
+import { cellCentre, drag, openPenTool, padValues, penEntries, setSlider } from './pen.mjs'
+import { settle } from './settle.mjs'
 
 // The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
 const { CHEVRON, ARROW_SPACING } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const PEN_KEY = 'PenColor_pen'
@@ -26,31 +22,9 @@ const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
 const ARROW_SPACING_KEY = 'PenColor_arrowspacing'
-const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_THREE = 'jlnprtvxz'
 const PAGE_ONE = '123456789'
-
-// Waits for the puzzle, starts it, and returns once the controls exist.
-async function startPuzzle (page) {
-  await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = page.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await page.locator('#control-undo').waitFor({ state: 'visible' })
-}
-
-// The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is
-// clicked again until the tool's buttons show.
-async function openPenTool (page) {
-  const shown = () => page.locator('.tool-pen button[data-key="1"]').isVisible()
-  const deadline = Date.now() + SETTLE_MS
-  while (!(await shown()) && Date.now() < deadline) {
-    await page.click('#control-pen')
-    await settle(shown, true, 500)
-  }
-}
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -69,18 +43,13 @@ const headings = (chevronsPath) => {
   return out
 }
 
-// One browser context: its page, its page errors, and the checks.
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
   const selected = () => read(() => String(ToolPen.tool.selectedColor))
-  const padValues = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
-  // The pen entries of every cell as `row,col:value+color`, sorted.
-  const penValues = () => read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
-  const penOf = async (cells) => (await penValues()).filter((v) => cells.some((c) => v.startsWith(`${c}:`)))
-  // Every arrow line group in the pen layer: its class, the way its arrows point, and the width of its line.
+  const penOf = async (cells) => (await penEntries(p)).filter((v) => cells.some((c) => v.startsWith(`${c}:`)))
   const chevronGroups = () => read(() => [...document.querySelectorAll('#cell-pen > g.cell-pen')].map((g) => {
     const [line, chevrons] = ['line', 'chevrons'].map((name) => g.querySelector(`[data-chevron-part="${name}"]`))
     return { cls: g.getAttribute('class'), chevrons: chevrons.getAttribute('d'), line: line.getAttribute('d'), lineWidth: Number(line.getAttribute('stroke-width')) }
@@ -88,41 +57,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
   const pageErrors = () => errors.slice()
 
-  const cellCentre = (row, col) => read(([r, c]) => {
-    const box = Framework.app.puzzle.cells.find((cell) => cell.row === r && cell.col === c).elem.getBoundingClientRect()
-    return [box.x + box.width / 2, box.y + box.height / 2, box.width]
-  }, [row, col])
-
-  // A drag along `points`, each [row, col] in cells from the grid's top left (a cell's middle is at .5), with real mouse
-  // input, returning once the grid has changed.
-  const drag = async (points) => {
-    const before = JSON.stringify(await penValues())
-    const [x0, y0, size] = await cellCentre(0, 0)
-    const at = ([r, c]) => [x0 + (c - 0.5) * size, y0 + (r - 0.5) * size]
-    await p.mouse.move(...at(points[0]))
-    await p.mouse.down()
-    for (const point of points.slice(1)) await p.mouse.move(...at(point), { steps: 8 })
-    await p.mouse.up()
-    assert.equal(await settle(async () => JSON.stringify(await penValues()) !== before, true), true, 'the drag changed the grid')
-  }
-
   const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
-  // Turns to page 3 (two page button presses from page 1) and selects the pen on button `key`.
   const selectChevronPen = async (key) => {
     await openPenTool(p)
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-    if ((await padValues()) !== PAGE_THREE) {
-      const turns = (await padValues()) === PAGE_ONE ? 2 : 1
+    if ((await padValues(p)) !== PAGE_THREE) {
+      const turns = (await padValues(p)) === PAGE_ONE ? 2 : 1
       for (let i = 0; i < turns; i++) await p.locator(PAGE_BUTTON).click()
     }
-    assert.equal(await settle(padValues, PAGE_THREE), PAGE_THREE)
+    assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE)
     await press(key)
   }
   const undo = () => p.click('#control-undo')
   const undoAll = async () => { while ((await read(() => Framework.app.puzzle.undoStack.length)) > 0) await undo() }
   const eraseDrag = async (points) => {
     // A press exactly on a stroke starts no drag in SudokuPad, so an erase drag starts a little off the line.
-    await drag(points.map(([r, c]) => [r + 0.1, c + 0.1]))
+    await drag(p, points.map(([r, c]) => [r + 0.1, c + 0.1]))
   }
 
   const boot = async () => {
@@ -137,14 +87,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
     // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
-    p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console.error: ${m.text()}`) })
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
     await boot()
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, ARROW_SPACING_KEY, 'ToolPen_color'])
     await selectChevronPen(3)
@@ -155,7 +99,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('page 3 is the nine chevron pens: the buttons carry the forward characters j, l, n, ... and each has a chevron swatch in its pen color', async () => {
-    assert.equal(await padValues(), PAGE_THREE)
+    assert.equal(await padValues(p), PAGE_THREE)
     assert.equal(await selected(), 'n')
     // each swatch is a mask over a background of the pen color: the color a probe element resolves --puzzle-pencolor-N to
     const swatches = await read(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
@@ -176,7 +120,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('a line dragged right is stored with the pen\'s own character and drawn as a line with chevrons pointing right', async () => {
-    await drag([[2.5, 2.5], [2.5, 4.5]])
+    await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     assert.deepEqual(await penOf(['2,2', '2,3']), ['2,2:1n', '2,3:1n'])
     const groups = await chevronGroups()
     assert.equal(groups.length, 2)
@@ -188,7 +132,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('a line dragged left is stored with the pen\'s reverse character and its chevrons point left', async () => {
-    await drag([[4.5, 4.5], [4.5, 2.5]])
+    await drag(p, [[4.5, 4.5], [4.5, 2.5]])
     assert.deepEqual(await penOf(['4,2', '4,3']), ['4,2:1o', '4,3:1o'])
     const groups = (await chevronGroups()).filter((g) => g.cls.endsWith('pencolor-o'))
     assert.equal(groups.length, 2)
@@ -197,7 +141,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a drag that turns stores the right character per segment, draws each segment pointing the way it went, and is one undo step', async () => {
     // right along row 6, down column 4, then left along row 7
-    await drag([[6.5, 2.5], [6.5, 4.5], [7.5, 4.5], [7.5, 2.5]])
+    await drag(p, [[6.5, 2.5], [6.5, 4.5], [7.5, 4.5], [7.5, 2.5]])
     assert.deepEqual(await penOf(['6,2', '6,3', '6,4', '7,2', '7,3']), ['6,2:1n', '6,3:1n', '6,4:2n', '7,2:1o', '7,3:1o'])
     const byClass = async (cls) => (await chevronGroups()).filter((g) => g.cls === cls)
     assert.equal((await byClass('cell-pen pen-2 pencolor-n')).length, 1)
@@ -213,7 +157,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('a drag up and then right stores the up segment with the reverse character: 2 is drawn downward, so up is the reverse', async () => {
-    await drag([[8.5, 6.5], [7.5, 6.5], [7.5, 7.5]])
+    await drag(p, [[8.5, 6.5], [7.5, 6.5], [7.5, 7.5]])
     assert.deepEqual(await penOf(['7,6']), ['7,6:1n', '7,6:2o'])
     const headingOfClass = async (cls) => (await chevronGroups()).filter((g) => g.cls === cls).flatMap((g) => headings(g.chevrons))
     assert.deepEqual([...new Set(await headingOfClass('cell-pen pen-2 pencolor-o'))], ['N'])
@@ -222,16 +166,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('center diagonals and edge lines (straight and diagonal) store their way too: down-right is forward, up-left is the reverse character', async () => {
     // center diagonal e, dragged down and right, then up and left on another row
-    await drag([[0.5, 5.5], [1.5, 6.5]])
-    await drag([[1.5, 8.5], [0.5, 7.5]])
+    await drag(p, [[0.5, 5.5], [1.5, 6.5]])
+    await drag(p, [[1.5, 8.5], [0.5, 7.5]])
     assert.deepEqual(await penOf(['0,5', '0,7']), ['0,5:en', '0,7:eo'])
     // edge line 8, along grid line 5 (the bottom edge of row 4), dragged right and then another dragged left
-    await drag([[5, 6], [5, 7]])
-    await drag([[6, 7], [6, 6]])
+    await drag(p, [[5, 6], [5, 7]])
+    await drag(p, [[6, 7], [6, 6]])
     assert.deepEqual(await penOf(['4,6', '5,6']), ['4,6:8n', '5,6:8o'])
     // edge diagonal g (top left to bottom right), dragged down-right and up-left
-    await drag([[3, 0], [4, 1]])
-    await drag([[8, 2], [7, 1]])
+    await drag(p, [[3, 0], [4, 1]])
+    await drag(p, [[8, 2], [7, 1]])
     assert.deepEqual(await penOf(['3,0', '7,1']), ['3,0:gn', '7,1:go'])
     const all = await chevronGroups()
     const headingOf = (cls) => [...new Set(all.filter((g) => g.cls === cls).flatMap((g) => headings(g.chevrons)))]
@@ -251,29 +195,30 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(arrowStroke, 'none')
     await read((k) => Framework.setData(k, { 3: '#123456' }), COLORS_KEY)
     await reload()
-    assert.equal(await settle(async () => (await strokeOf())[0], 'rgb(18, 52, 86)'), 'rgb(18, 52, 86)')
+    const recolored = ['rgb(18, 52, 86)', 'rgb(18, 52, 86)', 'rgb(18, 52, 86)', 'none']
+    assert.deepEqual(await settle(strokeOf, recolored), recolored)
     await read((k) => Framework.removeData(k), COLORS_KEY)
     await reload()
     await selectChevronPen(3)
   })
 
   it('the lines survive undo of everything and a replay: the stored characters and the drawn chevrons come back', async () => {
-    const values = await penValues()
+    const values = await penEntries(p)
     const groups = await chevronGroups()
     const replay = await read(() => Framework.app.getReplay())
     await undoAll()
     assert.equal(await settle(strokeCount, 0), 0)
     await read((r) => Framework.app.loadReplay(r), replay)
-    assert.deepEqual(await settle(penValues, values), values)
+    assert.deepEqual(await settle(() => penEntries(p), values), values)
     const again = await chevronGroups()
     assert.deepEqual(again.map((g) => [g.cls, headings(g.chevrons)]).sort(), groups.map((g) => [g.cls, headings(g.chevrons)]).sort())
   })
 
   it('after a page reload the lines are drawn again, pointing the same ways', async () => {
-    const values = await penValues()
+    const values = await penEntries(p)
     const groups = await chevronGroups()
     await reload()
-    assert.deepEqual(await settle(penValues, values), values)
+    assert.deepEqual(await settle(() => penEntries(p), values), values)
     assert.equal(await settle(async () => (await chevronGroups()).length, groups.length), groups.length)
     const again = await chevronGroups()
     assert.deepEqual(again.map((g) => [g.cls, headings(g.chevrons)]).sort(), groups.map((g) => [g.cls, headings(g.chevrons)]).sort())
@@ -292,28 +237,28 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('dragging a line over a run drawn both ways erases all of it: a cell stored in one character is not skipped for the other\'s', async () => {
     // (5,2) is drawn right (1n) and (5,3) left (1o); one erase drag over both removes both, in either direction
-    await drag([[5.5, 2.5], [5.5, 3.5]])
-    await drag([[5.5, 4.5], [5.5, 3.5]])
+    await drag(p, [[5.5, 2.5], [5.5, 3.5]])
+    await drag(p, [[5.5, 4.5], [5.5, 3.5]])
     assert.deepEqual(await penOf(['5,2', '5,3']), ['5,2:1n', '5,3:1o'])
     await eraseDrag([[5.5, 2.5], [5.5, 4.5]])
     assert.deepEqual(await settle(() => penOf(['5,2', '5,3']), []), [])
-    await drag([[5.5, 2.5], [5.5, 3.5]])
-    await drag([[5.5, 4.5], [5.5, 3.5]])
+    await drag(p, [[5.5, 2.5], [5.5, 3.5]])
+    await drag(p, [[5.5, 4.5], [5.5, 3.5]])
     await eraseDrag([[5.5, 4.5], [5.5, 2.5]])
     assert.deepEqual(await settle(() => penOf(['5,2', '5,3']), []), [])
   })
 
   it('dragging a line over one drawn the same way erases it too, and the line can then be drawn again', async () => {
-    await drag([[2.5, 2.5], [2.5, 4.5]])
+    await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     assert.deepEqual(await penOf(['2,2', '2,3']), ['2,2:1n', '2,3:1n'])
     await eraseDrag([[2.5, 2.5], [2.5, 4.5]])
     assert.deepEqual(await settle(() => penOf(['2,2', '2,3']), []), [])
-    await drag([[2.5, 4.5], [2.5, 2.5]])
+    await drag(p, [[2.5, 4.5], [2.5, 2.5]])
     assert.deepEqual(await penOf(['2,2', '2,3']), ['2,2:1o', '2,3:1o'])
   })
 
   it('the Thickness slider scales the arrow lines already drawn: a wider line and fewer arrows; 5 gives them back', async () => {
-    const slider = (value) => p.locator('#pen-tool-extras-thickness').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+    const slider = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
     const sample = async () => { const [g] = (await chevronGroups()).filter((x) => x.cls === 'cell-pen pen-1 pencolor-o'); return { lineWidth: g.lineWidth, count: headings(g.chevrons).length } }
     await slider(5)
     const normal = await settle(async () => (await sample()).lineWidth, CHEVRON.line * 5)
@@ -335,40 +280,38 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the Arrow spacing slider (3 to 12, 5 by default) is a draft until Save, then redraws the arrow lines already drawn: wider spacing gives fewer arrows, and Restore defaults then Save gives 5 back', async () => {
     await selectChevronPen(3)
-    await drag([[2.5, 1.5], [2.5, 4.5]])
+    await drag(p, [[2.5, 1.5], [2.5, 4.5]])
     const arrows = async () => (await chevronGroups()).reduce((sum, g) => sum + headings(g.chevrons).length, 0)
     const base = await arrows()
     assert.equal(base > 0, true)
     const editor = () => p.locator('#pen-tool-extras-editor')
     const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
-    const openEditor = () => openExtrasEditor(p)
-    const closeWith = (text) => closeExtrasEditorWith(p, text)
     const setSpacing = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-    await openEditor()
+    await openExtrasEditor(p)
     assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), [String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), String(ARROW_SPACING.fallback)])
     await setSpacing(12)
     assert.equal(await editor().locator('output[data-readout="arrowSpacing"]').textContent(), '12', 'the value moves with the slider')
     assert.equal(await arrows(), base, 'a draft changes nothing before Save')
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await arrows(), base)
     assert.equal(await saved(ARROW_SPACING_KEY), null)
-    await openEditor()
+    await openExtrasEditor(p)
     await setSpacing(12)
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(ARROW_SPACING_KEY), 12)
     const wide = await settle(async () => (await arrows()) < base, true)
     assert.equal(wide, true, `fewer arrows at spacing 12 than ${base}`)
     const sparse = await arrows()
     await reload()
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await slider().inputValue(), '12', 'saved over a reload')
     await setSpacing(3)
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.equal(await settle(async () => (await arrows()) > base, true), true, 'denser at spacing 3')
-    await openEditor()
+    await openExtrasEditor(p)
     await p.locator('.dialog button').filter({ hasText: /^\s*Restore defaults\s*$/ }).first().click()
     assert.equal(await slider().inputValue(), '5')
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(ARROW_SPACING_KEY), null, 'the default spacing is not kept')
     assert.equal(await settle(arrows, base), base)
     assert.equal(sparse < base, true)
@@ -377,15 +320,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the Opacity slider fades the chevron lines with the pen layer: the group and its parts show at the slider\'s value', async () => {
     const shown = async (selector) => [...new Set(await effectiveOpacities(p, selector))]
-    await p.locator('#pen-tool-extras-opacity').evaluate((el) => { el.value = '50'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+    await setSlider(p, '#pen-tool-extras-opacity', 50)
     assert.deepEqual(await settle(() => shown('#cell-pen > g.cell-pen'), [0.5]), [0.5])
     assert.deepEqual(await shown('#cell-pen > g.cell-pen > path'), [0.5])
-    await p.locator('#pen-tool-extras-opacity').evaluate((el) => { el.value = '80'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+    await setSlider(p, '#pen-tool-extras-opacity', 80)
     assert.deepEqual(await settle(() => shown('#cell-pen > g.cell-pen'), [0.8]), [0.8])
   })
 
   it('a cell circle drawn with a page 3 pen is an ordinary solid mark, with no chevrons', async () => {
-    const [x, y] = await cellCentre(5, 1)
+    const [x, y] = await cellCentre(p, 5, 1)
     await p.mouse.click(x, y)
     assert.equal(await settle(async () => (await penOf(['5,1'])).length, 1), 1)
     assert.deepEqual(await penOf(['5,1']), ['5,1:5n'])
@@ -395,7 +338,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('an edge mark clicked with a page 3 pen is stored in the pen\'s own character and stays a plain mark', async () => {
-    const [x, y, size] = await cellCentre(5, 5)
+    const [x, y, size] = await cellCentre(p, 5, 5)
     await p.mouse.click(x + size / 2, y)
     assert.equal(await settle(async () => (await penOf(['5,5'])).length, 1), 1)
     const stored = (await penOf(['5,5']))[0]
@@ -408,10 +351,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await restartPuzzle(p)
     await press(9)
     assert.equal(await selected(), 'z')
-    await drag([[0.5, 0.5], [0.5, 2.5]])
-    await drag([[2.5, 8.5], [2.5, 6.5]])
+    await drag(p, [[0.5, 0.5], [0.5, 2.5]])
+    await drag(p, [[2.5, 8.5], [2.5, 6.5]])
     const want = ['0,0:1z', '0,1:1z', '2,6:10', '2,7:10']
-    assert.deepEqual((await penValues()).filter((v) => /:1[z0]$/.test(v)), want)
+    assert.deepEqual((await penEntries(p)).filter((v) => /:1[z0]$/.test(v)), want)
     const nine = async () => (await chevronGroups()).filter((g) => /pencolor-[z0]$/.test(g.cls)).map((g) => [g.cls, headings(g.chevrons)[0]]).sort()
     const drawn = await nine()
     assert.deepEqual(drawn, [['cell-pen pen-1 pencolor-0', 'W'], ['cell-pen pen-1 pencolor-0', 'W'], ['cell-pen pen-1 pencolor-z', 'E'], ['cell-pen pen-1 pencolor-z', 'E']])
@@ -419,18 +362,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undoAll()
     assert.equal(await settle(strokeCount, 0), 0)
     await read((r) => Framework.app.loadReplay(r), replay)
-    assert.deepEqual(await settle(async () => (await penValues()).filter((v) => /:1[z0]$/.test(v)), want), want)
+    assert.deepEqual(await settle(async () => (await penEntries(p)).filter((v) => /:1[z0]$/.test(v)), want), want)
     await reload()
-    assert.deepEqual(await settle(async () => (await penValues()).filter((v) => /:1[z0]$/.test(v)), want), want)
+    assert.deepEqual(await settle(async () => (await penEntries(p)).filter((v) => /:1[z0]$/.test(v)), want), want)
     assert.deepEqual(await settle(nine, drawn), drawn)
   })
 
-  it('page 2 and page 1 pens still draw as before beside the chevron lines', async () => {
+  it('page 1 pens still draw plain lines beside the chevron lines', async () => {
     await p.locator(PAGE_BUTTON).click()
-    assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+    assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
     await press(2)
-    await drag([[8.5, 0.5], [8.5, 2.5]])
-    assert.deepEqual((await penValues()).filter((v) => v.startsWith('8,0:')), ['8,0:12'])
+    await drag(p, [[8.5, 0.5], [8.5, 2.5]])
+    assert.deepEqual((await penEntries(p)).filter((v) => v.startsWith('8,0:')), ['8,0:12'])
     assert.equal(await read(() => document.querySelectorAll('.cell-pen.pen-1.pencolor-2').length), 2)
     assert.equal(await read(() => document.querySelectorAll('#cell-pen > g.cell-pen.pencolor-2').length), 0, 'a page 1 line is a plain path')
   })
