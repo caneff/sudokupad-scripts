@@ -289,33 +289,46 @@
   const doNothing = () => {}
 
   // A table row: the key it saves under, its default, what makes saved data (untrusted) usable, and `effect`, which brings the page in line once
-  // `inForce` holds the new value. The style is written after the effects, so an effect need not.
-  function slider (key, range, effect) {
-    return { key, fallback: range.fallback, normalize: (data) => inRange(data, range) ? data : range.fallback, effect }
+  // `inForce` holds the new value. The style is written after the effects, so an effect need not. `dialog` places its row in the dialog: its
+  // `label`, and its `section` or the box it sits `under` (a flag's name, or `name.flag` for one of a set), hidden while that box is unticked.
+  function slider (key, range, effect, dialog) {
+    return { key, fallback: range.fallback, normalize: (data) => inRange(data, range) ? data : range.fallback, effect, range, dialog }
   }
 
-  function flag (key, effect = doNothing) {
-    return { key, fallback: true, normalize: (data) => data !== false, effect }
+  function flag (key, effect = doNothing, dialog) {
+    return { key, fallback: true, normalize: (data) => data !== false, effect, dialog }
   }
 
-  function flags (key, names, effect) {
-    return { key, fallback: decodeFlags(names), normalize: (data) => decodeFlags(names, data), effect }
+  // `dialog.attribute` names the boxes' data attribute when it is not the setting's name; `dialog.labels` gives each flag a row.
+  function flags (key, names, effect, dialog) {
+    return { key, fallback: decodeFlags(names), normalize: (data) => decodeFlags(names, data), effect, dialog }
   }
 
   // Every setting the dialog holds. `lineStyles` is which line styles (page 2 dashed lines, page 3 arrow lines) are enabled, and `show` which panel
-  // sliders show. `outline` is the white outline on the pen layer. Marks and the line mode are saved their own way.
+  // sliders show: its box sits in each slider row that names it as `box`. Marks and the line mode are saved their own way.
   const SETTINGS = {
-    thickness: slider('PenColor_thickness', THICKNESS, adoptThickness),
-    opacity: slider('PenColor_opacity', OPACITY, adoptOpacity),
-    dash: slider('PenColor_dash', DASH, syncPenPanel),
-    arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, redrawArrowLines),
-    outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline),
-    outline: flag('PenColor_outline', adoptOutline),
-    middleErase: flag('PenColor_middleerase'),
-    lineStyles: flags('PenColor_linestyles', ['dashed', 'arrows'], adoptLineStyles),
-    show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow)
+    thickness: slider('PenColor_thickness', THICKNESS, adoptThickness, { label: 'Thickness', section: 'Line settings', box: 'show' }),
+    opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: 'Opacity (%)', section: 'Line settings', box: 'show' }),
+    dash: slider('PenColor_dash', DASH, syncPenPanel, { label: 'Dash length', under: 'lineStyles.dashed' }),
+    arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, redrawArrowLines, { label: 'Arrow spacing', under: 'lineStyles.arrows' }),
+    outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline, { label: 'Outline width', under: 'outline' }),
+    outline: flag('PenColor_outline', adoptOutline, { label: 'White outline on lines and marks', section: 'Other' }),
+    middleErase: flag('PenColor_middleerase', doNothing, { label: 'Middle click erases a whole line', section: 'Other' }),
+    lineStyles: flags('PenColor_linestyles', ['dashed', 'arrows'], adoptLineStyles,
+      { section: 'Line styles', attribute: 'style', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
+    show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' })
   }
   const SETTING_NAMES = Object.keys(SETTINGS)
+  const boxAttribute = (name) => SETTINGS[name].dialog.attribute || name
+
+  const boxValue = (state, under) => under.split('.').reduce((value, name) => value[name], state)
+
+  // `draft` with the box of `dataset` (a dialog checkbox's) ticked or not; undefined for a box no table row has.
+  function draftWithBox (draft, dataset, checked) {
+    const name = SETTING_NAMES.find((n) => SETTINGS[n].dialog && !SETTINGS[n].range && boxAttribute(n) in dataset)
+    const flagName = name && dataset[boxAttribute(name)]
+    return name && { ...draft, [name]: flagName ? { ...draft[name], [flagName]: checked } : checked }
+  }
 
   // Two values of one setting are the same when equal, name by name for a `flags` setting.
   function sameValue (a, b) {
@@ -1085,7 +1098,6 @@
   const COLUMN_HEADING = 'font-size:.8rem;color:#666;font-weight:400;justify-self:center;white-space:nowrap'
   const DIVIDER = '<div style="border-top:1px solid #e3dff0;margin:12px 0 0"></div>'
   const DIALOG_CLASS = 'pen-tool-extras-dialog'
-  const STYLE_SLIDERS = { dashed: 'dash', arrows: 'arrowSpacing' }
 
   // The look of the dialog's button row (Restore defaults as small underlined text at the left, Cancel and Save at the right, under a
   // divider), of the SudokuPad colors button and of the pen line mode pulldown. Scoped by DIALOG_CLASS, so SudokuPad's other dialogs are left alone.
@@ -1099,11 +1111,8 @@
     `#${EDITOR_ID} select[data-line-mode] { font-size: 0.95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
   ].join('\n')
 
-  // The dialog's body at the state it holds: the nine pen colors as a 3 by 3 grid in the order of the pen
-  // tool's buttons (1 2 3, 4 5 6, 7 8 9), each with its number; Line settings (the thickness and opacity sliders, each with the box that
-  // shows it in the pen tool's panel); Line styles (dashed and arrow lines, each with an Enable box and a slider that is hidden while it is unticked);
-  // the table of marks a click cycles through; the outline and the middle click boxes; the line mode. A slider here is a draft that takes effect on
-  // Save, so the panel's own sliders and these show the same value when the dialog opens.
+  // The dialog's body: the pen colors in the order of the pen tool's buttons (1 2 3, 4 5 6, 7 8 9), the rows of SETTINGS by section, the marks
+  // and the line mode. Its values are drafts that take effect on Save, so the panel's sliders and these agree when the dialog opens.
   function renderEditor (state) {
     const cells = PEN_COLOR_NUMBERS.map((n) =>
       '<div style="display:flex;align-items:center;gap:8px">' +
@@ -1119,19 +1128,34 @@
       `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}" aria-label="${name}" title="${name}"${state.marks[key] ? ' checked' : ''}>` +
       `${markPicture(picture)}</label>`
     const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} style="margin:0;justify-self:center">`
-    // `shown` false hides the row (a setting under an unticked box); `boxMarkup` is the box in the fourth column; `indented` sets the label under a name above it.
-    const sliderRow = (key, label, range, value, { indented = false, shown = true, boxMarkup = '<span></span>' } = {}) =>
-      `<div data-row="${key}" style="${SLIDER_COLUMNS}${shown ? '' : ';display:none'}">` +
-      `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;margin:0${indented ? ';padding-left:1.2em;color:#444;box-sizing:border-box' : ''}">${label}</label>` +
-      `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" style="width:100%;min-width:0;margin:0">` +
-      `<output data-readout="${key}">${value}</output>${boxMarkup}</div>`
-    // A name and its Enable box, with the slider row under it, hidden while the box is unticked.
-    const styleBlock = (key, name, enabled, sliderMarkup) =>
-      `<div style="${SLIDER_COLUMNS};margin-bottom:0"><span style="grid-column:1 / 4">${name}</span>` +
-      `${box(`id="pen-tool-extras-style-${key}" data-style="${key}" aria-label="Enable ${name}"`, enabled)}</div>` + sliderMarkup
+    const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+    const flagBox = (name, flagName, extra = '') =>
+      box(`id="pen-tool-extras-${boxAttribute(name)}-${flagName}" data-${boxAttribute(name)}="${flagName}"${extra}`, state[name][flagName], SETTINGS[name].dialog.title)
+    const sliderRow = (key) => {
+      const { range, dialog: { label, under, box } } = SETTINGS[key]
+      const value = state[key]
+      return `<div data-row="${key}" style="${SLIDER_COLUMNS}${!under || boxValue(state, under) ? '' : ';display:none'}">` +
+        `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;margin:0${under ? ';padding-left:1.2em;color:#444;box-sizing:border-box' : ''}">${label}</label>` +
+        `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" style="width:100%;min-width:0;margin:0">` +
+        `<output data-readout="${key}">${value}</output>${box ? flagBox(box, key) : '<span></span>'}</div>`
+    }
+    const rowsUnder = (path) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog?.under === path).map(sliderRow).join('')
+    const labelled = (name) => '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
+      `<input type="checkbox" id="pen-tool-extras-${kebab(name)}" data-${kebab(name)}${state[name] ? ' checked' : ''} style="margin:0">` +
+      `<label for="pen-tool-extras-${kebab(name)}" style="width:auto;text-align:left;margin:0">${SETTINGS[name].dialog.label}</label></div>`
+    const styleBlock = (name, flagName, text) =>
+      `<div style="${SLIDER_COLUMNS};margin-bottom:0"><span style="grid-column:1 / 4">${text}</span>` +
+      `${flagBox(name, flagName, ` aria-label="Enable ${text}"`)}</div>`
+    const settingRows = (name) => {
+      const { range, dialog: { labels } } = SETTINGS[name]
+      if (range) return sliderRow(name)
+      if (labels) return Object.entries(labels).map(([flagName, text]) => styleBlock(name, flagName, text) + rowsUnder(`${name}.${flagName}`)).join('')
+      return labelled(name) + rowsUnder(name)
+    }
+    const sectionRows = (section) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog?.section === section).map(settingRows).join('')
     const heading = (text, caption) =>
       DIVIDER + `<div style="${SLIDER_COLUMNS};margin:10px 0 4px"><span style="font-weight:600;grid-column:1 / 4">${text}</span>` +
-      `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>`
+      `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>` + sectionRows(text)
     const markRow = (label, cellsMarkup) => `<div>${label}</div>${cellsMarkup}`
     const columnHead = (text) => `<div style="font-size:.85rem;color:#666">${text}</div>`
     const marksTable = '<div style="display:grid;grid-template-columns:max-content repeat(3, max-content);column-gap:28px;row-gap:6px;align-items:center;margin:4px 0">' +
@@ -1139,23 +1163,12 @@
       markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('circle', 'Edge Circle', 'circle') + markBox('directions', 'Edge Directions', 'directions')) +
       markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerCircle', 'Corner Circle', 'circle') + '<div></div>') +
       '</div>'
-    const labelled = (id, attributes, checked, text) =>
-      '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
-      `<input type="checkbox" id="${id}" ${attributes}${checked ? ' checked' : ''} style="margin:0">` +
-      `<label for="${id}" style="width:auto;text-align:left;margin:0">${text}</label></div>`
     return offNote(state.off) + '<div style="font-weight:600">Pen colors</div>' + colorsRow +
       missingNote(state.missing) +
       heading('Line settings', 'Slider in panel') +
-      sliderRow('thickness', 'Thickness', THICKNESS, state.thickness, { boxMarkup: box('id="pen-tool-extras-show-thickness" data-show="thickness"', state.show.thickness, 'Show this slider in the pen panel') }) +
-      sliderRow('opacity', 'Opacity (%)', OPACITY, state.opacity, { boxMarkup: box('id="pen-tool-extras-show-opacity" data-show="opacity"', state.show.opacity, 'Show this slider in the pen panel') }) +
       heading('Line styles', 'Enable') +
-      styleBlock('dashed', 'Dashed lines', state.lineStyles.dashed, sliderRow('dash', 'Dash length', DASH, state.dash, { indented: true, shown: state.lineStyles.dashed })) +
-      styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, sliderRow('arrowSpacing', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) +
       sectionHeading('Marks a click cycles through') + marksTable +
-      sectionHeading('Other') +
-      labelled('pen-tool-extras-outline', 'data-outline', state.outline, 'White outline on lines and marks') +
-      sliderRow('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth, { indented: true, shown: state.outline }) +
-      labelled('pen-tool-extras-middle-erase', 'data-middle-erase', state.middleErase, 'Middle click erases a whole line') +
+      sectionHeading('Other') + sectionRows('Other') +
       lineModeChoice(state.lineMode)
   }
 
@@ -1316,7 +1329,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, shapeOf, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, DEFAULT_MARK_SETTINGS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, shapeOf, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, DEFAULT_MARK_SETTINGS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com) and is left alone;
   // a Framework without `getApp` is a SudokuPad this script cannot hook, which is reported.
@@ -1753,8 +1766,10 @@
     })
     box = document.getElementById(EDITOR_ID)
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
-    // A ticked or unticked box shows or hides the slider row under it at once; the slider keeps its value.
-    const showRow = (key, shown) => { box.querySelector(`[data-row="${key}"]`).style.display = shown ? 'grid' : 'none' }
+    // A ticked or unticked box shows or hides the slider rows under it at once; a slider keeps its value.
+    const showRows = () => SETTING_NAMES.filter((name) => SETTINGS[name].dialog?.under).forEach((name) => {
+      box.querySelector(`[data-row="${name}"]`).style.display = boxValue(draft, SETTINGS[name].dialog.under) ? 'grid' : 'none'
+    })
     draw()
     arrangeButtons(box)
     // `change` fires when a color picker closes (the swatch the user sees is already the new
@@ -1783,31 +1798,13 @@
         lineMode = normalizeLineMode(mode.value)
         return
       }
-      const outlined = event.target.closest('input[data-outline]')
-      if (outlined) {
-        draft.outline = outlined.checked
-        showRow('outlineWidth', draft.outline)
-        return
-      }
-      const erasing = event.target.closest('input[data-middle-erase]')
-      if (erasing) {
-        draft.middleErase = erasing.checked
-        return
-      }
-      const styled = event.target.closest('input[data-style]')
-      if (styled) {
-        draft.lineStyles = { ...draft.lineStyles, [styled.dataset.style]: styled.checked }
-        showRow(STYLE_SLIDERS[styled.dataset.style], styled.checked)
-        return
-      }
-      const shown = event.target.closest('input[data-show]')
-      if (shown) {
-        draft.show = { ...draft.show, [shown.dataset.show]: shown.checked }
-        return
-      }
-      const mark = event.target.closest('input[type="checkbox"]')
-      if (mark) {
-        marks = { ...marks, [mark.dataset.mark]: mark.checked }
+      const ticked = event.target.closest('input[type="checkbox"]')
+      if (ticked) {
+        const next = draftWithBox(draft, ticked.dataset, ticked.checked)
+        if (next) {
+          draft = next
+          showRows()
+        } else marks = { ...marks, [ticked.dataset.mark]: ticked.checked }
         return
       }
       const el = event.target.closest('input[type="color"]')

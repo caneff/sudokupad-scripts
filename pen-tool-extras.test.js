@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
+  SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -1117,6 +1117,30 @@ test('the dialog always holds the thickness, opacity, dash, arrow spacing and ou
     ['arrowSpacing', String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), '7'],
     ['outlineWidth', String(OUTLINE_WIDTH.min), String(OUTLINE_WIDTH.max), String(OUTLINE_WIDTH.step), '2']
   ])
+})
+
+test('every slider in the settings table has one dialog row, with the label and range of its table entry', () => {
+  const html = renderEditor(editorState())
+  const sliders = Object.entries(SETTINGS).filter(([, row]) => row.range)
+  assert.deepEqual(sliders.map(([name, row]) => [name, row.dialog.label]), [
+    ['thickness', 'Thickness'], ['opacity', 'Opacity (%)'], ['dash', 'Dash length'], ['arrowSpacing', 'Arrow spacing'], ['outlineWidth', 'Outline width']
+  ])
+  for (const [name, { range, dialog }] of sliders) {
+    const row = rowOf(html, name)
+    assert.match(row, new RegExp(`<label for="pen-tool-extras-setting-${name}"[^>]*>${dialog.label.replace(/[()]/g, '\\$&')}</label>`), name)
+    assert.match(row, new RegExp(`data-setting="${name}" min="${range.min}" max="${range.max}" step="${range.step}"`), name)
+  }
+  assert.equal((html.match(/<input type="range"/g) || []).length, sliders.length)
+})
+
+test('a box ticked in the dialog sets its setting in the draft through the table; a mark box is not a table row', () => {
+  const draft = editorState()
+  assert.equal(draftWithBox(draft, { outline: '' }, false).outline, false)
+  assert.equal(draftWithBox(draft, { middleErase: '' }, false).middleErase, false)
+  assert.deepEqual(draftWithBox(draft, { style: 'dashed' }, false).lineStyles, { dashed: false, arrows: true })
+  assert.deepEqual(draftWithBox(draft, { show: 'opacity' }, false).show, { thickness: true, opacity: false })
+  assert.deepEqual(draft.lineStyles, { dashed: true, arrows: true }, 'the draft given is left alone')
+  assert.equal(draftWithBox(draft, { mark: 'x' }, false), undefined)
 })
 
 test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
