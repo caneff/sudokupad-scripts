@@ -1,7 +1,7 @@
 // Live check of pen-tool-extras.user.js's settings gear on SudokuPad's pen tool button (#control-pen), on sudokupad.app in headless Chromium.
 // A real touch screen stays untested. The clicks are real mouse input; the tap is Chromium's emulated touch.
 // That the gear sits clear of the pen icon is judged on the screenshot in the PR, not here.
-/* global Framework */
+/* global Framework, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -52,6 +52,20 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
     assert.equal(m.h, 13)
     assert.equal(Math.round(m.right), 2, 'right inset')
     assert.equal(Math.round(m.top), 2, 'top inset')
+  })
+
+  // The glyph is drawn in the border's purple on a white box. SudokuPad turns a selected tool's icons white, which hid it (#213).
+  it('the gear glyph is drawn in purple, not white, with the pen tool selected and not selected', async () => {
+    const PURPLE = 'rgb(106, 27, 154)'
+    const glyphFill = () => p.evaluate((gear) => getComputedStyle(document.querySelector(gear).querySelector('path')).fill, GEAR)
+    const other = await p.evaluate(() => [...document.querySelectorAll('.controls-tool button, .controls-tool [role=button]')].find((e) => e.id && e.id !== 'control-pen')?.id)
+    assert.ok(other, 'another tool button exists')
+    await p.click(`#${other}`)
+    assert.equal(await glyphFill(), PURPLE, 'pen tool not selected')
+    const box = await p.locator(BUTTON).boundingBox()
+    await p.mouse.click(box.x + 6, box.y + box.height - 6)
+    assert.equal(await selectedId(), 'control-pen')
+    assert.equal(await glyphFill(), PURPLE, 'pen tool selected')
   })
 
   it('a click on the gear with another tool selected opens the dialog and leaves that tool selected', async () => {
