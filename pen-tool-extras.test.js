@@ -8,7 +8,7 @@ const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
-  stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
+  stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
@@ -452,7 +452,7 @@ const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCirc
 const NONE = { x: false, directions: false, circle: false, cornerX: false, cornerCircle: false }
 
 test('fresh install has every mark ticked', () => {
-  assert.deepEqual(DEFAULT_MARK_SETTINGS, ALL)
+  assert.deepEqual(SETTINGS.marks.fallback, ALL)
   assert.deepEqual(normalizeMarkSettings(null), ALL)
   assert.deepEqual(normalizeMarkSettings(undefined), ALL)
 })
@@ -1047,7 +1047,7 @@ test('with both sliders hidden the panel has no slider block at all, so no gap i
 const editorState = (over = {}) => ({
   colors: SUDOKUPAD_PEN_COLORS,
   missing: [],
-  marks: DEFAULT_MARK_SETTINGS,
+  marks: ALL,
   lineMode: 'both',
   thickness: 5,
   opacity: 80,
@@ -1133,14 +1133,14 @@ test('every slider in the settings table has one dialog row, with the label and 
   assert.equal((html.match(/<input type="range"/g) || []).length, sliders.length)
 })
 
-test('a box ticked in the dialog sets its setting in the draft through the table; a mark box is not a table row', () => {
+test('a box ticked in the dialog sets its setting in the draft through the table, a mark box included', () => {
   const draft = editorState()
   assert.equal(draftWithBox(draft, { outline: '' }, false).outline, false)
   assert.equal(draftWithBox(draft, { middleErase: '' }, false).middleErase, false)
   assert.deepEqual(draftWithBox(draft, { style: 'dashed' }, false).lineStyles, { dashed: false, arrows: true })
   assert.deepEqual(draftWithBox(draft, { show: 'opacity' }, false).show, { thickness: true, opacity: false })
   assert.deepEqual(draft.lineStyles, { dashed: true, arrows: true }, 'the draft given is left alone')
-  assert.equal(draftWithBox(draft, { mark: 'x' }, false), undefined)
+  assert.deepEqual(draftWithBox(draft, { mark: 'cornerX' }, false).marks, { ...ALL, cornerX: false })
 })
 
 test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
@@ -1850,8 +1850,34 @@ test('the table holds each setting\'s saved key and default', () => {
     outline: ['PenColor_outline', true],
     middleErase: ['PenColor_middleerase', true],
     lineStyles: ['PenColor_linestyles', { dashed: true, arrows: true }],
-    show: ['PenColor_sliders', { thickness: true, opacity: true }]
+    show: ['PenColor_sliders', { thickness: true, opacity: true }],
+    marks: ['EdgeMarks_marks', ALL]
   })
+})
+
+// A store that keeps what is saved, as SudokuPad's own does between a save and the next read.
+function memoryStore (saved = {}) {
+  return { saved, getData: (key) => saved[key], setData: (key, value) => { saved[key] = value }, removeData: (key) => { delete saved[key] } }
+}
+
+test('the marks a save writes read back the same, and so do marks saved under the old circle names', () => {
+  const unticked = { ...ALL, circle: false, cornerCircle: false }
+  const store = memoryStore()
+  const current = settingDefaults()
+  saveChangedSettings(store, { ...current, marks: unticked }, current)
+  assert.deepEqual(readSettings(store).marks, unticked)
+  const oldSave = memoryStore({ EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } })
+  assert.deepEqual(readSettings(oldSave).marks, unticked)
+})
+
+test('saving one mark unticked writes the key, and saving all five ticked removes it so the next read is all ticked', () => {
+  const store = memoryStore()
+  const current = settingDefaults()
+  assert.deepEqual(saveChangedSettings(store, { ...current, marks: { ...ALL, directions: false } }, current), ['marks'])
+  assert.deepEqual(store.saved, { EdgeMarks_marks: { ...ALL, directions: false } })
+  assert.deepEqual(saveChangedSettings(store, { ...current, marks: ALL }, current), ['marks'])
+  assert.deepEqual(store.saved, {})
+  assert.deepEqual(readSettings(store).marks, ALL)
 })
 
 test('a slider row built from a range normalizes and saves by that range alone', () => {
@@ -1922,7 +1948,7 @@ test('readSettings normalizes what is saved under each key and falls back for th
 })
 
 test('settingDefaults holds every row\'s default', () => {
-  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, middleErase: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true } })
+  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, middleErase: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true }, marks: ALL })
 })
 
 test('changedSettings names only the settings whose value differs, reading flags by value', () => {
