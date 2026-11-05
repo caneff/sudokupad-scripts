@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.1
+// @version      1.14.2
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.1'
+  const VERSION = '1.14.2'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
@@ -367,7 +367,7 @@
     const order = [...cycle.types, 'empty']
     const from = order.indexOf(current)
     for (let step = 1; step <= order.length; step++) {
-      const type = order[(((from + direction * step) % order.length) + order.length) % order.length]
+      const type = order[stepPage(from, direction * step, order.length)]
       if (type === 'empty' || settings[cycle.setting[type]]) return type
     }
     throw new Error('pen-tool-extras: the cycle has no empty step')
@@ -648,8 +648,8 @@
   // segment, as wide as a page 1 line; each arrow in `chevrons` is a closed triangle, base corner, tip, base corner, the tip toward the way it was
   // dragged. Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
   function chevronLine (value, forward, row, col, thickness, spacing) {
-    const [start, end] = LINE_PATHS[value]
-    const [from, to] = (forward ? [start, end] : [end, start]).map(([r, c]) => [(col + c) * CELL_UNITS, (row + r) * CELL_UNITS])
+    const points = linePoints(value, row, col)
+    const [from, to] = (forward ? points : points.reverse()).map(([r, c]) => [c * CELL_UNITS, r * CELL_UNITS])
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
     // Arrows keep the size they have at the default thickness below it; only the line gets thinner.
@@ -1050,7 +1050,7 @@
   }
 
   // The one plain line that names the features that are off because SudokuPad changed; nothing when none is.
-  function offNote (off = []) {
+  function offNote (off) {
     if (!off.length) return ''
     return `<div style="margin:6px 0;max-width:20em">Off because SudokuPad changed: ${off.map((name) => FEATURE_LABELS[name]).join(', ')}</div>`
   }
@@ -1102,7 +1102,7 @@
   // the table of marks a click cycles through; the outline and the middle click boxes; the line mode. A slider here is a draft that takes effect on
   // Save, so the panel's own sliders and these show the same value when the dialog opens.
   function renderEditor (state) {
-    const off = new Set(state.off || [])
+    const off = new Set(state.off)
     const cells = PEN_COLORS.map((n) =>
       '<div style="display:flex;align-items:center;gap:8px">' +
       `<b style="width:1.2em;text-align:right">${n}</b>` +
@@ -1221,7 +1221,6 @@
       isOff,
       turnOff,
       offNames,
-      offLabels: () => offNames().map((name) => labels[name]),
       attempt (names, run, fallback = () => {}) {
         if ([].concat(names).every(isOff)) return fallback()
         try {
@@ -1233,6 +1232,60 @@
         }
       }
     }
+  }
+
+  // The midpoint of an edge, as [row, col] in cell units, for the cell that stores it.
+  function edgeMidpoint (edge, row, col) {
+    switch (edge) {
+      case '3': return [row + 0.5, col + 1]
+      case '4': return [row + 1, col + 0.5]
+      case 'b': return [row + 0.5, col]
+      default: return [row, col + 0.5]
+    }
+  }
+
+  // The point (as [row, col] in cell units) and shape that the value this script adds draws at, on
+  // the cell at (row, col) of a grid `cols` wide; null for any other value.
+  function addedMark (value, row, col, cols) {
+    const shape = shapeOf(value)
+    if (shape !== null) return { point: edgeMidpoint(edgeOf(value), row, col), shape }
+    const corner = cornerMarkOf(value)
+    if (corner === null) return null
+    return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
+  }
+
+  // Whether the arrow line `opts` asks `renderPen` for was dragged forward (true or false), when its value is a line and its
+  // class holds a page 3 color character (`cell-pen pen-1 pencolor-j`); null for anything else.
+  function chevronOf (opts) {
+    const match = /(?:^|\s)pencolor-(\S+)$/.exec(opts.className || '')
+    return match && LINE_VALUES.includes(opts.value) ? chevronWayOf(match[1]) : null
+  }
+
+  // An edge click has a select action and one pen action with an edge X value.
+  function isEdgeActs (acts) {
+    return acts !== null && acts.length === 2 && acts[0].type === 'select' && acts[1].type === 'pen' && EDGE_X.includes(acts[1].arg)
+  }
+
+  // The pen values a cell holds, without their colors.
+  function penValuesOf (cell) {
+    return (cell.pen || []).map((valueColor) => valueColor[0])
+  }
+
+  // The actions of one click that applies `plan` to `cell`: select it, toggle off what the plan
+  // removes, toggle on what it adds.
+  function planActs (cell, plan) {
+    return [
+      { type: 'select', arg: [cell] },
+      ...plan.remove.map((arg) => ({ type: 'pen', arg })),
+      ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])
+    ]
+  }
+
+  // Every pen line on the grid as { value, row, col, color }, read off the cells; marks are not lines and are left out.
+  function lineSegmentsOf (cells) {
+    return cells.flatMap((cell) => (cell.pen || [])
+      .filter((valueColor) => LINE_VALUES.includes(valueColor[0]))
+      .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
   }
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -1302,6 +1355,13 @@
       DASH,
       normalizeMarkSettings,
       stepType,
+      edgeMidpoint,
+      addedMark,
+      chevronOf,
+      isEdgeActs,
+      penValuesOf,
+      planActs,
+      lineSegmentsOf,
       planClick,
       planCornerClick,
       cornerAt,
@@ -1388,34 +1448,6 @@
     }
   }
 
-  // The midpoint of an edge, as [row, col] in cell units, for the cell that stores it.
-  function edgeMidpoint (edge, row, col) {
-    switch (edge) {
-      case '3': return [row + 0.5, col + 1]
-      case '4': return [row + 1, col + 0.5]
-      case 'b': return [row + 0.5, col]
-      default: return [row, col + 0.5]
-    }
-  }
-
-  // The point (as [row, col] in cell units) and shape that the value this script adds draws at, on
-  // the cell at (row, col); null for any other value.
-  function addedMark (value, row, col) {
-    const shape = shapeOf(value)
-    if (shape !== null) return { point: edgeMidpoint(edgeOf(value), row, col), shape }
-    const corner = cornerMarkOf(value)
-    if (corner === null) return null
-    const { cols } = Framework.app.grid
-    return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
-  }
-
-  // Whether the arrow line `opts` asks `renderPen` for was dragged forward (true or false), when its value is a line and its
-  // class holds a page 3 color character (`cell-pen pen-1 pencolor-j`); null for anything else.
-  function chevronOf (opts) {
-    const match = /(?:^|\s)pencolor-(\S+)$/.exec(opts.className || '')
-    return match && LINE_VALUES.includes(opts.value) ? chevronWayOf(match[1]) : null
-  }
-
   // Draws an arrow line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
   // eraser's lookups act on it as on any stroke) of a line and a path of filled arrows (the fill is set in CSS, with the group's color).
   function renderChevronLine (renderer, opts, forward) {
@@ -1449,7 +1481,7 @@
     const size = renderer.constructor.CellSize
     // The options to draw with: a mark's get the path of its shape.
     const withMarkPath = (self, opts) => {
-      const mark = addedMark(opts.value, opts.row, opts.col)
+      const mark = addedMark(opts.value, opts.row, opts.col, Framework.app.grid.cols)
       return mark === null ? opts : Object.assign({}, opts, { d: self.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125) })
     }
     proto.renderPen = function (opts = {}) {
@@ -1477,11 +1509,6 @@
       tool._actList.length = 0
     }
     return queued
-  }
-
-  // An edge click has a select action and one pen action with an edge X value.
-  function isEdgeActs (acts) {
-    return acts !== null && acts.length === 2 && acts[0].type === 'select' && acts[1].type === 'pen' && EDGE_X.includes(acts[1].arg)
   }
 
   // The mouse button of the latest press or release. SudokuPad calls `clickCell` on the
@@ -1538,21 +1565,6 @@
     return cornerAt(r, c, rows, cols)
   }
 
-  // The pen values a cell holds, without their colors.
-  function penValuesOf (cell) {
-    return (cell.pen || []).map((valueColor) => valueColor[0])
-  }
-
-  // The actions of one click that applies `plan` to `cell`: select it, toggle off what the plan
-  // removes, toggle on what it adds.
-  function planActs (cell, plan) {
-    return [
-      { type: 'select', arg: [cell] },
-      ...plan.remove.map((arg) => ({ type: 'pen', arg })),
-      ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])
-    ]
-  }
-
   // A click on a grid corner: this script's corner cycle (backwards after a right click) on the
   // cell that stores the corner, sent as one group like any pen click.
   function clickCorner (tool, corner) {
@@ -1562,13 +1574,6 @@
     tool.actStart()
     planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, steppingBackwards())).forEach((act) => tool.actAdd(act))
     inStock(() => tool.actSend())
-  }
-
-  // Every pen line on the grid as { value, row, col, color }, read off the cells; marks are not lines and are left out.
-  function lineSegmentsOf (cells) {
-    return cells.flatMap((cell) => (cell.pen || [])
-      .filter((valueColor) => LINE_VALUES.includes(valueColor[0]))
-      .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
   }
 
   // Erases the whole line under `point` ({ r, c } in cells from the grid's top left): every segment joined to the one nearest it and

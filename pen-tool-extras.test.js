@@ -14,7 +14,8 @@ const {
   LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
-  createFeatures, inStock, FEATURE_LABELS, FEATURE_NEEDS
+  createFeatures, inStock, FEATURE_LABELS, FEATURE_NEEDS,
+  edgeMidpoint, addedMark, chevronOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
@@ -1053,6 +1054,7 @@ const editorState = (over = {}) => ({
   middleErase: true,
   outline: true,
   outlineWidth: 2,
+  off: [],
   ...over
 })
 
@@ -1697,16 +1699,16 @@ test('turning one feature off leaves the others on', () => {
 test('a feature that needs another is off with it, and the list names both in the dialog\'s order', () => {
   const { features } = newFeatures()
   features.turnOff('pages', 'no setSelectedColor')
-  assert.deepEqual(features.offLabels(), ['pen pages', 'dashes', 'arrow lines'])
+  assert.deepEqual(features.offNames(), ['pages', 'dashes', 'chevrons'])
   const second = newFeatures().features
   second.turnOff('marks', 'no getInputRc')
-  assert.deepEqual(second.offLabels(), ['marks', 'right click'])
+  assert.deepEqual(second.offNames(), ['marks', 'rightClick'])
 })
 
 test('one throw turns off every feature the attempt names, and the others stay on', () => {
   const { features } = newFeatures()
   features.attempt(['sliders', 'outline'], () => { throw new Error('hint') })
-  assert.deepEqual(features.offLabels(), ['sliders', 'outline'])
+  assert.deepEqual(features.offNames(), ['sliders', 'outline'])
   assert.equal(features.isOff('marks'), false)
 })
 
@@ -1737,7 +1739,6 @@ test('a throw in a SudokuPad function the feature only called passes through and
 
 test('the dialog shows one plain line naming the features that are off, and nothing when none is', () => {
   assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
-  assert.doesNotMatch(renderEditor(editorState()), /Off because/)
   assert.match(renderEditor(editorState({ off: ['chevrons'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
   assert.match(renderEditor(editorState({ off: ['marks', 'rightClick'] })), />Off because SudokuPad changed: marks, right click<\/div>/)
 })
@@ -1868,4 +1869,63 @@ test('saveSetting removes the key of a value at its default and sets any other',
     ['remove', 'PenColor_linestyles'],
     ['set', 'PenColor_linestyles', { dashed: false, arrows: true }]
   ])
+})
+
+// The helpers a click and a redraw share, tested without SudokuPad.
+test('edgeMidpoint puts each edge value on the right side of the cell', () => {
+  assert.deepEqual(edgeMidpoint('3', 2, 4), [2.5, 5])
+  assert.deepEqual(edgeMidpoint('4', 2, 4), [3, 4.5])
+  assert.deepEqual(edgeMidpoint('b', 2, 4), [2.5, 4])
+  assert.deepEqual(edgeMidpoint('c', 2, 4), [2, 4.5])
+})
+
+test('isEdgeActs accepts a select then an edge pen action, and nothing else', () => {
+  const select = { type: 'select', arg: [] }
+  const pen = (arg) => ({ type: 'pen', arg })
+  assert.equal(isEdgeActs([select, pen('3')]), true)
+  assert.equal(isEdgeActs(null), false)
+  assert.equal(isEdgeActs([select]), false)
+  assert.equal(isEdgeActs([select, pen('3'), pen('4')]), false)
+  assert.equal(isEdgeActs([{ type: 'deselect' }, pen('3')]), false)
+  assert.equal(isEdgeActs([select, pen('1')]), false)
+})
+
+test('chevronOf reads the way of an arrow line, and is null for anything else', () => {
+  const line = LINE_VALUES[0]
+  const way = chevronOf({ value: line, className: `cell-pen pen-1 pencolor-${PEN_PAGES[2].chars[0]}` })
+  assert.equal(way, chevronWayOf(PEN_PAGES[2].chars[0]))
+  assert.equal(typeof way, 'boolean')
+  assert.equal(chevronOf({ value: '3', className: `cell-pen pencolor-${PEN_PAGES[2].chars[0]}` }), null)
+  assert.equal(chevronOf({ value: line, className: 'cell-pen pen-1' }), null)
+  assert.equal(chevronOf({ value: line }), null)
+})
+
+test('addedMark draws an edge mark at its edge, a corner x as x and the other corner type as the circle, and a stock value as null', () => {
+  assert.equal(addedMark('1', 0, 0, 9), null)
+  assert.deepEqual(addedMark('h', 3, 4, 9), { point: edgeMidpoint('3', 3, 4), shape: '>' })
+  assert.deepEqual(addedMark('t', 3, 4, 9), { point: cornerPoint('tl', 3, 4, 9), shape: 'x' })
+  assert.deepEqual(addedMark('w', 3, 4, 9), { point: cornerPoint('tl', 3, 4, 9), shape: 'o' })
+  // The far corner's two cells sit on different corners, told apart by the grid's width.
+  assert.deepEqual(addedMark('v', 0, 8, 9), { point: [0, 9], shape: 'x' })
+  assert.deepEqual(addedMark('v', 0, 8, 12), { point: [1, 8], shape: 'x' })
+})
+
+test('penValuesOf lists the values of a cell without their colors, and none for a cell with no pen', () => {
+  assert.deepEqual(penValuesOf({ pen: ['3a', '4b'] }), ['3', '4'])
+  assert.deepEqual(penValuesOf({}), [])
+})
+
+test('planActs selects the cell, toggles off what the plan removes, then toggles on what it adds', () => {
+  const cell = { row: 1, col: 2 }
+  assert.deepEqual(planActs(cell, { remove: ['3', '4'], add: 'c' }), [
+    { type: 'select', arg: [cell] }, { type: 'pen', arg: '3' }, { type: 'pen', arg: '4' }, { type: 'pen', arg: 'c' }
+  ])
+  assert.deepEqual(planActs(cell, { remove: [], add: null }), [{ type: 'select', arg: [cell] }])
+})
+
+test('lineSegmentsOf lists the line values of every cell with their color, and leaves marks out', () => {
+  const line = LINE_VALUES[0]
+  const mark = MARK_VALUES[0]
+  const cells = [{ row: 1, col: 2, pen: [`${line}x`, `${mark}y`] }, { row: 0, col: 0 }]
+  assert.deepEqual(lineSegmentsOf(cells), [{ value: line, row: 1, col: 2, color: 'x' }])
 })
