@@ -11,9 +11,10 @@ import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { effectiveOpacities, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
+import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
 import { settle, SETTLE_MS, stable } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -58,8 +59,6 @@ const CORNERS = {
   'outer right, between rows 4 and 5': { corner: [4, SIZE], stored: [3, SIZE - 1], cycle: ['u', 'x', null] },
   'outer bottom, between columns 4 and 5': { corner: [SIZE, 4], stored: [SIZE - 1, 3], cycle: ['u', 'x', null] }
 }
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const START = /Start Puzzle|Continue|Resume/i
 
@@ -165,15 +164,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
-  const openEditor = async () => {
-    await openSettings(p)
-    await settingsEntry().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await dialogButton(text).click()
-    await editor().waitFor({ state: 'detached' })
-  }
+  const openEditor = () => openExtrasEditor(p)
+  const closeWith = (text) => closeExtrasEditorWith(p, text)
   const box = (mark) => editor().locator(`input[data-mark="${mark}"]`)
 
   const boot = async () => {

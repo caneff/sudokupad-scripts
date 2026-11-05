@@ -9,6 +9,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
@@ -34,7 +35,6 @@ const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Watches `read` for QUIET_MS and returns every distinct reading.
 async function watch (read) {

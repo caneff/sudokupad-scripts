@@ -8,6 +8,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
@@ -47,8 +48,6 @@ const LAYOUT_POLL_MS = 250
 const FIT_SLACK_PX = 1
 // How many stand-in buttons another script's row gets in the wrap test; enough to fill a second row.
 const OTHER_BUTTONS = 8
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Watches `read` for QUIET_MS and returns every distinct reading.
 async function watch (read) {

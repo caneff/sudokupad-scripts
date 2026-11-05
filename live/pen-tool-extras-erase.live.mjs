@@ -10,6 +10,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { closeExtrasEditorWith, openExtrasEditor, restartPuzzle } from './settings.mjs'
@@ -23,8 +24,6 @@ const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor
 const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGES = { 1: '123456789', 2: 'abcdefghi', 3: 'jlnprtvxz' }
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function startPuzzle (page) {
   await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })

@@ -9,9 +9,10 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { drawnWidth, headerVersion, openSettings } from './settings.mjs'
+import { closeExtrasEditorWith, drawnWidth, headerVersion, openExtrasEditor, openSettings } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -45,10 +46,24 @@ const CUSTOM_CELL = { css: 'rgb(10, 20, 200)', pen: '#05008c' }
 // The pickers appear only when the hold timer fires, so a count that has not moved yet is not a count that stopped.
 const HOLD_QUIET_MS = HOLD_TO_EDIT_MS + 500
 const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const START = /Start Puzzle|Continue|Resume/i
 const STYLE = '#pen-tool-extras-style'
+
+// Takes SudokuPad's color tool palette away, keeping it for `restorePalette`, so a script injected now waits for the tool.
+const removePalette = (page) => page.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
+const restorePalette = (page) => page.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
+
+// Adds a stroke element of pen value `value` into the element matching `parent`, as SudokuPad draws it, and returns the width it draws at.
+const probeStrokeWidth = (page, value, parent) => page.evaluate(([value, parent]) => {
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('class', `cell-pen pen-${value} pencolor-1`)
+  document.querySelector(parent).appendChild(path)
+  const style = window.getComputedStyle(path)
+  const computed = { strokeWidth: style.strokeWidth, transform: style.transform }
+  path.remove()
+  return computed
+}, [value, parent]).then(drawnWidth)
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -124,15 +139,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator('#control-pen').waitFor({ state: 'visible' })
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = async () => {
-    await openSettings(p)
-    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await dialogButton(text).click()
-    await editor().waitFor({ state: 'detached' })
-  }
+  const openEditor = () => openExtrasEditor(p)
+  const closeWith = (text) => closeExtrasEditorWith(p, text)
   const pick = (n, hex) => editor().locator(`input[data-pen="${n}"]`).fill(hex)
 
   before(async () => {
@@ -411,17 +419,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // The computed stroke width of every drawn stroke of pen color `n` (a drag draws a line and a
     // cell circle), as numbers.
     const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
-    // Adds a stroke element of pen value `value` to the drawing, as SudokuPad draws it, and returns the width it draws at.
-    const probeWidth = (value) => read((value) => {
-      const ns = 'http://www.w3.org/2000/svg'
-      const path = document.createElementNS(ns, 'path')
-      path.setAttribute('class', `cell-pen pen-${value} pencolor-1`)
-      document.querySelector('.cell-pen').parentNode.appendChild(path)
-      const style = window.getComputedStyle(path)
-      const computed = { strokeWidth: style.strokeWidth, transform: style.transform }
-      path.remove()
-      return computed
-    }, value).then(drawnWidth)
+    const probeWidth = (value) => probeStrokeWidth(p, value, '#cell-pen')
     const FULL = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
     const HALF = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
     // Every pen value's width, as { full: [...], half: [...] } of distinct numbers.
@@ -752,7 +750,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
       await p.getByRole('button', { name: START }).first().click()
       await p.locator('#control-undo').waitFor({ state: 'visible' })
-      await p.evaluate(() => { Framework.app.tools.colour.palette = undefined })
+      await removePalette(p)
       await p.addScriptTag({ content: script })
       // Nothing may happen for the script's whole wait, so this one is a sleep: the check is
       // that no color override appeared in the two seconds after its wait ran out. The style
@@ -760,9 +758,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       // variables are read: they must still be SudokuPad's own.
       await sleep(COLOR_TOOL_WAIT_MS + 2000)
       assert.deepEqual(await p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim())), OWN_PEN_HEX)
-      await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-      await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+      await openExtrasEditor(p)
       const values = await p.locator('#pen-tool-extras-editor input[type=color]').evaluateAll((es) => es.map((e) => e.value))
       assert.deepEqual(values, OWN_PEN_HEX)
       assert.deepEqual(errors, [])
@@ -780,7 +776,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
       await p.getByRole('button', { name: START }).first().click()
       await p.locator('#control-undo').waitFor({ state: 'visible' })
-      await p.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
+      await removePalette(p)
       await p.addScriptTag({ content: script })
       await p.evaluate(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
@@ -792,20 +788,11 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
         await settle(() => panel.isVisible(), true, 500)
       }
       await panel.evaluate((el) => { el.value = '11'; el.dispatchEvent(new Event('input', { bubbles: true })) })
-      await p.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
+      await restorePalette(p)
       // The script polls every 100 ms and then applies the derived colors; wait for them.
       const pen1 = () => p.evaluate(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-1').trim())
       assert.equal(await settle(pen1, PAGE_PENS[0][0]), PAGE_PENS[0][0])
-      const probe = () => p.evaluate(() => {
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-        path.setAttribute('class', 'cell-pen pen-1 pencolor-1')
-        document.querySelector('#svgrenderer').appendChild(path)
-        const style = window.getComputedStyle(path)
-        const computed = { strokeWidth: style.strokeWidth, transform: style.transform }
-        path.remove()
-        return computed
-      }).then(drawnWidth)
-      assert.equal(await probe(), 11)
+      assert.equal(await probeStrokeWidth(p, 1, '#svgrenderer'), 11)
     } finally {
       await context.close()
     }
@@ -820,15 +807,12 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
       await p.getByRole('button', { name: START }).first().click()
       await p.locator('#control-undo').waitFor({ state: 'visible' })
-      await p.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
+      await removePalette(p)
       await p.addScriptTag({ content: script })
-      await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-      await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+      await openExtrasEditor(p)
       await p.locator('#pen-tool-extras-editor input[data-pen="4"]').fill(FOUR.hex)
-      await p.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).first().click()
-      await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
-      await p.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
+      await closeExtrasEditorWith(p, 'Save')
+      await restorePalette(p)
       // The script polls every 100ms, so by 1.5s it has seen the tool and decided; the check is
       // that nothing then replaced the saved colors.
       await sleep(1500)

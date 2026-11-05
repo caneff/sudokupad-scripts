@@ -14,9 +14,11 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
+import { POLL_MS, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
@@ -46,10 +48,6 @@ const START = /Start Puzzle|Continue|Resume/i
 // The most white the rectangle may keep past the drawing on a side that has text on it, in page
 // pixels: the text's box is taller than its glyphs. The whole svg box leaves 20 or more.
 const TIGHT_SLACK_PX = 12
-const POLL_MS = 50
-const SETTLE_MS = 10000
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Runs `read` until two readings in a row agree, and returns that reading. A page that never
 // settles within SETTLE_MS fails with what was being waited on, not with its last reading.
