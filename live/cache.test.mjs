@@ -1,7 +1,7 @@
 // The pure parts of live/cache.mjs: where the recording lives, whether a run records or replays it,
 // and how a fresh recording is cleaned. Network-free, so it runs in `npm test`; the recording and
 // replay themselves are what `npm run test:live` exercises.
-import { after, before, describe, it } from 'node:test'
+import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
@@ -173,6 +173,17 @@ describe('ensureRecording', () => {
     assert.equal(calls.length, 2)
   })
 
+  it('takes over a lock left by a dead run, records, and releases it', async () => {
+    reset()
+    const lock = `${file()}.lock`
+    mkdirSync(lock, { recursive: true })
+    const old = (Date.now() - 11 * 60 * 1000) / 1000 // past LOCK_STALE_MS (10 minutes)
+    utimesSync(lock, old, old)
+    await ensure({})
+    assert.equal(calls.length, 1)
+    assert.equal(existsSync(lock), false)
+  })
+
   it('LIVE_OFFLINE=1 with no recording throws and records nothing', async () => {
     reset()
     await assert.rejects(ensure({ LIVE_OFFLINE: '1' }), /LIVE_OFFLINE=1/)
@@ -216,6 +227,7 @@ describe('routeSudokuPad', () => {
     }
   }
 
+  beforeEach(() => misses.clear())
   before(() => {
     saved = { XDG: process.env.XDG_CACHE_HOME, OFFLINE: process.env.LIVE_OFFLINE }
     cache = mkdtempSync(join(tmpdir(), 'cache-route-'))
@@ -244,7 +256,6 @@ describe('routeSudokuPad', () => {
     const url = 'https://sudokupad.app/assets/fonts/Other.ttf'
     assert.deepEqual(await t.request(url, 'font'), { aborted: true })
     assert.deepEqual([...misses], [url])
-    misses.clear()
   })
 
   it('aborts a tracker without listing it as a miss', async () => {
