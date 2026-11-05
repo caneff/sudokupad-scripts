@@ -410,6 +410,24 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await restorePalette()
   })
 
+  it('a saved page preset the palette no longer has stays shown, and cannot be picked, while the pages it has can be', async () => {
+    await openExtrasEditor(p)
+    await pickPreset('page-3')
+    await closeExtrasEditorWith(p, 'Save')
+    await read(() => {
+      const colors = { a: 'rgb(200, 0, 0)', b: 'rgb(0, 0, 200)' }
+      Framework.app.tools.colour.setPalette({ colors, pages: [Object.keys(colors)] })
+    })
+    await openExtrasEditor(p)
+    assert.equal(await presetShown(), 'page-3')
+    assert.deepEqual(await presetMenu().locator('option').evaluateAll((os) => os.map((o) => [o.value, o.disabled])), [['page-3', true], ['page-1', false], ['sudokupad', false]])
+    assert.deepEqual(await pickerValues(), PAGE_PENS[2])
+    await closeExtrasEditorWith(p, 'Cancel')
+    await restorePalette()
+    await read(([k, v]) => Framework.setData(k, v), [DATA_KEY, INSTALLED])
+    await reload()
+  })
+
   it('Save with no pick and no edit writes no colors', async () => {
     const elsewhere = { ...toObject(PAGE_PENS[1]), preset: 'page-2' }
     // Written behind the script's back, so a write by Save would show.
@@ -689,7 +707,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await closeExtrasEditorWith(p, 'Cancel')
     })
 
-    it('the edit is kept after a reload, and the set no longer follows the color page', async () => {
+    it('the edit is kept after a reload, and a change of color page leaves it', async () => {
       await reload()
       assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex })
       await swatchesAre(Object.values({ ...toObject(PAGE_PENS[0]), 4: FOUR.hex }))
@@ -763,7 +781,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-      // Past the 10 s limit older versions gave up at. The check is that nothing was saved or warned meanwhile, so this one is a sleep.
+      // Well past any short limit a wait might have. The check is that nothing was saved or warned meanwhile, so this one is a sleep.
       await sleep(12000)
       const pens = () => p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
       assert.deepEqual(await pens(), OWN_PEN_HEX)
@@ -772,12 +790,37 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await openExtrasEditor(p)
       const editor = p.locator('#pen-tool-extras-editor')
       assert.deepEqual(await editor.locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value)), OWN_PEN_HEX)
-      assert.deepEqual(await editor.locator('select[data-pen-preset] option').evaluateAll((os) => os.map((o) => o.value)), ['sudokupad'])
+      // The unsaved colors are shown first and cannot be picked, so SudokuPad default colors stays pickable.
+      assert.deepEqual(await editor.locator('select[data-pen-preset] option').evaluateAll((os) => os.map((o) => [o.value, o.disabled])), [['unsaved', true], ['sudokupad', false]])
+      assert.equal(await editor.locator('select[data-pen-preset]').evaluate((el) => el.value), 'unsaved')
+      // With no page 1 to read, Restore defaults gives SudokuPad default colors.
+      await dialogButton(p, 'Restore defaults').click()
+      assert.equal(await editor.locator('select[data-pen-preset]').evaluate((el) => el.value), 'sudokupad')
       await closeExtrasEditorWith(p, 'Cancel')
       await putBackRemovedPalette(p)
       assert.deepEqual(await settle(() => p.evaluate((k) => Framework.getData(k), DATA_KEY), INSTALLED), INSTALLED)
       assert.deepEqual(await settle(pens, PAGE_PENS[0]), PAGE_PENS[0])
       assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
+  })
+
+  it('picking SudokuPad default colors and saving while the script waits outranks the install save', async () => {
+    const { context, p } = await openPage(browser)
+    try {
+      await startPuzzle(p)
+      await removePalette(p)
+      await p.addScriptTag({ content: script })
+      await openExtrasEditor(p)
+      await p.locator('#pen-tool-extras-editor select[data-pen-preset]').selectOption('sudokupad')
+      await closeExtrasEditorWith(p, 'Save')
+      const own = { ...toObject(OWN_PEN_HEX), preset: 'sudokupad' }
+      assert.deepEqual(await p.evaluate((k) => Framework.getData(k), DATA_KEY), own)
+      await putBackRemovedPalette(p)
+      // The script polls every 100ms, so by 1.5s it has seen the tool and decided; the check is that nothing then replaced the saved colors.
+      await sleep(1500)
+      assert.deepEqual(await p.evaluate((k) => Framework.getData(k), DATA_KEY), own)
     } finally {
       await context.close()
     }

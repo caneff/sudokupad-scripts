@@ -117,7 +117,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
 
 test(`${DETAILS} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(section(read(DETAILS), 'What it adds'), [
-    'Pen colors that match your cell colors. Darker versions of your cell colors. Hold a pen color button to change one.',
+    'Pen colors from your cell colors. Darker versions of one cell color page, kept until you pick another in the settings. Hold a pen color button to change one.',
     'Dashed lines and arrow lines. Two more pages of pens. Switch with the page button.',
     'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
@@ -129,7 +129,7 @@ test(`${DETAILS} lists what the script adds, one item per feature`, () => {
 
 test(`${DETAILS} opens each feature with its bold lead-in`, () => {
   assert.deepEqual(leadIns(read(DETAILS)).slice(0, 7), [
-    'Pen colors that match your cell colors.',
+    'Pen colors from your cell colors.',
     'Dashed lines and arrow lines.',
     'Marks on cell edges.',
     'Marks on grid corners.',
@@ -142,7 +142,7 @@ test(`${DETAILS} opens each feature with its bold lead-in`, () => {
 // Each feature a still picture can show has one picture inside its item; the erase item has none, since a
 // middle click does not show in a still picture. The page has no figure.
 const PICTURES = {
-  'Pen colors that match your cell colors.': 'colors',
+  'Pen colors from your cell colors.': 'colors',
   'Dashed lines and arrow lines.': 'lines',
   'Marks on cell edges.': 'edges',
   'Marks on grid corners.': 'corners',

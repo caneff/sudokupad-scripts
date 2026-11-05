@@ -33,7 +33,7 @@ test('SUDOKUPAD_PEN_COLORS are SudokuPad\'s own nine pen colors', () => {
   assert.deepEqual(SUDOKUPAD_PEN_COLORS, TABLE)
 })
 
-test('nothing saved is the fresh-install state: every pen color has its default', () => {
+test('nothing saved normalizes to SudokuPad\'s own color for every pen', () => {
   assert.deepEqual(normalizeColors(null), TABLE)
   assert.deepEqual(normalizeColors(undefined), TABLE)
 })
@@ -304,7 +304,7 @@ test('readPenColors reads colors saved with no preset name, as older versions sa
 test('readPenColors keeps a saved preset name, and reads one it does not know as Custom', () => {
   assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2' })
   assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad' })
-  for (const odd of ['page-4', 'custom', 'Darker cell color page 1', 7, null]) {
+  for (const odd of ['page-4', 'custom', 'unsaved', 'Darker cell color page 1', 7, null]) {
     assert.equal(readPenColors({ ...NINE_SAVED, preset: odd }).preset, 'custom', JSON.stringify(odd))
   }
 })
@@ -1171,6 +1171,20 @@ test('the Pen colors section has a preset pulldown above the grid, its options i
 
 test('the pulldown lists only the pages the palette has', () => {
   assert.deepEqual(presetMenu(renderEditor(editorState({ presets: ['page-1', 'sudokupad'] }))).map((o) => o.value), ['page-1', 'sudokupad'])
+})
+
+test('a set in force that is no pickable preset is listed first, selected and not pickable, so every preset stays pickable', () => {
+  // A page-3 set with a one-page palette, a page-1 set with the colors step off, and SudokuPad's colors before the install save.
+  assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'page-3', presets: ['page-1', 'sudokupad'] }))), [
+    { value: 'page-3', label: 'Darker cell color page 3', selected: true, disabled: true },
+    { value: 'page-1', label: 'Darker cell color page 1', selected: false, disabled: false },
+    { value: 'sudokupad', label: 'SudokuPad default colors', selected: false, disabled: false }
+  ])
+  assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'page-1', presets: ['sudokupad'] }))).map((o) => [o.value, o.selected, o.disabled]), [['page-1', true, true], ['sudokupad', false, false]])
+  assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'unsaved', presets: ['sudokupad'] }))), [
+    { value: 'unsaved', label: 'SudokuPad colors, not saved yet', selected: true, disabled: true },
+    { value: 'sudokupad', label: 'SudokuPad default colors', selected: false, disabled: false }
+  ])
 })
 
 test('Custom is in the pulldown only while the set is custom, selected and not pickable', () => {

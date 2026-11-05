@@ -369,16 +369,20 @@
     9: '#000000'
   }
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
-  // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not listed here, is Custom. One page preset per cell color page, up to
-  // PRESET_PAGES pages, then SudokuPad's own colors.
-  const PRESET_PAGES = 3
-  const CUSTOM = 'custom'
+  // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. One page preset per cell color page, up
+  // to three, then SudokuPad's own colors. UNSAVED is SudokuPad's own colors before the install save, never saved.
+  const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
   const SUDOKUPAD_PRESET = 'sudokupad'
-  const pagePreset = (page) => `page-${page + 1}`
+  const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
+  const CUSTOM = 'custom'
+  const UNSAVED = 'unsaved'
   const PRESET_LABELS = {
-    ...Object.fromEntries([...Array(PRESET_PAGES)].map((_, page) => [pagePreset(page), `Darker cell color page ${page + 1}`])),
+    'page-1': 'Darker cell color page 1',
+    'page-2': 'Darker cell color page 2',
+    'page-3': 'Darker cell color page 3',
     [SUDOKUPAD_PRESET]: 'SudokuPad default colors',
-    [CUSTOM]: 'Custom'
+    [CUSTOM]: 'Custom',
+    [UNSAVED]: 'SudokuPad colors, not saved yet'
   }
   // The share of its OKLCH lightness a cell color keeps as a pen color: low enough to read against cell colors drawn at 60% opacity, high enough that the
   // lightest still show as 5px lines on white and the nine stay apart.
@@ -410,7 +414,7 @@
   function readPenColors (data) {
     const colors = savedColors(data)
     if (!colors) return null
-    const preset = Object.hasOwn(PRESET_LABELS, data.preset) ? data.preset : CUSTOM
+    const preset = SAVED_PRESETS.includes(data.preset) ? data.preset : CUSTOM
     return { colors, preset }
   }
 
@@ -423,8 +427,10 @@
   function startupPenColors (data, hasColorTool) {
     const saved = readPenColors(data)
     if (saved) return { load: saved }
-    return hasColorTool ? { wait: true } : { save: { colors: { ...SUDOKUPAD_PEN_COLORS }, preset: SUDOKUPAD_PRESET } }
+    return hasColorTool ? { wait: true } : { save: { colors: sudokupadSet().colors, preset: SUDOKUPAD_PRESET } }
   }
+
+  const sudokupadSet = () => ({ colors: { ...SUDOKUPAD_PEN_COLORS }, missing: [] })
 
   // The set is what gets saved, so an invalid pen or value throws rather than saving a wrong entry.
   function editedColors (colors, pen, value) {
@@ -534,12 +540,12 @@
   }
 
   function presetOptions (pageCount) {
-    return [...Array(Math.min(pageCount, PRESET_PAGES))].map((_, page) => pagePreset(page)).concat(SUDOKUPAD_PRESET)
+    return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
   }
 
   // `pages` is the palette's pages of color keys, and `readColor` reads a key's color as CSS text.
   function presetColors (preset, pages, readColor) {
-    if (preset === SUDOKUPAD_PRESET) return { colors: { ...SUDOKUPAD_PEN_COLORS }, missing: [] }
+    if (preset === SUDOKUPAD_PRESET) return sudokupadSet()
     const page = presetOptions(pages.length).indexOf(preset)
     if (page === -1) throw new RangeError(`pen-tool-extras: ${preset} is not a preset of this palette`)
     return derivedPenColors(pages[page], readColor)
@@ -563,11 +569,10 @@
   // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
   const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
 
+  // The colors in force with their preset, and the pens of the page they came from with no usable color (`missing`, on page `missingPage`), which the dialog names.
+  const penSet = ({ colors, missing = [] }, preset) => ({ colors, preset, missing, missingPage: PAGE_PRESETS.indexOf(preset) + 1 })
   // Until the install save they are SudokuPad's own, which is what the page shows with no override.
-  let active = { ...SUDOKUPAD_PEN_COLORS }
-  let activePreset = SUDOKUPAD_PRESET
-  let activeMissing = []
-  let activeMissingPage = 1
+  let active = penSet(sudokupadSet(), UNSAVED)
 
   // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
   // values for them exist earlier and say nothing about a custom palette).
@@ -616,22 +621,19 @@
     }
   }
 
-  function adoptColors (colors, preset, missing = [], missingPage = 1) {
-    active = colors
-    activePreset = preset
-    activeMissing = missing
-    activeMissingPage = missingPage
+  function adoptColors (set) {
+    active = set
     applyStyle()
-    document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
+    document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = set.colors[el.dataset.pen] })
   }
 
-  function saveColors (colors, preset, missing, missingPage) {
-    Framework.setData(COLORS_KEY, storedPenColors(colors, preset))
-    adoptColors(colors, preset, missing, missingPage)
+  function saveColors (set) {
+    Framework.setData(COLORS_KEY, storedPenColors(set.colors, set.preset))
+    adoptColors(set)
   }
 
   function savePenColor (pen, value) {
-    saveColors(editedColors(active, pen, value), CUSTOM)
+    saveColors(penSet({ colors: editedColors(active.colors, pen, value) }, CUSTOM))
   }
 
   // SudokuPad keeps one panel element and swaps its `tool-pen` class for the next tool's, so the pickers would stay behind on their own: a class watcher ends edit mode when the
@@ -655,7 +657,7 @@
     panel.classList.add(EDITING)
     buttons.forEach((button, i) => {
       button.insertAdjacentHTML('beforebegin',
-        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active[PEN_COLOR_NUMBERS[i]]}"></div>`)
+        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active.colors[PEN_COLOR_NUMBERS[i]]}"></div>`)
     })
     leaveWatch = new window.MutationObserver(() => {
       if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
@@ -1764,11 +1766,12 @@
     return `<div class="${NOTE}">Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
-  // Custom is listed only while it is the set in force, and cannot be picked back.
+  // A set in force that is no pickable preset (Custom, a page the palette no longer has, a preset while the colors step is off, or the colors before the install save) is
+  // shown first and cannot be picked, so the pulldown says what is in force and every preset stays pickable: picking the option already shown fires no `change`.
   function presetChoice (preset, presets) {
-    const option = (id) => `<option value="${id}"${id === preset ? ' selected' : ''}${id === CUSTOM ? ' disabled' : ''}>${PRESET_LABELS[id]}</option>`
-    const ids = preset === CUSTOM ? [CUSTOM, ...presets] : presets
-    return `<select data-pen-preset aria-label="Pen color preset">${ids.map(option).join('')}</select>`
+    const option = (id, disabled) => `<option value="${id}"${id === preset ? ' selected' : ''}${disabled ? ' disabled' : ''}>${PRESET_LABELS[id]}</option>`
+    const inForce = presets.includes(preset) ? '' : option(preset, true)
+    return `<select data-pen-preset aria-label="Pen color preset">${inForce}${presets.map((id) => option(id, false)).join('')}</select>`
   }
 
   const sectionHeading = (text) => `${DIVIDER}<div class="${SECTION_TITLE}">${text}</div>`
@@ -1917,38 +1920,30 @@
   }
 
   function openDialog () {
-    let colors = { ...active }
-    let preset = activePreset
-    let missing = activeMissing
-    let missingPage = activeMissingPage
+    let set = active
     // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
     let colorsChosen = false
-    const edited = new Set()
-    const presets = availablePresets()
     let lineMode = currentLineMode()
     let draft = { ...inForce }
     let box = null
-    const shownMissing = () => missing.filter((n) => !edited.has(String(n)))
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, preset, presets, missing: shownMissing(), missingPage, lineMode, ...draft, off: skipped })
+      box.innerHTML = renderEditor({ ...set, presets: availablePresets(), lineMode, ...draft, off: skipped })
     }
-    // Computed now, from the palette in force: the saved colors are a snapshot.
+    // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
-      const picked = id === SUDOKUPAD_PRESET ? presetColors(id, [], null) : steps.colors.run(() => presetFromTool(readyColorTool(), id), () => null)
+      const picked = id === SUDOKUPAD_PRESET ? sudokupadSet() : steps.colors.run(() => presetFromTool(readyColorTool(), id), () => null)
       if (picked) {
-        ;({ colors, missing } = picked)
-        // Page presets come first, in page order.
-        missingPage = presets.indexOf(id) + 1
-        preset = id
-        edited.clear()
+        set = penSet(picked, id)
         colorsChosen = true
       }
       draw()
+      return Boolean(picked)
     }
+    // SudokuPad's own colors when page 1 cannot be read, as before the presets.
     const restoreDefaults = () => {
       // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. The mark boxes keep their draft: Restore defaults has never reset the edge and corner cycles.
       draft = { ...settingDefaults(), marks: draft.marks }
-      pickPreset(presets[0])
+      if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
     }
     Framework.showDialog({
       centerOverBoard: true,
@@ -1962,7 +1957,7 @@
               tag: 'button',
               content: 'Save',
               handler: () => {
-                if (colorsChosen) saveColors(colors, preset, shownMissing(), missingPage)
+                if (colorsChosen) saveColors(set)
                 saveSettings(draft)
                 if (lineMode !== undefined && lineMode !== currentLineMode()) steps.penPanel.run(() => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
@@ -2011,9 +2006,9 @@
       }
       const el = event.target.closest('input[type="color"]')
       if (!el) return
-      colors = editedColors(colors, el.dataset.pen, el.value)
-      edited.add(el.dataset.pen)
-      preset = CUSTOM
+      // A pen picked by hand leaves the missing-color note; the others stay on it.
+      const pen = el.dataset.pen
+      set = { ...set, colors: editedColors(set.colors, pen, el.value), preset: CUSTOM, missing: set.missing.filter((n) => String(n) !== pen) }
       colorsChosen = true
       draw()
     })
@@ -2086,14 +2081,19 @@
       }
     })
     const start = startupPenColors(Framework.getData(COLORS_KEY), hasColorTool)
-    if (start.load) return adoptColors(start.load.colors, start.load.preset)
-    if (start.save) return saveColors(start.save.colors, start.save.preset, [], 1)
+    if (start.load) return adoptColors(penSet(start.load, start.load.preset))
+    if (start.save) return saveColors(penSet(start.save, start.save.preset))
     // The install save, once: page 1 darkened.
     const tool = await waitForColorTool()
     // A save made in the dialog while waiting outranks it.
     if (readPenColors(Framework.getData(COLORS_KEY))) return
-    const firstPage = pagePreset(0)
-    const derived = steps.colors.run(() => presetFromTool(tool, firstPage), () => null)
-    if (derived) saveColors(derived.colors, firstPage, derived.missing, 1)
+    // Tried even with the colors step off since startup (edit mode failing to install): only a failure to read page 1 itself leaves nothing saved, reported as the step's.
+    let derived = null
+    try {
+      derived = presetFromTool(tool, PAGE_PRESETS[0])
+    } catch (error) {
+      steps.colors.skip(error)
+    }
+    if (derived) saveColors(penSet(derived, PAGE_PRESETS[0]))
   })
 })()

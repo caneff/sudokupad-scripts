@@ -40,7 +40,7 @@ The pen colors never change on their own. Only picking a preset and saving, or e
 
 Three ways to change them:
 
-- **Preset pulldown**, at the top of the dialog's Pen colors section: "Darker cell color page 1", "Darker cell color page 2" and "Darker cell color page 3" (one per page the current puzzle's palette has, up to 3), then "SudokuPad default colors". Picking one fills the nine pickers, worked out at that moment from the palette in force. Save keeps the colors and the preset's name, and Cancel drops them. The pulldown then shows the last preset picked. "Custom" appears in it only while the colors are your own, and can't be picked.
+- **Preset pulldown**, at the top of the dialog's Pen colors section: "Darker cell color page 1", "Darker cell color page 2" and "Darker cell color page 3" (one per page the current puzzle's palette has, up to 3), then "SudokuPad default colors". Picking one fills the nine pickers, worked out at that moment from the palette in force. Save keeps the colors and the preset's name, and Cancel drops them. The pulldown then shows the last preset picked. When the colors in force are no preset it offers, it shows them first, greyed out so they can't be picked: "Custom" while the colors are your own, a darker page the current palette doesn't have, or "SudokuPad colors, not saved yet" before the install save.
 - **Settings dialog pickers:** a 3 by 3 grid in the arrangement of the pen buttons. An edit turns the pulldown to Custom. Save keeps your colors.
 - **Hold a pen color button for a second**, with either mouse button: a picker appears over each button, as in the cell color tool. Click one to open it. The pen changes live and the set is saved, as Custom. Hold again, or leave the pen tool, to close them.
 
@@ -172,7 +172,7 @@ The dialog's Pen line mode (Center & Edge, Center only, Edge only) is SudokuPad'
 
 ## Restore defaults
 
-The dialog's Restore defaults picks the Darker cell color page 1 preset. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and Enable boxes, the White outline box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults picks the Darker cell color page 1 preset, or SudokuPad default colors when the color tool has no page 1 to read. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and Enable boxes, the White outline box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 

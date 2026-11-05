@@ -24,7 +24,7 @@ const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const SIZE = 9
 const CELL_MARK = [5, 5]
-// Pen color 4 with nothing saved: the default first cell color page's color 4, darkened.
+// Pen color 4 as the install save stores it: the default first cell color page's color 4, darkened.
 const PEN_4 = 'rgb(113, 159, 23)'
 
 // Each edge a click can reach: the cell a click lands in, the side of it, and the cell and

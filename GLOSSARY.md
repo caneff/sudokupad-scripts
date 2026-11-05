@@ -98,8 +98,9 @@
 - **pen color preset** — a named set the settings dialog's pulldown, at the top of Pen colors, fills the nine pickers with as a draft: "Darker cell color
   page 1" to "page 3" (the derived colors of that page, one per page the palette has, up to 3) or "SudokuPad default colors" (`SUDOKUPAD_PEN_COLORS`).
   Save stores the colors with the preset's id (`page-1` to `page-3`, `sudokupad`) under `preset`; Cancel drops it. An edit, in the dialog or by hold, makes
-  the set **Custom**, saved with no `preset`, and so are colors an older version saved. Custom shows in the pulldown only while it is in force and cannot be
-  picked. Restore defaults picks Darker cell color page 1.
+  the set **Custom**, saved with no `preset`, and so are colors an older version saved. A set in force that the pulldown does not offer (Custom, a page the palette
+  no longer has, or "SudokuPad colors, not saved yet" before the install save) shows first and cannot be picked. Restore defaults picks Darker cell color
+  page 1, or SudokuPad default colors with no page 1 to read.
 - **arrow line** — a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of filled triangles (its arrows, in the pen's color) along it, pointing the way the line was
   dragged. Only lines are arrow lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Not a **direction arrow**, the `>` `<` `^` `v` mark a click on a cell edge cycles through. Its arrows' size and
   spacing scale with the thickness from the default up (an arrow is never smaller than at 5, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole arrows, half a space in from
