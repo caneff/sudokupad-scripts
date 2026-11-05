@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -529,14 +529,11 @@ test('renderProfiles lists each profile as a radio row with its handle, colors w
   assert.equal(count(html, /data-role="chip"/g), 5)
 })
 
-test('renderProfiles marks only the active row with the highlight and a bold name', () => {
+test('renderProfiles marks the active row by aria-checked alone, and the stylesheet gives that row the highlight and a bold name', () => {
   const html = renderProfiles(profileState, colorFor, '')
-  assert.equal(count(html, /background:#f1ebfb/g), 1)
-  assert.equal(count(html, /text-align:left;font-weight:600/g), 1)
-  const rows = html.split('data-role="profile-row"').slice(1)
-  assert.match(rows[1], /background:#f1ebfb/)
-  assert.match(rows[1], /font-weight:600/)
-  assert.doesNotMatch(rows[0], /font-weight:600|background:#f1ebfb/)
+  assert.doesNotMatch(html, /#f1ebfb|font-weight/)
+  assert.match(STYLE_CSS, /\[aria-checked="true"\] \{[^}]*background: #f1ebfb/)
+  assert.match(STYLE_CSS, /\[aria-checked="true"\] \.cbd-name \{[^}]*font-weight: 600/)
 })
 
 test('renderProfiles disables delete on the last profile and Add at four', () => {
@@ -934,9 +931,10 @@ test('VERSION is the @version in the script header', () => {
 test('renderEditor lays each group\'s digits out as a numpad: 1 to 9 in SudokuPad\'s order with 0 alone under 8', () => {
   const html = editor([{ key: 'a', digits: ['1', '0'] }], [], [0])
   assert.deepEqual([...html.matchAll(/data-act="digit"[^>]*data-digit="(\d)"/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
-  assert.match(html, /grid-template-columns:repeat\(3,/)
-  assert.match(html, /data-digit="0"[^>]*grid-column:2/)
-  assert.doesNotMatch(html, /data-digit="[1-9]"[^>]*grid-column/)
+  assert.doesNotMatch(html, /grid-column|grid-template-columns/)
+  assert.match(STYLE_CSS, /\[data-role="numpad"\] \{[^}]*grid-template-columns: repeat\(3,/)
+  assert.match(STYLE_CSS, /\[data-digit="0"\] \{[^}]*grid-column: 2/)
+  assert.doesNotMatch(STYLE_CSS, /\[data-digit="[1-9]"\]/)
 })
 
 test('renderEditor keeps the in-group digits bold and full opacity and the others dimmed', () => {
@@ -964,8 +962,26 @@ test('renderEditor gives each group a red × in its box\'s upper right corner, n
   const tag = buttons[0][0]
   assert.match(tag, /aria-label="Remove group"/)
   assert.match(tag, /title="Remove group"/)
-  assert.match(tag, /position:absolute;top:\d+px;right:\d+px/)
-  assert.match(tag, /color:#c0392b/)
+  assert.match(STYLE_CSS, /\[data-act="remove"\] \{[^}]*position: absolute;\s+top: \d+px;\s+right: \d+px/)
+  assert.match(STYLE_CSS, /\[data-act="remove"\] \{[^}]*color: #c0392b/)
+})
+
+// What stays inline is what depends on a value: a swatch's or chip's color, a chip's size, a digit's weight and dimming.
+const VALUE_PROPERTIES = ['background', 'color', 'width', 'height', 'font-size', 'font-weight', 'opacity']
+
+test('the editor and the profile list carry inline only the styles that depend on a value', () => {
+  const profiles = renderProfiles(profileState, colorFor, '')
+  const html = editor([{ key: 'a2', digits: ['1', '3'] }, { key: 'zz', digits: [] }], twoPages(), [0, 0])
+  const properties = [...(profiles + html).matchAll(/ style="([^"]*)"/g)].flatMap((m) => m[1].split(';').filter(Boolean).map((d) => d.split(':')[0].trim()))
+  assert.ok(properties.length > 0)
+  assert.deepEqual([...new Set(properties)].filter((p) => !VALUE_PROPERTIES.includes(p)), [])
+})
+
+test('the stylesheet scopes every rule to the editor, the dialog options row, or Color by Digit\'s own classes', () => {
+  const selectors = [...STYLE_CSS.matchAll(/^([^{}\n]+) \{/gm)].flatMap((m) => m[1].split(', '))
+  assert.ok(selectors.length > 20)
+  const scope = /^(#color-by-digit-editor|#color-by-digit-menu|\.dialog-options\.color-by-digit-dialog|\.cbd-)/
+  assert.deepEqual(selectors.filter((s) => !scope.test(s)), [])
 })
 
 const THREE_GROUPS = [{ key: 'a', digits: ['1'] }, { key: 'b', digits: ['2'] }, { key: 'c', digits: [] }]
