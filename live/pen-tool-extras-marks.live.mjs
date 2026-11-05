@@ -809,11 +809,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await drawAll()
     })
 
-    it('moving the slider changes every mark\'s opacity live and saves it at once, without saving the colors', async () => {
+    it('moving the slider changes every mark\'s opacity live and saves it at once, leaving the saved colors alone', async () => {
+      const colors = await read((k) => Framework.getData(k), COLORS_KEY)
       await setOpacity(40)
       assert.equal(await settle(sameAt('0.4'), true), true, (await opacities()).join(' '))
       assert.equal(await savedOpacity(), 40)
-      assert.equal(await read((k) => Framework.getData(k), COLORS_KEY), null)
+      assert.deepEqual(await read((k) => Framework.getData(k), COLORS_KEY), colors)
     })
 
     it('undo, redo and replay leave the opacity alone, and a reload keeps it', async () => {

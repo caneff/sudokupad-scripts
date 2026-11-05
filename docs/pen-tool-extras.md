@@ -19,7 +19,7 @@ A small white box with a purple gear sits in the upper right corner of the pen t
 
 Pen tool extras in SudokuPad's settings, or the small gear in the upper right corner of the pen tool button, opens one dialog, top to bottom, each section under a thin divider:
 
-1. **Pen colors**, with the SudokuPad colors button.
+1. **Pen colors**, with the preset pulldown.
 2. **Line settings**: Thickness and Opacity, each with a Slider in panel box.
 3. **Line styles**: Dashed lines and Directional arrow lines, each with an Enable box and a slider under it.
 4. **Marks a click cycles through**: one table, edge and corner.
@@ -30,17 +30,21 @@ Under all of it, one row of buttons: Restore defaults as small underlined text a
 
 ## Colors
 
-- With nothing saved, the nine pen colors are your current cell color page, darkened. Each pen takes the color on the same button number, and button 0 is not used. The darkest grey becomes black.
-- A cell color that is transparent or unreadable leaves SudokuPad's own pen color on that button.
-- Strokes already drawn and the color buttons change with the colors.
-- The colors are read when the page loads, so changing cell colors later doesn't move the pen until the next load.
-- Recoloring a pen changes it on every page.
+The pen colors never change on their own. Only picking a preset and saving, or editing a color, changes them, with one exception: the install save.
 
-Two ways to change them:
+- **Install save:** on the first load with no pen colors saved, the script saves cell color page 1, darkened, as the "Darker cell color page 1" preset. This happens once. It also happens on the first load after updating from a version that saved nothing, even when another cell color page is current. The script waits for the color tool for as long as it takes; until then the pens show SudokuPad's own colors. With no color tool at all, it saves "SudokuPad default colors" instead. A save made in the dialog before the install save wins.
+- **Darker page:** each pen takes the cell color on the same button number, darkened, and button 0 is not used. The darkest grey becomes black. A cell color that is transparent or unreadable leaves SudokuPad's own pen color on that button, and the dialog says which.
+- The saved colors are a snapshot. A later change to the cell colors or the current page doesn't touch them.
+- Strokes already drawn and the color buttons change with the colors. Recoloring a pen changes it on every page.
+- Colors saved by an older version are kept as they are and show as Custom.
 
-- **Settings dialog:** a 3 by 3 grid of pickers in the arrangement of the pen buttons. Save keeps your colors.
-- **SudokuPad colors button**, beside the grid (below it on a narrow screen): sets the nine pickers to SudokuPad's own pen colors. Like the rest of the dialog it takes effect on Save, and Cancel leaves the colors as they were. Saving stores them as your colors, so they stop following the cell color page, and all three pages follow. Restore defaults is different: it goes back to colors derived from the cell color page.
-- **Hold a pen color button for a second**, with either mouse button: a picker appears over each button, as in the cell color tool. Click one to open it. The pen changes live and the set is saved. Hold again, or leave the pen tool, to close them.
+Three ways to change them:
+
+- **Preset pulldown**, at the top of the dialog's Pen colors section: "Darker cell color page 1", "Darker cell color page 2" and "Darker cell color page 3" (one per page the current puzzle's palette has, up to 3), then "SudokuPad default colors". Picking one fills the nine pickers, worked out at that moment from the palette in force. Save keeps the colors and the preset's name, and Cancel drops them. The pulldown then shows the last preset picked. "Custom" appears in it only while the colors are your own, and can't be picked.
+- **Settings dialog pickers:** a 3 by 3 grid in the arrangement of the pen buttons. An edit turns the pulldown to Custom. Save keeps your colors.
+- **Hold a pen color button for a second**, with either mouse button: a picker appears over each button, as in the cell color tool. Click one to open it. The pen changes live and the set is saved, as Custom. Hold again, or leave the pen tool, to close them.
+
+The colors are saved under `PenColor_colors` as `{"1": "#rrggbb", …, "9": "#rrggbb", "preset": "page-1"}`. Older versions read the nine colors and ignore `preset`. The preset is `page-1`, `page-2`, `page-3` or `sudokupad`; a set with no `preset`, or one the script doesn't know, is Custom.
 
 ## Sliders
 
@@ -168,7 +172,7 @@ The dialog's Pen line mode (Center & Edge, Center only, Edge only) is SudokuPad'
 
 ## Restore defaults
 
-The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and Enable boxes, the White outline box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults picks the Darker cell color page 1 preset. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and Enable boxes, the White outline box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 
@@ -178,7 +182,7 @@ The settings dialog names the skipped steps in one line at its top, for example 
 
 | Step | Not installed when SudokuPad has no | What you see with it skipped |
 | --- | --- | --- |
-| colors | the cell color tool (`tools.colour`); also skipped when reading its page or opening the pickers fails | The pen colors are not derived from the cell color page, and a hold on a pen color button opens no pickers. The dialog's pickers and saved colors still work. A color tool that is merely slow or empty leaves SudokuPad's own pen colors, with a warning of its own |
+| colors | the cell color tool (`tools.colour`); also skipped when reading its page or opening the pickers fails | No darker page preset is offered or saved, and a hold on a pen color button opens no pickers. The dialog's pickers, SudokuPad default colors and saved colors still work. With no color tool at all, the install save stores SudokuPad default colors. A color tool that is merely slow or empty is waited for, with SudokuPad's own pen colors until it is ready |
 | pen pages | the pen tool's `setSelectedColor`, `handleToolEnter` or `handleToolExit` | Only SudokuPad's nine pens. Tab, the mouse wheel and the page button do nothing, and a pen on page 2 or 3 that was selected is replaced by the same color on page 1. Lines already stored with a page 2 or page 3 pen keep their color |
 | arrow lines | the renderer's `renderPen` or `renderPart`, the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, or the app's `puzzle.cells` | Page 3 lines draw as plain lines of the pen's color, and a line dragged with a page 3 pen is stored in the pen's own character, with no direction |
 | drag highlight | the pen tool's `drawLineHint` | The highlight of a line being dragged fades with the opacity setting and takes the white outline |

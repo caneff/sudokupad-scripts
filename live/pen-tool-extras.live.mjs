@@ -12,11 +12,11 @@ import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
-const { COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
+const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 
 const DATA_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
-// What the pen colors are with nothing saved: SudokuPad's cell color pages, darkened. Typed out
+// SudokuPad's cell color pages, darkened: the pen color presets. Typed out
 // here from the script's own darkening of SudokuPad's default palette (tool-color.js) as the
 // expected result; the three entries are the default pages 0-2, pen colors 1-9 in order.
 const PAGE_PENS = [
@@ -27,6 +27,9 @@ const PAGE_PENS = [
 // SudokuPad's own pen colors (tool-pen.css), read off the page with no script installed.
 const OWN_PEN_HEX = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
 const toObject = (list) => Object.fromEntries(list.map((hex, i) => [String(i + 1), hex]))
+// What the install save stores: darker cell color page 1, with its preset name.
+const INSTALLED = { ...toObject(PAGE_PENS[0]), preset: 'page-1' }
+const PRESET_OPTIONS = [['page-1', 'Darker cell color page 1'], ['page-2', 'Darker cell color page 2'], ['page-3', 'Darker cell color page 3'], ['sudokupad', 'SudokuPad default colors']]
 const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 // SudokuPad's default cell colors for keys 0-9 (tool-color.js), as the page computes them.
 const CELL_VARS = ['transparent', 'rgb(214, 214, 214)', 'rgb(124, 124, 124)', 'rgb(-36, -36, -36)', 'rgb(179, 229, 106)', 'rgb(232, 124, 241)', 'rgb(228, 150, 50)', 'rgb(245, 58, 55)', 'rgb(252, 235, 63)', 'rgb(61, 153, 245)']
@@ -89,6 +92,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   const restoreDefaults = () => dialogButton(p, 'Restore defaults').click()
   const pickerValues = () => editor().locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value))
+  const presetMenu = () => editor().locator('select[data-pen-preset]')
+  const presetShown = () => presetMenu().evaluate((el) => el.value)
+  const presetListed = () => presetMenu().locator('option').evaluateAll((os) => os.map((o) => [o.value, o.textContent]))
+  const pickPreset = (id) => presetMenu().selectOption(id)
 
   const drawInFirstColumn = async (n, row) => {
     await openPenTool(p)
@@ -120,8 +127,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a fresh install has nothing saved, and swatches and strokes show the darkened first color page', async () => {
-    assert.equal(await saved(), null)
+  it('a fresh install saves darker cell color page 1 once, with its preset name, and swatches and strokes show it', async () => {
+    assert.deepEqual(await settle(saved, INSTALLED), INSTALLED)
     await swatchesAre(PAGE_PENS[0])
     await drawInFirstColumn(4, 1)
     assert.deepEqual(await settle(allStrokes(4), [rgbOf(PAGE_PENS[0][3])]), [rgbOf(PAGE_PENS[0][3])])
@@ -131,10 +138,50 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await cellVars(), CELL_VARS)
   })
 
-  it('the dialog has a Pen tool extras entry in settings with a picker for each of the nine pen colors, set to the derived colors', async () => {
+  it('the dialog has a Pen tool extras entry in settings with a picker for each of the nine pen colors, set to the installed colors, and the pulldown shows their preset', async () => {
     await openExtrasEditor(p)
     assert.deepEqual(await pickerValues(), PAGE_PENS[0])
+    assert.equal(await presetShown(), 'page-1')
     await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('the pulldown lists one darker page per palette page, then SudokuPad default colors, and no Custom while the set is a preset', async () => {
+    await openExtrasEditor(p)
+    assert.deepEqual(await presetListed(), PRESET_OPTIONS)
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('picking a preset fills the pickers as a draft: Cancel drops it, Save keeps it with its name, and reopening shows the last pick', async () => {
+    await openExtrasEditor(p)
+    await pickPreset('page-2')
+    assert.deepEqual(await pickerValues(), PAGE_PENS[1])
+    await pickPreset('sudokupad')
+    assert.deepEqual(await pickerValues(), OWN_PEN_HEX)
+    await closeExtrasEditorWith(p, 'Cancel')
+    assert.deepEqual(await saved(), INSTALLED)
+    await swatchesAre(PAGE_PENS[0])
+    for (const [id, pens] of [['page-3', PAGE_PENS[2]], ['sudokupad', OWN_PEN_HEX], ['page-1', PAGE_PENS[0]]]) {
+      await openExtrasEditor(p)
+      await pickPreset(id)
+      await closeExtrasEditorWith(p, 'Save')
+      assert.deepEqual(await saved(), { ...toObject(pens), preset: id }, id)
+      await swatchesAre(pens)
+      await openExtrasEditor(p)
+      assert.equal(await presetShown(), id)
+      assert.deepEqual(await pickerValues(), pens, id)
+      await closeExtrasEditorWith(p, 'Cancel')
+    }
+  })
+
+  it('a preset set survives a palette change and a reload unchanged, still under its name', async () => {
+    await setCellColor(['4', CUSTOM_CELL.css])
+    await reload()
+    assert.deepEqual(await saved(), INSTALLED)
+    await swatchesAre(PAGE_PENS[0])
+    await openExtrasEditor(p)
+    assert.equal(await presetShown(), 'page-1')
+    await closeExtrasEditorWith(p, 'Cancel')
+    await setCellColor(['4', CELL_VARS[4]])
   })
 
   it('the dialog lays the nine pen colors out as a 3 by 3 grid like the pen tool\'s buttons, each keeping its number', async () => {
@@ -160,11 +207,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(buttons[0][1] < buttons[1][1] && buttons[3][2] > buttons[0][2], true, 'the panel runs left to right, then down')
   })
 
-  it('Cancel saves nothing and changes no color', async () => {
+  it('editing a picker turns the pulldown to Custom, which cannot be picked; Cancel saves nothing and changes no color', async () => {
     await openExtrasEditor(p)
     await pick('4', FOUR.hex)
+    assert.equal(await presetShown(), 'custom')
+    assert.deepEqual(await presetListed(), [['custom', 'Custom'], ...PRESET_OPTIONS])
+    assert.equal(await presetMenu().locator('option[value="custom"]').evaluate((o) => o.disabled), true)
     await closeExtrasEditorWith(p, 'Cancel')
-    assert.equal(await saved(), null)
+    assert.deepEqual(await saved(), INSTALLED)
     assert.deepEqual(await allStrokes(4)(), [rgbOf(PAGE_PENS[0][3])])
     await swatchesAre(PAGE_PENS[0])
   })
@@ -224,19 +274,21 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setCellColor(['1', CELL_VARS[1]])
   })
 
-  it('Restore defaults then Save returns to the derived colors of the current page, from each default page and a customized cell color', async () => {
+  it('Restore defaults then Save picks darker cell color page 1 from the palette in force, whichever page is current', async () => {
     await setCellColor(['4', CUSTOM_CELL.css])
+    const want = PAGE_PENS[0].map((hex, i) => (i === 3 ? CUSTOM_CELL.pen : hex))
     for (const page of [0, 1, 2]) {
-      const want = page === 0 ? PAGE_PENS[0].map((hex, i) => (i === 3 ? CUSTOM_CELL.pen : hex)) : PAGE_PENS[page]
       await setCellColorPage(page)
       await openExtrasEditor(p)
       await restoreDefaults()
+      assert.equal(await presetShown(), 'page-1')
       assert.deepEqual(await pickerValues(), want, `page ${page}`)
       await closeExtrasEditorWith(p, 'Save')
-      assert.equal(await saved(), null, `page ${page}`)
+      assert.deepEqual(await saved(), { ...toObject(want), preset: 'page-1' }, `page ${page}`)
       await swatchesAre(want)
     }
     assert.deepEqual(await cellVars(), CELL_VARS.map((v, i) => (i === 4 ? CUSTOM_CELL.css : v)))
+    await setCellColor(['4', CELL_VARS[4]])
   })
 
   it('Restore defaults then Cancel changes nothing', async () => {
@@ -251,28 +303,46 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await allStrokes(4)(), [FOUR.rgb])
   })
 
-  it('Save after Restore defaults and a hand edit keeps the edit', async () => {
+  it('Save after Restore defaults and a hand edit keeps the edit, as Custom', async () => {
     await openExtrasEditor(p)
     await restoreDefaults()
     await pick('9', NINE.hex)
     await closeExtrasEditorWith(p, 'Save')
-    assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 9: NINE.hex })
+    assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 9: NINE.hex })
     await openExtrasEditor(p)
+    assert.equal(await presetShown(), 'custom')
     await restoreDefaults()
     await closeExtrasEditorWith(p, 'Save')
-    assert.equal(await saved(), null)
+    assert.deepEqual(await saved(), INSTALLED)
   })
 
-  it('with nothing saved, a reload derives from the page and palette in force at load', async () => {
+  it('with nothing saved, the next load saves darker page 1 once, even on cell color page 3', async () => {
+    await read((k) => Framework.removeData(k), DATA_KEY)
+    assert.equal(await read(() => Framework.app.tools.colour.currentPage), 2)
     await reload()
-    await swatchesAre(PAGE_PENS[2])
+    assert.deepEqual(await settle(saved, INSTALLED), INSTALLED)
+    await swatchesAre(PAGE_PENS[0])
+  })
+
+  it('colors saved by an older version, with no preset name, load unchanged as Custom', async () => {
+    const older = { ...toObject(PAGE_PENS[1]), 4: FOUR.hex }
+    await read(([k, v]) => Framework.setData(k, v), [DATA_KEY, older])
+    await reload()
+    await swatchesAre(Object.values(older))
+    assert.deepEqual(await saved(), older)
+    await openExtrasEditor(p)
+    assert.equal(await presetShown(), 'custom')
+    assert.deepEqual(await pickerValues(), Object.values(older))
+    await restoreDefaults()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), INSTALLED)
   })
 
   it('cycling the color page mid-solve leaves the pen alone', async () => {
     await drawInFirstColumn(4, 6)
     const before = await allStrokes(4)()
     await setCellColorPage(0)
-    await swatchesAre(PAGE_PENS[2])
+    await swatchesAre(PAGE_PENS[0])
     assert.deepEqual(await allStrokes(4)(), before)
     await setCellColorPage(2)
   })
@@ -284,11 +354,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       t.setPalette(palette)
     })
     await openExtrasEditor(p)
+    assert.deepEqual(await presetListed(), [PRESET_OPTIONS[0], PRESET_OPTIONS[3]], 'one page, so one darker page')
     await restoreDefaults()
     const values = await pickerValues()
     assert.deepEqual(values.slice(3), OWN_PEN_HEX.slice(3))
     assert.equal(values.slice(0, 3).filter((v, i) => OWN_PEN_HEX[i] !== v).length, 3)
-    assert.match(await editor().innerText(), /pen colors 4, 5, 6, 7, 8, 9 keep SudokuPad's own/)
+    assert.match(await editor().innerText(), /Cell color page 1 has no usable color at the matching button, so pen colors 4, 5, 6, 7, 8, 9 keep SudokuPad's own/)
     // Picking a pen color by hand takes it off the list; the others stay on it.
     await pick('4', FOUR.hex)
     assert.match(await editor().innerText(), /pen colors 5, 6, 7, 8, 9 keep SudokuPad's own/)
@@ -339,20 +410,24 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await restorePalette()
   })
 
-  it('Save with no edit saves nothing, so the pen keeps following the cell color page at load', async () => {
-    await read((k) => Framework.removeData(k), DATA_KEY)
-    await reload()
+  it('Save with no pick and no edit writes no colors', async () => {
+    const elsewhere = { ...toObject(PAGE_PENS[1]), preset: 'page-2' }
+    // Written behind the script's back, so a write by Save would show.
+    await read(([k, v]) => Framework.setData(k, v), [DATA_KEY, elsewhere])
     await openExtrasEditor(p)
     await closeExtrasEditorWith(p, 'Save')
-    assert.equal(await saved(), null)
+    assert.deepEqual(await saved(), elsewhere)
+    await read(([k, v]) => Framework.setData(k, v), [DATA_KEY, INSTALLED])
+    await reload()
   })
 
-  it('corrupt saved settings fall back to the derived colors with no thrown error', async () => {
+  it('corrupt saved settings are replaced by the install save with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
       await plantUnchecked(p, DATA_KEY, bad)
       await reload()
-      assert.equal(await settle(() => swatch(4), rgbOf(PAGE_PENS[2][3])), rgbOf(PAGE_PENS[2][3]), bad)
+      assert.equal(await settle(() => swatch(4), rgbOf(PAGE_PENS[0][3])), rgbOf(PAGE_PENS[0][3]), bad)
+      assert.deepEqual(await settle(saved, INSTALLED), INSTALLED, bad)
     }
     assert.deepEqual(errors.slice(errorsBefore), [])
   })
@@ -372,7 +447,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     before(async () => {
       await read((k) => Framework.removeData(k), THICKNESS_KEY)
-      await read((k) => Framework.removeData(k), DATA_KEY)
       await reload()
       await drawInFirstColumn(1, 7)
     })
@@ -395,16 +469,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await savedThickness(), 2)
     })
 
-    it('a saved thickness leaves the colors unsaved, and a new line, a reload and the old lines all use it', async () => {
+    it('a saved thickness leaves the saved colors alone, and a new line, a reload and the old lines all use it', async () => {
       await setThickness(9)
       assert.equal(await savedThickness(), 9)
-      assert.equal(await saved(), null)
+      assert.deepEqual(await saved(), INSTALLED)
       assert.deepEqual(await settle(widths(1), [9]), [9])
       await drawInFirstColumn(2, 8)
       assert.deepEqual(await settle(widths(2), [9]), [9])
       await reload()
-      assert.equal(await saved(), null)
-      await swatchesAre(PAGE_PENS[2])
+      assert.deepEqual(await saved(), INSTALLED)
+      await swatchesAre(PAGE_PENS[0])
       await openPenTool(p)
       assert.equal(await slider().inputValue(), '9')
       await drawInFirstColumn(3, 9)
@@ -531,7 +605,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.equal(await settle(pickerCount, 9, HOLD_WAIT_MS, HOLD_QUIET_MS), 9)
         await p.mouse.up({ button: which })
         assert.deepEqual(await pickers().evaluateAll((es) => es.map((e) => e.dataset.pen)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-        assert.deepEqual(await penPickerValues(), PAGE_PENS[2])
+        assert.deepEqual(await penPickerValues(), PAGE_PENS[0])
         assert.equal(await undoDepth(), depth)
         assert.equal(await strokeCount(), drawn)
         await leaveEditMode()
@@ -603,21 +677,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       }, FOUR.hex)
       assert.equal(await settle(() => swatch(4), FOUR.rgb), FOUR.rgb)
       assert.deepEqual(await settle(allStrokes(4), [FOUR.rgb]), [FOUR.rgb])
-      assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 4: FOUR.hex })
+      assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex })
       // The edit saves the colors only: no thickness is written, and the lines keep SudokuPad's 5.
       assert.equal(await read((k) => Framework.getData(k), THICKNESS_KEY), null)
       assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pencolor-4:not(.pen-5)')).strokeWidth), '5px')
       assert.equal(await undoDepth(), depth)
       await leaveEditMode()
       await openExtrasEditor(p)
-      assert.deepEqual(await pickerValues(), Object.values({ ...toObject(PAGE_PENS[2]), 4: FOUR.hex }))
+      assert.deepEqual(await pickerValues(), Object.values({ ...toObject(PAGE_PENS[0]), 4: FOUR.hex }))
+      assert.equal(await presetShown(), 'custom', 'a hold-to-edit change is Custom')
       await closeExtrasEditorWith(p, 'Cancel')
     })
 
     it('the edit is kept after a reload, and the set no longer follows the color page', async () => {
       await reload()
-      assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 4: FOUR.hex })
-      await swatchesAre(Object.values({ ...toObject(PAGE_PENS[2]), 4: FOUR.hex }))
+      assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex })
+      await swatchesAre(Object.values({ ...toObject(PAGE_PENS[0]), 4: FOUR.hex }))
       await setCellColorPage(0)
       assert.equal(await swatch(4), FOUR.rgb)
       await setCellColorPage(2)
@@ -628,8 +703,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await openExtrasEditor(p)
       await restoreDefaults()
       await closeExtrasEditorWith(p, 'Save')
-      assert.equal(await saved(), null)
-      assert.deepEqual(await settle(penPickerValues, PAGE_PENS[2]), PAGE_PENS[2])
+      assert.deepEqual(await saved(), INSTALLED)
+      assert.deepEqual(await settle(penPickerValues, PAGE_PENS[0]), PAGE_PENS[0])
       await leaveEditMode()
     })
 
@@ -655,9 +730,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // Runs before the checks after this group, whether or not the screenshot ran.
     after(async () => {
       await leaveEditMode()
-      // Put back the derived colors for the checks below.
+      // Put back the installed colors for the checks below.
       await read((k) => Framework.removeData(k), DATA_KEY)
       await reload()
+      assert.deepEqual(await settle(saved, INSTALLED), INSTALLED)
     })
   })
 
@@ -677,30 +753,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 })
 
-describe('the color tool never becomes ready', { concurrency: false }, () => {
-  it('after the wait, the pen keeps SudokuPad\'s own colors and the dialog still opens', async () => {
+describe('the color tool is not ready yet', { concurrency: false }, () => {
+  it('the pens show SudokuPad\'s own colors and nothing is saved while it waits, with no time limit; the dialog offers only SudokuPad default colors; once page 1 is readable it saves darker page 1', async () => {
     const { context, p, errors } = await openPage(browser)
-    try {
-      await startPuzzle(p)
-      await removePalette(p)
-      await p.addScriptTag({ content: script })
-      // Nothing may happen for the script's whole wait, so this one is a sleep: the check is
-      // that no color override appeared in the two seconds after its wait ran out. The style
-      // element exists from the start (it carries the thickness rules), so the pen color
-      // variables are read: they must still be SudokuPad's own.
-      await sleep(COLOR_TOOL_WAIT_MS + 2000)
-      assert.deepEqual(await p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim())), OWN_PEN_HEX)
-      await openExtrasEditor(p)
-      const values = await p.locator('#pen-tool-extras-editor input[type=color]').evaluateAll((es) => es.map((e) => e.value))
-      assert.deepEqual(values, OWN_PEN_HEX)
-      assert.deepEqual(errors, [])
-    } finally {
-      await context.close()
-    }
-  })
-
-  it('colors saved during the wait raise no warning that the pen keeps SudokuPad\'s own colors', async () => {
-    const { context, p } = await openPage(browser)
     const warned = []
     p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
     try {
@@ -708,16 +763,27 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-      await p.evaluate(() => Framework.setData('PenColor_colors', { 1: '#ff0000' }))
-      // The check is that nothing is logged when the script's wait runs out, so this one is a sleep.
-      await sleep(COLOR_TOOL_WAIT_MS + 2000)
+      // Past the 10 s limit older versions gave up at. The check is that nothing was saved or warned meanwhile, so this one is a sleep.
+      await sleep(12000)
+      const pens = () => p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
+      assert.deepEqual(await pens(), OWN_PEN_HEX)
+      assert.equal(await p.evaluate((k) => Framework.getData(k), DATA_KEY), null)
       assert.deepEqual(warned, [])
+      await openExtrasEditor(p)
+      const editor = p.locator('#pen-tool-extras-editor')
+      assert.deepEqual(await editor.locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value)), OWN_PEN_HEX)
+      assert.deepEqual(await editor.locator('select[data-pen-preset] option').evaluateAll((os) => os.map((o) => o.value)), ['sudokupad'])
+      await closeExtrasEditorWith(p, 'Cancel')
+      await putBackRemovedPalette(p)
+      assert.deepEqual(await settle(() => p.evaluate((k) => Framework.getData(k), DATA_KEY), INSTALLED), INSTALLED)
+      assert.deepEqual(await settle(pens, PAGE_PENS[0]), PAGE_PENS[0])
+      assert.deepEqual(errors, [])
     } finally {
       await context.close()
     }
   })
 
-  it('derived colors arriving after a thickness is set in the panel leave the thickness in place', async () => {
+  it('the install save arriving after a thickness is set in the panel leaves the thickness in place', async () => {
     const { context, p } = await openPage(browser)
     try {
       await startPuzzle(p)
@@ -727,7 +793,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       await setSlider(p, '#pen-tool-extras-thickness', 11)
       await putBackRemovedPalette(p)
-      // The script polls every 100 ms and then applies the derived colors; wait for them.
+      // The script polls every 100 ms and then saves darker page 1; wait for it.
       const pen1 = () => p.evaluate(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-1').trim())
       assert.equal(await settle(pen1, PAGE_PENS[0][0]), PAGE_PENS[0][0])
       assert.equal(await probeStrokeWidth(p, 1, '#svgrenderer'), 11)
@@ -736,7 +802,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
     }
   })
 
-  it('a save made while the script waits for the color tool outranks the derived colors', async () => {
+  it('a save made while the script waits for the color tool outranks the install save', async () => {
     const { context, p } = await openPage(browser)
     try {
       await startPuzzle(p)
@@ -751,6 +817,7 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
       await sleep(1500)
       const pens = await p.evaluate(() => [1, 4].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
       assert.deepEqual(pens, [OWN_PEN_HEX[0], FOUR.hex])
+      assert.deepEqual(await p.evaluate((k) => Framework.getData(k), DATA_KEY), { ...toObject(OWN_PEN_HEX), 4: FOUR.hex })
     } finally {
       await context.close()
     }
