@@ -1,9 +1,6 @@
 // Live check of pen-tool-extras.user.js's whole-line erase (a middle click in the pen tool) on sudokupad.app in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real injection time and
-// crackingthecryptic.com stay untested. A real mouse's middle button on Windows is still owed: headless Chromium draws no
-// autoscroll, so the checks read `defaultPrevented` on the press events instead of watching a scroll. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// A real mouse's middle button on Windows is still owed: headless Chromium draws no autoscroll, so the checks read
+// `defaultPrevented` on the press events instead of watching a scroll.
 // Every drag and click is real input except one `mousedown` sent by hand, and each check reads what is stored (`cell.pen`) and the
 // undo stack; the autoscroll checks read `defaultPrevented` on the press events instead.
 /* global Framework, MouseEvent */
@@ -42,7 +39,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const undo = () => p.click('#control-undo')
   const undoAll = async () => { while ((await undoDepth()) > 0) await undo() }
 
-  // Turns to pen page `page` and selects the pen on button `key`.
   const selectPenOnPage = async (page, key) => {
     await openPenTool(p)
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })

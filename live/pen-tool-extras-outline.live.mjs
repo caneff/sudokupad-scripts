@@ -1,10 +1,7 @@
 // Live check of pen-tool-extras.user.js's White outline box on sudokupad.app in headless Chromium: on by default at width 2, off from the dialog's
 // Save (an explicit false is stored), painted white round a pen line (read off a screenshot's pixels, over a black backing so white shows), faded by the opacity
 // slider, kept off the drag highlight, kept over a reload, and on for settings saved before the box existed.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real injection time and
-// crackingthecryptic.com stay untested, and so does a touch screen. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// A touch screen stays untested.
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -54,7 +51,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.mouse.move(5, 5)
   }
 
-  // A black backing under the pen layer, so a white outline shows against it; removed with `unback`.
   const back = () => read(() => {
     const layer = document.querySelector('#cell-pen')
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')

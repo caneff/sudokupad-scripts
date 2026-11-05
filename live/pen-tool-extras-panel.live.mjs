@@ -1,12 +1,6 @@
 // Live check of pen-tool-extras.user.js's thickness and opacity sliders in the pen tool's panel, of the
 // hidden line mode pulldown whose choice moved to the dialog, and of the opacity of the pen layer, on
-// sudokupad.app in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested, and so does a
-// touch screen. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// sudokupad.app in headless Chromium. A touch screen stays untested.
 // Every slider move is a real mouse drag.
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
@@ -42,13 +36,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
   const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
   const activeElementTag = () => read(() => document.activeElement.tagName)
-  // The computed stroke width and opacity of the first stroke of pen color 1, drawn by `draw`.
   const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).strokeWidth))
   const effectiveOpacity = async (selector) => (await effectiveOpacities(p, selector))[0]
   const lineOpacity = () => effectiveOpacity('.cell-pen.pencolor-1')
   const strokeOwnOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).opacity))
 
-  // Presses on the middle of the slider and drags to `toX` (a page x), a real mouse drag.
   const dragSlider = async (selector, toX) => {
     const box = await p.locator(selector).boundingBox()
     const y = box.y + box.height / 2

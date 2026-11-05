@@ -1,10 +1,5 @@
 // Live check of pen-tool-extras.user.js's edge and corner marks and its opacity slider on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested, and so
-// does replay playback on a puzzle page. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// Replay playback on a puzzle page stays untested.
 // Every click is a real mouse click on the page at an edge's pixel position.
 /* global Replay, Framework, ToolPen, MouseEvent, Node, createImageBitmap, OffscreenCanvas */
 import { after, before, beforeEach, describe, it } from 'node:test'
@@ -28,7 +23,6 @@ const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = createRequire(import.meta
 const MARK_BOXES = ['x', 'directions', 'dot', 'cornerX', 'cornerDot']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const SIZE = 9
-// The cell the cell-mark checks click.
 const CELL_MARK = [5, 5]
 // Pen color 4 with nothing saved: the default first cell color page's color 4, darkened.
 const PEN_4 = 'rgb(113, 159, 23)'
@@ -84,7 +78,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       top: [e.x + e.width / 2, e.y + pad]
     }[s]
   }, [row, col, side])
-  // The page point of the grid corner [row, col] (0 to SIZE), moved by (dx, dy) cells.
   const cornerPoint = (row, col, dx = 0, dy = 0) => read(([r, c, ox, oy]) => {
     const { rows, cols } = Framework.app.grid
     const e = Framework.app.puzzle.cells.find((x) => x.row === Math.min(r, rows - 1) && x.col === Math.min(c, cols - 1)).elem.getBoundingClientRect()
@@ -366,7 +359,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
   })
 
-  // The thickness slider's value set the way a drag sets it, with the pen tool on.
   const setThickness = async (value) => {
     await openPenTool(p)
     await p.locator('#pen-tool-extras-thickness').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
@@ -652,7 +644,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await box('cornerX').uncheck()
     await box('cornerDot').uncheck()
     await closeExtrasEditorWith(p, 'Save')
-    // Cleared so that the click under test starts from an empty grid.
     await clearMarks()
     await clickCorner(3, 3, 'left', 0, 0.01)
     // by SudokuPad's own arithmetic a click on a corner comes out as an edge mark
@@ -716,8 +707,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   describe('opacity', { concurrency: false }, () => {
-    // The slider in the pen tool's panel. The real drag is checked in pen-tool-extras-panel.live.mjs;
-    // these checks only need the value set, with the same `input` event a drag fires.
     const slider = () => p.locator('#pen-tool-extras-opacity')
     const setOpacity = (value) => setSlider(p, '#pen-tool-extras-opacity', value)
     const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
@@ -727,7 +716,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const values = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
       return [...new Set(values.map((v, i) => `${v}:${shown[i]}`))].sort()
     }
-    // Draws a free line (a drag), a cell circle, a cell cross, an edge X and a corner X.
     const drawAll = async () => {
       // Marks outlive a reload, and the edge and corner clicks cycle from what is there.
       await clearMarks()
@@ -746,7 +734,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['6']), ['6'])
       assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_CIRCLE), ['5']), ['5'])
     }
-    // The cell the cell circle is clicked into, apart from CELL_MARK.
     const CELL_CIRCLE = [1, 1]
     // The pen values SudokuPad draws a free line's segments with (docs/research/sudokupad-pen-edge-marks.md).
     const LINE_VALUES = ['1', '2', 'a', 'd', 'e', 'f', 'g', '7', '8', '9']

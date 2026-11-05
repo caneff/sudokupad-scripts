@@ -1,10 +1,4 @@
 // Live check of color-by-digit.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -56,7 +50,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const getSetting = () => read(() => Framework.getSetting('multicolour'))
   const editor = () => p.locator(EDITOR)
 
-  // What the board should show after a press, given each digit's key.
   const expectedColours = (keyOfDigit) => (x) => {
     const digit = ENTERED[`${x.r},${x.c}`] || GIVENS[x.r * 9 + x.c]
     return digit === '0' ? [] : [keyOfDigit(digit)]
@@ -65,7 +58,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const lowFiveHigh = expectedColours((d) => (Number(d) < 5 ? '1' : d === '5' ? '5' : '9'))
   const wrongCount = async (expected) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(expected(x))).length
 
-  // Runs the loaded page through Start Puzzle and injects the script.
   const boot = async () => {
     await startPuzzle(p, { injection: { mode: 'after-start', code: script } })
     await p.locator(BUTTON).waitFor({ state: 'attached' })
@@ -91,7 +83,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(board, GIVENS)
   })
 
-  // Rects of the button, Undo, the bottom row, the footer and the viewport, from the page.
   const layout = () => read(() => {
     const box = (e) => e.getBoundingClientRect().toJSON()
     // SudokuPad's footer is a bare element with no id or class; find it by its credit line.
@@ -118,7 +109,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
     throw new Error(`the controls were still moving after ${SETTLE_MS} ms: ${last}`)
   }
-  // The button and its row lie inside the viewport, and the footer starts below the button.
   // FIT_SLACK_PX absorbs sub-pixel rounding between the row's bottom edge and the footer's top.
   const fits = (l) => [l.button, l.row].every((r) => r.left >= 0 && r.top >= 0 && r.right <= l.view.width && r.bottom <= l.view.height) &&
     l.footer.top >= l.button.bottom - FIT_SLACK_PX && l.footer.top >= l.row.bottom - FIT_SLACK_PX

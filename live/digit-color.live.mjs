@@ -1,10 +1,4 @@
 // Live check of digit-color.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -34,7 +28,6 @@ const CLIP_BEFORE = 3
 const CLIP_AFTER = 5
 // A pixel is ink when it differs between the two screenshots by at least this fraction of the largest difference.
 const INK_FRACTION = 0.5
-// Hides every mark and the circles, then shows only the mark carrying the probe attribute.
 const INK_PROBE_CSS = '#cell-pencilmarks text, #cell-candidates text, #cell-candidates tspan { visibility: hidden !important } #digit-color-circles { display: none !important } #cell-pencilmarks [data-ink-probe], #cell-candidates [data-ink-probe] { visibility: visible !important }'
 // Per digit, a row with that digit given and two empty cells in it that no other check here fills with a digit, so a mark of the digit
 // in either cell is in SudokuPad's conflict state: [row, corner mark's column, centre mark's column].
@@ -42,7 +35,6 @@ const CONFLICT_CELLS = {
   1: [1, 1, 2], 2: [5, 1, 2], 3: [4, 6, 7], 4: [4, 1, 2], 5: [7, 0, 1], 6: [2, 0, 3], 7: [8, 5, 6], 8: [3, 1, 2], 9: [1, 7, 8]
 }
 const CIRCLES = '#digit-color-circles'
-// A mark in SudokuPad's conflict state, per place on the board.
 const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
 // The default colors (issue #7), as the dialog's #rrggbb. The map is the independent source
 // the saved value is compared with; RGB is the same colors as the page computes them.
@@ -50,7 +42,6 @@ const DEFAULTS = {
   0: '#4b5563', 1: '#b0125b', 2: '#b04a00', 3: '#7a6200', 4: '#1b7a2f', 5: '#00736f', 6: '#0059c9', 7: '#3d2bb8', 8: '#8a1fa8', 9: '#5e3a1a'
 }
 const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 5: 'rgb(0, 115, 111)', 6: 'rgb(0, 89, 201)' }
-// The colors the checks choose.
 const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
 const EIGHT = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
 

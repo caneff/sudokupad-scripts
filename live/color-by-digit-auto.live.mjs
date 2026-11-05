@@ -1,11 +1,4 @@
 // Live check of Color by Digit's auto mode on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist, except in the two saved-on groups, which run at every injection
-// time; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -32,7 +25,6 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Loads the page again and runs it through `startInjected`.
 const bootPage = async (p, mode) => {
   await gotoPuzzle(p)
   await startInjected(p, script, mode)
@@ -57,7 +49,6 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
   const getAuto = () => read((key) => Framework.getData(key), AUTO_KEY)
   const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
-  // Makes the profile at `index` of SEED the active one in the open dialog.
   const chooseProfile = (index) => p.click(`#color-by-digit-editor [data-act=activate][data-index="${index}"]`)
   const boxChecked = () => boxCheckedOn(p)
   const dialogBox = () => p.locator('#color-by-digit-editor input[data-role="auto-draft"]')
@@ -65,7 +56,6 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
-  // A click on the button proper, away from the box in its corner.
   const pressButton = async () => {
     const box = await p.locator(BUTTON).boundingBox()
     await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7)

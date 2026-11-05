@@ -1,10 +1,7 @@
 // Live check of pen-tool-extras.user.js's settings dialog layout on sudokupad.app in headless Chromium: the sections in their
 // order, the slider columns of Line settings, Line styles and the outline lining up, the Enable boxes under their heading,
 // the button row (Restore defaults, Cancel, Save), and a phone-width dialog that stays inside its screen.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of `npm test`.
-//
-// The script is injected into the page after Start Puzzle, not installed through Tampermonkey, so Tampermonkey's real
-// injection time and crackingthecryptic.com stay untested, and so does a touch screen. Every click is real input.
+// A touch screen stays untested. Every click is real input.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -25,7 +22,6 @@ describe('the settings dialog layout', { concurrency: false }, () => {
 
   const editor = () => p.locator('#pen-tool-extras-editor')
   const openEditor = () => openExtrasEditor(p)
-  // The horizontal middle of an element, rounded to a pixel.
   const centreX = (locator) => locator.evaluate((el) => { const box = el.getBoundingClientRect(); return Math.round(box.x + box.width / 2) })
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
