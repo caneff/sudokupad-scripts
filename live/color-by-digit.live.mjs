@@ -319,6 +319,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.setViewportSize({ width: 1200, height: 900 })
     })
 
+    it('Add group adds a group in a color no group has, and Cancel drops it', async () => {
+      await openEditor()
+      const chosenKeys = () => p.$$eval('#color-by-digit-editor select[data-act="page"] + [data-role="chosen"]', (es) => es.map((e) => e.title))
+      const before = await chosenKeys()
+      assert.equal(before.length, 3)
+      await p.click('#color-by-digit-editor button[data-act=add-group]')
+      const after = await chosenKeys()
+      assert.equal(after.length, 4)
+      assert.deepEqual(after.slice(0, 3), before)
+      assert.equal(before.includes(after[3]), false)
+      await closeDialogWith(p, 'Cancel', EDITOR)
+      assert.equal((await getGroups()).length, 3)
+    })
+
     it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a press does nothing', async () => {
       await openEditor()
       const groupCount = () => p.locator('#color-by-digit-editor button[data-act=remove]').count()
@@ -341,7 +355,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   // A custom palette, with page 4 current: page 1 has a color at index 0 and a transparent index 4,
-  // and a fourth page of four colors, three of them on keys the default palette lacks. Three saved
+  // and a fourth page of four colors: u and v on keys the default palette lacks, w on a color the browser cannot draw. Three saved
   // groups: key 8 (on pages 1 and 4), key 6 (on page 1) and key nope (on none).
   describe('custom palette', { concurrency: false }, () => {
     const group = (g) => `#color-by-digit-editor [data-group="${g}"]`
@@ -361,7 +375,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         const palette = JSON.parse(JSON.stringify(original))
         palette.colors.u = 'rgb(10, 20, 30)'
         palette.colors.v = 'rgb(40, 50, 60)'
-        palette.colors.w = 'rgb(70, 80, 90)'
+        palette.colors.w = 'notacolor'
         palette.pages[0] = ['4', '1', '2', '3', '0', '5', '6', '7', '8', '9']
         palette.pages.push(['u', 'v', 'w', '8'])
         Framework.app.tools.colour.setPalette(palette)
@@ -391,7 +405,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('a group shows one 3 by 3 page: nine or ten swatches, not every page', async () => {
       assert.equal((await swatchKeys(1)).length, 9)
-      assert.equal((await swatchKeys(0)).length, 4)
+      assert.equal((await swatchKeys(0)).length, 3)
     })
 
     it('lays page 1 out by index, with the empty index kept and index 0 on its own row below', async () => {
@@ -407,8 +421,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(sizes, ['44x44'])
     })
 
-    it('shows the fourth page, with its index 0 below', async () => {
-      assert.deepEqual(await swatchKeys(0), ['v', 'w', '8', 'u'])
+    it('shows the fourth page, with its index 0 below, and an empty slot where the palette holds a color the browser cannot draw', async () => {
+      assert.deepEqual(await swatchKeys(0), ['v', '8', 'u'])
+      // Index 2 holds 'w', whose color is 'notacolor': its slot stays empty and 8 stays at index 3.
+      const grid = await pageSelect(0).evaluate((e) => [...e.parentElement.nextElementSibling.children].map((c) => c.dataset.key || c.dataset.empty))
+      assert.deepEqual(grid, ['v', 'slot', '8', 'slot', 'slot', 'slot', 'slot', 'slot', 'slot'])
     })
 
     it('the group\'s own color is marked selected only on the page that holds it', async () => {

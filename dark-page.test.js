@@ -6,7 +6,6 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY } = require('./dark-page.user.js')
 
-// The rules buildCss returns, one per line, as { selector, declarations }.
 function rules () {
   return buildCss(DEFAULT_COLOR).split('\n').map((line) => {
     const m = /^(.*?) \{ (.*) \}$/.exec(line)
@@ -71,7 +70,6 @@ test('the replay tool\'s readout (the ::after of .controls-input) takes the text
   assert.equal(readout('#ffcc00'), '.controls-input::after { color: #222222 !important }')
 })
 
-// The one-line rules of buildCss(color) whose selector mentions a control button.
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
 
 test('on a dark page color the control buttons go dark gray with light purple text, and a button that is on keeps its own fill and gets a purple border', () => {
@@ -196,4 +194,72 @@ test('halfStroke is half the stroke width in page pixels, and 0 when there is no
 
 test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'dark-page.user.js'), 'utf8')))
+})
+
+const SVG_BOX = { left: 0, top: 0, right: 500, bottom: 500 }
+const CELL_BOX = { left: 100, top: 100, right: 200, bottom: 200 }
+
+// Starts the script on a page holding a board of one cell, with `framework` as the page's Framework, or none.
+function startOnBoard (framework) {
+  const file = require.resolve('./dark-page.user.js')
+  const appended = []
+  const observed = []
+  const element = () => ({ style: { setProperty (name, value) { this[name] = value } } })
+  const svg = { getScreenCTM: () => ({ a: 1 }), getBoundingClientRect: () => SVG_BOX, querySelectorAll: () => [] }
+  const cell = { getBoundingClientRect: () => ({ ...CELL_BOX, width: 100, height: 100 }) }
+  const saved = { document: global.document, window: global.window, Framework: global.Framework }
+  global.document = {
+    createElement: element,
+    head: { appendChild: (el) => appended.push(el) },
+    body: { appendChild: (el) => appended.push(el) },
+    querySelector: (selector) => (selector === '#svgrenderer' ? svg : null),
+    querySelectorAll: (selector) => (selector === '.cells .cell' ? [cell] : []),
+    fonts: null
+  }
+  global.window = { MutationObserver: class { observe (target) { observed.push(target) } }, addEventListener () {}, requestAnimationFrame () {} }
+  delete global.Framework
+  if (framework) global.Framework = framework
+  const warnings = []
+  const realWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = realWarn
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete global[name]
+      else global[name] = value
+    }
+    delete require.cache[file]
+  }
+  return {
+    warnings,
+    observed,
+    style: appended.find((el) => el.id === 'dark-page-style'),
+    rect: appended.find((el) => el.id === RECT_ID)
+  }
+}
+
+function assertDarkens ({ style, rect, observed }) {
+  const kept = clampBox(snapOutward(growBox(CELL_BOX, SOLVER_REACH), PAD), snapOutward(SVG_BOX, 0))
+  assert.equal(style.textContent, buildCss(DEFAULT_COLOR))
+  assert.equal(style.disabled, false)
+  assert.equal(rect.style.display, 'block')
+  assert.equal(rect.style.left, `${kept.left}px`)
+  assert.equal(rect.style.width, `${kept.right - kept.left}px`)
+  assert.equal(observed.length, 1)
+}
+
+test('a Framework without getApp warns that the settings entry was skipped, and the page still darkens', () => {
+  const page = startOnBoard({})
+  assert.equal(page.warnings.length, 1)
+  assert.match(page.warnings[0], /^dark-page: .*getApp/)
+  assertDarkens(page)
+})
+
+test('a page with no Framework at all darkens without a warning', () => {
+  const page = startOnBoard()
+  assert.deepEqual(page.warnings, [])
+  assertDarkens(page)
 })

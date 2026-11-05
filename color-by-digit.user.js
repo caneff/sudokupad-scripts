@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.2
+// @version      0.5.6
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,8 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.5.2'
-  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const VERSION = '0.5.6'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -36,7 +35,6 @@
   const NUMPAD_KEY = '2.4em'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
-  // A group is one palette key plus the digits that get it.
   const PRELOADS = {
     'Low/5/High': [
       { key: '1', digits: ['0', '1', '2', '3', '4'] },
@@ -102,7 +100,6 @@
   // What auto mode watches in a plan cell: the entered digit and the centre marks, in any order.
   const entrySignature = (cell) => JSON.stringify([String(cell.value || ''), [...(cell.centre || [])].sort()])
 
-  // The indices whose signature differs between two readings of the same cells.
   const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
 
   // What auto mode does to the listed cells: [{action, key, indices}], removals first. A pure cell
@@ -138,7 +135,6 @@
     return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
-  // Puts a digit in one group, or takes it out if that group already holds it.
   function assignDigit (groups, groupIndex, digit) {
     const had = groups[groupIndex].digits.includes(digit)
     return groups.map((g, i) => {
@@ -147,6 +143,34 @@
       const digits = had ? rest : [...rest, digit].sort()
       return { key: g.key, digits }
     })
+  }
+
+  // The dialog's edit of the groups for one button: `act` is 'color', 'digit', 'remove', 'clear' or
+  // 'add-group', `group` the group index, `key` the chosen palette key, `digit` the chosen digit, and
+  // `colors` the visible palette colors ([{ key }]). Returns the new { groups, shown }, `shown` being the page each
+  // group shows, which follows a removal. A new group takes the
+  // first color no group has, else the first color, and none when there are no colors.
+  function editGroupsFor (groups, shown, act, { group, key, digit }, colors) {
+    switch (act) {
+      case 'color': return { groups: groups.map((g, j) => (j === group ? { key, digits: g.digits } : g)), shown }
+      case 'digit': return { groups: assignDigit(groups, group, digit), shown }
+      case 'remove': return { groups: groups.filter((_, j) => j !== group), shown: shown.filter((_, j) => j !== group) }
+      case 'clear': return { groups: [], shown: [] }
+      case 'add-group': {
+        const used = groups.map((g) => g.key)
+        const free = colors.find((c) => !used.includes(c.key)) || colors[0]
+        return { groups: free ? [...groups, { key: free.key, digits: [] }] : groups, shown }
+      }
+    }
+  }
+
+  const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
+  // The row a key on a profile row goes to: Enter and Space stay on the row, an arrow moves to the next or
+  // previous row and wraps at both ends; any other key gives null.
+  function rowAfterKey (key, index, count) {
+    if (key === 'Enter' || key === ' ') return index
+    if (ARROW_STEP[key]) return (index + ARROW_STEP[key] + count) % count
+    return null
   }
 
   // Saved data is untrusted: returns clean groups, or null when it is not a list of groups.
@@ -163,11 +187,14 @@
     return out
   }
 
+  // A profile name as stored: trimmed and cut to MAX_NAME_LENGTH.
+  const cleanName = (name) => String(name).trim().slice(0, MAX_NAME_LENGTH)
+
   // A profile as saved data may hold it: a name that is not blank and clean groups, else null.
   function normalizeProfile (data) {
     if (!data || typeof data.name !== 'string' || data.name.trim() === '') return null
     const groups = normalizeGroups(data.groups)
-    return groups && { name: data.name.trim().slice(0, MAX_NAME_LENGTH), groups }
+    return groups && { name: cleanName(data.name), groups }
   }
 
   // Saved profiles are untrusted: a clean state, or null when no profile is usable. A profile that is
@@ -205,7 +232,7 @@
 
   // A copy of the active profile joins the end under `name`. Nothing at MAX_PROFILES or with a blank name.
   function addProfile (state, name) {
-    const trimmed = String(name).trim().slice(0, MAX_NAME_LENGTH)
+    const trimmed = cleanName(name)
     if (state.profiles.length >= MAX_PROFILES || trimmed === '') return state
     const copy = { name: trimmed, groups: cloneGroups(activeGroups(state)) }
     return { profiles: [...state.profiles.map(cloneProfile), copy], active: state.active }
@@ -327,7 +354,6 @@
       `font:700 8px/1 sans-serif">${on ? 'X' : ''}</span>AUTO</span>`
   }
 
-  // The menu arrow box in the button's lower right.
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
     'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:14px;height:14px;' +
     `border:1.5px solid ${PURPLE};border-radius:3px;background:#fff;color:${PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
@@ -385,9 +411,12 @@
     })
   }
 
+  // The ten slots of a laid-out page: index 0, then indices 1-9. An empty slot is null.
+  const pageSlots = (p) => [p.zero, ...p.rows.flat()]
+
   // Every visible color of the laid-out pages, page by page, index 0 first.
   function layoutColors (pages) {
-    return pages.flatMap((p) => [p.zero, ...p.rows.flat()]).filter(Boolean)
+    return pages.flatMap(pageSlots).filter(Boolean)
   }
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -411,7 +440,7 @@
   // The page a group opens on: the page that holds its color, the current page first when the
   // color is on several; the current page when no page holds it, and the first with none current.
   function initialPage (pages, key) {
-    const holds = (p) => [p.zero, ...p.rows.flat()].some((slot) => slot && slot.key === key)
+    const holds = (p) => pageSlots(p).some((slot) => slot && slot.key === key)
     const found = pages.find((p) => p.current && holds(p)) || pages.find(holds) || pages.find((p) => p.current)
     return found ? found.page : 0
   }
@@ -434,11 +463,10 @@
     const swatches = page.rows.flat().map((slot) => renderSwatch(slot, groupIndex, key)).join('')
     const zero = page.zero ? `<div style="${grid};margin-top:6px">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
     return '<div style="margin-bottom:6px">' +
-      `<select data-act="page" data-group="${groupIndex}" aria-label="Palette page" style="${PULLDOWN_LOOK}">${options}</select> ${renderChosen(colors, key)}</div>` +
+      `<select data-act="page" data-group="${groupIndex}" aria-label="Cell color page" style="${PULLDOWN_LOOK}">${options}</select> ${renderChosen(colors, key)}</div>` +
       `<div style="${grid}">${swatches}</div>${zero}`
   }
 
-  // The groups of a profile as small squares in their palette colors, each with its shown digit.
   function renderChips (groups, colorOf, size) {
     return iconLayout(groups).map(({ key, digit }) => {
       const color = colorOf(key)
@@ -451,8 +479,6 @@
   // `css` with every declaration important: SudokuPad's own rules for the dialog's selects, buttons and
   // labels size them otherwise.
   const important = (css) => css.split(';').map((d) => `${d} !important`).join(';')
-  // The dialog's look: a light grey button with a rounded border, a divider between sections, a purple
-  // Save, and a pulldown with a purple arrow.
   const RULE_COLOR = '#e3dff0'
   const DIVIDER = `border-top:1px solid ${RULE_COLOR};margin:12px 0 0;padding-top:10px`
   const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
@@ -550,18 +576,24 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
-  if (typeof Framework === 'undefined' || !Framework.getApp) return
+  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
+  // has no Framework and is left alone. A Framework without `getApp` is a SudokuPad this script
+  // cannot hook, which is reported.
+  if (typeof Framework === 'undefined') return
+  if (!Framework.getApp) {
+    console.warn('color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed')
+    return
+  }
 
   // The color tool's pages laid out as SudokuPad's buttons are, read now from the tool and
-  // the raw `--cell-color-<key>` values; [] until the tool holds a palette.
+  // the colors `readColor` resolves; [] until the tool holds a palette.
   function readPages () {
     const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
     const palette = tool && tool.palette
     if (!palette || !Array.isArray(palette.pages)) return []
-    const style = window.getComputedStyle(document.documentElement)
-    return layoutPages(palette.pages, tool.currentPage, (key) => style.getPropertyValue(`--cell-color-${key}`))
+    return layoutPages(palette.pages, tool.currentPage, readColor)
   }
 
   const loadState = () => stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
@@ -644,7 +676,6 @@
   let autoMode = false
 
   const BUTTON = '#control-colorbydigit'
-  // The AUTO box and the menu arrow box on the button.
   const BOX = `${BUTTON} [data-role="auto"]`
   const ARROW = `${BUTTON} [data-role="menu"]`
   const MENU = '#color-by-digit-menu'
@@ -858,7 +889,6 @@
     let draft = savedState
     // The draft of the auto mode box: it opens at the value in force and takes effect on Save.
     let auto = autoMode
-    // The text in the new profile's name field.
     let newName = ''
     Framework.showDialog({
       centerOverBoard: true,
@@ -885,7 +915,6 @@
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
       box.innerHTML = renderEditor(groups, pages, shown, auto, renderProfiles(draft, readColor, newName))
     }
-    const editGroups = (groups) => { draft = setActiveGroups(draft, groups) }
     // Another profile's groups are showing: its groups open on their own pages.
     const reshow = (next) => { draft = next; shown = [] }
     const addProfileFromField = () => {
@@ -950,15 +979,10 @@
     }
     // Enter and Space activate the focused row; the arrow keys move the choice to the next or previous row,
     // wrapping, as a radio group does. Only the active row is a tab stop.
-    const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="activate"]')) return
-      const count = draft.profiles.length
-      const index = Number(event.target.dataset.index)
-      let target
-      if (event.key === 'Enter' || event.key === ' ') target = index
-      else if (ARROW_STEP[event.key]) target = (index + ARROW_STEP[event.key] + count) % count
-      else return
+      const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)
+      if (target === null) return
       event.preventDefault()
       event.stopPropagation()
       activateRow(target, true)
@@ -975,28 +999,20 @@
       if (!el) return
       event.preventDefault()
       event.stopPropagation()
-      const i = Number(el.dataset.group)
-      const groups = activeGroups(draft)
-      switch (el.dataset.act) {
-        case 'color': editGroups(groups.map((g, j) => (j === i ? { key: el.dataset.key, digits: g.digits } : g))); break
-        case 'digit': editGroups(assignDigit(groups, i, el.dataset.digit)); break
-        case 'remove': editGroups(groups.filter((_, j) => j !== i)); shown = shown.filter((_, j) => j !== i); break
-        case 'clear': editGroups([]); shown = []; break
-        case 'add-group': {
-          const used = groups.map((g) => g.key)
-          const free = colors.find((c) => !used.includes(c.key)) || colors[0]
-          if (free) editGroups([...groups, { key: free.key, digits: [] }])
-          break
-        }
-        case 'delete': reshow(deleteProfile(draft, Number(el.dataset.index))); break
-        case 'add': addProfileFromField(); return
+      const act = el.dataset.act
+      if (act === 'add') { addProfileFromField(); return }
+      if (act === 'delete') {
+        reshow(deleteProfile(draft, Number(el.dataset.index)))
+      } else {
+        const edit = editGroupsFor(activeGroups(draft), shown, act, { group: Number(el.dataset.group), key: el.dataset.key, digit: el.dataset.digit }, colors)
+        draft = setActiveGroups(draft, edit.groups)
+        shown = edit.shown
       }
       draw()
     })
   }
 
   Framework.getApp().then((app) => {
-    // Closes a dialog already open, then opens the editor once it is gone.
     const openEditor = () => {
       Framework.closeDialog()
       setTimeout(() => openDialog(app), 0)
