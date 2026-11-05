@@ -1171,9 +1171,7 @@
     gear: 'settings gear'
   }
 
-  // One install step, which stays off once skipped: `run(fn, fallback)` then answers with `fallback()` and a wrapper calls SudokuPad's original.
-  // A throw in the step's own code skips it with one warning and `onSkip` puts back what it changed; `skip(why, false)` is the quiet form for a
-  // step never installed. `skipped` collects the label for the dialog.
+  // A step stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for a step never installed.
   function createStep (label, skipped, onSkip = doNothing) {
     const step = {
       off: false,
@@ -1199,8 +1197,8 @@
           return fallback()
         }
       },
-      // Replaces `owner[name]` with `body(stock, ...args)`, `stock` calling the original. A throw from the original passes through as
-      // SudokuPad's own; a throw from the body answers with the original's result, calling it only if the body had not.
+      // A throw from the original is SudokuPad's own and passes through; after the body's own throw the original's result answers, so it
+      // is never called twice for one event.
       wrap (owner, name, body) {
         const original = owner[name]
         owner[name] = function (...args) {
@@ -1577,7 +1575,6 @@
     })
   }
 
-  // Whether the click now ending steps the cycle backwards.
   function steppingBackwards () {
     return lastButton === RIGHT_BUTTON
   }
@@ -2193,7 +2190,6 @@
     })
   }
 
-  // A step whose SudokuPad internals are not there is never installed, so it leaves stock SudokuPad behavior.
   function checkSteps (app) {
     const tool = typeof ToolPen !== 'undefined' ? ToolPen.tool : undefined
     lackingInternals(app, tool).forEach((names, missing) => {
