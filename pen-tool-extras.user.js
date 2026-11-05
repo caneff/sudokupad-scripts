@@ -1687,6 +1687,13 @@
     return `<svg width="${width}" height="16" viewBox="0 0 ${width} 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
   }
 
+  // The class names more than one template writes, named once here; a class only one template writes is spelled in that template and in its rule in `DIALOG_CSS`.
+  const NOTE = 'pen-tool-extras-note'
+  const SECTION_TITLE = 'pen-tool-extras-section-title'
+  const DIVIDER = '<div class="pen-tool-extras-divider"></div>'
+  const SLIDER_COLUMNS = 'pen-tool-extras-columns'
+  const COLUMN_HEADING = 'pen-tool-extras-column-heading'
+
   function offNote (off) {
     if (!off.length) return ''
     return `<div class="${NOTE}">Off because SudokuPad changed: ${off.join(', ')}</div>`
@@ -1700,13 +1707,6 @@
 
   const sectionHeading = (text) => `${DIVIDER}<div class="${SECTION_TITLE}">${text}</div>`
 
-  // Class names the editor's markup and its rules (`DIALOG_CSS`) share.
-  const NOTE = 'pen-tool-extras-note'
-  const SECTION_TITLE = 'pen-tool-extras-section-title'
-  const DIVIDER = '<div class="pen-tool-extras-divider"></div>'
-  const SLIDER_COLUMNS = 'pen-tool-extras-columns'
-  const COLUMN_HEADING = 'pen-tool-extras-column-heading'
-
   const DIALOG_CLASS = 'pen-tool-extras-dialog'
 
   // Scoped by DIALOG_CLASS, so SudokuPad's other dialogs are left alone.
@@ -1716,6 +1716,7 @@
     `.dialog-options.${DIALOG_CLASS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: #777 !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
+    '.pen-tool-extras-version { opacity: .6; }',
     `#${EDITOR_ID} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
     `#${EDITOR_ID} .${SECTION_TITLE} { font-weight: 600; margin-top: 10px; }`,
     `#${EDITOR_ID} .pen-tool-extras-pen-title { font-weight: 600; }`,
@@ -1879,7 +1880,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Pen tool extras</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<b>Pen tool extras</b> <small class="pen-tool-extras-version">v${VERSION}</small>` },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',

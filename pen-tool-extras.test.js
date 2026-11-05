@@ -1177,6 +1177,7 @@ test('Line styles: Dashed lines and Directional arrow lines each have an Enable 
   assert.match(html, />Dashed lines<[\s\S]*data-style="dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-style="arrows"[\s\S]*>Arrow spacing</)
   assert.match(rowOf(html, 'dash'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(rowOf(html, 'arrowSpacing'), /class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.doesNotMatch(rowOf(html, 'dash'), /display:none/)
 })
 
@@ -1216,6 +1217,7 @@ test('Other: the White outline box has its own line with Outline width under it,
   assert.match(html, /<input type="checkbox" id="pen-tool-extras-outline" data-outline checked[^>]*>\s*<label for="pen-tool-extras-outline"[^>]*>White outline on lines and marks<\/label>/)
   assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-middle-erase'), true)
   assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
   assert.doesNotMatch(rowOf(html, 'outlineWidth'), /display:none/)
   const off = renderEditor(editorState({ outline: false, outlineWidth: 5 }))
