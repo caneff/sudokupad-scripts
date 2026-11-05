@@ -25,7 +25,7 @@ const DRAG_STEPS = 14
 const CLICK_PAUSE_MS = 150
 const EDGE_INSET_PX = 2
 // Cells in a cropped grid picture, and the margin around it in page pixels.
-const MARGIN = 10
+const MARGIN = 12
 
 const browser = await chromium.launch()
 const page = await (await browser.newContext({ viewport: { width: 1200, height: 900 }, deviceScaleFactor: 3 })).newPage()
@@ -107,11 +107,11 @@ await compose('colors', [cellRow, penRow], true)
 // Lines: a dashed line (page 2, blue) and an arrow line (page 3, orange) on the grid, with the page button.
 await mode('centeronly')
 await pageButton.click()
-await pick(9); await drag([[1.5, 1.5], [1.5, 4.5]])
+await pick(9); await drag([[1.5, 1.5], [1.5, 3.5]])
 await pageButton.click()
-await pick(6); await drag([[3.5, 1.5], [3.5, 4.5]])
+await pick(6); await drag([[3.5, 1.5], [3.5, 3.5]])
 await quiet()
-const lines = await png(gridClip(1, 1, 3, 4))
+const lines = await png(gridClip(1, 1, 3, 3))
 const pageShot = (await pageButton.screenshot()).toString('base64')
 await compose('lines', [lines, pageShot], false)
 
@@ -125,19 +125,19 @@ const edge = async (row, col, side, clicks, key) => {
   await landing(`the edge mark at ${row},${col} ${side}`, () => clickTimes(x, y, clicks))
 }
 await edge(5, 1, 'right', 1, 9)
-await edge(5, 2, 'bottom', 2, 4)
-await edge(5, 3, 'right', 3, 7)
-await edge(5, 4, 'bottom', 4, 6)
+await edge(5, 1, 'bottom', 4, 6)
+await edge(5, 2, 'right', 2, 4)
+await edge(5, 2, 'bottom', 3, 7)
 await quiet()
-await page.screenshot({ path: out('edges'), clip: gridClip(5, 1, 1, 5) })
+await page.screenshot({ path: out('edges'), clip: gridClip(5, 1, 1, 2) })
 
 // Corners: a click near a grid corner; 1 click is the X, 2 the circle.
 await pick(5)
 await landing('the corner X', () => clickTimes(...at(7, 2), 1))
 await pick(9)
-await landing('the corner circle', () => clickTimes(...at(7, 4), 2))
+await landing('the corner circle', () => clickTimes(...at(7, 3), 2))
 await quiet()
-await page.screenshot({ path: out('corners'), clip: gridClip(6.5, 1.5, 1.5, 3.5) })
+await page.screenshot({ path: out('corners'), clip: gridClip(6.6, 1.6, 0.8, 1.8) })
 
 // Sliders: the panel's Thickness and Opacity sliders, and a thick line with its white outline over a colored cell.
 const slider = await page.locator('#pen-tool-extras-thickness').boundingBox()
@@ -157,9 +157,9 @@ await page.locator('.tool-colour button[data-key="8"]').click()
 await page.mouse.click(...at(8.5, 7.5))
 await page.locator('.tool-colour button[data-key="8"]').click()
 await openPanel('#control-pen', '.tool-pen')
-await pick(9); await drag([[8.5, 5.5], [8.5, 8.5]])
+await pick(9); await drag([[8.5, 5.5], [8.5, 7.5]])
 await quiet()
-const lineOverColor = await png(gridClip(8, 5, 1, 4))
+const lineOverColor = await png(gridClip(8, 5, 1, 3))
 const controls = await page.locator('.controls-buttons').boundingBox()
 const slidersBox = await page.locator('#pen-tool-extras-thickness').boundingBox()
 const opacityBox = await page.locator('#pen-tool-extras-opacity').boundingBox()
@@ -171,6 +171,6 @@ await compose('sliders', [await png(sliderClip), lineOverColor], true)
 // Gear: the pen tool button, with the gear in its corner.
 await page.locator('.pen-tool-extras-gear').waitFor()
 const penButton = await page.locator('#control-pen').boundingBox()
-await page.screenshot({ path: out('gear'), clip: { x: penButton.x - 6, y: penButton.y - 6, width: penButton.width + 12, height: penButton.height + 12 } })
+await page.screenshot({ path: out('gear'), clip: { x: penButton.x - 1, y: penButton.y - 1, width: penButton.width + 2, height: penButton.height + 2 } })
 
 await browser.close()
