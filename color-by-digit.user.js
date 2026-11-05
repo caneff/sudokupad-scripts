@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.4
+// @version      0.5.5
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,8 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.5.4'
-  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const VERSION = '0.5.5'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -36,7 +35,6 @@
   const NUMPAD_KEY = '2.4em'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
-  // A group is one palette key plus the digits that get it.
   const PRELOADS = {
     'Low/5/High': [
       { key: '1', digits: ['0', '1', '2', '3', '4'] },
@@ -102,7 +100,6 @@
   // What auto mode watches in a plan cell: the entered digit and the centre marks, in any order.
   const entrySignature = (cell) => JSON.stringify([String(cell.value || ''), [...(cell.centre || [])].sort()])
 
-  // The indices whose signature differs between two readings of the same cells.
   const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
 
   // What auto mode does to the listed cells: [{action, key, indices}], removals first. A pure cell
@@ -138,7 +135,6 @@
     return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
-  // Puts a digit in one group, or takes it out if that group already holds it.
   function assignDigit (groups, groupIndex, digit) {
     const had = groups[groupIndex].digits.includes(digit)
     return groups.map((g, i) => {
@@ -359,7 +355,6 @@
       `font:700 8px/1 sans-serif">${on ? 'X' : ''}</span>AUTO</span>`
   }
 
-  // The menu arrow box in the button's lower right.
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
     'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:14px;height:14px;' +
     `border:1.5px solid ${PURPLE};border-radius:3px;background:#fff;color:${PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
@@ -473,7 +468,6 @@
       `<div style="${grid}">${swatches}</div>${zero}`
   }
 
-  // The groups of a profile as small squares in their palette colors, each with its shown digit.
   function renderChips (groups, colorOf, size) {
     return iconLayout(groups).map(({ key, digit }) => {
       const color = colorOf(key)
@@ -486,8 +480,6 @@
   // `css` with every declaration important: SudokuPad's own rules for the dialog's selects, buttons and
   // labels size them otherwise.
   const important = (css) => css.split(';').map((d) => `${d} !important`).join(';')
-  // The dialog's look: a light grey button with a rounded border, a divider between sections, a purple
-  // Save, and a pulldown with a purple arrow.
   const RULE_COLOR = '#e3dff0'
   const DIVIDER = `border-top:1px solid ${RULE_COLOR};margin:12px 0 0;padding-top:10px`
   const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
@@ -688,7 +680,6 @@
   let autoMode = false
 
   const BUTTON = '#control-colorbydigit'
-  // The AUTO box and the menu arrow box on the button.
   const BOX = `${BUTTON} [data-role="auto"]`
   const ARROW = `${BUTTON} [data-role="menu"]`
   const MENU = '#color-by-digit-menu'
@@ -902,7 +893,6 @@
     let draft = savedState
     // The draft of the auto mode box: it opens at the value in force and takes effect on Save.
     let auto = autoMode
-    // The text in the new profile's name field.
     let newName = ''
     Framework.showDialog({
       centerOverBoard: true,
@@ -1028,7 +1018,6 @@
   }
 
   Framework.getApp().then((app) => {
-    // Closes a dialog already open, then opens the editor once it is gone.
     const openEditor = () => {
       Framework.closeDialog()
       setTimeout(() => openDialog(app), 0)

@@ -101,7 +101,7 @@ test('circleFor centres on the mark\'s middle and is sized by its width', () => 
 
 test('inkMiddle centres on the digit\'s ink, not on its advance box or its font\'s em box', () => {
   // A character whose advance box starts at x 100 and whose em box starts at y 20, with a font
-  // ascent of 10: the baseline is at y 30. The ink reaches 1 left and 5 right of the origin, and 7
+  // ascent of 10: the baseline is at y 30. The ink starts 1 right of the origin and reaches 5 right of it, and 7
   // above and 0 below the baseline.
   const middle = inkMiddle({ x: 100, y: 20 }, { left: -1, right: 5, ascent: 7, descent: 0, fontAscent: 10 })
   assert.equal(middle.x, 103)

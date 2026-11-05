@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.4
+// @version      0.3.5
 // @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark gets a small red circle behind it, keeping its digit color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,8 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.4'
-  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const VERSION = '0.3.5'
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'DigitColor_colors'
   const STYLE_ID = 'digit-color-style'
