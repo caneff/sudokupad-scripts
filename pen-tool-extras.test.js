@@ -457,8 +457,8 @@ test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s colo
   assert.equal(HOLD_TO_EDIT_MS, 1000)
 })
 
-const ALL = { x: true, directions: true, dot: true, cornerX: true, cornerDot: true }
-const NONE = { x: false, directions: false, dot: false, cornerX: false, cornerDot: false }
+const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
+const NONE = { x: false, directions: false, circle: false, cornerX: false, cornerCircle: false }
 
 test('fresh install has every mark ticked', () => {
   assert.deepEqual(DEFAULT_MARK_SETTINGS, ALL)
@@ -473,7 +473,30 @@ test('corrupt saved settings fall back to every mark ticked', () => {
 })
 
 test('a saved boolean is kept and a non-boolean entry takes its default', () => {
-  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', dot: false, cornerX: 'no', cornerDot: false }), { x: false, directions: true, dot: false, cornerX: true, cornerDot: false })
+  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', circle: false, cornerX: 'no', cornerCircle: false }), { x: false, directions: true, circle: false, cornerX: true, cornerCircle: false })
+})
+
+test('settings saved under the old names dot and cornerDot load as circle and cornerCircle with the same values', () => {
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: true, dot: false, cornerX: true, cornerDot: true }), { ...ALL, circle: false })
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: true, dot: true, cornerX: true, cornerDot: false }), { ...ALL, cornerCircle: false })
+})
+
+test('a new name wins over an old name saved beside it', () => {
+  assert.deepEqual(normalizeMarkSettings({ circle: true, dot: false, cornerCircle: false, cornerDot: true }), { ...ALL, cornerCircle: false })
+})
+
+// The values saved inside puzzles, typed out from docs/research/sudokupad-pen-edge-marks.md: a rename of a type must not move one.
+test('the pen values saved inside puzzles stay: each edge cycles X, circle, direction, other direction, and each corner X, circle', () => {
+  const edgeCycles = { 3: ['3', 'j', 'h', 'i'], 4: ['4', 'm', 'k', 'l'], b: ['b', 'p', 'n', 'o'], c: ['c', 's', 'q', 'r'] }
+  for (const [edge, cycle] of Object.entries(edgeCycles)) {
+    assert.deepEqual(planClick(edge, [], ALL), { remove: [], add: cycle[0] }, edge)
+    for (let i = 1; i < cycle.length; i++) assert.deepEqual(planClick(edge, [cycle[i - 1]], ALL), { remove: [cycle[i - 1]], add: cycle[i] }, cycle[i])
+  }
+  const cornerCycles = { tl: ['t', 'w'], br: ['u', 'x'], far: ['v', 'y'] }
+  for (const [kind, [x, circle]] of Object.entries(cornerCycles)) {
+    assert.deepEqual(planCornerClick(kind, [], ALL), { remove: [], add: x }, kind)
+    assert.deepEqual(planCornerClick(kind, [x], ALL), { remove: [x], add: circle }, kind)
+  }
 })
 
 test('with everything ticked the cycle is X, circle, direction, other direction, empty', () => {
@@ -483,30 +506,30 @@ test('with everything ticked the cycle is X, circle, direction, other direction,
     type = nextType(type, ALL)
     seen.push(type)
   }
-  assert.deepEqual(seen, ['x', 'dot', 'dirA', 'dirB', 'empty'])
+  assert.deepEqual(seen, ['x', 'circle', 'dirA', 'dirB', 'empty'])
 })
 
 test('an unticked type is skipped', () => {
-  assert.equal(nextType('empty', { x: false, directions: true, dot: true }), 'dot')
-  assert.equal(nextType('dot', { x: true, directions: true, dot: false }), 'dirA')
-  assert.equal(nextType('x', { x: true, directions: true, dot: false }), 'dirA')
-  assert.equal(nextType('dirB', { x: true, directions: true, dot: false }), 'empty')
-  assert.equal(nextType('x', { x: true, directions: false, dot: true }), 'dot')
-  assert.equal(nextType('empty', { x: false, directions: false, dot: true }), 'dot')
-  assert.equal(nextType('dot', { x: false, directions: false, dot: true }), 'empty')
+  assert.equal(nextType('empty', { x: false, directions: true, circle: true }), 'circle')
+  assert.equal(nextType('circle', { x: true, directions: true, circle: false }), 'dirA')
+  assert.equal(nextType('x', { x: true, directions: true, circle: false }), 'dirA')
+  assert.equal(nextType('dirB', { x: true, directions: true, circle: false }), 'empty')
+  assert.equal(nextType('x', { x: true, directions: false, circle: true }), 'circle')
+  assert.equal(nextType('empty', { x: false, directions: false, circle: true }), 'circle')
+  assert.equal(nextType('circle', { x: false, directions: false, circle: true }), 'empty')
 })
 
 test('Directions is one box: both directions or neither', () => {
-  const only = { x: false, directions: true, dot: false }
+  const only = { x: false, directions: true, circle: false }
   assert.equal(nextType('empty', only), 'dirA')
   assert.equal(nextType('dirA', only), 'dirB')
   assert.equal(nextType('dirB', only), 'empty')
 })
 
 test('a mark whose type is unticked moves to the next ticked mark, or to empty', () => {
-  assert.equal(nextType('x', { x: false, directions: true, dot: false }), 'dirA')
-  assert.equal(nextType('x', { x: false, directions: false, dot: false }), 'empty')
-  assert.equal(nextType('dot', { x: true, directions: false, dot: false }), 'empty')
+  assert.equal(nextType('x', { x: false, directions: true, circle: false }), 'dirA')
+  assert.equal(nextType('x', { x: false, directions: false, circle: false }), 'empty')
+  assert.equal(nextType('circle', { x: true, directions: false, circle: false }), 'empty')
 })
 
 test('with everything ticked the backward cycle is empty, other direction, direction, circle, X, empty', () => {
@@ -516,28 +539,28 @@ test('with everything ticked the backward cycle is empty, other direction, direc
     type = previousType(type, ALL)
     seen.push(type)
   }
-  assert.deepEqual(seen, ['dirB', 'dirA', 'dot', 'x', 'empty'])
+  assert.deepEqual(seen, ['dirB', 'dirA', 'circle', 'x', 'empty'])
 })
 
 test('going backwards from empty lands on the last ticked mark, and from the X on empty', () => {
-  assert.equal(previousType('empty', { x: true, directions: true, dot: false }), 'dirB')
-  assert.equal(previousType('empty', { x: true, directions: false, dot: true }), 'dot')
-  assert.equal(previousType('empty', { x: true, directions: false, dot: false }), 'x')
+  assert.equal(previousType('empty', { x: true, directions: true, circle: false }), 'dirB')
+  assert.equal(previousType('empty', { x: true, directions: false, circle: true }), 'circle')
+  assert.equal(previousType('empty', { x: true, directions: false, circle: false }), 'x')
   assert.equal(previousType('x', ALL), 'empty')
   assert.equal(previousType('empty', NONE), 'empty')
 })
 
 test('going backwards skips an unticked type', () => {
-  assert.equal(previousType('dirA', { x: true, directions: true, dot: false }), 'x')
-  assert.equal(previousType('dot', { x: false, directions: true, dot: true }), 'empty')
-  assert.equal(previousType('empty', { x: true, directions: false, dot: true }), 'dot')
-  assert.equal(previousType('dirA', { x: true, directions: true, dot: true }), 'dot')
+  assert.equal(previousType('dirA', { x: true, directions: true, circle: false }), 'x')
+  assert.equal(previousType('circle', { x: false, directions: true, circle: true }), 'empty')
+  assert.equal(previousType('empty', { x: true, directions: false, circle: true }), 'circle')
+  assert.equal(previousType('dirA', { x: true, directions: true, circle: true }), 'circle')
 })
 
 test('a mark whose type is unticked moves back to the previous ticked mark, or to empty', () => {
-  assert.equal(previousType('dirA', { x: true, directions: false, dot: false }), 'x')
-  assert.equal(previousType('dirB', { x: false, directions: false, dot: true }), 'dot')
-  assert.equal(previousType('dot', { x: false, directions: false, dot: true }), 'empty')
+  assert.equal(previousType('dirA', { x: true, directions: false, circle: false }), 'x')
+  assert.equal(previousType('dirB', { x: false, directions: false, circle: true }), 'circle')
+  assert.equal(previousType('circle', { x: false, directions: false, circle: true }), 'empty')
   assert.equal(previousType('dirA', NONE), 'empty')
 })
 
@@ -591,7 +614,7 @@ test('with nothing ticked the click does nothing, and an existing mark stays', (
 })
 
 test('an unticked mark already on the grid moves to the next ticked mark', () => {
-  assert.deepEqual(planClick('3', ['3'], { ...NONE, dot: true }), { remove: ['3'], add: 'j' })
+  assert.deepEqual(planClick('3', ['3'], { ...NONE, circle: true }), { remove: ['3'], add: 'j' })
 })
 
 test('two marks on one edge, as a replay can hold, both go on the next click', () => {
@@ -650,7 +673,7 @@ test('an arrow is a two-segment chevron pointing the way it names', () => {
 })
 
 test('settings saved before corner marks existed read back with both corner marks ticked', () => {
-  assert.deepEqual(normalizeMarkSettings({ x: true, directions: false, dot: true }), { ...ALL, directions: false })
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: false, circle: true }), { ...ALL, directions: false })
 })
 
 test('the corner zone is 0.2 of a cell from a grid corner', () => {
@@ -752,31 +775,31 @@ test('the corner characters are lowercase letters SudokuPad does not use and the
 
 test('cornerMarkOf names the kind and type a corner character draws, and nothing for another character', () => {
   assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[0]), { kind: 'br', type: 'x' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[1]), { kind: 'br', type: 'dot' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.far[1]), { kind: 'far', type: 'dot' })
+  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[1]), { kind: 'br', type: 'circle' })
+  assert.deepEqual(cornerMarkOf(CORNER_VALUES.far[1]), { kind: 'far', type: 'circle' })
   for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'h', 's', 'z']) assert.equal(cornerMarkOf(other), null, other)
 })
 
 test('the corner cycle is X, circle, empty, and a click on an empty corner adds the X', () => {
-  const [x, dot] = CORNER_VALUES.br
+  const [x, circle] = CORNER_VALUES.br
   assert.deepEqual(planCornerClick('br', [], ALL), { remove: [], add: x })
-  assert.deepEqual(planCornerClick('br', [x], ALL), { remove: [x], add: dot })
-  assert.deepEqual(planCornerClick('br', [dot], ALL), { remove: [dot], add: null })
+  assert.deepEqual(planCornerClick('br', [x], ALL), { remove: [x], add: circle })
+  assert.deepEqual(planCornerClick('br', [circle], ALL), { remove: [circle], add: null })
 })
 
 test('the corner cycle backwards is circle, X, empty', () => {
-  const [x, dot] = CORNER_VALUES.tl
-  assert.deepEqual(planCornerClick('tl', [], ALL, true), { remove: [], add: dot })
-  assert.deepEqual(planCornerClick('tl', [dot], ALL, true), { remove: [dot], add: x })
+  const [x, circle] = CORNER_VALUES.tl
+  assert.deepEqual(planCornerClick('tl', [], ALL, true), { remove: [], add: circle })
+  assert.deepEqual(planCornerClick('tl', [circle], ALL, true), { remove: [circle], add: x })
   assert.deepEqual(planCornerClick('tl', [x], ALL, true), { remove: [x], add: null })
 })
 
 test('an unticked corner type is skipped, and with both unticked the corner click does nothing', () => {
-  const [x, dot] = CORNER_VALUES.far
-  assert.deepEqual(planCornerClick('far', [], { ...ALL, cornerX: false }), { remove: [], add: dot })
-  assert.deepEqual(planCornerClick('far', [dot], { ...ALL, cornerX: false }), { remove: [dot], add: null })
-  assert.deepEqual(planCornerClick('far', [x], { ...ALL, cornerDot: false }), { remove: [x], add: null })
-  assert.equal(planCornerClick('far', [x], { ...ALL, cornerX: false, cornerDot: false }), null)
+  const [x, circle] = CORNER_VALUES.far
+  assert.deepEqual(planCornerClick('far', [], { ...ALL, cornerX: false }), { remove: [], add: circle })
+  assert.deepEqual(planCornerClick('far', [circle], { ...ALL, cornerX: false }), { remove: [circle], add: null })
+  assert.deepEqual(planCornerClick('far', [x], { ...ALL, cornerCircle: false }), { remove: [x], add: null })
+  assert.equal(planCornerClick('far', [x], { ...ALL, cornerX: false, cornerCircle: false }), null)
 })
 
 test('a corner click sees only its own kind: another kind, an edge mark or a cell mark on the cell stays', () => {
@@ -786,7 +809,7 @@ test('a corner click sees only its own kind: another kind, an edge mark or a cel
 
 test('the edge cycle ignores the corner boxes, and the corner cycle ignores the edge boxes', () => {
   assert.deepEqual(planClick('3', [], { ...NONE, cornerX: true }), null)
-  assert.equal(planCornerClick('br', [], { ...NONE, x: true, directions: true, dot: true }), null)
+  assert.equal(planCornerClick('br', [], { ...NONE, x: true, directions: true, circle: true }), null)
 })
 
 test('corner marks are half the thickness, like edge marks', () => {
@@ -1148,11 +1171,11 @@ test('Marks a click cycles through is one table: columns X Mark, Circle, Directi
   const html = renderEditor(editorState())
   assert.match(html, />Marks a click cycles through</)
   assert.doesNotMatch(html, /Edge marks a click|Corner marks a click/)
-  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-mark="x"[\s\S]*data-mark="dot"[\s\S]*data-mark="directions"[\s\S]*>Corner<[\s\S]*data-mark="cornerX"[\s\S]*data-mark="cornerDot"/)
+  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-mark="x"[\s\S]*data-mark="circle"[\s\S]*data-mark="directions"[\s\S]*>Corner<[\s\S]*data-mark="cornerX"[\s\S]*data-mark="cornerCircle"/)
   const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-mark-(\w+)" data-mark="\w+" aria-label="([^"]+)" title="([^"]+)"( checked)?>/g)]
   assert.deepEqual(boxes.map((m) => [m[1], m[2], m[3]]), [
-    ['x', 'Edge X Mark', 'Edge X Mark'], ['dot', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
-    ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerDot', 'Corner Circle', 'Corner Circle']
+    ['x', 'Edge X Mark', 'Edge X Mark'], ['circle', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
+    ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerCircle', 'Corner Circle', 'Corner Circle']
   ])
   assert.equal(boxes.every((m) => m[4] === ' checked'), true)
 })
@@ -1163,7 +1186,7 @@ test('a mark box shows its picture only: no word label beside it, and Directions
   const label = (key) => new RegExp(`<label[^>]*>(<input[^>]*data-mark="${key}"[^>]*>)(.*?)</label>`).exec(html)[2]
   assert.equal((label('directions').match(/<svg/g) || []).length, 1)
   assert.equal(label('directions').match(/M\d+ \d+ L\d+ \d+ L\d+ \d+/g).length, 4, 'four arrow heads')
-  assert.doesNotMatch(label('x') + label('dot') + label('directions'), />[A-Za-z]/, 'no text')
+  assert.doesNotMatch(label('x') + label('circle') + label('directions'), />[A-Za-z]/, 'no text')
 })
 
 test('Other: the White outline box has its own line with Outline width under it, hidden while the box is unticked, and the middle click box follows', () => {
