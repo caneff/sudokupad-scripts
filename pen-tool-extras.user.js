@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.10
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
+// @version      1.14.11
+// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.10'
+  const VERSION = '1.14.11'
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
   const COLORS_KEY = 'PenColor_colors'
@@ -307,7 +307,7 @@
   const SETTINGS = {
     thickness: slider('PenColor_thickness', THICKNESS, adoptThickness),
     opacity: slider('PenColor_opacity', OPACITY, adoptOpacity),
-    dash: slider('PenColor_dash', DASH, syncPageButton),
+    dash: slider('PenColor_dash', DASH, syncPenPanel),
     arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, redrawArrowLines),
     outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline),
     outline: flag('PenColor_outline', adoptOutline),
@@ -1055,10 +1055,10 @@
     return `<svg width="${width}" height="16" viewBox="0 0 ${width} 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
   }
 
-  // The one plain line that names the features that are off because SudokuPad changed; nothing when none is.
+  // The one plain line that names the steps skipped because SudokuPad changed; nothing when none is.
   function offNote (off) {
     if (!off.length) return ''
-    return `<div style="margin:6px 0;max-width:20em">Off because SudokuPad changed: ${off.map((name) => FEATURE_LABELS[name]).join(', ')}</div>`
+    return `<div style="margin:6px 0;max-width:20em">Off because SudokuPad changed: ${off.join(', ')}</div>`
   }
 
   function missingNote (missing) {
@@ -1105,7 +1105,6 @@
   // the table of marks a click cycles through; the outline and the middle click boxes; the line mode. A slider here is a draft that takes effect on
   // Save, so the panel's own sliders and these show the same value when the dialog opens.
   function renderEditor (state) {
-    const off = new Set(state.off)
     const cells = PEN_COLOR_NUMBERS.map((n) =>
       '<div style="display:flex;align-items:center;gap:8px">' +
       `<b style="width:1.2em;text-align:right">${n}</b>` +
@@ -1130,7 +1129,6 @@
     const styleBlock = (key, name, enabled, sliderMarkup) =>
       `<div style="${SLIDER_COLUMNS};margin-bottom:0"><span style="grid-column:1 / 4">${name}</span>` +
       `${box(`id="pen-tool-extras-style-${key}" data-style="${key}" aria-label="Enable ${name}"`, enabled)}</div>` + sliderMarkup
-    const when = (feature, markup) => off.has(feature) ? '' : markup
     const heading = (text, caption) =>
       DIVIDER + `<div style="${SLIDER_COLUMNS};margin:10px 0 4px"><span style="font-weight:600;grid-column:1 / 4">${text}</span>` +
       `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>`
@@ -1141,99 +1139,96 @@
       markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('circle', 'Edge Circle', 'circle') + markBox('directions', 'Edge Directions', 'directions')) +
       markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerCircle', 'Corner Circle', 'circle') + '<div></div>') +
       '</div>'
-    const dashed = !off.has('dashes')
-    const arrows = !off.has('arrowLines')
     const labelled = (id, attributes, checked, text) =>
       '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
       `<input type="checkbox" id="${id}" ${attributes}${checked ? ' checked' : ''} style="margin:0">` +
       `<label for="${id}" style="width:auto;text-align:left;margin:0">${text}</label></div>`
     return offNote(state.off) + '<div style="font-weight:600">Pen colors</div>' + colorsRow +
       missingNote(state.missing) +
-      when('sliders', heading('Line settings', 'Slider in panel') +
-        sliderRow('thickness', 'Thickness', THICKNESS, state.thickness, { boxMarkup: box('id="pen-tool-extras-show-thickness" data-show="thickness"', state.show.thickness, 'Show this slider in the pen panel') }) +
-        sliderRow('opacity', 'Opacity (%)', OPACITY, state.opacity, { boxMarkup: box('id="pen-tool-extras-show-opacity" data-show="opacity"', state.show.opacity, 'Show this slider in the pen panel') })) +
-      (dashed || arrows
-        ? heading('Line styles', 'Enable') +
-          (dashed ? styleBlock('dashed', 'Dashed lines', state.lineStyles.dashed, sliderRow('dash', 'Dash length', DASH, state.dash, { indented: true, shown: state.lineStyles.dashed })) : '') +
-          (arrows ? styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, sliderRow('arrowSpacing', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) : '')
-        : '') +
-      when('marks', sectionHeading('Marks a click cycles through') + marksTable) +
-      (off.has('outline') && off.has('lineErase')
-        ? ''
-        : sectionHeading('Other') +
-          when('outline', labelled('pen-tool-extras-outline', 'data-outline', state.outline, 'White outline on lines and marks') +
-            sliderRow('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth, { indented: true, shown: state.outline })) +
-          when('lineErase', labelled('pen-tool-extras-middle-erase', 'data-middle-erase', state.middleErase, 'Middle click erases a whole line'))) +
+      heading('Line settings', 'Slider in panel') +
+      sliderRow('thickness', 'Thickness', THICKNESS, state.thickness, { boxMarkup: box('id="pen-tool-extras-show-thickness" data-show="thickness"', state.show.thickness, 'Show this slider in the pen panel') }) +
+      sliderRow('opacity', 'Opacity (%)', OPACITY, state.opacity, { boxMarkup: box('id="pen-tool-extras-show-opacity" data-show="opacity"', state.show.opacity, 'Show this slider in the pen panel') }) +
+      heading('Line styles', 'Enable') +
+      styleBlock('dashed', 'Dashed lines', state.lineStyles.dashed, sliderRow('dash', 'Dash length', DASH, state.dash, { indented: true, shown: state.lineStyles.dashed })) +
+      styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, sliderRow('arrowSpacing', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) +
+      sectionHeading('Marks a click cycles through') + marksTable +
+      sectionHeading('Other') +
+      labelled('pen-tool-extras-outline', 'data-outline', state.outline, 'White outline on lines and marks') +
+      sliderRow('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth, { indented: true, shown: state.outline }) +
+      labelled('pen-tool-extras-middle-erase', 'data-middle-erase', state.middleErase, 'Middle click erases a whole line') +
       lineModeChoice(state.lineMode)
   }
 
-  // The features that can each fail on their own when a SudokuPad update changes an internal they rely on, in the order the dialog names them, and the words the
-  // dialog uses for each.
-  const FEATURE_LABELS = {
+  // The install steps, under the names the requirement table uses, and the words the console and the dialog use for each.
+  const STEP_LABELS = {
     colors: 'colors',
     pages: 'pen pages',
-    dashes: 'dashes',
     arrowLines: 'arrow lines',
-    sliders: 'sliders',
+    dragHint: 'drag highlight',
     marks: 'marks',
-    rightClick: 'right click',
-    lineMode: 'line mode',
-    outline: 'outline',
     lineErase: 'line erase',
+    lineMode: 'pen panel',
     gear: 'settings gear'
   }
-  // The features that cannot work without another one: the dashes and arrows are pens on pages, and a right click steps the marks' cycle.
-  const FEATURE_NEEDS = { dashes: ['pages'], arrowLines: ['pages'], rightClick: ['marks'] }
 
-  // A failure in SudokuPad's own function that a feature merely called: `attempt` lets it through without blaming the feature.
-  class StockFailure extends Error {
-    constructor (cause) {
-      super(String(cause && cause.message))
-      this.cause = cause
-    }
-  }
-
-  // Runs `call`, SudokuPad's own function, so that a throw in it is SudokuPad's and not the feature's.
-  function inStock (call) {
-    try {
-      return call()
-    } catch (error) {
-      throw new StockFailure(error)
-    }
-  }
-
-  // The record of which features are off, and the one place that turns a feature off and falls back to stock SudokuPad. `log(labels, why)` reports it
-  // and `changed()` is told after a feature goes off, so the style and the panel can follow. `attempt(names, run, fallback)` runs `run()` unless
-  // every one of `names` is off already; when it throws, all of `names` go off for good, the error is logged once and `fallback(error)` answers. A
-  // feature that is off is not run again, so its error does not repeat on every event, and `fallback()` answers at once. `run` holds the SudokuPad
-  // calls a feature makes and the pure helpers of this file, so a throw there is a changed SudokuPad (or a bug, which the log shows with the error
-  // itself); a SudokuPad function the feature only calls is wrapped in `inStock`, and its throw passes through as SudokuPad's own.
-  function createFeatures (labels, needs, { log, changed }) {
-    const off = new Set()
-    const isOff = (name) => off.has(name) || (needs[name] || []).some(isOff)
-    const offNames = () => Object.keys(labels).filter(isOff)
-    const turnOff = (names, why) => {
-      const fresh = [].concat(names).filter((name) => !off.has(name))
-      if (!fresh.length) return
-      fresh.forEach((name) => off.add(name))
-      log(fresh.map((name) => labels[name]), why)
-      changed()
-    }
-    return {
-      isOff,
-      turnOff,
-      offNames,
-      attempt (names, run, fallback = () => {}) {
-        if ([].concat(names).every(isOff)) return fallback()
+  // One install step, which stays off once skipped: `run(fn, fallback)` then answers with `fallback()` and a wrapper calls SudokuPad's original.
+  // A throw in the step's own code skips it with one warning and `onSkip` puts back what it changed; `skip(why, false)` is the quiet form for a
+  // step never installed. `skipped` collects the label for the dialog.
+  function createStep (label, skipped, onSkip = doNothing) {
+    const step = {
+      off: false,
+      skip (why, installed = true) {
+        if (step.off) return
+        step.off = true
+        skipped.push(label)
+        if (!installed) return
+        console.warn(`pen-tool-extras: ${label} skipped because SudokuPad changed:`, why)
         try {
-          return run()
+          onSkip()
         } catch (error) {
-          if (error instanceof StockFailure) throw error.cause
-          turnOff(names, error)
-          return fallback(error)
+          // Best effort: the step is off already, and what it left behind stays until the page reloads.
+          console.warn(`pen-tool-extras: could not undo ${label}:`, error)
+        }
+      },
+      run (fn, fallback = doNothing) {
+        if (step.off) return fallback()
+        try {
+          return fn()
+        } catch (error) {
+          step.skip(error)
+          return fallback()
+        }
+      },
+      // Replaces `owner[name]` with `body(stock, ...args)`, `stock` calling the original. A throw from the original passes through as
+      // SudokuPad's own; a throw from the body answers with the original's result, calling it only if the body had not.
+      wrap (owner, name, body) {
+        const original = owner[name]
+        owner[name] = function (...args) {
+          if (step.off) return original.apply(this, args)
+          let called = false
+          let result
+          let stockFailure = null
+          const stock = (...stockArgs) => {
+            called = true
+            try {
+              result = original.apply(this, stockArgs)
+              return result
+            } catch (error) {
+              stockFailure = { error }
+              throw error
+            }
+          }
+          try {
+            return body.call(this, stock, ...args)
+          } catch (error) {
+            if (stockFailure && stockFailure.error === error) throw error
+            step.skip(error)
+            return called ? result : original.apply(this, args)
+          }
         }
       }
     }
+    return step
   }
 
   // The midpoint of an edge, as [row, col] in cell units, for the cell that stores it.
@@ -1290,8 +1285,8 @@
       .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
   }
 
-  // The SudokuPad internals each feature cannot work without, as a Map of the first internal a feature lacks to the features that lack it, in the order the
-  // dialog names them. `app` is `Framework.app` and `tool` is `ToolPen.tool`, undefined when SudokuPad has no pen tool. An empty map means nothing is missing.
+  // The SudokuPad internals each install step cannot work without, as a Map of the first internal a step lacks to the steps that lack it, in the order
+  // STEP_LABELS names them. `app` is `Framework.app` and `tool` is `ToolPen.tool`, undefined when SudokuPad has no pen tool. An empty map means nothing is missing.
   function lackingInternals (app, tool) {
     const renderer = app.svgRenderer
     const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
@@ -1304,8 +1299,7 @@
       colors: [['tools.colour', Boolean(app.tools) && Boolean(app.tools.colour)]],
       pages: toolFns('setSelectedColor', 'handleToolEnter', 'handleToolExit'),
       arrowLines: [fn(proto, 'renderPen'), fn(renderer, 'renderPart'), ...actions, cells],
-      sliders: toolFns('drawLineHint'),
-      outline: toolFns('drawLineHint'),
+      dragHint: toolFns('drawLineHint'),
       marks: [
         ...actions, ...toolFns('getInputRc'), fn(grid, 'getCell'), ['grid.rows', Number.isInteger(grid && grid.rows)], ['grid.cols', Number.isInteger(grid && grid.cols)],
         fn(proto, 'renderPen'), fn(renderer && renderer.constructor, 'rcToPathData'), ['CellSize', Boolean(renderer) && typeof renderer.constructor.CellSize === 'number'], cells
@@ -1314,7 +1308,7 @@
       lineMode: [['ToolPen.tool', Boolean(tool)]],
       lineErase: [...actions, fn(app, 'xyToRCExact'), fn(grid, 'getCell'), cells]
     }
-    // The features that lack the same internal go off in one report.
+    // The steps that lack the same internal are reported together.
     const lacking = new Map()
     Object.entries(requirements).forEach(([name, needs]) => {
       const missing = needs.find(([, present]) => !present)
@@ -1324,103 +1318,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-      VERSION,
-      SETTINGS,
-      slider,
-      flag,
-      flags,
-      isPlainObject,
-      isHexColor,
-      inRange,
-      settingDefaults,
-      readSettings,
-      changedSettings,
-      saveSetting,
-      saveChangedSettings,
-      effectsOf,
-      normalizeColors,
-      savedColors,
-      editedColors,
-      parseColor,
-      isTransparent,
-      darkenColor,
-      derivedPenColors,
-      buildCss,
-      buildThicknessCss,
-      buildOpacityCss,
-      buildOutlineCss,
-      renderOutlineFilter,
-      OUTLINE_FILTER_ID,
-      OUTLINE_WIDTH,
-      ARROW_SPACING,
-      enabledPages,
-      stepEnabledPage,
-      pageAfterSave,
-      MARK_VALUES,
-      MARKS_LAYER_ID,
-      PEN_PAGES,
-      LINE_VALUES,
-      directionCharOf,
-      arrowLineWayOf,
-      ARROW_LINE,
-      lineSegment,
-      splitLineActs,
-      linePoints,
-      lineIdentityOf,
-      segmentNear,
-      connectedLine,
-      eraseLineActs,
-      LINE_HIT_RADIUS,
-      arrowLine,
-      penPageOf,
-      penNumber,
-      penCharOn,
-      normalizePen,
-      wrapIndex,
-      normalizeLineMode,
-      LINE_MODES,
-      buildPagesCss,
-      renderPageIcon,
-      renderPanelSliders,
-      renderEditor,
-      createFeatures,
-      lackingInternals,
-      inStock,
-      FEATURE_LABELS,
-      FEATURE_NEEDS,
-      markGrowthScale,
-      DASH,
-      normalizeMarkSettings,
-      stepType,
-      edgeMidpoint,
-      addedMark,
-      arrowLineOf,
-      isEdgeActs,
-      penValuesOf,
-      planActs,
-      lineSegmentsOf,
-      planClick,
-      planCornerClick,
-      cornerAt,
-      cornerStorage,
-      cornerPoint,
-      cornerMarkOf,
-      shapeOf,
-      shapePath,
-      EDGE_CYCLE,
-      CORNER_RADIUS,
-      CORNER_VALUES,
-      SUDOKUPAD_PEN_COLORS,
-      DEFAULT_MARK_SETTINGS,
-      THICKNESS,
-      OPACITY,
-      FULL_WIDTH_VALUES,
-      LIGHTNESS_FACTOR,
-      GREY_CHROMA,
-      COLOR_TOOL_WAIT_MS,
-      HOLD_TO_EDIT_MS
-    }
+    module.exports = { VERSION, SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, shapeOf, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, DEFAULT_MARK_SETTINGS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com) and is left alone;
   // a Framework without `getApp` is a SudokuPad this script cannot hook, which is reported.
@@ -1430,11 +1328,26 @@
     return
   }
 
-  // Which features are off because SudokuPad changed. A feature that goes off leaves stock SudokuPad behavior; the dialog names it.
-  const features = createFeatures(FEATURE_LABELS, FEATURE_NEEDS, {
-    log: (labels, why) => console.error(`pen-tool-extras: ${labels.join(', ')} turned off because SudokuPad changed:`, why),
-    changed: () => featuresChanged()
-  })
+  // The labels of the steps skipped because SudokuPad changed, in the order they went off; the dialog names them.
+  const skipped = []
+  const steps = {
+    colors: createStep(STEP_LABELS.colors, skipped),
+    // A page 2 or page 3 pen left selected would draw with no color, so the pad and the pen go back to page 1.
+    pages: createStep(STEP_LABELS.pages, skipped, () => {
+      setPadPage(0)
+      putStockPenBack()
+      syncPenPanel()
+    }),
+    arrowLines: createStep(STEP_LABELS.arrowLines, skipped),
+    dragHint: createStep(STEP_LABELS.dragHint, skipped),
+    marks: createStep(STEP_LABELS.marks, skipped),
+    lineErase: createStep(STEP_LABELS.lineErase, skipped),
+    lineMode: createStep(STEP_LABELS.lineMode, skipped, () => {
+      applyStyle()
+      syncPenPanel()
+    }),
+    gear: createStep(STEP_LABELS.gear, skipped, () => document.querySelectorAll(`.${GEAR_CLASS}`).forEach((el) => el.remove()))
+  }
 
   // The pen colors in force and the pen colors (by number) that kept SudokuPad's own because
   // the color page had no usable color at their index. Until the color tool is read they are
@@ -1494,7 +1407,7 @@
   // Draws an arrow line as a group (in the pen layer, with the classes the line would have had, so the color, the opacity and the
   // eraser's lookups act on it as on any stroke) of a line and a path of filled arrows (the fill is set in CSS, with the group's color).
   function renderArrowLine (renderer, opts, forward) {
-    const shape = arrowLine(opts.value, forward, opts.row, opts.col, effectiveThickness(), inForce.arrowSpacing)
+    const shape = arrowLine(opts.value, forward, opts.row, opts.col, inForce.thickness, inForce.arrowSpacing)
     const group = renderer.renderPart({ target: 'cell-pen', type: 'g', attr: { class: opts.className } })
     ;[['line', shape.line], ['arrows', shape.arrows]].forEach(([name, d]) => {
       const path = document.createElementNS(SVG_NAMESPACE, 'path')
@@ -1517,24 +1430,15 @@
   }
 
   // Draws the values this script adds, and keeps every mark above the lines. SudokuPad's own `renderPen` has no case for the values
-  // and gives the path no `d`; it copies every option onto the path, so passing `d` is enough. A line in a page 3
-  // pen's color is drawn as an arrow line instead. A feature that is off draws as SudokuPad does.
-  function wrapRenderPen (proto, renderer) {
-    const original = proto.renderPen
+  // and gives the path no `d`; it copies every option onto the path, so passing `d` is enough.
+  function wrapRenderPenMarks (proto, renderer) {
     const size = renderer.constructor.CellSize
-    // The options to draw with: a mark's get the path of its shape.
-    const withMarkPath = (self, opts) => {
+    steps.marks.wrap(proto, 'renderPen', function (stock, opts = {}) {
       const mark = addedMark(opts.value, opts.row, opts.col, Framework.app.grid.cols)
-      return mark === null ? opts : Object.assign({}, opts, { d: self.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125) })
-    }
-    proto.renderPen = function (opts = {}) {
-      const forward = arrowLineOf(opts)
-      // SudokuPad's own drawing runs outside what is tried, so a failure in it is not put down to a feature.
-      const part = (forward !== null && features.attempt('arrowLines', () => renderArrowLine(this, opts, forward), () => null)) ||
-        original.call(this, features.attempt('marks', () => withMarkPath(this, opts), () => opts))
-      features.attempt('marks', () => keepMarksAbove(part, MARK_VALUES.includes(opts.value)))
+      const part = stock(mark === null ? opts : { ...opts, d: this.constructor.rcToPathData([mark.point]) + shapePath(mark.shape, size * 0.125) })
+      keepMarksAbove(part, MARK_VALUES.includes(opts.value))
       return part
-    }
+    })
   }
 
   // Runs the original `clickCell` with its `actSend` held back and returns the actions it
@@ -1545,7 +1449,7 @@
     let queued = null
     tool.actSend = function () { queued = this._actList.slice() }
     try {
-      inStock(() => original.apply(tool, args))
+      original.apply(tool, args)
     } finally {
       if (hadOwn) tool.actSend = ownSend
       else delete tool.actSend
@@ -1614,9 +1518,10 @@
     const { rows, cols } = Framework.app.grid
     const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
     const cell = Framework.app.grid.getCell(row, col)
+    const acts = planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, steppingBackwards()))
     tool.actStart()
-    planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, steppingBackwards())).forEach((act) => tool.actAdd(act))
-    inStock(() => tool.actSend())
+    acts.forEach((act) => tool.actAdd(act))
+    tool.actSend()
   }
 
   // Erases the whole line under `point` ({ r, c } in cells from the grid's top left): every segment joined to the one nearest it and
@@ -1635,14 +1540,16 @@
   // `clickCell` (checked live), so the erase runs from the press itself and no pen mark or drag follows. `mousedown` is prevented
   // too for a browser that still sends it, which stops only the autoscroll: SudokuPad's own `mousedown` handler still runs there.
   // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
-  function installMiddleClickErase (app, tool) {
+  function installLineErase (app, tool) {
+    // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
+    steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => lastButton === MIDDLE_BUTTON && inForce.middleErase ? undefined : stock(...args))
     const middlePress = (event) => inForce.middleErase && event.button === MIDDLE_BUTTON && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
-    window.addEventListener('pointerdown', (event) => features.attempt('lineErase', () => {
+    window.addEventListener('pointerdown', (event) => steps.lineErase.run(() => {
       if (!middlePress(event)) return
       event.preventDefault()
       eraseLineAt(tool, app.xyToRCExact(event.clientX, event.clientY))
     }), true)
-    window.addEventListener('mousedown', (event) => features.attempt('lineErase', () => { if (middlePress(event)) event.preventDefault() }), true)
+    window.addEventListener('mousedown', (event) => steps.lineErase.run(() => { if (middlePress(event)) event.preventDefault() }), true)
   }
 
   // Chooses the mark for a click. A click within CORNER_RADIUS of a grid corner is a corner
@@ -1650,12 +1557,13 @@
   // edge-versus-cell hit test decides what was clicked; its `actSend` is held back to see
   // the actions it queued. An edge click is replaced by this script's cycle (backwards after a
   // right click), and everything else is sent as it was. The actions still go out through
-  // `actSend`, one group per click, so one undo reverses one click.
+  // `actSend`, one group per click, so one undo reverses one click. A middle click is left to the line erase.
   function wrapClickCell (tool, original) {
-    const clickMark = (self, args) => {
-      const corner = cornerUnderPointer(self)
-      if (corner !== null) return clickCorner(self, corner)
-      const queued = queuedActs(self, original, args)
+    steps.marks.wrap(tool, 'clickCell', function (stock, ...args) {
+      if (lastButton === MIDDLE_BUTTON) return stock(...args)
+      const corner = cornerUnderPointer(this)
+      if (corner !== null) return clickCorner(this, corner)
+      const queued = queuedActs(this, original, args)
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {
@@ -1664,26 +1572,14 @@
         if (plan === null) return
         acts = planActs(cell, plan)
       }
-      acts.forEach((act) => self.actAdd(act))
-      inStock(() => self.actSend())
-    }
-    tool.clickCell = function () {
-      if (lastButton === MIDDLE_BUTTON && !features.isOff('lineErase')) {
-        // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
-        if (inForce.middleErase) return
-        return original.apply(this, arguments)
-      }
-      // A click that failed half way leaves actions queued, which the original click must not send as its own.
-      return features.attempt('marks', () => clickMark(this, arguments), (error) => {
-        if (error && Array.isArray(this._actList)) this._actList.length = 0
-        return original.apply(this, arguments)
-      })
-    }
+      acts.forEach((act) => this.actAdd(act))
+      this.actSend()
+    })
   }
 
-  // Whether the click now ending steps the cycle backwards: a right click, unless the right click feature is off.
+  // Whether the click now ending steps the cycle backwards.
   function steppingBackwards () {
-    return lastButton === RIGHT_BUTTON && !features.isOff('rightClick')
+    return lastButton === RIGHT_BUTTON
   }
 
   // Whether a click at the pointer's current position would be a corner click or an edge click,
@@ -1697,7 +1593,7 @@
   // corner or an edge counts: a right click in a cell's middle, with another tool, or off the grid
   // keeps its menu.
   function suppressMarkMenu (app, isMarkClick) {
-    document.addEventListener('contextmenu', (event) => features.attempt('rightClick', () => {
+    document.addEventListener('contextmenu', (event) => steps.marks.run(() => {
       if (app.tool === 'pen' && event.target.closest(GRID_SELECTOR) && isMarkClick()) event.preventDefault()
     }), true)
   }
@@ -1709,43 +1605,42 @@
     })
   }
 
-  // Whether the wrap on `renderPen` is in, so an arrow line is drawn by this script.
-  let arrowLinesDrawn = false
-
   // Draws every arrow line again: an arrow's size and spacing are fixed when it is drawn, so a change of thickness, and a
   // wrap that came after the cell was drawn, need it. Cells with no arrow line are left alone.
   function redrawArrowLines () {
-    if (!arrowLinesDrawn) return
-    features.attempt('arrowLines', () => Framework.app.puzzle.cells.forEach((cell) => {
+    steps.arrowLines.run(() => Framework.app.puzzle.cells.forEach((cell) => {
       if ((cell.pen || []).some((valueColor) => LINE_VALUES.includes(valueColor[0]) && arrowLineWayOf(valueColor[1]) !== null)) cell.renderContent(true)
     }))
   }
 
-  function installEdgeMarks (app) {
-    const marks = !features.isOff('marks')
-    const lineErase = !features.isOff('lineErase')
-    const arrowLines = !features.isOff('arrowLines')
-    if (!marks && !lineErase && !arrowLines) return
-    const tool = ToolPen.tool
-    if (marks || arrowLines) wrapRenderPen(Object.getPrototypeOf(app.svgRenderer), app.svgRenderer)
-    arrowLinesDrawn = arrowLines
-    const original = tool.clickCell
-    if (marks || lineErase) wrapClickCell(tool, original)
-    trackButton()
-    if (lineErase) installMiddleClickErase(app, tool)
-    if (marks) {
-      suppressMarkMenu(app, () => markUnderPointer(tool, original))
-      features.attempt('marks', () => redrawMarks(app))
-    }
+  // A line in a page 3 pen's color is drawn as an arrow line. A line dragged with a page 3 pen is stored with the character of the way each
+  // segment was dragged: the tool queues its actions (and its path) before `actSend` sends them, so they are rewritten there. A drag that
+  // erases queues the value alone, which removes the line whichever way it was stored, and is left as it is.
+  function installArrowLines (app, tool) {
+    steps.arrowLines.wrap(Object.getPrototypeOf(app.svgRenderer), 'renderPen', function (stock, opts = {}) {
+      const forward = arrowLineOf(opts)
+      return forward === null ? stock(opts) : renderArrowLine(this, opts, forward)
+    })
+    steps.arrowLines.wrap(tool, 'actSend', function (stock, ...args) {
+      if (!this.eraseMode && Array.isArray(this.currentPath) && arrowLineWayOf(selectedPen()) !== null) {
+        this._actList.splice(0, this._actList.length, ...splitLineActs(this._actList, this.currentPath, selectedPen()))
+      }
+      return stock(...args)
+    })
     redrawArrowLines()
   }
 
-  // The thickness and opacity in force: with the sliders off, SudokuPad's own, so the saved values wait for the sliders to come back.
-  const effectiveThickness = () => features.isOff('sliders') ? THICKNESS.fallback : inForce.thickness
-  const effectiveOpacity = () => features.isOff('sliders') ? OPACITY.fallback : inForce.opacity
+  // Wrapped after the line erase and the arrow lines, so a mark's click and drawing come first and the marks layer stays on top of an arrow line.
+  function installMarks (app, tool) {
+    wrapRenderPenMarks(Object.getPrototypeOf(app.svgRenderer), app.svgRenderer)
+    const original = tool.clickCell
+    wrapClickCell(tool, original)
+    suppressMarkMenu(app, () => markUnderPointer(tool, original))
+    redrawMarks(app)
+  }
 
-  // Writes the style for the colors, thickness and opacity in force. The page rules, the outline and the panel rules are left out for a feature that is
-  // off, and the panel rules also when SudokuPad's line mode pulldown, whose row they take, is not ours to hide.
+  // Writes the style for the colors, thickness and opacity in force. The panel rules are left out once SudokuPad's line mode pulldown, whose row
+  // they take, is not ours to hide.
   function applyStyle () {
     let style = document.getElementById(STYLE_ID)
     if (!style) {
@@ -1755,32 +1650,22 @@
     }
     style.textContent = [
       buildCss(active),
-      buildThicknessCss(effectiveThickness()),
-      buildOpacityCss(effectiveOpacity()),
-      buildOutlineCss(inForce.outline && !features.isOff('outline')),
-      features.isOff('pages') ? '' : buildPagesCss(effectiveThickness(), inForce.dash),
+      buildThicknessCss(inForce.thickness),
+      buildOpacityCss(inForce.opacity),
+      buildOutlineCss(inForce.outline),
+      buildPagesCss(inForce.thickness, inForce.dash),
       EDIT_CSS,
       DIALOG_CSS,
-      features.isOff('gear') ? '' : GEAR_CSS,
-      features.isOff('lineMode') ? '' : PANEL_CSS
+      GEAR_CSS,
+      steps.lineMode.off ? '' : PANEL_CSS
     ].join('\n')
   }
 
-  // After a feature goes off: the style drops its rules, the pen buttons go back to SudokuPad's own and the panel loses what is no longer ours.
-  function featuresChanged () {
-    applyStyle()
-    if (features.isOff('pages')) {
-      setPadPage(0)
-      putStockPenBack()
-    }
-    syncPenPanel()
-  }
-
-  // The pen's line mode now, or undefined when the line mode feature is off. It is the saved one: SudokuPad's pen tool holds its
+  // The pen's line mode now, or undefined when SudokuPad's own pulldown is in the panel. It is the saved one: SudokuPad's pen tool holds its
   // default until it first opens and reads the saved mode then, and with the pulldown hidden only this dialog
   // changes it. It does not depend on the page support in `installPenPages`.
   function currentLineMode () {
-    return features.isOff('lineMode') ? undefined : normalizeLineMode(Framework.getData(LINE_MODE_KEY))
+    return steps.lineMode.off ? undefined : normalizeLineMode(Framework.getData(LINE_MODE_KEY))
   }
 
   // Sets the line mode and saves it where SudokuPad does, so its hidden pulldown, when the pen tool is on, shows it too.
@@ -1824,12 +1709,12 @@
     let draft = { ...inForce }
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, ...draft, off: features.offNames() })
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, ...draft, off: skipped })
     }
     // Reads the color tool's current page now; with no color tool, SudokuPad's own colors.
     const restoreDefaults = () => {
       const tool = readyColorTool()
-      const derived = (tool && features.attempt('colors', () => deriveFromTool(tool), () => null)) || { colors: { ...SUDOKUPAD_PEN_COLORS }, missing: [] }
+      const derived = (tool && steps.colors.run(() => deriveFromTool(tool), () => null)) || { colors: { ...SUDOKUPAD_PEN_COLORS }, missing: [] }
       colors = derived.colors
       missing = derived.missing
       edited.clear()
@@ -1859,7 +1744,7 @@
                 if (!sameValue(marks, markSettings)) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
                 saveSettings(draft)
-                if (lineMode !== undefined && lineMode !== currentLineMode()) features.attempt('lineMode', () => applyLineMode(lineMode))
+                if (lineMode !== undefined && lineMode !== currentLineMode()) steps.lineMode.run(() => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
               }
             },
@@ -1967,13 +1852,12 @@
   // The enabled line styles changed: the page button, Tab and the wheel skip a page that is not enabled, and a pen on one becomes the
   // pen of the same number on page 1. Lines already drawn in a page that is not enabled still draw: its rules stay in the style.
   function adoptLineStyles () {
-    if (penTool) {
+    steps.pages.run(() => {
       const pen = pageAfterSave(selectedPen(), inForce.lineStyles)
-      if (pen !== selectedPen()) {
-        if (penTool.active) penTool.setSelectedColor(pen)
-        else Framework.setData(PEN_KEY, pen)
-      }
-    }
+      if (pen === selectedPen()) return
+      if (ToolPen.tool.active) ToolPen.tool.setSelectedColor(pen)
+      else Framework.setData(PEN_KEY, pen)
+    })
     syncPenPanel()
   }
 
@@ -2008,7 +1892,7 @@
     if (panelCheck !== null || !document.querySelector(PEN_PANEL)) return
     panelCheck = setTimeout(() => {
       panelCheck = null
-      if (document.querySelector(PEN_PANEL) && !document.querySelector(LINE_MODE_BOX)) features.turnOff('lineMode', 'the pen tool panel has no .penlinemode')
+      if (document.querySelector(PEN_PANEL) && !document.querySelector(LINE_MODE_BOX)) steps.lineMode.skip('the pen tool panel has no .penlinemode')
     }, PANEL_CHECK_MS)
   }
 
@@ -2017,30 +1901,31 @@
   // added beside it (it is hidden, not removed, so SudokuPad's own handlers keep their element) and taken
   // away with it. Safe to run any number of times.
   function syncPenPanel () {
-    const mode = document.querySelector(LINE_MODE_BOX)
-    const sliders = document.querySelector(`.${SLIDERS}`)
-    const removeSliders = () => { if (sliders) sliders.remove() }
-    if (!mode) checkPanelRow()
-    // The panel's last row is ours only while the line mode pulldown that fills it is hidden and moved into the dialog.
-    if (!mode || features.isOff('lineMode')) {
-      removeSliders()
-      removePageButtons()
-      return
-    }
-    features.attempt('sliders', () => {
+    steps.lineMode.run(() => {
+      const mode = document.querySelector(LINE_MODE_BOX)
+      if (!mode) {
+        checkPanelRow()
+        return removePanelParts()
+      }
       const markup = renderPanelSliders(inForce.thickness, inForce.opacity, inForce.show)
-      if (!markup) removeSliders()
+      const sliders = document.querySelector(`.${SLIDERS}`)
+      if (!markup && sliders) sliders.remove()
       if (markup && !sliders) mode.insertAdjacentHTML('afterend', markup)
-    }, removeSliders)
-    syncPageButton()
+      syncPageButton(mode)
+    }, removePanelParts)
+  }
+
+  function removePanelParts () {
+    document.querySelectorAll(`.${SLIDERS}`).forEach((el) => el.remove())
+    removePageButtons()
   }
 
   // Puts the gear in the pen tool button, once; a page without the button (the pen tool is off, or the controls are not built yet) gets none.
   function syncGear () {
-    features.attempt('gear', () => {
+    steps.gear.run(() => {
       const button = document.querySelector(GEAR_BUTTON)
       if (button && !button.querySelector(`.${GEAR_CLASS}`)) button.insertAdjacentHTML('beforeend', GEAR_MARKUP)
-    }, () => document.querySelectorAll(`.${GEAR_CLASS}`).forEach((el) => el.remove()))
+    })
   }
 
   // SudokuPad runs a tool button's action on the press and cancels the touch events of a tap, which stops the browser sending the click. A press
@@ -2071,7 +1956,7 @@
     new window.MutationObserver(syncPenPanel).observe(document.body, { childList: true, subtree: true })
     syncPenPanel()
     document.addEventListener('input', (event) => {
-      if (event.target.matches(`.${SLIDERS} input`)) features.attempt('sliders', () => saveSlider(event.target))
+      if (event.target.matches(`.${SLIDERS} input`)) saveSlider(event.target)
     })
     // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops
     // the browser dragging a slider's thumb. A mouse move over a slider is kept from SudokuPad's
@@ -2085,25 +1970,14 @@
     }, true)
   }
 
-  // The pen tool, once its selection is wrapped for pages; null until then, and when it cannot be. `stockSelectColor` is SudokuPad's own
-  // `setSelectedColor`, which the wrapper replaced.
-  let penTool = null
-  let stockSelectColor = null
-
-  // A page 2 or page 3 pen still selected when the pages go off would draw with no color, so SudokuPad's own pen of the same color number is selected.
   function putStockPenBack () {
-    if (!penTool || penPageOf(selectedPen()) < 1) return
-    try {
-      stockSelectColor.call(penTool, penNumber(selectedPen()))
-    } catch (error) {
-      // Best effort: the pages are off already, and the pen stays as it is until the user picks another.
-      console.error('pen-tool-extras: could not select the pen on page 1 again:', error)
-    }
+    const pen = selectedPen()
+    if (penPageOf(pen) >= 1) ToolPen.tool.setSelectedColor(penNumber(pen))
   }
 
   // The selected pen's color character. SudokuPad's own selection reads `ToolPen_color` with `getData`, which
   // parses a saved '3' into the number 3, so the selection can be a number.
-  const selectedPen = () => String(penTool.selectedColor)
+  const selectedPen = () => String(ToolPen.tool.selectedColor)
 
   // The index of the page the selected pen is on; the first page before any pen is selected.
   function currentPage () {
@@ -2124,12 +1998,10 @@
     })
   }
 
-  // The page button, at the right end of the panel's last row: it shows the next page and a dot per page. The picture is
-  // only rewritten when what it shows changed, so the panel's mutation watcher does not loop on it.
-  function syncPageButton () {
-    const mode = document.querySelector(LINE_MODE_BOX)
-    if (!penTool || !mode || features.isOff('lineMode')) return
-    features.attempt('pages', () => {
+  // The page button, at the right end of the panel's last row, beside the pulldown `mode`: it shows the next page and a dot per page. The picture
+  // is only rewritten when what it shows changed, so the panel's mutation watcher does not loop on it.
+  function syncPageButton (mode) {
+    steps.pages.run(() => {
       // With no line style enabled there is no page to turn to, and no button.
       if (!hasPageToTurnTo()) return removePageButtons()
       let button = document.querySelector(`.${PAGE_BUTTON}`)
@@ -2150,14 +2022,14 @@
   // turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
   function turnPage (delta) {
     const number = penNumber(selectedPen()) || PEN_COLOR_NUMBERS[0]
-    penTool.setSelectedColor(penCharOn(stepEnabledPage(currentPage(), delta, inForce.lineStyles), number))
+    ToolPen.tool.setSelectedColor(penCharOn(stepEnabledPage(currentPage(), delta, inForce.lineStyles), number))
   }
 
   // The selected pen is saved under PEN_KEY, and `ToolPen_color` keeps only its color number. After a
   // reload SudokuPad has selected that number on the first page; the saved pen replaces it when its color
   // number is that one, so a number changed by stock SudokuPad (the script removed for a while) wins.
   function restoreSelectedPen (saved) {
-    if (saved && saved !== selectedPen() && penNumber(saved) === selectedPen()) penTool.setSelectedColor(saved)
+    if (saved && saved !== selectedPen() && penNumber(saved) === selectedPen()) ToolPen.tool.setSelectedColor(saved)
   }
 
   // The saved pen `pen` (or null), moved to page 1 when its page is not enabled.
@@ -2188,94 +2060,62 @@
     return layerIn(HINT_LAYER_ID, true)
   }
 
-  // Each wrapper below asks SudokuPad's own function when its feature is off, or when it just failed.
   function installPenPages (tool) {
-    penTool = tool
-    const select = tool.setSelectedColor
-    stockSelectColor = select
     // SudokuPad's own looks for the button holding the color, so the pad shows the pen's page first, and it
     // saves the pen to `ToolPen_color`, which is put back to the color number the moment it returns.
     // Its own read of `ToolPen_color` gives a number for a digit (`getData` parses), so the color is a string here.
-    tool.setSelectedColor = function (color) {
+    steps.pages.wrap(tool, 'setSelectedColor', function (stock, color) {
       const pen = String(color)
-      const page = features.attempt('pages', () => penPageOf(pen), () => -1)
-      if (page === -1) return select.call(this, color)
-      features.attempt('pages', () => setPadPage(page))
-      select.call(this, pen)
-      features.attempt('pages', () => {
-        Framework.setData('ToolPen_color', penNumber(pen))
-        Framework.setData(PEN_KEY, pen)
-        syncPageButton()
-      })
-    }
-    const enter = tool.handleToolEnter
+      const page = penPageOf(pen)
+      if (page === -1) return stock(color)
+      setPadPage(page)
+      stock(pen)
+      Framework.setData('ToolPen_color', penNumber(pen))
+      Framework.setData(PEN_KEY, pen)
+      syncPenPanel()
+    })
     // SudokuPad's own enter selects the saved color number through the wrapper above, which saves it as the
     // pen, so the saved pen is read first.
-    tool.handleToolEnter = function () {
-      const saved = features.attempt('pages', () => pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY))), () => null)
-      enter.call(this)
-      features.attempt('pages', () => restoreSelectedPen(saved))
-    }
+    steps.pages.wrap(tool, 'handleToolEnter', function (stock) {
+      const saved = pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY)))
+      stock()
+      restoreSelectedPen(saved)
+    })
     // The panel's buttons are shared with the other tools, which read their `data-value`.
-    const exit = tool.handleToolExit
-    tool.handleToolExit = function () {
-      exit.call(this)
-      features.attempt('pages', () => setPadPage(0))
-    }
+    steps.pages.wrap(tool, 'handleToolExit', function (stock) {
+      stock()
+      setPadPage(0)
+    })
     // SudokuPad asks every tool's `handleKeydown` before its key handlers, and stops at the first that answers, so
     // answering Tab here also keeps it from the letter tool's Tab binding (which does nothing in the pen tool in
     // SudokuPad now, with No Tab Letters installed or not), and the key's default of moving the focus is stopped.
     // Shift+Tab is left alone: a held Shift is the letter tool's own temporary switch.
-    const keydown = tool.handleKeydown
-    tool.handleKeydown = function (event) {
-      const turned = features.attempt('pages', () => {
-        if (!hasPageToTurnTo() || Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return false
-        event.preventDefault()
-        turnPage(1)
-        return true
-      }, () => false)
-      return turned || (typeof keydown === 'function' ? keydown.call(this, event) : false)
-    }
-    document.addEventListener('click', (event) => features.attempt('pages', () => {
+    if (typeof tool.handleKeydown !== 'function') tool.handleKeydown = () => false
+    steps.pages.wrap(tool, 'handleKeydown', function (stock, event) {
+      if (!hasPageToTurnTo() || Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return stock(event)
+      event.preventDefault()
+      turnPage(1)
+      return true
+    })
+    document.addEventListener('click', (event) => steps.pages.run(() => {
       if (event.target.closest(`.${PAGE_BUTTON}`)) turnPage(1)
     }))
     // The wheel turns the page only over the page button, as SudokuPad's color tool does over its own, and like that one it does not cancel the wheel.
-    document.addEventListener('wheel', (event) => features.attempt('pages', () => {
+    document.addEventListener('wheel', (event) => steps.pages.run(() => {
       if (event.deltaY === 0 || !hasPageToTurnTo() || !event.target.closest(`.${PAGE_BUTTON}`)) return
       turnPage(event.deltaY < 0 ? -1 : 1)
     }))
-    features.attempt('pages', () => {
-      if (tool.active) restoreSelectedPen(pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY))))
-      syncPageButton()
-    })
+    if (tool.active) restoreSelectedPen(pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY))))
   }
 
   // SudokuPad draws the drag highlight inside the pen layer; it is moved to the layer beside it the moment it exists, so the layer's opacity and outline do
   // not touch it.
   function installHintLayer (tool) {
-    const drawHint = tool.drawLineHint
-    tool.drawLineHint = function (path) {
-      drawHint.call(this, path)
-      features.attempt(['sliders', 'outline'], () => {
-        const layer = hintLayer()
-        if (layer && this.linePart && this.linePart.parentNode !== layer) layer.appendChild(this.linePart)
-      })
-    }
-  }
-
-  // A line dragged with a page 3 pen is stored with the character of the way each segment was dragged. The tool queues its
-  // actions (and its path) before `actSend` sends them, so they are rewritten there. A drag that erases queues the value
-  // alone, which removes the line whichever way it was stored, and is left as it is.
-  function installArrowDrags (tool) {
-    const send = tool.actSend
-    tool.actSend = function () {
-      features.attempt('arrowLines', () => {
-        if (this.eraseMode || !Array.isArray(this.currentPath) || arrowLineWayOf(selectedPen()) === null) return
-        // A drag that no segment explains (SudokuPad's path changed) turns the arrows off and goes out as SudokuPad queued it, every line in the pen's own character.
-        this._actList.splice(0, this._actList.length, ...splitLineActs(this._actList, this.currentPath, selectedPen()))
-      })
-      return send.apply(this, arguments)
-    }
+    steps.dragHint.wrap(tool, 'drawLineHint', function (stock, ...args) {
+      stock(...args)
+      const layer = hintLayer()
+      if (layer && this.linePart && this.linePart.parentNode !== layer) layer.appendChild(this.linePart)
+    })
   }
 
   // Sets pen color `pen` live and saves the whole current set, the same as Save in the dialog:
@@ -2332,11 +2172,10 @@
     document.addEventListener('pointerdown', (event) => {
       cancel()
       holdDone = false
-      if (features.isOff('colors')) return
       const target = event.target.closest(HOLD_TARGETS)
       if (!target) return
       const panel = target.closest('.tool-pen')
-      timer = setTimeout(() => { holdDone = true; features.attempt('colors', () => toggleEditMode(panel)) }, HOLD_TO_EDIT_MS)
+      timer = setTimeout(() => { holdDone = true; steps.colors.run(() => toggleEditMode(panel)) }, HOLD_TO_EDIT_MS)
     }, true)
     window.addEventListener('pointerup', cancel, true)
     window.addEventListener('pointercancel', cancel, true)
@@ -2354,21 +2193,32 @@
     })
   }
 
-  // Turns off each feature whose SudokuPad internals are not there, before anything is installed, so it leaves stock SudokuPad behavior.
-  function checkFeatures (app) {
+  // A step whose SudokuPad internals are not there is never installed, so it leaves stock SudokuPad behavior.
+  function checkSteps (app) {
     const tool = typeof ToolPen !== 'undefined' ? ToolPen.tool : undefined
-    lackingInternals(app, tool).forEach((names, missing) => features.turnOff(names, `SudokuPad has no ${missing}`))
+    lackingInternals(app, tool).forEach((names, missing) => {
+      names.forEach((name) => steps[name].skip(missing, false))
+      console.warn(`pen-tool-extras: ${names.map((name) => STEP_LABELS[name]).join(', ')} skipped because SudokuPad has no ${missing}`)
+    })
   }
 
   Framework.getApp().then(async () => {
-    checkFeatures(Framework.app)
+    const app = Framework.app
     // Read before the panel is built, which the first sync does with the pen tool already on.
     Object.assign(inForce, readSettings(Framework))
-    installHoldToEdit()
-    installPenPanel()
-    installGear()
-    installOverlayPressSwallow()
     markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
+    checkSteps(app)
+    // The line erase, then the arrow lines, then the marks wrap `clickCell` and `renderPen`; see installMarks.
+    trackButton()
+    steps.lineErase.run(() => installLineErase(app, ToolPen.tool))
+    steps.arrowLines.run(() => installArrowLines(app, ToolPen.tool))
+    steps.marks.run(() => installMarks(app, ToolPen.tool))
+    steps.pages.run(() => installPenPages(ToolPen.tool))
+    steps.dragHint.run(() => installHintLayer(ToolPen.tool))
+    steps.colors.run(installHoldToEdit)
+    steps.lineMode.run(installPenPanel)
+    steps.gear.run(installGear)
+    installOverlayPressSwallow()
     effectsOf(SETTING_NAMES).forEach((effect) => effect())
     applyStyle()
     Framework.addSetting({
@@ -2381,10 +2231,6 @@
         setTimeout(openDialog, 0)
       }
     })
-    installEdgeMarks(Framework.app)
-    if (!features.isOff('pages')) installPenPages(ToolPen.tool)
-    if (!features.isOff('sliders') || !features.isOff('outline')) installHintLayer(ToolPen.tool)
-    if (!features.isOff('arrowLines')) installArrowDrags(ToolPen.tool)
     const saved = savedColors(Framework.getData(COLORS_KEY))
     if (saved) {
       adoptColors(saved, [])
@@ -2392,7 +2238,7 @@
     }
     // Nothing saved: the pen takes the darkened current color page, read once at load. When
     // the color tool never becomes ready, SudokuPad's own pen colors stay in force.
-    if (features.isOff('colors')) return
+    if (steps.colors.off) return
     const tool = await waitForColorTool()
     // A save made in the dialog while waiting outranks the derived colors.
     if (savedColors(Framework.getData(COLORS_KEY))) return
@@ -2400,7 +2246,7 @@
       console.warn(`pen-tool-extras: the color tool was not ready after ${COLOR_TOOL_WAIT_MS / 1000} s, so the pen keeps SudokuPad's own colors`)
       return
     }
-    const derived = features.attempt('colors', () => deriveFromTool(tool), () => null)
+    const derived = steps.colors.run(() => deriveFromTool(tool), () => null)
     if (derived) adoptColors(derived.colors, derived.missing)
   })
 })()
