@@ -172,7 +172,7 @@ test(`${DETAILS} has no picture on the erase item and no large example figure`, 
 })
 
 test(`${DETAILS} good to know names the dashed and arrow pages`, () => {
-  assert.deepEqual(section(read(DETAILS), 'Good to know'), ["Others see your dashed and arrow lines only if they have the script too."])
+  assert.deepEqual(section(read(DETAILS), 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
 })
 
 test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, () => {
