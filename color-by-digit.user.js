@@ -16,8 +16,7 @@
 (function () {
   'use strict'
 
-  // Shown in the options dialog, and the same as @version above. The script cannot read its own header
-  // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
+  // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
   const VERSION = '0.5.6'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
@@ -27,10 +26,8 @@
   const MAX_PROFILES = 4
   const MAX_NAME_LENGTH = 24
   const CUSTOM_NAME = 'Custom'
-  // Whether auto mode is on: true or false, absent until first set.
   const AUTO_KEY = 'ColorByDigit_auto'
-  // SudokuPad's numpad order for the digit buttons of the dialog: 1 to 9 in rows of three, then 0 alone
-  // in the middle column.
+  // SudokuPad's numpad order: 1 to 9 in rows of three, then 0 alone in the middle column.
   const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
   const NUMPAD_KEY = '2.4em'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -49,8 +46,6 @@
 
   const cloneGroups = (groups) => groups.map((g) => ({ key: g.key, digits: [...g.digits] }))
 
-  // The key every mark shares, or undefined when there are no marks, a mark is not a digit or
-  // has no group, or the marks span two groups.
   function sharedKey (marks, keyOfDigit) {
     const keys = new Set(marks.map((m) => keyOfDigit[String(m)]))
     return keys.size === 1 ? [...keys][0] : undefined
@@ -62,14 +57,11 @@
     return keyOfDigit
   }
 
-  // The key of the one group a cell belongs to (a pure cell), or undefined. A given or entered digit
-  // decides the key; a cell with neither takes the key its `centre` marks (digit strings) all share.
   function pureKey (cell, keyOfDigit) {
     const placed = String(cell.given || cell.value || '')
     return placed === '' ? sharedKey(cell.centre || [], keyOfDigit) : keyOfDigit[placed]
   }
 
-  // Which cells get which key. Pure: cells in, [{index, key}] out.
   function planColoring (cells, groups) {
     const keyOfDigit = keyOfDigitMap(groups)
     const plan = []
@@ -88,24 +80,18 @@
 
   const givenIndices = (cells) => cells.flatMap((cell, index) => (String(cell.given || '') === '' ? [] : [index]))
 
-  // An action that can change a cell's digit or centre marks, as SudokuPad names them: `value` (digit),
-  // `candidates` (centre mark) and `clear` of anything but colors and pen marks. Corner marks
-  // (`pencilmarks`) and colors never start auto mode. Anything that is not an action object is not one.
+  // SudokuPad's action names: `value` (digit), `candidates` (centre mark), `pencilmarks` (corner mark).
   function isEntryAction (action) {
     if (!action) return false
     if (action.type === 'value' || action.type === 'candidates') return true
     return action.type === 'clear' && action.arg !== 'colour' && action.arg !== 'pen'
   }
 
-  // What auto mode watches in a plan cell: the entered digit and the centre marks, in any order.
   const entrySignature = (cell) => JSON.stringify([String(cell.value || ''), [...(cell.centre || [])].sort()])
 
   const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
 
-  // What auto mode does to the listed cells: [{action, key, indices}], removals first. A pure cell
-  // gets its group's key and loses every other managed key; a cell that is not pure loses every
-  // managed key; a color outside `managedKeys` stays. `managedKeys` defaults to the groups' keys, and
-  // is wider when a Save drops an old group whose color must come off too.
+  // `managedKeys` is wider than the groups' keys when a Save drops an old group whose color must come off too.
   function planAuto (cells, groups, indices, managedKeys = groupKeys(groups)) {
     const keyOfDigit = keyOfDigitMap(groups)
     const removals = new Map()
@@ -124,13 +110,11 @@
     ]
   }
 
-  // The centre marks SudokuPad shows on a cell, read as its own solver does
-  // (SolverTool.getCellOptions): none when the cell hides them, as a given does.
+  // Read as SudokuPad's SolverTool.getCellOptions does: none when the cell hides them, as a given does.
   function readCentreMarks (cell) {
     return cell.propVisible('centre') ? cell.propGet('centre') : []
   }
 
-  // The fields of a SudokuPad cell that planColoring reads, and only those: corner marks stay out.
   function toPlanCell (cell) {
     return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
@@ -145,11 +129,6 @@
     })
   }
 
-  // The dialog's edit of the groups for one button: `act` is 'color', 'digit', 'remove', 'clear' or
-  // 'add-group', `group` the group index, `key` the chosen palette key, `digit` the chosen digit, and
-  // `colors` the visible palette colors ([{ key }]). Returns the new { groups, shown }, `shown` being the page each
-  // group shows, which follows a removal. A new group takes the
-  // first color no group has, else the first color, and none when there are no colors.
   function editGroupsFor (groups, shown, act, { group, key, digit }, colors) {
     switch (act) {
       case 'color': return { groups: groups.map((g, j) => (j === group ? { key, digits: g.digits } : g)), shown }
@@ -165,15 +144,12 @@
   }
 
   const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
-  // The row a key on a profile row goes to: Enter and Space stay on the row, an arrow moves to the next or
-  // previous row and wraps at both ends; any other key gives null.
   function rowAfterKey (key, index, count) {
     if (key === 'Enter' || key === ' ') return index
     if (ARROW_STEP[key]) return (index + ARROW_STEP[key] + count) % count
     return null
   }
 
-  // Saved data is untrusted: returns clean groups, or null when it is not a list of groups.
   function normalizeGroups (data) {
     if (!Array.isArray(data)) return null
     const out = []
@@ -187,19 +163,14 @@
     return out
   }
 
-  // A profile name as stored: trimmed and cut to MAX_NAME_LENGTH.
   const cleanName = (name) => String(name).trim().slice(0, MAX_NAME_LENGTH)
 
-  // A profile as saved data may hold it: a name that is not blank and clean groups, else null.
   function normalizeProfile (data) {
     if (!data || typeof data.name !== 'string' || data.name.trim() === '') return null
     const groups = normalizeGroups(data.groups)
     return groups && { name: cleanName(data.name), groups }
   }
 
-  // Saved profiles are untrusted: a clean state, or null when no profile is usable. A profile that is
-  // not usable drops out and the rest are kept; more than MAX_PROFILES drop off the end. The active index
-  // follows its profile, and is the first when that profile is gone or the index is no profile.
   function normalizeState (data) {
     if (!data || !Array.isArray(data.profiles)) return null
     const kept = data.profiles.slice(0, MAX_PROFILES).map((profile, index) => ({ profile: normalizeProfile(profile), index })).filter((entry) => entry.profile)
@@ -214,9 +185,7 @@
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
 
-  // What the profiles start as: the saved profiles; else the preloads with Low/5/High active; else, for
-  // groups saved before profiles existed, those groups as the active profile (named after the preload they
-  // equal, which they replace in the list, else Custom, first) with the other preloads beside it.
+  // Groups saved before profiles existed become the active profile.
   function stateFromStored (data, legacyGroups) {
     const saved = normalizeState(data)
     if (saved) return saved
@@ -230,7 +199,6 @@
 
   const activeGroups = (state) => state.profiles[state.active].groups
 
-  // A copy of the active profile joins the end under `name`. Nothing at MAX_PROFILES or with a blank name.
   function addProfile (state, name) {
     const trimmed = cleanName(name)
     if (state.profiles.length >= MAX_PROFILES || trimmed === '') return state
@@ -238,8 +206,6 @@
     return { profiles: [...state.profiles.map(cloneProfile), copy], active: state.active }
   }
 
-  // Drops a profile, never the last. Deleting the active one makes the next one active (the previous
-  // when it was last); deleting one before it keeps the same profile active.
   function deleteProfile (state, index) {
     if (state.profiles.length <= 1 || !state.profiles[index]) return state
     const profiles = state.profiles.filter((_, i) => i !== index).map(cloneProfile)
@@ -247,7 +213,6 @@
     return { profiles, active }
   }
 
-  // Moves the profile at `from` so it ends at index `to`; the active profile stays the same profile.
   function moveProfile (state, from, to) {
     if (from === to) return state
     const order = state.profiles.map((_, i) => i)
@@ -263,19 +228,13 @@
     return { profiles: state.profiles.map((p, i) => (i === state.active ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), active: state.active }
   }
 
-  // Where a dragged row ends up: the number of the other rows whose middle (`mids`, top to bottom) is
-  // above the pointer at `y`.
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
 
-  // The button's icon is drawn in 100 by 100 units; the AUTO label takes its top ICON_TOP, and the menu
-  // arrow box its bottom right corner below ARROW_START.
+  // The icon is drawn in 100 by 100 units; the AUTO label takes its top ICON_TOP, the arrow box everything below ARROW_START.
   const ICON_TOP = 22
   const ARROW_START = 78
   const ICON_MAX_GROUPS = 4
 
-  // The digit that stands for a group on its colored cell, over its digits with 0 left out: the lowest
-  // when all are below 5, the highest when all are above 5, else the middle (the lower of the two middle
-  // ones on an even count). A group of only 0 shows 0, and a group with no digits shows ''.
   function shownDigit (digits) {
     const sorted = [...digits].sort()
     const nonZero = sorted.filter((d) => d !== '0')
@@ -285,9 +244,6 @@
     return nonZero[Math.ceil(nonZero.length / 2) - 1]
   }
 
-  // The cells of the button's icon for the first ICON_MAX_GROUPS groups: [{ key, digit, x, y, size }] in
-  // the icon's units, `digit` the group's shownDigit. Up to three go in a row and four
-  // as 2 by 2; none of them reaches the AUTO label or the arrow box.
   function iconLayout (groups) {
     const shown = groups.slice(0, ICON_MAX_GROUPS).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
     const gap = 3
@@ -302,7 +258,6 @@
     return shown.map((c, i) => ({ ...c, x: start + i * (size + gap), y: ICON_TOP + 10, size }))
   }
 
-  // Black or white, whichever reads on `color` (a `#rgb`, `#rrggbb` or `rgb(a)` value); black when unreadable.
   function inkFor (color) {
     const v = String(color).trim().toLowerCase()
     let channels
@@ -319,13 +274,10 @@
     return 0.299 * r + 0.587 * g + 0.114 * b < 140 ? '#fff' : '#000'
   }
 
-  // Switching profile: the old groups' colors come off every cell and every pure cell gets its new
-  // group's color. It is planAuto over every cell with both profiles' keys managed.
   function planSwitch (cells, oldGroups, newGroups) {
     return planAuto(cells, newGroups, everyIndex(cells), [...new Set([...groupKeys(oldGroups), ...groupKeys(newGroups)])])
   }
 
-  // A CSS color the user can see: not empty, not `transparent`, not an alpha-0 spelling.
   function isVisibleColor (value) {
     const v = String(value).trim().toLowerCase()
     if (v === '' || v === 'transparent') return false
@@ -342,9 +294,8 @@
   const PURPLE = '#6a1b9a'
   const GREY = '#b3acbf'
 
-  // The AUTO box in the button's upper left: bold purple with an X in the box when on, light grey with an
-  // empty box when off. A span with the checkbox role, not an <input>: a form control inside a <button>
-  // takes focus from the puzzle and is swallowed by some browsers.
+  // A span with the checkbox role, not an <input>: a form control inside a <button> takes focus from
+  // the puzzle and is swallowed by some browsers.
   function autoBoxHtml (on) {
     const color = on ? PURPLE : GREY
     return '<span data-role="auto" role="checkbox" aria-label="Auto mode" title="Auto mode" ' + `aria-checked="${Boolean(on)}" ` +
@@ -360,7 +311,6 @@
 
   const UNREADABLE_FILL = '#ccc'
 
-  // One cell of the icon: the group's color with its shown digit in the ink that reads on it.
   function iconCellSvg ({ key, digit, x, y, size }, colorOf) {
     const color = colorOf(key)
     const fill = color || UNREADABLE_FILL
@@ -368,32 +318,24 @@
       `<text x="${x + size / 2}" y="${y + size * 0.72}" fill="${inkFor(color)}" font-family="sans-serif" font-size="${Math.round(size * 0.7)}" font-weight="bold" text-anchor="middle">${esc(digit)}</text>`
   }
 
-  // The button's icon: one cell per group of the active profile (at most four) with its shown digit,
-  // the AUTO box upper left and the menu arrow box lower right. SudokuPad's own app buttons put their
-  // icon in <div class="icon">. `colorOf(key)` gives a palette key's CSS color, or '' when unreadable.
+  // SudokuPad's own app buttons put their icon in <div class="icon">.
   const iconHtml = (autoOn, groups, colorOf) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
     iconLayout(groups).map((cell) => iconCellSvg(cell, colorOf)).join('') +
     '</svg>' + autoBoxHtml(autoOn) + ARROW_BOX_HTML + '</div>'
 
-  // The button goes in the bottom row (.controls-aux) beside Undo, Redo, Check and Select, where
-  // SudokuPad lays it out and wraps it like theirs. SudokuPad binds button handlers only to
-  // buttons present when the controls were built, so a button added later needs refreshControls
-  // to get its onClick. A press on the button proper is handled by listenForButton before SudokuPad's
-  // handler sees it, so `onClick` is what SudokuPad would run on a press that does reach it.
+  // SudokuPad binds button handlers only to buttons present when the controls were built, so a
+  // button added later needs refreshControls to get its onClick.
   function installButton (framework, app, onClick, autoOn, groups, colorOf) {
     framework.addAuxButton({ name: 'colorbydigit', title: 'Color by digit', content: iconHtml(autoOn, groups, colorOf), onClick })
     app.refreshControls()
   }
 
-  // A cell color page has ten colors, one per SudokuPad color button: index 0, then indices 1-9 in rows of three.
+  // A page has one color per SudokuPad color button: index 0, then indices 1-9 in rows of three.
   const PAGE_COLUMNS = 3
   const PAGE_BUTTONS = 10
 
-  // Each cell color page as SudokuPad's color buttons show it: `rows` holds indices 1-9, three to a
-  // row, and `zero` index 0. An entry is { key, value }, or null where the key is missing,
-  // transparent or unreadable, so the empty space keeps every other color on its index.
-  // `readColor(key)` gives the key's CSS color.
+  // A null entry keeps the empty space, so every other color stays on its index.
   function layoutPages (pages, currentPage, readColor) {
     return pages.map((keys, page) => {
       const list = Array.isArray(keys) ? keys.slice(0, PAGE_BUTTONS) : []
@@ -411,10 +353,8 @@
     })
   }
 
-  // The ten slots of a laid-out page: index 0, then indices 1-9. An empty slot is null.
   const pageSlots = (p) => [p.zero, ...p.rows.flat()]
 
-  // Every visible color of the laid-out pages, page by page, index 0 first.
   function layoutColors (pages) {
     return pages.flatMap(pageSlots).filter(Boolean)
   }
@@ -423,8 +363,7 @@
 
   const SWATCH_SIZE = '44px'
 
-  // One color of a page: a square button, ringed twice (white inside, black outside) when it
-  // is the group's color so it shows on any swatch color. An index with no visible color is a spacer of the same size.
+  // The group's color is ringed twice (white inside, black outside) so it shows on any swatch color.
   function renderSwatch (slot, groupIndex, selectedKey) {
     if (!slot) return `<span data-empty="slot" style="display:block;width:${SWATCH_SIZE};height:${SWATCH_SIZE}"></span>`
     const selected = slot.key === selectedKey
@@ -437,16 +376,12 @@
 
   const pageLabel = (page) => `Page ${page.page + 1}${page.current ? ' (current)' : ''}`
 
-  // The page a group opens on: the page that holds its color, the current page first when the
-  // color is on several; the current page when no page holds it, and the first with none current.
   function initialPage (pages, key) {
     const holds = (p) => pageSlots(p).some((slot) => slot && slot.key === key)
     const found = pages.find((p) => p.current && holds(p)) || pages.find(holds) || pages.find((p) => p.current)
     return found ? found.page : 0
   }
 
-  // The group's color as a small square, so it shows while another page is open; dashed when
-  // no page has a visible color for the key.
   function renderChosen (colors, key) {
     const color = colors.find((c) => c.key === key)
     const look = color ? `background:${esc(color.value)};border:1px solid #888` : 'border:1px dashed #888'
@@ -454,7 +389,6 @@
       `border-radius:3px;vertical-align:middle;${look}"></span>`
   }
 
-  // One group's page pulldown, its chosen color, and the shown page as a 3 by 3 grid with index 0 below.
   function renderPalette (pages, colors, groupIndex, key, shownPage) {
     if (pages.length === 0) return ''
     const page = pages[shownPage] || pages[0]
@@ -476,21 +410,18 @@
     }).join('')
   }
 
-  // `css` with every declaration important: SudokuPad's own rules for the dialog's selects, buttons and
-  // labels size them otherwise.
+  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise.
   const important = (css) => css.split(';').map((d) => `${d} !important`).join(';')
   const RULE_COLOR = '#e3dff0'
   const DIVIDER = `border-top:1px solid ${RULE_COLOR};margin:12px 0 0;padding-top:10px`
   const BUTTON_LOOK = 'background:#f1eff5;color:#333;border:1px solid #cfc9db;border-radius:8px;font-size:.9rem;font-weight:500;padding:0 14px;height:34px;line-height:32px;margin:0;cursor:pointer'
-  // The small × buttons: the profile row's delete and the group box's remove share the 28px square.
   const SMALL_BUTTON_SIZE = 28
   const SMALL_BUTTON_LOOK = `${BUTTON_LOOK};padding:0 10px;height:${SMALL_BUTTON_SIZE}px;line-height:${SMALL_BUTTON_SIZE - 2}px`
-  // The red × in a group box's upper right corner. The box keeps REMOVE_ROOM of right padding (the
-  // button, its inset and a gap), so the button never sits over the pulldown or the numpad.
+  // REMOVE_ROOM keeps the × off the pulldown and the numpad.
   const REMOVE_INSET = 8
   const REMOVE_ROOM = `${SMALL_BUTTON_SIZE + REMOVE_INSET + 4}px`
   const REMOVE_LOOK = `${SMALL_BUTTON_LOOK};position:absolute;top:${REMOVE_INSET}px;right:${REMOVE_INSET}px;width:${SMALL_BUTTON_SIZE}px;padding:0;color:#c0392b;font-size:1.1rem`
-  // Percent-encoded, with no quotes, so the value sits inside a style="..." attribute.
+  // Percent-encoded, with no quotes, so it fits inside a style="..." attribute.
   const PULLDOWN_ARROW = 'url(data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20width=%2710%27%20height=%276%27%3E%3Cpath%20d=%27M0%200l5%206%205-6z%27%20fill=%27%236b4fa0%27/%3E%3C/svg%3E)'
   const PULLDOWN_LOOK = important(`font-size:.95rem;padding:4px 28px 4px 10px;border:1px solid #b9b0c9;border-radius:6px;background:#fff ${PULLDOWN_ARROW} no-repeat right 10px center;appearance:none;color:#222`)
   const heading = (text, extra = '') => `<div style="display:flex;align-items:center;justify-content:space-between;font-weight:600;margin:0 0 6px">${text}${extra}</div>`
@@ -498,7 +429,6 @@
   const DIALOG_BUTTON_LOOK = 'border-radius:8px;font-size:1rem;padding:0 22px;height:38px;line-height:36px;margin:0;width:auto;min-width:0;flex:none;cursor:pointer'
   const SAVE_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#6b3fa0;color:#fff;border:1px solid #5a3489;font-weight:600`
   const CANCEL_BUTTON_LOOK = `${DIALOG_BUTTON_LOOK};background:#f1eff5;color:#333;border:1px solid #cfc9db`
-  // The bottom row under a divider, Cancel then Save at the right. The dialog builds the row; this styles it.
   function styleDialogButtons (dialog) {
     const row = dialog.querySelector('.dialog-options')
     if (!row) return
@@ -509,15 +439,11 @@
   }
 
   const MUTED = '#8a8496'
-  // The active profile's row, in the dialog and in the menu, and an idle row's ring.
   const ACTIVE_FILL = '#f1ebfb'
   const ACTIVE_RING = '#b79be0'
   const ACTIVE_INK = '#5b2a9a'
   const IDLE_RING = '#e2dcea'
 
-  // The dialog's profile list, a radio group: per row a drag handle, the colors, the name and a delete
-  // button, and a click on the row makes it the active profile; then the name field and Add. `newName`
-  // is the text in the name field.
   function renderProfiles (state, colorOf, newName) {
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
@@ -537,8 +463,7 @@
       `<button type="button" data-act="add" style="${BUTTON_LOOK}"${full ? ' disabled' : ''}>+ Add</button></div>`
   }
 
-  // The menu above the button: its heading, a row per profile in the dialog's order (the active one
-  // marked and highlighted), then Edit profiles. Rows are not focusable, so the keyboard stays with the puzzle.
+  // Rows are not focusable, so the keyboard stays with the puzzle.
   function renderMenu (state, colorOf) {
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
@@ -551,8 +476,6 @@
       '<div role="menuitem" data-act="edit" style="padding:9px 10px;border-radius:8px;cursor:pointer;color:#5d5868">&#9881; Edit profiles…</div>'
   }
 
-  // `shown[i]` is the page index group i shows; `auto` is the draft of the auto mode box; `profilesHtml`
-  // is the profile list (renderProfiles), which goes above the groups.
   function renderEditor (groups, pages, shown, auto, profilesHtml) {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
@@ -578,17 +501,13 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
-  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
-  // has no Framework and is left alone. A Framework without `getApp` is a SudokuPad this script
-  // cannot hook, which is reported.
+  // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
   if (!Framework.getApp) {
     console.warn('color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed')
     return
   }
 
-  // The color tool's pages laid out as SudokuPad's buttons are, read now from the tool and
-  // the colors `readColor` resolves; [] until the tool holds a palette.
   function readPages () {
     const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
     const palette = tool && tool.palette
@@ -600,8 +519,7 @@
   const saveState = (state) => Framework.setData(PROFILES_KEY, state)
   const loadGroups = () => activeGroups(loadState())
 
-  // The CSS color of a palette key as the browser draws it (`rgb(...)`), or '' when the key has no
-  // visible color. The raw `--cell-color-<key>` value can be any CSS color, so it is resolved on a probe.
+  // The raw `--cell-color-<key>` value can be any CSS color, so it is resolved on a probe.
   function readColor (key) {
     const raw = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
     if (!isVisibleColor(raw)) return ''
@@ -616,7 +534,7 @@
 
   const allCells = (app) => [].concat(app.puzzle.cells).flat(Infinity)
 
-  // Runs `fn` between groupstart and groupend, so SudokuPad undoes everything it does in one step.
+  // SudokuPad undoes everything between groupstart and groupend in one step.
   function inOneUndoStep (app, fn) {
     app.act({ type: 'groupstart' })
     try {
@@ -626,9 +544,8 @@
     }
   }
 
-  // Applies [{action, key, indices}] to `cells` as SudokuPad's color tool does: each op selects its
-  // cells and toggles the key, which adds it where every cell lacks it and removes it where every
-  // cell holds it (so an op's cells must all lack it, or all hold it). The selection is put back.
+  // SudokuPad's color tool toggles: it adds the key where every selected cell lacks it and removes it
+  // where every cell holds it, so an op's cells must all lack it or all hold it.
   function runColorOps (app, cells, ops) {
     const savedSelection = [...app.puzzle.selectedCells]
     const toggle = (target, key) => {
@@ -651,10 +568,8 @@
     }
   }
 
-  // Runs the ops `makeOps` plans from the plan cells as one undo step, and nothing when there are none.
-  // The plan is made again from the cells as the first ops left them and what it still lists is run too:
-  // with Multi-color off, taking one color off a cell that held two clears both, and the cell's own group
-  // color, planned as already there, must go back on. Called inside a group, it adds to that group.
+  // Planned a second time after the first ops: with Multi-color off, taking one color off a cell that
+  // held two clears both, so the group color planned as already there must go back on.
   function recolor (app, makeOps) {
     const first = allCells(app)
     const ops = makeOps(first.map(toPlanCell))
@@ -668,7 +583,6 @@
     else inOneUndoStep(app, run)
   }
 
-  // The button: adds each pure cell's group color, never removes one.
   const colorCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), everyIndex(plans), []))
 
   const colorGivens = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), givenIndices(plans)))
@@ -680,20 +594,17 @@
   const ARROW = `${BUTTON} [data-role="menu"]`
   const MENU = '#color-by-digit-menu'
 
-  // Runs `fn` now if the puzzle's cells exist, else once SudokuPad has loaded the puzzle and its saved
-  // progress: loading progress resets the board, so a pass before it would be wiped.
+  // Loading progress resets the board, so a pass before it would be wiped.
   function whenProgressLoaded (app, fn) {
     if (allCells(app).length > 0) fn()
     else app.puzzle.addEventListener('progressloaded', fn, { once: true })
   }
 
-  // Redraws the button's icon: the active profile's colors and the auto mode value in force.
   function showButton () {
     const icon = document.querySelector(`${BUTTON} .icon`)
     if (icon) icon.outerHTML = iconHtml(autoMode, loadGroups(), readColor)
   }
 
-  // Applies a new auto mode value at once and saves it; turning it on colors the givens.
   function setAutoMode (app, on) {
     const turnedOn = on && !autoMode
     autoMode = on
@@ -702,10 +613,8 @@
     if (turnedOn) colorGivens(app)
   }
 
-  // Whether `action` could change what auto mode watches in `cell`: a digit goes only on a cell that
-  // shows digits, a centre mark on one that shows centre marks, and a clear only where there is a
-  // digit or a centre mark to clear. A change SudokuPad would drop is not wrapped in a group, since a
-  // group around nothing still empties the redo stack and leaves a dead undo step.
+  // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
+  // stack and leaves a dead undo step.
   function mayChange (action, cell) {
     if (action.type === 'value') return cell.propVisible('normal')
     if (action.type === 'candidates') return cell.propVisible('centre')
@@ -713,10 +622,8 @@
     return String(plan.value || '') !== '' || plan.centre.length > 0
   }
 
-  // Wraps app.act so that, with auto mode on, the player's change to a digit or centre marks and the
-  // color changes it brings are one undo step. A change SudokuPad already runs inside its own group
-  // (a paste) has its color changes added to that group; opening a second would end it early. Undo,
-  // redo, replays and the loading of progress run on the puzzle itself, never through app.act.
+  // A change SudokuPad already runs inside its own group (a paste) has its color changes added to that
+  // group; opening a second would end it early. Undo, redo, replays and loading progress bypass app.act.
   function installAutoMode (app) {
     const act = app.act
     app.act = function (action) {
@@ -737,7 +644,6 @@
     app.on('restarted', () => { if (autoMode) colorGivens(app) })
   }
 
-  // The open menu's element, or null.
   let menu = null
 
   const closeMenu = () => {
@@ -745,7 +651,6 @@
     menu = null
   }
 
-  // Opens the profile menu above the button, its right edge by the arrow box. The rows take no focus.
   function openMenu () {
     closeMenu()
     // The palette can change after the button was drawn, so the icon is drawn again with the menu.
@@ -765,8 +670,6 @@
     menu.style.top = `${Math.max(rect.top - menu.offsetHeight - 12, 4)}px`
   }
 
-  // Makes the profile at `index` the active one, saves it, and recolors the cells as a Save of changed
-  // groups does with auto mode on, whether auto mode is on or not: one undo step.
   function switchProfile (app, index) {
     const state = loadState()
     closeMenu()
@@ -777,18 +680,14 @@
     showButton()
   }
 
-  // How long a press on the button is held before it opens the menu, and how far it may move meanwhile.
   const HOLD_MS = 500
   const HOLD_SLOP = 10
 
-  // The button, its two small controls and its menu. A press on the box or the arrow is not a press on the
-  // button: SudokuPad acts on a press of a control by reading `event.target.dataset.control`, which they
-  // do not have, and on a touch it cancels the touchstart so the browser sends no click, so these take the
-  // touch themselves. A mouse press on either is stopped from focusing the button so the keyboard stays
-  // with the puzzle. SudokuPad runs a button's handler the moment it is pressed, which would color the
-  // grid under a right click or a hold, so a press on the button proper never reaches SudokuPad: the
-  // release of a short press colors the grid, a right click or a hold (HOLD_MS) opens the menu, and the
-  // browser's own context menu never shows. A press elsewhere, or Escape, closes the menu.
+  // SudokuPad reads `event.target.dataset.control` on a control press, which the box and arrow lack,
+  // and on a touch cancels the touchstart so no click follows: they take the touch themselves. It
+  // runs a button's handler on press, which would color the grid under a right click or a hold, so a
+  // press on the button proper never reaches it. A mouse press on the box or arrow must not focus
+  // the button, so the keyboard stays with the puzzle.
   function listenForButton (app, openEditor) {
     const within = (event, selector) => event.target.closest && event.target.closest(selector)
     const onBox = (event) => within(event, BOX)
@@ -869,10 +768,6 @@
     window.addEventListener('resize', closeMenu)
   }
 
-  // Save: stores the profiles, then puts the auto mode draft in force. With auto mode on after the Save,
-  // changed active groups take the old groups' colors off every cell and give every pure cell its new color
-  // (whether or not it was already on); turning auto mode on also colors the givens (setAutoMode);
-  // with auto mode off, nothing is colored.
   function saveDialog (app, oldState, draft, auto) {
     saveState(draft)
     const oldGroups = activeGroups(oldState)
@@ -885,9 +780,7 @@
     const pages = readPages()
     const colors = layoutColors(pages)
     const savedState = loadState()
-    // The draft of the profiles: every edit lands here and takes effect on Save.
     let draft = savedState
-    // The draft of the auto mode box: it opens at the value in force and takes effect on Save.
     let auto = autoMode
     let newName = ''
     Framework.showDialog({
@@ -908,14 +801,12 @@
     if (!box) return
     const dialog = box.closest('.dialog')
     if (dialog) styleDialogButtons(dialog)
-    // The page each group of the active profile shows, by group index; a group not yet shown opens on its color's page.
     let shown = []
     const draw = () => {
       const groups = activeGroups(draft)
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
       box.innerHTML = renderEditor(groups, pages, shown, auto, renderProfiles(draft, readColor, newName))
     }
-    // Another profile's groups are showing: its groups open on their own pages.
     const reshow = (next) => { draft = next; shown = [] }
     const addProfileFromField = () => {
       const before = draft
@@ -943,8 +834,6 @@
       shown[Number(el.dataset.group)] = Number(el.value)
       draw()
     })
-    // A drag of a profile's handle: the row under the pointer's place is outlined while it moves, and the
-    // profile lands there on release. Pointer events cover the mouse and a touch alike.
     box.addEventListener('pointerdown', (event) => {
       const handle = event.target.closest('[data-role="handle"]')
       if (!handle || (event.pointerType === 'mouse' && event.button !== 0)) return
@@ -970,15 +859,11 @@
       handle.addEventListener('pointerup', finish)
       handle.addEventListener('pointercancel', finish)
     })
-    // A click on a profile row, off its handle and its buttons, or a key on the focused row (below),
-    // makes that profile the active one; the redrawn row takes the focus back for the keyboard.
     const activateRow = (index, refocus) => {
       reshow(setActive(draft, index))
       draw()
       if (refocus) box.querySelector(`[data-act="activate"][data-index="${index}"]`).focus()
     }
-    // Enter and Space activate the focused row; the arrow keys move the choice to the next or previous row,
-    // wrapping, as a radio group does. Only the active row is a tab stop.
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="activate"]')) return
       const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)

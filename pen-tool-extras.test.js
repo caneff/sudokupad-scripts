@@ -7,14 +7,14 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
+  SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
-  createFeatures, lackingInternals, inStock, FEATURE_LABELS, FEATURE_NEEDS,
+  createStep, lackingInternals, STEP_LABELS,
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
@@ -1119,6 +1119,30 @@ test('the dialog always holds the thickness, opacity, dash, arrow spacing and ou
   ])
 })
 
+test('every slider in the settings table has one dialog row, with the label and range of its table entry', () => {
+  const html = renderEditor(editorState())
+  const sliders = Object.entries(SETTINGS).filter(([, row]) => row.range)
+  assert.deepEqual(sliders.map(([name, row]) => [name, row.dialog.label]), [
+    ['thickness', 'Thickness'], ['opacity', 'Opacity (%)'], ['dash', 'Dash length'], ['arrowSpacing', 'Arrow spacing'], ['outlineWidth', 'Outline width']
+  ])
+  for (const [name, { range, dialog }] of sliders) {
+    const row = rowOf(html, name)
+    assert.match(row, new RegExp(`<label for="pen-tool-extras-setting-${name}"[^>]*>${dialog.label.replace(/[()]/g, '\\$&')}</label>`), name)
+    assert.match(row, new RegExp(`data-setting="${name}" min="${range.min}" max="${range.max}" step="${range.step}"`), name)
+  }
+  assert.equal((html.match(/<input type="range"/g) || []).length, sliders.length)
+})
+
+test('a box ticked in the dialog sets its setting in the draft through the table; a mark box is not a table row', () => {
+  const draft = editorState()
+  assert.equal(draftWithBox(draft, { outline: '' }, false).outline, false)
+  assert.equal(draftWithBox(draft, { middleErase: '' }, false).middleErase, false)
+  assert.deepEqual(draftWithBox(draft, { style: 'dashed' }, false).lineStyles, { dashed: false, arrows: true })
+  assert.deepEqual(draftWithBox(draft, { show: 'opacity' }, false).show, { thickness: true, opacity: false })
+  assert.deepEqual(draft.lineStyles, { dashed: true, arrows: true }, 'the draft given is left alone')
+  assert.equal(draftWithBox(draft, { mark: 'x' }, false), undefined)
+})
+
 test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
   const html = renderEditor(editorState())
   const columns = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => /grid-template-columns:([^;]+);/.exec(rowOf(html, key))[1])
@@ -1664,100 +1688,138 @@ test('eraseLineActs removes each value from its own cells as one select and one 
   assert.deepEqual(eraseLineActs([], cellAt), [])
 })
 
-const newFeatures = () => {
-  const logged = []
-  const changes = []
-  const features = createFeatures(FEATURE_LABELS, FEATURE_NEEDS, { log: (labels, why) => logged.push([labels, why]), changed: () => changes.push(1) })
-  return { features, logged, changes }
+// A step with its warnings and skipped labels caught.
+const newStep = (onSkip) => {
+  const warned = []
+  const skipped = []
+  const warn = console.warn
+  console.warn = (...args) => warned.push(args)
+  const step = createStep('marks', skipped, onSkip)
+  return { step, warned, skipped, restore: () => { console.warn = warn } }
 }
 
-test('a feature that throws is turned off, logged once with its name, and answers with the fallback', () => {
-  const { features, logged, changes } = newFeatures()
+test('a throw in a step\'s own code skips it, warns once naming it, and the fallback answers from then on', (t) => {
+  const { step, warned, skipped, restore } = newStep()
+  t.after(restore)
   const boom = new TypeError('x is not a function')
   let runs = 0
   const run = () => { runs++; throw boom }
-  assert.equal(features.attempt('marks', run, (error) => ['fallback', error]).at(0), 'fallback')
-  assert.equal(features.isOff('marks'), true)
-  assert.deepEqual(logged, [[['marks'], boom]])
-  assert.equal(changes.length, 1)
-  assert.deepEqual(features.attempt('marks', run, (error) => ['again', error]), ['again', undefined])
-  assert.equal(runs, 1, 'a feature that is off is not run, so its error is not repeated')
-  assert.equal(logged.length, 1)
+  assert.equal(step.run(run, () => 'fallback'), 'fallback')
+  assert.equal(step.run(run, () => 'again'), 'again')
+  assert.equal(runs, 1, 'a skipped step is not run again')
+  assert.deepEqual(warned, [['pen-tool-extras: marks skipped because SudokuPad changed:', boom]])
+  assert.deepEqual(skipped, ['marks'])
 })
 
-test('a feature that works runs and keeps its result', () => {
-  const { features, logged } = newFeatures()
-  assert.equal(features.attempt('marks', () => 42, () => 'fallback'), 42)
-  assert.equal(features.isOff('marks'), false)
-  assert.deepEqual(logged, [])
+test('a step that works runs, keeps its result and warns nothing', (t) => {
+  const { step, warned, restore } = newStep()
+  t.after(restore)
+  assert.equal(step.run(() => 42, () => 'fallback'), 42)
+  assert.deepEqual(warned, [])
 })
 
-test('turning one feature off leaves the others on', () => {
-  const { features } = newFeatures()
-  features.turnOff('arrowLines', 'no renderPart')
-  for (const name of Object.keys(FEATURE_LABELS).filter((n) => n !== 'arrowLines')) assert.equal(features.isOff(name), false, name)
+test('a wrapper whose own code throws after SudokuPad\'s call answers with that call\'s result, without calling it twice, and is stock from then on', (t) => {
+  const { step, warned, restore } = newStep()
+  t.after(restore)
+  const calls = []
+  let ownRuns = 0
+  const owner = { click (n) { calls.push(n); return n * 10 } }
+  step.wrap(owner, 'click', (stock, n) => { ownRuns++; stock(n); throw new Error('own') })
+  assert.equal(owner.click(1), 10)
+  assert.deepEqual(calls, [1])
+  assert.equal(owner.click(2), 20)
+  assert.deepEqual(calls, [1, 2])
+  assert.equal(ownRuns, 1, 'the wrapper\'s own code does not run once the step is skipped')
+  assert.equal(warned.length, 1)
 })
 
-test('a feature that needs another is off with it, and the list names both in the dialog\'s order', () => {
-  const { features } = newFeatures()
-  features.turnOff('pages', 'no setSelectedColor')
-  assert.deepEqual(features.offNames(), ['pages', 'dashes', 'arrowLines'])
-  const second = newFeatures().features
-  second.turnOff('marks', 'no getInputRc')
-  assert.deepEqual(second.offNames(), ['marks', 'rightClick'])
+test('a wrapper whose own code throws after another SudokuPad function ran for the event does not call the original', (t) => {
+  const { step, warned, restore } = newStep()
+  t.after(restore)
+  const sent = []
+  const owner = { click () { sent.push('stock click') }, send (act) { sent.push(act) } }
+  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.send('mark')); throw new Error('own') })
+  assert.equal(owner.click(), undefined)
+  assert.deepEqual(sent, ['mark'], 'the click is not sent a second time')
+  assert.equal(warned.length, 1)
 })
 
-test('one throw turns off every feature the attempt names, and the others stay on', () => {
-  const { features } = newFeatures()
-  features.attempt(['sliders', 'outline'], () => { throw new Error('hint') })
-  assert.deepEqual(features.offNames(), ['sliders', 'outline'])
-  assert.equal(features.isOff('marks'), false)
+test('a wrapper whose own code throws after a SudokuPad call that sends nothing still calls the original', (t) => {
+  const { step, restore } = newStep()
+  t.after(restore)
+  const sent = []
+  const owner = { click () { sent.push('stock click') }, peek () { return 'queued' } }
+  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.peek(), false); throw new Error('own') })
+  owner.click()
+  assert.deepEqual(sent, ['stock click'])
 })
 
-test('an attempt that names two features still runs while one of them is on', () => {
-  const { features } = newFeatures()
-  features.turnOff('sliders', 'no drawLineHint')
-  assert.equal(features.attempt(['sliders', 'outline'], () => 'ran', () => 'fallback'), 'ran')
-  features.turnOff('outline', 'no drawLineHint')
-  assert.equal(features.attempt(['sliders', 'outline'], () => 'ran', () => 'fallback'), 'fallback')
+test('a throw from a SudokuPad function called through stock.sudokupad passes through, is not retried and leaves the step on', (t) => {
+  const { step, warned, skipped, restore } = newStep()
+  t.after(restore)
+  const stockError = new TypeError('render failed')
+  const sent = []
+  const owner = { click () { sent.push('stock click') }, send (act) { sent.push(act); throw stockError } }
+  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.send('mark')) })
+  assert.throws(() => owner.click(), (error) => error === stockError)
+  assert.deepEqual(sent, ['mark'])
+  assert.deepEqual([warned, skipped], [[], []])
 })
 
-test('turning off a feature that is off already logs nothing more and tells nobody', () => {
-  const { features, logged, changes } = newFeatures()
-  features.turnOff('colors', 'first')
-  features.turnOff('colors', 'second')
-  assert.deepEqual(logged, [[['colors'], 'first']])
-  assert.equal(changes.length, 1)
+test('a wrapper whose own code throws before SudokuPad\'s call makes that call with the arguments it was given', (t) => {
+  const { step, restore } = newStep()
+  t.after(restore)
+  const owner = { name: 'pen', click (n) { return `${this.name} ${n}` } }
+  step.wrap(owner, 'click', () => { throw new Error('own') })
+  assert.equal(owner.click(3), 'pen 3')
 })
 
-test('a throw in a SudokuPad function the feature only called passes through and turns nothing off', () => {
-  const { features, logged } = newFeatures()
-  const stock = new TypeError('SudokuPad broke')
-  assert.throws(() => features.attempt('marks', () => inStock(() => { throw stock }), () => 'fallback'), (error) => error === stock)
-  assert.equal(features.isOff('marks'), false)
-  assert.deepEqual(logged, [])
-  assert.equal(inStock(() => 7), 7)
+test('a throw in SudokuPad\'s own function passes through a wrapper and leaves the step on', (t) => {
+  const { step, warned, skipped, restore } = newStep()
+  t.after(restore)
+  const stockError = new TypeError('SudokuPad broke')
+  let fail = true
+  const owner = { click () { if (fail) throw stockError; return 'stock' } }
+  step.wrap(owner, 'click', (stock) => `own ${stock()}`)
+  assert.throws(() => owner.click(), (error) => error === stockError)
+  fail = false
+  assert.equal(owner.click(), 'own stock')
+  assert.deepEqual([warned, skipped], [[], []])
 })
 
-test('the dialog shows one plain line naming the features that are off, and nothing when none is', () => {
+test('a step skipped puts back what it changed once, and a failure there is warned, not thrown', (t) => {
+  let undone = 0
+  const { step, warned, restore } = newStep(() => { undone++; throw new Error('undo') })
+  t.after(restore)
+  step.run(() => { throw new Error('own') })
+  step.skip(new Error('again'))
+  assert.equal(undone, 1)
+  assert.equal(warned.length, 2)
+  assert.match(warned[1][0], /^pen-tool-extras: could not undo marks/)
+})
+
+test('a step skipped for a missing internal is quiet and puts nothing back: nothing was installed', (t) => {
+  let undone = 0
+  const { step, warned, skipped, restore } = newStep(() => { undone++ })
+  t.after(restore)
+  step.skip('getInputRc', false)
+  assert.equal(step.run(() => 'ran', () => 'fallback'), 'fallback')
+  assert.deepEqual([warned, skipped, undone], [[], ['marks'], 0])
+})
+
+test('every settings table row with a section is drawn in the dialog, so a section whose rows went astray fails here', () => {
+  const html = renderEditor(editorState())
+  const boxes = { outline: 'data-outline', middleErase: 'data-middle-erase', lineStyles: 'data-style="dashed"', show: 'data-show="thickness"' }
+  for (const [name, row] of Object.entries(SETTINGS)) {
+    if (!row.dialog.section) continue
+    assert.ok(html.includes(row.range ? `data-row="${name}"` : boxes[name]), name)
+  }
+})
+
+test('the dialog shows one plain line naming the steps that are skipped, and nothing when none is', () => {
   assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
-  assert.match(renderEditor(editorState({ off: ['arrowLines'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
-  assert.match(renderEditor(editorState({ off: ['marks', 'rightClick'] })), />Off because SudokuPad changed: marks, right click<\/div>/)
-})
-
-test('the dialog leaves out the controls of a feature that is off', () => {
-  const html = (off) => renderEditor(editorState({ off }))
-  assert.match(html([]), /data-setting="thickness"/)
-  assert.doesNotMatch(html(['sliders']), /data-setting="thickness"|data-setting="opacity"|data-show=/)
-  assert.doesNotMatch(html(['dashes']), /data-setting="dash"|data-style="dashed"/)
-  assert.match(html(['dashes']), /data-style="arrows"/)
-  assert.doesNotMatch(html(['arrowLines']), /data-setting="arrowSpacing"|data-style="arrows"/)
-  assert.doesNotMatch(html(['dashes', 'arrowLines']), /Line styles/)
-  assert.doesNotMatch(html(['marks']), /data-mark=|Marks a click/)
-  assert.doesNotMatch(html(['outline']), /data-outline|outlineWidth/)
-  assert.doesNotMatch(html(['lineErase']), /data-middle-erase/)
-  assert.doesNotMatch(html(['outline', 'lineErase']), />Other</)
-  assert.match(html(['colors']), /data-pen="1"/, 'the pickers set a saved color and need no SudokuPad internal')
+  assert.match(renderEditor(editorState({ off: ['arrow lines'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
+  assert.match(renderEditor(editorState({ off: ['marks', 'line erase'] })), />Off because SudokuPad changed: marks, line erase<\/div>/)
 })
 
 test('inRange takes a whole number from min to max on the steps counted from min, and nothing else', () => {
@@ -1953,9 +2015,9 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
   assert.deepEqual(lineSegmentsOf(cells), [{ value: line, row: 1, col: 2, color: 'x' }])
 })
 
-// The requirement table: which SudokuPad internal each feature cannot work without.
+// The requirement table: which SudokuPad internal each install step cannot work without.
 const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
-// A SudokuPad stand-in with every internal the features need.
+// A SudokuPad stand-in with every internal the steps need.
 const completeSudokuPad = () => {
   class Renderer {
     static CellSize = 64
@@ -1981,14 +2043,14 @@ test('a complete SudokuPad lacks nothing', () => {
   assert.deepEqual(lackingInternals(app, tool), new Map())
 })
 
-// Each internal removed alone, and the features that go off with it.
+// Each internal removed alone, and the steps it holds back.
 const LACKING_ALONE = [
   ...['actStart', 'actAdd', 'actSend', 'clickCell', '_actList'].map((name) => [name, (s) => { delete s.tool[name] }, ['arrowLines', 'marks', 'lineErase']]),
   ['getInputRc', (s) => { delete s.tool.getInputRc }, ['marks']],
   ['setSelectedColor', (s) => { delete s.tool.setSelectedColor }, ['pages']],
   ['handleToolEnter', (s) => { delete s.tool.handleToolEnter }, ['pages']],
   ['handleToolExit', (s) => { delete s.tool.handleToolExit }, ['pages']],
-  ['drawLineHint', (s) => { delete s.tool.drawLineHint }, ['sliders', 'outline']],
+  ['drawLineHint', (s) => { delete s.tool.drawLineHint }, ['dragHint']],
   ['getCell', (s) => { delete s.app.grid.getCell }, ['marks', 'lineErase']],
   ['puzzle.cells', (s) => { delete s.app.puzzle.cells }, ['arrowLines', 'marks', 'lineErase']],
   ['grid.rows', (s) => { s.app.grid.rows = '9' }, ['marks']],
@@ -2008,19 +2070,19 @@ for (const [internal, remove, featureNames] of LACKING_ALONE) {
   })
 }
 
-test('every feature with a requirement of its own is lacking under some internal removed alone', () => {
-  // dashes and rightClick ride on another feature (FEATURE_NEEDS), gear needs nothing of SudokuPad's, and lineMode needs ToolPen.tool (the next test).
-  const own = Object.keys(FEATURE_LABELS).filter((name) => !['dashes', 'rightClick', 'gear', 'lineMode'].includes(name))
+test('every step with a requirement is lacking under some internal removed alone', () => {
+  // gear needs nothing of SudokuPad's, and penPanel needs ToolPen.tool (the next test).
+  const own = Object.keys(STEP_LABELS).filter((name) => !['gear', 'penPanel'].includes(name))
   assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), own.sort())
 })
 
-test('without a pen tool, every feature that needs it is reported under the first internal it lacks', () => {
+test('without a pen tool, every step that needs it is reported under the first internal it lacks', () => {
   const { app } = completeSudokuPad()
   assert.deepEqual(lackingInternals(app, undefined), new Map([
     ['setSelectedColor', ['pages']],
     ['actStart', ['arrowLines', 'marks', 'lineErase']],
-    ['drawLineHint', ['sliders', 'outline']],
-    ['ToolPen.tool', ['lineMode']]
+    ['drawLineHint', ['dragHint']],
+    ['ToolPen.tool', ['penPanel']]
   ]))
 })
 
