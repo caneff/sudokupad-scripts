@@ -14,11 +14,10 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, openPage, START, startPuzzle } from './page.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
-import { POLL_MS, SETTLE_MS } from './settle.mjs'
+import { SETTLE_MS, stable } from './settle.mjs'
 
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
 const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
@@ -46,20 +45,6 @@ const ACCENT_RED = 'rgb(212, 17, 89)'
 // The most white the rectangle may keep past the drawing on a side that has text on it, in page
 // pixels: the text's box is taller than its glyphs. The whole svg box leaves 20 or more.
 const TIGHT_SLACK_PX = 12
-
-// Runs `read` until two readings in a row agree, and returns that reading. A page that never
-// settles within SETTLE_MS fails with what was being waited on, not with its last reading.
-async function untilSettled (what, read, same = (a, b) => JSON.stringify(a) === JSON.stringify(b)) {
-  const deadline = Date.now() + SETTLE_MS
-  let previous = await read()
-  for (;;) {
-    await sleep(POLL_MS)
-    const next = await read()
-    if (same(previous, next)) return next
-    if (Date.now() > deadline) throw new Error(`${what} did not settle within ${SETTLE_MS} ms`)
-    previous = next
-  }
-}
 
 // Boards of other sizes, in the page's own puzzle format. Outside text is drawn the way little
 // killer and sandwich clues are: text beyond the grid lines.
@@ -126,34 +111,30 @@ const regionOf = (p) => p.evaluate(() => {
   return { x, y, width: Math.ceil(b.right) - x, height: Math.ceil(b.bottom) - y }
 })
 
-// The kept rectangle in page pixels, once two readings in a row agree: the script moves it on the
+// The kept rectangle in page pixels, once it has held still: the script moves it on the
 // next frame after a change.
-const settledRectangle = (p) => untilSettled('the kept rectangle', () => p.evaluate((selector) => {
+const settledRectangle = (p) => stable(() => p.evaluate((selector) => {
   const el = document.querySelector(selector)
   if (!el || window.getComputedStyle(el).display === 'none') return null
   const b = el.getBoundingClientRect()
   return { x: b.x, y: b.y, width: b.width, height: b.height }
 }, RECT))
 
-// A PNG of `clip`, taken until two in a row agree, so a fade or a late repaint is waited on by
+// A PNG of `clip`, taken until its bytes have held still, so a fade or a late repaint is waited on by
 // its condition and not by a sleep.
-const settledShot = (p, clip) => untilSettled('the page image', () => p.screenshot({ clip, animations: 'disabled' }), (a, b) => a.equals(b))
+const settledShot = (p, clip) => stable(() => p.screenshot({ clip, animations: 'disabled' }), SETTLE_MS, (a, b) => a.equals(b))
 
 // The board region now, with the kept rectangle relative to it (null for a page with no board).
-// The region is read again after the shot, and the shot repeated until both agree, so a relayout
-// still under way (a resize, a puzzle just loaded) is waited on by its condition.
-async function boardShot (p) {
-  const deadline = Date.now() + SETTLE_MS
-  for (;;) {
-    const region = await regionOf(p)
-    const png = await settledShot(p, region)
-    const rect = await settledRectangle(p)
-    if (JSON.stringify(await regionOf(p)) === JSON.stringify(region)) {
-      return { png, region, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
-    }
-    if (Date.now() > deadline) throw new Error(`the board region did not settle within ${SETTLE_MS} ms`)
-  }
-}
+// Each read takes the region, a settled shot of it and the settled rectangle, and the reads repeat until
+// the region holds still, so a relayout still under way (a resize, a puzzle just loaded) is waited on by
+// its condition. `region` comes first in the read so a timeout's message, cut to its first characters,
+// shows the region and not the shot's bytes.
+const boardShot = (p) => stable(async () => {
+  const region = await regionOf(p)
+  const png = await settledShot(p, region)
+  const rect = await settledRectangle(p)
+  return { region, png, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
+}, SETTLE_MS, (a, b) => JSON.stringify(a.region) === JSON.stringify(b.region))
 
 // A PNG's pixels: { width, height, data } with `data` the RGBA bytes, carried out of the page as
 // base64 because a plain array of them is slow to serialize.

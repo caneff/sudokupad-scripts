@@ -90,6 +90,21 @@ describe('stable', () => {
     assert.deepEqual(await stable(async () => [1, 2]), [1, 2])
   })
 
+  it('takes its own equality: two Buffers with the same bytes count as the same value', async () => {
+    const { value, ms } = await timed(() => stable(async () => Buffer.from([1, 2, 3]), undefined, (a, b) => a.equals(b)))
+    assert.deepEqual(value, Buffer.from([1, 2, 3]))
+    assert.equal(ms >= STABLE_MS && ms < 5000, true, `took ${ms} ms`)
+  })
+
+  it('with its own equality, waits while the compared part moves and ignores a part the equality skips', async () => {
+    const t0 = Date.now()
+    // `noise` changes every read; `n` flips once. The equality compares `n` only.
+    const read = async () => ({ n: Date.now() - t0 >= 150 ? 2 : 1, noise: Math.random() })
+    const { value, ms } = await timed(() => stable(read, undefined, (a, b) => a.n === b.n))
+    assert.equal(value.n, 2)
+    assert.equal(ms >= 150 + STABLE_MS, true, `took ${ms} ms`)
+  })
+
   it('throws, naming the last value, when the value keeps moving until the timeout', async () => {
     let n = 0
     await assert.rejects(() => stable(async () => ({ n: n++ }), 700), /did not stop changing in 700 ms; last \{"n":\d+\}/)
