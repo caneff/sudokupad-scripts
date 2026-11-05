@@ -13,11 +13,10 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
+import { gotoPuzzle, newPage, openPage, restartPuzzle, scaleOf, startPuzzle } from './page.mjs'
+import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor, openSettings } from './settings.mjs'
 import { settle, SETTLE_MS, stable } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'EdgeMarks_marks'
@@ -60,30 +59,9 @@ const CORNERS = {
   'outer bottom, between columns 4 and 5': { corner: [SIZE, 4], stored: [SIZE - 1, 3], cycle: ['u', 'x', null] }
 }
 
-const START = /Start Puzzle|Continue|Resume/i
-
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
-
-async function newPage (context, errors) {
-  const p = await context.newPage()
-  p.on('pageerror', (e) => errors.push(String(e)))
-  await routeSudokuPad(p)
-  return p
-}
-
-const waitForFramework = (p) => p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-
-// Clicks Start Puzzle.
-async function startPuzzle (p) {
-  await waitForFramework(p)
-  const start = p.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-}
 
 // The page point at the centre of the cell at [row, col].
 const cellCentre = (p, row, col) => p.evaluate(([r, c]) => {
@@ -181,10 +159,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await newPage(context, errors)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser))
     await boot()
   })
   after(async () => { await context.close() })
@@ -1065,14 +1040,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 describe('without the script', { concurrency: false }, () => {
   it('a replay holding these values loads with no page error, and the values draw nothing', async () => {
     // First page: the script, to record a replay with every kind of added mark.
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    const errors = []
+    const { context, p: withScript } = await openPage(browser)
     try {
-      const withScript = await newPage(context, [])
-      await withScript.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await withScript.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-      await withScript.addScriptTag({ content: script })
-      await startPuzzle(withScript)
+      await startPuzzle(withScript, { injection: { mode: 'before-start', code: script } })
       const replay = await withScript.evaluate(() => {
         const { app } = Framework
         const cell = app.puzzle.cells.find((c) => c.row === 3 && c.col === 3)
@@ -1086,8 +1056,8 @@ describe('without the script', { concurrency: false }, () => {
       await withScript.close()
 
       // Second page: no script. Load the replay.
-      const bare = await newPage(context, errors)
-      await bare.goto(url, { waitUntil: 'load', timeout: 60000 })
+      const { p: bare, errors } = await newPage(context)
+      await gotoPuzzle(bare)
       await startPuzzle(bare)
       await bare.evaluate((r) => Framework.app.loadReplay(r), replay)
       await bare.waitForFunction(() => Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).pen.length === 18, null, { timeout: 15000 })
@@ -1118,12 +1088,11 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   }
   for (const [member, remove] of Object.entries(REMOVALS)) {
     it(`${member} gone: one report that marks are off`, async () => {
-      const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
       const warnings = []
+      const { context, p } = await openPage(browser, {
+        seed: (page) => page.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+      })
       try {
-        const p = await newPage(context, [])
-        p.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
-        await p.goto(url, { waitUntil: 'load', timeout: 60000 })
         await startPuzzle(p)
         await p.evaluate(`(${remove})()`)
         await p.addScriptTag({ content: script })
@@ -1136,13 +1105,11 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   }
 
   it('logs one report, turns marks off, and the pen tool still works', async () => {
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    const errors = []
     const warnings = []
+    const { context, p, errors } = await openPage(browser, {
+      seed: (page) => page.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+    })
     try {
-      const p = await newPage(context, errors)
-      p.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
       await startPuzzle(p)
       // `_actList` is the field the click wrap reads; SudokuPad's own `actStart` recreates it
       // on the first click, so the pen tool still works.

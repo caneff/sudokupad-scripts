@@ -13,11 +13,10 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 import { effectiveOpacities, openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const THICKNESS_KEY = 'PenColor_thickness'
@@ -26,7 +25,6 @@ const OPACITY_KEY = 'PenColor_opacity'
 const LINE_MODE_KEY = 'ToolPen_linemode'
 const THICKNESS = '#pen-tool-extras-thickness'
 const OPACITY = '#pen-tool-extras-opacity'
-const START = /Start Puzzle|Continue|Resume/i
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -91,12 +89,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const dragToMax = async (selector) => dragSlider(selector, (await p.locator(selector).boundingBox()).x + 400)
 
   const boot = async () => {
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    const start = p.getByRole('button', { name: START }).first()
-    await start.waitFor({ state: 'visible' })
-    await start.click()
-    await start.waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
     // The pen tool is off until its own setting turns it on.
@@ -108,12 +101,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const openEditor = () => openExtrasEditor(p)
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser))
     await boot()
     await read(([a, b]) => { Framework.removeData(a); Framework.removeData(b) }, [THICKNESS_KEY, OPACITY_KEY])
     await draw()

@@ -11,11 +11,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
 import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
@@ -33,7 +32,6 @@ async function watch (read) {
   return seen.map((s) => JSON.parse(s))
 }
 
-const START = /Start Puzzle|Continue|Resume/i
 const BUTTON = '#control-colorbydigit'
 const BOX = `${BUTTON} [data-role="auto"]`
 const ARROW = `${BUTTON} [data-role="menu"]`
@@ -69,36 +67,23 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Runs the page through load and Start Puzzle, then injects the script.
+// Runs the loaded page through Start Puzzle, then injects the script.
 const bootPage = async (p) => {
-  await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-  const startButton = () => p.getByRole('button', { name: START }).first()
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  await startButton().waitFor({ state: 'visible' })
-  const inject = async () => {
-    await p.addScriptTag({ content: script })
-    await p.locator(BUTTON).waitFor({ state: 'attached' })
-  }
-  await startButton().click()
-  await startButton().waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-  await inject()
+  await startPuzzle(p, { injection: { mode: 'after-start', code: script } })
   await p.locator(BUTTON).waitFor({ state: 'visible' })
 }
 
 // A page. `seed` maps a localStorage key to a JSON value, written before the
 // page's own scripts run, and only while the key is absent so a reload keeps what was saved.
 const openSession = async (seed, contextOptions = {}) => {
-  const context = await browser.newContext({ viewport: { width: 1200, height: 900 }, ...contextOptions })
-  const errors = []
-  const p = await context.newPage()
-  p.on('pageerror', (e) => errors.push(String(e)))
-  await routeSudokuPad(p)
-  await p.addInitScript((entries) => {
-    entries.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
-  }, Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]))
-  await bootPage(p)
-  return { context, p, errors }
+  const opened = await openPage(browser, {
+    contextOptions,
+    seed: (page) => page.addInitScript((entries) => {
+      entries.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
+    }, Object.entries(seed).map(([key, value]) => [key, JSON.stringify(value)]))
+  })
+  await bootPage(opened.p)
+  return opened
 }
 
 // The reads and moves every group of checks below uses, bound to a page.

@@ -10,12 +10,10 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const START = /Start Puzzle|Continue|Resume/i
 const SECTIONS = ['Pen colors', 'Line settings', 'Line styles', 'Marks a click cycles through', 'Other', 'Pen line mode']
 
 let browser
@@ -33,18 +31,8 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 1000 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    const start = p.getByRole('button', { name: START }).first()
-    await start.waitFor({ state: 'visible' })
-    await start.click()
-    await start.waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
     await p.evaluate(() => Framework.setSetting('toolpen', true))

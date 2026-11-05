@@ -14,15 +14,13 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'EdgeMarks_marks']
-const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
@@ -87,15 +85,6 @@ const CASES = [
   { name: 'nothing broken', off: NOTHING_OFF, breaks: '' }
 ]
 
-async function startPuzzle (page) {
-  await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = page.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await page.locator('#control-undo').waitFor({ state: 'visible' })
-}
-
 // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is clicked again until the tool's buttons show.
 async function openPenTool (page) {
   const shown = () => page.locator('.tool-pen button[data-key="1"]').isVisible()
@@ -146,19 +135,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       }
 
       before(async () => {
-        context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-        errors = []
         logged = []
-        p = await context.newPage()
-        p.on('pageerror', (e) => errors.push(String(e)))
-        p.on('console', (m) => {
-          if (m.type() !== 'error' || /Failed to load resource/.test(m.text())) return
-          if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(m.text())) logged.push(m.text())
-          else errors.push(`console.error: ${m.text()}`)
-        })
-        await routeSudokuPad(p)
+        ;({ context, p, errors } = await openPage(browser, {
+          seed: (page, errs) => {
+            page.on('console', (m) => {
+              if (m.type() !== 'error' || /Failed to load resource/.test(m.text())) return
+              if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(m.text())) logged.push(m.text())
+              else errs.push(`console.error: ${m.text()}`)
+            })
+          }
+        }))
         const source = withBreak(kase.breaks)
-        await p.goto(url, { waitUntil: 'load', timeout: 60000 })
         await startPuzzle(p)
         await p.addScriptTag({ content: source })
         await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })

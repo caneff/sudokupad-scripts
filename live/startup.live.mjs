@@ -14,15 +14,12 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { MODES, openPage, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-const MODES = ['document-idle', 'before-start', 'after-start']
-const START = /Start Puzzle|Continue|Resume/i
 // How many scripts-at-a-time pages run at once: each is its own browser context.
 const CONCURRENCY = 5
 // How long one click gets to show its effect before it is made again: SudokuPad binds a new button's click handler a moment late.
@@ -151,29 +148,6 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Loads the puzzle with `code` injected at `mode`, and leaves the page on the board.
-async function load (p, mode, code) {
-  if (mode === 'document-idle') {
-    await p.addInitScript((src) => {
-      document.addEventListener('DOMContentLoaded', () => {
-        window.__fwAtIdle = typeof Framework + '/' + (typeof Framework !== 'undefined' && typeof Framework.getApp)
-        const s = document.createElement('script')
-        s.textContent = src
-        document.documentElement.appendChild(s)
-      })
-    }, code)
-  }
-  await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = p.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  if (mode === 'before-start') await p.addScriptTag({ content: code })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-  if (mode === 'after-start') await p.addScriptTag({ content: code })
-}
-
 describe('startup', { concurrency: CONCURRENCY }, () => {
   for (const script of SCRIPTS) {
     for (const mode of MODES) {
@@ -181,12 +155,9 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
         let context, p, errors
 
         before(async () => {
-          context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-          errors = []
-          p = await context.newPage()
-          p.on('pageerror', (e) => errors.push(String(e)))
-          await routeSudokuPad(p)
-          await load(p, mode, source(script.file))
+          const injection = { mode, code: source(script.file) }
+          ;({ context, p, errors } = await openPage(browser, { injection }))
+          await startPuzzle(p, { injection })
           await script.ready(p)
         })
         after(async () => { await context.close() })

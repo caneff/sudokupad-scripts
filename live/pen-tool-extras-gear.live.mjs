@@ -9,11 +9,9 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { gotoPuzzle, openPage, startPuzzle } from './page.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const START = /Start Puzzle|Continue|Resume/i
 const BUTTON = '#control-pen'
 const GEAR = '#control-pen [aria-label="Pen tool extras settings"]'
 const EDITOR = '#pen-tool-extras-editor'
@@ -25,16 +23,9 @@ after(async () => { await browser?.close() })
 describe('the settings gear on the pen tool button', { concurrency: false }, () => {
   let context, p
 
-  // Loads the puzzle with the pen tool on, starts it and injects the script.
+  // Starts the loaded puzzle with the pen tool on and injects the script.
   const load = async (p) => {
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    await p.evaluate(() => Framework.setSetting('toolpen', true))
-    const start = p.getByRole('button', { name: START }).first()
-    await start.waitFor({ state: 'visible' })
-    await start.click()
-    await start.waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    await startPuzzle(p, { beforeStart: () => p.evaluate(() => Framework.setSetting('toolpen', true)) })
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
   }
@@ -46,9 +37,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 1000 } })
-    p = await context.newPage()
-    await routeSudokuPad(p)
+    ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
     await load(p)
   })
   after(async () => { await context.close() })
@@ -94,6 +83,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   })
 
   it('the gear is present after a reload', async () => {
+    await gotoPuzzle(p)
     await load(p)
     await p.locator(GEAR).waitFor({ state: 'visible' })
   })
@@ -101,10 +91,8 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   // SudokuPad cancels the touch events of a tap on a tool button, which stops the browser sending the click; the gear keeps its touchstart and
   // touchend from SudokuPad. A mouse press needs no such check: SudokuPad ignores a press whose target is not the button.
   it('a tap on the gear opens the dialog', async () => {
-    const touch = await browser.newContext({ viewport: { width: 1200, height: 1000 }, hasTouch: true })
+    const { context: touch, p: tp } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 }, hasTouch: true } })
     try {
-      const tp = await touch.newPage()
-      await routeSudokuPad(tp)
       await load(tp)
       const box = await tp.locator(GEAR).boundingBox()
       await tp.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)

@@ -12,13 +12,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
-import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor, restartPuzzle } from './settings.mjs'
+import { openPage, restartPuzzle, startPuzzle } from './page.mjs'
+import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 // The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
 const { CHEVRON, ARROW_SPACING } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const PEN_KEY = 'PenColor_pen'
@@ -26,20 +25,9 @@ const COLORS_KEY = 'PenColor_colors'
 const THICKNESS_KEY = 'PenColor_thickness'
 const OPACITY_KEY = 'PenColor_opacity'
 const ARROW_SPACING_KEY = 'PenColor_arrowspacing'
-const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_THREE = 'jlnprtvxz'
 const PAGE_ONE = '123456789'
-
-// Waits for the puzzle, starts it, and returns once the controls exist.
-async function startPuzzle (page) {
-  await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = page.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await page.locator('#control-undo').waitFor({ state: 'visible' })
-}
 
 // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is
 // clicked again until the tool's buttons show.
@@ -137,14 +125,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
-    p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console.error: ${m.text()}`) })
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser, {
+      seed: (page, errs) => {
+        // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
+        page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`console.error: ${m.text()}`) })
+      }
+    }))
     await boot()
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, ARROW_SPACING_KEY, 'ToolPen_color'])
     await selectChevronPen(3)
