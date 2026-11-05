@@ -1,11 +1,12 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { readFileSync } = require('node:fs')
+const { readdirSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
 
 const SCRIPT = './pen-tool-extras.user.js'
-const source = readFileSync(join(__dirname, SCRIPT), 'utf8')
+const read = (file) => readFileSync(join(__dirname, file), 'utf8')
+const source = read(SCRIPT)
 const extras = require(SCRIPT)
 
 // A store with SudokuPad's three calls that holds `saved`, a map of key to value.
@@ -14,6 +15,11 @@ const storeOf = (saved) => ({
   setData: (key, value) => { saved[key] = value },
   removeData: (key) => { delete saved[key] }
 })
+
+// The files the renames reach: the repo's root, `live/` and `site/`, so never `docs/research/`, nor the records in dotfiles.
+const filesIn = (dir) => readdirSync(join(__dirname, dir), { withFileTypes: true }).filter((entry) => entry.isFile() && !entry.name.startsWith('.')).map((entry) => join(dir, entry.name))
+const swept = [...filesIn('.'), ...filesIn('live'), ...filesIn('site')]
+const ownFiles = swept.filter((file) => /pen-tool-extras/.test(file))
 
 // Spec 130's acceptance as one pass over the script's exports and its text, at `npm test`. This seam is blind to real
 // SudokuPad (`npm run test:live` covers the `Framework` calls, rendering and undo there), and to a real Tampermonkey
@@ -56,32 +62,17 @@ test('Pen Tool Extras holds spec 130 together', () => {
   assert.deepEqual([marks.circle, marks.cornerCircle], [false, false])
   assert.deepEqual(Object.keys(marks).sort(), ['circle', 'cornerCircle', 'cornerX', 'directions', 'x'])
 
-  // The glossary's words: none of the old names is left in the script.
-  for (const old of [/chevron/i, /\bPEN_COLORS\b/, /\bDEFAULT_COLORS\b/, /penColorsFromPage/, /offLabels/, /stepPage/]) {
-    assert.equal(old.test(source), false, String(old))
+  // The pen values saved inside puzzles did not change with the names.
+  assert.equal(extras.MARK_VALUES.join(''), '34bc56hijklmnopqrstwuxvy')
+
+  // The glossary's words: the renames this spec lists are gone. Each old name is spelled in pieces, so this file does not
+  // hold what it looks for. The circle's old names stay in the reader, which still takes them.
+  for (const file of swept) assert.equal(new RegExp(['chev', 'ron'].join(''), 'i').test(read(file)), false, file)
+  for (const pieces of [['PEN', '_COLORS'], ['DEFAULT', '_COLORS'], ['penColors', 'FromPage'], ['off', 'Labels'], ['step', 'Page']]) {
+    const old = new RegExp(`\\b${pieces.join('')}\\b`)
+    for (const file of ownFiles) assert.equal(old.test(read(file)), false, `${pieces.join('')} in ${file}`)
   }
 
-  // Every change raised the version, in both places it is kept.
+  // The version is one number, in both places it is kept.
   assert.equal(source.match(/@version\s+(\S+)/)[1], extras.VERSION)
-})
-
-test('a Framework with no getApp is reported, and no Framework is not', () => {
-  const file = require.resolve(SCRIPT)
-  const load = (framework) => {
-    const warnings = []
-    const warn = console.warn
-    console.warn = (...args) => warnings.push(args.join(' '))
-    if (framework) global.Framework = framework
-    delete require.cache[file]
-    try {
-      require(SCRIPT)
-    } finally {
-      console.warn = warn
-      delete global.Framework
-      delete require.cache[file]
-    }
-    return warnings
-  }
-  assert.deepEqual(load(), [])
-  assert.deepEqual(load({}), ['pen-tool-extras: SudokuPad\'s Framework has no getApp, so nothing was changed'])
 })

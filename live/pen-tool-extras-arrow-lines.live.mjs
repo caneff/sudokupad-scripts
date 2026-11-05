@@ -13,7 +13,7 @@ import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from './s
 import { cellCentre, drag, openPenTool, padValues, penEntries, setSlider } from './pen.mjs'
 import { settle } from './settle.mjs'
 
-// The sizes of a arrow line are the script's own, so the checks read them from it and a retuning moves both.
+// The sizes of an arrow line are the script's own, so the checks read them from it and a retuning moves both.
 const { ARROW_LINE, ARROW_SPACING } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 

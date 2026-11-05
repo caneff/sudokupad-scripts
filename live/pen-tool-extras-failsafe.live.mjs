@@ -12,6 +12,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
@@ -19,6 +20,7 @@ import { drag, gridPoint, openPenTool, padValues, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
+const { COLOR_TOOL_WAIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'EdgeMarks_marks']
 const PAGE_BUTTON = '.pen-tool-extras-page'
@@ -82,11 +84,11 @@ const CASES = [
     breaks: `const insert = Element.prototype.insertAdjacentHTML
       Element.prototype.insertAdjacentHTML = function (where, html) { if (String(html).includes('pen-tool-extras-gear')) throw new TypeError('no gear'); return insert.apply(this, arguments) }`
   },
-  // The color tool never holds a palette, so the wait for it ends at the 10 s limit with a warning, not a turned-off feature (nothing in the script fails).
+  // The color tool never holds a palette, so the wait for it ends at its limit with a warning, not a turned-off feature (nothing in the script fails).
   {
     name: 'color tool never ready',
     off: NOTHING_OFF,
-    warns: /^pen-tool-extras: the color tool was not ready after 10 s, so the pen keeps SudokuPad's own colors$/,
+    warns: new RegExp(`^pen-tool-extras: the color tool was not ready after ${COLOR_TOOL_WAIT_MS / 1000} s, so the pen keeps SudokuPad's own colors$`),
     breaks: 'Framework.app.tools.colour.palette = null'
   },
   { name: 'nothing broken', off: NOTHING_OFF, breaks: '' }

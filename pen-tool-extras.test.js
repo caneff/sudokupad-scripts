@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting,
+  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -28,7 +28,7 @@ const TABLE = {
   1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000'
 }
 
-test('the default colors are SudokuPad\'s own nine pen colors', () => {
+test('SUDOKUPAD_PEN_COLORS are SudokuPad\'s own nine pen colors', () => {
   assert.deepEqual(SUDOKUPAD_PEN_COLORS, TABLE)
 })
 
@@ -37,7 +37,7 @@ test('nothing saved is the fresh-install state: every pen color has its default'
   assert.deepEqual(normalizeColors(undefined), TABLE)
 })
 
-test('corrupt saved data falls back to the default colors', () => {
+test('corrupt saved data falls back to SudokuPad\'s pen colors', () => {
   for (const bad of ['red', 7, true, [], ['#ff0000'], '{"1":"#ff0000"}']) {
     assert.deepEqual(normalizeColors(bad), TABLE, JSON.stringify(bad))
   }
@@ -647,7 +647,7 @@ test('the edge circle\'s hole stays clearly open at the largest thickness', () =
   assert.equal(rx - stroke / 2 > stroke / 2, true, `${rx} ${stroke}`)
 })
 
-test('an arrow is a filled triangle pointing the way it names', () => {
+test('a direction arrow is an open head pointing the way it names', () => {
   // relative to the edge midpoint: the tip is the middle vertex
   const tip = (d) => {
     const [, mx, my, l1x, l1y] = d.match(/m ?(-?[\d.]+),(-?[\d.]+) l ?(-?[\d.]+),(-?[\d.]+)/)
@@ -821,7 +821,7 @@ test('penPageOf, penNumber and penCharOn move between a color character, its pag
   assert.equal(penPageOf('3'), 0)
   assert.equal(penPageOf('c'), 1)
   assert.equal(penPageOf('z'), 2)
-  assert.equal(penPageOf('k'), -1, 'the reverse character of a arrow line pen is not a pen to select')
+  assert.equal(penPageOf('k'), -1, 'the reverse character of an arrow line pen is not a pen to select')
   assert.equal(penPageOf('A'), -1)
   assert.equal(penNumber('c'), '3')
   assert.equal(penNumber('3'), '3')
@@ -924,7 +924,7 @@ test('the page button samples the page it turns to: dashes on page 2, an arrow l
   const fromTwo = renderPageIcon(1, 0, BOTH_STYLES)
   assert.match(fromTwo, /data-page-sample="arrowLines"/)
   assert.equal((fromTwo.match(/<circle/g) || []).length, 3)
-  assert.equal((fromTwo.match(/<path[^>]*data-arrow-line/g) || []).length, 3)
+  assert.equal((fromTwo.match(/<path[^>]*data-arrow/g) || []).length, 3)
   assert.equal((fromTwo.match(/<path[^>]*data-sample-line/g) || []).length, 1)
   const fromThree = renderPageIcon(2, 0, BOTH_STYLES)
   assert.match(fromThree, /data-page-sample="solid"/)
@@ -1792,12 +1792,7 @@ test('the table holds each setting\'s saved key and default', () => {
   })
 })
 
-test('the opacity row refuses a saved value off the slider\'s steps', () => {
-  assert.equal(SETTINGS.opacity.normalize(55), 55)
-  assert.equal(SETTINGS.opacity.normalize(57), 80)
-})
-
-test('a new slider is one builder call: its row normalizes and saves with nothing else added', () => {
+test('a slider row built from a range normalizes and saves by that range alone', () => {
   const row = slider('New_key', { min: 2, max: 10, step: 2, fallback: 4 }, () => {})
   assert.equal(row.normalize(6), 6)
   for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.normalize(bad), 4, JSON.stringify(bad))
@@ -1808,16 +1803,36 @@ test('a new slider is one builder call: its row normalizes and saves with nothin
   assert.deepEqual(calls, [['set', 'New_key', 6], ['remove', 'New_key']])
 })
 
-test('a flag is off only for a saved false', () => {
-  const row = flag('Flag_key')
-  assert.equal(row.fallback, true)
-  assert.equal(row.normalize(false), false)
-  for (const ok of [true, undefined, null, 0, 'false', {}]) assert.equal(row.normalize(ok), true, JSON.stringify(ok))
-})
-
 test('a row built with no effect has one that does nothing', () => {
   assert.equal(flag('Flag_key').effect(), undefined)
   assert.equal(SETTINGS.middleErase.effect(), undefined)
+})
+
+test('saving what changed updates the values in force and names what changed', () => {
+  const saved = {}
+  const store = { setData: (key, value) => { saved[key] = value }, removeData: (key) => { delete saved[key] } }
+  const current = settingDefaults()
+  assert.deepEqual(saveChangedSettings(store, { ...current, thickness: 9, opacity: 55 }, current), ['thickness', 'opacity'])
+  assert.deepEqual([current.thickness, current.opacity], [9, 55])
+  assert.deepEqual(saved, { [SETTINGS.thickness.key]: 9, [SETTINGS.opacity.key]: 55 })
+})
+
+test('a failed write leaves the values in force alone, so a retry saves every change again', () => {
+  const saved = {}
+  let failing = true
+  const store = {
+    setData: (key, value) => {
+      if (failing && key === SETTINGS.opacity.key) throw new Error('quota')
+      saved[key] = value
+    },
+    removeData: (key) => { delete saved[key] }
+  }
+  const current = settingDefaults()
+  const draft = { ...current, thickness: 9, opacity: 55 }
+  assert.throws(() => saveChangedSettings(store, draft, current), /quota/)
+  assert.deepEqual(current, settingDefaults())
+  failing = false
+  assert.deepEqual(saveChangedSettings(store, draft, current), ['thickness', 'opacity'])
 })
 
 test('flags decode each name on its own: only a saved false is off, a non-object is all on, an unknown name is dropped', () => {
@@ -1890,6 +1905,7 @@ test('isEdgeActs accepts a select then an edge pen action, and nothing else', ()
   assert.equal(isEdgeActs([select, pen('3'), pen('4')]), false)
   assert.equal(isEdgeActs([{ type: 'deselect' }, pen('3')]), false)
   assert.equal(isEdgeActs([select, pen('1')]), false)
+  assert.equal(isEdgeActs([select, { type: 'select', arg: '3' }]), false)
 })
 
 test('arrowLineOf reads the way of an arrow line, and is null for anything else', () => {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.9
+// @version      1.14.10
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.9'
+  const VERSION = '1.14.10'
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
   const COLORS_KEY = 'PenColor_colors'
@@ -166,7 +166,7 @@
     setting: { x: 'cornerX', circle: 'cornerCircle' }
   }
   const DEFAULT_MARK_SETTINGS = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
-  // The names the scripts this one replaced saved the two circle boxes under, by the name each is saved under now.
+  // The names older saves hold the two circle boxes under, by the name each is saved under now.
   const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
   // How far from a grid corner, in cells, a click still counts as on the corner. An edge's midpoint
   // is 0.5 from its corners and a cell's middle 0.71, so neither comes near it; the 0.2 is a circle
@@ -290,7 +290,7 @@
 
   // A table row: the key it saves under, its default, what makes saved data (untrusted) usable, and `effect`, which brings the page in line once
   // `inForce` holds the new value. The style is written after the effects, so an effect need not.
-  function slider (key, range, effect = doNothing) {
+  function slider (key, range, effect) {
     return { key, fallback: range.fallback, normalize: (data) => inRange(data, range) ? data : range.fallback, effect }
   }
 
@@ -298,7 +298,7 @@
     return { key, fallback: true, normalize: (data) => data !== false, effect }
   }
 
-  function flags (key, names, effect = doNothing) {
+  function flags (key, names, effect) {
     return { key, fallback: decodeFlags(names), normalize: (data) => decodeFlags(names, data), effect }
   }
 
@@ -340,6 +340,15 @@
   function saveSetting (store, setting, value) {
     if (sameValue(value, setting.fallback)) store.removeData(setting.key)
     else store.setData(setting.key, value)
+  }
+
+  // Saves each setting whose value in `draft` differs from `current`, then updates `current` and returns their names. A write that throws leaves
+  // `current` as it was, so a retry finds the same settings changed and their effects still run.
+  function saveChangedSettings (store, draft, current) {
+    const changed = changedSettings(draft, current)
+    changed.forEach((name) => saveSetting(store, SETTINGS[name], draft[name]))
+    changed.forEach((name) => { current[name] = draft[name] })
+    return changed
   }
 
   // Saved data is untrusted: returns { x, directions, circle, cornerX, cornerCircle }, each ticked unless saved as false. Data saved before the corner boxes
@@ -631,7 +640,7 @@
 
   // The corners of a triangle (an arrow of an arrow line, and the page button's sample of one), base corner, tip, base corner, as [x, y] points: its middle at (x, y), pointing along the unit vector (ux, uy),
   // its base `half` back and `wide` out from the middle and its tip `half` forward.
-  function arrowLineCorners (x, y, ux, uy, half, wide) {
+  function arrowCorners (x, y, ux, uy, half, wide) {
     return [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
   }
 
@@ -654,7 +663,7 @@
     let arrows = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
-      const [wing, tip, other] = arrowLineCorners(from[0] + ux * along, from[1] + uy * along, ux, uy, half, wide)
+      const [wing, tip, other] = arrowCorners(from[0] + ux * along, from[1] + uy * along, ux, uy, half, wide)
       arrows += `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}Z`
     }
     return {
@@ -1010,8 +1019,8 @@
     if (kind === 'arrowLines') {
       sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_ARROW_LINE.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
         SAMPLE_ARROW_LINE.at.map((t) => {
-          const [wing, tip, other] = arrowLineCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, ARROW_LINE.halfLength * SAMPLE_ARROW_LINE.line, ARROW_LINE.halfWidth * SAMPLE_ARROW_LINE.line)
-          return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}Z" stroke="none" data-arrow-line/>`
+          const [wing, tip, other] = arrowCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, ARROW_LINE.halfLength * SAMPLE_ARROW_LINE.line, ARROW_LINE.halfWidth * SAMPLE_ARROW_LINE.line)
+          return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}Z" stroke="none" data-arrow/>`
         }).join('')
     } else if (kind === 'dots') {
       sample = [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + 9 * k}" cy="${52 - 7 * k}" r="3.6" fill="currentColor" stroke="none"/>`).join('')
@@ -1107,7 +1116,7 @@
       `${markPicture(picture)}</label>`
     const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} style="margin:0;justify-self:center">`
     // `shown` false hides the row (a setting under an unticked box); `boxMarkup` is the box in the fourth column; `indented` sets the label under a name above it.
-    const slider = (key, label, range, value, { indented = false, shown = true, boxMarkup = '<span></span>' } = {}) =>
+    const sliderRow = (key, label, range, value, { indented = false, shown = true, boxMarkup = '<span></span>' } = {}) =>
       `<div data-row="${key}" style="${SLIDER_COLUMNS}${shown ? '' : ';display:none'}">` +
       `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;margin:0${indented ? ';padding-left:1.2em;color:#444;box-sizing:border-box' : ''}">${label}</label>` +
       `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" style="width:100%;min-width:0;margin:0">` +
@@ -1136,19 +1145,19 @@
     return offNote(state.off) + '<div style="font-weight:600">Pen colors</div>' + colorsRow +
       missingNote(state.missing) +
       when('sliders', heading('Line settings', 'Slider in panel') +
-        slider('thickness', 'Thickness', THICKNESS, state.thickness, { boxMarkup: box('id="pen-tool-extras-show-thickness" data-show="thickness"', state.show.thickness, 'Show this slider in the pen panel') }) +
-        slider('opacity', 'Opacity (%)', OPACITY, state.opacity, { boxMarkup: box('id="pen-tool-extras-show-opacity" data-show="opacity"', state.show.opacity, 'Show this slider in the pen panel') })) +
+        sliderRow('thickness', 'Thickness', THICKNESS, state.thickness, { boxMarkup: box('id="pen-tool-extras-show-thickness" data-show="thickness"', state.show.thickness, 'Show this slider in the pen panel') }) +
+        sliderRow('opacity', 'Opacity (%)', OPACITY, state.opacity, { boxMarkup: box('id="pen-tool-extras-show-opacity" data-show="opacity"', state.show.opacity, 'Show this slider in the pen panel') })) +
       (dashed || arrows
         ? heading('Line styles', 'Enable') +
-          (dashed ? styleBlock('dashed', 'Dashed lines', state.lineStyles.dashed, slider('dash', 'Dash length', DASH, state.dash, { indented: true, shown: state.lineStyles.dashed })) : '') +
-          (arrows ? styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, slider('arrowSpacing', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) : '')
+          (dashed ? styleBlock('dashed', 'Dashed lines', state.lineStyles.dashed, sliderRow('dash', 'Dash length', DASH, state.dash, { indented: true, shown: state.lineStyles.dashed })) : '') +
+          (arrows ? styleBlock('arrows', 'Directional arrow lines', state.lineStyles.arrows, sliderRow('arrowSpacing', 'Arrow spacing', ARROW_SPACING, state.arrowSpacing, { indented: true, shown: state.lineStyles.arrows })) : '')
         : '') +
       when('marks', sectionHeading('Marks a click cycles through') + marksTable) +
       (off.has('outline') && off.has('lineErase')
         ? ''
         : sectionHeading('Other') +
           when('outline', labelled('pen-tool-extras-outline', 'data-outline', state.outline, 'White outline on lines and marks') +
-            slider('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth, { indented: true, shown: state.outline })) +
+            sliderRow('outlineWidth', 'Outline width', OUTLINE_WIDTH, state.outlineWidth, { indented: true, shown: state.outline })) +
           when('lineErase', labelled('pen-tool-extras-middle-erase', 'data-middle-erase', state.middleErase, 'Middle click erases a whole line'))) +
       lineModeChoice(state.lineMode)
   }
@@ -1323,6 +1332,7 @@
       readSettings,
       changedSettings,
       saveSetting,
+      saveChangedSettings,
       normalizeColors,
       savedColors,
       editedColors,
@@ -1840,7 +1850,7 @@
                   else Framework.setData(COLORS_KEY, colors)
                   adoptColors(colors, edited.size ? [] : missing)
                 }
-                if (Object.keys(marks).some((key) => marks[key] !== markSettings[key])) Framework.setData(MARKS_KEY, marks)
+                if (!sameValue(marks, markSettings)) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
                 saveSettings(draft)
                 if (lineMode !== undefined && lineMode !== currentLineMode()) features.attempt('lineMode', () => applyLineMode(lineMode))
@@ -1969,21 +1979,22 @@
 
   // Each setting that differs from what is in force is saved and put in force, then the effects run with every new value in place, and the style is written once.
   function saveSettings (draft) {
-    const changed = changedSettings(draft, inForce)
+    const changed = saveChangedSettings(Framework, draft, inForce)
     if (!changed.length) return
-    changed.forEach((name) => {
-      saveSetting(Framework, SETTINGS[name], draft[name])
-      inForce[name] = draft[name]
-    })
-    changed.forEach((name) => SETTINGS[name].effect())
+    runEffects(changed)
     applyStyle()
+  }
+
+  // Runs the effect of each named row, an effect that rows share once.
+  function runEffects (names) {
+    new Set(names.map((name) => SETTINGS[name].effect)).forEach((effect) => effect())
   }
 
   // Moving a panel slider sets and saves its value at once. It changes no cell, so nothing goes on the
   // undo stack or in the replay.
-  function saveSlider (slider) {
-    const name = slider.id === THICKNESS_SLIDER ? 'thickness' : 'opacity'
-    saveSettings({ ...inForce, [name]: Number(slider.value) })
+  function saveSlider (input) {
+    const name = input.id === THICKNESS_SLIDER ? 'thickness' : 'opacity'
+    saveSettings({ ...inForce, [name]: Number(input.value) })
   }
 
   const PEN_PANEL = '.tool-pen .controls-input'
@@ -2357,7 +2368,7 @@
     installGear()
     installOverlayPressSwallow()
     markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
-    Object.values(SETTINGS).forEach((setting) => setting.effect())
+    runEffects(SETTING_NAMES)
     applyStyle()
     Framework.addSetting({
       tag: 'button',
@@ -2382,12 +2393,12 @@
     // the color tool never becomes ready, SudokuPad's own pen colors stay in force.
     if (features.isOff('colors')) return
     const tool = await waitForColorTool()
+    // A save made in the dialog while waiting outranks the derived colors.
+    if (savedColors(Framework.getData(COLORS_KEY))) return
     if (!tool) {
       console.warn(`pen-tool-extras: the color tool was not ready after ${COLOR_TOOL_WAIT_MS / 1000} s, so the pen keeps SudokuPad's own colors`)
       return
     }
-    // A save made in the dialog while waiting outranks the derived colors.
-    if (savedColors(Framework.getData(COLORS_KEY))) return
     const derived = features.attempt('colors', () => deriveFromTool(tool), () => null)
     if (derived) adoptColors(derived.colors, derived.missing)
   })
