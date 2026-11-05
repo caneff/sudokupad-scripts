@@ -14,7 +14,7 @@ const {
   LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
-  createFeatures, inStock, FEATURE_LABELS, FEATURE_NEEDS,
+  createFeatures, lackingInternals, inStock, FEATURE_LABELS, FEATURE_NEEDS,
   edgeMidpoint, addedMark, chevronOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
@@ -1928,4 +1928,75 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
   const mark = MARK_VALUES[0]
   const cells = [{ row: 1, col: 2, pen: [`${line}x`, `${mark}y`] }, { row: 0, col: 0 }]
   assert.deepEqual(lineSegmentsOf(cells), [{ value: line, row: 1, col: 2, color: 'x' }])
+})
+
+// The requirement table: which SudokuPad internal each feature cannot work without.
+const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
+// A SudokuPad stand-in with every internal the features need.
+const completeSudokuPad = () => {
+  class Renderer {
+    static CellSize = 64
+    static rcToPathData () {}
+    renderPen () {}
+  }
+  const renderer = new Renderer()
+  renderer.renderPart = () => {}
+  const tool = { _actList: [] }
+  TOOL_FNS.forEach((name) => { tool[name] = () => {} })
+  const app = {
+    tools: { colour: {} },
+    svgRenderer: renderer,
+    grid: { rows: 9, cols: 9, getCell: () => {} },
+    puzzle: { cells: [] },
+    xyToRCExact: () => {}
+  }
+  return { app, tool }
+}
+
+test('a complete SudokuPad lacks nothing', () => {
+  const { app, tool } = completeSudokuPad()
+  assert.deepEqual(lackingInternals(app, tool), new Map())
+})
+
+// Each internal removed alone, and the features that go off with it.
+const LACKING_ALONE = [
+  ...['actStart', 'actAdd', 'actSend', 'clickCell', '_actList'].map((name) => [name, (s) => { delete s.tool[name] }, ['chevrons', 'marks', 'lineErase']]),
+  ['getInputRc', (s) => { delete s.tool.getInputRc }, ['marks']],
+  ['setSelectedColor', (s) => { delete s.tool.setSelectedColor }, ['pages']],
+  ['handleToolEnter', (s) => { delete s.tool.handleToolEnter }, ['pages']],
+  ['handleToolExit', (s) => { delete s.tool.handleToolExit }, ['pages']],
+  ['drawLineHint', (s) => { delete s.tool.drawLineHint }, ['sliders', 'outline']],
+  ['getCell', (s) => { delete s.app.grid.getCell }, ['marks', 'lineErase']],
+  ['puzzle.cells', (s) => { delete s.app.puzzle.cells }, ['chevrons', 'marks', 'lineErase']],
+  ['grid.rows', (s) => { s.app.grid.rows = '9' }, ['marks']],
+  ['grid.cols', (s) => { s.app.grid.cols = 9.5 }, ['marks']],
+  ['CellSize', (s) => { delete s.app.svgRenderer.constructor.CellSize }, ['marks']],
+  ['rcToPathData', (s) => { delete s.app.svgRenderer.constructor.rcToPathData }, ['marks']],
+  ['renderPen', (s) => { delete Object.getPrototypeOf(s.app.svgRenderer).renderPen }, ['chevrons', 'marks']],
+  ['renderPart', (s) => { delete s.app.svgRenderer.renderPart }, ['chevrons']],
+  ['xyToRCExact', (s) => { delete s.app.xyToRCExact }, ['lineErase']],
+  ['tools.colour', (s) => { delete s.app.tools.colour }, ['colors']]
+]
+for (const [internal, remove, featureNames] of LACKING_ALONE) {
+  test(`without ${internal}, exactly ${featureNames.join(', ')} are lacking`, () => {
+    const stub = completeSudokuPad()
+    remove(stub)
+    assert.deepEqual(lackingInternals(stub.app, stub.tool), new Map([[internal, featureNames]]))
+  })
+}
+
+test('every feature with a requirement of its own is lacking under some internal removed alone', () => {
+  // dashes and rightClick ride on another feature (FEATURE_NEEDS), gear needs nothing of SudokuPad's, and lineMode needs ToolPen.tool (the next test).
+  const own = Object.keys(FEATURE_LABELS).filter((name) => !['dashes', 'rightClick', 'gear', 'lineMode'].includes(name))
+  assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), own.sort())
+})
+
+test('without a pen tool, every feature that needs it is reported under the first internal it lacks', () => {
+  const { app } = completeSudokuPad()
+  assert.deepEqual(lackingInternals(app, undefined), new Map([
+    ['setSelectedColor', ['pages']],
+    ['actStart', ['chevrons', 'marks', 'lineErase']],
+    ['drawLineHint', ['sliders', 'outline']],
+    ['ToolPen.tool', ['lineMode']]
+  ]))
 })
