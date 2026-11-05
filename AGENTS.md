@@ -2,8 +2,14 @@
 
 Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
 script is one `*.user.js` file with no build step and no ties to any other repo.
-`site/` is the static homepage and its Pen Tool Extras details page: GitHub Pages serves it from `main` (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`) and Netlify serves it from the `release` branch (`netlify.toml`); `git push origin main:release` publishes to Netlify at 15 credits a push; `docs/research/` holds what was read from SudokuPad's source; `GLOSSARY.md` holds
-the vocabulary.
+
+- **Pages**: `site/` is the static homepage and its Pen Tool Extras details page. GitHub Pages serves it from `main`
+  (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
+- **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
+  spends 15 of the plan's 300 credits a month (`docs/research/netlify-credits.md`). It is pushed very rarely, so it lags
+  `main` by design: Chris kept Netlify on 2026-11-05.
+- **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
+- **`GLOSSARY.md`**: the vocabulary.
 
 ## Agent skills
 
@@ -25,24 +31,19 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 
 ## End-to-end seam
 
-- **Seam**: `npm test` (`node --test`), against each script's pure functions and
-  against every page in `site/` (`site.test.js`: every script has an install link on the homepage)
-- **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run
-  test:live` (every `live/*.live.mjs`) covers them on sudokupad.app in headless Chromium, with the script
-  injected after Start Puzzle. A case about the injection time itself runs at all three times
-  (at `DOMContentLoaded`, after load before Start Puzzle, after Start Puzzle): `live/startup.live.mjs` checks each script's
-  startup that way (it loads with no page error, its control appears, one action works), and the two "auto mode saved on"
-  groups of `live/color-by-digit-auto.live.mjs` do too. Dark Page's page color dialog group injects at `DOMContentLoaded` only. SudokuPad is served from a recording (`live/cache.mjs`, kept in
-  `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`, shared by every worktree): a recording
-  older than a day is checked against SudokuPad's version with one plain request and re-recorded only when it changed;
-  `LIVE_REFRESH=1` records again at once, whatever the version (both need the network), and the rest replay it;
-  `LIVE_OFFLINE=1` never touches the network and fails naming any request the recording lacks.
-  It also needs a Playwright Chromium
-  (`npx playwright install chromium`), so it stays out of `npm test` and
-  `land.testcmd`; run it when a change touches a `Framework` call, rendering or
-  undo. While you iterate, run only the changed script's files (`live/<script name>*.live.mjs`, and `live/startup.live.mjs` when its startup changed);
-  the full suite runs once, at the controller's merge check. When your change alters behavior on purpose,
-  first change the live tests that check the old behavior, then run them: a wrong expectation waits out its time limit. It does not cover a real Tampermonkey install or `crackingthecryptic.com`:
-  a PR names those as still owed
+- **Seam**: `npm test` (`node --test`), against each script's pure functions, the live harness's helper tests
+  (`live/*.test.mjs`) and every page in `site/` (`site.test.js`: every script has an install link on the homepage)
+- **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/*.live.mjs`)
+  covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.
+- Before you write or debug a live test: read `live/README.md`.
+- `npm run test:live` needs a Playwright Chromium (`npx playwright install chromium`), so it stays out of `npm test` and
+  `land.testcmd`.
+- Run it when a change touches a `Framework` call, rendering or undo.
+- While you iterate, run only the changed script's files (`live/<script name>*.live.mjs`, and `live/startup.live.mjs` when
+  its startup changed); the full suite runs once, at the controller's merge check.
+- When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
+  wrong expectation waits out its time limit.
+- It does not cover a real Tampermonkey install or `crackingthecryptic.com`: a PR names those as still owed.
 
-`npm run lint` runs StandardJS over the repo, excluding `docs/research/`.
+`npm run lint` runs StandardJS over the repo, excluding `docs/research/`. Run it before you hand off a change:
+`land.testcmd` runs only the tests, and no hook or CI job runs the linter.

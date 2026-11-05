@@ -52,3 +52,9 @@ seam. These come from `twitch-rules-scroller` and
 11. **No parameter, flag or function that nothing calls.** An unused option is a
     promise nobody tests.
 12. **Name things with `GLOSSARY.md`'s terms.** A synonym splits one concept in two.
+
+## Release
+
+13. **A diff that changes what a `*.user.js` does raises its `@version`, and its
+    `VERSION` where it has one.** Tampermonkey's update check reads `@version`;
+    the tests only check the two match.
