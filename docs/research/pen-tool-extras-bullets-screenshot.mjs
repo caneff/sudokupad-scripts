@@ -8,15 +8,19 @@
 //   pen-tool-extras-bullet-sliders.png  the Thickness and Opacity sliders, and a thick outlined line over a colored cell
 //   pen-tool-extras-bullet-gear.png     the pen tool button with its settings gear
 // The erase bullet has none: a middle click does not show in a still picture. Every line is a real mouse drag
-// and every mark a real click; the script fails, writing nothing, when one does not land. The mascot is hidden.
+// and every mark a real click. The script fails when a line or mark does not land (it checks the grid gained a pen
+// value, not which mark), and writes the six files only once all are taken, so a failure leaves the old ones. The mascot is hidden.
 // Run from the repo root with Playwright's Chromium installed: node docs/research/pen-tool-extras-bullets-screenshot.mjs
 // Not part of any test.
 import { chromium } from 'playwright'
 import { readFileSync, writeFileSync } from 'node:fs'
+// Taken pictures wait here until every one is taken.
+const taken = new Map()
 
 const url = readFileSync(new URL('../../live/puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const out = (name) => new URL(`./pen-tool-extras-bullet-${name}.png`, import.meta.url).pathname
+const save = (name, buffer) => taken.set(name, buffer)
 
 const DASH_KEY = 'PenColor_dash'
 // Page 2 dash length in line widths; the script's own default is dots (0).
@@ -24,7 +28,7 @@ const DASH_LENGTH = 3
 const DRAG_STEPS = 14
 const CLICK_PAUSE_MS = 150
 const EDGE_INSET_PX = 2
-// Cells in a cropped grid picture, and the margin around it in page pixels.
+// The margin around a cropped grid picture, in page pixels.
 const MARGIN = 12
 
 const browser = await chromium.launch()
@@ -81,24 +85,28 @@ const gridClip = (row0, col0, rows, cols) => {
 }
 const quiet = async () => { await page.mouse.move(5, 5); await page.waitForTimeout(400) }
 const png = async (clip) => (await page.screenshot({ clip })).toString('base64')
-// Puts pictures side by side on one white page and writes the result.
+// Puts pictures on one white page, in a row or a column, and saves the result.
 const compose = async (name, pictures, vertical) => {
   const p = await (await browser.newContext({ viewport: { width: 1400, height: 400 }, deviceScaleFactor: 1 })).newPage()
   const imgs = pictures.map((b) => `<img src="data:image/png;base64,${b}" style="display:block">`).join('')
   await p.setContent(`<body style="margin:0;background:#fff"><div id="c" style="display:inline-flex;flex-direction:${vertical ? 'column' : 'row'};gap:8px;padding:8px;align-items:flex-start">${imgs}</div></body>`)
   await p.locator('#c img').last().evaluate((i) => i.decode())
-  writeFileSync(out(name), await p.locator('#c').screenshot())
+  save(name, await p.locator('#c').screenshot())
   await p.close()
 }
 
 // Colors: the cell color tool's bottom row of buttons (7 to 9) above the pen tool's, the pen colors darker versions of the cell colors.
+// The page rectangle that holds every box, padded.
+const around = (boxes, pad) => {
+  const x = Math.min(...boxes.map((b) => b.x))
+  const y = Math.min(...boxes.map((b) => b.y))
+  return { x: x - pad, y: y - pad, width: Math.max(...boxes.map((b) => b.x + b.width)) - x + 2 * pad, height: Math.max(...boxes.map((b) => b.y + b.height)) - y + 2 * pad }
+}
 const rowShot = async (control, panel) => {
   await openPanel(control, panel)
   await quiet()
   const boxes = await Promise.all([7, 8, 9].map((k) => page.locator(`${panel} button[data-key="${k}"]`).boundingBox()))
-  const x = Math.min(...boxes.map((b) => b.x))
-  const y = Math.min(...boxes.map((b) => b.y))
-  return png({ x: x - 4, y: y - 4, width: Math.max(...boxes.map((b) => b.x + b.width)) - x + 8, height: Math.max(...boxes.map((b) => b.y + b.height)) - y + 8 })
+  return png(around(boxes, 4))
 }
 const cellRow = await rowShot('#control-colour', '.tool-colour')
 const penRow = await rowShot('#control-pen', '.tool-pen')
@@ -129,7 +137,7 @@ await edge(5, 1, 'bottom', 4, 6)
 await edge(5, 2, 'right', 2, 4)
 await edge(5, 2, 'bottom', 3, 7)
 await quiet()
-await page.screenshot({ path: out('edges'), clip: gridClip(5, 1, 1, 2) })
+save('edges', await page.screenshot({ clip: gridClip(5, 1, 1, 2) }))
 
 // Corners: a click near a grid corner; 1 click is the X, 2 the circle.
 await pick(5)
@@ -137,7 +145,7 @@ await landing('the corner X', () => clickTimes(...at(7, 2), 1))
 await pick(9)
 await landing('the corner circle', () => clickTimes(...at(7, 3), 2))
 await quiet()
-await page.screenshot({ path: out('corners'), clip: gridClip(6.6, 1.6, 0.8, 1.8) })
+save('corners', await page.screenshot({ clip: gridClip(6.6, 1.6, 0.8, 1.8) }))
 
 // Sliders: the panel's Thickness and Opacity sliders, and a thick line with its white outline over a colored cell.
 const slider = await page.locator('#pen-tool-extras-thickness').boundingBox()
@@ -161,16 +169,16 @@ await pick(9); await drag([[8.5, 5.5], [8.5, 7.5]])
 await quiet()
 const lineOverColor = await png(gridClip(8, 5, 1, 3))
 const controls = await page.locator('.controls-buttons').boundingBox()
-const slidersBox = await page.locator('#pen-tool-extras-thickness').boundingBox()
-const opacityBox = await page.locator('#pen-tool-extras-opacity').boundingBox()
-const top = Math.min(slidersBox.y, opacityBox.y)
-const bottom = Math.max(slidersBox.y + slidersBox.height, opacityBox.y + opacityBox.height)
-const sliderClip = { x: controls.x, y: top - 4, width: opacityBox.x + opacityBox.width - controls.x + 3, height: bottom - top + 8 }
+const opacity = await page.locator('#pen-tool-extras-opacity').boundingBox()
+const rows = around([slider, opacity], 4)
+const sliderClip = { ...rows, x: controls.x, width: opacity.x + opacity.width - controls.x + 3 }
 await compose('sliders', [await png(sliderClip), lineOverColor], true)
 
-// Gear: the pen tool button, with the gear in its corner.
+// Gear: the pen tool button, with the gear in its corner. The color tool is open, so the pen button is not selected and shows its gear.
+await openPanel('#control-colour', '.tool-colour')
+await quiet()
 await page.locator('.pen-tool-extras-gear').waitFor()
-const penButton = await page.locator('#control-pen').boundingBox()
-await page.screenshot({ path: out('gear'), clip: { x: penButton.x - 1, y: penButton.y - 1, width: penButton.width + 2, height: penButton.height + 2 } })
+save('gear', await page.screenshot({ clip: around([await page.locator('#control-pen').boundingBox()], 1) }))
 
+for (const [name, buffer] of taken) writeFileSync(out(name), buffer)
 await browser.close()
