@@ -1,10 +1,5 @@
 // Live check of every script's startup on sudokupad.app, in headless Chromium, at each injection time.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
-// injection time and crackingthecryptic.com stay untested. The injection time matters only while a script
-// starts up, so every other live file injects after Start Puzzle, and this one runs each script at all three:
+// The injection time matters only while a script starts up, so this file runs each script at all three:
 //   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
@@ -14,19 +9,14 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { MODES, openPage, START, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { keydownDefaults, openPenTool, penEntries } from './pen.mjs'
+import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-const MODES = ['document-idle', 'before-start', 'after-start']
-const START = /Start Puzzle|Continue|Resume/i
-// How many scripts-at-a-time pages run at once: each is its own browser context.
 const CONCURRENCY = 5
-// How long one click gets to show its effect before it is made again: SudokuPad binds a new button's click handler a moment late.
-const CLICK_TAKES_MS = 300
 
 const BLACK = 'rgb(0, 0, 0)'
 // The color Digit Color gives an entered 4.
@@ -36,24 +26,14 @@ const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
 
-// A settings entry the way a player finds it: a button in the Experimental group named `text`.
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
   await group.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })
 }
 
-// Clicks until `read` shows `expected`, as long as SETTLE_MS allows; returns the last reading.
-async function clickUntil (p, selector, read, expected) {
-  const deadline = Date.now() + SETTLE_MS
-  let value
-  do {
-    await p.click(selector)
-    value = await settle(read, expected, CLICK_TAKES_MS)
-  } while (JSON.stringify(value) !== JSON.stringify(expected) && Date.now() < deadline)
-  return value
-}
+// Prepended to a before-start injection: records whether the Start Puzzle button shows as the script runs.
+const RECORD_START_SHOWN = `window.__startShownAtInjection = [...document.querySelectorAll('button')].some((b) => ${START}.test(b.textContent) && b.getClientRects().length > 0);\n`
 
-const penValues = (p) => p.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
 const select = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
 
 // Per script: its file, what shows it has started (`ready`), its control (`control`) and one representative action (`act`).
@@ -67,7 +47,7 @@ const SCRIPTS = [
     // The button colors the board's givens.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
-      assert.equal(await clickUntil(p, '#control-colorbydigit', colored, true), true, 'the button colored a cell')
+      assert.equal(await clickUntil(() => p.click('#control-colorbydigit'), colored, true, SETTLE_MS), true, 'the button colored a cell')
     }
   },
   {
@@ -107,12 +87,7 @@ const SCRIPTS = [
     // Tab is swallowed: it leaves the number pad on digits and saves no letter mode. The keydown default is prevented
     // either way, since SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script.
     act: async (p) => {
-      await p.evaluate(() => {
-        window.__keydowns = []
-        window.addEventListener('keydown', (e) => window.__keydowns.push(e.defaultPrevented), { once: true })
-      })
-      await p.keyboard.press('Tab')
-      assert.deepEqual(await p.evaluate(() => window.__keydowns), [true])
+      assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
       const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
       assert.equal(await settle(pad, DIGITS), DIGITS, 'the number pad stayed on digits')
       assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
@@ -125,9 +100,7 @@ const SCRIPTS = [
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await p.evaluate(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
-      // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears.
-      const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-      assert.equal(await clickUntil(p, '#control-pen', shown, true), true, 'the pen tool opened')
+      assert.equal(await openPenTool(p), true, 'the pen tool opened')
     },
     control: (p) => p.locator(PEN_PAGE_BUTTON).waitFor({ state: 'visible' }),
     // Two clicks on one cell edge: SudokuPad's own X, then this script's arrow 'm'.
@@ -138,7 +111,7 @@ const SCRIPTS = [
       })
       // 2 px inside the top edge of cell (2, 2).
       const [x, y] = [x0 + 2.5 * size, y0 + 2 * size + 2]
-      const edge = async () => (await penValues(p)).map((v) => v.split(':')[1][0])
+      const edge = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
       await p.mouse.click(x, y)
       assert.deepEqual(await settle(edge, ['4']), ['4'], 'the first click made SudokuPad\'s X')
       await p.mouse.click(x, y)
@@ -151,29 +124,6 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Loads the puzzle with `code` injected at `mode`, and leaves the page on the board.
-async function load (p, mode, code) {
-  if (mode === 'document-idle') {
-    await p.addInitScript((src) => {
-      document.addEventListener('DOMContentLoaded', () => {
-        window.__fwAtIdle = typeof Framework + '/' + (typeof Framework !== 'undefined' && typeof Framework.getApp)
-        const s = document.createElement('script')
-        s.textContent = src
-        document.documentElement.appendChild(s)
-      })
-    }, code)
-  }
-  await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = p.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  if (mode === 'before-start') await p.addScriptTag({ content: code })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-  if (mode === 'after-start') await p.addScriptTag({ content: code })
-}
-
 describe('startup', { concurrency: CONCURRENCY }, () => {
   for (const script of SCRIPTS) {
     for (const mode of MODES) {
@@ -181,12 +131,9 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
         let context, p, errors
 
         before(async () => {
-          context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-          errors = []
-          p = await context.newPage()
-          p.on('pageerror', (e) => errors.push(String(e)))
-          await routeSudokuPad(p)
-          await load(p, mode, source(script.file))
+          const injection = { mode, code: (mode === 'before-start' ? RECORD_START_SHOWN : '') + source(script.file) }
+          ;({ context, p, errors } = await openPage(browser, { injection }))
+          await startPuzzle(p, { injection })
           await script.ready(p)
         })
         after(async () => { await context.close() })
@@ -196,6 +143,12 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
         if (mode === 'document-idle') {
           it('Framework and getApp exist when the script runs', async () => {
             assert.equal(await p.evaluate(() => window.__fwAtIdle), 'function/function')
+          })
+        }
+
+        if (mode === 'before-start') {
+          it('the Start Puzzle button still shows when the script runs', async () => {
+            assert.equal(await p.evaluate(() => window.__startShownAtInjection), true)
           })
         }
 

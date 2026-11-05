@@ -1,21 +1,16 @@
 // Live check of pen-tool-extras.user.js's settings dialog layout on sudokupad.app in headless Chromium: the sections in their
 // order, the slider columns of Line settings, Line styles and the outline lining up, the Enable boxes under their heading,
 // the button row (Restore defaults, Cancel, Save), and a phone-width dialog that stays inside its screen.
-// Run with `npm run test:live`. It needs the network and a Playwright Chromium, so it is not part of `npm test`.
-//
-// The script is injected into the page after Start Puzzle, not installed through Tampermonkey, so Tampermonkey's real
-// injection time and crackingthecryptic.com stay untested, and so does a touch screen. Every click is real input.
+// A touch screen stays untested. Every click is real input.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const START = /Start Puzzle|Continue|Resume/i
 const SECTIONS = ['Pen colors', 'Line settings', 'Line styles', 'Marks a click cycles through', 'Other', 'Pen line mode']
 
 let browser
@@ -26,25 +21,12 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   let context, p, errors
 
   const editor = () => p.locator('#pen-tool-extras-editor')
-  const openEditor = () => openExtrasEditor(p)
-  const closeWith = (text) => closeExtrasEditorWith(p, text)
-  // The horizontal middle of an element, rounded to a pixel.
   const centreX = (locator) => locator.evaluate((el) => { const box = el.getBoundingClientRect(); return Math.round(box.x + box.width / 2) })
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 1000 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    const start = p.getByRole('button', { name: START }).first()
-    await start.waitFor({ state: 'visible' })
-    await start.click()
-    await start.waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
     await p.evaluate(() => Framework.setSetting('toolpen', true))
@@ -52,28 +34,28 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the sections run Pen colors, Line settings, Line styles, Marks, Other, Pen line mode, each after the first under a divider line', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const order = await editor().evaluate((el, names) => names.map((name) => el.textContent.indexOf(name)), SECTIONS)
     assert.deepEqual(order, [...order].sort((a, b) => a - b), 'in order')
     assert.equal(order.every((at) => at >= 0), true, `all present: ${order}`)
     const dividers = await editor().evaluate((el) => [...el.children].filter((child) => child.children.length === 0 && window.getComputedStyle(child).borderTopWidth === '1px').length)
     assert.equal(dividers, SECTIONS.length - 1)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the SudokuPad colors button looks like Cancel and sits level with the middle row of pickers', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const button = editor().locator('button[data-sudokupad-colors]')
     const look = (locator) => locator.evaluate((el) => { const style = window.getComputedStyle(el); return { background: style.backgroundColor, radius: style.borderTopLeftRadius, align: style.textAlign } })
     assert.deepEqual(await look(button), await look(p.locator('.dialog-options button[data-role="cancel"]')))
     // Both in one read, so a dialog that is still moving into place cannot put them in different frames.
     const [middle, buttonMiddle] = await editor().evaluate((el) => [el.querySelector('input[data-pen="5"]'), el.querySelector('button[data-sudokupad-colors]')].map((e) => { const box = e.getBoundingClientRect(); return Math.round(box.y + box.height / 2) }))
     assert.equal(Math.abs(middle - buttonMiddle) <= 3, true, `middle row ${middle}, button ${buttonMiddle}`)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the sliders of Line settings, Line styles and the outline are in one column, and the Slider in panel, Enable and outline boxes are in another', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const sliders = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => editor().locator(`input[data-setting="${key}"]`))
     const lefts = await Promise.all(sliders.map(left))
     assert.equal(new Set(lefts).size, 1, `slider columns ${lefts}`)
@@ -84,11 +66,11 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     assert.equal(Math.abs((await centreX(heading('Slider in panel'))) - centres[0]) <= 2, true, 'Slider in panel is over its boxes')
     assert.equal(Math.abs((await centreX(heading('Enable'))) - centres[0]) <= 2, true, 'Enable is over its boxes')
     assert.equal(await left(editor().locator('input[data-outline]')) < lefts[0], true, 'the outline box is at the left, not in the slider column')
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its Enable box is unticked', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const label = (key) => editor().locator(`[data-row="${key}"] label`)
     const name = (text) => editor().locator('span', { hasText: new RegExp('^' + text + '$') }).first()
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
@@ -99,23 +81,23 @@ describe('the settings dialog layout', { concurrency: false }, () => {
       await editor().locator(`input[data-style="${style}"]`).check()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), true, `${row} back`)
     }
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the buttons are one row at the bottom: Restore defaults at the left, Cancel and Save at the right', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const [restore, cancel, save] = await p.evaluate(() => ['restore', 'cancel', 'save'].map((role) => { const { x, y, width, height } = document.querySelector(`.dialog-options button[data-role="${role}"]`).getBoundingClientRect(); return { x, y, width, height } }))
     assert.equal(restore.x < cancel.x && cancel.x < save.x, true)
     assert.equal(Math.abs(restore.y + restore.height / 2 - (save.y + save.height / 2)) <= 3, true, 'one row')
     const dialog = await p.locator('.dialog').boundingBox()
     assert.equal(save.x + save.width <= dialog.x + dialog.width, true)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('at a phone width the dialog does not run off the screen sideways', async () => {
     await p.setViewportSize({ width: 390, height: 800 })
     try {
-      await openEditor()
+      await openExtrasEditor(p)
       const fits = await p.evaluate(() => {
         const dialog = document.querySelector('.dialog').getBoundingClientRect()
         const editor = document.getElementById('pen-tool-extras-editor')
@@ -124,7 +106,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
       })
       assert.equal(fits.dialogRight <= fits.width + 1, true, JSON.stringify(fits))
       assert.deepEqual(fits.overflowing, [])
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     } finally {
       await p.setViewportSize({ width: 1200, height: 1000 })
     }

@@ -1,22 +1,18 @@
 // Live check of pen-tool-extras.user.js's edge and corner marks and its opacity slider on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested, and so
-// does replay playback on a puzzle page. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// Replay playback on a puzzle page stays untested.
 // Every click is a real mouse click on the page at an edge's pixel position.
 /* global Replay, Framework, ToolPen, MouseEvent, Node, createImageBitmap, OffscreenCanvas */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
-import { effectiveOpacities, headerVersion, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
-import { settle, SETTLE_MS, stable } from './settle.mjs'
+import { gotoPuzzle, newPage, openPage, restartPuzzle, scaleOf, startPuzzle } from './page.mjs'
+import { closeExtrasEditorWith, dialogButton, effectiveOpacities, openExtrasEditor, openSettings } from './settings.mjs'
+import { cellCentre, openPenTool, penValuesAt, plantSaved, plantUnchecked, setSlider } from './pen.mjs'
+import { settle, stable } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'EdgeMarks_marks'
@@ -27,7 +23,6 @@ const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = createRequire(import.meta
 const MARK_BOXES = ['x', 'directions', 'dot', 'cornerX', 'cornerDot']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const SIZE = 9
-// The cell the cell-mark checks click.
 const CELL_MARK = [5, 5]
 // Pen color 4 with nothing saved: the default first cell color page's color 4, darkened.
 const PEN_4 = 'rgb(113, 159, 23)'
@@ -59,60 +54,17 @@ const CORNERS = {
   'outer bottom, between columns 4 and 5': { corner: [SIZE, 4], stored: [SIZE - 1, 3], cycle: ['u', 'x', null] }
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const START = /Start Puzzle|Continue|Resume/i
-
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
-
-async function newPage (context, errors) {
-  const p = await context.newPage()
-  p.on('pageerror', (e) => errors.push(String(e)))
-  await routeSudokuPad(p)
-  return p
-}
-
-const waitForFramework = (p) => p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-
-// Clicks Start Puzzle.
-async function startPuzzle (p) {
-  await waitForFramework(p)
-  const start = p.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-}
-
-// The page point at the centre of the cell at [row, col].
-const cellCentre = (p, row, col) => p.evaluate(([r, c]) => {
-  const e = Framework.app.puzzle.cells.find((v) => v.row === r && v.col === c).elem.getBoundingClientRect()
-  return [e.x + e.width / 2, e.y + e.height / 2]
-}, [row, col])
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const editor = () => p.locator('#pen-tool-extras-editor')
 
-  // The pen values on the cell at [row, col], without their colors.
-  const penValues = (row, col) => read(([r, c]) => Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c).pen.map((v) => v[0]).sort(), [row, col])
   const penCount = () => read(() => document.querySelectorAll('.cell-pen').length)
-
-  // The pen button toggles the tool, and SudokuPad binds its handler a moment after the
-  // button appears, so it is clicked again until the tool's buttons show.
-  const selectPen = async () => {
-    const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-    const deadline = Date.now() + SETTLE_MS
-    while (!(await shown()) && Date.now() < deadline) {
-      await p.click('#control-pen')
-      await settle(shown, true, 500)
-    }
-  }
 
   // A point 2 px inside the cell, next to the given side: a real click there is an edge click.
   const edgePoint = (row, col, side) => read(([r, c, s]) => {
@@ -125,7 +77,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       top: [e.x + e.width / 2, e.y + pad]
     }[s]
   }, [row, col, side])
-  // The page point of the grid corner [row, col] (0 to SIZE), moved by (dx, dy) cells.
   const cornerPoint = (row, col, dx = 0, dy = 0) => read(([r, c, ox, oy]) => {
     const { rows, cols } = Framework.app.grid
     const e = Framework.app.puzzle.cells.find((x) => x.row === Math.min(r, rows - 1) && x.col === Math.min(c, cols - 1)).elem.getBoundingClientRect()
@@ -165,15 +116,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
-  const openEditor = async () => {
-    await openSettings(p)
-    await settingsEntry().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await dialogButton(text).click()
-    await editor().waitFor({ state: 'detached' })
-  }
   const box = (mark) => editor().locator(`input[data-mark="${mark}"]`)
 
   const boot = async () => {
@@ -183,16 +125,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await read(() => Framework.setSetting('toolpen', true))
     await p.locator('#control-pen').waitFor({ state: 'visible' })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
-    await selectPen()
+    await openPenTool(p)
     await watchMenus()
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await newPage(context, errors)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser))
     await boot()
   })
   after(async () => { await context.close() })
@@ -202,7 +141,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const [sr, sc] = edge.stored
       for (const value of [...edge.cycle, edge.cycle[0]]) {
         await clickEdge(edge.row, edge.col, edge.side)
-        assert.deepEqual(await settle(() => penValues(sr, sc), value === null ? [] : [value]), value === null ? [] : [value], `${name} after a click`)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), value === null ? [] : [value]), value === null ? [] : [value], `${name} after a click`)
         // every drawn mark has a path with data: a mark with no `d` shows nothing
         const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
         assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
@@ -219,7 +158,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const want = (value) => value === null ? [] : [value]
       for (const value of backwards) {
         await clickEdge(edge.row, edge.col, edge.side, 'right')
-        assert.deepEqual(await settle(() => penValues(sr, sc), want(value)), want(value), `${name} after a right click`)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after a right click`)
         const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
         assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
         assert.equal(drawn.length, value === null ? 0 : 1)
@@ -227,7 +166,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // each undo restores the step before it
       for (const value of [...backwards.slice(0, -1).reverse(), null]) {
         await p.click('#control-undo')
-        assert.deepEqual(await settle(() => penValues(sr, sc), want(value)), want(value), `${name} after an undo`)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after an undo`)
       }
       await clearMarks()
     })
@@ -235,13 +174,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a left click after a right click goes forward again, and a right click after it comes back', async () => {
     await clickEdge(3, 3, 'right', 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['i']), ['i'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['i']), ['i'])
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), []), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), []), [])
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
     await clickEdge(3, 3, 'right', 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), []), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), []), [])
     await clearMarks()
   })
 
@@ -253,7 +192,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // a right click in a cell middle stays as SudokuPad has it: a cell mark, and the menu opens
     const [cx, cy] = await cellCentre(p, ...CELL_MARK)
     await p.mouse.click(cx, cy, { button: 'right' })
-    assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'], 'a right click in a cell middle makes the cell mark')
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['5']), ['5'], 'a right click in a cell middle makes the cell mark')
     // a right click off the grid
     await p.mouse.click(5, 5, { button: 'right' })
     assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false])), [true, true, false, false], 'cell middle, then off the grid')
@@ -271,16 +210,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await settle(() => read(() => Framework.app.tool), 'normal'), 'normal')
     await clickEdge(3, 3, 'right', 'right')
     assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false, true, false, false])), [true, true, false, false, true, false, false], 'other tool')
-    await selectPen()
+    await openPenTool(p)
     await clearMarks()
   })
 
   it('the other side of an interior edge reaches the same mark', async () => {
     await clickEdge(3, 4, 'left')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
-    assert.deepEqual(await penValues(3, 4), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
+    assert.deepEqual(await penValuesAt(p, 3, 4), [])
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['j']), ['j'])
     await clearMarks()
   })
 
@@ -291,7 +230,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const [cx, cy] = await cornerPoint(...corner)
       for (const value of [...cycle, cycle[0]]) {
         await clickCorner(...corner)
-        assert.deepEqual(await settle(() => penValues(sr, sc), want(value)), want(value), `${name} after a click`)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after a click`)
         const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
         assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
         assert.equal(drawn.length, value === null ? 0 : 1)
@@ -307,11 +246,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const backwards = [...cycle.slice(0, -1).reverse(), null]
       for (const value of backwards) {
         await clickCorner(...corner, 'right')
-        assert.deepEqual(await settle(() => penValues(sr, sc), want(value)), want(value), `${name} after a right click`)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after a right click`)
       }
       for (const value of [...backwards.slice(0, -1).reverse(), null]) {
         await p.click('#control-undo')
-        assert.deepEqual(await settle(() => penValues(sr, sc), want(value)), want(value), `${name} after an undo`)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after an undo`)
       }
       await clearMarks()
     })
@@ -319,14 +258,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('an inner corner is one mark, whichever of the four cells around it the click lands in', async () => {
     await clickCorner(3, 3, 'left', 0.1, 0.1)
-    assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
     await clickCorner(3, 3, 'left', -0.1, 0.1)
-    assert.deepEqual(await settle(() => penValues(2, 2), ['x']), ['x'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['x']), ['x'])
     await clickCorner(3, 3, 'left', 0.1, -0.1)
-    assert.deepEqual(await settle(() => penValues(2, 2), []), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), []), [])
     await clickCorner(3, 3, 'left', -0.1, -0.1)
-    assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
-    for (const [r, c] of [[2, 3], [3, 2], [3, 3]]) assert.deepEqual(await penValues(r, c), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
+    for (const [r, c] of [[2, 3], [3, 2], [3, 3]]) assert.deepEqual(await penValuesAt(p, r, c), [])
     await clearMarks()
   })
 
@@ -334,18 +273,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clickCorner(3, 3)
     await clickEdge(2, 2, 'right')
     await clickCellCentre(2, 2)
-    assert.deepEqual(await settle(() => penValues(2, 2), ['3', '5', 'u']), ['3', '5', 'u'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['3', '5', 'u']), ['3', '5', 'u'])
     await clickCorner(3, 3)
-    assert.deepEqual(await settle(() => penValues(2, 2), ['3', '5', 'x']), ['3', '5', 'x'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['3', '5', 'x']), ['3', '5', 'x'])
     await clearMarks()
   })
 
   it(`the corner zone is ${CORNER_RADIUS} of a cell: just inside is a corner mark, just outside along an edge is the edge mark`, async () => {
     // 0.17 of a cell up the side from the corner is inside; 0.23 is in the edge zone
     await clickCorner(3, 4, 'left', -0.02, -0.17)
-    assert.deepEqual(await settle(() => penValues(2, 3), ['u']), ['u'], 'inside the zone')
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 3), ['u']), ['u'], 'inside the zone')
     await clickCorner(3, 4, 'left', -0.02, -0.23)
-    assert.deepEqual(await settle(() => penValues(2, 3), ['3', 'u']), ['3', 'u'], 'outside the zone: the edge mark')
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 3), ['3', 'u']), ['3', 'u'], 'outside the zone: the edge mark')
     await clearMarks()
   })
 
@@ -381,7 +320,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const before = (await menuLog()).length
     await p.mouse.click(found[0], found[1], { button: 'right' })
     assert.deepEqual(await settle(async () => (await menuLog()).slice(before), [true]), [true])
-    assert.deepEqual(await settle(() => penValues(2, 2), ['x']), ['x'], 'the corner mark, stepped backwards from empty')
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['x']), ['x'], 'the corner mark, stepped backwards from empty')
     await clearMarks()
   })
 
@@ -395,10 +334,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(actions.includes('pe:u/0'), true, JSON.stringify(actions))
     assert.equal(actions.includes('pe:v/0') && actions.includes('pe:y/0'), true, `the far corner X, then the circle: ${JSON.stringify(actions)}`)
     await clearMarks()
-    assert.deepEqual(await penValues(2, 2), [])
+    assert.deepEqual(await penValuesAt(p, 2, 2), [])
     await read((r) => Framework.app.loadReplay(r), replay)
-    assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
-    assert.deepEqual(await settle(() => penValues(0, SIZE - 1), ['y']), ['y'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 0, SIZE - 1), ['y']), ['y'])
     const drawn = await read(() => [...document.querySelectorAll('.cell-pen.pen-u, .cell-pen.pen-y')].map((e) => e.getAttribute('d')))
     assert.deepEqual(drawn.filter((d) => !d), [])
     assert.equal(new Set(drawn).size, 2, 'the X on the inner corner and the circle on the far corner')
@@ -408,21 +347,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('a corner mark survives a reload of the page', async () => {
     await clickCorner(3, 3)
     await clickCorner(SIZE, SIZE)
-    assert.deepEqual(await settle(() => penValues(8, 8), ['u']), ['u'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 8, 8), ['u']), ['u'])
     await reload()
-    assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
-    assert.deepEqual(await settle(() => penValues(8, 8), ['u']), ['u'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 8, 8), ['u']), ['u'])
     const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
     assert.deepEqual(drawn.filter((d) => !d), [])
     assert.equal(drawn.length, 2)
     await clearMarks()
   })
 
-  // The thickness slider's value set the way a drag sets it, with the pen tool on.
-  const setThickness = async (value) => {
-    await selectPen()
-    await p.locator('#pen-tool-extras-thickness').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-  }
+  const setThickness = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
   // How far the first pen mark's drawn extent, stroke included and scale applied, reaches past the grid's cells, in page pixels.
   const reach = () => read(() => {
     const mark = document.querySelector('.cell-pen')
@@ -470,7 +405,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setThickness(5)
   })
 
-  it('edge and corner marks keep their size up to thickness 5, are about 1.27 times at 10 and 1.6 times at 16, and stay centred on their edge or corner; lines do not grow', async () => {
+  it('edge and corner marks are about 1.27x at 10 and 1.6x at 16 of their size at 5, and stay centred', async () => {
     const boxOf = (selector) => read((sel) => {
       const r = document.querySelector(sel)?.getBoundingClientRect()
       return r ? { w: r.width, h: r.height, x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
@@ -557,14 +492,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('one undo reverses one click and redo restores it', async () => {
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['j']), ['j'])
     await p.click('#control-undo')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
     await p.click('#control-redo')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['j']), ['j'])
     await p.click('#control-undo')
     await p.click('#control-undo')
-    assert.deepEqual(await settle(() => penValues(3, 3), []), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), []), [])
     await clearMarks()
   })
 
@@ -584,18 +519,23 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('the edge circle (stored under the dot value) is an open ring with a round stroke at half the pen width, and no fill', async () => {
     for (let i = 0; i < 2; i++) await clickEdge(3, 3, 'right')
     const ring = () => read(() => {
+      // Two arcs of one radius r, from the left end of a diameter round to the right end and back: `m -r,0 a r,r 0 1,0 2r,0 a r,r 0 1,0 -2r,0`.
+      const isCircle = (d) => {
+        const m = /^m -([\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 ([\d.]+),0 a \2,\3 0 1,0 -\4,0$/.exec(d)
+        return Boolean(m) && m[1] === m[2] && m[2] === m[3] && Math.abs(2 * m[2] - m[4]) < 0.01
+      }
       const e = document.querySelector('.cell-pen.pen-j')
       if (!e) return null
       const s = window.getComputedStyle(e)
-      return { cap: s.strokeLinecap, width: s.strokeWidth, fill: s.fill, d: e.getAttribute('d').replace(/^M[\d. ]+ /, '') }
+      return { cap: s.strokeLinecap, width: s.strokeWidth, fill: s.fill, circle: isCircle(e.getAttribute('d').replace(/^M[\d. ]+ /, '')) }
     })
-    const want = { cap: 'round', width: '2.5px', fill: 'none', d: 'm -6.64,0 a 6.64,6.64 0 1,0 13.28,0 a 6.64,6.64 0 1,0 -13.28,0' }
+    const want = { cap: 'round', width: '2.5px', fill: 'none', circle: true }
     assert.deepEqual(await settle(ring, want), want)
     await clearMarks()
   })
 
   it('the dialog shows one table of marks: a picture and no word beside each box, the mark\'s name as the box\'s name and hover title', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const labels = editor().locator('label:has(> input[data-mark])')
     assert.equal(await labels.count(), 5)
     const names = { x: 'Edge X Mark', dot: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerDot: 'Corner Circle' }
@@ -605,20 +545,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await editor().locator(`label:has(> input[data-mark="${mark}"])`).textContent()).trim(), '', `${mark} has no word`)
       assert.equal((await p.getByRole('checkbox', { name: names[mark] }).count()), 1, `${mark} is found by its name`)
     }
-    const text = await editor().textContent()
-    assert.match(text, /Marks a click cycles through/)
-    assert.match(text, /X Mark\s*Circle\s*Directions\s*Edge\s*Corner/)
-    assert.doesNotMatch(text, /Corner marks a click near a grid corner/)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('cell marks and drawn lines still work', async () => {
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'])
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['5']), ['5'])
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['6']), ['6'])
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['6']), ['6'])
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValues(...CELL_MARK), []), [])
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), []), [])
     // a drag draws a line, not an edge mark
     const before = await penCount()
     const [x, y] = await cellCentre(p, 6, 1)
@@ -645,150 +581,129 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('The dialog has five mark boxes (three for edges, two for corners), all ticked on a fresh install', async () => {
     assert.equal(await saved(), null)
-    await openEditor()
+    await openExtrasEditor(p)
     for (const mark of MARK_BOXES) assert.equal(await box(mark).isChecked(), true, mark)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('Cancel saves nothing and changes nothing', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     await box('directions').uncheck()
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await saved(), null)
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['j']), ['j'])
     await clearMarks()
   })
 
   it('unticking Directions skips both directions and the boxes survive a reload', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     await box('directions').uncheck()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await saved(), { ...ALL_TICKED, directions: false })
     await reload()
     assert.deepEqual(await saved(), { ...ALL_TICKED, directions: false })
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await box('x').isChecked(), true)
     assert.equal(await box('directions').isChecked(), false)
     assert.equal(await box('dot').isChecked(), true)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     for (const value of ['3', 'j', null]) {
       await clickEdge(3, 3, 'right')
-      assert.deepEqual(await settle(() => penValues(3, 3), value === null ? [] : [value]), value === null ? [] : [value])
+      assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), value === null ? [] : [value]), value === null ? [] : [value])
     }
   })
 
   it('a mark whose type is unticked stays until clicked, then moves on', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     await box('directions').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
-    await openEditor()
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['j']), ['j'])
+    await openExtrasEditor(p)
     await box('dot').uncheck()
-    await closeWith('Save')
-    assert.deepEqual(await penValues(3, 3), ['j'])
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await penValuesAt(p, 3, 3), ['j'])
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'])
-    await openEditor()
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['h']), ['h'])
+    await openExtrasEditor(p)
     await box('dot').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
   })
 
   it('with both corner boxes unticked a click on a corner is the edge click it was before, and one box ticked cycles only that mark', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     await box('cornerX').uncheck()
     await box('cornerDot').uncheck()
-    await closeWith('Save')
-    // Cleared so that the click under test starts from an empty grid.
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
     await clickCorner(3, 3, 'left', 0, 0.01)
     // by SudokuPad's own arithmetic a click on a corner comes out as an edge mark
-    const held = await settle(async () => (await penValues(2, 2)).length, 1)
+    const held = await settle(async () => (await penValuesAt(p, 2, 2)).length, 1)
     assert.equal(held, 1)
-    assert.equal(['3', '4'].includes((await penValues(2, 2))[0]), true, `got ${await penValues(2, 2)}`)
+    assert.equal(['3', '4'].includes((await penValuesAt(p, 2, 2))[0]), true, `got ${await penValuesAt(p, 2, 2)}`)
     await clearMarks()
-    await openEditor()
+    await openExtrasEditor(p)
     await box('cornerDot').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
     await clickCorner(3, 3)
-    assert.deepEqual(await settle(() => penValues(2, 2), ['x']), ['x'], 'only the circle is ticked')
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['x']), ['x'], 'only the circle is ticked')
     await clickCorner(3, 3)
-    assert.deepEqual(await settle(() => penValues(2, 2), []), [])
-    await openEditor()
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), []), [])
+    await openExtrasEditor(p)
     await box('cornerX').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
   })
 
   it('with nothing ticked an edge click does nothing, and cell marks and existing marks are unaffected', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     await box('directions').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clickEdge(3, 3, 'right')
-    assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
-    await openEditor()
+    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
+    await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).uncheck()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     const undoable = await read(() => Framework.app.puzzle.undoStack.length)
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'bottom')
     // "nothing happened in 500 ms" check
     await sleep(500)
-    assert.deepEqual(await penValues(3, 3), ['3'])
+    assert.deepEqual(await penValuesAt(p, 3, 3), ['3'])
     assert.equal(await read(() => Framework.app.puzzle.undoStack.length), undoable)
     await clickCellCentre(...CELL_MARK)
-    assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'])
-    await openEditor()
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['5']), ['5'])
+    await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
   })
 
   it('corrupt saved settings fall back to every mark ticked with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"x":"no"}']) {
-      await read(([k, raw]) => {
-        const key = Object.keys(window.localStorage).find((n) => n.endsWith(k))
-        if (!key) throw new Error('no stored key for ' + k)
-        window.localStorage.setItem(key, raw)
-      }, [DATA_KEY, bad])
+      await plantSaved(p, DATA_KEY, bad)
       await reload()
       await clickEdge(3, 3, 'right')
       await clickEdge(3, 3, 'right')
-      assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'], bad)
+      assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['j']), ['j'], bad)
       await clearMarks()
       // the dialog shows the defaults too, so Save cannot store the corrupt value
-      await openEditor()
+      await openExtrasEditor(p)
       for (const mark of MARK_BOXES) assert.equal(await box(mark).isChecked(), true, `${bad}: ${mark}`)
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     }
     assert.deepEqual(errors.slice(errorsBefore), [])
   })
 
-  it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
-    const group = await openSettings(p)
-    const entry = group.locator('button').filter({ hasText: 'Pen tool extras' })
-    assert.equal((await entry.textContent()).trim(), 'Pen tool extras')
-    await entry.click()
-    await editor().waitFor({ state: 'visible' })
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen tool extras')
-    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-    await closeWith('Cancel')
-  })
-
   describe('opacity', { concurrency: false }, () => {
-    // The slider in the pen tool's panel. The real drag is checked in pen-tool-extras-panel.live.mjs;
-    // these checks only need the value set, with the same `input` event a drag fires.
     const slider = () => p.locator('#pen-tool-extras-opacity')
-    const setSlider = async (value) => {
-      await selectPen()
-      await slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-    }
+    const setOpacity = (value) => setSlider(p, '#pen-tool-extras-opacity', value)
     const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
     // The pen value (`pen-<value>` class) and the opacity each drawn mark shows at, without repeats.
     const opacities = async () => {
@@ -796,7 +711,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const values = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
       return [...new Set(values.map((v, i) => `${v}:${shown[i]}`))].sort()
     }
-    // Draws a free line (a drag), a cell circle, a cell cross, an edge X and a corner X.
     const drawAll = async () => {
       // Marks outlive a reload, and the edge and corner clicks cycle from what is there.
       await clearMarks()
@@ -810,12 +724,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await clickCellCentre(...CELL_CIRCLE)
       await clickEdge(3, 3, 'right')
       await clickCorner(3, 3)
-      assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
-      assert.deepEqual(await settle(() => penValues(2, 2), ['u']), ['u'])
-      assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['6']), ['6'])
-      assert.deepEqual(await settle(() => penValues(...CELL_CIRCLE), ['5']), ['5'])
+      assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
+      assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
+      assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['6']), ['6'])
+      assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_CIRCLE), ['5']), ['5'])
     }
-    // The cell the cell circle is clicked into, apart from CELL_MARK.
     const CELL_CIRCLE = [1, 1]
     // The pen values SudokuPad draws a free line's segments with (docs/research/sudokupad-pen-edge-marks.md).
     const LINE_VALUES = ['1', '2', 'a', 'd', 'e', 'f', 'g', '7', '8', '9']
@@ -841,21 +754,24 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(seen.some((x) => x.startsWith('5:')), true, 'the cell circle')
       assert.equal(seen.some((x) => LINE_VALUES.includes(x.split(':')[0])), true, `a free line: ${seen}`)
       assert.equal(await sameAt('0.8')(), true, seen.join(' '))
-      await selectPen()
+      await openPenTool(p)
       assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
     })
 
     it('at the default the grid matches SudokuPad\'s own per-stroke opacity to within a few levels per channel, where marks do not overlap', async () => {
       // The white outline (on by default) is a filter on the layer, which fading the layer as one picture and fading each stroke do not agree on; it is left out of both pictures.
-      await read(() => {
+      // Drops every line of the script's style that matches `drop` and returns the style's length before and after.
+      const dropLines = (drop) => read((source) => {
         const style = document.getElementById('pen-tool-extras-style')
-        style.textContent = style.textContent.split('\n').filter((line) => !/filter: url/.test(line)).join('\n')
-      })
+        const before = style.textContent.length
+        style.textContent = style.textContent.split('\n').filter((line) => !new RegExp(source).test(line)).join('\n')
+        return [before, style.textContent.length]
+      }, drop.source)
+      const [filterBefore, filterAfter] = await dropLines(/filter: url/)
+      assert.equal(filterAfter < filterBefore, true, `the outline filter line was in the style: ${filterBefore} then ${filterAfter}`)
       const withRule = await grid()
-      await read(() => {
-        const style = document.getElementById('pen-tool-extras-style')
-        style.textContent = style.textContent.split('\n').filter((line) => !/^:root:root (\.cell-pen|#cell-pen)[ ,].*\{ opacity/.test(line)).join('\n')
-      })
+      const [ruleBefore, ruleAfter] = await dropLines(/^:root:root (\.cell-pen|#cell-pen)[ ,].*\{ opacity/)
+      assert.equal(ruleAfter < ruleBefore, true, `the opacity rule was in the style: ${ruleBefore} then ${ruleAfter}`)
       assert.equal(await sameAt('0.8')(), true, 'SudokuPad\'s own rule gives 0.8 alone')
       const without = await grid()
       // Fading the layer as one picture and fading each stroke differ only in rounding where nothing overlaps.
@@ -875,14 +791,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('moving the slider changes every mark\'s opacity live and saves it at once, without saving the colors', async () => {
-      await setSlider(40)
+      await setOpacity(40)
       assert.equal(await settle(sameAt('0.4'), true), true, (await opacities()).join(' '))
       assert.equal(await savedOpacity(), 40)
       assert.equal(await read((k) => Framework.getData(k), COLORS_KEY), null)
     })
 
     it('undo, redo and replay leave the opacity alone, and a reload keeps it', async () => {
-      await setSlider(30)
+      await setOpacity(30)
       assert.equal(await savedOpacity(), 30)
       assert.equal(await settle(sameAt('0.3'), true), true)
       const before = await read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])).sort())
@@ -894,7 +810,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await read((r) => Replay.decode(r).actions.some((a) => /opacity/i.test(a)), replay), false, 'the replay holds no opacity')
       await clearMarks()
       await read((r) => Framework.app.loadReplay(r), replay)
-      assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
+      assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
       assert.equal(await settle(sameAt('0.3'), true), true, 'after loading the replay')
       await reload()
       assert.equal(await settle(sameAt('0.3'), true), true, 'after a reload')
@@ -902,18 +818,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('Restore defaults sets the dialog\'s opacity slider to 80 for Save: Cancel afterwards leaves the saved opacity and the marks, Save clears it and draws at 0.8', async () => {
       assert.equal(await savedOpacity(), 30)
-      await openEditor()
+      await openExtrasEditor(p)
       assert.equal(await editor().locator('input[type=range]').count(), 5)
-      await dialogButton('Restore defaults').click()
+      await dialogButton(p, 'Restore defaults').click()
       assert.equal(await editor().locator('input[data-setting="opacity"]').inputValue(), '80')
       assert.equal(await savedOpacity(), 30, 'nothing is saved before Save')
       assert.equal(await settle(sameAt('0.3'), true), true)
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await savedOpacity(), 30)
       assert.equal(await settle(sameAt('0.3'), true), true)
-      await openEditor()
-      await dialogButton('Restore defaults').click()
-      await closeWith('Save')
+      await openExtrasEditor(p)
+      await dialogButton(p, 'Restore defaults').click()
+      await closeExtrasEditorWith(p, 'Save')
       assert.equal(await savedOpacity(), null)
       assert.equal(await settle(() => slider().inputValue(), '80'), '80')
       assert.equal(await settle(sameAt('0.8'), true), true)
@@ -922,11 +838,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('corrupt saved opacity falls back to 0.8 with no thrown error', async () => {
       const errorsBefore = errors.length
       for (const bad of ['{not json', '"40"', '99', '0', '37', '[40]', 'null', '105']) {
-        await read(([k, raw]) => { window.localStorage.setItem(Framework.makeDataKey(k), raw) }, [OPACITY_KEY, bad])
+        await plantUnchecked(p, OPACITY_KEY, bad)
         await reload()
         await drawAll()
         assert.equal(await settle(sameAt('0.8'), true), true, bad)
-        await selectPen()
+        await openPenTool(p)
         assert.equal(await slider().inputValue(), '80', bad)
         await clearMarks()
       }
@@ -971,7 +887,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     for (const text of ['Save', 'Cancel']) {
       it(`${text} leaves no pen mark under the button`, async () => {
-        const [x, y] = await probedPoint(openEditor, () => dialogButton(text))
+        const [x, y] = await probedPoint(() => openExtrasEditor(p), () => dialogButton(p, text))
         await p.mouse.click(x, y)
         await editor().waitFor({ state: 'detached' })
         assert.equal(await anyMark(), false)
@@ -987,7 +903,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.click(x, y)
       await editor().waitFor({ state: 'visible' })
       assert.equal(await anyMark(), false)
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     })
   })
 
@@ -1034,7 +950,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const releases = () => read(() => window.__releases)
 
     it('a press over the grid on this script\'s dialog closes it and leaves no pen mark', async () => {
-      await openEditor()
+      await openExtrasEditor(p)
       await clearMarks()
       await restPointer()
       await pressOverlay(await corner())
@@ -1043,7 +959,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('a click on the grid after that press still makes a mark', async () => {
-      await openEditor()
+      await openExtrasEditor(p)
       await clearMarks()
       const point = await corner()
       await pressOverlay(point)
@@ -1064,7 +980,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('the release of a press on this script\'s dialog does not reach the page', async () => {
-      await openEditor()
+      await openExtrasEditor(p)
       await countReleases()
       await pressOverlay(OFF_DIALOG)
       await editor().waitFor({ state: 'detached' })
@@ -1080,14 +996,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 describe('without the script', { concurrency: false }, () => {
   it('a replay holding these values loads with no page error, and the values draw nothing', async () => {
     // First page: the script, to record a replay with every kind of added mark.
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    const errors = []
+    const { context, p: withScript } = await openPage(browser)
     try {
-      const withScript = await newPage(context, [])
-      await withScript.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await withScript.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-      await withScript.addScriptTag({ content: script })
-      await startPuzzle(withScript)
+      await startPuzzle(withScript, { injection: { mode: 'before-start', code: script } })
       const replay = await withScript.evaluate(() => {
         const { app } = Framework
         const cell = app.puzzle.cells.find((c) => c.row === 3 && c.col === 3)
@@ -1101,8 +1012,8 @@ describe('without the script', { concurrency: false }, () => {
       await withScript.close()
 
       // Second page: no script. Load the replay.
-      const bare = await newPage(context, errors)
-      await bare.goto(url, { waitUntil: 'load', timeout: 60000 })
+      const { p: bare, errors } = await newPage(context)
+      await gotoPuzzle(bare)
       await startPuzzle(bare)
       await bare.evaluate((r) => Framework.app.loadReplay(r), replay)
       await bare.waitForFunction(() => Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).pen.length === 18, null, { timeout: 15000 })
@@ -1133,12 +1044,11 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   }
   for (const [member, remove] of Object.entries(REMOVALS)) {
     it(`${member} gone: one report that marks are off`, async () => {
-      const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
       const warnings = []
+      const { context, p } = await openPage(browser, {
+        seed: (page) => page.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+      })
       try {
-        const p = await newPage(context, [])
-        p.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
-        await p.goto(url, { waitUntil: 'load', timeout: 60000 })
         await startPuzzle(p)
         await p.evaluate(`(${remove})()`)
         await p.addScriptTag({ content: script })
@@ -1151,13 +1061,11 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   }
 
   it('logs one report, turns marks off, and the pen tool still works', async () => {
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    const errors = []
     const warnings = []
+    const { context, p, errors } = await openPage(browser, {
+      seed: (page) => page.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
+    })
     try {
-      const p = await newPage(context, errors)
-      p.on('console', (m) => { if (m.type() === 'error' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
       await startPuzzle(p)
       // `_actList` is the field the click wrap reads; SudokuPad's own `actStart` recreates it
       // on the first click, so the pen tool still works.
@@ -1167,12 +1075,7 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       await settle(async () => warnings.length, 1)
       assert.equal(warnings.length, 1)
-      const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-      const deadline = Date.now() + SETTLE_MS
-      while (!(await shown()) && Date.now() < deadline) {
-        await p.click('#control-pen')
-        await settle(shown, true, 500)
-      }
+      await openPenTool(p)
       const pen = () => p.evaluate(() => Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).pen.map((v) => v[0]))
       const [x, y] = await p.evaluate(() => {
         const e = Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3).elem.getBoundingClientRect()

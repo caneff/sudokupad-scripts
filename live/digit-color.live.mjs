@@ -1,22 +1,17 @@
 // Live check of digit-color.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
-import { headerVersion, openSettings } from './settings.mjs'
+import { openPage, PUZZLE_URL, startPuzzle } from './page.mjs'
+import { closeDialogWith, dialogButton, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
+import { plantSaved } from './pen.mjs'
 import { settle } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../digit-color.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'DigitColor_colors'
+const EDITOR = '#digit-color-editor'
 // SudokuPad's own colors, read off the page with no script installed.
 const GIVEN_FILL = 'rgb(0, 0, 0)'
 const DEFAULT_FILL = 'rgb(29, 106, 229)'
@@ -33,7 +28,6 @@ const CLIP_BEFORE = 3
 const CLIP_AFTER = 5
 // A pixel is ink when it differs between the two screenshots by at least this fraction of the largest difference.
 const INK_FRACTION = 0.5
-// Hides every mark and the circles, then shows only the mark carrying the probe attribute.
 const INK_PROBE_CSS = '#cell-pencilmarks text, #cell-candidates text, #cell-candidates tspan { visibility: hidden !important } #digit-color-circles { display: none !important } #cell-pencilmarks [data-ink-probe], #cell-candidates [data-ink-probe] { visibility: visible !important }'
 // Per digit, a row with that digit given and two empty cells in it that no other check here fills with a digit, so a mark of the digit
 // in either cell is in SudokuPad's conflict state: [row, corner mark's column, centre mark's column].
@@ -41,7 +35,6 @@ const CONFLICT_CELLS = {
   1: [1, 1, 2], 2: [5, 1, 2], 3: [4, 6, 7], 4: [4, 1, 2], 5: [7, 0, 1], 6: [2, 0, 3], 7: [8, 5, 6], 8: [3, 1, 2], 9: [1, 7, 8]
 }
 const CIRCLES = '#digit-color-circles'
-// A mark in SudokuPad's conflict state, per place on the board.
 const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
 // The default colors (issue #7), as the dialog's #rrggbb. The map is the independent source
 // the saved value is compared with; RGB is the same colors as the page computes them.
@@ -49,11 +42,9 @@ const DEFAULTS = {
   0: '#4b5563', 1: '#b0125b', 2: '#b04a00', 3: '#7a6200', 4: '#1b7a2f', 5: '#00736f', 6: '#0059c9', 7: '#3d2bb8', 8: '#8a1fa8', 9: '#5e3a1a'
 }
 const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 5: 'rgb(0, 115, 111)', 6: 'rgb(0, 89, 201)' }
-// The colors the checks choose.
 const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
 const EIGHT = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
 
-const START = /Start Puzzle|Continue|Resume/i
 const STYLE = '#digit-color-style'
 
 let browser
@@ -64,9 +55,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, decoder, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const editor = () => p.locator('#digit-color-editor')
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-  const startButton = () => p.getByRole('button', { name: START }).first()
+  const editor = () => p.locator(EDITOR)
 
   // One computed style property of the elements that show `digit`, per place on the board.
   // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
@@ -166,35 +155,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
 
   const boot = async () => {
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    await startButton().waitFor({ state: 'visible' })
-    await startButton().click()
-    await startButton().waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator(STYLE).waitFor({ state: 'attached' })
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = async () => {
-    await openSettings(p)
-    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Digit color' }).first().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await dialogButton(text).click()
-    await editor().waitFor({ state: 'detached' })
-  }
+  const openEditor = () => openScriptDialog(p, 'Digit color', EDITOR)
   const pick = (digit, hex) => editor().locator(`input[data-digit="${digit}"]`).fill(hex)
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
+    ;({ context, p, errors } = await openPage(browser))
     // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
     decoder = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
     await boot()
   })
   after(async () => { await context.close() })
@@ -213,13 +185,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openEditor()
     const values = await editor().locator('input[type=color]').evaluateAll((es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.value])))
     assert.deepEqual(values, DEFAULTS)
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   it('Cancel saves nothing and changes no color', async () => {
     await openEditor()
     await pick('4', FOUR.hex)
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
     assert.equal(await saved(), null)
     assert.deepEqual(await allFills('entered', '4')(), [DEFAULT_RGB[4]])
   })
@@ -230,13 +202,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await pick('8', EIGHT.hex)
     await editor().locator('button[data-act=own][data-digit="6"]').click()
     await editor().locator('button[data-act=own][data-digit="7"]').click()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await saved(), { ...DEFAULTS, 4: FOUR.hex, 8: EIGHT.hex, 6: null, 7: null })
     assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
   })
 
   it('givens keep their color, with a color set for the same digit', async () => {
-    assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
+    assert.deepEqual(await allFills('given', '4')(), [GIVEN_FILL])
+    assert.deepEqual(await allFills('given', '8')(), [GIVEN_FILL])
   })
 
   it('corner marks and centre marks take the digit\'s color; a digit on SudokuPad\'s own color keeps it', async () => {
@@ -485,7 +458,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await read(async (id) => {
         const { parsePuzzleData, fetchPuzzle } = window.pageLoader
         await Framework.app.loadCTCPuzzle(await parsePuzzleData(await fetchPuzzle(id)))
-      }, url.replace(/^https?:\/\/[^/]+\//, ''))
+      }, PUZZLE_URL.replace(/^https?:\/\/[^/]+\//, ''))
       // The old givens are gone once the new board is drawn.
       await p.waitForFunction(() => document.querySelectorAll('#cell-givens text:not([data-old-board])').length > 0)
       await enter(0, 3, '4')
@@ -503,7 +476,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('a digit can be set back to SudokuPad\'s own color from the dialog', async () => {
     await openEditor()
     await editor().locator('button[data-act=own][data-digit="4"]').click()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await saved(), { ...DEFAULTS, 4: null, 8: EIGHT.hex, 6: null, 7: null })
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
   })
@@ -519,8 +492,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('Restore defaults brings back every default color', async () => {
     await openEditor()
-    await dialogButton('Restore defaults').click()
-    await closeWith('Save')
+    await dialogButton(p, 'Restore defaults').click()
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await saved(), DEFAULTS)
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
     assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_RGB[6]])
@@ -529,11 +502,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('corrupt saved settings fall back to the default colors with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
-      await read(([k, raw]) => {
-        const key = Object.keys(window.localStorage).find((n) => n.endsWith(k))
-        if (!key) throw new Error('no stored key for ' + k)
-        window.localStorage.setItem(key, raw)
-      }, [DATA_KEY, bad])
+      await plantSaved(p, DATA_KEY, bad)
       await reload()
       assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]], bad)
     }
@@ -548,7 +517,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await editor().waitFor({ state: 'visible' })
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit color')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   it('no uncaught page errors', () => {
