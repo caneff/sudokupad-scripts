@@ -1094,7 +1094,7 @@
   ])
   // The marks that grow with thickness: the edge X marks and every mark this script adds.
   const GROWING_MARKS = [...EDGE_X, ...ADDED_MARKS.keys()]
-  const MARK_VALUES = [...GROWING_MARKS, '5', '6']
+  const MARK_VALUES = [...EDGE_X, '5', '6', ...ADDED_MARKS.keys()]
 
   // Data saved before the corner boxes existed has no corner entry, so both read as ticked. A circle box saved under its old name reads as the new one, which wins when both are
   // there; the result holds only the new names, so the next save writes those.
