@@ -90,6 +90,8 @@ There are three pages of nine pens, for 27, using the same nine colors.
 | 2 | Dashed lines, or dots with a Dash length of 0 |
 | 3 | A line with a run of arrows (filled triangles), pointing the way you dragged |
 
+Each pen color button shows a picture of its line in the pen's color: a solid line on page 1, dashes on page 2, arrows on page 3. The color tool's buttons keep SudokuPad's own swatches.
+
 Only lines change with the page. A cell circle, a cross and the edge and corner marks stay solid.
 
 **Changing page**, the way the cell color tool does:
