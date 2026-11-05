@@ -1584,7 +1584,7 @@
     if (lineMode === undefined) return ''
     const options = LINE_MODES.map(([value, label]) => `<option value="${value}"${value === lineMode ? ' selected' : ''}>${label}</option>`).join('')
     return sectionHeading('Pen line mode') +
-      `<select data-line-mode style="margin:4px 0;font-size:1rem">${options}</select>`
+      `<select data-line-mode>${options}</select>`
   }
 
   // The saved mode: SudokuPad's pen tool holds its default until it first opens and reads the saved mode then, and with the pulldown hidden only this dialog changes it. It does not
@@ -1695,21 +1695,24 @@
 
   function offNote (off) {
     if (!off.length) return ''
-    return `<div style="margin:6px 0;max-width:20em">Off because SudokuPad changed: ${off.join(', ')}</div>`
+    return `<div class="${NOTE}">Off because SudokuPad changed: ${off.join(', ')}</div>`
   }
 
   function missingNote (missing) {
     if (!missing.length) return ''
     const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
-    return `<div style="margin:6px 0;max-width:20em">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
+    return `<div class="${NOTE}">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
 
-  const sectionHeading = (text) => `${DIVIDER}<div style="font-weight:600;margin-top:10px">${text}</div>`
+  const sectionHeading = (text) => `${DIVIDER}<div class="${SECTION_TITLE}">${text}</div>`
 
-  // The dialog's slider rows share four columns, so the sliders of Line settings, Line styles and the outline line up. The first two shrink on a narrow dialog.
-  const SLIDER_COLUMNS = 'display:grid;grid-template-columns:minmax(6em,12.5em) minmax(5em,11em) 2em 6.2em;column-gap:8px;align-items:center;margin:4px 0'
-  const COLUMN_HEADING = 'font-size:.8rem;color:#666;font-weight:400;justify-self:center;white-space:nowrap'
-  const DIVIDER = '<div style="border-top:1px solid #e3dff0;margin:12px 0 0"></div>'
+  // Class names the editor's markup and its rules (`DIALOG_CSS`) share.
+  const NOTE = 'pen-tool-extras-note'
+  const SECTION_TITLE = 'pen-tool-extras-section-title'
+  const DIVIDER = '<div class="pen-tool-extras-divider"></div>'
+  const SLIDER_COLUMNS = 'pen-tool-extras-columns'
+  const COLUMN_HEADING = 'pen-tool-extras-column-heading'
+
   const DIALOG_CLASS = 'pen-tool-extras-dialog'
 
   // Scoped by DIALOG_CLASS, so SudokuPad's other dialogs are left alone.
@@ -1719,43 +1722,67 @@
     `.dialog-options.${DIALOG_CLASS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: #777 !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
-    `#${EDITOR_ID} [data-sudokupad-colors] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; padding: 0 14px !important; height: 34px !important; line-height: 32px !important; margin: 0 !important; font-weight: 500; text-align: center; }`,
-    `#${EDITOR_ID} select[data-line-mode] { font-size: 0.95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
+    `#${EDITOR_ID} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
+    `#${EDITOR_ID} .${SECTION_TITLE} { font-weight: 600; margin-top: 10px; }`,
+    `#${EDITOR_ID} .pen-tool-extras-pen-title { font-weight: 600; }`,
+    `#${EDITOR_ID} .pen-tool-extras-divider { border-top: 1px solid #e3dff0; margin: 12px 0 0; }`,
+    // The slider rows share four columns, so the sliders of Line settings, Line styles and the outline line up. The first two shrink on a narrow dialog.
+    `#${EDITOR_ID} .${SLIDER_COLUMNS} { display: grid; grid-template-columns: minmax(6em, 12.5em) minmax(5em, 11em) 2em 6.2em; column-gap: 8px; align-items: center; margin: 4px 0; }`,
+    `#${EDITOR_ID} .${SLIDER_COLUMNS}.pen-tool-extras-style-block { margin-bottom: 0; }`,
+    `#${EDITOR_ID} .${SLIDER_COLUMNS}.pen-tool-extras-heading-row { margin: 10px 0 4px; }`,
+    `#${EDITOR_ID} .pen-tool-extras-span { grid-column: 1 / 4; }`,
+    `#${EDITOR_ID} .pen-tool-extras-heading-row .pen-tool-extras-span { font-weight: 600; }`,
+    `#${EDITOR_ID} .${COLUMN_HEADING} { font-size: .8rem; color: #666; font-weight: 400; justify-self: center; white-space: nowrap; }`,
+    `#${EDITOR_ID} .pen-tool-extras-label { width: auto; text-align: left; margin: 0; }`,
+    `#${EDITOR_ID} .pen-tool-extras-label.pen-tool-extras-under { padding-left: 1.2em; color: #444; box-sizing: border-box; }`,
+    `#${EDITOR_ID} .pen-tool-extras-range { width: 100%; min-width: 0; margin: 0; }`,
+    `#${EDITOR_ID} .pen-tool-extras-box { margin: 0; justify-self: center; }`,
+    `#${EDITOR_ID} .pen-tool-extras-check { margin: 0; }`,
+    `#${EDITOR_ID} .pen-tool-extras-check-row { margin: 4px 0; display: flex; justify-content: flex-start; align-items: center; gap: 6px; }`,
+    `#${EDITOR_ID} .pen-tool-extras-pen { display: flex; align-items: center; gap: 8px; }`,
+    `#${EDITOR_ID} .pen-tool-extras-pen b { width: 1.2em; text-align: right; }`,
+    `#${EDITOR_ID} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px 18px; margin: 4px 0; }`,
+    `#${EDITOR_ID} [data-colors-row] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }`,
+    `#${EDITOR_ID} .pen-tool-extras-mark { display: flex; align-items: center; gap: 6px; margin: 0; width: auto; }`,
+    `#${EDITOR_ID} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(3, max-content); column-gap: 28px; row-gap: 6px; align-items: center; margin: 4px 0; }`,
+    `#${EDITOR_ID} .pen-tool-extras-mark-head { font-size: .85rem; color: #666; }`,
+    `#${EDITOR_ID} [data-sudokupad-colors] { font-size: inherit; white-space: nowrap; background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; padding: 0 14px !important; height: 34px !important; line-height: 32px !important; margin: 0 !important; font-weight: 500; text-align: center; }`,
+    `#${EDITOR_ID} select[data-line-mode] { margin: 4px 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
   ].join('\n')
 
   // Its values are drafts that take effect on Save, so the panel's sliders and these agree when the dialog opens.
   function renderEditor (state) {
     const cells = PEN_COLOR_NUMBERS.map((n) =>
-      '<div style="display:flex;align-items:center;gap:8px">' +
-      `<b style="width:1.2em;text-align:right">${n}</b>` +
+      '<div class="pen-tool-extras-pen">' +
+      `<b>${n}</b>` +
       `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
     ).join('')
-    const grid = `<div style="display:grid;grid-template-columns: repeat(3, max-content);gap:6px 18px;margin:4px 0">${cells}</div>`
-    const colorsRow = `<div data-colors-row style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px">${grid}` +
-      '<button type="button" data-sudokupad-colors style="font-size:inherit;white-space:nowrap">SudokuPad colors</button></div>'
+    const grid = `<div class="pen-tool-extras-pen-grid">${cells}</div>`
+    const colorsRow = `<div data-colors-row>${grid}` +
+      '<button type="button" data-sudokupad-colors>SudokuPad colors</button></div>'
     // A box with no word label carries its name as its accessible name and hover title.
     const markBox = (key, name, picture) =>
-      `<label title="${name}" style="display:flex;align-items:center;gap:6px;margin:0;width:auto">` +
+      `<label title="${name}" class="pen-tool-extras-mark">` +
       `<input type="checkbox" id="pen-tool-extras-mark-${key}" data-mark="${key}" aria-label="${name}" title="${name}"${state.marks[key] ? ' checked' : ''}>` +
       `${markPicture(picture)}</label>`
-    const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} style="margin:0;justify-self:center">`
+    const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} class="pen-tool-extras-box">`
     const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
     const flagBox = (name, flagName, extra = '') =>
       box(`id="pen-tool-extras-${boxAttribute(name)}-${flagName}" data-${boxAttribute(name)}="${flagName}"${extra}`, state[name][flagName], SETTINGS[name].dialog.title)
     const sliderRow = (key) => {
       const { range, dialog: { label, under, box } } = SETTINGS[key]
       const value = state[key]
-      return `<div data-row="${key}" style="${SLIDER_COLUMNS}${!under || boxValue(state, under) ? '' : ';display:none'}">` +
-        `<label for="pen-tool-extras-setting-${key}" style="width:auto;text-align:left;margin:0${under ? ';padding-left:1.2em;color:#444;box-sizing:border-box' : ''}">${label}</label>` +
-        `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" style="width:100%;min-width:0;margin:0">` +
+      return `<div data-row="${key}" class="${SLIDER_COLUMNS}"${!under || boxValue(state, under) ? '' : ' style="display:none"'}>` +
+        `<label for="pen-tool-extras-setting-${key}" class="pen-tool-extras-label${under ? ' pen-tool-extras-under' : ''}">${label}</label>` +
+        `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" class="pen-tool-extras-range">` +
         `<output data-readout="${key}">${value}</output>${box ? flagBox(box, key) : '<span></span>'}</div>`
     }
     const rowsUnder = (path) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under === path).map(sliderRow).join('')
-    const labelled = (name) => '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
-      `<input type="checkbox" id="pen-tool-extras-${kebab(name)}" data-${kebab(name)}${state[name] ? ' checked' : ''} style="margin:0">` +
-      `<label for="pen-tool-extras-${kebab(name)}" style="width:auto;text-align:left;margin:0">${SETTINGS[name].dialog.label}</label></div>`
+    const labelled = (name) => '<div class="pen-tool-extras-check-row">' +
+      `<input type="checkbox" id="pen-tool-extras-${kebab(name)}" data-${kebab(name)}${state[name] ? ' checked' : ''} class="pen-tool-extras-check">` +
+      `<label for="pen-tool-extras-${kebab(name)}" class="pen-tool-extras-label">${SETTINGS[name].dialog.label}</label></div>`
     const styleBlock = (name, flagName, text) =>
-      `<div style="${SLIDER_COLUMNS};margin-bottom:0"><span style="grid-column:1 / 4">${text}</span>` +
+      `<div class="${SLIDER_COLUMNS} pen-tool-extras-style-block"><span class="pen-tool-extras-span">${text}</span>` +
       `${flagBox(name, flagName, ` aria-label="Enable ${text}"`)}</div>`
     const settingRows = (name) => {
       const { range, dialog: { labels } } = SETTINGS[name]
@@ -1765,16 +1792,16 @@
     }
     const sectionRows = (section) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.section === section).map(settingRows).join('')
     const heading = (text, caption) =>
-      DIVIDER + `<div style="${SLIDER_COLUMNS};margin:10px 0 4px"><span style="font-weight:600;grid-column:1 / 4">${text}</span>` +
-      `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>`
+      DIVIDER + `<div class="${SLIDER_COLUMNS} pen-tool-extras-heading-row"><span class="pen-tool-extras-span">${text}</span>` +
+      `<span class="${COLUMN_HEADING}">${caption || ''}</span></div>`
     const markRow = (label, cellsMarkup) => `<div>${label}</div>${cellsMarkup}`
-    const columnHead = (text) => `<div style="font-size:.85rem;color:#666">${text}</div>`
-    const marksTable = '<div style="display:grid;grid-template-columns:max-content repeat(3, max-content);column-gap:28px;row-gap:6px;align-items:center;margin:4px 0">' +
+    const columnHead = (text) => `<div class="pen-tool-extras-mark-head">${text}</div>`
+    const marksTable = '<div class="pen-tool-extras-marks-table">' +
       '<div></div>' + columnHead('X Mark') + columnHead('Circle') + columnHead('Directions') +
       markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('circle', 'Edge Circle', 'circle') + markBox('directions', 'Edge Directions', 'directions')) +
       markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerCircle', 'Corner Circle', 'circle') + '<div></div>') +
       '</div>'
-    return offNote(state.off) + '<div style="font-weight:600">Pen colors</div>' + colorsRow +
+    return offNote(state.off) + '<div class="pen-tool-extras-pen-title">Pen colors</div>' + colorsRow +
       missingNote(state.missing) +
       heading('Line settings', 'Slider in panel') + sectionRows('Line settings') +
       heading('Line styles', 'Enable') + sectionRows('Line styles') +
@@ -1958,7 +1985,7 @@
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, shapeOf, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, shapeOf, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
