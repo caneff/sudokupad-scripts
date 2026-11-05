@@ -6,7 +6,6 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY } = require('./dark-page.user.js')
 
-// The rules buildCss returns, one per line, as { selector, declarations }.
 function rules () {
   return buildCss(DEFAULT_COLOR).split('\n').map((line) => {
     const m = /^(.*?) \{ (.*) \}$/.exec(line)
@@ -71,7 +70,6 @@ test('the replay tool\'s readout (the ::after of .controls-input) takes the text
   assert.equal(readout('#ffcc00'), '.controls-input::after { color: #222222 !important }')
 })
 
-// The one-line rules of buildCss(color) whose selector mentions a control button.
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
 
 test('on a dark page color the control buttons go dark gray with light purple text, and a button that is on keeps its own fill and gets a purple border', () => {

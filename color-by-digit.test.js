@@ -364,7 +364,6 @@ test('normalizeGroups keeps a digit in only its first group', () => {
   )
 })
 
-// Auto mode: which colors come off and go on when cells change. Cells are plan cells.
 const auto = (cells, indices = cells.map((_, i) => i), g = groups, managed) => planAuto(cells, g, indices, managed)
 
 test('auto: a pure cell gets its group color', () => {
@@ -447,7 +446,6 @@ test('auto: changedIndices lists the positions whose signature differs', () => {
   assert.deepEqual(changedIndices(['a'], ['a']), [])
 })
 
-// A color of each key for the drawn pieces: key `a` is dark, anything else light.
 const colorFor = (key) => (key === 'a' ? 'rgb(10, 10, 10)' : 'rgb(240, 240, 240)')
 
 test('auto: the button box shows its state in aria-checked, an X in the box and bold purple, or an empty box and light grey', () => {
@@ -682,7 +680,6 @@ function autoMockApp (cellDefs, { single = false } = {}) {
   return app
 }
 
-// Runs the script's entry point against `app` with auto mode saved on; `fn` gets the wrapped app.
 async function withAutoMode (app, fn) {
   const path = require.resolve('./color-by-digit.user.js')
   const saved = require.cache[path]

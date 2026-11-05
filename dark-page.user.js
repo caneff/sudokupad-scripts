@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.6
+// @version      0.3.7
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,8 +18,7 @@
 
   // Shown in the settings, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.6'
-  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const VERSION = '0.3.7'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
   const RECT_ID = 'dark-page-rect'
@@ -127,7 +126,6 @@
     }))
   }
 
-  // Grows a box by `amount` on every side.
   const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
 
   // Grows the box by `pad`, then rounds every edge away from it, so a partly covered pixel at the
@@ -174,7 +172,6 @@
     return Math.max(refX, width - refX, refY, height - refY) * unit * scale
   }
 
-  // The part of `box` that lies within `limit`.
   const clampBox = (box, limit) => ({
     left: Math.max(box.left, limit.left),
     top: Math.max(box.top, limit.top),
