@@ -19,7 +19,6 @@ const {
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
-// The edge cycle, a step forward and a step back.
 const nextType = (current, settings) => stepType(current, settings, 1, EDGE_CYCLE)
 const previousType = (current, settings) => stepType(current, settings, -1, EDGE_CYCLE)
 
@@ -146,7 +145,6 @@ test('darkenColor gives a valid hex for near-black, white and out-of-range input
 })
 
 test('a darkened light color has OKLCH lightness under 0.8, the bar for a 5px line on white', () => {
-  // Light yellow and light gray, the lightest of the default cell colors.
   for (const rgb of [[252, 235, 63], [214, 214, 214], [255, 255, 255]]) {
     assert.ok(oklch(darkenColor(rgb)).L < 0.8, JSON.stringify(rgb))
   }
@@ -334,12 +332,10 @@ function rulesByValue (css) {
   return byValue
 }
 
-// The width each pen value draws at: its stroke width times its scale, as a string.
 function widthsOf (css) {
   return Object.fromEntries(Object.entries(rulesByValue(css)).map(([v, { width, scale }]) => [v, String(Math.round(width * scale * 1e6) / 1e6)]))
 }
 
-// The scale each pen value's rule gives it, 1 where it has none.
 const scalesOf = (css) => Object.fromEntries(Object.entries(rulesByValue(css)).map(([v, { scale }]) => [v, scale]))
 
 test('buildThicknessCss at 5 gives the widths the pen had before: free lines, circle and cross 5; edge X marks, arrows and edge circles 2.5', () => {
@@ -429,7 +425,6 @@ test('buildOpacityCss writes the fraction of the percent, and 1 at 100', () => {
   assert.equal(layer(buildOpacityCss(100)), ':root:root #cell-pen { opacity: 1; }')
 })
 
-// The id, range and value of each range input in markup, in order.
 const slidersIn = (html) => [...html.matchAll(/<input type="range" id="([^"]+)"[^>]* min="([^"]+)" max="([^"]+)" step="([^"]+)" value="([^"]+)"/g)].map((m) => m.slice(1))
 
 test('the panel markup has Thickness above Opacity, each with the range and value of its setting, and neither takes focus by tabbing', () => {
@@ -639,7 +634,7 @@ test('the edge circle is an open ring closed back at the edge midpoint, about 1.
   assert.equal(to, 2 * rx)
   assert.equal(back, -2 * rx)
   // At the default the ring's outer diameter (path plus its 2.5 stroke) is about 16 units, a
-  // 64 unit cell's quarter, against 11.3 before and a 7 unit point before that.
+  // 64 unit cell's quarter.
   const outer = 2 * rx + 2.5
   assert.equal(outer > 15 && outer < 17, true, String(outer))
 })
@@ -707,7 +702,6 @@ test('cornerAt reads a non-square grid by its own rows and columns', () => {
   assert.equal(cornerAt(4, 7, 4, 6), null)
 })
 
-// Every grid corner of a rows x cols grid.
 function allCorners (rows, cols) {
   const corners = []
   for (let row = 0; row <= rows; row++) for (let col = 0; col <= cols; col++) corners.push({ row, col })
@@ -854,7 +848,6 @@ test('wrapIndex goes round a list of any length in either direction', () => {
   assert.equal(wrapIndex(2, 1, 3), 0)
 })
 
-// The rules of buildPagesCss as { selector, body }.
 const rulesOf = (css) => css.split('\n').filter(Boolean).map((rule) => { const i = rule.indexOf(' { '); return { selector: rule.slice(0, i), body: rule.slice(i + 3, -2) } })
 
 test('every page 2 color character strokes in the color of its page 1 partner, so one recolor changes both', () => {
@@ -905,7 +898,6 @@ test('a page 2 swatch is a single dashed line in the pen color of its button, as
   assert.equal(css.includes('data-pen-page="1"'), false)
 })
 
-// The swatch of button 1 on page 2 at a dash length, decoded: its one path's stroke-dasharray and stroke-dashoffset.
 const swatchDashes = (dash) => {
   const rule = rulesOf(buildPagesCss(5, dash)).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after')
   const svg = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
@@ -952,7 +944,6 @@ test('the line mode choices are SudokuPad\'s three, and anything else saved read
   for (const bad of [null, undefined, 'edge', 1, ['both'], '']) assert.equal(normalizeLineMode(bad), 'both', JSON.stringify(bad))
 })
 
-// Dash length (page 2): from dots to longer dashes, in line widths.
 test('the dash length runs from 0 (dots) to 8 line widths in whole steps, and starts at 3, which draws dashes', () => {
   assert.deepEqual(DASH, { min: 0, max: 8, step: 1, fallback: 3 })
 })
@@ -972,7 +963,7 @@ const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).fi
   })
 
 test('at dash 0 the page 2 lines are the dots they were: the spacing origin/main gave, as literals', () => {
-  // The dasharray of the orthogonal and the diagonal rule at thicknesses 1, 5 and 12, from the script before dash lengths existed.
+  // The dasharray of the orthogonal and the diagonal rule at thicknesses 1, 5 and 12.
   const before = { 1: ['0 1.9998', '0 2.011124822779531'], 5: ['0 10.6656', '0 10.055624113897656'], 12: ['0 21.3312', '0 22.625154256269724'] }
   for (const [thickness, want] of Object.entries(before)) {
     const got = rulesOf(buildPagesCss(Number(thickness), 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
@@ -1029,7 +1020,6 @@ test('the page button samples dashes as long as the setting, and dots at 0', () 
   assert.equal(span(long[0]) > span(short[0]), true)
 })
 
-// Showing the sliders in the pen tool's panel.
 test('both sliders show unless saved as hidden, and saved data without the setting shows both', () => {
   assert.deepEqual(SETTINGS.show.normalize(undefined), { thickness: true, opacity: true })
   assert.deepEqual(SETTINGS.show.normalize(null), { thickness: true, opacity: true })
@@ -1054,7 +1044,6 @@ test('with both sliders hidden the panel has no slider block at all, so no gap i
   assert.equal(renderPanelSliders(9, 35, { thickness: false, opacity: false }), '')
 })
 
-// The dialog.
 const editorState = (over = {}) => ({
   colors: SUDOKUPAD_PEN_COLORS,
   missing: [],
@@ -1102,7 +1091,6 @@ test('the page button turns to the next enabled page and has a dot for each enab
   assert.match(noArrows, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
 })
 
-// The row of a slider in the dialog, by its setting name.
 const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?</div>`).exec(html)[0]
 
 test('Line settings: Thickness and Opacity are one row each, with a Slider in panel box at the right end that is ticked as saved', () => {
@@ -1469,7 +1457,6 @@ test('an arrow line has at least one arrow on any segment at any thickness and a
   }
 })
 
-// The white outline.
 test('the outline setting is off only for a saved false: nothing saved and anything untrusted is on', () => {
   assert.equal(SETTINGS.outline.normalize(false), false)
   for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.normalize(ok), true, JSON.stringify(ok))
@@ -1551,7 +1538,6 @@ test('a page turn skips a page that is not enabled, in either direction, and sta
   assert.equal(stepEnabledPage(0, -1, noDash), 2)
   assert.equal(stepEnabledPage(2, -1, noDash), 0)
   assert.equal(stepEnabledPage(0, 1, { dashed: false, arrows: false }), 0)
-  // a pen left on a page that is no longer enabled still moves on to the next enabled one
   assert.equal(stepEnabledPage(1, 1, noDash), 2)
   assert.equal(stepEnabledPage(1, -1, noDash), 0)
 })
@@ -1565,7 +1551,6 @@ test('after Save a selected pen on a page that is not enabled moves to the same 
   assert.equal(pageAfterSave('3', { dashed: false, arrows: false }), '3')
 })
 
-// A segment as the line erase reads it off a cell: its value, cell and color character.
 const seg = (value, row, col, color = '1') => ({ value, row, col, color })
 
 test('linePoints gives the two grid points of every line value, in cell units from the grid top left', () => {
@@ -1679,7 +1664,6 @@ test('eraseLineActs removes each value from its own cells as one select and one 
   assert.deepEqual(eraseLineActs([], cellAt), [])
 })
 
-// Failing safely: one feature at a time.
 const newFeatures = () => {
   const logged = []
   const changes = []

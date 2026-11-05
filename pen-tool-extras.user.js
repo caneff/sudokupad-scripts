@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.8
+// @version      1.14.9
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,17 +20,14 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.8'
-  // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
+  const VERSION = '1.14.9'
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
   const COLORS_KEY = 'PenColor_colors'
   // The `id` of each slider in the pen tool's panel; the input handler tells them apart by it.
   const THICKNESS_SLIDER = 'pen-tool-extras-thickness'
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
-  // The `id` of the editor inside this script's dialog.
   const EDITOR_ID = 'pen-tool-extras-editor'
-  // The block of both sliders in the pen tool's panel, and the row of each.
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
   // SudokuPad's line mode pulldown (`.penlinemode`), which this script hides and offers in its dialog instead.
@@ -40,9 +37,7 @@
   const LINE_MODES = [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']]
   const MARKS_KEY = 'EdgeMarks_marks'
   const STYLE_ID = 'pen-tool-extras-style'
-  // The element SudokuPad draws the grid in.
   const GRID_SELECTOR = '#svgrenderer'
-  // The group SudokuPad draws every pen stroke in.
   const PEN_LAYER = '#cell-pen'
   // The group the drag highlight (`.penhint`, and the erase highlight, which is the same element) is moved
   // to while a line is dragged, so the pen layer's opacity does not fade it. It sits right above the pen layer.
@@ -52,7 +47,6 @@
   // pen layer's opacity fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
-  // `MouseEvent.button` of the middle and right mouse buttons.
   const MIDDLE_BUTTON = 1
   const RIGHT_BUTTON = 2
   const PEN_COLOR_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
@@ -158,9 +152,7 @@
   // SudokuPad's own pen values stop at `g`, so `h` onward are free. They stay lowercase letters:
   // SudokuPad lowercases a pen value when it undoes or replays one.
   const ADDED = { 3: ['h', 'i', 'j'], 4: ['k', 'l', 'm'], b: ['n', 'o', 'p'], c: ['q', 'r', 's'] }
-  // The type each of an edge's ADDED values is, in the same order.
   const ADDED_ORDER = ['dirA', 'dirB', 'circle']
-  // The two directions of a vertical edge, then of a horizontal one.
   const SHAPES = { 3: ['>', '<'], 4: ['^', 'v'], b: ['>', '<'], c: ['^', 'v'] }
   // The types of mark in cycle order (X, circle, first direction, second direction), and the setting that ticks each. `directions` is the one
   // checkbox for dirA and dirB.
@@ -247,7 +239,6 @@
     return page ? PEN_COLOR_NUMBERS[page.chars.indexOf(pen)] : undefined
   }
 
-  // The color character of the pen with color number `number` on page `page`.
   function penCharOn (page, number) {
     return PEN_PAGES[page].chars[PEN_COLOR_NUMBERS.indexOf(number)]
   }
@@ -360,7 +351,6 @@
     return decodeFlags(Object.keys(DEFAULT_MARK_SETTINGS), { ...underOldNames, ...saved })
   }
 
-  // The pen value of each type on the edge whose X value is `edge`.
   function valueOfType (edge, type) {
     return type === 'x' ? edge : ADDED[edge][ADDED_ORDER.indexOf(type)]
   }
@@ -645,7 +635,6 @@
     return [[x - ux * half - uy * wide, y - uy * half + ux * wide], [x + ux * half, y + uy * half], [x - ux * half + uy * wide, y - uy * half - ux * wide]]
   }
 
-  // A point as path data text, to 2 places.
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
   // The path data of an arrow line, in the renderer's units (a cell is CELL_UNITS), for the line value `value` on the cell at
@@ -881,7 +870,6 @@
     return { on, gap: period - on, offset: on / 2 }
   }
 
-  // The same pattern as the declarations of a CSS rule.
   function dashDeclarations (thickness, dash, length) {
     const { on, gap, offset } = dashPattern(thickness, dash, length)
     return `stroke-dasharray: ${on} ${gap};${dash === 0 ? '' : ` stroke-dashoffset: ${offset};`}`
@@ -1020,7 +1008,6 @@
     const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
     const length = Math.hypot(dx, dy)
     if (kind === 'arrowLines') {
-      // a line and three arrows along it, tips toward the line's end
       sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_ARROW_LINE.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
         SAMPLE_ARROW_LINE.at.map((t) => {
           const [wing, tip, other] = arrowLineCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, ARROW_LINE.halfLength * SAMPLE_ARROW_LINE.line, ARROW_LINE.halfWidth * SAMPLE_ARROW_LINE.line)
@@ -1082,11 +1069,8 @@
   // value, and a box (Slider in panel, Enable) centred under its small grey heading. The first two shrink on a narrow dialog.
   const SLIDER_COLUMNS = 'display:grid;grid-template-columns:minmax(6em,12.5em) minmax(5em,11em) 2em 6.2em;column-gap:8px;align-items:center;margin:4px 0'
   const COLUMN_HEADING = 'font-size:.8rem;color:#666;font-weight:400;justify-self:center;white-space:nowrap'
-  // The thin line above every section but the first.
   const DIVIDER = '<div style="border-top:1px solid #e3dff0;margin:12px 0 0"></div>'
-  // The class of the dialog's button row, which DIALOG_CSS styles.
   const DIALOG_CLASS = 'pen-tool-extras-dialog'
-  // The slider row under each line style's Enable box.
   const STYLE_SLIDERS = { dashed: 'dash', arrows: 'arrowSpacing' }
 
   // The look of the dialog's button row (Restore defaults as small underlined text at the left, Cancel and Save at the right, under a
@@ -1132,7 +1116,6 @@
     const styleBlock = (key, name, enabled, sliderMarkup) =>
       `<div style="${SLIDER_COLUMNS};margin-bottom:0"><span style="grid-column:1 / 4">${name}</span>` +
       `${box(`id="pen-tool-extras-style-${key}" data-style="${key}" aria-label="Enable ${name}"`, enabled)}</div>` + sliderMarkup
-    // The controls of a feature that is off are left out, so the dialog offers nothing that does nothing.
     const when = (feature, markup) => off.has(feature) ? '' : markup
     const heading = (text, caption) =>
       DIVIDER + `<div style="${SLIDER_COLUMNS};margin:10px 0 4px"><span style="font-weight:600;grid-column:1 / 4">${text}</span>` +
@@ -1444,7 +1427,6 @@
   let activeMissing = []
   // The value of every row of SETTINGS in force.
   const inForce = settingDefaults()
-  // The edge mark types ticked in the dialog, which the edge click cycles through.
   let markSettings = normalizeMarkSettings(null)
 
   // SudokuPad's color tool, once it holds the palette and current page it read at startup;
@@ -1673,7 +1655,6 @@
       if (lastButton === MIDDLE_BUTTON && !features.isOff('lineErase')) {
         // A middle press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
         if (inForce.middleErase) return
-        // With the erase unticked a middle click is SudokuPad's own, not this script's mark cycle.
         return original.apply(this, arguments)
       }
       // A click that failed half way leaves actions queued, which the original click must not send as its own.
@@ -1724,7 +1705,6 @@
     }))
   }
 
-  // Installs what the features that are still on need of the renderer and the pen tool.
   function installEdgeMarks (app) {
     const marks = !features.isOff('marks')
     const lineErase = !features.isOff('lineErase')
@@ -2152,7 +2132,6 @@
     }, removePageButtons)
   }
 
-  // Whether any page besides page 1 is enabled.
   const hasPageToTurnTo = () => enabledPages(inForce.lineStyles).length > 1
 
   // Selects the pen on the enabled page `delta` pages from the selected one with the same color number: a page
