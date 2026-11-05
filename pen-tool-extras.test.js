@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings,
+  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -1833,6 +1833,11 @@ test('a failed write leaves the values in force alone, so a retry saves every ch
   assert.deepEqual(current, settingDefaults())
   failing = false
   assert.deepEqual(saveChangedSettings(store, draft, current), ['thickness', 'opacity'])
+})
+
+test('an effect two rows share runs once', () => {
+  assert.equal(SETTINGS.outline.effect, SETTINGS.outlineWidth.effect)
+  assert.deepEqual(effectsOf(['outline', 'outlineWidth', 'thickness']), [SETTINGS.outline.effect, SETTINGS.thickness.effect])
 })
 
 test('flags decode each name on its own: only a saved false is off, a non-object is all on, an unknown name is dropped', () => {

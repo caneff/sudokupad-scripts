@@ -351,6 +351,11 @@
     return changed
   }
 
+  // The effect of each named row, an effect that rows share once.
+  function effectsOf (names) {
+    return [...new Set(names.map((name) => SETTINGS[name].effect))]
+  }
+
   // Saved data is untrusted: returns { x, directions, circle, cornerX, cornerCircle }, each ticked unless saved as false. Data saved before the corner boxes
   // existed has no corner entry, so both read as ticked. A circle box saved under its old name reads as the new one, which wins when both are there;
   // the result holds only the new names, so the next save writes those.
@@ -1333,6 +1338,7 @@
       changedSettings,
       saveSetting,
       saveChangedSettings,
+      effectsOf,
       normalizeColors,
       savedColors,
       editedColors,
@@ -1981,13 +1987,8 @@
   function saveSettings (draft) {
     const changed = saveChangedSettings(Framework, draft, inForce)
     if (!changed.length) return
-    runEffects(changed)
+    effectsOf(changed).forEach((effect) => effect())
     applyStyle()
-  }
-
-  // Runs the effect of each named row, an effect that rows share once.
-  function runEffects (names) {
-    new Set(names.map((name) => SETTINGS[name].effect)).forEach((effect) => effect())
   }
 
   // Moving a panel slider sets and saves its value at once. It changes no cell, so nothing goes on the
@@ -2368,7 +2369,7 @@
     installGear()
     installOverlayPressSwallow()
     markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
-    runEffects(SETTING_NAMES)
+    effectsOf(SETTING_NAMES).forEach((effect) => effect())
     applyStyle()
     Framework.addSetting({
       tag: 'button',
