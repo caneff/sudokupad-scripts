@@ -718,6 +718,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openExtrasEditor(p)
     for (const mark of MARK_BOXES) await box(mark).check()
     await closeExtrasEditorWith(p, 'Save')
+    assert.equal(await saved(), null, 'all five ticked is the default, so Save removes the key')
   })
 
   describe('opacity', { concurrency: false }, () => {

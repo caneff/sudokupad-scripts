@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.11
+// @version      1.14.12
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.14.11'
+  const VERSION = '1.14.12'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -74,11 +74,11 @@
     return { key, fallback: true, normalize: (data) => data !== false, effect, dialog }
   }
 
-  function flags (key, names, effect, dialog) {
-    return { key, fallback: decodeFlags(names), normalize: (data) => decodeFlags(names, data), effect, dialog }
+  function flags (key, names, effect, dialog, normalize = (data) => decodeFlags(names, data)) {
+    return { key, fallback: decodeFlags(names), normalize, effect, dialog }
   }
 
-  // Marks and the line mode are saved their own way. A row `under` a box is hidden while that box is unticked.
+  // The line mode is saved its own way. A row `under` a box is hidden while that box is unticked.
   const SETTINGS = {
     thickness: slider('PenColor_thickness', THICKNESS, adoptThickness, { label: 'Thickness', section: 'Line settings', box: 'show' }),
     opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: 'Opacity (%)', section: 'Line settings', box: 'show' }),
@@ -89,7 +89,9 @@
     middleErase: flag('PenColor_middleerase', doNothing, { label: 'Middle click erases a whole line', section: 'Other' }),
     lineStyles: flags('PenColor_linestyles', ['dashed', 'arrows'], adoptLineStyles,
       { section: 'Line styles', attribute: 'style', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
-    show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' })
+    show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
+    // The marks table is built by hand in the dialog, so this row has no section.
+    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle'], doNothing, { attribute: 'mark' }, normalizeMarkSettings)
   }
   const SETTING_NAMES = Object.keys(SETTINGS)
   const boxAttribute = (name) => SETTINGS[name].dialog.attribute || name
@@ -1055,7 +1057,6 @@
   }
 
   // 6. Marks: edge marks, grid-corner marks, right click goes backwards and the marks layer
-  const MARKS_KEY = 'EdgeMarks_marks'
   // Every edge mark, grid-corner mark and cell circle and cross is drawn here, last in the pen layer: SudokuPad adds a cell's strokes in cell order, so a later
   // cell's line would otherwise cover an earlier cell's mark. The pen layer's opacity then fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
@@ -1082,7 +1083,6 @@
     types: ['x', 'circle'],
     setting: { x: 'cornerX', circle: 'cornerCircle' }
   }
-  const DEFAULT_MARK_SETTINGS = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
   // The names older saves hold the two circle boxes under.
   const OLD_MARK_NAMES = { circle: 'dot', cornerCircle: 'cornerDot' }
   // An edge's midpoint is 0.5 from its corners and a cell's middle 0.71, so neither comes near 0.2, which is a circle about 12 px across at a cell 60 px wide. It takes the corner end
@@ -1110,7 +1110,7 @@
   function normalizeMarkSettings (data) {
     const saved = isPlainObject(data) ? data : {}
     const underOldNames = Object.fromEntries(Object.entries(OLD_MARK_NAMES).map(([name, old]) => [name, saved[old]]))
-    return decodeFlags(Object.keys(DEFAULT_MARK_SETTINGS), { ...underOldNames, ...saved })
+    return decodeFlags(Object.keys(SETTINGS.marks.fallback), { ...underOldNames, ...saved })
   }
 
   function valueOfType (edge, type) {
@@ -1218,7 +1218,6 @@
       ...(plan.add === null ? [] : [{ type: 'pen', arg: plan.add }])
     ]
   }
-  let markSettings = normalizeMarkSettings(null)
 
   // A stroke SudokuPad has just added displaces the marks layer, so it goes back as the last child. The cell still holds the same element, so erasing, undo and a redraw remove it from wherever it is.
   function keepMarksAbove (part, isMark) {
@@ -1259,7 +1258,7 @@
   // null also while both corner boxes are unticked, so the original hit test handles every click as it did before. SudokuPad's `clickCell` hit-tests `getInputRc()`, the pointer in
   // cell units, and so does this.
   function cornerUnderPointer (tool) {
-    if (!markSettings.cornerX && !markSettings.cornerCircle) return null
+    if (!inForce.marks.cornerX && !inForce.marks.cornerCircle) return null
     const { r, c } = tool.getInputRc()
     const { rows, cols } = Framework.app.grid
     return cornerAt(r, c, rows, cols)
@@ -1269,7 +1268,7 @@
     const { rows, cols } = Framework.app.grid
     const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
     const cell = Framework.app.grid.getCell(row, col)
-    return planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, steppingBackwards()))
+    return planActs(cell, planCornerClick(kind, penValuesOf(cell), inForce.marks, steppingBackwards()))
   }
 
   // A click within CORNER_RADIUS of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
@@ -1288,7 +1287,7 @@
       let acts = queued
       if (isEdgeActs(queued)) {
         const cell = queued[0].arg[0]
-        const plan = planClick(queued[1].arg, penValuesOf(cell), markSettings, steppingBackwards())
+        const plan = planClick(queued[1].arg, penValuesOf(cell), inForce.marks, steppingBackwards())
         if (plan === null) return
         acts = planActs(cell, plan)
       }
@@ -1839,12 +1838,11 @@
     let reset = false
     // Only colors picked by hand are saved, so a derived set is never saved by accident.
     const edited = new Set()
-    let marks = markSettings
     let lineMode = currentLineMode()
     let draft = { ...inForce }
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), marks, lineMode, ...draft, off: skipped })
+      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), lineMode, ...draft, off: skipped })
     }
     const restoreDefaults = () => {
       const tool = readyColorTool()
@@ -1874,8 +1872,6 @@
                   else Framework.setData(COLORS_KEY, colors)
                   adoptColors(colors, edited.size ? [] : missing)
                 }
-                if (!sameValue(marks, markSettings)) Framework.setData(MARKS_KEY, marks)
-                markSettings = marks
                 saveSettings(draft)
                 if (lineMode !== undefined && lineMode !== currentLineMode()) steps.penPanel.run(() => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
@@ -1920,11 +1916,9 @@
       const ticked = event.target.closest('input[type="checkbox"]')
       if (ticked) {
         const next = draftWithBox(draft, ticked.dataset, ticked.checked)
-        if (next) {
-          draft = next
-          showRows()
-        } else if (ticked.dataset.mark) marks = { ...marks, [ticked.dataset.mark]: ticked.checked }
-        else throw new Error(`pen-tool-extras: the dialog box ${ticked.id} is in no table row and is no mark`)
+        if (!next) throw new Error(`pen-tool-extras: the dialog box ${ticked.id} is in no table row`)
+        draft = next
+        showRows()
         return
       }
       const el = event.target.closest('input[type="color"]')
@@ -1964,7 +1958,7 @@
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, shapeOf, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, DEFAULT_MARK_SETTINGS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, shapeOf, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
@@ -1977,7 +1971,6 @@
     const app = Framework.app
     // Read before the panel is built, which the first sync does with the pen tool already on.
     Object.assign(inForce, readSettings(Framework))
-    markSettings = normalizeMarkSettings(Framework.getData(MARKS_KEY))
     checkSteps(app)
     trackButton()
     steps.lineErase.run(() => installLineErase(app, ToolPen.tool))
