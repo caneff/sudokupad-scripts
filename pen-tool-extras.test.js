@@ -10,7 +10,7 @@ const {
   SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
@@ -831,12 +831,12 @@ test('normalizePen keeps a saved color character of any page and nothing else', 
   for (const bad of [null, undefined, 0, 10, 3.5, 'k', '0', 'A', '', 'ab', ['a'], { a: 1 }]) assert.equal(normalizePen(bad), null, JSON.stringify(bad))
 })
 
-test('stepPage goes round the pages in either direction, whatever the count', () => {
-  assert.equal(stepPage(0, 1, 2), 1)
-  assert.equal(stepPage(1, 1, 2), 0)
-  assert.equal(stepPage(0, -1, 2), 1)
-  assert.equal(stepPage(1, -1, 3), 0)
-  assert.equal(stepPage(2, 1, 3), 0)
+test('wrapIndex goes round a list of any length in either direction', () => {
+  assert.equal(wrapIndex(0, 1, 2), 1)
+  assert.equal(wrapIndex(1, 1, 2), 0)
+  assert.equal(wrapIndex(0, -1, 2), 1)
+  assert.equal(wrapIndex(1, -1, 3), 0)
+  assert.equal(wrapIndex(2, 1, 3), 0)
 })
 
 // The rules of buildPagesCss as { selector, body }.

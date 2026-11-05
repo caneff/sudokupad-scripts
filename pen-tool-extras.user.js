@@ -266,7 +266,7 @@
   function stepEnabledPage (page, delta, styles) {
     const enabled = enabledPages(styles)
     let next = page
-    do next = stepPage(next, delta, PEN_PAGES.length)
+    do next = wrapIndex(next, delta, PEN_PAGES.length)
     while (!enabled.includes(next))
     return next
   }
@@ -277,9 +277,9 @@
     return page === -1 || enabledPages(styles).includes(page) ? pen : penCharOn(0, penNumber(pen))
   }
 
-  // The page `delta` pages (1 forward, -1 back) from `page`, going round `count` pages.
-  function stepPage (page, delta, count) {
-    return (((page + delta) % count) + count) % count
+  // The index `delta` places (1 forward, -1 back) from `index`, going round a list of `count` items.
+  function wrapIndex (index, delta, count) {
+    return (((index + delta) % count) + count) % count
   }
 
   // A whole number from `range.min` to `range.max` on the steps counted from `range.min`.
@@ -367,7 +367,7 @@
     const order = [...cycle.types, 'empty']
     const from = order.indexOf(current)
     for (let step = 1; step <= order.length; step++) {
-      const type = order[stepPage(from, direction * step, order.length)]
+      const type = order[wrapIndex(from, direction * step, order.length)]
       if (type === 'empty' || settings[cycle.setting[type]]) return type
     }
     throw new Error('pen-tool-extras: the cycle has no empty step')
@@ -1340,7 +1340,7 @@
       penNumber,
       penCharOn,
       normalizePen,
-      stepPage,
+      wrapIndex,
       normalizeLineMode,
       LINE_MODES,
       buildPagesCss,
