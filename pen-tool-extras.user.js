@@ -1883,8 +1883,8 @@
       missing = derived.missing
       edited.clear()
       reset = true
-      // The sliders and boxes are drafts like the colors: Cancel leaves what is in force.
-      draft = settingDefaults()
+      // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. The mark boxes keep their draft: Restore defaults has never reset the edge and corner cycles.
+      draft = { ...settingDefaults(), marks: draft.marks }
       draw()
     }
     Framework.showDialog({

@@ -722,6 +722,26 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(), null, 'all five ticked is the default, so Save removes the key')
   })
 
+  it('Restore defaults leaves the mark boxes as they are: Save after it keeps the saved marks, and they survive a reload', async () => {
+    const custom = { ...ALL_TICKED, directions: false, cornerCircle: false }
+    await openExtrasEditor(p)
+    await box('directions').uncheck()
+    await box('cornerCircle').uncheck()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), custom)
+    await openExtrasEditor(p)
+    await dialogButton(p, 'Restore defaults').click()
+    assert.equal(await box('directions').isChecked(), false, 'Restore defaults left Directions unticked')
+    assert.equal(await box('cornerCircle').isChecked(), false, 'Restore defaults left the corner Circle unticked')
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), custom)
+    await reload()
+    assert.deepEqual(await saved(), custom)
+    await openExtrasEditor(p)
+    for (const mark of MARK_BOXES) await box(mark).check()
+    await closeExtrasEditorWith(p, 'Save')
+  })
+
   describe('opacity', { concurrency: false }, () => {
     const slider = () => p.locator('#pen-tool-extras-opacity')
     const setOpacity = (value) => setSlider(p, '#pen-tool-extras-opacity', value)

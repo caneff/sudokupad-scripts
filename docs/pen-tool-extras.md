@@ -168,7 +168,7 @@ The dialog's Pen line mode (Center & Edge, Center only, Edge only) is SudokuPad'
 
 ## Restore defaults
 
-The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and Enable boxes, the White outline box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults goes back to the darkened cell color page. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and Enable boxes, the White outline box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 
