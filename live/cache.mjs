@@ -6,7 +6,8 @@
 // once per run, under a lock; every other call replays it. A recording older than 24 hours is checked first:
 // one plain request for the puzzle page reads SudokuPad's version (`?v=` on its assets, see
 // docs/research/sudokupad-version-signal.md). The same version keeps the recording and restamps its time, so
-// the next check is a day later; a new version records; a failed check replays the recording and warns.
+// the next check is a day later; a new version records; a failed check replays the recording and warns, once
+// per run.
 // The recording is SudokuPad's own code, so it lives outside the repo, shared by every worktree:
 // `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`.
 //   LIVE_REFRESH=1  record again now, whatever the recording's age
@@ -24,10 +25,12 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { openSettings } from './settings.mjs'
 
 export const MAX_AGE_MS = 24 * 60 * 60 * 1000
-const LOCK_STALE_MS = 10 * 60 * 1000
+export const LOCK_STALE_MS = 10 * 60 * 1000
 const LOCK_WAIT_MS = 15 * 60 * 1000
-// How long a refresh marker (below) names its runner: a full run takes minutes, so an older one is another run's.
-const REFRESH_MARKER_MAX_AGE_MS = 60 * 60 * 1000
+// How long a run marker (below) names its runner: a full run takes minutes, so an older one is another run's.
+const RUN_MARKER_MAX_AGE_MS = 60 * 60 * 1000
+// How long a page gets to load.
+export const LOAD_MS = 60000
 
 const SUDOKUPAD_ORIGIN = 'https://sudokupad.app'
 // Hosts and paths the live checks never want: consent and analytics, and the solve counter, whose URL is
@@ -35,17 +38,18 @@ const SUDOKUPAD_ORIGIN = 'https://sudokupad.app'
 const TRACKERS = /cookiebot|googletagmanager|plausible|api\.sudokupad\.com\/counter/
 // SudokuPad serves its fonts as text/html, which Playwright would store as UTF-8 text and so corrupt.
 const FONT_FILE = /^https:\/\/sudokupad\.app\/.*\.(ttf|otf|woff2?)(\?|$)/
-const START = /Start Puzzle|Continue|Resume/i
+// The label of the button that starts the puzzle, or resumes one the page remembers.
+export const START = /Start Puzzle|Continue|Resume/i
 
-const puzzleUrl = () => readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
+export const puzzleUrl = () => readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 
 export const harPath = (env, home) => join(env.XDG_CACHE_HOME || join(home, '.cache'), 'sudokupad-scripts', 'live', 'sudokupad.har')
 
-// 'record', 'replay', 'restamp' (replay, after stamping the recording with the time now) or 'check' (the
-// recording is stale and `check`, the version check's outcome, is not known yet). `check` is 'same', 'changed'
-// or 'failed'. LIVE_REFRESH=1 records once per run, so a run that has already refreshed replays.
+// 'record', 'replay', 'restamp' (replay, after stamping the recording with the time now) or 'needs-check' (the
+// recording is stale and `versionCheck`, the version check's outcome, is not known yet). `versionCheck` is
+// 'same', 'changed' or 'failed'. LIVE_REFRESH=1 records once per run, so a run that has already refreshed replays.
 // LIVE_OFFLINE=1 never records and never checks, so it throws when there is nothing to replay.
-export function modeFor ({ env, exists, mtimeMs, now, refreshedThisRun, check }) {
+export function modeFor ({ env, exists, mtimeMs, now, refreshedThisRun, versionCheck }) {
   if (env.LIVE_OFFLINE === '1') {
     if (env.LIVE_REFRESH === '1') throw new Error('LIVE_OFFLINE=1 and LIVE_REFRESH=1 contradict: one never touches the network, the other records from it')
     if (!exists) throw new Error('LIVE_OFFLINE=1 but there is no recording to replay: run once without it to record')
@@ -53,8 +57,8 @@ export function modeFor ({ env, exists, mtimeMs, now, refreshedThisRun, check })
   }
   if ((env.LIVE_REFRESH === '1' && !refreshedThisRun) || !exists) return 'record'
   if (now - mtimeMs <= MAX_AGE_MS) return 'replay'
-  if (check === undefined) return 'check'
-  return { same: 'restamp', changed: 'record', failed: 'replay' }[check]
+  if (versionCheck === undefined) return 'needs-check'
+  return { same: 'restamp', changed: 'record', failed: 'replay' }[versionCheck]
 }
 
 const VERSION = /\?v=(\d+(?:\.\d+)+)/
@@ -68,15 +72,26 @@ const fetchPuzzlePage = async () => {
   return response.text()
 }
 
+// The version in the recording's copy of the puzzle page, or null when the recording has no such page, names no
+// version or cannot be read. Null is an answer here and not a swallowed failure: a recording that cannot say
+// what it holds is one to replace, and recording again replaces it.
+const recordedVersion = (file) => {
+  try {
+    const document = JSON.parse(readFileSync(file, 'utf8')).log.entries
+      .find((e) => e.request.url === puzzleUrl() && e.response.content.text)
+    return document ? pageVersion(document.response.content.text) : null
+  } catch {
+    return null
+  }
+}
+
 // 'same' or 'changed': the version of the puzzle page `fetchHtml` returns against the version in the
-// recording's copy of it. A recording that names none counts as changed. Throws when the page cannot be
-// fetched or names no version, so the caller sees a failed check and not a guess.
+// recording's copy of it. A recording that names none or cannot be read counts as changed. Throws only when the
+// live page cannot be fetched or names no version, so the caller sees a failed check and not a guess.
 export async function checkVersion (file, fetchHtml = fetchPuzzlePage) {
   const live = pageVersion(await fetchHtml())
   if (live === null) throw new Error('the live puzzle page names no version')
-  const document = JSON.parse(readFileSync(file, 'utf8')).log.entries
-    .find((e) => e.request.url === puzzleUrl() && e.response.content.text)
-  return document && pageVersion(document.response.content.text) === live ? 'same' : 'changed'
+  return recordedVersion(file) === live ? 'same' : 'changed'
 }
 
 // A fresh recording without what a replay must not hold: a request the recorder aborted (status -1), and a
@@ -152,7 +167,7 @@ async function record (file) {
     await context.route(TRACKERS, (r) => r.abort())
     const p = await context.newPage()
     const stylesheet = p.waitForResponse(/fonts\.googleapis\.com\/css/)
-    await p.goto(puzzleUrl(), { waitUntil: 'load', timeout: 60000 })
+    await p.goto(puzzleUrl(), { waitUntil: 'load', timeout: LOAD_MS })
     const start = p.getByRole('button', { name: START }).first()
     await start.waitFor({ state: 'visible' })
     await start.click()
@@ -173,13 +188,11 @@ async function record (file) {
 // process, which is what makes them one run.
 const runnerKey = (env, ppid) => env.NODE_TEST_CONTEXT ? String(ppid) : null
 
-// Whether this runner already refreshed the recording: `<file>.refresh-run` names the runner that did, and is
-// ignored once it is too old to be the same run.
-function refreshedBy (file, key) {
+// Whether the run marker file `marker` names this runner. It is ignored once it is too old to be the same run.
+function markedBy (marker, key) {
   if (key === null) return false
-  const marker = `${file}.refresh-run`
   try {
-    return Date.now() - statSync(marker).mtimeMs < REFRESH_MARKER_MAX_AGE_MS && readFileSync(marker, 'utf8') === key
+    return Date.now() - statSync(marker).mtimeMs < RUN_MARKER_MAX_AGE_MS && readFileSync(marker, 'utf8') === key
   } catch (e) {
     if (e.code === 'ENOENT') return false
     throw e
@@ -188,21 +201,27 @@ function refreshedBy (file, key) {
 
 // The recording's path once it is fit to replay. When the mode says record, it records under the lock and
 // first re-reads the mode there, since another process may have recorded or restamped while this one waited.
-// `record` is handed the path and writes the recording there. `check(file)` resolves to 'same' or 'changed'
-// and rejects when it cannot tell; a rejection replays the recording and goes to `warn`.
-export async function ensureRecording ({ env, home, ppid, record, check, warn }) {
+// `record` is handed the path and writes the recording there. `checkVersion(file)` resolves to 'same' or 'changed'
+// and rejects when it cannot tell; a rejection replays the recording and goes to `warn`. Two run markers name the
+// runner that did something a later test file of its run must not repeat: `<file>.refresh-run` that it recorded,
+// `<file>.check-failed-run` that its check failed, so the run makes one failed request and gives one warning.
+export async function ensureRecording ({ env, home, ppid, record, checkVersion, warn }) {
   const file = harPath(env, home)
   const key = runnerKey(env, ppid)
-  const mode = (outcome) => modeFor({ env, ...recordingState(file), now: Date.now(), refreshedThisRun: refreshedBy(file, key), check: outcome })
+  const refreshMarker = `${file}.refresh-run`
+  const failedCheckMarker = `${file}.check-failed-run`
+  const mode = (versionCheck = markedBy(failedCheckMarker, key) ? 'failed' : undefined) =>
+    modeFor({ env, ...recordingState(file), now: Date.now(), refreshedThisRun: markedBy(refreshMarker, key), versionCheck })
   if (mode() === 'replay') return file
   mkdirSync(dirname(file), { recursive: true })
   await withLock(file, async () => {
     let next = mode()
-    if (next === 'check') {
+    if (next === 'needs-check') {
       let outcome
-      try { outcome = await check(file) } catch (e) {
+      try { outcome = await checkVersion(file) } catch (e) {
         outcome = 'failed'
         warn(`live cache: could not check SudokuPad's version (${e.message}); replaying the recording in ${file}`)
+        if (key !== null) writeFileSync(failedCheckMarker, key)
       }
       next = mode(outcome)
     }
@@ -214,7 +233,7 @@ export async function ensureRecording ({ env, home, ppid, record, check, warn })
     if (next === 'replay') return
     console.error(`live cache: recording SudokuPad's app from ${SUDOKUPAD_ORIGIN} into ${file}`)
     await record(file)
-    if (key !== null) writeFileSync(`${file}.refresh-run`, key)
+    if (key !== null) writeFileSync(refreshMarker, key)
   })
   return file
 }
@@ -235,7 +254,7 @@ let ready
 // recorded puzzle's URL (one page document serves every path; the page keeps its own location), then the
 // recording, then the abort of whatever it lacks.
 export async function routeSudokuPad (target) {
-  ready ??= ensureRecording({ env: process.env, home: homedir(), ppid: process.ppid, record, check: checkVersion, warn: console.error })
+  ready ??= ensureRecording({ env: process.env, home: homedir(), ppid: process.ppid, record, checkVersion, warn: console.error })
   const file = await ready
   await target.route('**/*', (route) => {
     misses.add(route.request().url())

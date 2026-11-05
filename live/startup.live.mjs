@@ -1,6 +1,5 @@
 // Live check of every script's startup on sudokupad.app, in headless Chromium, at each injection time.
-// The injection time matters only while a script starts up, so every other live file injects after Start Puzzle,
-// and this one runs each script at all three:
+// The injection time matters only while a script starts up, so this file runs each script at all three:
 //   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
@@ -10,7 +9,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { MODES, openPage, startPuzzle } from './page.mjs'
+import { MODES, openPage, START, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
 import { keydownDefaults, openPenTool, penEntries } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
@@ -31,6 +30,9 @@ const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
   await group.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })
 }
+
+// Prepended to a before-start injection: records whether the Start Puzzle button shows as the script runs.
+const RECORD_START_SHOWN = `window.__startShownAtInjection = [...document.querySelectorAll('button')].some((b) => ${START}.test(b.textContent) && b.getClientRects().length > 0);\n`
 
 const select = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
 
@@ -129,7 +131,7 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
         let context, p, errors
 
         before(async () => {
-          const injection = { mode, code: source(script.file) }
+          const injection = { mode, code: (mode === 'before-start' ? RECORD_START_SHOWN : '') + source(script.file) }
           ;({ context, p, errors } = await openPage(browser, { injection }))
           await startPuzzle(p, { injection })
           await script.ready(p)
@@ -141,6 +143,12 @@ describe('startup', { concurrency: CONCURRENCY }, () => {
         if (mode === 'document-idle') {
           it('Framework and getApp exist when the script runs', async () => {
             assert.equal(await p.evaluate(() => window.__fwAtIdle), 'function/function')
+          })
+        }
+
+        if (mode === 'before-start') {
+          it('the Start Puzzle button still shows when the script runs', async () => {
+            assert.equal(await p.evaluate(() => window.__startShownAtInjection), true)
           })
         }
 

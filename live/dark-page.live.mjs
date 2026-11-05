@@ -10,7 +10,7 @@ import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { gotoPuzzle, openPage, START, startPuzzle } from './page.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
-import { SETTLE_MS, stable } from './settle.mjs'
+import { readUntil, SETTLE_MS, stable } from './settle.mjs'
 
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
 const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
@@ -116,16 +116,17 @@ const settledRectangle = (p) => stable(() => p.evaluate((selector) => {
 const settledShot = (p, clip) => stable(() => p.screenshot({ clip, animations: 'disabled' }), SETTLE_MS, (a, b) => a.equals(b))
 
 // The board region now, with the kept rectangle relative to it (null for a page with no board).
-// Each read takes the region, a settled shot of it and the settled rectangle, and the reads repeat until
-// the region holds still, so a relayout still under way (a resize, a puzzle just loaded) is waited on by
-// its condition. `region` comes first in the read so a timeout's message, cut to its first characters,
-// shows the region and not the shot's bytes.
-const boardShot = (p) => stable(async () => {
+// Each read takes the region, a settled shot of it, the settled rectangle and the region again, and the reads
+// repeat until the region is the same before and after, so a relayout still under way (a resize, a puzzle just
+// loaded) is waited on by its condition and a shot it moved during is not returned. The two regions come first
+// in the read so a timeout's message, cut to its first characters, shows them and not the shot's bytes.
+const boardShot = (p) => readUntil(async () => {
   const region = await regionOf(p)
   const png = await settledShot(p, region)
   const rect = await settledRectangle(p)
-  return { region, png, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
-}, SETTLE_MS, (a, b) => JSON.stringify(a.region) === JSON.stringify(b.region))
+  const regionAfter = await regionOf(p)
+  return { region, regionAfter, png, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
+}, (r) => JSON.stringify(r.region) === JSON.stringify(r.regionAfter))
 
 // A PNG's pixels: { width, height, data } with `data` the RGBA bytes, carried out of the page as
 // base64 because a plain array of them is slow to serialize.

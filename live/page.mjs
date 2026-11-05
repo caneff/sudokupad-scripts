@@ -1,19 +1,16 @@
 // Shared by the live checks: opening SudokuPad's puzzle page and getting it past Start Puzzle, with a script
 // injected at any of the three times a userscript can load. Not a check itself, so `live/*.live.mjs` skips it.
 
-import { readFileSync } from 'node:fs'
-import { routeSudokuPad } from './cache.mjs'
+import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
 
-// The label of the button that starts the puzzle, or resumes one the page remembers.
-export const START = /Start Puzzle|Continue|Resume/i
+export { START }
 
-export const PUZZLE_URL = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
+export const PUZZLE_URL = puzzleUrl()
 
 // The injection times a check can ask for: a script that waits on SudokuPad's own startup behaves differently at each.
 export const MODES = ['document-idle', 'before-start', 'after-start']
 
 const VIEWPORT = { width: 1200, height: 900 }
-const LOAD_MS = 60000
 const FRAMEWORK_MS = 30000
 
 // A page of `context` served from the recording, with the page's errors collected into the returned `errors`.
@@ -23,6 +20,16 @@ export async function newPage (context) {
   p.on('pageerror', (e) => errors.push(String(e)))
   await routeSudokuPad(p)
   return { p, errors }
+}
+
+// Collects the page's `console.error` lines into `errors`, leaving out a resource that failed to load, which a
+// replay's aborted trackers print. Fits `openPage`'s `seed` as it is. `take(text)`, when given, is asked first:
+// a line it returns true for is the caller's, and stays out of `errors`.
+export const captureConsoleErrors = (page, errors, take = () => false) => {
+  page.on('console', (m) => {
+    if (m.type() !== 'error' || /Failed to load resource/.test(m.text()) || take(m.text())) return
+    errors.push(`console.error: ${m.text()}`)
+  })
 }
 
 // Runs the code at DOMContentLoaded, before the page's own scripts finish, and records in `window.__fwAtIdle`
@@ -53,7 +60,7 @@ export async function openPage (browser, { contextOptions = {}, seed, injection 
 }
 
 // Waits for SudokuPad's own page to have a puzzle.
-export const waitForFramework = (p) => p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: FRAMEWORK_MS })
+const waitForFramework = (p) => p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: FRAMEWORK_MS })
 
 // Waits for the puzzle, clicks Start Puzzle once it shows and returns once the controls exist. `beforeStart()`
 // runs while the button still shows. `injection` (`{ mode, code }`) adds the code at `before-start`, just

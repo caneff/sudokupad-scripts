@@ -28,9 +28,12 @@ export async function openScriptDialog (p, entryText, editorSel) {
   await p.locator(editorSel).waitFor({ state: 'visible' })
 }
 
+// The open dialog's button whose whole label is `text`.
+export const dialogButton = (p, text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
+
 // Presses the dialog button named `text` (Save or Cancel) and waits for the editor matching `editorSel` to go.
 export async function closeDialogWith (p, text, editorSel) {
-  await p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first().click()
+  await dialogButton(p, text).click()
   await p.locator(editorSel).waitFor({ state: 'detached' })
 }
 

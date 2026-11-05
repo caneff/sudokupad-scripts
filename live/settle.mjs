@@ -1,4 +1,4 @@
-// Shared by the live checks: waits for a page to show an expected value (`settle`) or to stop changing (`stable`), and clicks until a click takes (`clickUntil`). Not a check itself, so
+// Shared by the live checks: waits for a page to show an expected value (`settle`), to stop changing (`stable`) or to give a reading that passes a test (`readUntil`), and clicks until a click takes (`clickUntil`). Not a check itself, so
 // `live/*.live.mjs` skips it.
 
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -66,16 +66,31 @@ export async function stable (read, timeoutMs = SETTLE_MS, equal = (a, b) => JSO
   }
 }
 
+// Reads until `holds(reading)` and returns that reading: for a read that checks itself, such as a region taken before
+// and after a slow capture. The deadline is looked at only after a reading fails, so a slow read that holds is
+// returned however long it took, and a read with deadlines of its own cannot use up this one on a still page.
+// Throws, naming the first 200 characters of the last reading as JSON, when a reading fails past `timeoutMs`.
+export async function readUntil (read, holds, timeoutMs = SETTLE_MS) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const reading = await read()
+    if (holds(reading)) return reading
+    if (Date.now() > deadline) throw new Error(`no reading held in ${timeoutMs} ms; last ${JSON.stringify(reading).slice(0, 200)}`)
+    await sleep(POLL_MS)
+  }
+}
+
 // SudokuPad throttles refreshControls, which binds a new button's click handler, so a click in the first moments after a script is
 // injected is dead. Clicks (`click` is an async function) until `read` shows `expected` (compared as JSON), giving each click
-// CLICK_TAKES_MS, and stops clicking once `deadlineMs` has passed; returns the last reading. A handler that never binds ends at
-// the deadline with the wrong value, so the caller's assert fails.
-export async function clickUntil (click, read, expected, deadlineMs) {
+// `clickTakesMs`, and stops clicking once `deadlineMs` has passed; returns the last reading. A handler that never binds ends at
+// the deadline with the wrong value, so the caller's assert fails. A button that toggles passes a `clickTakesMs` longer than its
+// effect takes, since a second click undoes the first. `settle`'s FLOOR_MS caps it for a value that does not change.
+export async function clickUntil (click, read, expected, deadlineMs, clickTakesMs = CLICK_TAKES_MS) {
   const deadline = Date.now() + deadlineMs
   let value
   do {
     await click()
-    value = await settle(read, expected, CLICK_TAKES_MS)
+    value = await settle(read, expected, clickTakesMs)
   } while (JSON.stringify(value) !== JSON.stringify(expected) && Date.now() < deadline)
   return value
 }
