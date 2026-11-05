@@ -125,20 +125,16 @@ const settledRectangle = (p) => stable(() => p.evaluate((selector) => {
 const settledShot = (p, clip) => stable(() => p.screenshot({ clip, animations: 'disabled' }), SETTLE_MS, (a, b) => a.equals(b))
 
 // The board region now, with the kept rectangle relative to it (null for a page with no board).
-// The region is read again after the shot, and the shot repeated until both agree, so a relayout
-// still under way (a resize, a puzzle just loaded) is waited on by its condition.
-async function boardShot (p) {
-  const deadline = Date.now() + SETTLE_MS
-  for (;;) {
-    const region = await regionOf(p)
-    const png = await settledShot(p, region)
-    const rect = await settledRectangle(p)
-    if (JSON.stringify(await regionOf(p)) === JSON.stringify(region)) {
-      return { png, region, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
-    }
-    if (Date.now() > deadline) throw new Error(`the board region did not settle within ${SETTLE_MS} ms`)
-  }
-}
+// Each read takes the region, a settled shot of it and the settled rectangle, and the reads repeat until
+// the region holds still, so a relayout still under way (a resize, a puzzle just loaded) is waited on by
+// its condition. `region` comes first in the read so a timeout's message, cut to its first characters,
+// shows the region and not the shot's bytes.
+const boardShot = (p) => stable(async () => {
+  const region = await regionOf(p)
+  const png = await settledShot(p, region)
+  const rect = await settledRectangle(p)
+  return { region, png, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
+}, SETTLE_MS, (a, b) => JSON.stringify(a.region) === JSON.stringify(b.region))
 
 // A PNG's pixels: { width, height, data } with `data` the RGBA bytes, carried out of the page as
 // base64 because a plain array of them is slow to serialize.
