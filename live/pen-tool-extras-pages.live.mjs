@@ -33,8 +33,6 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// One browser context per group: its page, its page errors, and the checks. `extra` is the scripts
-// injected besides pen-tool-extras, for the group that has No Tab Letters installed.
 function group (title, extra = []) {
   describe(title, { concurrency: false }, () => {
     let context, p, errors
@@ -54,7 +52,6 @@ function group (title, extra = []) {
       await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     }
 
-    // One free line across the middle of grid row `row`, a real drag; a second line takes another row.
     const drawFromColumn2 = async (row) => {
       const before = await strokeCount()
       const [x, y] = await cellCentre(p, row, 2)
@@ -65,7 +62,6 @@ function group (title, extra = []) {
       assert.equal(await settle(async () => (await strokeCount()) > before, true), true, 'a stroke appeared')
     }
 
-    // The page button turns one page forward, so a page two turns away takes two presses.
     const goToPage = async (values) => {
       for (let i = 0; i < 3 && (await padValues()) !== values; i++) {
         await p.locator(PAGE_BUTTON).click()
@@ -303,13 +299,12 @@ function group (title, extra = []) {
       // The color buttons and the panel's margin are the panel but not the page button.
       const colour = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
       await p.mouse.move(colour.x + colour.width / 2, colour.y + colour.height / 2)
-      // One turn forward only: the old anywhere-in-the-panel wheel moved the pen to page 3 and this leaves it on page 2.
+      // One turn forward only, which leaves the pen on page 2.
       await p.mouse.wheel(0, 100)
       await sleep(500) // "nothing happened in 500 ms" check
       assert.equal(await selected(), 'c')
     })
 
-    // Opens the dialog, sets the two Enable boxes and saves.
     const setStyles = async ({ dashed, arrows }) => {
       await openEditor()
       for (const [key, on] of [['dashed', dashed], ['arrows', arrows]]) await editor().locator(`input[data-style="${key}"]`).setChecked(on)

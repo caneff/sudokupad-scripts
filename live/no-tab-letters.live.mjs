@@ -1,10 +1,4 @@
 // Live check of no-tab-letters.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 // The letter tool is switched on through its setting after the script is in, as a player does.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -30,7 +24,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   // The tests below are one ordered sequence on one page: each starts from the letter mode the one
   // before left (digits, with the saved mode null, then false once a toggle has saved it).
-  // The number pad's keys as typed on the page, and the letter mode SudokuPad saved.
   const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
   const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
 

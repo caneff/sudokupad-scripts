@@ -1,10 +1,4 @@
 // Live check of pen-tool-extras.user.js's pen colors and thickness on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -49,11 +43,9 @@ const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 
 const STYLE = '#pen-tool-extras-style'
 
-// Takes SudokuPad's color tool palette away, keeping it for `restorePalette`, so a script injected now waits for the tool.
 const removePalette = (page) => page.evaluate(() => { window.__palette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = undefined })
 const restorePalette = (page) => page.evaluate(() => { Framework.app.tools.colour.palette = window.__palette })
 
-// Adds a stroke element of pen value `value` into the element matching `parent`, as SudokuPad draws it, and returns the width it draws at.
 const probeStrokeWidth = (page, value, parent) => page.evaluate(([value, parent]) => {
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
   path.setAttribute('class', `cell-pen pen-${value} pencolor-1`)
@@ -76,13 +68,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
 
-  // The computed stroke of every drawn stroke of pen color `n`, in drawing order.
   const strokes = (n) => read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => window.getComputedStyle(e).stroke), n)
   const allStrokes = (n) => async () => [...new Set(await strokes(n))]
   const strokeCount = async () => (await read(() => document.querySelectorAll('.cell-pen').length))
-  // The color of a tool button's swatch, which SudokuPad draws as the button's :after.
   const swatch = (n) => read((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor, n)
-  // All nine swatches, as rgb(), once the pen tool's buttons are showing.
   const swatches = async () => {
     await openPenTool(p)
     return read(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor))
@@ -91,15 +80,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const want = hexes.map(rgbOf)
     assert.deepEqual(await settle(swatches, want), want)
   }
-  // The cell color variables for keys 0-9 as the page computes them, and SudokuPad's color tool.
   const cellVars = () => read(() => [...Array(10)].map((_, i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${i}`).trim()))
   const setCellColorPage = (page) => read((page) => Framework.app.tools.colour.setPage(page), page)
   const setCellColor = ([key, css]) => read(([key, css]) => Framework.app.tools.colour.setColor(key, css), [key, css])
   const restoreDefaults = () => dialogButton('Restore defaults').click()
   const pickerValues = () => editor().locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value))
 
-  // Draws one stroke with pen color `n` in row `row` of the screen's first cell column, so
-  // that no two strokes are the same line.
   const drawInFirstColumn = async (n, row) => {
     await openPenTool(p)
     await p.locator(`.tool-pen button[data-key="${n}"]`).click()
@@ -268,7 +254,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await pick('9', NINE.hex)
     await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 9: NINE.hex })
-    // Clear it again for the checks below.
     await openEditor()
     await restoreDefaults()
     await closeExtrasEditorWith(p, 'Save')
@@ -383,18 +368,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   describe('thickness', { concurrency: false }, () => {
-    // The slider in the pen tool's panel. The real drag is checked in pen-tool-extras-panel.live.mjs;
-    // these checks only need the value set, with the same `input` event a drag fires.
     const slider = () => p.locator('#pen-tool-extras-thickness')
     const setThickness = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
     const savedThickness = () => read((k) => Framework.getData(k), THICKNESS_KEY)
-    // The computed stroke width of every drawn stroke of pen color `n` (a drag draws a line and a
-    // cell circle), as numbers.
     const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
     const probeWidth = (value) => probeStrokeWidth(p, value, '#cell-pen')
     const FULL = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
     const HALF = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
-    // Every pen value's width, as { full: [...], half: [...] } of distinct numbers.
     const allWidths = async () => ({
       full: [...new Set(await Promise.all(FULL.map(probeWidth)))],
       half: [...new Set(await Promise.all(HALF.map(probeWidth)))]
@@ -523,14 +503,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const box = await locator.boundingBox()
       return [box.x + box.width / 2, box.y + box.height / 2]
     }
-    // Presses `which` over pen button `n` and leaves it down; the caller releases it.
     const press = async (n, which) => {
       await openPenTool(p)
       const [x, y] = await centre(button(n))
       await p.mouse.move(x, y)
       await p.mouse.down({ button: which })
     }
-    // Holds pen button `n` until the pickers show, then releases.
     const holdToOpen = async (n, which = 'left') => {
       await press(n, which)
       assert.equal(await settle(pickerCount, 9, HOLD_WAIT_MS, HOLD_QUIET_MS), 9)
@@ -585,8 +563,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('the context menu is suppressed during a hold on a pen color button, and not over the undo button or a quick press', async () => {
       const button4 = '.tool-pen button[data-value="4"]'
-      // A quick press (released before the delay) keeps its menu, here and on a button
-      // outside the pen tool.
+      // A quick press (released before the delay) keeps its menu.
       await press(4, 'right')
       await p.mouse.up({ button: 'right' })
       assert.equal(await menuAllowed(button4), true)

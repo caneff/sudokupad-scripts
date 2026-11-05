@@ -1,10 +1,6 @@
 // Live check of every script's startup on sudokupad.app, in headless Chromium, at each injection time.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
-// injection time and crackingthecryptic.com stay untested. The injection time matters only while a script
-// starts up, so every other live file injects after Start Puzzle, and this one runs each script at all three:
+// The injection time matters only while a script starts up, so every other live file injects after Start Puzzle,
+// and this one runs each script at all three:
 //   document-idle: at DOMContentLoaded, as `@run-at document-idle` approximates it
 //   before-start:  after the page loads, before Start Puzzle
 //   after-start:   after Start Puzzle, when the controls already exist
@@ -21,7 +17,6 @@ import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-// How many scripts-at-a-time pages run at once: each is its own browser context.
 const CONCURRENCY = 5
 
 const BLACK = 'rgb(0, 0, 0)'
@@ -32,7 +27,6 @@ const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
 
-// A settings entry the way a player finds it: a button in the Experimental group named `text`.
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
   await group.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })

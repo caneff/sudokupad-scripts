@@ -1,11 +1,5 @@
 // Live check of Color by Digit's profiles on sudokupad.app, in headless Chromium: the profile menu on
 // the button, switching profile, the button's icon, the dialog's profile list, and migration.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of
-// `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
-// injection time and crackingthecryptic.com stay untested. The script goes in after Start Puzzle, when the controls
-// already exist; startup.live.mjs checks the other injection times.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -23,7 +17,6 @@ const ARROW = `${BUTTON} [data-role="menu"]`
 const MENU = '#color-by-digit-menu'
 const EDITOR = '#color-by-digit-editor'
 const ROWS = `${EDITOR} [data-role=profile-row]`
-// The script's own hold time on the button.
 const HOLD_MS = 500
 // How far past a row's middle a drag ends to land beyond it.
 const DROP_PAST_MIDDLE_PX = 8
@@ -37,14 +30,12 @@ const FOUR_PROFILES = {
 }
 const TWO_PROFILES = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 
-// The key a digit gets in `groups`, or undefined.
 const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Runs the loaded page through Start Puzzle, then injects the script.
 const bootPage = async (p) => {
   await startPuzzle(p, { injection: { mode: 'after-start', code: script } })
   await p.locator(BUTTON).waitFor({ state: 'visible' })
@@ -53,7 +44,6 @@ const bootPage = async (p) => {
 // A page with the script injected; `seed` maps a localStorage key to a JSON value, saved before the page loads.
 const openProfiles = (seed, contextOptions = {}) => openSession(browser, script, { seed, contextOptions })
 
-// The reads and moves every group of checks below uses, bound to a page.
 const tools = (p) => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const cellsState = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({
@@ -62,7 +52,6 @@ const tools = (p) => {
   const coloredCount = async () => (await cellsState()).filter((x) => x.colours.length).length
   const coloursOf = async () => JSON.stringify((await cellsState()).map((x) => x.colours))
   const digitOf = (x) => String(x.given || x.value || '')
-  // The cells whose colors are not what `groups` gives their digit.
   const wrongCount = async (groups) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(digitOf(x) === '' ? [] : [keyOf(groups, digitOf(x))])).length
   const getState = () => read((key) => Framework.getData(key), PROFILES_KEY)
   const names = async () => (await getState()).profiles.map((x) => x.name)
@@ -130,7 +119,7 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
 })
 
 describe('migration from saved groups, injected after Start Puzzle', { concurrency: false }, () => {
-  // `rows` are the menu's rows after the migration: the active profile is the one in `activeName`.
+  // `rows` are the menu's rows after the migration.
   const migrate = async (groups, rows, expectedDigits) => {
     const { context, p, errors } = await openProfiles({ [LEGACY_STORAGE_KEY]: groups })
     try {

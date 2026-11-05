@@ -1,11 +1,4 @@
 // Live check of dark-page.user.js on sudokupad.app, in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so
-// it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so
-// Tampermonkey's real injection time and crackingthecryptic.com stay untested.
-// The script goes in after Start Puzzle, when the controls already exist, except in the page color dialog group at the end, which
-// injects at DOMContentLoaded; startup.live.mjs checks the other injection times.
 //
 // The reference for every board check is the same page with the script switched off (its
 // stylesheet's media set to `not all`): a separate page that never had the script rasterizes the
@@ -22,7 +15,6 @@ import { SETTLE_MS, stable } from './settle.mjs'
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
 const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
 
-// Dark Page's button among the entries of the Experimental group.
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ })
 const RECT = `#${RECT_ID}`
 const STYLE = `#${STYLE_ID}`
@@ -91,7 +83,6 @@ async function fillBoard (p) {
   })
 }
 
-// Selects the cells in order, leaving them all selected.
 const selectCells = (p, cells) => p.evaluate((cells) => {
   const a = Framework.app
   a.deselect()
@@ -188,7 +179,6 @@ async function compareBoards (p, off, on) {
   return { changed, clipped, slack }
 }
 
-// The unique colors in a strip of the page, as `r,g,b`.
 async function colorsIn (p, clip) {
   const image = await decode(p, await settledShot(p, clip))
   const seen = new Set()
@@ -196,7 +186,6 @@ async function colorsIn (p, clip) {
   return [...seen]
 }
 
-// `off` and `on` are boardShot results.
 async function expectKept (p, off, on) {
   const result = await compareBoards(p, off, on)
   assert.notEqual(result, null, 'the board region has the same size with the script on and off')

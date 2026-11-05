@@ -1,9 +1,5 @@
 // Live check of pen-tool-extras.user.js's third page of pens (chevron lines) on sudokupad.app in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
-//
-// The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real injection time and
-// crackingthecryptic.com stay untested, and so does a touch screen.
-// The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// A touch screen stays untested.
 // Every drag, press and click is real input. A line's direction is stored in its color character (a page 3 pen is two
 // characters), so the checks read both what is stored (`cell.pen`) and what is drawn (the way each chevron points).
 /* global Framework, ToolPen */
@@ -47,7 +43,6 @@ const headings = (chevronsPath) => {
   return out
 }
 
-// One browser context: its page, its page errors, and the checks.
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
 
@@ -56,7 +51,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const selected = () => read(() => String(ToolPen.tool.selectedColor))
   const padValues = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
   const penOf = async (cells) => (await penEntries(p)).filter((v) => cells.some((c) => v.startsWith(`${c}:`)))
-  // Every arrow line group in the pen layer: its class, the way its arrows point, and the width of its line.
   const chevronGroups = () => read(() => [...document.querySelectorAll('#cell-pen > g.cell-pen')].map((g) => {
     const [line, chevrons] = ['line', 'chevrons'].map((name) => g.querySelector(`[data-chevron-part="${name}"]`))
     return { cls: g.getAttribute('class'), chevrons: chevrons.getAttribute('d'), line: line.getAttribute('d'), lineWidth: Number(line.getAttribute('stroke-width')) }
@@ -65,7 +59,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const pageErrors = () => errors.slice()
 
   const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
-  // Turns to page 3 (two page button presses from page 1) and selects the pen on button `key`.
   const selectChevronPen = async (key) => {
     await openPenTool(p)
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })

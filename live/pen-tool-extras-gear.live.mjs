@@ -1,8 +1,5 @@
 // Live check of pen-tool-extras.user.js's settings gear on SudokuPad's pen tool button (#control-pen), on sudokupad.app in headless Chromium.
-// Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium.
-//
-// The script is injected into the page after Start Puzzle, not installed through Tampermonkey, so Tampermonkey's real injection time,
-// crackingthecryptic.com and a real touch screen stay untested. The clicks are real mouse input; the tap is Chromium's emulated touch.
+// A real touch screen stays untested. The clicks are real mouse input; the tap is Chromium's emulated touch.
 // That the gear sits clear of the pen icon is judged on the screenshot in the PR, not here.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
@@ -23,13 +20,11 @@ after(async () => { await browser?.close() })
 describe('the settings gear on the pen tool button', { concurrency: false }, () => {
   let context, p
 
-  // Starts the loaded puzzle with the pen tool on and injects the script.
   const load = async (p) => {
     await startPuzzle(p, { beforeStart: () => p.evaluate(() => Framework.setSetting('toolpen', true)) })
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
   }
-  // The id of the selected tool button.
   const selectedId = () => p.evaluate(() => (document.querySelector('.controls-tool .selected, .controls-tool [aria-pressed=true], .controls-tool .active') || {}).id || null)
   const closeDialog = async () => {
     await p.keyboard.press('Escape')
