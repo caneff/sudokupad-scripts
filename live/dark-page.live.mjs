@@ -13,7 +13,8 @@ import { headerVersion, openSettings } from './settings.mjs'
 import { readUntil, SETTLE_MS, stable } from './settle.mjs'
 
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
-const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
+const { RECT_ID, STYLE_ID, SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
+const DATA_KEY = 'DarkPage_color'
 
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ })
 const RECT = `#${RECT_ID}`
