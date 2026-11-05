@@ -1794,12 +1794,15 @@ test('the opacity row refuses a saved value off the slider\'s steps', () => {
   assert.equal(SETTINGS.opacity.normalize(57), 80)
 })
 
-test('a new slider is one builder call: its row reads, normalizes and saves with nothing else added', () => {
+test('a new slider is one builder call: its row normalizes and saves with nothing else added', () => {
   const row = slider('New_key', { min: 2, max: 10, step: 2, fallback: 4 }, () => {})
-  assert.equal(row.key, 'New_key')
-  assert.equal(row.fallback, 4)
   assert.equal(row.normalize(6), 6)
   for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.normalize(bad), 4, JSON.stringify(bad))
+  const calls = []
+  const store = { setData: (key, value) => calls.push(['set', key, value]), removeData: (key) => calls.push(['remove', key]) }
+  saveSetting(store, row, 6)
+  saveSetting(store, row, 4)
+  assert.deepEqual(calls, [['set', 'New_key', 6], ['remove', 'New_key']])
 })
 
 test('a flag is off only for a saved false', () => {
