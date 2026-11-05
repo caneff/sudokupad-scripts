@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION } = require('./digit-color.user.js')
+const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION } = require('./digit-color.user.js')
 
 // Chris's table from issue #7, typed out here as the independent source for the constant.
 const TABLE = {
@@ -127,4 +127,54 @@ test('digitOfText reads a single digit and nothing else', () => {
 
 test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'digit-color.user.js'), 'utf8')))
+})
+
+test('a digit set to null renders SudokuPad blue at opacity 0.4 with a disabled "SudokuPad color" button', () => {
+  const html = renderEditor({ ...TABLE, 3: null })
+  const row = html.split('<div ').find((r) => r.includes('data-digit="3"'))
+  assert.match(row, /<input type="color" data-digit="3" value="#1d6ae5" style="opacity:0.4">/)
+  assert.match(row, /<button type="button" data-act="own" data-digit="3" disabled>SudokuPad color<\/button>/)
+  const other = html.split('<div ').find((r) => r.includes('data-digit="4"'))
+  assert.match(other, /value="#1b7a2f" style="opacity:1"/)
+  assert.doesNotMatch(other, /disabled/)
+})
+
+test('a color containing a double quote is escaped in the editor', () => {
+  const html = renderEditor({ ...TABLE, 5: '#fff" onfocus="x' })
+  assert.equal(esc('a"b<c>&'), 'a&quot;b&lt;c&gt;&amp;')
+  assert.ok(html.includes('value="#fff&quot; onfocus=&quot;x"'), html)
+  assert.ok(!html.includes('onfocus="x"'), html)
+})
+
+test('a Framework without getApp makes the script warn and change nothing', () => {
+  const file = require.resolve('./digit-color.user.js')
+  const warnings = []
+  const realWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  global.Framework = {}
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = realWarn
+    delete global.Framework
+    delete require.cache[file]
+  }
+  assert.equal(warnings.length, 1)
+  assert.match(warnings[0], /^digit-color: .*getApp/)
+})
+
+test('no Framework at all is left alone without a warning', () => {
+  const file = require.resolve('./digit-color.user.js')
+  const warnings = []
+  const realWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = realWarn
+    delete require.cache[file]
+  }
+  assert.deepEqual(warnings, [])
 })
