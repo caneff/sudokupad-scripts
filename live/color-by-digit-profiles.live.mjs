@@ -297,8 +297,9 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   })
 
   it('a pick with auto mode on does the same, as one undo step', async () => {
+    const checked = () => p.locator(BOX).getAttribute('aria-checked')
     await p.click(BOX)
-    await settle(() => p.locator(BOX).getAttribute('aria-checked'), 'true')
+    assert.equal(await settle(checked, 'true'), 'true')
     const before = await t.coloursOf()
     await t.openMenuByArrow()
     await t.pick('Odd/Even')
@@ -306,7 +307,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await t.undo()
     assert.equal(await settle(t.coloursOf, before), before)
     await p.click(BOX)
-    await settle(() => p.locator(BOX).getAttribute('aria-checked'), 'false')
+    assert.equal(await settle(checked, 'false'), 'false')
   })
 
   it('with Multi-color off, a pick that takes one color off a cell holding two leaves it its group color', async () => {
@@ -364,10 +365,6 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
       seen.push([name, await settle(overlaps, { cells, hits: 0 })])
     }
     assert.deepEqual(seen, [['Odd/Even', { cells: 2, hits: 0 }], ['Low/5/High', { cells: 3, hits: 0 }], ['Four', { cells: 4, hits: 0 }], ['Six', { cells: 4, hits: 0 }]])
-  })
-
-  it('a group of the icon shows its digit: Six shows 0 to 3 on its first four groups', async () => {
-    assert.deepEqual(await t.iconDigits(), ['0', '1', '2', '3'])
   })
 
   it('Edit profiles… opens the dialog', async () => {

@@ -210,16 +210,17 @@ function group (title, extra = []) {
       assert.notEqual((await styleOf('.cell-pen.pencolor-c')).dash, 'none')
     })
 
-    it('the dialog\'s dash length starts at 3, which draws dashes; 0 draws dots, and a saved 0 stays; Cancel leaves it, Restore defaults and Save bring the dashes back', async () => {
-      const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')).strokeDasharray))
+    const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')).strokeDasharray))
+    const sample = () => p.locator(`${PAGE_BUTTON} [data-page-sample]`).getAttribute('data-page-sample')
+    const range = () => editor().locator('input[data-setting="dash"]')
+
+    it('the dialog\'s dash length starts at 3, which draws dashes; 0 draws dots, and a saved 0 stays; Cancel leaves it, Restore defaults and Save bring the dashes back, and each segment starts half a dash in', async () => {
       const solidOn = () => read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-3')).strokeDasharray)
-      const sample = () => p.locator(`${PAGE_BUTTON} [data-page-sample]`).getAttribute('data-page-sample')
       await read(([k]) => Framework.removeData(k), [DASH_KEY])
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
       // 3 dashes of a line width of 5
       assert.equal(await settle(dashOn, 15), 15, 'dashes to start with')
       await openEditor()
-      const range = () => editor().locator('input[data-setting="dash"]')
       assert.deepEqual(await range().evaluate((el) => [el.min, el.max, el.step, el.value]), ['0', '8', '1', '3'])
       await range().fill('0')
       await closeWith('Cancel')
@@ -249,6 +250,9 @@ function group (title, extra = []) {
       // Each segment starts half a dash in, so it is inked at both ends and the halves at a cell boundary make one whole dash.
       const pattern = await read(() => { const st = window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')); return { array: st.strokeDasharray.split(/[ ,]+/).map(parseFloat), offset: parseFloat(st.strokeDashoffset) } })
       assert.equal(Math.abs(pattern.offset - pattern.array[0] / 2) < 1e-6, true, JSON.stringify(pattern))
+    })
+
+    it('the page button shows the line of the page it turns to: chevrons from page 2, solid from page 3, dashes from page 1', async () => {
       await selectPen()
       // The button shows the line of the page it turns to: from page 2 the chevrons of page 3, from page 3 page 1's solid line,
       // from page 1 the dashes.
@@ -259,7 +263,9 @@ function group (title, extra = []) {
       assert.equal(await settle(sample, 'dashed'), 'dashed', 'the page button shows dashes')
       await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
-      // The dash scales with the thickness slider.
+    })
+
+    it('the dash scales with the thickness slider', async () => {
       await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })) })
       assert.equal(await settle(dashOn, 12), 12)
       await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '5'; el.dispatchEvent(new Event('input', { bubbles: true })) })

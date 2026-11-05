@@ -251,7 +251,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(arrowStroke, 'none')
     await read((k) => Framework.setData(k, { 3: '#123456' }), COLORS_KEY)
     await reload()
-    assert.equal(await settle(async () => (await strokeOf())[0], 'rgb(18, 52, 86)'), 'rgb(18, 52, 86)')
+    const recolored = ['rgb(18, 52, 86)', 'rgb(18, 52, 86)', 'rgb(18, 52, 86)', 'none']
+    assert.deepEqual(await settle(strokeOf, recolored), recolored)
     await read((k) => Framework.removeData(k), COLORS_KEY)
     await reload()
     await selectChevronPen(3)
@@ -425,7 +426,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(nine, drawn), drawn)
   })
 
-  it('page 2 and page 1 pens still draw as before beside the chevron lines', async () => {
+  it('page 1 pens still draw plain lines beside the chevron lines', async () => {
     await p.locator(PAGE_BUTTON).click()
     assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
     await press(2)

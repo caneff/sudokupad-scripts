@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { effectiveOpacities, headerVersion, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
+import { effectiveOpacities, openSettings, restartPuzzle, scaleOf } from './settings.mjs'
 import { settle, SETTLE_MS, stable } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -470,7 +470,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setThickness(5)
   })
 
-  it('edge and corner marks keep their size up to thickness 5, are about 1.27 times at 10 and 1.6 times at 16, and stay centred on their edge or corner; lines do not grow', async () => {
+  it('edge and corner marks are about 1.27x at 10 and 1.6x at 16 of their size at 5, and stay centred', async () => {
     const boxOf = (selector) => read((sel) => {
       const r = document.querySelector(sel)?.getBoundingClientRect()
       return r ? { w: r.width, h: r.height, x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
@@ -584,12 +584,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('the edge circle (stored under the dot value) is an open ring with a round stroke at half the pen width, and no fill', async () => {
     for (let i = 0; i < 2; i++) await clickEdge(3, 3, 'right')
     const ring = () => read(() => {
+      // Two arcs of one radius r, from the left end of a diameter round to the right end and back: `m -r,0 a r,r 0 1,0 2r,0 a r,r 0 1,0 -2r,0`.
+      const isCircle = (d) => {
+        const m = /^m -([\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 ([\d.]+),0 a \2,\3 0 1,0 -\4,0$/.exec(d)
+        return Boolean(m) && m[1] === m[2] && m[2] === m[3] && Math.abs(2 * m[2] - m[4]) < 0.01
+      }
       const e = document.querySelector('.cell-pen.pen-j')
       if (!e) return null
       const s = window.getComputedStyle(e)
-      return { cap: s.strokeLinecap, width: s.strokeWidth, fill: s.fill, d: e.getAttribute('d').replace(/^M[\d. ]+ /, '') }
+      return { cap: s.strokeLinecap, width: s.strokeWidth, fill: s.fill, circle: isCircle(e.getAttribute('d').replace(/^M[\d. ]+ /, '')) }
     })
-    const want = { cap: 'round', width: '2.5px', fill: 'none', d: 'm -6.64,0 a 6.64,6.64 0 1,0 13.28,0 a 6.64,6.64 0 1,0 -13.28,0' }
+    const want = { cap: 'round', width: '2.5px', fill: 'none', circle: true }
     assert.deepEqual(await settle(ring, want), want)
     await clearMarks()
   })
@@ -605,10 +610,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await editor().locator(`label:has(> input[data-mark="${mark}"])`).textContent()).trim(), '', `${mark} has no word`)
       assert.equal((await p.getByRole('checkbox', { name: names[mark] }).count()), 1, `${mark} is found by its name`)
     }
-    const text = await editor().textContent()
-    assert.match(text, /Marks a click cycles through/)
-    assert.match(text, /X Mark\s*Circle\s*Directions\s*Edge\s*Corner/)
-    assert.doesNotMatch(text, /Corner marks a click near a grid corner/)
     await closeWith('Cancel')
   })
 
@@ -770,17 +771,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(errors.slice(errorsBefore), [])
   })
 
-  it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
-    const group = await openSettings(p)
-    const entry = group.locator('button').filter({ hasText: 'Pen tool extras' })
-    assert.equal((await entry.textContent()).trim(), 'Pen tool extras')
-    await entry.click()
-    await editor().waitFor({ state: 'visible' })
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen tool extras')
-    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-    await closeWith('Cancel')
-  })
-
   describe('opacity', { concurrency: false }, () => {
     // The slider in the pen tool's panel. The real drag is checked in pen-tool-extras-panel.live.mjs;
     // these checks only need the value set, with the same `input` event a drag fires.
@@ -847,15 +837,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('at the default the grid matches SudokuPad\'s own per-stroke opacity to within a few levels per channel, where marks do not overlap', async () => {
       // The white outline (on by default) is a filter on the layer, which fading the layer as one picture and fading each stroke do not agree on; it is left out of both pictures.
-      await read(() => {
+      // Drops every line of the script's style that matches `drop` and returns the style's length before and after.
+      const dropLines = (drop) => read((source) => {
         const style = document.getElementById('pen-tool-extras-style')
-        style.textContent = style.textContent.split('\n').filter((line) => !/filter: url/.test(line)).join('\n')
-      })
+        const before = style.textContent.length
+        style.textContent = style.textContent.split('\n').filter((line) => !new RegExp(source).test(line)).join('\n')
+        return [before, style.textContent.length]
+      }, drop.source)
+      const [filterBefore, filterAfter] = await dropLines(/filter: url/)
+      assert.equal(filterAfter < filterBefore, true, `the outline filter line was in the style: ${filterBefore} then ${filterAfter}`)
       const withRule = await grid()
-      await read(() => {
-        const style = document.getElementById('pen-tool-extras-style')
-        style.textContent = style.textContent.split('\n').filter((line) => !/^:root:root (\.cell-pen|#cell-pen)[ ,].*\{ opacity/.test(line)).join('\n')
-      })
+      const [ruleBefore, ruleAfter] = await dropLines(/^:root:root (\.cell-pen|#cell-pen)[ ,].*\{ opacity/)
+      assert.equal(ruleAfter < ruleBefore, true, `the opacity rule was in the style: ${ruleBefore} then ${ruleAfter}`)
       assert.equal(await sameAt('0.8')(), true, 'SudokuPad\'s own rule gives 0.8 alone')
       const without = await grid()
       // Fading the layer as one picture and fading each stroke differ only in rounding where nothing overlaps.

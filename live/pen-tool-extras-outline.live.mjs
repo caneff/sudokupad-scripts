@@ -308,17 +308,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('a mark much thinner than the outline still gets the full outline: page 2 dots at Thickness 1 are white 4 and 7 units out at width 8 and 2 units out at width 3', async () => {
+    // A row no earlier test draws in, so the pixel read sits over the dots alone.
+    const DOT_ROW = 3
     await read(([t, d, o, w, op]) => { Framework.setData(t, 1); Framework.setData(d, 0); Framework.setData(o, true); Framework.setData(w, 8); Framework.setData(op, 100) }, [THICKNESS_KEY, DASH_KEY, OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY])
     await reload()
-    await draw(6, 1)
+    await draw(DOT_ROW, 1)
     await back()
-    assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS, 6).then((v) => v > 200), true), true, 'white 4 units above the dots at width 8')
-    assert.equal(await brightnessAbove(WIDE_UNITS, 6) > 200, true, 'white 7 units above the dots at width 8')
+    assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS, DOT_ROW).then((v) => v > 200), true), true, 'white 4 units above the dots at width 8')
+    assert.equal(await brightnessAbove(WIDE_UNITS, DOT_ROW) > 200, true, 'white 7 units above the dots at width 8')
     await unback()
     await read(([w]) => Framework.setData(w, 3), [OUTLINE_WIDTH_KEY])
     await reload()
     await back()
-    assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS - 2, 6).then((v) => v > 200), true), true, 'white 2 units above the dots at width 3 (a dot edge is 0.5 out, so the outline reaches 3.5 from its middle, and the pixel may sit between two dots 5 units apart)')
+    assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS - 2, DOT_ROW).then((v) => v > 200), true), true, 'white 2 units above the dots at width 3 (a dot edge is 0.5 out, so the outline reaches 3.5 from its middle, and the pixel may sit between two dots 5 units apart)')
     await unback()
     await clearSaved()
   })

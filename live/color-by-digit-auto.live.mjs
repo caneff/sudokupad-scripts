@@ -113,6 +113,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])]
   })))
   const at = (s, r, c) => s.find((x) => x.r === r && x.c === c)
+  const allColors = async () => JSON.stringify((await cellsState()).map((x) => x.colours))
   const coloredCount = async () => (await cellsState()).filter((x) => x.colours.length).length
   const givensColored = () => givensColoredOn(p)
   const cellAt = async (r, c) => at(await cellsState(), r, c)
@@ -280,6 +281,8 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     assert.deepEqual(await settle(() => colorsAt(8, 0), []), [])
     await p.click('#control-normal')
     await select(8, 1); await p.click('#control-corner'); await p.keyboard.press('1'); await p.click('#control-normal')
+    const corner = () => read(() => Framework.app.grid.getCell(8, 1).propGet('corner').join(''))
+    assert.equal(await settle(corner, '1'), '1')
     assert.deepEqual(await watch(() => colorsAt(8, 1)), [[]])
   })
 
@@ -334,12 +337,13 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 
   it('Save with the dialog box unticked turns auto mode off on both controls and leaves every color in place', async () => {
+    const colors = await allColors()
     await openEditor()
     await dialogBox().uncheck()
     await closeWith('Save')
     assert.equal(await settle(boxChecked, 'false'), 'false')
     assert.equal(await getAuto(), false)
-    assert.deepEqual(await watch(givensColored), [GIVEN_COUNT])
+    assert.deepEqual(await watch(allColors), [colors])
   })
 
   it('with auto mode off a typed digit gets no color, and the button still colors the grid', async () => {
@@ -401,9 +405,11 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 
   it('a click on the box turns auto mode off again, and the colors stay', async () => {
+    const colors = await allColors()
     await p.click(BOX)
     assert.equal(await settle(boxChecked, 'false'), 'false')
     assert.equal(await getAuto(), false)
+    assert.deepEqual(await watch(allColors), [colors])
   })
 
   it('no uncaught page errors', () => {

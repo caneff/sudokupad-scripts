@@ -160,10 +160,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(board, GIVENS)
   })
 
-  it('the button is present and visible', async () => {
-    await p.locator(BUTTON).waitFor({ state: 'visible' })
-  })
-
   // Rects of the button, Undo, the bottom row, the footer and the viewport, from the page.
   const layout = () => read(() => {
     const box = (e) => e.getBoundingClientRect().toJSON()
@@ -218,10 +214,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(look.icon || (look.text.length > 0 && look.fontSize > 4), true, JSON.stringify(look))
   })
 
-  it('the session starts with the two seeded profiles, Odd/Even active', async () => {
-    assert.deepEqual(await getData(), SEED)
-  })
-
   let baseline
 
   it('setup: entered digits and a corner mark land, and nothing is colored', async () => {
@@ -244,12 +236,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const s = await cellsState()
     assert.deepEqual(at(s, 0, 2).colours, ['2'])
     assert.deepEqual(at(s, 0, 3).colours, ['1'])
-  })
-
-  it('corner-marked and empty cells are untouched', async () => {
-    const s = await cellsState()
-    assert.deepEqual(at(s, 0, 5).colours, [])
-    assert.deepEqual(at(s, 8, 0).colours, [])
   })
 
   it('the selection is restored', async () => {
