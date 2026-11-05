@@ -1051,12 +1051,18 @@
   // cell's line would otherwise cover an earlier cell's mark. The pen layer's opacity then fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
   const RIGHT_BUTTON = 2
-  // The pen value of SudokuPad's own edge X on a cell's right, bottom, left and top edge. An edge between two cells is stored on one of them, so a click on it is always one of these four.
-  const EDGE_X = ['3', '4', 'b', 'c']
-  // The values this script adds per edge. SudokuPad's own pen values stop at `g`, so `h` onward are free; they stay lowercase letters because SudokuPad lowercases a pen value when it undoes or replays one.
-  const ADDED = { 3: ['h', 'i', 'j'], 4: ['k', 'l', 'm'], b: ['n', 'o', 'p'], c: ['q', 'r', 's'] }
+  // Keyed by the pen value of SudokuPad's own edge X on a cell's right, bottom, left and top edge. An edge between two cells is stored on one of them, so a click on it is always
+  // one of these four. `midpoint` is the edge's middle as a [row, col] offset from the cell's top left corner. `added` is the values this script adds, in ADDED_ORDER: SudokuPad's
+  // own pen values stop at `g`, so `h` onward are free; they stay lowercase letters because SudokuPad lowercases a pen value when it undoes or replays one. `arrows` is the
+  // shapes dirA and dirB draw.
+  const EDGES = {
+    3: { midpoint: [0.5, 1], added: ['h', 'i', 'j'], arrows: ['>', '<'] },
+    4: { midpoint: [1, 0.5], added: ['k', 'l', 'm'], arrows: ['^', 'v'] },
+    b: { midpoint: [0.5, 0], added: ['n', 'o', 'p'], arrows: ['>', '<'] },
+    c: { midpoint: [0, 0.5], added: ['q', 'r', 's'], arrows: ['^', 'v'] }
+  }
+  const EDGE_X = Object.keys(EDGES)
   const ADDED_ORDER = ['dirA', 'dirB', 'circle']
-  const SHAPES = { 3: ['>', '<'], 4: ['^', 'v'], b: ['>', '<'], c: ['^', 'v'] }
   // `directions` is the one checkbox for dirA and dirB.
   const EDGE_CYCLE = {
     types: ['x', 'circle', 'dirA', 'dirB'],
@@ -1077,9 +1083,18 @@
   // cells is stored once; `tl` is the top left corner, for the grid's top and left edge; `far` is the top right corner of the top row's last cell or the bottom left corner of the
   // bottom row's first, the two grid corners the other kinds cannot reach. Each kind lists the X, then the circle.
   const CORNER_VALUES = { tl: ['t', 'w'], br: ['u', 'x'], far: ['v', 'y'] }
-  const MARK_VALUES = [...EDGE_X, '5', '6', ...EDGE_X.flatMap((edge) => ADDED[edge]), ...Object.values(CORNER_VALUES).flat()]
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
+  // Each pen value this script draws, to its `edge` or corner `kind`, its type in the edge cycle or corner cycle, and its shape.
+  const ADDED_MARKS = new Map([
+    ...Object.entries(EDGES).flatMap(([edge, { added, arrows }]) =>
+      ADDED_ORDER.map((type, i) => [added[i], { edge, type, shape: type === 'circle' ? CIRCLE : arrows[i] }])),
+    ...Object.entries(CORNER_VALUES).flatMap(([kind, values]) =>
+      CORNER_CYCLE.types.map((type, i) => [values[i], { kind, type, shape: type === 'x' ? 'x' : CIRCLE }]))
+  ])
+  // The marks that grow with thickness: the edge X marks and every mark this script adds.
+  const GROWING_MARKS = [...EDGE_X, ...ADDED_MARKS.keys()]
+  const MARK_VALUES = [...GROWING_MARKS, '5', '6']
 
   // Data saved before the corner boxes existed has no corner entry, so both read as ticked. A circle box saved under its old name reads as the new one, which wins when both are
   // there; the result holds only the new names, so the next save writes those.
@@ -1090,7 +1105,7 @@
   }
 
   function valueOfType (edge, type) {
-    return type === 'x' ? edge : ADDED[edge][ADDED_ORDER.indexOf(type)]
+    return type === 'x' ? edge : EDGES[edge].added[ADDED_ORDER.indexOf(type)]
   }
 
   function stepType (current, settings, direction, cycle) {
@@ -1144,22 +1159,14 @@
   }
 
   function cornerMarkOf (value) {
-    for (const kind of Object.keys(CORNER_VALUES)) {
-      const index = CORNER_VALUES[kind].indexOf(value)
-      if (index !== -1) return { kind, type: CORNER_CYCLE.types[index] }
-    }
-    return null
+    const mark = ADDED_MARKS.get(value)
+    return mark && mark.kind ? { kind: mark.kind, type: mark.type } : null
   }
 
-  function edgeOf (value) {
-    return EDGE_X.find((edge) => ADDED[edge].includes(value)) || null
-  }
-
+  // An edge mark's shape; null for any other value.
   function shapeOf (value) {
-    const edge = edgeOf(value)
-    if (edge === null) return null
-    const index = ADDED[edge].indexOf(value)
-    return index === 2 ? CIRCLE : SHAPES[edge][index]
+    const mark = ADDED_MARKS.get(value)
+    return mark && mark.edge ? mark.shape : null
   }
 
   // Relative to the point the mark is centred on, `s` being the half-size in SudokuPad's units; 'x' is SudokuPad's own edge X.
@@ -1177,20 +1184,14 @@
   }
 
   function edgeMidpoint (edge, row, col) {
-    switch (edge) {
-      case '3': return [row + 0.5, col + 1]
-      case '4': return [row + 1, col + 0.5]
-      case 'b': return [row + 0.5, col]
-      default: return [row, col + 0.5]
-    }
+    const [dr, dc] = EDGES[edge].midpoint
+    return [row + dr, col + dc]
   }
 
   function addedMark (value, row, col, cols) {
-    const shape = shapeOf(value)
-    if (shape !== null) return { point: edgeMidpoint(edgeOf(value), row, col), shape }
-    const corner = cornerMarkOf(value)
-    if (corner === null) return null
-    return { point: cornerPoint(corner.kind, row, col, cols), shape: corner.type === 'x' ? 'x' : CIRCLE }
+    const mark = ADDED_MARKS.get(value)
+    if (!mark) return null
+    return { point: mark.edge ? edgeMidpoint(mark.edge, row, col) : cornerPoint(mark.kind, row, col, cols), shape: mark.shape }
   }
 
   function isEdgeActs (acts) {
@@ -1459,11 +1460,10 @@
   function buildThicknessCss (thickness) {
     if (!inRange(thickness, THICKNESS)) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
     const selector = (values) => values.map((v) => `:root:root .cell-pen.pen-${v}`).join(', ')
-    const marks = [...EDGE_X.flatMap((edge) => [edge, ...ADDED[edge]]), ...Object.values(CORNER_VALUES).flat()]
     const scale = markGrowthScale(thickness)
     return [
       `${selector(FULL_WIDTH_VALUES)} { stroke-width: ${thickness}; }`,
-      `${selector(marks)} { stroke-width: ${thickness * MARK_PER_THICKNESS / scale}; transform: scale(${scale}); transform-box: fill-box; transform-origin: center; }`
+      `${selector(GROWING_MARKS)} { stroke-width: ${thickness * MARK_PER_THICKNESS / scale}; transform: scale(${scale}); transform-box: fill-box; transform-origin: center; }`
     ].join('\n')
   }
 
