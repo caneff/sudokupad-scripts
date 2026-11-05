@@ -141,11 +141,11 @@ save('edges', await page.screenshot({ clip: gridClip(5, 1, 1, 2) }))
 
 // Corners: a click near a grid corner; 1 click is the X, 2 the circle.
 await pick(5)
-await landing('the corner X', () => clickTimes(...at(7, 2), 1))
+await landing('the corner X', () => clickTimes(...at(1, 6), 1))
 await pick(9)
-await landing('the corner circle', () => clickTimes(...at(7, 3), 2))
+await landing('the corner circle', () => clickTimes(...at(1, 7), 2))
 await quiet()
-save('corners', await page.screenshot({ clip: gridClip(6.6, 1.6, 0.8, 1.8) }))
+save('corners', await page.screenshot({ clip: gridClip(0.6, 6, 0.8, 1) }))
 
 // Sliders: the panel's Thickness and Opacity sliders, and a thick line with its white outline over a colored cell.
 const slider = await page.locator('#pen-tool-extras-thickness').boundingBox()
