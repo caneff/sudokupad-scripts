@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.2
+// @version      1.14.3
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.2'
+  const VERSION = '1.14.3'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
@@ -1288,6 +1288,39 @@
       .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
   }
 
+  // The SudokuPad internals each feature cannot work without, as a Map of the first internal a feature lacks to the features that lack it, in the order the
+  // dialog names them. `app` is `Framework.app` and `tool` is `ToolPen.tool`, undefined when SudokuPad has no pen tool. An empty map means nothing is missing.
+  function lackingInternals (app, tool) {
+    const renderer = app.svgRenderer
+    const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
+    const grid = app.grid
+    const fn = (owner, name) => [name, Boolean(owner) && typeof owner[name] === 'function']
+    const toolFns = (...names) => names.map((name) => fn(tool, name))
+    const actions = [...toolFns('actStart', 'actAdd', 'actSend', 'clickCell'), ['_actList', Boolean(tool) && Array.isArray(tool._actList)]]
+    const cells = ['puzzle.cells', Boolean(app.puzzle) && Array.isArray(app.puzzle.cells)]
+    const requirements = {
+      colors: [['tools.colour', Boolean(app.tools) && Boolean(app.tools.colour)]],
+      pages: toolFns('setSelectedColor', 'handleToolEnter', 'handleToolExit'),
+      chevrons: [fn(proto, 'renderPen'), fn(renderer, 'renderPart'), ...actions, cells],
+      sliders: toolFns('drawLineHint'),
+      outline: toolFns('drawLineHint'),
+      marks: [
+        ...actions, ...toolFns('getInputRc'), fn(grid, 'getCell'), ['grid.rows', Number.isInteger(grid && grid.rows)], ['grid.cols', Number.isInteger(grid && grid.cols)],
+        fn(proto, 'renderPen'), fn(renderer && renderer.constructor, 'rcToPathData'), ['CellSize', Boolean(renderer) && typeof renderer.constructor.CellSize === 'number'], cells
+      ],
+      // `lineMode` is not on the tool on every page load, so the pulldown the sliders sit beside is what is watched (checkPanelRow).
+      lineMode: [['ToolPen.tool', Boolean(tool)]],
+      lineErase: [...actions, fn(app, 'xyToRCExact'), fn(grid, 'getCell'), cells]
+    }
+    // The features that lack the same internal go off in one report.
+    const lacking = new Map()
+    Object.entries(requirements).forEach(([name, needs]) => {
+      const missing = needs.find(([, present]) => !present)
+      if (missing) lacking.set(missing[0], [...(lacking.get(missing[0]) || []), name])
+    })
+    return lacking
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
       VERSION,
@@ -1348,6 +1381,7 @@
       renderPanelSliders,
       renderEditor,
       createFeatures,
+      lackingInternals,
       inStock,
       FEATURE_LABELS,
       FEATURE_NEEDS,
@@ -2321,34 +2355,7 @@
   // Turns off each feature whose SudokuPad internals are not there, before anything is installed, so it leaves stock SudokuPad behavior.
   function checkFeatures (app) {
     const tool = typeof ToolPen !== 'undefined' ? ToolPen.tool : undefined
-    const renderer = app.svgRenderer
-    const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
-    const grid = app.grid
-    const fn = (owner, name) => [name, Boolean(owner) && typeof owner[name] === 'function']
-    const toolFns = (...names) => names.map((name) => fn(tool, name))
-    const actions = [...toolFns('actStart', 'actAdd', 'actSend', 'clickCell'), ['_actList', Boolean(tool) && Array.isArray(tool._actList)]]
-    const cells = ['puzzle.cells', Boolean(app.puzzle) && Array.isArray(app.puzzle.cells)]
-    const requirements = {
-      colors: [['tools.colour', Boolean(app.tools) && Boolean(app.tools.colour)]],
-      pages: toolFns('setSelectedColor', 'handleToolEnter', 'handleToolExit'),
-      chevrons: [fn(proto, 'renderPen'), fn(renderer, 'renderPart'), ...actions, cells],
-      sliders: toolFns('drawLineHint'),
-      outline: toolFns('drawLineHint'),
-      marks: [
-        ...actions, ...toolFns('getInputRc'), fn(grid, 'getCell'), ['grid.rows', Number.isInteger(grid && grid.rows)], ['grid.cols', Number.isInteger(grid && grid.cols)],
-        fn(proto, 'renderPen'), fn(renderer && renderer.constructor, 'rcToPathData'), ['CellSize', Boolean(renderer) && typeof renderer.constructor.CellSize === 'number'], cells
-      ],
-      // `lineMode` is not on the tool on every page load, so the pulldown the sliders sit beside is what is watched (checkPanelRow).
-      lineMode: [['ToolPen.tool', Boolean(tool)]],
-      lineErase: [...actions, fn(app, 'xyToRCExact'), fn(grid, 'getCell'), cells]
-    }
-    // The features that lack the same internal go off in one report.
-    const lacking = new Map()
-    Object.entries(requirements).forEach(([name, needs]) => {
-      const missing = needs.find(([, present]) => !present)
-      if (missing) lacking.set(missing[0], [...(lacking.get(missing[0]) || []), name])
-    })
-    lacking.forEach((names, missing) => features.turnOff(names, `SudokuPad has no ${missing}`))
+    lackingInternals(app, tool).forEach((names, missing) => features.turnOff(names, `SudokuPad has no ${missing}`))
   }
 
   Framework.getApp().then(async () => {
