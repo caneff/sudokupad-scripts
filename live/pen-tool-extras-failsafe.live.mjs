@@ -10,7 +10,6 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
@@ -18,7 +17,6 @@ import { drag, gridPoint, openPenTool, padValues, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const { COLOR_TOOL_WAIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'EdgeMarks_marks']
 const PAGE_BUTTON = '.pen-tool-extras-page'
@@ -40,13 +38,13 @@ const CASES = [
   { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
   { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
   { name: 'marks missing', off: 'marks', warns: missing('marks', 'grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
-  // The color tool's page cannot be read when the colors are derived.
+  // Cell color page 1 cannot be read when the install save darkens it.
   {
     name: 'colors',
     off: 'colors',
     warns: changed('colors'),
-    breaks: `const tool = Framework.app.tools.colour
-      tool.palette.pages[tool.currentPage] = new Proxy(tool.palette.pages[tool.currentPage], { get (page, key) { if (key === 'length') throw new TypeError('no length'); return page[key] } })`
+    breaks: `const pages = Framework.app.tools.colour.palette.pages
+      pages[0] = new Proxy(pages[0], { get (page, key) { if (key === 'length') throw new TypeError('no length'); return page[key] } })`
   },
   // The call fails only while the middle press is handled, so SudokuPad's own pointer reading, which uses it, goes on.
   {
@@ -112,11 +110,10 @@ const CASES = [
     edgeAgain: null,
     source: planted('  function keepMarksAbove (part, isMark) {\n', "    if (isMark) throw new Error('planted in the render wrapper')\n")
   },
-  // The color tool never holds a palette, so the wait for it ends at its limit with a warning, and no step is skipped.
+  // The color tool never holds a palette, so the install save waits with no time limit, warning nothing and skipping no step.
   {
     name: 'color tool never ready',
     off: NOTHING_OFF,
-    warns: new RegExp(`^pen-tool-extras: the color tool was not ready after ${COLOR_TOOL_WAIT_MS / 1000} s, so the pen keeps SudokuPad's own colors$`),
     breaks: 'Framework.app.tools.colour.palette = null'
   },
   { name: 'nothing broken', off: NOTHING_OFF }

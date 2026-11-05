@@ -241,51 +241,50 @@ function group (title, extra = []) {
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
     })
 
-    it('the SudokuPad colors button sets the nine pickers to SudokuPad\'s own pen colors: Cancel leaves the colors, Save stores them for all three pages, and the click marks no cell', async () => {
+    it('picking SudokuPad default colors in the pulldown sets the nine pickers to SudokuPad\'s own pen colors: Cancel leaves the colors, Save stores them for all three pages, and the pick marks no cell', async () => {
       const colorOf3 = () => read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
       const pickers = () => editor().locator('input[type="color"]').evaluateAll((els) => els.map((el) => el.value))
+      const pickSudokuPad = () => editor().locator('select[data-pen-preset]').selectOption('sudokupad')
       // SudokuPad's own pen colors, typed out here from tool-pen.css as the independent source.
       const own = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
       const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
-      // The colors in force start as the cell color page's, which are not SudokuPad's own.
-      await read((k) => Framework.removeData(k), COLORS_KEY)
+      const ownSaved = { ...Object.fromEntries(own.map((c, i) => [i + 1, c])), preset: 'sudokupad' }
+      // The colors in force start as the install save's darker page 1, which are not SudokuPad's own.
+      assert.equal(await settle(async () => (await saved(COLORS_KEY) || {}).preset, 'page-1'), 'page-1')
+      const installed = await saved(COLORS_KEY)
       const before = await colorOf3()
       assert.notEqual(before, own[2], 'the colors in force are not SudokuPad\'s own')
       const marks = await penStrings(p)
       const depth = await undoDepth()
       await openExtrasEditor(p)
       assert.notDeepEqual(await pickers(), own)
-      await editor().locator('button[data-sudokupad-colors]').click()
+      await pickSudokuPad()
       assert.deepEqual(await pickers(), own)
-      assert.equal(await editor().locator('button[data-sudokupad-colors]').count(), 1, 'the dialog is still open, with the button in it')
-      assert.deepEqual(await penStrings(p), marks, 'the click left no pen mark')
-      assert.equal(await undoDepth(), depth, 'the click is no undo step')
+      assert.deepEqual(await penStrings(p), marks, 'the pick left no pen mark')
+      assert.equal(await undoDepth(), depth, 'the pick is no undo step')
       await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await colorOf3(), before, 'Cancel leaves the colors as they were')
-      assert.equal(await saved(COLORS_KEY), null)
+      assert.deepEqual(await saved(COLORS_KEY), installed)
       await openExtrasEditor(p)
-      await editor().locator('button[data-sudokupad-colors]').click()
+      await pickSudokuPad()
       await closeExtrasEditorWith(p, 'Save')
       assert.equal(await settle(colorOf3, own[2]), own[2])
-      assert.deepEqual(await saved(COLORS_KEY), Object.fromEntries(own.map((c, i) => [i + 1, c])), 'all nine are saved as the user\'s colors')
+      assert.deepEqual(await saved(COLORS_KEY), ownSaved, 'all nine are saved, with the preset name')
       assert.deepEqual(await penStrings(p), marks, 'closing the dialog left no pen mark either')
       // Pen 3 on page 1 is 3, on page 2 c, on page 3 n and its reverse o: every page follows the color.
       assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, rgbOf(own[2]))
       assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, rgbOf(own[2]))
       await reload()
       assert.equal(await settle(colorOf3, own[2]), own[2], 'the saved colors are kept after a reload')
-      await read((k) => Framework.removeData(k), COLORS_KEY)
-      // Restore defaults and then the button: the button's colors are picked by hand, so Save stores them and does not clear the saved set.
+      // Restore defaults picks darker page 1 as a draft, and a later pick replaces it.
       await openExtrasEditor(p)
       await dialogButton(p, 'Restore defaults').click()
-      await editor().locator('button[data-sudokupad-colors]').click()
-      assert.deepEqual(await pickers(), own)
+      assert.deepEqual(await pickers(), Object.values(installed).filter((v) => v.startsWith('#')))
+      await pickSudokuPad()
       await closeExtrasEditorWith(p, 'Save')
-      assert.deepEqual(await saved(COLORS_KEY), Object.fromEntries(own.map((c, i) => [i + 1, c])), 'Save after Restore defaults and the button stores the colors')
-      assert.equal(await settle(colorOf3, own[2]), own[2])
+      assert.deepEqual(await saved(COLORS_KEY), ownSaved)
+      await read(([k, v]) => Framework.setData(k, v), [COLORS_KEY, installed])
       await reload()
-      assert.equal(await settle(colorOf3, own[2]), own[2], 'and they are still there after a reload')
-      await read((k) => Framework.removeData(k), COLORS_KEY)
     })
 
     it('Tab turns the page forward through all three and round, keeping the color number, and ToolPen_color stays a digit', async () => {

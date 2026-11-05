@@ -24,7 +24,7 @@ const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
 const SIZE = 9
 const CELL_MARK = [5, 5]
-// Pen color 4 with nothing saved: the default first cell color page's color 4, darkened.
+// Pen color 4 as the install save stores it: the default first cell color page's color 4, darkened.
 const PEN_4 = 'rgb(113, 159, 23)'
 
 // Each edge a click can reach: the cell a click lands in, the side of it, and the cell and
@@ -831,11 +831,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await drawAll()
     })
 
-    it('moving the slider changes every mark\'s opacity live and saves it at once, without saving the colors', async () => {
+    it('moving the slider changes every mark\'s opacity live and saves it at once, leaving the saved colors alone', async () => {
+      const colors = await read((k) => Framework.getData(k), COLORS_KEY)
       await setOpacity(40)
       assert.equal(await settle(sameAt('0.4'), true), true, (await opacities()).join(' '))
       assert.equal(await savedOpacity(), 40)
-      assert.equal(await read((k) => Framework.getData(k), COLORS_KEY), null)
+      assert.deepEqual(await read((k) => Framework.getData(k), COLORS_KEY), colors)
     })
 
     it('undo, redo and replay leave the opacity alone, and a reload keeps it', async () => {

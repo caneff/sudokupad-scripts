@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.14
-// @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
+// @version      1.15.0
+// @description  Pen tool extras: sets the pen's nine colors once, at install, to cell color page 1 darkened, and after that changes them only when you pick a preset (a darker cell color page or SudokuPad's own colors) in a settings dialog or edit a color there or by holding a pen color button, adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -20,7 +20,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.14.14'
+  const VERSION = '1.15.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -308,7 +308,7 @@
       document.head.appendChild(style)
     }
     style.textContent = [
-      buildCss(active),
+      buildCss(active.colors),
       buildThicknessCss(inForce.thickness),
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
@@ -369,13 +369,27 @@
     9: '#000000'
   }
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
+  // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. One page preset per cell color page, up
+  // to three, then SudokuPad's own colors. UNSAVED is SudokuPad's own colors before the install save, never saved.
+  const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
+  const SUDOKUPAD_PRESET = 'sudokupad'
+  const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
+  const CUSTOM = 'custom'
+  const UNSAVED = 'unsaved'
+  const PRESET_LABELS = {
+    'page-1': 'Darker cell color page 1',
+    'page-2': 'Darker cell color page 2',
+    'page-3': 'Darker cell color page 3',
+    [SUDOKUPAD_PRESET]: 'SudokuPad default colors',
+    [CUSTOM]: 'Custom',
+    [UNSAVED]: 'SudokuPad colors, not saved yet'
+  }
   // The share of its OKLCH lightness a cell color keeps as a pen color: low enough to read against cell colors drawn at 60% opacity, high enough that the
   // lightest still show as 5px lines on white and the nine stay apart.
   const LIGHTNESS_FACTOR = 0.75
   // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
-  const COLOR_TOOL_WAIT_MS = 10000
   const COLOR_TOOL_POLL_MS = 100
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
@@ -390,11 +404,33 @@
     return out
   }
 
-  // null when nothing usable is saved, which means the derived colors apply.
+  // null when nothing usable is saved.
   function savedColors (data) {
     const usable = isPlainObject(data) && PEN_COLOR_NUMBERS.some((n) => isHexColor(data[n]))
     return usable ? normalizeColors(data) : null
   }
+
+  // null when nothing usable is saved, which means the install save is still owed.
+  function readPenColors (data) {
+    const colors = savedColors(data)
+    if (!colors) return null
+    const preset = SAVED_PRESETS.includes(data.preset) ? data.preset : CUSTOM
+    return { colors, preset }
+  }
+
+  // The colors stay under keys 1 to 9, where older versions read them.
+  function storedPenColors (colors, preset) {
+    return preset === CUSTOM ? { ...colors } : { ...colors, preset }
+  }
+
+  // Only the install save (`wait`, then page 1 darkened, or `save` with no color tool at all) changes the colors without the user.
+  function startupPenColors (data, hasColorTool) {
+    const saved = readPenColors(data)
+    if (saved) return { load: saved }
+    return hasColorTool ? { wait: true } : { save: { colors: sudokupadSet().colors, preset: SUDOKUPAD_PRESET } }
+  }
+
+  const sudokupadSet = () => ({ colors: { ...SUDOKUPAD_PEN_COLORS }, missing: [] })
 
   // The set is what gets saved, so an invalid pen or value throws rather than saving a wrong entry.
   function editedColors (colors, pen, value) {
@@ -503,6 +539,18 @@
     return { colors, missing }
   }
 
+  function presetOptions (pageCount) {
+    return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+  }
+
+  // `pages` is the palette's pages of color keys, and `readColor` reads a key's color as CSS text.
+  function presetColors (preset, pages, readColor) {
+    if (preset === SUDOKUPAD_PRESET) return sudokupadSet()
+    const page = presetOptions(pages.length).indexOf(preset)
+    if (page === -1) throw new RangeError(`pen-tool-extras: ${preset} is not a preset of this palette`)
+    return derivedPenColors(pages[page], readColor)
+  }
+
   // Strokes (`.pencolor-N`) and the tool's button swatches both read these variables; the eraser has its own fixed color and no variable.
   // SudokuPad's `tool-pen.css` loads when the pen tool is enabled, so a plain `:root` rule would lose to it by coming first; `:root:root` outranks it whichever loads last.
   function buildCss (colors) {
@@ -521,40 +569,48 @@
   // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
   const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
 
-  // Until the color tool is read they are SudokuPad's own, which is what the page shows with no override.
-  let active = { ...SUDOKUPAD_PEN_COLORS }
-  let activeMissing = []
+  // The colors in force with their preset, and the pens of the page they came from with no usable color (`missing`, on page `missingPage`), which the dialog names.
+  const penSet = ({ colors, missing = [] }, preset) => ({ colors, preset, missing, missingPage: PAGE_PRESETS.indexOf(preset) + 1 })
+  // Until the install save they are SudokuPad's own, which is what the page shows with no override.
+  let active = penSet(sudokupadSet(), UNSAVED)
 
   // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
   // values for them exist earlier and say nothing about a custom palette).
   function readyColorTool () {
     const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
     const palette = tool && tool.palette
-    const ready = palette && Array.isArray(palette.pages) && Array.isArray(palette.pages[tool.currentPage])
+    const ready = palette && Array.isArray(palette.pages) && Array.isArray(palette.pages[0])
     return ready ? tool : null
   }
 
+  // No time limit: the install save is page 1 darkened, and until then the pens show SudokuPad's own colors.
   function waitForColorTool () {
     return new Promise((resolve) => {
-      const deadline = Date.now() + COLOR_TOOL_WAIT_MS
       const check = () => {
         const tool = readyColorTool()
-        if (tool || Date.now() >= deadline) resolve(tool)
+        if (tool) resolve(tool)
         else setTimeout(check, COLOR_TOOL_POLL_MS)
       }
       check()
     })
   }
 
+  // The page presets the palette in force offers, and SudokuPad's own colors, which need no color tool.
+  const availablePresets = () => {
+    const tool = steps.colors.off ? null : readyColorTool()
+    return presetOptions(tool ? tool.palette.pages.length : 0)
+  }
+
   // The raw `--cell-color-<key>` values, not the 60% opacity they show with on the grid. A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`), and the variable
   // reads back as written, so each value goes through the browser to become `rgb()` text first. A value the browser rejects stays as written, and `derivedPenColors` treats it as unreadable.
-  function deriveFromTool (tool) {
+  // SudokuPad sets the variable of every key in the palette, so any page reads, not only the current one.
+  function presetFromTool (tool, preset) {
     const root = document.documentElement
     const rootStyle = window.getComputedStyle(root)
     const probe = document.createElement('span')
     root.appendChild(probe)
     try {
-      return derivedPenColors(tool.palette.pages[tool.currentPage], (key) => {
+      return presetColors(preset, tool.palette.pages, (key) => {
         const value = rootStyle.getPropertyValue(`--cell-color-${key}`).trim()
         probe.style.color = ''
         probe.style.color = value
@@ -565,17 +621,19 @@
     }
   }
 
-  function adoptColors (colors, missing) {
-    active = colors
-    activeMissing = missing
+  function adoptColors (set) {
+    active = set
     applyStyle()
-    document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = colors[el.dataset.pen] })
+    document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = set.colors[el.dataset.pen] })
+  }
+
+  function saveColors (set) {
+    Framework.setData(COLORS_KEY, storedPenColors(set.colors, set.preset))
+    adoptColors(set)
   }
 
   function savePenColor (pen, value) {
-    const colors = editedColors(active, pen, value)
-    Framework.setData(COLORS_KEY, colors)
-    adoptColors(colors, [])
+    saveColors(penSet({ colors: editedColors(active.colors, pen, value) }, CUSTOM))
   }
 
   // SudokuPad keeps one panel element and swaps its `tool-pen` class for the next tool's, so the pickers would stay behind on their own: a class watcher ends edit mode when the
@@ -599,7 +657,7 @@
     panel.classList.add(EDITING)
     buttons.forEach((button, i) => {
       button.insertAdjacentHTML('beforebegin',
-        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active[PEN_COLOR_NUMBERS[i]]}"></div>`)
+        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active.colors[PEN_COLOR_NUMBERS[i]]}"></div>`)
     })
     leaveWatch = new window.MutationObserver(() => {
       if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
@@ -1702,10 +1760,18 @@
     return `<div class="${NOTE}">Off because SudokuPad changed: ${off.join(', ')}</div>`
   }
 
-  function missingNote (missing) {
+  function missingNote (missing, page) {
     if (!missing.length) return ''
     const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
-    return `<div class="${NOTE}">The current cell color page has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
+    return `<div class="${NOTE}">Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
+  }
+
+  // A set in force that is no pickable preset (Custom, a page the palette no longer has, a preset while the colors step is off, or the colors before the install save) is
+  // shown first and cannot be picked, so the pulldown says what is in force and every preset stays pickable: picking the option already shown fires no `change`.
+  function presetChoice (preset, presets) {
+    const option = (id, disabled) => `<option value="${id}"${id === preset ? ' selected' : ''}${disabled ? ' disabled' : ''}>${PRESET_LABELS[id]}</option>`
+    const inForce = presets.includes(preset) ? '' : option(preset, true)
+    return `<select data-pen-preset aria-label="Pen color preset">${inForce}${presets.map((id) => option(id, false)).join('')}</select>`
   }
 
   const sectionHeading = (text) => `${DIVIDER}<div class="${SECTION_TITLE}">${text}</div>`
@@ -1740,12 +1806,10 @@
     `#${EDITOR_ID} .pen-tool-extras-pen { display: flex; align-items: center; gap: 8px; }`,
     `#${EDITOR_ID} .pen-tool-extras-pen b { width: 1.2em; text-align: right; }`,
     `#${EDITOR_ID} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px 18px; margin: 4px 0; }`,
-    `#${EDITOR_ID} [data-colors-row] { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }`,
     `#${EDITOR_ID} .pen-tool-extras-mark { display: flex; align-items: center; gap: 6px; margin: 0; width: auto; }`,
     `#${EDITOR_ID} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(3, max-content); column-gap: 28px; row-gap: 6px; align-items: center; margin: 4px 0; }`,
     `#${EDITOR_ID} .pen-tool-extras-mark-head { font-size: .85rem; color: #666; }`,
-    `#${EDITOR_ID} [data-sudokupad-colors] { font-size: inherit; white-space: nowrap; background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; padding: 0 14px !important; height: 34px !important; line-height: 32px !important; margin: 0 !important; font-weight: 500; text-align: center; }`,
-    `#${EDITOR_ID} select[data-line-mode] { margin: 4px 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
+    `#${EDITOR_ID} select:is([data-line-mode], [data-pen-preset]) { margin: 4px 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
   ].join('\n')
 
   // Its values are drafts that take effect on Save, so the panel's sliders and these agree when the dialog opens.
@@ -1756,8 +1820,6 @@
       `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
     ).join('')
     const grid = `<div class="pen-tool-extras-pen-grid">${cells}</div>`
-    const colorsRow = `<div data-colors-row>${grid}` +
-      '<button type="button" data-sudokupad-colors>SudokuPad colors</button></div>'
     // A box with no word label carries its name as its accessible name and hover title.
     const markBox = (key, name, picture) =>
       `<label title="${name}" class="pen-tool-extras-mark">` +
@@ -1799,8 +1861,8 @@
       markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('circle', 'Edge Circle', 'circle') + markBox('directions', 'Edge Directions', 'directions')) +
       markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerCircle', 'Corner Circle', 'circle') + '<div></div>') +
       '</div>'
-    return offNote(state.off) + '<div class="pen-tool-extras-pen-title">Pen colors</div>' + colorsRow +
-      missingNote(state.missing) +
+    return offNote(state.off) + '<div class="pen-tool-extras-pen-title">Pen colors</div>' + presetChoice(state.preset, state.presets) + grid +
+      missingNote(state.missing, state.missingPage) +
       heading('Line settings', 'Slider in panel') + sectionRows('Line settings') +
       heading('Line styles', 'Enable') + sectionRows('Line styles') +
       sectionHeading('Marks a click cycles through') + marksTable +
@@ -1858,27 +1920,30 @@
   }
 
   function openDialog () {
-    let colors = { ...active }
-    let missing = activeMissing
-    let reset = false
-    // Only colors picked by hand are saved, so a derived set is never saved by accident.
-    const edited = new Set()
+    let set = active
+    // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
+    let colorsChosen = false
     let lineMode = currentLineMode()
     let draft = { ...inForce }
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ colors, missing: missing.filter((n) => !edited.has(String(n))), lineMode, ...draft, off: skipped })
+      box.innerHTML = renderEditor({ ...set, presets: availablePresets(), lineMode, ...draft, off: skipped })
     }
+    // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
+    const pickPreset = (id) => {
+      const picked = id === SUDOKUPAD_PRESET ? sudokupadSet() : steps.colors.run(() => presetFromTool(readyColorTool(), id), () => null)
+      if (picked) {
+        set = penSet(picked, id)
+        colorsChosen = true
+      }
+      draw()
+      return Boolean(picked)
+    }
+    // SudokuPad's own colors when page 1 cannot be read, as before the presets.
     const restoreDefaults = () => {
-      const tool = readyColorTool()
-      const derived = (tool && steps.colors.run(() => deriveFromTool(tool), () => null)) || { colors: { ...SUDOKUPAD_PEN_COLORS }, missing: [] }
-      colors = derived.colors
-      missing = derived.missing
-      edited.clear()
-      reset = true
       // The sliders and boxes are drafts like the colors: Cancel leaves what is in force. The mark boxes keep their draft: Restore defaults has never reset the edge and corner cycles.
       draft = { ...settingDefaults(), marks: draft.marks }
-      draw()
+      if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
     }
     Framework.showDialog({
       centerOverBoard: true,
@@ -1892,11 +1957,7 @@
               tag: 'button',
               content: 'Save',
               handler: () => {
-                if (reset || edited.size) {
-                  if (reset) Framework.removeData(COLORS_KEY)
-                  else Framework.setData(COLORS_KEY, colors)
-                  adoptColors(colors, edited.size ? [] : missing)
-                }
+                if (colorsChosen) saveColors(set)
                 saveSettings(draft)
                 if (lineMode !== undefined && lineMode !== currentLineMode()) steps.penPanel.run(() => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
@@ -1924,15 +1985,12 @@
       draft[el.dataset.setting] = value
       box.querySelector(`output[data-readout="${el.dataset.setting}"]`).textContent = String(value)
     })
-    // As if each had been picked by hand: Save keeps them as the user's colors. It closes nothing, so the release of its press lands on the dialog.
-    box.addEventListener('click', (event) => {
-      if (!event.target.closest('button[data-sudokupad-colors]')) return
-      colors = { ...SUDOKUPAD_PEN_COLORS }
-      PEN_COLOR_NUMBERS.forEach((n) => edited.add(n))
-      reset = false
-      draw()
-    })
     box.addEventListener('change', (event) => {
+      const choice = event.target.closest('select[data-pen-preset]')
+      if (choice) {
+        pickPreset(choice.value)
+        return
+      }
       const mode = event.target.closest('select[data-line-mode]')
       if (mode) {
         lineMode = normalizeLineMode(mode.value)
@@ -1948,9 +2006,10 @@
       }
       const el = event.target.closest('input[type="color"]')
       if (!el) return
-      colors = editedColors(colors, el.dataset.pen, el.value)
-      edited.add(el.dataset.pen)
-      reset = false
+      // A pen picked by hand leaves the missing-color note; the others stay on it.
+      const pen = el.dataset.pen
+      set = { ...set, colors: editedColors(set.colors, pen, el.value), preset: CUSTOM, missing: set.missing.filter((n) => String(n) !== pen) }
+      colorsChosen = true
       draw()
     })
   }
@@ -1983,7 +2042,7 @@
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
@@ -1997,6 +2056,8 @@
     // Read before the panel is built, which the first sync does with the pen tool already on.
     Object.assign(inForce, readSettings(Framework))
     checkSteps(app)
+    // Read before any step runs, so only the startup check can have turned the colors step off.
+    const hasColorTool = !steps.colors.off
     trackButton()
     steps.lineErase.run(() => installLineErase(app, ToolPen.tool))
     steps.arrowLines.run(() => installArrowLines(app, ToolPen.tool))
@@ -2019,22 +2080,20 @@
         setTimeout(openDialog, 0)
       }
     })
-    const saved = savedColors(Framework.getData(COLORS_KEY))
-    if (saved) {
-      adoptColors(saved, [])
-      return
-    }
-    // Nothing saved: the pen takes the darkened current color page, read once at load. When
-    // the color tool never becomes ready, SudokuPad's own pen colors stay in force.
-    if (steps.colors.off) return
+    const start = startupPenColors(Framework.getData(COLORS_KEY), hasColorTool)
+    if (start.load) return adoptColors(penSet(start.load, start.load.preset))
+    if (start.save) return saveColors(penSet(start.save, start.save.preset))
+    // The install save, once: page 1 darkened.
     const tool = await waitForColorTool()
-    // A save made in the dialog while waiting outranks the derived colors.
-    if (savedColors(Framework.getData(COLORS_KEY))) return
-    if (!tool) {
-      console.warn(`pen-tool-extras: the color tool was not ready after ${COLOR_TOOL_WAIT_MS / 1000} s, so the pen keeps SudokuPad's own colors`)
-      return
+    // A save made in the dialog while waiting outranks it.
+    if (readPenColors(Framework.getData(COLORS_KEY))) return
+    // Tried even with the colors step off since startup (edit mode failing to install): only a failure to read page 1 itself leaves nothing saved, reported as the step's.
+    let derived = null
+    try {
+      derived = presetFromTool(tool, PAGE_PRESETS[0])
+    } catch (error) {
+      steps.colors.skip(error)
     }
-    const derived = steps.colors.run(() => deriveFromTool(tool), () => null)
-    if (derived) adoptColors(derived.colors, derived.missing)
+    if (derived) saveColors(penSet(derived, PAGE_PRESETS[0]))
   })
 })()

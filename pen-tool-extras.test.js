@@ -6,6 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
+  readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
@@ -32,7 +33,7 @@ test('SUDOKUPAD_PEN_COLORS are SudokuPad\'s own nine pen colors', () => {
   assert.deepEqual(SUDOKUPAD_PEN_COLORS, TABLE)
 })
 
-test('nothing saved is the fresh-install state: every pen color has its default', () => {
+test('nothing saved normalizes to SudokuPad\'s own color for every pen', () => {
   assert.deepEqual(normalizeColors(null), TABLE)
   assert.deepEqual(normalizeColors(undefined), TABLE)
 })
@@ -272,7 +273,7 @@ test('derivedPenColors on an empty page keeps all nine SudokuPad colors', () => 
   assert.deepEqual(r.missing, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 })
 
-test('savedColors is null when nothing usable was saved, so the derived colors apply', () => {
+test('savedColors is null when nothing usable was saved', () => {
   for (const none of [null, undefined, 'red', 7, true, [], ['#ff0000'], {}, { 4: 'url(x)' }, { 0: '#ff0000' }]) {
     assert.equal(savedColors(none), null, JSON.stringify(none))
   }
@@ -285,6 +286,66 @@ test('savedColors keeps a saved set whole, filling a bad entry with the default'
 test('savedColors does not read an array by index', () => {
   // Index 1 holds a usable color: only the array guard stops it counting as pen color 1.
   assert.equal(savedColors(['x', '#ff0000', '#00ff00']), null)
+})
+
+// A saved set of nine distinct colors, so a test can tell which entry went where.
+const NINE_SAVED = { 1: '#010101', 2: '#020202', 3: '#030303', 4: '#040404', 5: '#050505', 6: '#060606', 7: '#070707', 8: '#080808', 9: '#090909' }
+
+test('readPenColors is null when nothing usable is saved, so the install save is still owed', () => {
+  for (const none of [null, undefined, 'red', [], {}, { preset: 'page-1' }, { 4: 'url(x)' }]) {
+    assert.equal(readPenColors(none), null, JSON.stringify(none))
+  }
+})
+
+test('readPenColors reads colors saved with no preset name, as older versions save them, as Custom and unchanged', () => {
+  assert.deepEqual(readPenColors(NINE_SAVED), { colors: NINE_SAVED, preset: 'custom' })
+})
+
+test('readPenColors keeps a saved preset name, and reads one it does not know as Custom', () => {
+  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2' })
+  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad' })
+  for (const odd of ['page-4', 'custom', 'unsaved', 'Darker cell color page 1', 7, null]) {
+    assert.equal(readPenColors({ ...NINE_SAVED, preset: odd }).preset, 'custom', JSON.stringify(odd))
+  }
+})
+
+test('storedPenColors keeps the nine colors where older versions read them and adds the preset name beside them, but none for Custom', () => {
+  assert.deepEqual(storedPenColors(NINE_SAVED, 'page-1'), { ...NINE_SAVED, preset: 'page-1' })
+  assert.deepEqual(storedPenColors(NINE_SAVED, 'custom'), NINE_SAVED)
+  // An older version reads only the colors.
+  assert.deepEqual(savedColors(storedPenColors(NINE_SAVED, 'page-3')), NINE_SAVED)
+  assert.deepEqual(readPenColors(storedPenColors(NINE_SAVED, 'page-3')), { colors: NINE_SAVED, preset: 'page-3' })
+})
+
+test('startupPenColors loads a saved set, waits for the color tool when nothing is saved, and saves SudokuPad\'s colors when there is no color tool', () => {
+  assert.deepEqual(startupPenColors({ ...NINE_SAVED, preset: 'page-2' }, true), { load: { colors: NINE_SAVED, preset: 'page-2' } })
+  assert.deepEqual(startupPenColors(NINE_SAVED, false), { load: { colors: NINE_SAVED, preset: 'custom' } })
+  assert.deepEqual(startupPenColors(null, true), { wait: true })
+  assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad' } })
+})
+
+test('presetOptions lists one darker page per palette page, up to three, then SudokuPad default colors last', () => {
+  assert.deepEqual(presetOptions(3), ['page-1', 'page-2', 'page-3', 'sudokupad'])
+  assert.deepEqual(presetOptions(5), ['page-1', 'page-2', 'page-3', 'sudokupad'])
+  assert.deepEqual(presetOptions(1), ['page-1', 'sudokupad'])
+  assert.deepEqual(presetOptions(0), ['sudokupad'])
+  assert.deepEqual(['page-1', 'page-2', 'page-3', 'sudokupad', 'custom'].map((id) => PRESET_LABELS[id]),
+    ['Darker cell color page 1', 'Darker cell color page 2', 'Darker cell color page 3', 'SudokuPad default colors', 'Custom'])
+})
+
+test('presetColors darkens the named page, not the first or the current one, and gives SudokuPad\'s own for its preset', () => {
+  const pages = [['a0', 'a1'], ['b0', 'b1'], ['c0', 'c1']]
+  const read = (key) => ({ a1: 'rgb(255, 0, 0)', b1: 'rgb(0, 0, 255)', c1: 'rgb(0, 128, 0)' })[key]
+  // Blue darkens to #0000ae, as the live test's custom page types it out.
+  assert.equal(presetColors('page-2', pages, read).colors[1], '#0000ae')
+  assert.notEqual(presetColors('page-1', pages, read).colors[1], '#0000ae')
+  assert.deepEqual(presetColors('page-3', pages, read).missing, [2, 3, 4, 5, 6, 7, 8, 9])
+  assert.deepEqual(presetColors('sudokupad', pages, read), { colors: TABLE, missing: [] })
+})
+
+test('presetColors refuses a page preset the palette has no page for, rather than giving a set nobody picked', () => {
+  assert.throws(() => presetColors('page-3', [['a0'], ['b0']], () => 'red'), /page-3 is not a preset of this palette/)
+  assert.throws(() => presetColors('custom', [['a0']], () => 'red'), /custom is not a preset/)
 })
 
 test('editedColors gives the whole current set with one pen color changed, lowercased, leaving the input alone', () => {
@@ -1062,6 +1123,9 @@ test('with both sliders hidden the panel has no slider block at all, so no gap i
 const editorState = (over = {}) => ({
   colors: SUDOKUPAD_PEN_COLORS,
   missing: [],
+  missingPage: 1,
+  preset: 'page-1',
+  presets: ['page-1', 'page-2', 'page-3', 'sudokupad'],
   marks: ALL,
   lineMode: 'both',
   thickness: 5,
@@ -1086,14 +1150,53 @@ test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s
   assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
 })
 
-test('the dialog has a SudokuPad colors button beside the Pen colors grid, and it is a plain button that submits nothing', () => {
-  const html = renderEditor(editorState())
-  const row = /data-colors-row[^>]*>([\s\S]*?SudokuPad colors<\/button>)<\/div>/.exec(html)
-  assert.ok(row, 'a row holding the grid and the button')
-  assert.match(row[1], /<div class="pen-tool-extras-pen-grid">/)
-  assert.match(row[1], /<button type="button" data-sudokupad-colors[^>]*>SudokuPad colors<\/button>/)
-  assert.match(DIALOG_CSS, /\[data-sudokupad-colors\] \{ font-size: inherit; white-space: nowrap;/, 'the text is the size of the dialog\'s other text and stays on one line')
-  assert.equal((html.match(/data-sudokupad-colors/g) || []).length, 1)
+const presetMenu = (html) => {
+  const menu = /<select data-pen-preset[^>]*>([\s\S]*?)<\/select>/.exec(html)
+  assert.ok(menu, 'a pen color preset pulldown')
+  return [...menu[1].matchAll(/<option value="([^"]*)"([^>]*)>([^<]*)<\/option>/g)].map(([, value, attributes, label]) => ({ value, label, selected: / selected/.test(attributes), disabled: / disabled/.test(attributes) }))
+}
+
+test('the Pen colors section has a preset pulldown above the grid, its options in order, the preset in force selected, and no SudokuPad colors button', () => {
+  const html = renderEditor(editorState({ preset: 'page-2' }))
+  assert.deepEqual(presetMenu(html).map(({ value, label, selected }) => [value, label, selected]), [
+    ['page-1', 'Darker cell color page 1', false],
+    ['page-2', 'Darker cell color page 2', true],
+    ['page-3', 'Darker cell color page 3', false],
+    ['sudokupad', 'SudokuPad default colors', false]
+  ])
+  const section = html.indexOf('Pen colors')
+  assert.equal(section < html.indexOf('data-pen-preset') && html.indexOf('data-pen-preset') < html.indexOf('data-pen="1"'), true, 'heading, pulldown, then the grid')
+  assert.doesNotMatch(html, /SudokuPad colors<|data-sudokupad-colors/)
+})
+
+test('the pulldown lists only the pages the palette has', () => {
+  assert.deepEqual(presetMenu(renderEditor(editorState({ presets: ['page-1', 'sudokupad'] }))).map((o) => o.value), ['page-1', 'sudokupad'])
+})
+
+test('a set in force that is no pickable preset is listed first, selected and not pickable, so every preset stays pickable', () => {
+  // A page-3 set with a one-page palette, a page-1 set with the colors step off, and SudokuPad's colors before the install save.
+  assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'page-3', presets: ['page-1', 'sudokupad'] }))), [
+    { value: 'page-3', label: 'Darker cell color page 3', selected: true, disabled: true },
+    { value: 'page-1', label: 'Darker cell color page 1', selected: false, disabled: false },
+    { value: 'sudokupad', label: 'SudokuPad default colors', selected: false, disabled: false }
+  ])
+  assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'page-1', presets: ['sudokupad'] }))).map((o) => [o.value, o.selected, o.disabled]), [['page-1', true, true], ['sudokupad', false, false]])
+  assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'unsaved', presets: ['sudokupad'] }))), [
+    { value: 'unsaved', label: 'SudokuPad colors, not saved yet', selected: true, disabled: true },
+    { value: 'sudokupad', label: 'SudokuPad default colors', selected: false, disabled: false }
+  ])
+})
+
+test('Custom is in the pulldown only while the set is custom, selected and not pickable', () => {
+  assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'custom' }))).filter((o) => o.value === 'custom'), [{ value: 'custom', label: 'Custom', selected: true, disabled: true }])
+  assert.equal(presetMenu(renderEditor(editorState({ preset: 'page-1' }))).some((o) => o.value === 'custom'), false)
+})
+
+test('the missing-color note names the page the colors came from and the pens that keep SudokuPad\'s own', () => {
+  const text = renderEditor(editorState({ missing: [4, 5], missingPage: 2 }))
+  assert.match(text, /Cell color page 2 has no usable color at the matching button, so pen colors 4, 5 keep SudokuPad's own\./)
+  assert.match(renderEditor(editorState({ missing: [7], missingPage: 1 })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
+  assert.doesNotMatch(renderEditor(editorState()), /no usable color/)
 })
 
 test('the page button turns to the next enabled page and has a dot for each enabled page only', () => {

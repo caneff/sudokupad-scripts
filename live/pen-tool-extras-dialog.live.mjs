@@ -43,14 +43,14 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('the SudokuPad colors button looks like Cancel and sits level with the middle row of pickers', async () => {
+  it('the pen color preset pulldown sits under the Pen colors heading, above the pickers, styled like the line mode pulldown, and there is no SudokuPad colors button', async () => {
     await openExtrasEditor(p)
-    const button = editor().locator('button[data-sudokupad-colors]')
-    const look = (locator) => locator.evaluate((el) => { const style = window.getComputedStyle(el); return { background: style.backgroundColor, radius: style.borderTopLeftRadius, align: style.textAlign } })
-    assert.deepEqual(await look(button), await look(p.locator('.dialog-options button[data-role="cancel"]')))
-    // Both in one read, so a dialog that is still moving into place cannot put them in different frames.
-    const [middle, buttonMiddle] = await editor().evaluate((el) => [el.querySelector('input[data-pen="5"]'), el.querySelector('button[data-sudokupad-colors]')].map((e) => { const box = e.getBoundingClientRect(); return Math.round(box.y + box.height / 2) }))
-    assert.equal(Math.abs(middle - buttonMiddle) <= 3, true, `middle row ${middle}, button ${buttonMiddle}`)
+    const menu = editor().locator('select[data-pen-preset]')
+    const look = (locator) => locator.evaluate((el) => { const style = window.getComputedStyle(el); return { background: style.backgroundImage, border: style.borderTopColor, radius: style.borderTopLeftRadius } })
+    assert.deepEqual(await look(menu), await look(editor().locator('select[data-line-mode]')))
+    const [heading, pulldown, firstPicker] = await editor().evaluate((el) => [[...el.querySelectorAll('div')].find((d) => d.textContent === 'Pen colors'), el.querySelector('select[data-pen-preset]'), el.querySelector('input[data-pen="1"]')].map((e) => Math.round(e.getBoundingClientRect().y)))
+    assert.equal(heading < pulldown && pulldown < firstPicker, true, `heading ${heading}, pulldown ${pulldown}, pickers ${firstPicker}`)
+    assert.equal(await editor().locator('button').count(), 0)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 

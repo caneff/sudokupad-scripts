@@ -34,12 +34,14 @@
 - **pen color** — one of the pen tool's nine colors, numbered 1 to 9. It is a
   `#rrggbb` value kept in SudokuPad's `--puzzle-pencolor-N` variable, which
   strokes and the tool's color buttons both read. The eraser has no pen color. With
-  nothing saved, the nine are the **derived colors**: the colors of the current
-  **cell color page** (one of the color tool's pages of ten **cell colors**): pen
-  color N is the page's color at index N, darkened in OKLCH, so each pen sits on the
-  same button number as its cell color and index 0 is never used. A transparent or
-  unreadable entry keeps SudokuPad's own pen color there. The darkest derived color
-  with low chroma becomes black. A saved set wins, and "Restore defaults" clears it.
+  colors saved, the **install save** stores darker **cell color page** 1 once (one of the
+  color tool's pages of ten **cell colors**), or SudokuPad's own with no color tool; after
+  that the colors change only by a **pen color preset** picked and saved, or an edit.
+  The **derived colors** of a page: pen color N is the page's color at index N, darkened
+  in OKLCH, so each pen sits on the same button number as its cell color and index 0 is
+  never used. A transparent or unreadable entry keeps SudokuPad's own pen color there.
+  The darkest derived color with low chroma becomes black. Saved under `PenColor_colors`
+  as a snapshot: a later palette change does not touch it.
 - **edit mode** — Pen Tool Extras' state after a hold on a pen color button: a color picker sits over
   each of the nine pen buttons. A second hold, or leaving the pen tool, ends it. SudokuPad's color
   tool has the same state for its cell color buttons.
@@ -93,9 +95,12 @@
   page's lines is. 3 is the default and 0 is dots; a dash scales with the thickness and changes lines already drawn. A dash too long for a cell's line to hold a gap
   (at least one line width wide where it shows) is shortened to leave one, so a page 2 line is never solid; each cell's segment starts and ends with half a dash, so a line is
   inked at its ends, its turns and every join between cells, and two segments meet in one whole dash.
-- **SudokuPad colors button** — the settings dialog's button beside the Pen colors grid. It sets the nine pickers to SudokuPad's own pen colors
-  (`SUDOKUPAD_PEN_COLORS`) as a draft: Save stores them as the user's colors, so they stop following the cell color page, and Cancel leaves the colors as
-  they were. Unlike Restore defaults, it touches no other setting.
+- **pen color preset** — a named set the settings dialog's pulldown, at the top of Pen colors, fills the nine pickers with as a draft: "Darker cell color
+  page 1" to "page 3" (the derived colors of that page, one per page the palette has, up to 3) or "SudokuPad default colors" (`SUDOKUPAD_PEN_COLORS`).
+  Save stores the colors with the preset's id (`page-1` to `page-3`, `sudokupad`) under `preset`; Cancel drops it. An edit, in the dialog or by hold, makes
+  the set **Custom**, saved with no `preset`, and so are colors an older version saved. A set in force that the pulldown does not offer (Custom, a page the palette
+  no longer has, or "SudokuPad colors, not saved yet" before the install save) shows first and cannot be picked. Restore defaults picks Darker cell color
+  page 1, or SudokuPad default colors with no page 1 to read.
 - **arrow line** — a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of filled triangles (its arrows, in the pen's color) along it, pointing the way the line was
   dragged. Only lines are arrow lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Not a **direction arrow**, the `>` `<` `^` `v` mark a click on a cell edge cycles through. Its arrows' size and
   spacing scale with the thickness from the default up (an arrow is never smaller than at 5, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole arrows, half a space in from
