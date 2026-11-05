@@ -1744,6 +1744,16 @@ test('a wrapper whose own code throws after another SudokuPad function ran for t
   assert.equal(warned.length, 1)
 })
 
+test('a wrapper whose own code throws after a SudokuPad call that sends nothing still calls the original', (t) => {
+  const { step, restore } = newStep()
+  t.after(restore)
+  const sent = []
+  const owner = { click () { sent.push('stock click') }, peek () { return 'queued' } }
+  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.peek(), false); throw new Error('own') })
+  owner.click()
+  assert.deepEqual(sent, ['stock click'])
+})
+
 test('a throw from a SudokuPad function called through stock.sudokupad passes through, is not retried and leaves the step on', (t) => {
   const { step, warned, skipped, restore } = newStep()
   t.after(restore)

@@ -1043,7 +1043,8 @@
         }
       },
       // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
-      // body's own throw, the original runs only if no SudokuPad code ran for this event: a click half sent must not be sent again.
+      // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
+      // that sends nothing (`stock.sudokupad(fn, false)`) leaves the original to run.
       wrap (owner, name, body) {
         const original = owner[name]
         owner[name] = function (...args) {
@@ -1051,8 +1052,8 @@
           let reached = false
           let result
           let failure = null
-          const sudokupad = (fn) => {
-            reached = true
+          const sudokupad = (fn, sends = true) => {
+            if (sends) reached = true
             try {
               return fn()
             } catch (error) {
@@ -1372,7 +1373,7 @@
         const acts = cornerActs(corner)
         return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
       }
-      const queued = stock.sudokupad(() => queuedActs(this, () => original.apply(this, args)))
+      const queued = stock.sudokupad(() => queuedActs(this, () => original.apply(this, args)), false)
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {
