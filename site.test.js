@@ -97,6 +97,42 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
+// The details page says what the script lets you do, word for word as Chris approved it (#197).
+const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
+const section = (page, heading) => {
+  const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
+  assert.ok(m, `site/${DETAILS} has no <h2>${heading}</h2> followed by a list`)
+  return [...m[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map(li => plain(li[1]))
+}
+
+test(`${DETAILS} intro says what the script adds`, () => {
+  const m = read(DETAILS).match(/<\/p>\s*<p>(Pen Tool Extras makes[\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${DETAILS} has no intro paragraph starting "Pen Tool Extras makes"`)
+  assert.equal(plain(m[1]), "Pen Tool Extras makes SudokuPad's pen tool more useful. It adds pen colors that match your cell colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
+})
+
+test(`${DETAILS} lists what the script adds, one item per feature`, () => {
+  assert.deepEqual(section(read(DETAILS), 'What it adds'), [
+    'Pen colors that match your cell colors. The nine pen colors are darker versions of your cell colors, so a line matches the cells it marks. Change any of them by holding its pen color button, or in the settings dialog. A button there brings back SudokuPad\'s own pen colors.',
+    'Dashed lines and arrow lines. Two extra pages of pens: one draws dashed lines, the other draws lines with arrows along them. Switch pages with the page button, the Tab key, or the mouse wheel over the page button. You can turn off either page, and set the dash length and the arrow spacing, in the settings.',
+    'Marks on cell edges. Click a cell edge to put an X, a circle or an arrow on it. Click again to cycle through them, or right-click to go back.',
+    'Marks on grid corners. Click near a grid corner for an X or a circle. Right-click goes back here too.',
+    'Erase a whole line in one click. A middle click removes the line under the pointer, branches and all, in one undo step. An arrow line goes in one click from either end. You can turn this off in the settings.',
+    'Thicker, fainter or outlined lines. Thickness and opacity sliders sit in the pen panel, and you can hide either one. A white outline, on by default, keeps lines readable over colored cells. You can set its width.',
+    'Settings one click away. A small gear on the pen tool button opens the settings dialog.'
+  ])
+})
+
+test(`${DETAILS} good to know names the dashed and arrow pages`, () => {
+  assert.deepEqual(section(read(DETAILS), 'Good to know'), ["Other people can't see lines from the dashed or arrow pages unless they have the script too."])
+})
+
+test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, () => {
+  const m = read(HOME).match(/<h2>Pen Tool Extras<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Pen Tool Extras description`)
+  assert.doesNotMatch(m[1], /slider/i)
+})
+
 test('netlify.toml publishes only site/', () => {
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')
   assert.match(toml, /^\s*publish\s*=\s*"site"\s*$/m)

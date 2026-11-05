@@ -17,20 +17,18 @@
   <p><a href="index.html">&larr; All SudokuPad scripts</a></p>
   <h1>Pen Tool Extras</h1>
   <p class="warning">This script can break at any time, and there are no guarantees. It relies on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break it without notice. It isn't made or supported by SudokuPad.</p>
-  <p>A userscript that adds colors, extra pens, sliders and edge and corner marks to <a href="https://sudokupad.app">SudokuPad</a>'s pen tool. Turn the pen tool on in SudokuPad's settings first.</p>
+  <p>Pen Tool Extras makes <a href="https://sudokupad.app">SudokuPad</a>'s pen tool more useful. It adds pen colors that match your cell colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.</p>
   <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install Pen Tool Extras</a></p>
 
-  <h2>Features</h2>
+  <h2>What it adds</h2>
   <ul>
-    <li><strong>Pen colors:</strong> nine colors that match your cell colors; change them in the settings dialog, with a button there for SudokuPad's own pen colors, or by holding a pen color button.</li>
-    <li><strong>Three pen pages:</strong> 27 pens, solid, dashed and arrow lines; click the page button, press Tab or turn the mouse wheel over the page button to change page. Either extra page can be switched off in the settings dialog.</li>
-    <li><strong>Two sliders:</strong> Thickness and Opacity, in the pen panel (each can be hidden there), and the length of the dashes and the spacing of the arrows, in the settings dialog.</li>
-    <li><strong>White outline:</strong> a white outline round every pen mark, on by default, with a width slider, set in the settings dialog.</li>
-    <li><strong>Edge marks:</strong> click a cell edge to cycle an X, a circle and direction arrows.</li>
-    <li><strong>Corner marks:</strong> click near a grid corner to cycle an X and a circle.</li>
-    <li><strong>Settings gear:</strong> a small gear in the corner of the pen tool button opens the settings dialog.</li>
-    <li><strong>Middle click erases a line:</strong> the whole line, branches and all, in one undo step; arrow lines are one line from either direction. It can be switched off in the settings dialog.</li>
-    <li><strong>Right click goes backwards:</strong> on an edge or a corner it steps the cycle back.</li>
+    <li><strong>Pen colors that match your cell colors.</strong> The nine pen colors are darker versions of your cell colors, so a line matches the cells it marks. Change any of them by holding its pen color button, or in the settings dialog. A button there brings back SudokuPad's own pen colors.</li>
+    <li><strong>Dashed lines and arrow lines.</strong> Two extra pages of pens: one draws dashed lines, the other draws lines with arrows along them. Switch pages with the page button, the Tab key, or the mouse wheel over the page button. You can turn off either page, and set the dash length and the arrow spacing, in the settings.</li>
+    <li><strong>Marks on cell edges.</strong> Click a cell edge to put an X, a circle or an arrow on it. Click again to cycle through them, or right-click to go back.</li>
+    <li><strong>Marks on grid corners.</strong> Click near a grid corner for an X or a circle. Right-click goes back here too.</li>
+    <li><strong>Erase a whole line in one click.</strong> A middle click removes the line under the pointer, branches and all, in one undo step. An arrow line goes in one click from either end. You can turn this off in the settings.</li>
+    <li><strong>Thicker, fainter or outlined lines.</strong> Thickness and opacity sliders sit in the pen panel, and you can hide either one. A white outline, on by default, keeps lines readable over colored cells. You can set its width.</li>
+    <li><strong>Settings one click away.</strong> A small gear on the pen tool button opens the settings dialog.</li>
   </ul>
   <figure>
     <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-example.png" alt="A sudoku grid with solid, dashed and arrow pen lines in several colors, and edge and grid-corner marks: X, direction arrows and circles" width="1334" height="1334">
@@ -39,7 +37,7 @@
 
   <h2>Good to know</h2>
   <ul>
-    <li>Others can't see lines from pens past the first page unless they have the script too.</li>
+    <li>Other people can't see lines from the dashed or arrow pages unless they have the script too.</li>
   </ul>
   <p>More detail: <a href="https://github.com/caneff/sudokupad-scripts/blob/main/docs/pen-tool-extras.md">the full reference</a>.</p>
   <p><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
