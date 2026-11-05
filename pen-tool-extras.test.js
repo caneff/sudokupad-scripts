@@ -882,11 +882,13 @@ test('the dot spacing is two line widths, snapped so a cell of 64 holds whole do
   }
 })
 
+const maskSvg = (rule) => decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
+
 test('buildPagesCss refuses a thickness it cannot save', () => {
   assert.throws(() => buildPagesCss(0, 0), RangeError)
 })
 
-test('a page 2 swatch is a single dashed line in the pen color of its button, as a mask so the color follows a recolor, and a page 1 swatch is the same line solid', () => {
+test('a page 2 swatch is a single dashed line in the pen color of its button, as a mask so the color follows a recolor, and no rule names page 1\'s attribute', () => {
   const css = buildPagesCss(5, 3)
   for (let n = 1; n <= 9; n++) {
     const rule = rulesOf(css).find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="2"]:after`)
@@ -900,12 +902,12 @@ test('a page 2 swatch is a single dashed line in the pen color of its button, as
 
 test('a page 1 swatch is a solid line of the page 2 line\'s position and width in the pen color, as a mask, with no page attribute so it holds with the pages off', () => {
   const css = buildPagesCss(5, 3)
-  const dashed = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rulesOf(css).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after').body)[1])
+  const dashed = maskSvg(rulesOf(css).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after'))
   for (let n = 1; n <= 9; n++) {
     const rule = rulesOf(css).find((r) => r.selector === `.tool-pen button[data-key="${n}"]:after`)
     assert.ok(rule, `swatch ${n}`)
     assert.match(rule.body, new RegExp(`background-color: var\\(--puzzle-pencolor-${n}\\)`))
-    const svg = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
+    const svg = maskSvg(rule)
     assert.equal(svg, dashed.replace(/ stroke-dasharray='[^']*'/, '').replace(/ stroke-dashoffset='[^']*'/, ''))
     assert.doesNotMatch(svg, /dasharray/)
   }
@@ -913,7 +915,7 @@ test('a page 1 swatch is a solid line of the page 2 line\'s position and width i
 
 const swatchDashes = (dash) => {
   const rule = rulesOf(buildPagesCss(5, dash)).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after')
-  const svg = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
+  const svg = maskSvg(rule)
   const paths = svg.match(/<path[^>]*>/g)
   assert.equal(paths.length, 1, 'one line')
   const array = /stroke-dasharray='([\d. ]+)'/.exec(paths[0])[1].split(' ').map(Number)

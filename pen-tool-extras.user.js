@@ -775,13 +775,14 @@
   }
   const ARROW_LINE_SWATCH = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M2 12H22' stroke-width='2'/><path d='M5 6.5L12 12L5 17.5ZM13 6.5L20 12L13 17.5Z' fill='#000' stroke='none'/></svg>"
   const DASH_SWATCH = { width: 2, from: 2, to: 22 }
-  const SOLID_SWATCH = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}'/></svg>`
+  const lineSwatch = (dashes = '') => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}'${dashes}/></svg>`
+  const SOLID_SWATCH = lineSwatch()
   function dashSwatch (dash) {
     const { on, gap, offset } = dashPattern(DASH_SWATCH.width, dash, DASH_SWATCH.to - DASH_SWATCH.from)
     const round = (x) => Math.round(x * 1000) / 1000
-    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}' stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'/></svg>`
+    return lineSwatch(` stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'`)
   }
-  // The look of the pages after the first, which SudokuPad's own CSS knows nothing about: each pen character strokes in the color of its partner on the first page. A dash of 0
+  // The look of the pages after the first, which SudokuPad's own CSS knows nothing about, and the pen buttons' line swatches of every page: each pen character strokes in the color of its partner on the first page. A dash of 0
   // is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider. `:root:root` outranks SudokuPad's own rules whichever
   // stylesheet loads last.
   function buildPagesCss (thickness, dash) {

@@ -120,18 +120,27 @@ function group (title, extra = []) {
 
     it('a page 2 swatch is a dashed line cut out of the button\'s square, and a page 1 swatch is the same line solid, in the pen tool only', async () => {
       const swatch = () => read(() => window.getComputedStyle(document.querySelector('.controls-input button[data-key="2"]'), ':after').maskImage)
-      const decode = async () => decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(await swatch())[1])
-      const dashed = await decode()
-      assert.match(dashed, /stroke-dasharray='(?!0 )[\d.]+ [\d.]+'/)
-      assert.equal((dashed.match(/<path/g) || []).length, 1, 'one line')
-      await goToPage(PAGE_ONE)
-      const solid = await decode()
-      assert.equal(solid, dashed.replace(/ stroke-dasharray='[^']*'/, '').replace(/ stroke-dashoffset='[^']*'/, ''), 'the page 2 line, solid')
-      await p.click('#control-colour')
-      await p.locator('.tool-pen').waitFor({ state: 'detached' })
-      assert.equal(await swatch(), 'none', 'the color tool keeps its own swatch')
-      await openPenTool(p)
-      await goToPage(PAGE_TWO)
+      const lineOf = async (what) => {
+        const mask = await swatch()
+        assert.match(mask, /^url\("data:image\/svg\+xml,/, `${what} swatch is a mask`)
+        const paths = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(mask)[1]).match(/<path[^>]*>/g)
+        assert.equal(paths.length, 1, `${what} swatch is one line`)
+        return paths[0]
+      }
+      try {
+        const dashed = await lineOf('page 2')
+        assert.match(dashed, /stroke-dasharray='(?!0 )[\d.]+ [\d.]+'/)
+        await goToPage(PAGE_ONE)
+        const solid = await lineOf('page 1')
+        assert.doesNotMatch(solid, /dasharray/)
+        assert.equal(/ d='([^']*)'/.exec(solid)[1], / d='([^']*)'/.exec(dashed)[1], 'the page 2 line, solid')
+        await p.click('#control-colour')
+        await p.locator('.tool-pen').waitFor({ state: 'detached' })
+        assert.equal(await swatch(), 'none', 'the color tool keeps its own swatch')
+      } finally {
+        await openPenTool(p)
+        await goToPage(PAGE_TWO)
+      }
     })
 
     it('a line drawn with a page 2 pen is dashed in its partner\'s color; a line with its page 1 partner stays solid', async () => {
@@ -409,6 +418,7 @@ function group (title, extra = []) {
       assert.equal(await padValues(p), PAGE_ONE)
       assert.equal(await selected(), '3')
       assert.deepEqual(await saved(LINE_STYLES_KEY), { dashed: false, arrows: false })
+      assert.match(await read(() => window.getComputedStyle(document.querySelector('.tool-pen button[data-key="2"]'), ':after').maskImage), /^url\("data:image\/svg\+xml,/, 'the page 1 swatch is a line with the extra pages off')
       await setStyles({ dashed: true, arrows: false })
       await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
       await setStyles({ dashed: true, arrows: true })
