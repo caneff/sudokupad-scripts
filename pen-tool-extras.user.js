@@ -308,7 +308,7 @@
       document.head.appendChild(style)
     }
     style.textContent = [
-      buildCss(active),
+      buildCss(active.colors),
       buildThicknessCss(inForce.thickness),
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
