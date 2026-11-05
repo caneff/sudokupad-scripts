@@ -42,26 +42,26 @@ export async function settle (read, expected, timeoutMs = SETTLE_MS, quietMs = S
   return value
 }
 
-// Reads until the value (compared as JSON) has held for STABLE_MS and returns it: for a value with no
-// expected answer, such as a button's point while its dialog lays out. The hold is the time from the end of the
-// read that first returned the value to the start of a later read that returned it again, so a read that
-// itself takes long on a loaded box cannot make two nearby samples pass for a held value. Throws, naming the
-// last value, when it is still changing at `timeoutMs`.
-export async function stable (read, timeoutMs = SETTLE_MS) {
+// Reads until the value has held for STABLE_MS and returns it: for a value with no expected answer, such as a
+// button's point while its dialog lays out. Two values are the same when `equal` says so (default: equal as
+// JSON); a value JSON cannot compare well, such as a screenshot's Buffer, passes its own. The hold is the time
+// from the end of the read that first returned the value to the start of a later read that returned it again,
+// so a read that itself takes long on a loaded box cannot make two nearby samples pass for a held value.
+// Throws, naming the first 200 characters of the last value as JSON, when it is still changing at `timeoutMs`.
+export async function stable (read, timeoutMs = SETTLE_MS, equal = (a, b) => JSON.stringify(a) === JSON.stringify(b)) {
   const deadline = Date.now() + timeoutMs
   let value = await read()
-  let seen = JSON.stringify(value)
   let changedAt = Date.now()
   for (;;) {
     await sleep(POLL_MS)
     const startedAt = Date.now()
-    if (startedAt > deadline) throw new Error(`the value did not stop changing in ${timeoutMs} ms; last ${seen}`)
-    value = await read()
-    if (JSON.stringify(value) !== seen) {
-      seen = JSON.stringify(value)
+    if (startedAt > deadline) throw new Error(`the value did not stop changing in ${timeoutMs} ms; last ${JSON.stringify(value).slice(0, 200)}`)
+    const next = await read()
+    if (!equal(value, next)) {
+      value = next
       changedAt = Date.now()
     } else if (startedAt - changedAt >= STABLE_MS) {
-      return value
+      return next
     }
   }
 }
