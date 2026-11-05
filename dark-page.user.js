@@ -60,8 +60,7 @@
     }
   }
 
-  // WCAG relative luminance.
-  function luminance (color) {
+  function wcagLuminance (color) {
     const [r, g, b] = [1, 3, 5].map((i) => {
       const c = parseInt(color.slice(i, i + 2), 16) / 255
       return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
@@ -70,8 +69,8 @@
   }
 
   function textColorFor (pageColor) {
-    const page = luminance(pageColor) + 0.05
-    const contrast = (text) => { const t = luminance(text) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    const page = wcagLuminance(pageColor) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(text) + 0.05; return Math.max(page, t) / Math.min(page, t) }
     return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
   }
 

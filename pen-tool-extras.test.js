@@ -1797,6 +1797,15 @@ test('a step skipped for a missing internal is quiet and puts nothing back: noth
   assert.deepEqual([warned, skipped, undone], [[], ['marks'], 0])
 })
 
+test('every settings table row with a section is drawn in the dialog, so a section whose rows went astray fails here', () => {
+  const html = renderEditor(editorState())
+  const boxes = { outline: 'data-outline', middleErase: 'data-middle-erase', lineStyles: 'data-style="dashed"', show: 'data-show="thickness"' }
+  for (const [name, row] of Object.entries(SETTINGS)) {
+    if (!row.dialog.section) continue
+    assert.ok(html.includes(row.range ? `data-row="${name}"` : boxes[name]), name)
+  }
+})
+
 test('the dialog shows one plain line naming the steps that are skipped, and nothing when none is', () => {
   assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
   assert.match(renderEditor(editorState({ off: ['arrow lines'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
@@ -2052,8 +2061,8 @@ for (const [internal, remove, featureNames] of LACKING_ALONE) {
 }
 
 test('every step with a requirement is lacking under some internal removed alone', () => {
-  // gear needs nothing of SudokuPad's, and lineMode needs ToolPen.tool (the next test).
-  const own = Object.keys(STEP_LABELS).filter((name) => !['gear', 'lineMode'].includes(name))
+  // gear needs nothing of SudokuPad's, and penPanel needs ToolPen.tool (the next test).
+  const own = Object.keys(STEP_LABELS).filter((name) => !['gear', 'penPanel'].includes(name))
   assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), own.sort())
 })
 
@@ -2063,7 +2072,7 @@ test('without a pen tool, every step that needs it is reported under the first i
     ['setSelectedColor', ['pages']],
     ['actStart', ['arrowLines', 'marks', 'lineErase']],
     ['drawLineHint', ['dragHint']],
-    ['ToolPen.tool', ['lineMode']]
+    ['ToolPen.tool', ['penPanel']]
   ]))
 })
 

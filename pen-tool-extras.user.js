@@ -237,8 +237,7 @@
 
   const doNothing = () => {}
 
-  // A table row. `effect` brings the page in line once `inForce` holds the new value; the style is written after the effects, so an effect need not. `dialog` places the row: its
-  // `label`, and its `section` or the box it sits `under` (a flag's name, or `name.flag` for one of a set), hidden while that box is unticked.
+  // `effect` runs once `inForce` holds the new value; the style is written after the effects, so an effect need not.
   function slider (key, range, effect, dialog) {
     return { key, fallback: range.fallback, normalize: (data) => inRange(data, range) ? data : range.fallback, effect, range, dialog }
   }
@@ -247,13 +246,11 @@
     return { key, fallback: true, normalize: (data) => data !== false, effect, dialog }
   }
 
-  // `dialog.attribute` names the boxes' data attribute when it is not the setting's name; `dialog.labels` gives each flag a row.
   function flags (key, names, effect, dialog) {
     return { key, fallback: decodeFlags(names), normalize: (data) => decodeFlags(names, data), effect, dialog }
   }
 
-  // `lineStyles` is which line styles (page 2 dashed lines, page 3 arrow lines) are enabled, and `show` which panel sliders show: its box sits in each slider row that names it as `box`.
-  // Marks and the line mode are saved their own way.
+  // Marks and the line mode are saved their own way. A row `under` a box is hidden while that box is unticked.
   const SETTINGS = {
     thickness: slider('PenColor_thickness', THICKNESS, adoptThickness, { label: 'Thickness', section: 'Line settings', box: 'show' }),
     opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: 'Opacity (%)', section: 'Line settings', box: 'show' }),
@@ -272,7 +269,7 @@
   const boxValue = (state, under) => under.split('.').reduce((value, name) => value[name], state)
 
   function draftWithBox (draft, dataset, checked) {
-    const name = SETTING_NAMES.find((n) => SETTINGS[n].dialog && !SETTINGS[n].range && boxAttribute(n) in dataset)
+    const name = SETTING_NAMES.find((n) => !SETTINGS[n].range && boxAttribute(n) in dataset)
     const flagName = name && dataset[boxAttribute(name)]
     return name && { ...draft, [name]: flagName ? { ...draft[name], [flagName]: checked } : checked }
   }
@@ -323,7 +320,6 @@
     return type === 'x' ? edge : ADDED[edge][ADDED_ORDER.indexOf(type)]
   }
 
-  // 'empty' is always allowed, and a `current` whose type is unticked still moves on.
   function stepType (current, settings, direction, cycle) {
     const order = [...cycle.types, 'empty']
     const from = order.indexOf(current)
@@ -334,7 +330,6 @@
     throw new Error('pen-tool-extras: the cycle has no empty step')
   }
 
-  // null when nothing in `cycle` is ticked, so the click does nothing.
   function planCycleClick (cycle, valueOf, present, settings, backwards) {
     if (!cycle.types.some((type) => settings[cycle.setting[type]])) return null
     const held = cycle.types.filter((type) => present.includes(valueOf(type)))
@@ -664,8 +659,7 @@
   }
 
   // Pen color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the pen buttons line up with the cell buttons.
-  // A transparent or unreadable entry keeps SudokuPad's own pen color in its place, with nothing moving up. Of the darkened colors, the darkest one whose OKLCH chroma is
-  // under GREY_CHROMA becomes #000000; a kept SudokuPad color is not considered.
+  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest pen is black as in SudokuPad's own set.
   function derivedPenColors (keys, readColor) {
     const colors = {}
     const missing = []
@@ -856,8 +850,7 @@
   const linePicture = (width, strokeOpacity) =>
     `<svg viewBox="0 0 20 16" fill="none" stroke="currentColor" stroke-width="${width}" stroke-opacity="${strokeOpacity}" stroke-linecap="round" aria-hidden="true"><path d="M3 13 L17 3"/></svg>`
 
-  // A hidden slider is an empty row of the same height, so the other keeps its place, and with both hidden there is no block at all, so the panel has nothing left over.
-  // Neither slider takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
+  // A hidden slider keeps an empty row so the other keeps its place. Neither slider takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
   function renderPanelSliders (thickness, opacity, show) {
     if (!show.thickness && !show.opacity) return ''
     const row = (shown, id, label, picture, range, value) => shown
@@ -928,7 +921,6 @@
 
   const sectionHeading = (text) => `${DIVIDER}<div style="font-weight:600;margin-top:10px">${text}</div>`
 
-  // `lineMode` is undefined when the page has no pen tool, and the choice is left out.
   function lineModeChoice (lineMode) {
     if (lineMode === undefined) return ''
     const options = LINE_MODES.map(([value, label]) => `<option value="${value}"${value === lineMode ? ' selected' : ''}>${label}</option>`).join('')
@@ -980,7 +972,7 @@
         `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" style="width:100%;min-width:0;margin:0">` +
         `<output data-readout="${key}">${value}</output>${box ? flagBox(box, key) : '<span></span>'}</div>`
     }
-    const rowsUnder = (path) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog?.under === path).map(sliderRow).join('')
+    const rowsUnder = (path) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under === path).map(sliderRow).join('')
     const labelled = (name) => '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
       `<input type="checkbox" id="pen-tool-extras-${kebab(name)}" data-${kebab(name)}${state[name] ? ' checked' : ''} style="margin:0">` +
       `<label for="pen-tool-extras-${kebab(name)}" style="width:auto;text-align:left;margin:0">${SETTINGS[name].dialog.label}</label></div>`
@@ -993,10 +985,10 @@
       if (labels) return Object.entries(labels).map(([flagName, text]) => styleBlock(name, flagName, text) + rowsUnder(`${name}.${flagName}`)).join('')
       return labelled(name) + rowsUnder(name)
     }
-    const sectionRows = (section) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog?.section === section).map(settingRows).join('')
+    const sectionRows = (section) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.section === section).map(settingRows).join('')
     const heading = (text, caption) =>
       DIVIDER + `<div style="${SLIDER_COLUMNS};margin:10px 0 4px"><span style="font-weight:600;grid-column:1 / 4">${text}</span>` +
-      `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>` + sectionRows(text)
+      `<span style="${COLUMN_HEADING}">${caption || ''}</span></div>`
     const markRow = (label, cellsMarkup) => `<div>${label}</div>${cellsMarkup}`
     const columnHead = (text) => `<div style="font-size:.85rem;color:#666">${text}</div>`
     const marksTable = '<div style="display:grid;grid-template-columns:max-content repeat(3, max-content);column-gap:28px;row-gap:6px;align-items:center;margin:4px 0">' +
@@ -1006,14 +998,13 @@
       '</div>'
     return offNote(state.off) + '<div style="font-weight:600">Pen colors</div>' + colorsRow +
       missingNote(state.missing) +
-      heading('Line settings', 'Slider in panel') +
-      heading('Line styles', 'Enable') +
+      heading('Line settings', 'Slider in panel') + sectionRows('Line settings') +
+      heading('Line styles', 'Enable') + sectionRows('Line styles') +
       sectionHeading('Marks a click cycles through') + marksTable +
       sectionHeading('Other') + sectionRows('Other') +
       lineModeChoice(state.lineMode)
   }
 
-  // The words the console and the dialog use for each install step, under the names the requirement table uses.
   const STEP_LABELS = {
     colors: 'colors',
     pages: 'pen pages',
@@ -1021,7 +1012,7 @@
     dragHint: 'drag highlight',
     marks: 'marks',
     lineErase: 'line erase',
-    lineMode: 'pen panel',
+    penPanel: 'pen panel',
     gear: 'settings gear'
   }
 
@@ -1129,7 +1120,6 @@
       .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
   }
 
-  // `tool` is `ToolPen.tool`, undefined when SudokuPad has no pen tool.
   function lackingInternals (app, tool) {
     const renderer = app.svgRenderer
     const proto = renderer ? Object.getPrototypeOf(renderer) : undefined
@@ -1148,7 +1138,7 @@
         fn(proto, 'renderPen'), fn(renderer && renderer.constructor, 'rcToPathData'), ['CellSize', Boolean(renderer) && typeof renderer.constructor.CellSize === 'number'], cells
       ],
       // `lineMode` is not on the tool on every page load, so the pulldown the sliders sit beside is what is watched (checkPanelRow).
-      lineMode: [['ToolPen.tool', Boolean(tool)]],
+      penPanel: [['ToolPen.tool', Boolean(tool)]],
       lineErase: [...actions, fn(app, 'xyToRCExact'), fn(grid, 'getCell'), cells]
     }
     const lacking = new Map()
@@ -1172,7 +1162,7 @@
   const skipped = []
   const steps = {
     colors: createStep(STEP_LABELS.colors, skipped),
-    // A page 2 or page 3 pen left selected would draw with no color, so the pad and the pen go back to page 1.
+    // With pen pages off the pad cannot turn back from page 2 or 3, so it and the pen go back to page 1.
     pages: createStep(STEP_LABELS.pages, skipped, () => {
       setPadPage(0)
       putStockPenBack()
@@ -1182,7 +1172,7 @@
     dragHint: createStep(STEP_LABELS.dragHint, skipped),
     marks: createStep(STEP_LABELS.marks, skipped),
     lineErase: createStep(STEP_LABELS.lineErase, skipped),
-    lineMode: createStep(STEP_LABELS.lineMode, skipped, () => {
+    penPanel: createStep(STEP_LABELS.penPanel, skipped, () => {
       applyStyle()
       syncPenPanel()
     }),
@@ -1258,7 +1248,8 @@
   }
 
   // SudokuPad's own `renderPen` has no case for the values and gives the path no `d`; it copies every option onto the path, so passing `d` is enough.
-  function wrapRenderPenMarks (proto, renderer) {
+  function wrapRenderPenMarks (renderer) {
+    const proto = Object.getPrototypeOf(renderer)
     const size = renderer.constructor.CellSize
     steps.marks.wrap(proto, 'renderPen', function (stock, opts = {}) {
       const mark = addedMark(opts.value, opts.row, opts.col, Framework.app.grid.cols)
@@ -1442,7 +1433,7 @@
 
   // Wrapped after the line erase and the arrow lines, so a mark's click and drawing come first and the marks layer stays on top of an arrow line.
   function installMarks (app, tool) {
-    wrapRenderPenMarks(Object.getPrototypeOf(app.svgRenderer), app.svgRenderer)
+    wrapRenderPenMarks(app.svgRenderer)
     const original = tool.clickCell
     wrapClickCell(tool, original)
     suppressMarkMenu(app, () => markUnderPointer(tool, original))
@@ -1466,14 +1457,14 @@
       EDIT_CSS,
       DIALOG_CSS,
       GEAR_CSS,
-      steps.lineMode.off ? '' : PANEL_CSS
+      steps.penPanel.off ? '' : PANEL_CSS
     ].join('\n')
   }
 
   // The saved mode: SudokuPad's pen tool holds its default until it first opens and reads the saved mode then, and with the pulldown hidden only this dialog changes it. It does not
   // depend on the page support in `installPenPages`.
   function currentLineMode () {
-    return steps.lineMode.off ? undefined : normalizeLineMode(Framework.getData(LINE_MODE_KEY))
+    return steps.penPanel.off ? undefined : normalizeLineMode(Framework.getData(LINE_MODE_KEY))
   }
 
   // Saved where SudokuPad saves it, so its hidden pulldown, when the pen tool is on, shows it too.
@@ -1505,10 +1496,8 @@
   function openDialog () {
     let colors = { ...active }
     let missing = activeMissing
-    // True after Restore defaults until a color is edited: Save then clears the saved set.
     let reset = false
-    // The pen colors picked by hand since the dialog opened or Restore defaults. Save with none
-    // changes nothing, so a derived set is never saved by accident.
+    // Only colors picked by hand are saved, so a derived set is never saved by accident.
     const edited = new Set()
     let marks = markSettings
     let lineMode = currentLineMode()
@@ -1548,7 +1537,7 @@
                 if (!sameValue(marks, markSettings)) Framework.setData(MARKS_KEY, marks)
                 markSettings = marks
                 saveSettings(draft)
-                if (lineMode !== undefined && lineMode !== currentLineMode()) steps.lineMode.run(() => applyLineMode(lineMode))
+                if (lineMode !== undefined && lineMode !== currentLineMode()) steps.penPanel.run(() => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
               }
             },
@@ -1560,7 +1549,7 @@
     })
     box = document.getElementById(EDITOR_ID)
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
-    const showRows = () => SETTING_NAMES.filter((name) => SETTINGS[name].dialog?.under).forEach((name) => {
+    const showRows = () => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under).forEach((name) => {
       box.querySelector(`[data-row="${name}"]`).style.display = boxValue(draft, SETTINGS[name].dialog.under) ? 'grid' : 'none'
     })
     draw()
@@ -1594,7 +1583,8 @@
         if (next) {
           draft = next
           showRows()
-        } else marks = { ...marks, [ticked.dataset.mark]: ticked.checked }
+        } else if (ticked.dataset.mark) marks = { ...marks, [ticked.dataset.mark]: ticked.checked }
+        else throw new Error(`pen-tool-extras: the dialog box ${ticked.id} is in no table row and is no mark`)
         return
       }
       const el = event.target.closest('input[type="color"]')
@@ -1668,14 +1658,14 @@
     if (panelCheck !== null || !document.querySelector(PEN_PANEL)) return
     panelCheck = setTimeout(() => {
       panelCheck = null
-      if (document.querySelector(PEN_PANEL) && !document.querySelector(LINE_MODE_BOX)) steps.lineMode.skip('the pen tool panel has no .penlinemode')
+      if (document.querySelector(PEN_PANEL) && !document.querySelector(LINE_MODE_BOX)) steps.penPanel.skip('the pen tool panel has no .penlinemode')
     }, PANEL_CHECK_MS)
   }
 
   // SudokuPad builds `.penlinemode` each time the pen tool is turned on and removes it when another tool is. The sliders and the page button are added beside it (it is hidden,
   // not removed, so SudokuPad's own handlers keep their element) and taken away with it. Safe to run any number of times.
   function syncPenPanel () {
-    steps.lineMode.run(() => {
+    steps.penPanel.run(() => {
       const mode = document.querySelector(LINE_MODE_BOX)
       if (!mode) {
         checkPanelRow()
@@ -1968,7 +1958,7 @@
     steps.pages.run(() => installPenPages(ToolPen.tool))
     steps.dragHint.run(() => installHintLayer(ToolPen.tool))
     steps.colors.run(installHoldToEdit)
-    steps.lineMode.run(installPenPanel)
+    steps.penPanel.run(installPenPanel)
     steps.gear.run(installGear)
     installOverlayPressSwallow()
     effectsOf(SETTING_NAMES).forEach((effect) => effect())

@@ -111,6 +111,10 @@
 - **page button** — the square button at the right end of the pen panel's last row. It shows the line the next enabled page draws,
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
+- **install step** — one of the parts Pen Tool Extras installs at startup, each run in its own guard: colors, pen pages, arrow
+  lines, drag highlight, marks, line erase, pen panel, settings gear. A step is **skipped** when SudokuPad lacks an internal it
+  needs or its own code throws: one console warning names it, the settings dialog's "Off because SudokuPad changed" line lists it,
+  and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **settings gear** — the small white box with a purple gear in the upper right corner of SudokuPad's pen tool button. A click or tap opens
   Pen Tool Extras' settings dialog and leaves the selected tool alone. It shows whenever SudokuPad shows the pen tool button.
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
