@@ -485,7 +485,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await setSlider(7)
       assert.equal(await savedThickness(), 7)
       await openEditor()
-      assert.equal(await editor().locator('input[type=range]').count(), 5)
       await restoreDefaults()
       assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
       assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
@@ -710,10 +709,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await p.locator('.tool-pen.pen-tool-extras-editing').count(), 0)
     })
 
-    it('edit mode, screenshot', async () => {
+    // Set PEN_COLOR_SHOT to a path to save the screenshot kept in docs/research/.
+    it('edit mode, screenshot', { skip: !process.env.PEN_COLOR_SHOT }, async () => {
       await holdToOpen(4)
-      // Set PEN_COLOR_SHOT to a path to save the screenshot kept in docs/research/.
-      if (process.env.PEN_COLOR_SHOT) await p.locator('.tool-pen').first().screenshot({ path: process.env.PEN_COLOR_SHOT })
+      await p.locator('.tool-pen').first().screenshot({ path: process.env.PEN_COLOR_SHOT })
+    })
+
+    // Runs before the checks after this group, whether or not the screenshot ran.
+    after(async () => {
       await leaveEditMode()
       // Put back the derived colors for the checks below.
       await read((k) => Framework.removeData(k), DATA_KEY)

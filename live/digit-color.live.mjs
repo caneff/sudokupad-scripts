@@ -236,7 +236,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('givens keep their color, with a color set for the same digit', async () => {
-    assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
+    assert.deepEqual(await allFills('given', '4')(), [GIVEN_FILL])
+    assert.deepEqual(await allFills('given', '8')(), [GIVEN_FILL])
   })
 
   it('corner marks and centre marks take the digit\'s color; a digit on SudokuPad\'s own color keeps it', async () => {
