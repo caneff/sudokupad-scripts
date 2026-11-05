@@ -8,8 +8,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
-import { draw as drawLine, openPenTool } from './pen.mjs'
+import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from './settings.mjs'
+import { cellCentre, draw as drawLine, openPenTool } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -35,7 +35,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const editor = () => p.locator('#pen-tool-extras-editor')
   const outlineBox = () => editor().locator('input[data-outline]')
   const layerFilter = () => read(() => window.getComputedStyle(document.querySelector('#cell-pen')).filter)
@@ -47,7 +46,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openPenTool(p)
     for (let i = 0; i < page; i++) await p.click('.pen-tool-extras-page')
     await read(() => { ToolPen.tool.lineMode = 'centeronly' })
-    await drawLine(p, row, { col: 3, dx: (width) => 2 * width, dy: 0, steps: 8 })
+    const [, , width] = await cellCentre(p, row, 3)
+    await drawLine(p, row, { col: 3, dx: 2 * width, dy: 0, steps: 8 })
     await p.mouse.move(5, 5)
   }
 
@@ -95,7 +95,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openPenTool(p)
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = () => openExtrasEditor(p)
   const clearSaved = () => read((keys) => keys.forEach((k) => Framework.removeData(k)), [OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY, THICKNESS_KEY, DASH_KEY])
   const widthSlider = () => editor().locator('input[data-setting="outlineWidth"]')
   const setWidth = (value) => widthSlider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
@@ -123,14 +122,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await brightnessAbove(OUTLINE_UNITS) > 100, true, 'white beside the line')
     assert.equal(await brightnessAbove(CLEAR_UNITS), 0, 'black beyond the outline')
     await unback()
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await outlineBox().isChecked(), true)
     assert.equal(await widthSlider().inputValue(), '2')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('Outline width is a line under the box in the slider column, hidden at once while the box is unticked and back when it is ticked; the slider keeps its value', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await widthRow().isVisible(), true)
     await setWidth(6)
     const column = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
@@ -148,12 +147,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('Cancel leaves it on and Save with the box unticked turns it off for the line already drawn and stores an explicit false that survives a reload', async () => {
     await back()
-    await openEditor()
+    await openExtrasEditor(p)
     await outlineBox().uncheck()
     await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await layerFilter(), FILTER_ON)
     assert.equal(await saved(OUTLINE_KEY), null)
-    await openEditor()
+    await openExtrasEditor(p)
     await outlineBox().uncheck()
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await settle(layerFilter, 'none'), 'none')
@@ -163,7 +162,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
     assert.equal(await layerFilter(), 'none')
     assert.equal(await read(() => document.getElementById('pen-tool-extras-outline-holder')), null)
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await outlineBox().isChecked(), false)
     assert.equal(await widthRow().isVisible(), false, 'the width line is hidden while the outline is off')
     await outlineBox().check()
@@ -174,30 +173,30 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the Outline width slider is 1 to 8 at 2 by default; Cancel leaves the width, Save applies it to the line already drawn and saves it, and Restore defaults then Save puts back 2', async () => {
     await back()
-    await openEditor()
+    await openExtrasEditor(p)
     assert.deepEqual(await widthSlider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '8', '1', '2'])
     await setWidth(8)
     await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await brightnessAbove(WIDE_UNITS), 0, 'Cancel left the width at 2')
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await widthSlider().inputValue(), '2', 'the dialog opens at the width in force')
     await setWidth(8)
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(OUTLINE_WIDTH_KEY), 8)
     assert.equal(await settle(() => brightnessAbove(WIDE_UNITS).then((v) => v > 100), true), true, 'white 7 units out at width 8')
     assert.equal(await brightnessAbove(CLEAR_UNITS), 0, 'black beyond width 8')
-    await openEditor()
+    await openExtrasEditor(p)
     await setWidth(1)
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await settle(() => brightnessAbove(PAST_NARROW_UNITS), 0), 0, 'black 5.5 units out at width 1')
-    await openEditor()
-    await dialogButton('Restore defaults').click()
+    await openExtrasEditor(p)
+    await dialogButton(p, 'Restore defaults').click()
     assert.equal(await widthSlider().inputValue(), '2')
     assert.equal(await outlineBox().isChecked(), true)
     await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await saved(OUTLINE_WIDTH_KEY), 1, 'Restore defaults waits for Save')
-    await openEditor()
-    await dialogButton('Restore defaults').click()
+    await openExtrasEditor(p)
+    await dialogButton(p, 'Restore defaults').click()
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(OUTLINE_WIDTH_KEY), null, 'the default width is not kept')
     assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS).then((v) => v > 100), true), true)
@@ -244,9 +243,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await read(([k, w]) => { Framework.setData(k, false); Framework.setData(w, 5) }, [OUTLINE_KEY, OUTLINE_WIDTH_KEY])
     await reload()
     assert.equal(await layerFilter(), 'none')
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await outlineBox().isChecked(), false)
-    await dialogButton('Restore defaults').click()
+    await dialogButton(p, 'Restore defaults').click()
     assert.equal(await outlineBox().isChecked(), true)
     assert.equal(await widthSlider().inputValue(), '2')
     await closeExtrasEditorWith(p, 'Save')
@@ -260,7 +259,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // A saved width that is not a whole number from 1 to 8 reads as 2.
     await read(([k]) => Framework.setData(k, 99), [OUTLINE_WIDTH_KEY])
     await reload()
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await widthSlider().inputValue(), '2')
     await closeExtrasEditorWith(p, 'Cancel')
     await clearSaved()

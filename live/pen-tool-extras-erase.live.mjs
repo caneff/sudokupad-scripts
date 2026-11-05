@@ -9,9 +9,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { openPage, restartPuzzle, startPuzzle } from './page.mjs'
+import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
-import { cellCentre, drag, gridPoint, openPenTool, penEntries } from './pen.mjs'
+import { cellCentre, drag, gridPoint, openPenTool, padValues, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -30,7 +30,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
-  const padValues = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
   const middleClick = async (point) => {
     const [x, y] = await gridPoint(p, point)
     await p.mouse.move(x, y)
@@ -42,8 +41,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const selectPenOnPage = async (page, key) => {
     await openPenTool(p)
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-    for (let i = 0; i < 3 && (await padValues()) !== PAGES[page]; i++) await p.locator(PAGE_BUTTON).click()
-    assert.equal(await settle(padValues, PAGES[page]), PAGES[page])
+    for (let i = 0; i < 3 && (await padValues(p)) !== PAGES[page]; i++) await p.locator(PAGE_BUTTON).click()
+    assert.equal(await settle(() => padValues(p), PAGES[page]), PAGES[page])
     await p.locator(`.tool-pen button[data-key="${key}"]`).click()
   }
 
@@ -58,11 +57,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
-      seed: (page, errs) => {
-        page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`console.error: ${m.text()}`) })
-      }
-    }))
+    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
     await boot()
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
   })
@@ -111,21 +106,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const editor = () => p.locator('#pen-tool-extras-editor')
-  const openEditor = () => openExtrasEditor(p)
 
   it('with the Middle click box unticked a middle click erases nothing and prevents no default (autoscroll as stock); the box is ticked by default, saves as false, and ticking it again brings the erase back', async () => {
     await undoAll()
     await selectPenOnPage(1, 3)
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     const lines = await penEntries(p)
-    await openEditor()
+    await openExtrasEditor(p)
     const box = editor().locator('input[data-middle-erase]')
     assert.equal(await box.isChecked(), true, 'ticked on a fresh install')
     assert.equal(await p.getByLabel('Middle click erases a whole line').isChecked(), true)
     await box.uncheck()
     await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), null, 'Cancel saves nothing')
-    await openEditor()
+    await openExtrasEditor(p)
     await box.uncheck()
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), false)
@@ -140,7 +134,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await read(() => window.__middleLog), [['pointerdown', 1, false], ['mousedown', 1, false]], 'no default prevented, and the mouse events follow as in stock')
     await sleep(150) // "nothing happened in 150 ms" check
     assert.equal((await penEntries(p)).filter((v) => lines.includes(v)).length, lines.length, 'the line is still there')
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await box.isChecked(), false, 'the dialog opens with the box as saved')
     await box.check()
     await closeExtrasEditorWith(p, 'Save')

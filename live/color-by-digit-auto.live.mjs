@@ -3,7 +3,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { AUTO_KEY, AUTO_STORAGE_KEY, GIVENS, LOW_FIVE_HIGH, openSession, PROFILES_KEY, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, EDITOR, GIVENS, LOW_FIVE_HIGH, openSession, PROFILES_KEY, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, MODES } from './page.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
@@ -14,9 +14,7 @@ const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url
 
 const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 
-const BUTTON = '#control-colorbydigit'
-const EDITOR = '#color-by-digit-editor'
-const BOX = '#control-colorbydigit [data-role="auto"]'
+const BOX = `${BUTTON} [data-role="auto"]`
 
 const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
 const boxCheckedOn = (p) => p.locator(BOX).getAttribute('aria-checked')
@@ -24,11 +22,6 @@ const boxCheckedOn = (p) => p.locator(BOX).getAttribute('aria-checked')
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
-
-const bootPage = async (p, mode) => {
-  await gotoPuzzle(p)
-  await startInjected(p, script, mode)
-}
 
 // A page injected at `mode`. `seedAuto` saves the auto mode on before the page's own scripts run.
 const openAuto = (seedAuto, contextOptions = {}, mode = 'after-start') => openSession(browser, script, { force: seedAuto ? { [AUTO_STORAGE_KEY]: true } : {}, contextOptions, mode })
@@ -49,9 +42,9 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
   const getAuto = () => read((key) => Framework.getData(key), AUTO_KEY)
   const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
-  const chooseProfile = (index) => p.click(`#color-by-digit-editor [data-act=activate][data-index="${index}"]`)
+  const chooseProfile = (index) => p.click(`${EDITOR} [data-act=activate][data-index="${index}"]`)
   const boxChecked = () => boxCheckedOn(p)
-  const dialogBox = () => p.locator('#color-by-digit-editor input[data-role="auto-draft"]')
+  const dialogBox = () => p.locator(`${EDITOR} input[data-role="auto-draft"]`)
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
@@ -218,7 +211,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 
   it('loadReplay and replay playback with auto mode on change no colors', async () => {
-    const colorsBefore = JSON.stringify((await cellsState()).map((x) => x.colours))
+    const colorsBefore = await allColors()
     assert.notEqual(colorsBefore, JSON.stringify((await cellsState()).map(() => [])))
     await read(() => Framework.app.loadReplay(window.__replay))
     // The replay holds two entered digits and no color; auto mode must add none.
@@ -266,8 +259,8 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     await chooseProfile(1)
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH)
-    const colors = JSON.stringify((await cellsState()).map((x) => x.colours))
-    assert.deepEqual(await watch(async () => JSON.stringify((await cellsState()).map((x) => x.colours))), [colors])
+    const colors = await allColors()
+    assert.deepEqual(await watch(allColors), [colors])
   })
 
   it('Save with the dialog box ticked turns auto mode on from the dialog and colors the givens', async () => {
@@ -284,7 +277,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
 
   it('Save with changed groups and auto mode on recolors every cell in one undo step', async () => {
     // Low/5/High is saved; switch to Odd/Even.
-    const before = JSON.stringify((await cellsState()).map((x) => x.colours))
+    const before = await allColors()
     await openEditor()
     await chooseProfile(0)
     await closeDialogWith(p, 'Save', EDITOR)
@@ -295,7 +288,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     const wrong = async () => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(oddEven(x))).length
     assert.equal(await settle(wrong, 0), 0)
     await undo()
-    assert.equal(await settle(async () => JSON.stringify((await cellsState()).map((x) => x.colours)), before), before)
+    assert.equal(await settle(allColors, before), before)
   })
 
   it('one Save that turns auto mode on and changes the groups recolors every pure cell, not only the givens', async () => {
@@ -355,7 +348,8 @@ for (const mode of MODES) {
       // SudokuPad saves progress a moment after a change.
       await p.waitForFunction(() => Object.keys(window.localStorage).some((k) => /progress/i.test(k)), null, { timeout: SETTLE_MS })
       await p.evaluate(([key]) => Framework.setData(key, true), [AUTO_KEY])
-      await bootPage(p, mode)
+      await gotoPuzzle(p)
+      await startInjected(p, script, mode)
     })
     after(async () => { await context.close() })
 

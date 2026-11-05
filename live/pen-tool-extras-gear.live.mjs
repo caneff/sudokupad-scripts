@@ -20,7 +20,7 @@ after(async () => { await browser?.close() })
 describe('the settings gear on the pen tool button', { concurrency: false }, () => {
   let context, p
 
-  const load = async (p) => {
+  const boot = async (p) => {
     await startPuzzle(p, { beforeStart: () => p.evaluate(() => Framework.setSetting('toolpen', true)) })
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
@@ -33,7 +33,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
 
   before(async () => {
     ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 } } }))
-    await load(p)
+    await boot(p)
   })
   after(async () => { await context.close() })
 
@@ -79,7 +79,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
 
   it('the gear is present after a reload', async () => {
     await gotoPuzzle(p)
-    await load(p)
+    await boot(p)
     await p.locator(GEAR).waitFor({ state: 'visible' })
   })
 
@@ -88,7 +88,7 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   it('a tap on the gear opens the dialog', async () => {
     const { context: touch, p: tp } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 1000 }, hasTouch: true } })
     try {
-      await load(tp)
+      await boot(tp)
       const box = await tp.locator(GEAR).boundingBox()
       await tp.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2)
       await tp.locator(EDITOR).waitFor({ state: 'visible' })

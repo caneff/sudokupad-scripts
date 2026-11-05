@@ -1,6 +1,5 @@
 // Live check of pen-tool-extras.user.js's second page of pens (color characters a to i, drawn dashed)
-// on sudokupad.app in headless Chromium. Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a
-// Playwright Chromium, so it is not part of `npm test`.
+// on sudokupad.app in headless Chromium.
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
 // injection time and crackingthecryptic.com stay untested, and so does a touch screen. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
@@ -12,8 +11,8 @@ import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
-import { cellCentre, openPenTool, penStrings } from './pen.mjs'
+import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from './settings.mjs'
+import { cellCentre, openPenTool, padValues, penStrings, setSlider } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -40,7 +39,6 @@ function group (title, extra = []) {
     const read = (fn, arg) => p.evaluate(fn, arg)
     const saved = (key) => read((k) => Framework.getData(k), key)
     const selected = () => read(() => ToolPen.tool.selectedColor)
-    const padValues = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
     const currentButtonKey = () => read(() => { const b = document.querySelector('.tool-pen button.current'); return b && b.dataset.key })
     const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
     const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
@@ -63,16 +61,13 @@ function group (title, extra = []) {
     }
 
     const goToPage = async (values) => {
-      for (let i = 0; i < 3 && (await padValues()) !== values; i++) {
+      for (let i = 0; i < 3 && (await padValues(p)) !== values; i++) {
         await p.locator(PAGE_BUTTON).click()
-        await settle(padValues, values, 500)
+        await settle(() => padValues(p), values, 500)
       }
-      assert.equal(await settle(padValues, values), values)
+      assert.equal(await settle(() => padValues(p), values), values)
     }
-    // The settings dialog's editor: open it from SudokuPad's settings, press one of its buttons, and wait for it to go.
     const editor = () => p.locator('#pen-tool-extras-editor')
-    const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-    const openEditor = () => openExtrasEditor(p)
     const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const turnPageWithWheel = async (deltaY) => {
       const box = await p.locator(PAGE_BUTTON).boundingBox()
@@ -102,7 +97,7 @@ function group (title, extra = []) {
     })
 
     it('the pen tool starts on page 1: SudokuPad\'s own 1 to 9, pen 1 selected, a page button at the right end of the last row', async () => {
-      assert.equal(await padValues(), PAGE_ONE)
+      assert.equal(await padValues(p), PAGE_ONE)
       assert.equal(await selected(), '1')
       assert.equal(await currentButtonKey(), '1')
       assert.equal(await p.locator(`${PAGE_BUTTON} svg circle[data-page-dot="filled"]`).count(), 1)
@@ -113,7 +108,7 @@ function group (title, extra = []) {
     it('the page button turns to page 2: the same buttons carry a to i in data-value, and the same color number stays selected', async () => {
       await press(3)
       await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO)
+      assert.equal(await settle(() => padValues(p), PAGE_TWO), PAGE_TWO)
       assert.equal(await selected(), 'c')
       assert.equal(await currentButtonKey(), '3')
     })
@@ -178,13 +173,13 @@ function group (title, extra = []) {
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
       // 3 dashes of a line width of 5
       assert.equal(await settle(dashOn, 15), 15, 'dashes to start with')
-      await openEditor()
+      await openExtrasEditor(p)
       assert.deepEqual(await range().evaluate((el) => [el.min, el.max, el.step, el.value]), ['0', '8', '1', '3'])
       await range().fill('0')
       await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await dashOn(), 15, 'Cancel leaves the dashes')
       assert.equal(await saved(DASH_KEY), null)
-      await openEditor()
+      await openExtrasEditor(p)
       await range().fill('0')
       await closeExtrasEditorWith(p, 'Save')
       assert.equal(await settle(dashOn, 0), 0, 'a line already drawn takes the dots')
@@ -198,9 +193,9 @@ function group (title, extra = []) {
       assert.equal(await settle(sample, 'dots'), 'dots', 'the page button shows dots at 0')
       await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
-      await openEditor()
+      await openExtrasEditor(p)
       assert.equal(await range().inputValue(), '0')
-      await dialogButton('Restore defaults').click()
+      await dialogButton(p, 'Restore defaults').click()
       assert.equal(await range().inputValue(), '3')
       await closeExtrasEditorWith(p, 'Save')
       assert.equal(await settle(dashOn, 15), 15, 'the dashes are back')
@@ -224,9 +219,9 @@ function group (title, extra = []) {
     })
 
     it('the dash scales with the thickness slider', async () => {
-      await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '4'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+      await setSlider(p, '#pen-tool-extras-thickness', 4)
       assert.equal(await settle(dashOn, 12), 12)
-      await p.locator('#pen-tool-extras-thickness').evaluate((el) => { el.value = '5'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+      await setSlider(p, '#pen-tool-extras-thickness', 5)
       assert.equal(await settle(dashOn, 15), 15)
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
     })
@@ -243,7 +238,7 @@ function group (title, extra = []) {
       assert.notEqual(before, own[2], 'the colors in force are not SudokuPad\'s own')
       const marks = await penStrings(p)
       const depth = await undoDepth()
-      await openEditor()
+      await openExtrasEditor(p)
       assert.notDeepEqual(await pickers(), own)
       await editor().locator('button[data-sudokupad-colors]').click()
       assert.deepEqual(await pickers(), own)
@@ -253,7 +248,7 @@ function group (title, extra = []) {
       await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await colorOf3(), before, 'Cancel leaves the colors as they were')
       assert.equal(await saved(COLORS_KEY), null)
-      await openEditor()
+      await openExtrasEditor(p)
       await editor().locator('button[data-sudokupad-colors]').click()
       await closeExtrasEditorWith(p, 'Save')
       assert.equal(await settle(colorOf3, own[2]), own[2])
@@ -266,8 +261,8 @@ function group (title, extra = []) {
       assert.equal(await settle(colorOf3, own[2]), own[2], 'the saved colors are kept after a reload')
       await read((k) => Framework.removeData(k), COLORS_KEY)
       // Restore defaults and then the button: the button's colors are picked by hand, so Save stores them and does not clear the saved set.
-      await openEditor()
-      await dialogButton('Restore defaults').click()
+      await openExtrasEditor(p)
+      await dialogButton(p, 'Restore defaults').click()
       await editor().locator('button[data-sudokupad-colors]').click()
       assert.deepEqual(await pickers(), own)
       await closeExtrasEditorWith(p, 'Save')
@@ -306,7 +301,7 @@ function group (title, extra = []) {
     })
 
     const setStyles = async ({ dashed, arrows }) => {
-      await openEditor()
+      await openExtrasEditor(p)
       for (const [key, on] of [['dashed', dashed], ['arrows', arrows]]) await editor().locator(`input[data-style="${key}"]`).setChecked(on)
       await closeExtrasEditorWith(p, 'Save')
     }
@@ -332,7 +327,7 @@ function group (title, extra = []) {
       // The page 2 line the checks before this one left on the grid.
       const before = await styleOf('.cell-pen.pencolor-c')
       assert.notEqual(before.dash, 'none', 'a page 2 line is dashed')
-      await openEditor()
+      await openExtrasEditor(p)
       const dashRow = editor().locator('[data-row="dash"]')
       assert.equal(await dashRow.isVisible(), true)
       await editor().locator('input[data-style="dashed"]').uncheck()
@@ -343,30 +338,30 @@ function group (title, extra = []) {
       await setStyles({ dashed: false, arrows: true })
       assert.deepEqual(await saved(LINE_STYLES_KEY), { dashed: false, arrows: true })
       assert.equal(await settle(selected, '3'), '3', 'the page 2 pen became the same number on page 1')
-      assert.equal(await padValues(), PAGE_ONE)
+      assert.equal(await padValues(p), PAGE_ONE)
       assert.deepEqual(await styleOf('.cell-pen.pencolor-c'), before, 'the line drawn in page 2 still draws, dashed')
       await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_THREE), PAGE_THREE, 'the button skips page 2')
+      assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE, 'the button skips page 2')
       await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
       await p.keyboard.press('Tab')
-      assert.equal(await settle(padValues, PAGE_THREE), PAGE_THREE, 'Tab skips page 2')
+      assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE, 'Tab skips page 2')
       await p.keyboard.press('Tab')
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
       await turnPageWithWheel(-100)
-      assert.equal(await settle(padValues, PAGE_THREE), PAGE_THREE, 'the wheel back from page 1 skips page 2')
+      assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE, 'the wheel back from page 1 skips page 2')
       await turnPageWithWheel(100)
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
       assert.equal(await p.locator(`${PAGE_BUTTON} svg circle`).count(), 2, 'a dot for each page in the rotation')
       await reload()
       assert.deepEqual(await saved(LINE_STYLES_KEY), { dashed: false, arrows: true })
       await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_THREE), PAGE_THREE)
+      assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE)
       await setStyles({ dashed: true, arrows: true })
       assert.equal(await saved(LINE_STYLES_KEY), null, 'both enabled is the default and is not kept')
       await toPage(PAGE_ONE, 3)
       await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO, 'page 2 is back in the rotation')
+      assert.equal(await settle(() => padValues(p), PAGE_TWO), PAGE_TWO, 'page 2 is back in the rotation')
       await press(3)
     }))
 
@@ -375,10 +370,10 @@ function group (title, extra = []) {
       assert.equal(await selected(), 'n')
       await setStyles({ dashed: true, arrows: false })
       assert.equal(await settle(selected, '3'), '3')
-      assert.equal(await padValues(), PAGE_ONE)
+      assert.equal(await padValues(p), PAGE_ONE)
       await p.locator(PAGE_BUTTON).click()
       await p.locator(PAGE_BUTTON).click()
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE, 'page 1, page 2, then back to page 1')
+      assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE, 'page 1, page 2, then back to page 1')
       await setStyles({ dashed: true, arrows: true })
       await toPage(PAGE_TWO, 3)
     }))
@@ -399,13 +394,13 @@ function group (title, extra = []) {
       await p.keyboard.press('Tab')
       await sleep(300) // "nothing happened in 300 ms" check
       assert.equal(await read(() => window.__selectCalls), 0, 'the script took no Tab')
-      assert.equal(await padValues(), PAGE_ONE, 'the script turned no page on Tab')
+      assert.equal(await padValues(p), PAGE_ONE, 'the script turned no page on Tab')
       await read(() => { ToolPen.tool.setSelectedColor = window.__stockSelect })
       const colour = await p.locator('.tool-pen button[data-key="5"]').boundingBox()
       await p.mouse.move(colour.x + colour.width / 2, colour.y + colour.height / 2)
       await p.mouse.wheel(0, 100)
       await sleep(300) // "nothing happened in 300 ms" check
-      assert.equal(await padValues(), PAGE_ONE)
+      assert.equal(await padValues(p), PAGE_ONE)
       assert.equal(await selected(), '3')
       assert.deepEqual(await saved(LINE_STYLES_KEY), { dashed: false, arrows: false })
       await setStyles({ dashed: true, arrows: false })
@@ -434,10 +429,10 @@ function group (title, extra = []) {
 
     it('leaving the pen tool puts the buttons back on 1 to 9, and returning shows page 2 with pen c selected', async () => {
       await read(() => Framework.app.changeTool('normal'))
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
       assert.equal(await p.locator(PAGE_BUTTON).count(), 0)
       await openToolAndPageButton()
-      assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO)
+      assert.equal(await settle(() => padValues(p), PAGE_TWO), PAGE_TWO)
       assert.equal(await selected(), 'c')
       assert.equal(await currentButtonKey(), '3')
     })
@@ -446,7 +441,7 @@ function group (title, extra = []) {
       assert.equal(await saved('ToolPen_color'), 3)
       await reload()
       assert.equal(await settle(selected, 'c'), 'c')
-      assert.equal(await padValues(), PAGE_TWO)
+      assert.equal(await padValues(p), PAGE_TWO)
       assert.equal(await currentButtonKey(), '3')
       assert.equal(await saved('ToolPen_color'), 3)
       assert.equal(await saved(PEN_KEY), 'c')
@@ -467,7 +462,7 @@ function group (title, extra = []) {
     it('a saved pen that is no pen is ignored: the pen tool opens on page 1 with SudokuPad\'s own selection', async () => {
       await read((k) => Framework.setData(k, 'zz'), PEN_KEY)
       await reload()
-      assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+      assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
       // SudokuPad's own selection is the number 3 when its pen tool was already open as the script installed.
       assert.equal(String(await selected()), '3')
       assert.equal(await currentButtonKey(), '3')

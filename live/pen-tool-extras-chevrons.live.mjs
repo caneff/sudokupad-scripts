@@ -8,9 +8,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { openPage, restartPuzzle, startPuzzle } from './page.mjs'
+import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor } from './settings.mjs'
-import { cellCentre, drag, openPenTool, penEntries } from './pen.mjs'
+import { cellCentre, drag, openPenTool, padValues, penEntries, setSlider } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 // The sizes of a chevron line are the script's own, so the checks read them from it and a retuning moves both.
@@ -49,7 +49,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
   const selected = () => read(() => String(ToolPen.tool.selectedColor))
-  const padValues = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
   const penOf = async (cells) => (await penEntries(p)).filter((v) => cells.some((c) => v.startsWith(`${c}:`)))
   const chevronGroups = () => read(() => [...document.querySelectorAll('#cell-pen > g.cell-pen')].map((g) => {
     const [line, chevrons] = ['line', 'chevrons'].map((name) => g.querySelector(`[data-chevron-part="${name}"]`))
@@ -62,11 +61,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const selectChevronPen = async (key) => {
     await openPenTool(p)
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-    if ((await padValues()) !== PAGE_THREE) {
-      const turns = (await padValues()) === PAGE_ONE ? 2 : 1
+    if ((await padValues(p)) !== PAGE_THREE) {
+      const turns = (await padValues(p)) === PAGE_ONE ? 2 : 1
       for (let i = 0; i < turns; i++) await p.locator(PAGE_BUTTON).click()
     }
-    assert.equal(await settle(padValues, PAGE_THREE), PAGE_THREE)
+    assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE)
     await press(key)
   }
   const undo = () => p.click('#control-undo')
@@ -88,12 +87,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
-      seed: (page, errs) => {
-        // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
-        page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`console.error: ${m.text()}`) })
-      }
-    }))
+    // the script reports a drag it could not read the ways of with console.error and sends it unsplit, which no check would see
+    ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
     await boot()
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, THICKNESS_KEY, OPACITY_KEY, ARROW_SPACING_KEY, 'ToolPen_color'])
     await selectChevronPen(3)
@@ -104,7 +99,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('page 3 is the nine chevron pens: the buttons carry the forward characters j, l, n, ... and each has a chevron swatch in its pen color', async () => {
-    assert.equal(await padValues(), PAGE_THREE)
+    assert.equal(await padValues(p), PAGE_THREE)
     assert.equal(await selected(), 'n')
     // each swatch is a mask over a background of the pen color: the color a probe element resolves --puzzle-pencolor-N to
     const swatches = await read(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
@@ -263,7 +258,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('the Thickness slider scales the arrow lines already drawn: a wider line and fewer arrows; 5 gives them back', async () => {
-    const slider = (value) => p.locator('#pen-tool-extras-thickness').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+    const slider = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
     const sample = async () => { const [g] = (await chevronGroups()).filter((x) => x.cls === 'cell-pen pen-1 pencolor-o'); return { lineWidth: g.lineWidth, count: headings(g.chevrons).length } }
     await slider(5)
     const normal = await settle(async () => (await sample()).lineWidth, CHEVRON.line * 5)
@@ -291,9 +286,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(base > 0, true)
     const editor = () => p.locator('#pen-tool-extras-editor')
     const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
-    const openEditor = () => openExtrasEditor(p)
     const setSpacing = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-    await openEditor()
+    await openExtrasEditor(p)
     assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), [String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), String(ARROW_SPACING.fallback)])
     await setSpacing(12)
     assert.equal(await editor().locator('output[data-readout="arrowSpacing"]').textContent(), '12', 'the value moves with the slider')
@@ -301,7 +295,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await arrows(), base)
     assert.equal(await saved(ARROW_SPACING_KEY), null)
-    await openEditor()
+    await openExtrasEditor(p)
     await setSpacing(12)
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(ARROW_SPACING_KEY), 12)
@@ -309,12 +303,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(wide, true, `fewer arrows at spacing 12 than ${base}`)
     const sparse = await arrows()
     await reload()
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await slider().inputValue(), '12', 'saved over a reload')
     await setSpacing(3)
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await settle(async () => (await arrows()) > base, true), true, 'denser at spacing 3')
-    await openEditor()
+    await openExtrasEditor(p)
     await p.locator('.dialog button').filter({ hasText: /^\s*Restore defaults\s*$/ }).first().click()
     assert.equal(await slider().inputValue(), '5')
     await closeExtrasEditorWith(p, 'Save')
@@ -326,10 +320,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the Opacity slider fades the chevron lines with the pen layer: the group and its parts show at the slider\'s value', async () => {
     const shown = async (selector) => [...new Set(await effectiveOpacities(p, selector))]
-    await p.locator('#pen-tool-extras-opacity').evaluate((el) => { el.value = '50'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+    await setSlider(p, '#pen-tool-extras-opacity', 50)
     assert.deepEqual(await settle(() => shown('#cell-pen > g.cell-pen'), [0.5]), [0.5])
     assert.deepEqual(await shown('#cell-pen > g.cell-pen > path'), [0.5])
-    await p.locator('#pen-tool-extras-opacity').evaluate((el) => { el.value = '80'; el.dispatchEvent(new Event('input', { bubbles: true })) })
+    await setSlider(p, '#pen-tool-extras-opacity', 80)
     assert.deepEqual(await settle(() => shown('#cell-pen > g.cell-pen'), [0.8]), [0.8])
   })
 
@@ -376,7 +370,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('page 1 pens still draw plain lines beside the chevron lines', async () => {
     await p.locator(PAGE_BUTTON).click()
-    assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
+    assert.equal(await settle(() => padValues(p), PAGE_ONE), PAGE_ONE)
     await press(2)
     await drag(p, [[8.5, 0.5], [8.5, 2.5]])
     assert.deepEqual((await penEntries(p)).filter((v) => v.startsWith('8,0:')), ['8,0:12'])

@@ -1,15 +1,23 @@
-// Shared by the live checks of the pen tool: opening it, reading what it drew, drawing with the real mouse, and the
-// helpers the other pen-adjacent files use too. Not a check itself, so `live/*.live.mjs` skips it.
+// Shared by the live checks of the pen tool: opening it, reading what it drew and which pen page is up, drawing with
+// the real mouse, setting its sliders, planting saved values and probing keydowns. Not a check itself, so
+// `live/*.live.mjs` skips it.
 
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'
+
+// How long one click on the pen button gets to show the tool: longer than the tool takes to open, since a second click
+// on the toggle closes it again.
+const TOOL_OPENS_MS = 500
 
 // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is
 // clicked again until the tool's buttons show. Returns true once they show; an open tool is left as it is.
 export async function openPenTool (page) {
   const shown = () => page.locator('.tool-pen button[data-key="1"]').isVisible()
   if (await shown()) return true
-  return clickUntil(() => page.click('#control-pen'), shown, true, SETTLE_MS)
+  return clickUntil(() => page.click('#control-pen'), shown, true, SETTLE_MS, TOOL_OPENS_MS)
 }
+
+// The values of the number pad's buttons 1 to 9 as one string, which says which pen page is up.
+export const padValues = (page) => page.evaluate(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
 
 // The pen entries of every cell as `row,col:value+color`, sorted.
 export const penEntries = (page) => page.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
@@ -47,15 +55,16 @@ export async function drag (page, points) {
   if (changed !== true) throw new Error('the drag changed nothing on the grid')
 }
 
-// One free line in pen color 1 from the centre of the cell at [row, col], a real drag by (`dx`, `dy`) page pixels
-// (`dx` may be a function of the cell's width), returning once the line is in the pen layer.
+// One free line in pen color 1 from the centre of the cell at [row, col], a real drag by (`dx`, `dy`) page pixels,
+// returning once the line is in the pen layer. A line drawn over an existing one erases it, so a second line takes
+// another row.
 export async function draw (page, row, { col = 4, dx = 110, dy = 10, steps = 6 } = {}) {
   await openPenTool(page)
   await page.locator('.tool-pen button[data-key="1"]').click()
-  const [x, y, width] = await cellCentre(page, row, col)
+  const [x, y] = await cellCentre(page, row, col)
   await page.mouse.move(x, y)
   await page.mouse.down()
-  await page.mouse.move(x + (typeof dx === 'function' ? dx(width) : dx), y + dy, { steps })
+  await page.mouse.move(x + dx, y + dy, { steps })
   await page.mouse.up()
   await page.locator('.cell-pen.pencolor-1').first().waitFor({ state: 'attached' })
 }

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, PUZZLE_URL, startPuzzle } from './page.mjs'
-import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
+import { closeDialogWith, dialogButton, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
 import { plantSaved } from './pen.mjs'
 import { settle } from './settle.mjs'
 
@@ -56,7 +56,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const editor = () => p.locator(EDITOR)
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
 
   // One computed style property of the elements that show `digit`, per place on the board.
   // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
@@ -493,7 +492,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('Restore defaults brings back every default color', async () => {
     await openEditor()
-    await dialogButton('Restore defaults').click()
+    await dialogButton(p, 'Restore defaults').click()
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await saved(), DEFAULTS)
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])

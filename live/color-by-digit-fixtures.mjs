@@ -1,5 +1,5 @@
-// Shared by the three Color by Digit live files: the board, the saved profiles every session starts with, the storage
-// keys, and the helpers that open a session on that board. Not a check itself, so `live/*.live.mjs` skips it.
+// Color by Digit's live fixtures: the board, the saved profiles every session starts with, the storage keys, the
+// script's selectors, and the helpers that open a session on that board. Not a check itself, so `live/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -19,14 +19,18 @@ export const LOW_FIVE_HIGH = [group('1', ['0', '1', '2', '3', '4']), group('5', 
 export const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 
 // The keys the script saves under, and the ones Framework.setData stores them at (the site's own prefix in front).
+const storedAt = (key) => `svencodes_${key}`
 export const PROFILES_KEY = 'ColorByDigit_profiles'
-export const PROFILES_STORAGE_KEY = 'svencodes_ColorByDigit_profiles'
-export const LEGACY_STORAGE_KEY = 'svencodes_ColorByDigit_groups'
+export const PROFILES_STORAGE_KEY = storedAt(PROFILES_KEY)
+export const LEGACY_STORAGE_KEY = storedAt('ColorByDigit_groups')
 export const AUTO_KEY = 'ColorByDigit_auto'
-export const AUTO_STORAGE_KEY = 'svencodes_ColorByDigit_auto'
+export const AUTO_STORAGE_KEY = storedAt(AUTO_KEY)
+
+export const BUTTON = '#control-colorbydigit'
+export const EDITOR = '#color-by-digit-editor'
 
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
-export const QUIET_MS = 500
+const QUIET_MS = 500
 
 // Watches `read` for QUIET_MS and returns every distinct reading.
 export async function watch (read) {
@@ -40,8 +44,6 @@ export async function watch (read) {
   return seen.map((s) => JSON.parse(s))
 }
 
-const BUTTON = '#control-colorbydigit'
-
 // Runs the loaded page through the script's injection time for `mode` (document-idle is already set up by `openSession`)
 // and Start Puzzle, and returns once the script's button shows.
 export async function startInjected (p, script, mode = 'after-start') {
@@ -52,10 +54,10 @@ export async function startInjected (p, script, mode = 'after-start') {
   await p.locator(BUTTON).waitFor({ state: 'visible' })
 }
 
-// A page with `script` injected at `mode`. `seed` maps a localStorage key to a JSON value, written before the page's own
+// A page with `script` injected at `mode`. `saved` maps a localStorage key to a JSON value, written before the page's own
 // scripts run and only while the key is absent, so a reload keeps what was saved. `force` is written every load.
 // With neither, the page starts with SEED saved as the profiles.
-export async function openSession (browser, script, { seed = { [PROFILES_STORAGE_KEY]: SEED }, force = {}, contextOptions = {}, mode = 'after-start' } = {}) {
+export async function openSession (browser, script, { saved = { [PROFILES_STORAGE_KEY]: SEED }, force = {}, contextOptions = {}, mode = 'after-start' } = {}) {
   const entries = (object) => Object.entries(object).map(([key, value]) => [key, JSON.stringify(value)])
   const opened = await openPage(browser, {
     contextOptions,
@@ -63,7 +65,7 @@ export async function openSession (browser, script, { seed = { [PROFILES_STORAGE
     seed: async (page) => {
       await page.addInitScript((list) => {
         list.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
-      }, entries(seed))
+      }, entries(saved))
       await page.addInitScript((list) => list.forEach(([key, value]) => window.localStorage.setItem(key, value)), entries(force))
     }
   })

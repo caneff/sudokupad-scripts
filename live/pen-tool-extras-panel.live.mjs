@@ -8,8 +8,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { effectiveOpacities, openExtrasEditor } from './settings.mjs'
-import { draw, openPenTool, penValuesNoColor } from './pen.mjs'
+import { dialogButton, effectiveOpacities, openExtrasEditor } from './settings.mjs'
+import { draw, openPenTool, penValuesNoColor, setSlider } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -30,7 +30,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const editor = () => p.locator('#pen-tool-extras-editor')
   const sliderValue = (selector) => p.locator(selector).inputValue()
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
@@ -63,7 +62,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openPenTool(p)
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = () => openExtrasEditor(p)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -100,25 +98,25 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('SudokuPad\'s line mode pulldown is hidden, and the dialog holds the choice: Cancel leaves the mode, Save sets and saves it, and a slider move leaves it alone', async () => {
     assert.equal(await p.locator('.penlinemode').isVisible(), false)
     const before = await read(() => ToolPen.tool.lineMode)
-    await openEditor()
+    await openExtrasEditor(p)
     const select = editor().locator('select[data-line-mode]')
     assert.deepEqual(await select.locator('option').evaluateAll((os) => os.map((o) => [o.value, o.textContent])), [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']])
     await select.selectOption('edgeonly')
-    await dialogButton('Cancel').click()
+    await dialogButton(p, 'Cancel').click()
     assert.equal(await read(() => ToolPen.tool.lineMode), before)
-    await openEditor()
+    await openExtrasEditor(p)
     await editor().locator('select[data-line-mode]').selectOption('edgeonly')
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
     assert.equal(await saved(LINE_MODE_KEY), 'edgeonly')
     assert.equal(await p.locator('.penlinemode select').inputValue(), 'edgeonly')
     await dragToMax(THICKNESS)
     assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
     assert.equal(await saved(LINE_MODE_KEY), 'edgeonly')
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
     await editor().locator('select[data-line-mode]').selectOption('both')
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
   })
 
@@ -126,10 +124,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await read((k) => Framework.setData(k, 'edgeonly'), LINE_MODE_KEY)
     // Before SudokuPad's pen tool first opens it holds 'both' and reads the saved mode only on entry.
     await read(() => { ToolPen.tool.lineMode = 'both' })
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
     await editor().locator('select[data-line-mode]').selectOption('both')
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     assert.equal(await saved(LINE_MODE_KEY), 'both')
     assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
   })
@@ -174,7 +172,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       if (release) await p.mouse.up()
     }
     for (const [slider, percent] of [['20', 0.2], ['100', 1]]) {
-      await p.locator(OPACITY).evaluate((el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }, slider)
+      await setSlider(p, OPACITY, slider)
       assert.equal(await settle(lineOpacity, percent), percent)
       // A drag over empty cells: the highlight in the pen color, 0.6 as SudokuPad's own rule gives it.
       await dragFrom(6, false)
@@ -187,7 +185,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await effectiveOpacity('.penhint'), 0.5, `erase highlight at ${slider}`)
       await p.mouse.up()
     }
-    await p.locator(OPACITY).evaluate((el) => { el.value = 80; el.dispatchEvent(new Event('input', { bubbles: true })) })
+    await setSlider(p, OPACITY, 80)
   })
 
   it('a slider drag adds nothing to the undo stack or the replay, draws no pen stroke and leaves every pen mark as it was', async () => {
@@ -237,7 +235,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('the dialog holds both sliders at the values the panel shows, a change takes effect on Save and Cancel leaves it, and the panel\'s own sliders still save at once', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const dialogRange = (key) => editor().locator(`input[type=range][data-setting="${key}"]`)
     assert.deepEqual(await Promise.all(['thickness', 'opacity'].map((k) => dialogRange(k).inputValue())), [await sliderValue(THICKNESS), await sliderValue(OPACITY)])
     assert.deepEqual(await dialogRange('thickness').evaluate((el) => [el.min, el.max, el.step]), ['1', '16', '1'])
@@ -245,16 +243,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await dialogRange('opacity').fill('40')
     assert.equal(await sliderValue(THICKNESS), '16', 'a dialog slider moves nothing before Save')
     assert.equal(await settle(lineWidth, 16), 16)
-    await dialogButton('Cancel').click()
+    await dialogButton(p, 'Cancel').click()
     await editor().waitFor({ state: 'detached' })
     assert.equal(await sliderValue(THICKNESS), '16')
     assert.equal(await saved(THICKNESS_KEY), 16)
     assert.equal(await lineOpacity(), 1)
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await dialogRange('thickness').inputValue(), '16', 'Cancel left the value as it was')
     await dialogRange('thickness').fill('9')
     await dialogRange('opacity').fill('40')
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     await editor().waitFor({ state: 'detached' })
     assert.equal(await settle(lineWidth, 9), 9)
     assert.equal(await settle(lineOpacity, 0.4), 0.4)
@@ -264,15 +262,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(OPACITY_KEY), 40)
     await dragToMax(THICKNESS)
     assert.equal(await saved(THICKNESS_KEY), 16)
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await dialogRange('thickness').inputValue(), '16', 'the dialog opens at the value the panel saved')
-    await dialogButton('Cancel').click()
+    await dialogButton(p, 'Cancel').click()
     await editor().waitFor({ state: 'detached' })
   })
 
   it('the slider boxes are ticked by default, and a slider hidden in the dialog still applies: Save takes it out of the panel, Cancel leaves the panel, the other slider keeps its place, and both hidden leave no gap', async () => {
     await read((k) => Framework.removeData(k), SLIDERS_KEY)
-    await openEditor()
+    await openExtrasEditor(p)
     const show = (key) => editor().locator(`input[data-show="${key}"]`)
     assert.equal(await show('thickness').isChecked(), true)
     assert.equal(await show('opacity').isChecked(), true)
@@ -281,14 +279,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const bothAt = { thickness: await rowOf(THICKNESS), opacity: await rowOf(OPACITY), sliders: await slidersBox() }
     const pageButton = await p.locator('.pen-tool-extras-page').boundingBox()
     await show('thickness').uncheck()
-    await dialogButton('Cancel').click()
+    await dialogButton(p, 'Cancel').click()
     await editor().waitFor({ state: 'detached' })
     assert.equal(await p.locator(THICKNESS).count(), 1, 'Cancel leaves the panel as it was')
     assert.equal(await saved(SLIDERS_KEY), null)
     // Hide the thickness slider: the opacity slider keeps its place and the thickness one still applies to the marks.
-    await openEditor()
+    await openExtrasEditor(p)
     await show('thickness').uncheck()
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     await editor().waitFor({ state: 'detached' })
     await p.locator(THICKNESS).waitFor({ state: 'detached' })
     assert.deepEqual(await rowOf(OPACITY), bothAt.opacity)
@@ -297,9 +295,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await lineWidth(), 16, 'a hidden slider\'s value still applies')
     assert.deepEqual(await read((k) => Framework.getData(k), SLIDERS_KEY), { thickness: false, opacity: true })
     // Hide the opacity slider too: no block, no gap, and the page button stays put.
-    await openEditor()
+    await openExtrasEditor(p)
     await show('opacity').uncheck()
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     await editor().waitFor({ state: 'detached' })
     await p.locator('.pen-tool-extras-sliders').waitFor({ state: 'detached' })
     assert.deepEqual(await p.locator('.pen-tool-extras-page').boundingBox(), pageButton)
@@ -308,9 +306,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const height = () => p.locator('.controls-buttons').evaluate((el) => el.getBoundingClientRect().height)
     assert.equal(await height() > 0, true)
     // Only the opacity slider hidden: the thickness one is back where it was.
-    await openEditor()
+    await openExtrasEditor(p)
     await show('thickness').check()
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     await editor().waitFor({ state: 'detached' })
     await p.locator(THICKNESS).waitFor({ state: 'visible' })
     assert.deepEqual(await rowOf(THICKNESS), bothAt.thickness)
@@ -319,11 +317,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
     assert.equal(await p.locator(OPACITY).count(), 0)
     assert.equal(await p.locator(THICKNESS).count(), 1)
-    await openEditor()
+    await openExtrasEditor(p)
     assert.equal(await show('opacity').isChecked(), false)
-    await dialogButton('Restore defaults').click()
+    await dialogButton(p, 'Restore defaults').click()
     assert.equal(await show('opacity').isChecked(), true)
-    await dialogButton('Save').click()
+    await dialogButton(p, 'Save').click()
     await editor().waitFor({ state: 'detached' })
     await p.locator(OPACITY).waitFor({ state: 'visible' })
     assert.equal(await saved(SLIDERS_KEY), null)
@@ -332,19 +330,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('Restore defaults sets the dialog\'s sliders to the defaults for Save: Cancel afterwards leaves the panel\'s sliders, the saved values and the marks, and Save resets them', async () => {
     await dragToMax(THICKNESS)
     const keep = { thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }
-    await openEditor()
-    await dialogButton('Restore defaults').click()
+    await openExtrasEditor(p)
+    await dialogButton(p, 'Restore defaults').click()
     assert.deepEqual(await Promise.all(['thickness', 'opacity'].map((k) => editor().locator(`input[data-setting="${k}"]`).inputValue())), ['5', '80'])
     assert.deepEqual({ thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }, keep, 'the panel is untouched before Save')
     assert.equal(await saved(THICKNESS_KEY), 16)
-    await dialogButton('Cancel').click()
+    await dialogButton(p, 'Cancel').click()
     await editor().waitFor({ state: 'detached' })
     assert.deepEqual({ thickness: await sliderValue(THICKNESS), opacity: await sliderValue(OPACITY) }, keep)
     assert.equal(await saved(THICKNESS_KEY), 16)
     assert.equal(await lineWidth(), 16)
-    await openEditor()
-    await dialogButton('Restore defaults').click()
-    await dialogButton('Save').click()
+    await openExtrasEditor(p)
+    await dialogButton(p, 'Restore defaults').click()
+    await dialogButton(p, 'Save').click()
     await editor().waitFor({ state: 'detached' })
     assert.equal(await settle(() => sliderValue(THICKNESS), '5'), '5')
     assert.equal(await sliderValue(OPACITY), '80')

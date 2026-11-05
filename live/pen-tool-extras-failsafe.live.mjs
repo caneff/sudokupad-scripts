@@ -1,22 +1,21 @@
 // Live check that pen-tool-extras.user.js loses one feature, not the whole pen tool, when an internal of SudokuPad it relies on is gone, on
-// sudokupad.app in headless Chromium. Run with `npm run test:live`. The first run of a day needs the network (live/cache.mjs records SudokuPad, later runs replay it) and a Playwright Chromium, so it is not part of `npm test`.
+// sudokupad.app in headless Chromium.
 //
 // Each case breaks one SudokuPad internal before the script's startup check reads it (a snippet run on `Framework.getApp()`, ahead of the
 // script's own), then checks that the settings dialog names the features that are off, that the other features and SudokuPad's own pen
-// drawing still work, and that the failure was logged once. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
+// drawing still work, and that the failure was logged once.
 // A case breaks an internal by taking it away (undefined), or by making the call the script makes fail while SudokuPad's own use of it goes on (a
 // snippet that throws only during the script's moment of need). A removed internal also goes from SudokuPad's own code, so a case that removes
 // one draws only with what it does not serve: a click on a cell edge, which SudokuPad turns into its own X, and a dragged line unless the case
 // removes the drag highlight. Dashes follow pen pages, and the outline shares the drag highlight with the sliders, so neither has a case of its own.
-// Not covered: a real Tampermonkey install and crackingthecryptic.com.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
+import { captureConsoleErrors, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
-import { gridPoint, openPenTool, penEntries } from './pen.mjs'
+import { drag, gridPoint, openPenTool, padValues, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -118,13 +117,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       before(async () => {
         logged = []
         ;({ context, p, errors } = await openPage(browser, {
-          seed: (page, errs) => {
-            page.on('console', (m) => {
-              if (m.type() !== 'error' || /Failed to load resource/.test(m.text())) return
-              if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(m.text())) logged.push(m.text())
-              else errs.push(`console.error: ${m.text()}`)
-            })
-          }
+          seed: (page, errs) => captureConsoleErrors(page, errs, (text) => {
+            if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(text)) {
+              logged.push(text)
+              return true
+            }
+          })
         }))
         const source = withBreak(kase.breaks)
         await startPuzzle(p)
@@ -147,13 +145,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           await p.locator(PAGE_BUTTON).click()
           await p.locator(PAGE_BUTTON).click()
           await p.locator('.tool-pen button[data-key="3"]').click()
-          const [x0, y0] = await gridPoint(p, [2.5, 2.5])
-          const [x1] = await gridPoint(p, [2.5, 4.5])
-          await p.mouse.move(x0, y0)
-          await p.mouse.down()
-          await p.mouse.move(x1, y0, { steps: 8 })
-          await p.mouse.up()
-          assert.equal(await settle(async () => (await penEntries(p)).length > 0, true), true, 'the drag stored a line')
+          await drag(p, [[2.5, 2.5], [2.5, 4.5]])
           assert.equal(await read(() => document.querySelectorAll('#cell-pen [data-chevron-part]').length), 0, 'no arrow group')
           assert.ok(await read(() => document.querySelectorAll('#cell-pen path.cell-pen').length) > 0, 'SudokuPad\'s plain line is drawn')
           await p.locator(PAGE_BUTTON).click()
@@ -198,11 +190,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.equal(await p.locator('#control-pen .pen-tool-extras-gear').count(), kase.noGear ? 0 : 1, 'the settings gear')
         const sliders = await p.locator(SLIDERS).count()
         assert.equal(sliders, kase.noSliders ? 0 : 1, 'the thickness slider')
-        const pad = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
-        assert.equal(await pad(), '123456789')
+        assert.equal(await padValues(p), '123456789')
         if (pageButtons) {
           await p.locator(PAGE_BUTTON).click()
-          assert.equal(await settle(pad, 'abcdefghi'), 'abcdefghi')
+          assert.equal(await settle(() => padValues(p), 'abcdefghi'), 'abcdefghi')
           await p.locator(PAGE_BUTTON).click()
           await p.locator(PAGE_BUTTON).click()
         }
@@ -217,13 +208,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       if (!kase.noDrag) {
         it('SudokuPad\'s own dragged line still draws', async () => {
           while ((await penEntries(p)).length) await p.click('#control-undo')
-          const [x0, y0] = await gridPoint(p, [4.5, 2.5])
-          const [x1] = await gridPoint(p, [4.5, 4.5])
-          await p.mouse.move(x0, y0)
-          await p.mouse.down()
-          await p.mouse.move(x1, y0, { steps: 8 })
-          await p.mouse.up()
-          assert.equal(await settle(async () => (await penEntries(p)).length > 0, true), true, 'the drag stored a line')
+          await drag(p, [[4.5, 2.5], [4.5, 4.5]])
           while ((await penEntries(p)).length) await p.click('#control-undo')
         })
       }

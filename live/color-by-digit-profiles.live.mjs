@@ -4,18 +4,15 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { group, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, watch } from './color-by-digit-fixtures.mjs'
-import { startPuzzle } from './page.mjs'
+import { BUTTON, EDITOR, group, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
-const BUTTON = '#control-colorbydigit'
 const BOX = `${BUTTON} [data-role="auto"]`
 const ARROW = `${BUTTON} [data-role="menu"]`
 const MENU = '#color-by-digit-menu'
-const EDITOR = '#color-by-digit-editor'
 const ROWS = `${EDITOR} [data-role=profile-row]`
 const HOLD_MS = 500
 // How far past a row's middle a drag ends to land beyond it.
@@ -25,10 +22,9 @@ const FOUR = [group('1', ['1', '2']), group('3', ['3', '4']), group('5', ['5', '
 const SIX = ['1', '2', '3', '5', '7', '9'].map((key, i) => group(key, [String(i)]))
 // Four profiles of one to six groups, to show every icon layout: Odd/Even active.
 const FOUR_PROFILES = {
-  profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }, { name: 'Four', groups: FOUR }, { name: 'Six', groups: SIX }],
+  profiles: [...SEED.profiles, { name: 'Four', groups: FOUR }, { name: 'Six', groups: SIX }],
   active: 0
 }
-const TWO_PROFILES = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 
 const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
 
@@ -36,13 +32,8 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-const bootPage = async (p) => {
-  await startPuzzle(p, { injection: { mode: 'after-start', code: script } })
-  await p.locator(BUTTON).waitFor({ state: 'visible' })
-}
-
-// A page with the script injected; `seed` maps a localStorage key to a JSON value, saved before the page loads.
-const openProfiles = (seed, contextOptions = {}) => openSession(browser, script, { seed, contextOptions })
+// A page with the script injected; `saved` maps a localStorage key to a JSON value, saved before the page loads.
+const openProfiles = (saved, contextOptions = {}) => openSession(browser, script, { saved, contextOptions })
 
 const tools = (p) => {
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -62,7 +53,6 @@ const tools = (p) => {
   const menuRows = () => p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => ({ name: e.querySelector('[data-role=name]').textContent, active: e.getAttribute('aria-checked') === 'true' })))
   const iconShownDigits = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
   const editor = () => p.locator(EDITOR)
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
   const rowNames = () => p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label')))
   const activeRow = () => p.$$eval(ROWS, (es) => es.findIndex((e) => e.getAttribute('aria-checked') === 'true'))
@@ -79,7 +69,7 @@ const tools = (p) => {
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
     await menu().waitFor({ state: 'detached' })
   }
-  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, dialogButton, openEditor, rowNames, activeRow, pressButton, openMenuByArrow, pick }
+  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, openEditor, rowNames, activeRow, pressButton, openMenuByArrow, pick }
 }
 
 describe('profiles on a fresh install, injected after Start Puzzle', { concurrency: false }, () => {
@@ -277,13 +267,13 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   })
 
   it('the AUTO box and the arrow box overlap no cell of the icon, for profiles of 2, 3, 4 and 6 groups', async () => {
-    const overlaps = () => p.evaluate(({ auto, arrow }) => {
+    const overlaps = () => p.evaluate(({ button, auto, arrow }) => {
       const rect = (e) => e.getBoundingClientRect()
-      const cells = [...document.querySelectorAll('#control-colorbydigit svg rect[data-role=cell]')].map(rect)
+      const cells = [...document.querySelectorAll(`${button} svg rect[data-role=cell]`)].map(rect)
       const small = [auto, arrow].map((sel) => rect(document.querySelector(sel)))
       const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
       return { cells: cells.length, hits: cells.flatMap((c) => small.map((s) => hit(c, s))).filter(Boolean).length }
-    }, { auto: BOX, arrow: ARROW })
+    }, { button: BUTTON, auto: BOX, arrow: ARROW })
     const seen = []
     for (const [name, cells] of [['Odd/Even', 2], ['Low/5/High', 3], ['Four', 4], ['Six', 4]]) {
       await t.openMenuByArrow()
@@ -302,7 +292,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
 
   it('the switch survives a reload: the saved profile is the active one', async () => {
     await p.reload({ waitUntil: 'load' })
-    await bootPage(p)
+    await startInjected(p, script)
     assert.equal((await t.getState()).active, 3)
     assert.deepEqual(await t.iconShownDigits(), ['0', '1', '2', '3'])
   })
@@ -319,7 +309,7 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
   let context, p, errors, t, cdp
 
   before(async () => {
-    ({ context, p, errors } = await openProfiles({ [PROFILES_STORAGE_KEY]: TWO_PROFILES }, { hasTouch: true }))
+    ({ context, p, errors } = await openProfiles({ [PROFILES_STORAGE_KEY]: SEED }, { hasTouch: true }))
     t = tools(p)
     cdp = await context.newCDPSession(p)
   })
@@ -330,7 +320,7 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
     await t.menu().waitFor({ state: 'visible' })
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).tap()
     await t.menu().waitFor({ state: 'detached' })
-    assert.equal((await settle(t.getState, { ...TWO_PROFILES, active: 1 })).active, 1)
+    assert.equal((await settle(t.getState, { ...SEED, active: 1 })).active, 1)
   })
 
   it('a hold on the button opens the menu and colors nothing', async () => {
@@ -352,14 +342,11 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
     const box = await p.locator(BUTTON).boundingBox()
     const x = box.x + box.width * 0.5
     const y = box.y + box.height * 0.55
-    const deadline = Date.now() + SETTLE_MS
-    let colored = 0
-    while (colored === 0 && Date.now() < deadline) {
+    const tap = async () => {
       await touch(cdp, 'touchStart', x, y)
       await touch(cdp, 'touchEnd', x, y)
-      colored = await settle(t.coloredCount, 1, 300)
     }
-    assert.notEqual(colored, 0)
+    assert.equal(await clickUntil(tap, async () => (await t.coloredCount()) > 0, true, SETTLE_MS), true)
   })
 
   it('no uncaught page errors', () => {

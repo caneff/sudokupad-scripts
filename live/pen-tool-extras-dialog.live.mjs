@@ -21,7 +21,6 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   let context, p, errors
 
   const editor = () => p.locator('#pen-tool-extras-editor')
-  const openEditor = () => openExtrasEditor(p)
   const centreX = (locator) => locator.evaluate((el) => { const box = el.getBoundingClientRect(); return Math.round(box.x + box.width / 2) })
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
@@ -35,7 +34,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the sections run Pen colors, Line settings, Line styles, Marks, Other, Pen line mode, each after the first under a divider line', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const order = await editor().evaluate((el, names) => names.map((name) => el.textContent.indexOf(name)), SECTIONS)
     assert.deepEqual(order, [...order].sort((a, b) => a - b), 'in order')
     assert.equal(order.every((at) => at >= 0), true, `all present: ${order}`)
@@ -45,7 +44,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the SudokuPad colors button looks like Cancel and sits level with the middle row of pickers', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const button = editor().locator('button[data-sudokupad-colors]')
     const look = (locator) => locator.evaluate((el) => { const style = window.getComputedStyle(el); return { background: style.backgroundColor, radius: style.borderTopLeftRadius, align: style.textAlign } })
     assert.deepEqual(await look(button), await look(p.locator('.dialog-options button[data-role="cancel"]')))
@@ -56,7 +55,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the sliders of Line settings, Line styles and the outline are in one column, and the Slider in panel, Enable and outline boxes are in another', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const sliders = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => editor().locator(`input[data-setting="${key}"]`))
     const lefts = await Promise.all(sliders.map(left))
     assert.equal(new Set(lefts).size, 1, `slider columns ${lefts}`)
@@ -71,7 +70,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its Enable box is unticked', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const label = (key) => editor().locator(`[data-row="${key}"] label`)
     const name = (text) => editor().locator('span', { hasText: new RegExp('^' + text + '$') }).first()
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
@@ -86,7 +85,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the buttons are one row at the bottom: Restore defaults at the left, Cancel and Save at the right', async () => {
-    await openEditor()
+    await openExtrasEditor(p)
     const [restore, cancel, save] = await p.evaluate(() => ['restore', 'cancel', 'save'].map((role) => { const { x, y, width, height } = document.querySelector(`.dialog-options button[data-role="${role}"]`).getBoundingClientRect(); return { x, y, width, height } }))
     assert.equal(restore.x < cancel.x && cancel.x < save.x, true)
     assert.equal(Math.abs(restore.y + restore.height / 2 - (save.y + save.height / 2)) <= 3, true, 'one row')
@@ -98,7 +97,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   it('at a phone width the dialog does not run off the screen sideways', async () => {
     await p.setViewportSize({ width: 390, height: 800 })
     try {
-      await openEditor()
+      await openExtrasEditor(p)
       const fits = await p.evaluate(() => {
         const dialog = document.querySelector('.dialog').getBoundingClientRect()
         const editor = document.getElementById('pen-tool-extras-editor')
