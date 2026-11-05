@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
-  normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
+  normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
@@ -30,7 +30,7 @@ const TABLE = {
 }
 
 test('the default colors are SudokuPad\'s own nine pen colors', () => {
-  assert.deepEqual(DEFAULT_COLORS, TABLE)
+  assert.deepEqual(SUDOKUPAD_PEN_COLORS, TABLE)
 })
 
 test('nothing saved is the fresh-install state: every pen color has its default', () => {
@@ -69,7 +69,7 @@ test('the result has exactly nine keys, whatever was saved', () => {
 test('normalizeColors returns a copy, never the saved object or the defaults', () => {
   const saved = { 1: '#ff0000' }
   assert.notEqual(normalizeColors(saved), saved)
-  assert.notEqual(normalizeColors(null), DEFAULT_COLORS)
+  assert.notEqual(normalizeColors(null), SUDOKUPAD_PEN_COLORS)
 })
 
 test('buildCss writes the nine variables under :root:root, not plain :root', () => {
@@ -174,8 +174,8 @@ test('the darkened default first page gives nine different #rrggbb values', () =
   assert.equal(new Set(out).size, 9)
 })
 
-test('penColorsFromPage maps index N of the page to pen color N, darkened', () => {
-  const r = penColorsFromPage(PAGE_KEYS, (k) => CELL[k])
+test('derivedPenColors maps index N of the page to pen color N, darkened', () => {
+  const r = derivedPenColors(PAGE_KEYS, (k) => CELL[k])
   assert.deepEqual(r.missing, [])
   assert.deepEqual(Object.keys(r.colors), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
   assert.equal(r.colors[1], darkenColor([214, 214, 214]))
@@ -183,10 +183,10 @@ test('penColorsFromPage maps index N of the page to pen color N, darkened', () =
   assert.equal(r.colors[9], darkenColor([61, 153, 245]))
 })
 
-test('penColorsFromPage reads pen N from index N of the page, never index 0, even when index 0 holds a color', () => {
+test('derivedPenColors reads pen N from index N of the page, never index 0, even when index 0 holds a color', () => {
   const page = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
   const read = (k) => ({ 0: 'rgb(250, 250, 250)', 1: 'rgb(204, 51, 17)', 2: 'rgb(17, 119, 51)', 3: 'rgb(238, 153, 170)', 4: 'rgb(0, 68, 136)', 5: 'rgb(187, 85, 0)', 6: 'rgb(0, 153, 136)', 7: 'rgb(170, 51, 170)', 8: 'rgb(136, 136, 34)', 9: 'rgb(120, 80, 200)' })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.deepEqual(r.missing, [])
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
   assert.equal(r.colors[2], darkenColor([17, 119, 51]))
@@ -194,24 +194,24 @@ test('penColorsFromPage reads pen N from index N of the page, never index 0, eve
   for (const n of PEN_NUMBERS) assert.notEqual(r.colors[n], darkenColor([250, 250, 250]))
 })
 
-test('penColorsFromPage keeps SudokuPad\'s pen color at a transparent middle entry, lists it as missing, and shifts nothing', () => {
+test('derivedPenColors keeps SudokuPad\'s pen color at a transparent middle entry, lists it as missing, and shifts nothing', () => {
   const page = ['0', '1', '2', '3', '4']
   const read = (k) => ({ 0: 'transparent', 1: 'rgb(204, 51, 17)', 2: 'transparent', 3: 'rgb(17, 119, 51)', 4: 'rgb(238, 153, 170)' })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.deepEqual(r.missing, [2, 5, 6, 7, 8, 9])
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], DEFAULT_COLORS[2])
+  assert.equal(r.colors[2], SUDOKUPAD_PEN_COLORS[2])
   assert.equal(r.colors[3], darkenColor([17, 119, 51]))
   assert.equal(r.colors[4], darkenColor([238, 153, 170]))
-  for (const n of [5, 6, 7, 8, 9]) assert.equal(r.colors[n], DEFAULT_COLORS[n])
+  for (const n of [5, 6, 7, 8, 9]) assert.equal(r.colors[n], SUDOKUPAD_PEN_COLORS[n])
 })
 
-test('penColorsFromPage keeps an unreadable color\'s place: its pen color keeps SudokuPad\'s own, and later colors do not shift up', () => {
+test('derivedPenColors keeps an unreadable color\'s place: its pen color keeps SudokuPad\'s own, and later colors do not shift up', () => {
   const page = ['a', 'b', 'c', 'd', 'e']
   const read = (k) => ({ a: 'transparent', b: 'rgb(204, 51, 17)', c: 'unparseable', d: 'rgb(238, 153, 170)', e: 'rgb(17, 119, 51)' })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], DEFAULT_COLORS[2])
+  assert.equal(r.colors[2], SUDOKUPAD_PEN_COLORS[2])
   assert.equal(r.colors[3], darkenColor([238, 153, 170]))
   assert.equal(r.colors[4], darkenColor([17, 119, 51]))
   assert.deepEqual(r.missing, [2, 5, 6, 7, 8, 9])
@@ -219,7 +219,7 @@ test('penColorsFromPage keeps an unreadable color\'s place: its pen color keeps 
 
 const hueful = ['rgb(204, 51, 17)', 'rgb(17, 119, 51)', 'rgb(0, 68, 136)', 'rgb(187, 85, 0)']
 const pageOf = (colors) => ['transparent', ...colors]
-const penColors = (colors) => penColorsFromPage(pageOf(colors).map((_, i) => String(i)), (k) => pageOf(colors)[k]).colors
+const penColors = (colors) => derivedPenColors(pageOf(colors).map((_, i) => String(i)), (k) => pageOf(colors)[k]).colors
 
 test('the darkest low-chroma pen color becomes #000000, wherever it sits on the page', () => {
   // Two greys among hued colors: pen 3 is the darker grey and the only one turned black.
@@ -247,30 +247,30 @@ test('a pen color kept from SudokuPad is outside the black rule: the derived gre
   // would be the darkest grey and the derived grey (pen 2) would stay grey.
   const page = ['t', 'a', 'b', 'c']
   const read = (k) => ({ t: 'transparent', a: hueful[0], b: 'rgb(90, 90, 90)', c: hueful[1] })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
   assert.equal(r.colors[2], '#000000')
   assert.equal(r.colors[3], darkenColor([17, 119, 51]))
-  for (const n of [4, 5, 6, 7, 8, 9]) assert.equal(r.colors[n], DEFAULT_COLORS[n])
+  for (const n of [4, 5, 6, 7, 8, 9]) assert.equal(r.colors[n], SUDOKUPAD_PEN_COLORS[n])
 })
 
 test('SudokuPad\'s default first page keeps its result: index 3 is already black and stays the darkest', () => {
-  const r = penColorsFromPage(PAGE_KEYS, (k) => CELL[k])
+  const r = derivedPenColors(PAGE_KEYS, (k) => CELL[k])
   assert.equal(r.colors[1], darkenColor([214, 214, 214]))
   assert.equal(r.colors[2], darkenColor([124, 124, 124]))
   assert.equal(r.colors[3], '#000000')
 })
 
-test('penColorsFromPage ignores entries past index 9', () => {
+test('derivedPenColors ignores entries past index 9', () => {
   const keys = 'abcdefghijkl'.split('')
-  const r = penColorsFromPage(keys, () => 'rgb(204, 51, 17)')
+  const r = derivedPenColors(keys, () => 'rgb(204, 51, 17)')
   assert.deepEqual(r.missing, [])
   assert.equal(Object.keys(r.colors).length, 9)
 })
 
-test('penColorsFromPage on an empty page keeps all nine SudokuPad colors', () => {
-  const r = penColorsFromPage([], () => 'rgb(1, 2, 3)')
-  assert.deepEqual(r.colors, DEFAULT_COLORS)
+test('derivedPenColors on an empty page keeps all nine SudokuPad colors', () => {
+  const r = derivedPenColors([], () => 'rgb(1, 2, 3)')
+  assert.deepEqual(r.colors, SUDOKUPAD_PEN_COLORS)
   assert.deepEqual(r.missing, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 })
 
@@ -1041,7 +1041,7 @@ test('with both sliders hidden the panel has no slider block at all, so no gap i
 
 // The dialog.
 const editorState = (over = {}) => ({
-  colors: DEFAULT_COLORS,
+  colors: SUDOKUPAD_PEN_COLORS,
   missing: [],
   marks: DEFAULT_MARK_SETTINGS,
   lineMode: 'both',
@@ -1063,7 +1063,7 @@ test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s
   assert.match(html, /grid-template-columns: repeat\(3, /)
   const cells = [...html.matchAll(/<b[^>]*>(\d)<\/b><input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})">/g)].map((m) => m.slice(1))
   assert.deepEqual(cells.map(([label, pen]) => [label, pen]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [String(n), String(n)]))
-  assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => DEFAULT_COLORS[n]))
+  assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
 })
 
 test('the dialog has a SudokuPad colors button beside the Pen colors grid, and it is a plain button that submits nothing', () => {

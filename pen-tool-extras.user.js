@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.4
+// @version      1.14.5
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.4'
+  const VERSION = '1.14.5'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
@@ -55,8 +55,8 @@
   // `MouseEvent.button` of the middle and right mouse buttons.
   const MIDDLE_BUTTON = 1
   const RIGHT_BUTTON = 2
-  const PEN_COLORS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
-  // The pages of pens, in paging order. Each page's characters line up with PEN_COLORS: the pen on button
+  const PEN_COLOR_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+  // The pages of pens, in paging order. Each page's characters line up with PEN_COLOR_NUMBERS: the pen on button
   // N is the Nth character, and its color is color N, so a recolor changes the pen on every page. A
   // character is the one a stroke stores after its value and the replay holds (`pc:a`), which draws,
   // undoes and replays for any lowercase letter (docs/research/sudokupad-pen-tool.md, "Pen colors past
@@ -65,7 +65,7 @@
   // pen is two characters: the one on its button (`chars`) for a line dragged the way SudokuPad draws the value, and
   // the `reverse` one at the same index for a line dragged the other way. Only the first is ever selected.
   const PEN_PAGES = [
-    { chars: PEN_COLORS, dashed: false },
+    { chars: PEN_COLOR_NUMBERS, dashed: false },
     { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dashed: true },
     { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dashed: false, chevrons: true }
   ]
@@ -78,7 +78,7 @@
   const PAGE_ATTRIBUTE = 'data-pen-page'
   // SudokuPad's own pen colors (tool-pen.css), as #rrggbb. Pen color 9 is written there as
   // rgb(-36, -36, -36), which clamps to black.
-  const DEFAULT_COLORS = {
+  const SUDOKUPAD_PEN_COLORS = {
     1: '#1f8020',
     2: '#e87cf1',
     3: '#e49632',
@@ -205,8 +205,8 @@
   function normalizeColors (data) {
     const saved = isPlainObject(data) ? data : {}
     const out = {}
-    PEN_COLORS.forEach((n) => {
-      out[n] = isHexColor(saved[n]) ? saved[n].toLowerCase() : DEFAULT_COLORS[n]
+    PEN_COLOR_NUMBERS.forEach((n) => {
+      out[n] = isHexColor(saved[n]) ? saved[n].toLowerCase() : SUDOKUPAD_PEN_COLORS[n]
     })
     return out
   }
@@ -215,7 +215,7 @@
   // usable is saved (not a plain object, or no entry that is a #rrggbb string), which means
   // the derived colors apply.
   function savedColors (data) {
-    const usable = isPlainObject(data) && PEN_COLORS.some((n) => isHexColor(data[n]))
+    const usable = isPlainObject(data) && PEN_COLOR_NUMBERS.some((n) => isHexColor(data[n]))
     return usable ? normalizeColors(data) : null
   }
 
@@ -223,7 +223,7 @@
   // The set is what gets saved, so a pen color or value that is not valid throws rather than
   // saving a set with a wrong entry.
   function editedColors (colors, pen, value) {
-    if (!PEN_COLORS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
+    if (!PEN_COLOR_NUMBERS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
     if (!isHexColor(value)) throw new RangeError(`pen-tool-extras: ${value} is not a #rrggbb color`)
     return { ...colors, [pen]: value.toLowerCase() }
   }
@@ -239,15 +239,15 @@
     return PEN_PAGES.findIndex((page) => page.chars.includes(pen))
   }
 
-  // The number of the color (and of the button) of the pen `pen`, as PEN_COLORS names it; undefined for no pen.
+  // The number of the color (and of the button) of the pen `pen`, as PEN_COLOR_NUMBERS names it; undefined for no pen.
   function penNumber (pen) {
     const page = PEN_PAGES[penPageOf(pen)]
-    return page ? PEN_COLORS[page.chars.indexOf(pen)] : undefined
+    return page ? PEN_COLOR_NUMBERS[page.chars.indexOf(pen)] : undefined
   }
 
   // The color character of the pen with color number `number` on page `page`.
   function penCharOn (page, number) {
-    return PEN_PAGES[page].chars[PEN_COLORS.indexOf(number)]
+    return PEN_PAGES[page].chars[PEN_COLOR_NUMBERS.indexOf(number)]
   }
 
   // Saved data is untrusted: the saved pen character when it is one of a page, else null. SudokuPad's
@@ -755,17 +755,17 @@
   // same place and is listed in `missing`, by number, with nothing moving up. Of the darkened
   // colors, the darkest one whose OKLCH chroma is under GREY_CHROMA becomes #000000; a page with
   // no such color changes nothing, and a kept SudokuPad color is not considered.
-  function penColorsFromPage (keys, readColor) {
+  function derivedPenColors (keys, readColor) {
     const colors = {}
     const missing = []
     const derived = []
-    PEN_COLORS.forEach((n) => {
+    PEN_COLOR_NUMBERS.forEach((n) => {
       const rgb = n < keys.length ? parseColor(readColor(keys[n])) : null
       if (rgb) {
         colors[n] = darkenColor(rgb)
         derived.push(n)
       } else {
-        colors[n] = DEFAULT_COLORS[n]
+        colors[n] = SUDOKUPAD_PEN_COLORS[n]
         missing.push(Number(n))
       }
     })
@@ -787,7 +787,7 @@
   // SudokuPad's `tool-pen.css` loads when the pen tool is enabled, so a plain `:root` rule
   // would lose to it by coming first; `:root:root` outranks it whichever loads last.
   function buildCss (colors) {
-    const lines = PEN_COLORS.map((n) => `  --puzzle-pencolor-${n}: ${colors[n]};`)
+    const lines = PEN_COLOR_NUMBERS.map((n) => `  --puzzle-pencolor-${n}: ${colors[n]};`)
     return [':root:root {', ...lines, '}'].join('\n')
   }
 
@@ -910,16 +910,16 @@
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
-        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLORS[i]}); }`)
+        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLOR_NUMBERS[i]}); }`)
         // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
-        if (page.chevrons) rules.push(`:root:root .pencolor-${c} [data-chevron-part="chevrons"] { fill: var(--puzzle-pencolor-${PEN_COLORS[i]}); stroke: none; }`)
+        if (page.chevrons) rules.push(`:root:root .pencolor-${c} [data-chevron-part="chevrons"] { fill: var(--puzzle-pencolor-${PEN_COLOR_NUMBERS[i]}); stroke: none; }`)
       }))
-      if (page.chevrons) PEN_COLORS.forEach((n) => rules.push(swatchRule(n, index + 1, CHEVRON_SWATCH)))
+      if (page.chevrons) PEN_COLOR_NUMBERS.forEach((n) => rules.push(swatchRule(n, index + 1, CHEVRON_SWATCH)))
       if (!page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
       const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { ${dashDeclarations(thickness, dash, length)} }`
       rules.push(lines(ORTHOGONAL_LINES, CELL_UNITS), lines(DIAGONAL_LINES, CELL_UNITS * Math.SQRT2))
-      PEN_COLORS.forEach((n) => rules.push(swatchRule(n, index + 1, dashSwatch(dash))))
+      PEN_COLOR_NUMBERS.forEach((n) => rules.push(swatchRule(n, index + 1, dashSwatch(dash))))
     })
     return rules.join('\n')
   }
@@ -1103,7 +1103,7 @@
   // Save, so the panel's own sliders and these show the same value when the dialog opens.
   function renderEditor (state) {
     const off = new Set(state.off)
-    const cells = PEN_COLORS.map((n) =>
+    const cells = PEN_COLOR_NUMBERS.map((n) =>
       '<div style="display:flex;align-items:center;gap:8px">' +
       `<b style="width:1.2em;text-align:right">${n}</b>` +
       `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
@@ -1341,7 +1341,7 @@
       parseColor,
       isTransparent,
       darkenColor,
-      penColorsFromPage,
+      derivedPenColors,
       buildCss,
       buildThicknessCss,
       buildOpacityCss,
@@ -1407,7 +1407,7 @@
       EDGE_CYCLE,
       CORNER_RADIUS,
       CORNER_VALUES,
-      DEFAULT_COLORS,
+      SUDOKUPAD_PEN_COLORS,
       DEFAULT_MARK_SETTINGS,
       THICKNESS,
       OPACITY,
@@ -1435,7 +1435,7 @@
   // The pen colors in force and the pen colors (by number) that kept SudokuPad's own because
   // the color page had no usable color at their index. Until the color tool is read they are
   // SudokuPad's own, which is what the page shows with no override.
-  let active = { ...DEFAULT_COLORS }
+  let active = { ...SUDOKUPAD_PEN_COLORS }
   let activeMissing = []
   // The value of every row of SETTINGS in force.
   const inForce = settingDefaults()
@@ -1470,14 +1470,14 @@
   // `--cell-color-<key>` values (not the 60% opacity they show with on the grid). A custom
   // palette can hold any CSS color (`#f00`, `red`, `hsl()`), and the variable reads back as
   // written, so each value goes through the browser to become `rgb()` text first. A value the
-  // browser rejects stays as written, and `penColorsFromPage` treats it as unreadable.
+  // browser rejects stays as written, and `derivedPenColors` treats it as unreadable.
   function deriveFromTool (tool) {
     const root = document.documentElement
     const rootStyle = window.getComputedStyle(root)
     const probe = document.createElement('span')
     root.appendChild(probe)
     try {
-      return penColorsFromPage(tool.palette.pages[tool.currentPage], (key) => {
+      return derivedPenColors(tool.palette.pages[tool.currentPage], (key) => {
         const value = rootStyle.getPropertyValue(`--cell-color-${key}`).trim()
         probe.style.color = ''
         probe.style.color = value
@@ -1828,7 +1828,7 @@
     // Reads the color tool's current page now; with no color tool, SudokuPad's own colors.
     const restoreDefaults = () => {
       const tool = readyColorTool()
-      const derived = (tool && features.attempt('colors', () => deriveFromTool(tool), () => null)) || { colors: { ...DEFAULT_COLORS }, missing: [] }
+      const derived = (tool && features.attempt('colors', () => deriveFromTool(tool), () => null)) || { colors: { ...SUDOKUPAD_PEN_COLORS }, missing: [] }
       colors = derived.colors
       missing = derived.missing
       edited.clear()
@@ -1889,8 +1889,8 @@
     // colors and Cancel leaves the colors in force. It closes nothing, so the release of its press lands on the dialog.
     box.addEventListener('click', (event) => {
       if (!event.target.closest('button[data-sudokupad-colors]')) return
-      colors = { ...DEFAULT_COLORS }
-      PEN_COLORS.forEach((n) => edited.add(n))
+      colors = { ...SUDOKUPAD_PEN_COLORS }
+      PEN_COLOR_NUMBERS.forEach((n) => edited.add(n))
       reset = false
       draw()
     })
@@ -2118,7 +2118,7 @@
   // button press and the selection both read `data-value`. Button 0 is not a pen.
   function setPadPage (page) {
     document.querySelectorAll('.controls-input button[data-key]').forEach((button) => {
-      const index = PEN_COLORS.indexOf(button.dataset.key)
+      const index = PEN_COLOR_NUMBERS.indexOf(button.dataset.key)
       if (index === -1) return
       const pen = PEN_PAGES[page].chars[index]
       button.dataset.value = pen
@@ -2153,7 +2153,7 @@
   // Selects the pen on the enabled page `delta` pages from the selected one with the same color number: a page
   // turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
   function turnPage (delta) {
-    const number = penNumber(selectedPen()) || PEN_COLORS[0]
+    const number = penNumber(selectedPen()) || PEN_COLOR_NUMBERS[0]
     penTool.setSelectedColor(penCharOn(stepEnabledPage(currentPage(), delta, inForce.lineStyles), number))
   }
 
@@ -2306,7 +2306,7 @@
 
   function enterEditMode (panel) {
     // Every button is found before anything changes, so a missing one leaves no half edit mode.
-    const buttons = PEN_COLORS.map((n) => {
+    const buttons = PEN_COLOR_NUMBERS.map((n) => {
       const button = panel.querySelector(`button[data-key="${n}"]`)
       if (!button) throw new Error(`pen-tool-extras: the pen tool has no button for pen color ${n}`)
       return button
@@ -2314,7 +2314,7 @@
     panel.classList.add(EDITING)
     buttons.forEach((button, i) => {
       button.insertAdjacentHTML('beforebegin',
-        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLORS[i]}" value="${active[PEN_COLORS[i]]}"></div>`)
+        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active[PEN_COLOR_NUMBERS[i]]}"></div>`)
     })
     leaveWatch = new window.MutationObserver(() => {
       if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
