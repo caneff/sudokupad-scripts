@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.13
+// @version      1.14.14
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.14.13'
+  const VERSION = '1.14.14'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -1682,7 +1682,9 @@
   // SudokuPad's own CSS turns pointer events off on what is inside a tool button, so the gear turns them back on.
   const GEAR_CSS = [
     `${GEAR_BUTTON} { position: relative; }`,
-    `.${GEAR_CLASS} { position: absolute; right: ${GEAR_INSET_PX}px; top: ${GEAR_INSET_PX}px; box-sizing: border-box; width: ${GEAR_SIZE_PX}px; height: ${GEAR_SIZE_PX}px; border: 1.5px solid ${PANEL_COLOR}; border-radius: 3px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }`
+    `.${GEAR_CLASS} { position: absolute; right: ${GEAR_INSET_PX}px; top: ${GEAR_INSET_PX}px; box-sizing: border-box; width: ${GEAR_SIZE_PX}px; height: ${GEAR_SIZE_PX}px; border: 1.5px solid ${PANEL_COLOR}; border-radius: 3px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }`,
+    // A selected tool's icons are turned white, which would hide the glyph on its white box.
+    `.${GEAR_CLASS} path { fill: ${PANEL_COLOR} !important; }`
   ].join('\n')
   const GEAR_MARKUP = `<span class="${GEAR_CLASS}" role="button" aria-label="${GEAR_LABEL}" title="${GEAR_LABEL}"><svg viewBox="0 0 24 24" width="${GEAR_ICON_PX}" height="${GEAR_ICON_PX}" fill="${PANEL_COLOR}" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.88 2h-3.84a.5.5 0 0 0-.49.42l-.36 2.54a7 7 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.64 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.38 1.05.7 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54a7 7 0 0 0 1.63-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg></span>`
 
