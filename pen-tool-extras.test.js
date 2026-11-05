@@ -5,19 +5,20 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
-  normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, normalizeOutline, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, normalizeOutlineWidth, OUTLINE_WIDTH,
+  normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
+  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
-  CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
-  LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
-  ARROW_SPACING, normalizeArrowSpacing, normalizeMiddleErase, normalizeLineStyles, enabledPages, stepEnabledPage, pageAfterSave,
+  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
+  LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
+  ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
-  createFeatures, inStock, FEATURE_LABELS, FEATURE_NEEDS
+  createFeatures, lackingInternals, inStock, FEATURE_LABELS, FEATURE_NEEDS,
+  edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
-// The edge cycle, a step forward and a step back.
 const nextType = (current, settings) => stepType(current, settings, 1, EDGE_CYCLE)
 const previousType = (current, settings) => stepType(current, settings, -1, EDGE_CYCLE)
 
@@ -27,8 +28,8 @@ const TABLE = {
   1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000'
 }
 
-test('the default colors are SudokuPad\'s own nine pen colors', () => {
-  assert.deepEqual(DEFAULT_COLORS, TABLE)
+test('SUDOKUPAD_PEN_COLORS are SudokuPad\'s own nine pen colors', () => {
+  assert.deepEqual(SUDOKUPAD_PEN_COLORS, TABLE)
 })
 
 test('nothing saved is the fresh-install state: every pen color has its default', () => {
@@ -36,7 +37,7 @@ test('nothing saved is the fresh-install state: every pen color has its default'
   assert.deepEqual(normalizeColors(undefined), TABLE)
 })
 
-test('corrupt saved data falls back to the default colors', () => {
+test('corrupt saved data falls back to SudokuPad\'s pen colors', () => {
   for (const bad of ['red', 7, true, [], ['#ff0000'], '{"1":"#ff0000"}']) {
     assert.deepEqual(normalizeColors(bad), TABLE, JSON.stringify(bad))
   }
@@ -67,7 +68,7 @@ test('the result has exactly nine keys, whatever was saved', () => {
 test('normalizeColors returns a copy, never the saved object or the defaults', () => {
   const saved = { 1: '#ff0000' }
   assert.notEqual(normalizeColors(saved), saved)
-  assert.notEqual(normalizeColors(null), DEFAULT_COLORS)
+  assert.notEqual(normalizeColors(null), SUDOKUPAD_PEN_COLORS)
 })
 
 test('buildCss writes the nine variables under :root:root, not plain :root', () => {
@@ -144,7 +145,6 @@ test('darkenColor gives a valid hex for near-black, white and out-of-range input
 })
 
 test('a darkened light color has OKLCH lightness under 0.8, the bar for a 5px line on white', () => {
-  // Light yellow and light gray, the lightest of the default cell colors.
   for (const rgb of [[252, 235, 63], [214, 214, 214], [255, 255, 255]]) {
     assert.ok(oklch(darkenColor(rgb)).L < 0.8, JSON.stringify(rgb))
   }
@@ -172,8 +172,8 @@ test('the darkened default first page gives nine different #rrggbb values', () =
   assert.equal(new Set(out).size, 9)
 })
 
-test('penColorsFromPage maps index N of the page to pen color N, darkened', () => {
-  const r = penColorsFromPage(PAGE_KEYS, (k) => CELL[k])
+test('derivedPenColors maps index N of the page to pen color N, darkened', () => {
+  const r = derivedPenColors(PAGE_KEYS, (k) => CELL[k])
   assert.deepEqual(r.missing, [])
   assert.deepEqual(Object.keys(r.colors), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
   assert.equal(r.colors[1], darkenColor([214, 214, 214]))
@@ -181,10 +181,10 @@ test('penColorsFromPage maps index N of the page to pen color N, darkened', () =
   assert.equal(r.colors[9], darkenColor([61, 153, 245]))
 })
 
-test('penColorsFromPage reads pen N from index N of the page, never index 0, even when index 0 holds a color', () => {
+test('derivedPenColors reads pen N from index N of the page, never index 0, even when index 0 holds a color', () => {
   const page = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
   const read = (k) => ({ 0: 'rgb(250, 250, 250)', 1: 'rgb(204, 51, 17)', 2: 'rgb(17, 119, 51)', 3: 'rgb(238, 153, 170)', 4: 'rgb(0, 68, 136)', 5: 'rgb(187, 85, 0)', 6: 'rgb(0, 153, 136)', 7: 'rgb(170, 51, 170)', 8: 'rgb(136, 136, 34)', 9: 'rgb(120, 80, 200)' })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.deepEqual(r.missing, [])
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
   assert.equal(r.colors[2], darkenColor([17, 119, 51]))
@@ -192,24 +192,24 @@ test('penColorsFromPage reads pen N from index N of the page, never index 0, eve
   for (const n of PEN_NUMBERS) assert.notEqual(r.colors[n], darkenColor([250, 250, 250]))
 })
 
-test('penColorsFromPage keeps SudokuPad\'s pen color at a transparent middle entry, lists it as missing, and shifts nothing', () => {
+test('derivedPenColors keeps SudokuPad\'s pen color at a transparent middle entry, lists it as missing, and shifts nothing', () => {
   const page = ['0', '1', '2', '3', '4']
   const read = (k) => ({ 0: 'transparent', 1: 'rgb(204, 51, 17)', 2: 'transparent', 3: 'rgb(17, 119, 51)', 4: 'rgb(238, 153, 170)' })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.deepEqual(r.missing, [2, 5, 6, 7, 8, 9])
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], DEFAULT_COLORS[2])
+  assert.equal(r.colors[2], SUDOKUPAD_PEN_COLORS[2])
   assert.equal(r.colors[3], darkenColor([17, 119, 51]))
   assert.equal(r.colors[4], darkenColor([238, 153, 170]))
-  for (const n of [5, 6, 7, 8, 9]) assert.equal(r.colors[n], DEFAULT_COLORS[n])
+  for (const n of [5, 6, 7, 8, 9]) assert.equal(r.colors[n], SUDOKUPAD_PEN_COLORS[n])
 })
 
-test('penColorsFromPage keeps an unreadable color\'s place: its pen color keeps SudokuPad\'s own, and later colors do not shift up', () => {
+test('derivedPenColors keeps an unreadable color\'s place: its pen color keeps SudokuPad\'s own, and later colors do not shift up', () => {
   const page = ['a', 'b', 'c', 'd', 'e']
   const read = (k) => ({ a: 'transparent', b: 'rgb(204, 51, 17)', c: 'unparseable', d: 'rgb(238, 153, 170)', e: 'rgb(17, 119, 51)' })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], DEFAULT_COLORS[2])
+  assert.equal(r.colors[2], SUDOKUPAD_PEN_COLORS[2])
   assert.equal(r.colors[3], darkenColor([238, 153, 170]))
   assert.equal(r.colors[4], darkenColor([17, 119, 51]))
   assert.deepEqual(r.missing, [2, 5, 6, 7, 8, 9])
@@ -217,7 +217,7 @@ test('penColorsFromPage keeps an unreadable color\'s place: its pen color keeps 
 
 const hueful = ['rgb(204, 51, 17)', 'rgb(17, 119, 51)', 'rgb(0, 68, 136)', 'rgb(187, 85, 0)']
 const pageOf = (colors) => ['transparent', ...colors]
-const penColors = (colors) => penColorsFromPage(pageOf(colors).map((_, i) => String(i)), (k) => pageOf(colors)[k]).colors
+const penColors = (colors) => derivedPenColors(pageOf(colors).map((_, i) => String(i)), (k) => pageOf(colors)[k]).colors
 
 test('the darkest low-chroma pen color becomes #000000, wherever it sits on the page', () => {
   // Two greys among hued colors: pen 3 is the darker grey and the only one turned black.
@@ -245,30 +245,30 @@ test('a pen color kept from SudokuPad is outside the black rule: the derived gre
   // would be the darkest grey and the derived grey (pen 2) would stay grey.
   const page = ['t', 'a', 'b', 'c']
   const read = (k) => ({ t: 'transparent', a: hueful[0], b: 'rgb(90, 90, 90)', c: hueful[1] })[k]
-  const r = penColorsFromPage(page, read)
+  const r = derivedPenColors(page, read)
   assert.equal(r.colors[1], darkenColor([204, 51, 17]))
   assert.equal(r.colors[2], '#000000')
   assert.equal(r.colors[3], darkenColor([17, 119, 51]))
-  for (const n of [4, 5, 6, 7, 8, 9]) assert.equal(r.colors[n], DEFAULT_COLORS[n])
+  for (const n of [4, 5, 6, 7, 8, 9]) assert.equal(r.colors[n], SUDOKUPAD_PEN_COLORS[n])
 })
 
 test('SudokuPad\'s default first page keeps its result: index 3 is already black and stays the darkest', () => {
-  const r = penColorsFromPage(PAGE_KEYS, (k) => CELL[k])
+  const r = derivedPenColors(PAGE_KEYS, (k) => CELL[k])
   assert.equal(r.colors[1], darkenColor([214, 214, 214]))
   assert.equal(r.colors[2], darkenColor([124, 124, 124]))
   assert.equal(r.colors[3], '#000000')
 })
 
-test('penColorsFromPage ignores entries past index 9', () => {
+test('derivedPenColors ignores entries past index 9', () => {
   const keys = 'abcdefghijkl'.split('')
-  const r = penColorsFromPage(keys, () => 'rgb(204, 51, 17)')
+  const r = derivedPenColors(keys, () => 'rgb(204, 51, 17)')
   assert.deepEqual(r.missing, [])
   assert.equal(Object.keys(r.colors).length, 9)
 })
 
-test('penColorsFromPage on an empty page keeps all nine SudokuPad colors', () => {
-  const r = penColorsFromPage([], () => 'rgb(1, 2, 3)')
-  assert.deepEqual(r.colors, DEFAULT_COLORS)
+test('derivedPenColors on an empty page keeps all nine SudokuPad colors', () => {
+  const r = derivedPenColors([], () => 'rgb(1, 2, 3)')
+  assert.deepEqual(r.colors, SUDOKUPAD_PEN_COLORS)
   assert.deepEqual(r.missing, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 })
 
@@ -285,10 +285,6 @@ test('savedColors keeps a saved set whole, filling a bad entry with the default'
 test('savedColors does not read an array by index', () => {
   // Index 1 holds a usable color: only the array guard stops it counting as pen color 1.
   assert.equal(savedColors(['x', '#ff0000', '#00ff00']), null)
-})
-
-test('the wait for the color tool is a positive number of milliseconds', () => {
-  assert.ok(COLOR_TOOL_WAIT_MS > 0)
 })
 
 test('editedColors gives the whole current set with one pen color changed, lowercased, leaving the input alone', () => {
@@ -309,13 +305,13 @@ test('the thickness runs 1 to 16 in whole steps from SudokuPad\'s own pen width 
   assert.deepEqual(THICKNESS, { min: 1, max: 16, step: 1, fallback: 5 })
 })
 
-test('normalizeThickness keeps a saved whole number from 1 to 16', () => {
-  for (const ok of [1, 5, 8, 12, 16]) assert.equal(normalizeThickness(ok), ok)
+test('the thickness setting keeps a saved whole number from 1 to 16', () => {
+  for (const ok of [1, 5, 8, 12, 16]) assert.equal(SETTINGS.thickness.normalize(ok), ok)
 })
 
-test('normalizeThickness falls back to 5 for nothing saved and for anything untrusted', () => {
+test('the thickness setting falls back to 5 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 17, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
-    assert.equal(normalizeThickness(bad), 5, String(bad))
+    assert.equal(SETTINGS.thickness.normalize(bad), 5, String(bad))
   }
 })
 
@@ -336,12 +332,10 @@ function rulesByValue (css) {
   return byValue
 }
 
-// The width each pen value draws at: its stroke width times its scale, as a string.
 function widthsOf (css) {
   return Object.fromEntries(Object.entries(rulesByValue(css)).map(([v, { width, scale }]) => [v, String(Math.round(width * scale * 1e6) / 1e6)]))
 }
 
-// The scale each pen value's rule gives it, 1 where it has none.
 const scalesOf = (css) => Object.fromEntries(Object.entries(rulesByValue(css)).map(([v, { scale }]) => [v, scale]))
 
 test('buildThicknessCss at 5 gives the widths the pen had before: free lines, circle and cross 5; edge X marks, arrows and edge circles 2.5', () => {
@@ -368,7 +362,7 @@ test('edge marks and corner marks keep today\'s size up to the default thickness
   assert.equal(markGrowthScale(16), 1.6)
   const grown = [6, 10, 16].map(markGrowthScale)
   assert.equal(grown[0] > 1 && grown[0] < grown[1] && grown[1] < grown[2], true, grown.join(' < '))
-  assert.equal(Math.abs(markGrowthScale(10) - (1 + 0.6 * 5 / 11)) < 1e-3, true)
+  assert.equal(markGrowthScale(10), 1.2727)
 })
 
 test('MARK_VALUES holds exactly the values of SudokuPad\'s edge X and cell circle and cross and of every edge mark and grid-corner mark this script adds, and no line value', () => {
@@ -410,13 +404,13 @@ test('the opacity runs 20 to 100 percent in steps of 5 from SudokuPad\'s own pen
   assert.deepEqual(OPACITY, { min: 20, max: 100, step: 5, fallback: 80 })
 })
 
-test('normalizeOpacity keeps a saved whole number from 20 to 100 on the slider\'s steps', () => {
-  for (const ok of [20, 55, 80, 100]) assert.equal(normalizeOpacity(ok), ok)
+test('the opacity setting keeps a saved whole number from 20 to 100 on the slider\'s steps', () => {
+  for (const ok of [20, 55, 80, 100]) assert.equal(SETTINGS.opacity.normalize(ok), ok)
 })
 
-test('normalizeOpacity falls back to 80 for nothing saved and for anything untrusted', () => {
+test('the opacity setting falls back to 80 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 19, 105, -80, 82, 80.5, NaN, Infinity, '70', [70], { a: 70 }, true]) {
-    assert.equal(normalizeOpacity(bad), 80, String(bad))
+    assert.equal(SETTINGS.opacity.normalize(bad), 80, String(bad))
   }
 })
 
@@ -431,7 +425,6 @@ test('buildOpacityCss writes the fraction of the percent, and 1 at 100', () => {
   assert.equal(layer(buildOpacityCss(100)), ':root:root #cell-pen { opacity: 1; }')
 })
 
-// The id, range and value of each range input in markup, in order.
 const slidersIn = (html) => [...html.matchAll(/<input type="range" id="([^"]+)"[^>]* min="([^"]+)" max="([^"]+)" step="([^"]+)" value="([^"]+)"/g)].map((m) => m.slice(1))
 
 test('the panel markup has Thickness above Opacity, each with the range and value of its setting, and neither takes focus by tabbing', () => {
@@ -455,8 +448,8 @@ test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s colo
   assert.equal(HOLD_TO_EDIT_MS, 1000)
 })
 
-const ALL = { x: true, directions: true, dot: true, cornerX: true, cornerDot: true }
-const NONE = { x: false, directions: false, dot: false, cornerX: false, cornerDot: false }
+const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
+const NONE = { x: false, directions: false, circle: false, cornerX: false, cornerCircle: false }
 
 test('fresh install has every mark ticked', () => {
   assert.deepEqual(DEFAULT_MARK_SETTINGS, ALL)
@@ -471,7 +464,30 @@ test('corrupt saved settings fall back to every mark ticked', () => {
 })
 
 test('a saved boolean is kept and a non-boolean entry takes its default', () => {
-  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', dot: false, cornerX: 'no', cornerDot: false }), { x: false, directions: true, dot: false, cornerX: true, cornerDot: false })
+  assert.deepEqual(normalizeMarkSettings({ x: false, directions: 'no', circle: false, cornerX: 'no', cornerCircle: false }), { x: false, directions: true, circle: false, cornerX: true, cornerCircle: false })
+})
+
+test('settings saved under the old names dot and cornerDot load as circle and cornerCircle with the same values', () => {
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: true, dot: false, cornerX: true, cornerDot: true }), { ...ALL, circle: false })
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: true, dot: true, cornerX: true, cornerDot: false }), { ...ALL, cornerCircle: false })
+})
+
+test('a new name wins over an old name saved beside it', () => {
+  assert.deepEqual(normalizeMarkSettings({ circle: true, dot: false, cornerCircle: false, cornerDot: true }), { ...ALL, cornerCircle: false })
+})
+
+// The values saved inside puzzles, typed out from docs/research/sudokupad-pen-edge-marks.md: a rename of a type must not move one.
+test('the pen values saved inside puzzles stay: each edge cycles X, circle, direction, other direction, and each corner X, circle', () => {
+  const edgeCycles = { 3: ['3', 'j', 'h', 'i'], 4: ['4', 'm', 'k', 'l'], b: ['b', 'p', 'n', 'o'], c: ['c', 's', 'q', 'r'] }
+  for (const [edge, cycle] of Object.entries(edgeCycles)) {
+    assert.deepEqual(planClick(edge, [], ALL), { remove: [], add: cycle[0] }, edge)
+    for (let i = 1; i < cycle.length; i++) assert.deepEqual(planClick(edge, [cycle[i - 1]], ALL), { remove: [cycle[i - 1]], add: cycle[i] }, cycle[i])
+  }
+  const cornerCycles = { tl: ['t', 'w'], br: ['u', 'x'], far: ['v', 'y'] }
+  for (const [kind, [x, circle]] of Object.entries(cornerCycles)) {
+    assert.deepEqual(planCornerClick(kind, [], ALL), { remove: [], add: x }, kind)
+    assert.deepEqual(planCornerClick(kind, [x], ALL), { remove: [x], add: circle }, kind)
+  }
 })
 
 test('with everything ticked the cycle is X, circle, direction, other direction, empty', () => {
@@ -481,30 +497,30 @@ test('with everything ticked the cycle is X, circle, direction, other direction,
     type = nextType(type, ALL)
     seen.push(type)
   }
-  assert.deepEqual(seen, ['x', 'dot', 'dirA', 'dirB', 'empty'])
+  assert.deepEqual(seen, ['x', 'circle', 'dirA', 'dirB', 'empty'])
 })
 
 test('an unticked type is skipped', () => {
-  assert.equal(nextType('empty', { x: false, directions: true, dot: true }), 'dot')
-  assert.equal(nextType('dot', { x: true, directions: true, dot: false }), 'dirA')
-  assert.equal(nextType('x', { x: true, directions: true, dot: false }), 'dirA')
-  assert.equal(nextType('dirB', { x: true, directions: true, dot: false }), 'empty')
-  assert.equal(nextType('x', { x: true, directions: false, dot: true }), 'dot')
-  assert.equal(nextType('empty', { x: false, directions: false, dot: true }), 'dot')
-  assert.equal(nextType('dot', { x: false, directions: false, dot: true }), 'empty')
+  assert.equal(nextType('empty', { x: false, directions: true, circle: true }), 'circle')
+  assert.equal(nextType('circle', { x: true, directions: true, circle: false }), 'dirA')
+  assert.equal(nextType('x', { x: true, directions: true, circle: false }), 'dirA')
+  assert.equal(nextType('dirB', { x: true, directions: true, circle: false }), 'empty')
+  assert.equal(nextType('x', { x: true, directions: false, circle: true }), 'circle')
+  assert.equal(nextType('empty', { x: false, directions: false, circle: true }), 'circle')
+  assert.equal(nextType('circle', { x: false, directions: false, circle: true }), 'empty')
 })
 
 test('Directions is one box: both directions or neither', () => {
-  const only = { x: false, directions: true, dot: false }
+  const only = { x: false, directions: true, circle: false }
   assert.equal(nextType('empty', only), 'dirA')
   assert.equal(nextType('dirA', only), 'dirB')
   assert.equal(nextType('dirB', only), 'empty')
 })
 
 test('a mark whose type is unticked moves to the next ticked mark, or to empty', () => {
-  assert.equal(nextType('x', { x: false, directions: true, dot: false }), 'dirA')
-  assert.equal(nextType('x', { x: false, directions: false, dot: false }), 'empty')
-  assert.equal(nextType('dot', { x: true, directions: false, dot: false }), 'empty')
+  assert.equal(nextType('x', { x: false, directions: true, circle: false }), 'dirA')
+  assert.equal(nextType('x', { x: false, directions: false, circle: false }), 'empty')
+  assert.equal(nextType('circle', { x: true, directions: false, circle: false }), 'empty')
 })
 
 test('with everything ticked the backward cycle is empty, other direction, direction, circle, X, empty', () => {
@@ -514,28 +530,28 @@ test('with everything ticked the backward cycle is empty, other direction, direc
     type = previousType(type, ALL)
     seen.push(type)
   }
-  assert.deepEqual(seen, ['dirB', 'dirA', 'dot', 'x', 'empty'])
+  assert.deepEqual(seen, ['dirB', 'dirA', 'circle', 'x', 'empty'])
 })
 
 test('going backwards from empty lands on the last ticked mark, and from the X on empty', () => {
-  assert.equal(previousType('empty', { x: true, directions: true, dot: false }), 'dirB')
-  assert.equal(previousType('empty', { x: true, directions: false, dot: true }), 'dot')
-  assert.equal(previousType('empty', { x: true, directions: false, dot: false }), 'x')
+  assert.equal(previousType('empty', { x: true, directions: true, circle: false }), 'dirB')
+  assert.equal(previousType('empty', { x: true, directions: false, circle: true }), 'circle')
+  assert.equal(previousType('empty', { x: true, directions: false, circle: false }), 'x')
   assert.equal(previousType('x', ALL), 'empty')
   assert.equal(previousType('empty', NONE), 'empty')
 })
 
 test('going backwards skips an unticked type', () => {
-  assert.equal(previousType('dirA', { x: true, directions: true, dot: false }), 'x')
-  assert.equal(previousType('dot', { x: false, directions: true, dot: true }), 'empty')
-  assert.equal(previousType('empty', { x: true, directions: false, dot: true }), 'dot')
-  assert.equal(previousType('dirA', { x: true, directions: true, dot: true }), 'dot')
+  assert.equal(previousType('dirA', { x: true, directions: true, circle: false }), 'x')
+  assert.equal(previousType('circle', { x: false, directions: true, circle: true }), 'empty')
+  assert.equal(previousType('empty', { x: true, directions: false, circle: true }), 'circle')
+  assert.equal(previousType('dirA', { x: true, directions: true, circle: true }), 'circle')
 })
 
 test('a mark whose type is unticked moves back to the previous ticked mark, or to empty', () => {
-  assert.equal(previousType('dirA', { x: true, directions: false, dot: false }), 'x')
-  assert.equal(previousType('dirB', { x: false, directions: false, dot: true }), 'dot')
-  assert.equal(previousType('dot', { x: false, directions: false, dot: true }), 'empty')
+  assert.equal(previousType('dirA', { x: true, directions: false, circle: false }), 'x')
+  assert.equal(previousType('dirB', { x: false, directions: false, circle: true }), 'circle')
+  assert.equal(previousType('circle', { x: false, directions: false, circle: true }), 'empty')
   assert.equal(previousType('dirA', NONE), 'empty')
 })
 
@@ -589,7 +605,7 @@ test('with nothing ticked the click does nothing, and an existing mark stays', (
 })
 
 test('an unticked mark already on the grid moves to the next ticked mark', () => {
-  assert.deepEqual(planClick('3', ['3'], { ...NONE, dot: true }), { remove: ['3'], add: 'j' })
+  assert.deepEqual(planClick('3', ['3'], { ...NONE, circle: true }), { remove: ['3'], add: 'j' })
 })
 
 test('two marks on one edge, as a replay can hold, both go on the next click', () => {
@@ -618,7 +634,7 @@ test('the edge circle is an open ring closed back at the edge midpoint, about 1.
   assert.equal(to, 2 * rx)
   assert.equal(back, -2 * rx)
   // At the default the ring's outer diameter (path plus its 2.5 stroke) is about 16 units, a
-  // 64 unit cell's quarter, against 11.3 before and a 7 unit point before that.
+  // 64 unit cell's quarter.
   const outer = 2 * rx + 2.5
   assert.equal(outer > 15 && outer < 17, true, String(outer))
 })
@@ -631,7 +647,7 @@ test('the edge circle\'s hole stays clearly open at the largest thickness', () =
   assert.equal(rx - stroke / 2 > stroke / 2, true, `${rx} ${stroke}`)
 })
 
-test('an arrow is a two-segment chevron pointing the way it names', () => {
+test('a direction arrow is an open head pointing the way it names', () => {
   // relative to the edge midpoint: the tip is the middle vertex
   const tip = (d) => {
     const [, mx, my, l1x, l1y] = d.match(/m ?(-?[\d.]+),(-?[\d.]+) l ?(-?[\d.]+),(-?[\d.]+)/)
@@ -648,11 +664,7 @@ test('an arrow is a two-segment chevron pointing the way it names', () => {
 })
 
 test('settings saved before corner marks existed read back with both corner marks ticked', () => {
-  assert.deepEqual(normalizeMarkSettings({ x: true, directions: false, dot: true }), { ...ALL, directions: false })
-})
-
-test('the corner zone is 0.2 of a cell from a grid corner', () => {
-  assert.equal(CORNER_RADIUS, 0.2)
+  assert.deepEqual(normalizeMarkSettings({ x: true, directions: false, circle: true }), { ...ALL, directions: false })
 })
 
 test('cornerAt finds the grid corner within the radius, inner and outer, and nothing farther', () => {
@@ -690,7 +702,6 @@ test('cornerAt reads a non-square grid by its own rows and columns', () => {
   assert.equal(cornerAt(4, 7, 4, 6), null)
 })
 
-// Every grid corner of a rows x cols grid.
 function allCorners (rows, cols) {
   const corners = []
   for (let row = 0; row <= rows; row++) for (let col = 0; col <= cols; col++) corners.push({ row, col })
@@ -750,31 +761,31 @@ test('the corner characters are lowercase letters SudokuPad does not use and the
 
 test('cornerMarkOf names the kind and type a corner character draws, and nothing for another character', () => {
   assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[0]), { kind: 'br', type: 'x' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[1]), { kind: 'br', type: 'dot' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.far[1]), { kind: 'far', type: 'dot' })
+  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[1]), { kind: 'br', type: 'circle' })
+  assert.deepEqual(cornerMarkOf(CORNER_VALUES.far[1]), { kind: 'far', type: 'circle' })
   for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'h', 's', 'z']) assert.equal(cornerMarkOf(other), null, other)
 })
 
 test('the corner cycle is X, circle, empty, and a click on an empty corner adds the X', () => {
-  const [x, dot] = CORNER_VALUES.br
+  const [x, circle] = CORNER_VALUES.br
   assert.deepEqual(planCornerClick('br', [], ALL), { remove: [], add: x })
-  assert.deepEqual(planCornerClick('br', [x], ALL), { remove: [x], add: dot })
-  assert.deepEqual(planCornerClick('br', [dot], ALL), { remove: [dot], add: null })
+  assert.deepEqual(planCornerClick('br', [x], ALL), { remove: [x], add: circle })
+  assert.deepEqual(planCornerClick('br', [circle], ALL), { remove: [circle], add: null })
 })
 
 test('the corner cycle backwards is circle, X, empty', () => {
-  const [x, dot] = CORNER_VALUES.tl
-  assert.deepEqual(planCornerClick('tl', [], ALL, true), { remove: [], add: dot })
-  assert.deepEqual(planCornerClick('tl', [dot], ALL, true), { remove: [dot], add: x })
+  const [x, circle] = CORNER_VALUES.tl
+  assert.deepEqual(planCornerClick('tl', [], ALL, true), { remove: [], add: circle })
+  assert.deepEqual(planCornerClick('tl', [circle], ALL, true), { remove: [circle], add: x })
   assert.deepEqual(planCornerClick('tl', [x], ALL, true), { remove: [x], add: null })
 })
 
 test('an unticked corner type is skipped, and with both unticked the corner click does nothing', () => {
-  const [x, dot] = CORNER_VALUES.far
-  assert.deepEqual(planCornerClick('far', [], { ...ALL, cornerX: false }), { remove: [], add: dot })
-  assert.deepEqual(planCornerClick('far', [dot], { ...ALL, cornerX: false }), { remove: [dot], add: null })
-  assert.deepEqual(planCornerClick('far', [x], { ...ALL, cornerDot: false }), { remove: [x], add: null })
-  assert.equal(planCornerClick('far', [x], { ...ALL, cornerX: false, cornerDot: false }), null)
+  const [x, circle] = CORNER_VALUES.far
+  assert.deepEqual(planCornerClick('far', [], { ...ALL, cornerX: false }), { remove: [], add: circle })
+  assert.deepEqual(planCornerClick('far', [circle], { ...ALL, cornerX: false }), { remove: [circle], add: null })
+  assert.deepEqual(planCornerClick('far', [x], { ...ALL, cornerCircle: false }), { remove: [x], add: null })
+  assert.equal(planCornerClick('far', [x], { ...ALL, cornerX: false, cornerCircle: false }), null)
 })
 
 test('a corner click sees only its own kind: another kind, an edge mark or a cell mark on the cell stays', () => {
@@ -784,7 +795,7 @@ test('a corner click sees only its own kind: another kind, an edge mark or a cel
 
 test('the edge cycle ignores the corner boxes, and the corner cycle ignores the edge boxes', () => {
   assert.deepEqual(planClick('3', [], { ...NONE, cornerX: true }), null)
-  assert.equal(planCornerClick('br', [], { ...NONE, x: true, directions: true, dot: true }), null)
+  assert.equal(planCornerClick('br', [], { ...NONE, x: true, directions: true, circle: true }), null)
 })
 
 test('corner marks are half the thickness, like edge marks', () => {
@@ -802,7 +813,7 @@ test('the pages are a list: SudokuPad\'s 1 to 9, then a to i drawn dashed, then 
   assert.deepEqual(PEN_PAGES, [
     { chars: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], dashed: false },
     { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dashed: true },
-    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dashed: false, chevrons: true }
+    { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dashed: false, arrowLines: true }
   ])
 })
 
@@ -810,7 +821,7 @@ test('penPageOf, penNumber and penCharOn move between a color character, its pag
   assert.equal(penPageOf('3'), 0)
   assert.equal(penPageOf('c'), 1)
   assert.equal(penPageOf('z'), 2)
-  assert.equal(penPageOf('k'), -1, 'the reverse character of a chevron pen is not a pen to select')
+  assert.equal(penPageOf('k'), -1, 'the reverse character of an arrow line pen is not a pen to select')
   assert.equal(penPageOf('A'), -1)
   assert.equal(penNumber('c'), '3')
   assert.equal(penNumber('3'), '3')
@@ -829,15 +840,14 @@ test('normalizePen keeps a saved color character of any page and nothing else', 
   for (const bad of [null, undefined, 0, 10, 3.5, 'k', '0', 'A', '', 'ab', ['a'], { a: 1 }]) assert.equal(normalizePen(bad), null, JSON.stringify(bad))
 })
 
-test('stepPage goes round the pages in either direction, whatever the count', () => {
-  assert.equal(stepPage(0, 1, 2), 1)
-  assert.equal(stepPage(1, 1, 2), 0)
-  assert.equal(stepPage(0, -1, 2), 1)
-  assert.equal(stepPage(1, -1, 3), 0)
-  assert.equal(stepPage(2, 1, 3), 0)
+test('wrapIndex goes round a list of any length in either direction', () => {
+  assert.equal(wrapIndex(0, 1, 2), 1)
+  assert.equal(wrapIndex(1, 1, 2), 0)
+  assert.equal(wrapIndex(0, -1, 2), 1)
+  assert.equal(wrapIndex(1, -1, 3), 0)
+  assert.equal(wrapIndex(2, 1, 3), 0)
 })
 
-// The rules of buildPagesCss as { selector, body }.
 const rulesOf = (css) => css.split('\n').filter(Boolean).map((rule) => { const i = rule.indexOf(' { '); return { selector: rule.slice(0, i), body: rule.slice(i + 3, -2) } })
 
 test('every page 2 color character strokes in the color of its page 1 partner, so one recolor changes both', () => {
@@ -888,7 +898,6 @@ test('a page 2 swatch is a single dashed line in the pen color of its button, as
   assert.equal(css.includes('data-pen-page="1"'), false)
 })
 
-// The swatch of button 1 on page 2 at a dash length, decoded: its one path's stroke-dasharray and stroke-dashoffset.
 const swatchDashes = (dash) => {
   const rule = rulesOf(buildPagesCss(5, dash)).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after')
   const svg = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
@@ -913,9 +922,9 @@ test('the page button samples the page it turns to: dashes on page 2, an arrow l
   assert.equal((fromOne.match(/<circle/g) || []).length, 3)
   assert.equal((fromOne.match(/<path[^>]*data-dash/g) || []).length, 2)
   const fromTwo = renderPageIcon(1, 0, BOTH_STYLES)
-  assert.match(fromTwo, /data-page-sample="chevrons"/)
+  assert.match(fromTwo, /data-page-sample="arrowLines"/)
   assert.equal((fromTwo.match(/<circle/g) || []).length, 3)
-  assert.equal((fromTwo.match(/<path[^>]*data-chevron/g) || []).length, 3)
+  assert.equal((fromTwo.match(/<path[^>]*data-arrow/g) || []).length, 3)
   assert.equal((fromTwo.match(/<path[^>]*data-sample-line/g) || []).length, 1)
   const fromThree = renderPageIcon(2, 0, BOTH_STYLES)
   assert.match(fromThree, /data-page-sample="solid"/)
@@ -935,14 +944,13 @@ test('the line mode choices are SudokuPad\'s three, and anything else saved read
   for (const bad of [null, undefined, 'edge', 1, ['both'], '']) assert.equal(normalizeLineMode(bad), 'both', JSON.stringify(bad))
 })
 
-// Dash length (page 2): from dots to longer dashes, in line widths.
 test('the dash length runs from 0 (dots) to 8 line widths in whole steps, and starts at 3, which draws dashes', () => {
   assert.deepEqual(DASH, { min: 0, max: 8, step: 1, fallback: 3 })
 })
 
-test('normalizeDash keeps a saved whole number from 0 to 8, a saved 0 included, and anything else is 3', () => {
-  for (const ok of [0, 1, 4, 8]) assert.equal(normalizeDash(ok), ok)
-  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(normalizeDash(bad), 3, String(bad))
+test('the dash setting keeps a saved whole number from 0 to 8, a saved 0 included, and anything else is 3', () => {
+  for (const ok of [0, 1, 4, 8]) assert.equal(SETTINGS.dash.normalize(ok), ok)
+  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(SETTINGS.dash.normalize(bad), 3, String(bad))
 })
 
 // The declarations of the first (orthogonal) and second (diagonal) page 2 line rule, as { dash, gap, offset } numbers
@@ -955,7 +963,7 @@ const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).fi
   })
 
 test('at dash 0 the page 2 lines are the dots they were: the spacing origin/main gave, as literals', () => {
-  // The dasharray of the orthogonal and the diagonal rule at thicknesses 1, 5 and 12, from the script before dash lengths existed.
+  // The dasharray of the orthogonal and the diagonal rule at thicknesses 1, 5 and 12.
   const before = { 1: ['0 1.9998', '0 2.011124822779531'], 5: ['0 10.6656', '0 10.055624113897656'], 12: ['0 21.3312', '0 22.625154256269724'] }
   for (const [thickness, want] of Object.entries(before)) {
     const got = rulesOf(buildPagesCss(Number(thickness), 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
@@ -1012,15 +1020,14 @@ test('the page button samples dashes as long as the setting, and dots at 0', () 
   assert.equal(span(long[0]) > span(short[0]), true)
 })
 
-// Showing the sliders in the pen tool's panel.
 test('both sliders show unless saved as hidden, and saved data without the setting shows both', () => {
-  assert.deepEqual(normalizeSliderVisibility(undefined), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility(null), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility({}), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility({ thickness: false }), { thickness: false, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility({ opacity: false, thickness: false }), { thickness: false, opacity: false })
-  assert.deepEqual(normalizeSliderVisibility({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility([false, false]), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize(undefined), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize(null), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize({}), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize({ thickness: false }), { thickness: false, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize({ opacity: false, thickness: false }), { thickness: false, opacity: false })
+  assert.deepEqual(SETTINGS.show.normalize({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize([false, false]), { thickness: true, opacity: true })
 })
 
 test('a hidden slider has no input, and the other keeps its place beside an empty row of the same height', () => {
@@ -1037,9 +1044,8 @@ test('with both sliders hidden the panel has no slider block at all, so no gap i
   assert.equal(renderPanelSliders(9, 35, { thickness: false, opacity: false }), '')
 })
 
-// The dialog.
 const editorState = (over = {}) => ({
-  colors: DEFAULT_COLORS,
+  colors: SUDOKUPAD_PEN_COLORS,
   missing: [],
   marks: DEFAULT_MARK_SETTINGS,
   lineMode: 'both',
@@ -1052,6 +1058,7 @@ const editorState = (over = {}) => ({
   middleErase: true,
   outline: true,
   outlineWidth: 2,
+  off: [],
   ...over
 })
 
@@ -1060,7 +1067,7 @@ test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s
   assert.match(html, /grid-template-columns: repeat\(3, /)
   const cells = [...html.matchAll(/<b[^>]*>(\d)<\/b><input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})">/g)].map((m) => m.slice(1))
   assert.deepEqual(cells.map(([label, pen]) => [label, pen]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [String(n), String(n)]))
-  assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => DEFAULT_COLORS[n]))
+  assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
 })
 
 test('the dialog has a SudokuPad colors button beside the Pen colors grid, and it is a plain button that submits nothing', () => {
@@ -1070,12 +1077,12 @@ test('the dialog has a SudokuPad colors button beside the Pen colors grid, and i
   assert.match(row[1], /grid-template-columns: repeat\(3, /)
   assert.match(row[1], /<button type="button" data-sudokupad-colors[^>]*>SudokuPad colors<\/button>/)
   assert.match(row[1], /<button[^>]*style="[^"]*font-size:inherit[^"]*white-space:nowrap/, 'the text is the size of the dialog\'s other text and stays on one line')
-  assert.equal((html.match(/<button/g) || []).length, 1)
+  assert.equal((html.match(/data-sudokupad-colors/g) || []).length, 1)
 })
 
 test('the page button turns to the next enabled page and has a dot for each enabled page only', () => {
   const noDash = renderPageIcon(0, 3, { dashed: false, arrows: true })
-  assert.match(noDash, /data-page-sample="chevrons"/)
+  assert.match(noDash, /data-page-sample="arrowLines"/)
   assert.equal((noDash.match(/<circle/g) || []).length, 2)
   assert.equal((noDash.match(/data-page-dot="filled"/g) || []).length, 1)
   const noArrows = renderPageIcon(1, 3, { dashed: true, arrows: false })
@@ -1084,7 +1091,6 @@ test('the page button turns to the next enabled page and has a dot for each enab
   assert.match(noArrows, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
 })
 
-// The row of a slider in the dialog, by its setting name.
 const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?</div>`).exec(html)[0]
 
 test('Line settings: Thickness and Opacity are one row each, with a Slider in panel box at the right end that is ticked as saved', () => {
@@ -1145,11 +1151,11 @@ test('Marks a click cycles through is one table: columns X Mark, Circle, Directi
   const html = renderEditor(editorState())
   assert.match(html, />Marks a click cycles through</)
   assert.doesNotMatch(html, /Edge marks a click|Corner marks a click/)
-  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-mark="x"[\s\S]*data-mark="dot"[\s\S]*data-mark="directions"[\s\S]*>Corner<[\s\S]*data-mark="cornerX"[\s\S]*data-mark="cornerDot"/)
+  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-mark="x"[\s\S]*data-mark="circle"[\s\S]*data-mark="directions"[\s\S]*>Corner<[\s\S]*data-mark="cornerX"[\s\S]*data-mark="cornerCircle"/)
   const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-mark-(\w+)" data-mark="\w+" aria-label="([^"]+)" title="([^"]+)"( checked)?>/g)]
   assert.deepEqual(boxes.map((m) => [m[1], m[2], m[3]]), [
-    ['x', 'Edge X Mark', 'Edge X Mark'], ['dot', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
-    ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerDot', 'Corner Circle', 'Corner Circle']
+    ['x', 'Edge X Mark', 'Edge X Mark'], ['circle', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
+    ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerCircle', 'Corner Circle', 'Corner Circle']
   ])
   assert.equal(boxes.every((m) => m[4] === ' checked'), true)
 })
@@ -1160,7 +1166,7 @@ test('a mark box shows its picture only: no word label beside it, and Directions
   const label = (key) => new RegExp(`<label[^>]*>(<input[^>]*data-mark="${key}"[^>]*>)(.*?)</label>`).exec(html)[2]
   assert.equal((label('directions').match(/<svg/g) || []).length, 1)
   assert.equal(label('directions').match(/M\d+ \d+ L\d+ \d+ L\d+ \d+/g).length, 4, 'four arrow heads')
-  assert.doesNotMatch(label('x') + label('dot') + label('directions'), />[A-Za-z]/, 'no text')
+  assert.doesNotMatch(label('x') + label('circle') + label('directions'), />[A-Za-z]/, 'no text')
 })
 
 test('Other: the White outline box has its own line with Outline width under it, hidden while the box is unticked, and the middle click box follows', () => {
@@ -1194,7 +1200,7 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8')))
 })
 
-// Page 3: arrow lines (`chevron` in the code's names). A page 3 pen is two color characters; the one a line stores says which way it was dragged.
+// Page 3: arrow lines. A page 3 pen is two color characters; the one a line stores says which way it was dragged.
 test('a page 3 pen\'s two characters are the 18 from j to z and 0, two to a pen, the first for the way a line is stored', () => {
   const page = PEN_PAGES[2]
   assert.deepEqual([...page.chars, ...page.reverse].sort(), 'jklmnopqrstuvwxyz0'.split('').sort())
@@ -1209,12 +1215,12 @@ test('directionCharOf gives a page 3 pen\'s character for the way a line is drag
   assert.equal(directionCharOf('3', false), '3')
 })
 
-test('chevronWayOf reads a stored character back as the way its line was dragged, and is null for any other character', () => {
-  assert.equal(chevronWayOf('j'), true)
-  assert.equal(chevronWayOf('k'), false)
-  assert.equal(chevronWayOf('0'), false)
-  assert.equal(chevronWayOf('z'), true)
-  for (const other of ['1', 'a', 'i', 'A', '', undefined, 'jk']) assert.equal(chevronWayOf(other), null, String(other))
+test('arrowLineWayOf reads a stored character back as the way its line was dragged, and is null for any other character', () => {
+  assert.equal(arrowLineWayOf('j'), true)
+  assert.equal(arrowLineWayOf('k'), false)
+  assert.equal(arrowLineWayOf('0'), false)
+  assert.equal(arrowLineWayOf('z'), true)
+  for (const other of ['1', 'a', 'i', 'A', '', undefined, 'jk']) assert.equal(arrowLineWayOf(other), null, String(other))
 })
 
 test('the page 3 characters stroke in the color of their page 1 partner, both ways, and are never dashed', () => {
@@ -1232,7 +1238,7 @@ test('a page 3 arrow is filled and not stroked, in the pen color of its characte
   const css = buildPagesCss(5, 0)
   const page = PEN_PAGES[2]
   page.chars.forEach((char, i) => [char, page.reverse[i]].forEach((c) => {
-    assert.ok(css.includes(`:root:root .pencolor-${c} [data-chevron-part="chevrons"] { fill: var(--puzzle-pencolor-${i + 1}); stroke: none; }`), `character ${c}`)
+    assert.ok(css.includes(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${i + 1}); stroke: none; }`), `character ${c}`)
   }))
 })
 
@@ -1318,18 +1324,18 @@ test('splitLineActs leaves actions that are not line values alone, and refuses a
   assert.throws(() => splitLineActs([{ type: 'select', arg: [cellAt(7, 7)] }, { type: 'pen', arg: '1' }], [pt(2.5, 2.5), pt(2.5, 3.5)], 'j'), RangeError)
 })
 
-// Arrow line geometry (`chevronLine` in the code). A page 3 line is a line as wide as a page 1 line and a run of arrows along it.
-const chevronAt = (value, forward, row, col, thickness, spacing = ARROW_SPACING.fallback) => chevronLine(value, forward, row, col, thickness, spacing)
+// Arrow line geometry (`arrowLine` in the code). A page 3 line is a line as wide as a page 1 line and a run of arrows along it.
+const arrowLineAt = (value, forward, row, col, thickness, spacing = ARROW_SPACING.fallback) => arrowLine(value, forward, row, col, thickness, spacing)
 const numbersOf = (d) => d.match(/-?\d+(?:\.\d+)?/g).map(Number)
 const pointsOf = (d) => { const n = numbersOf(d); const out = []; for (let i = 0; i < n.length; i += 2) out.push([n[i], n[i + 1]]); return out }
 
 test('an arrow line draws the line along the whole segment and the arrows as closed triangles of three points: base corner, tip, base corner', () => {
-  const { line, chevrons } = chevronAt('1', true, 2, 3, 5)
+  const { line, arrows } = arrowLineAt('1', true, 2, 3, 5)
   // the cell at row 2, col 3 is at x 192, y 128; the center line runs right from its middle
   assert.deepEqual(pointsOf(line), [[224, 160], [288, 160]])
-  const points = pointsOf(chevrons)
+  const points = pointsOf(arrows)
   assert.equal(points.length % 3, 0)
-  assert.equal(chevrons.split('Z').length - 1, points.length / 3, 'every arrow is a closed triangle')
+  assert.equal(arrows.split('Z').length - 1, points.length / 3, 'every arrow is a closed triangle')
   for (let i = 0; i < points.length; i += 3) {
     const [wing, tip, other] = points.slice(i, i + 3)
     assert.equal(tip[0] > wing[0] && tip[0] > other[0], true, `the tip points the way the line was dragged (right): wing ${wing}, tip ${tip}, wing ${other}`)
@@ -1339,19 +1345,19 @@ test('an arrow line draws the line along the whole segment and the arrows as clo
 })
 
 test('an arrow line dragged the other way has its arrows pointing back and the same line', () => {
-  const forward = chevronAt('1', true, 0, 0, 5)
-  const back = chevronAt('1', false, 0, 0, 5)
+  const forward = arrowLineAt('1', true, 0, 0, 5)
+  const back = arrowLineAt('1', false, 0, 0, 5)
   assert.deepEqual(pointsOf(back.line).slice().reverse(), pointsOf(forward.line))
-  const [wing, tip] = pointsOf(back.chevrons)
+  const [wing, tip] = pointsOf(back.arrows)
   assert.equal(tip[0] < wing[0], true, `dragged left, the tip is left of the wings: wing ${wing}, tip ${tip}`)
 })
 
 test('arrows point along a diagonal and along a vertical line as well', () => {
-  const [wing, tip, other] = pointsOf(chevronAt('e', true, 0, 0, 5).chevrons).slice(0, 3)
+  const [wing, tip, other] = pointsOf(arrowLineAt('e', true, 0, 0, 5).arrows).slice(0, 3)
   // down and right: the tip is the furthest of the three along (1, 1)
   const along = ([x, y]) => x + y
   assert.equal(along(tip) > along(wing) && along(tip) > along(other), true, `down and right, the tip is furthest along (1, 1): ${wing} ${tip} ${other}`)
-  const [w2, t2] = pointsOf(chevronAt('2', false, 0, 0, 5).chevrons)
+  const [w2, t2] = pointsOf(arrowLineAt('2', false, 0, 0, 5).arrows)
   assert.equal(t2[1] < w2[1], true, `dragged up, the tip is above the wings: wing ${w2}, tip ${t2}`)
 })
 
@@ -1359,63 +1365,67 @@ test('the arrows are evenly spaced along the line, half a space in from each end
   // an arrow's middle is halfway between its base corners and its tip
   const middles = (d) => { const p = pointsOf(d); const out = []; for (let i = 0; i < p.length; i += 3) out.push((p[i][0] + p[i + 1][0]) / 2); return out }
   for (const thickness of [1, 5, 12, 16]) {
-    const xs = middles(chevronAt('1', true, 0, 0, thickness).chevrons)
+    const xs = middles(arrowLineAt('1', true, 0, 0, thickness).arrows)
     const space = 64 / xs.length
-    xs.forEach((x, i) => assert.equal(Math.abs(x - (32 + (i + 0.5) * space)) < 0.01, true, `chevron ${i} of ${xs.length} at thickness ${thickness}: ${x}`))
+    xs.forEach((x, i) => assert.equal(Math.abs(x - (32 + (i + 0.5) * space)) < 0.01, true, `arrow ${i} of ${xs.length} at thickness ${thickness}: ${x}`))
   }
 })
 
 test('the arrows and the line scale with the thickness: larger arrows, a wider line, fewer arrows', () => {
-  const thin = chevronAt('1', true, 0, 0, 2)
-  const thick = chevronAt('1', true, 0, 0, 12)
+  const thin = arrowLineAt('1', true, 0, 0, 2)
+  const thick = arrowLineAt('1', true, 0, 0, 12)
   assert.equal(thick.lineWidth > thin.lineWidth, true, `line widths ${thin.lineWidth} at 2, ${thick.lineWidth} at 12`)
-  assert.equal(chevronAt('1', true, 0, 0, 10).lineWidth / chevronAt('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
-  assert.equal(pointsOf(thin.chevrons).length > pointsOf(thick.chevrons).length, true, `${pointsOf(thin.chevrons).length / 3} arrows at 2, ${pointsOf(thick.chevrons).length / 3} at 12`)
-  const span = (c) => { const ys = pointsOf(c.chevrons).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
+  assert.equal(arrowLineAt('1', true, 0, 0, 10).lineWidth / arrowLineAt('1', true, 0, 0, 5).lineWidth, 2, 'above the line\'s minimum it scales with the thickness')
+  assert.equal(pointsOf(thin.arrows).length > pointsOf(thick.arrows).length, true, `${pointsOf(thin.arrows).length / 3} arrows at 2, ${pointsOf(thick.arrows).length / 3} at 12`)
+  const span = (c) => { const ys = pointsOf(c.arrows).map((p) => p[1]); return Math.max(...ys) - Math.min(...ys) }
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
 test('below the default thickness the arrows keep their size at the default and only the line gets thinner, so the direction shows at 1', () => {
-  const one = chevronAt('1', true, 0, 0, 1)
-  const five = chevronAt('1', true, 0, 0, THICKNESS.fallback)
-  assert.equal(one.chevrons, five.chevrons)
+  const one = arrowLineAt('1', true, 0, 0, 1)
+  const five = arrowLineAt('1', true, 0, 0, THICKNESS.fallback)
+  assert.equal(one.arrows, five.arrows)
   assert.equal(one.lineWidth, 1, 'the line is as thick as a page 1 line, 1')
   assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
 })
 
 test('the line under the arrows is as thick as a page 1 line at every slider value, and the arrows clearly stick out past it', () => {
   for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-    const shape = chevronAt('a', true, 0, 0, t)
+    const shape = arrowLineAt('a', true, 0, 0, t)
     assert.equal(shape.lineWidth, t, `the line at thickness ${t}`)
     // 'a' is the top edge line, so a point's distance from y 0 is its distance from the line's middle.
-    const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y)))
+    const reach = Math.max(...pointsOf(shape.arrows).map(([, y]) => Math.abs(y)))
     assert.equal(reach - t / 2 >= Math.max(t / 2, 2), true, `at thickness ${t} the arrows stick out ${reach - t / 2} past a line ${t} wide`)
   }
 })
 
 test('the arrow sizes are the ruled ones: base 1.5 line widths out to each side, 2.25 long, one spacing of 5', () => {
-  assert.deepEqual([CHEVRON.halfWidth, 2 * CHEVRON.halfLength, CHEVRON.line, ARROW_SPACING.fallback], [1.5, 2.25, 1, 5])
+  assert.deepEqual([ARROW_LINE.halfWidth, 2 * ARROW_LINE.halfLength, ARROW_LINE.line, ARROW_SPACING.fallback], [1.5, 2.25, 1, 5])
 })
 
-test('from thickness 5 up an arrow\'s base reaches CHEVRON.halfWidth (1.5) times the thickness to each side, it is twice CHEVRON.halfLength (1.125) times the thickness long, and the spacing scales with it', () => {
+test('from thickness 5 up an arrow\'s base reaches ARROW_LINE.halfWidth (1.5) times the thickness to each side, it is twice ARROW_LINE.halfLength (1.125) times the thickness long, and the spacing scales with it', () => {
   for (const t of [5, 8, 10, 13, 16]) {
-    const shape = chevronAt('a', true, 0, 0, t)
-    const points = pointsOf(shape.chevrons)
+    const shape = arrowLineAt('a', true, 0, 0, t)
+    const points = pointsOf(shape.arrows)
     const [first, tip] = points
-    assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - CHEVRON.halfWidth * t) < 0.01, true, `reach at ${t}`)
-    assert.equal(Math.abs(Math.abs(tip[0] - first[0]) - 2 * CHEVRON.halfLength * t) < 0.01, true, `length at ${t}`)
-    assert.equal(points.length / 3, Math.round(64 / (ARROW_SPACING.fallback * t)) || 1, `count at ${t}`)
+    assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - ARROW_LINE.halfWidth * t) < 0.01, true, `reach at ${t}`)
+    assert.equal(Math.abs(Math.abs(tip[0] - first[0]) - 2 * ARROW_LINE.halfLength * t) < 0.01, true, `length at ${t}`)
   }
+})
+
+test('the arrow count at the default spacing of 5 is the worked one for each thickness: 3 at 5, 2 at 8, then 1', () => {
+  const worked = { 5: 3, 8: 2, 10: 1, 13: 1, 16: 1 }
+  for (const [t, count] of Object.entries(worked)) assert.equal(pointsOf(arrowLineAt('a', true, 0, 0, Number(t)).arrows).length / 3, count, `count at ${t}`)
 })
 
 test('an arrow is centered on its line, on a diagonal as on a straight line, at every thickness from 1 to 16: its two base corners mirror each other across the line', () => {
   for (const value of ['1', '2', 'a', 'e', 'd']) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
-      const shape = chevronAt(value, true, 3, 3, t)
+      const shape = arrowLineAt(value, true, 3, 3, t)
       const [[x0, y0], [x1, y1]] = pointsOf(shape.line)
       const length = Math.hypot(x1 - x0, y1 - y0)
       const [ux, uy] = [(x1 - x0) / length, (y1 - y0) / length]
-      const points = pointsOf(shape.chevrons)
+      const points = pointsOf(shape.arrows)
       for (let i = 0; i < points.length; i += 3) {
         const [wing, tip, other] = points.slice(i, i + 3)
         // distance of a point from the line's axis (positive on one side), and how far along the line it is
@@ -1431,9 +1441,9 @@ test('an arrow is centered on its line, on a diagonal as on a straight line, at 
 
 test('at the largest thickness an arrow on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
   // a top edge line, 'a', on row 0: the arrow's base corners are the furthest from the edge itself
-  const shape = chevronAt('a', true, 0, 0, THICKNESS.max)
-  const reach = Math.max(...pointsOf(shape.chevrons).map(([, y]) => Math.abs(y)))
-  assert.equal(Math.abs(reach - CHEVRON.halfWidth * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the CHEVRON size at the largest thickness`)
+  const shape = arrowLineAt('a', true, 0, 0, THICKNESS.max)
+  const reach = Math.max(...pointsOf(shape.arrows).map(([, y]) => Math.abs(y)))
+  assert.equal(Math.abs(reach - ARROW_LINE.halfWidth * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the ARROW_LINE size at the largest thickness`)
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
 })
 
@@ -1441,16 +1451,15 @@ test('an arrow line has at least one arrow on any segment at any thickness and a
   for (const value of LINE_VALUES) {
     for (let t = THICKNESS.min; t <= THICKNESS.max; t++) {
       for (let spacing = ARROW_SPACING.min; spacing <= ARROW_SPACING.max; spacing++) {
-        assert.equal(pointsOf(chevronAt(value, true, 4, 4, t, spacing).chevrons).length >= 3, true, `at least one chevron: ${value} at thickness ${t}, spacing ${spacing}`)
+        assert.equal(pointsOf(arrowLineAt(value, true, 4, 4, t, spacing).arrows).length >= 3, true, `at least one arrow: ${value} at thickness ${t}, spacing ${spacing}`)
       }
     }
   }
 })
 
-// The white outline.
-test('normalizeOutline is off only for a saved false: nothing saved and anything untrusted is on', () => {
-  assert.equal(normalizeOutline(false), false)
-  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(normalizeOutline(ok), true, JSON.stringify(ok))
+test('the outline setting is off only for a saved false: nothing saved and anything untrusted is on', () => {
+  assert.equal(SETTINGS.outline.normalize(false), false)
+  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.normalize(ok), true, JSON.stringify(ok))
 })
 
 test('buildOutlineCss is empty when the outline is off and filters the pen layer, and only it, when on', () => {
@@ -1476,10 +1485,10 @@ test('the outline filter grows the layer\'s combined shape by the default width 
   assert.match(svg, /<feMerge><feMergeNode in="halo"\/><feMergeNode in="SourceGraphic"\/><\/feMerge>/, 'the layer is merged over the white')
 })
 
-test('normalizeOutlineWidth keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 2', () => {
+test('the outline width setting keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 2', () => {
   assert.deepEqual(OUTLINE_WIDTH, { min: 1, max: 8, step: 1, fallback: 2 })
-  for (const ok of [1, 3, 8]) assert.equal(normalizeOutlineWidth(ok), ok)
-  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(normalizeOutlineWidth(bad), 2, JSON.stringify(bad))
+  for (const ok of [1, 3, 8]) assert.equal(SETTINGS.outlineWidth.normalize(ok), ok)
+  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(SETTINGS.outlineWidth.normalize(bad), 2, JSON.stringify(bad))
 })
 
 test('the outline filter grows and blurs more for a wider outline, and refuses a width it cannot save', () => {
@@ -1490,29 +1499,28 @@ test('the outline filter grows and blurs more for a wider outline, and refuses a
   for (const bad of [0, 9, 2.5, '3']) assert.throws(() => renderOutlineFilter(bad), RangeError)
 })
 
-test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and normalizeArrowSpacing keeps a saved whole number in range', () => {
+test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
   assert.deepEqual(ARROW_SPACING, { min: 3, max: 12, step: 1, fallback: 5 })
-  for (const ok of [3, 5, 12]) assert.equal(normalizeArrowSpacing(ok), ok)
-  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(normalizeArrowSpacing(bad), 5, JSON.stringify(bad))
+  for (const ok of [3, 5, 12]) assert.equal(SETTINGS.arrowSpacing.normalize(ok), ok)
+  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.normalize(bad), 5, JSON.stringify(bad))
 })
 
 test('middle click erase is on unless saved as the boolean false', () => {
-  assert.equal(normalizeMiddleErase(false), false)
-  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(normalizeMiddleErase(ok), true, JSON.stringify(ok))
+  assert.equal(SETTINGS.middleErase.normalize(false), false)
+  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(SETTINGS.middleErase.normalize(ok), true, JSON.stringify(ok))
 })
 
 test('both line styles are enabled unless saved as the boolean false, each on its own; saved junk enables both', () => {
-  assert.deepEqual(normalizeLineStyles(undefined), { dashed: true, arrows: true })
-  assert.deepEqual(normalizeLineStyles({ dashed: false }), { dashed: false, arrows: true })
-  assert.deepEqual(normalizeLineStyles({ arrows: false }), { dashed: true, arrows: false })
-  assert.deepEqual(normalizeLineStyles({ dashed: false, arrows: false }), { dashed: false, arrows: false })
-  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(normalizeLineStyles(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
+  assert.deepEqual(SETTINGS.lineStyles.normalize(undefined), { dashed: true, arrows: true })
+  assert.deepEqual(SETTINGS.lineStyles.normalize({ dashed: false }), { dashed: false, arrows: true })
+  assert.deepEqual(SETTINGS.lineStyles.normalize({ arrows: false }), { dashed: true, arrows: false })
+  assert.deepEqual(SETTINGS.lineStyles.normalize({ dashed: false, arrows: false }), { dashed: false, arrows: false })
+  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(SETTINGS.lineStyles.normalize(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
 })
 
 test('a wider arrow spacing gives fewer arrows on the same segment and the spacing sets their distance', () => {
-  const count = (spacing) => pointsOf(chevronAt('1', true, 0, 0, 5, spacing).chevrons).length / 3
-  assert.equal(count(3), Math.round(64 / (3 * 5)))
-  assert.equal(count(12), Math.round(64 / (12 * 5)) || 1)
+  const count = (spacing) => pointsOf(arrowLineAt('1', true, 0, 0, 5, spacing).arrows).length / 3
+  assert.deepEqual([count(3), count(5), count(12)], [4, 3, 1])
   assert.equal(count(3) > count(5) && count(5) > count(12), true, `${count(3)}, ${count(5)}, ${count(12)}`)
 })
 
@@ -1530,7 +1538,6 @@ test('a page turn skips a page that is not enabled, in either direction, and sta
   assert.equal(stepEnabledPage(0, -1, noDash), 2)
   assert.equal(stepEnabledPage(2, -1, noDash), 0)
   assert.equal(stepEnabledPage(0, 1, { dashed: false, arrows: false }), 0)
-  // a pen left on a page that is no longer enabled still moves on to the next enabled one
   assert.equal(stepEnabledPage(1, 1, noDash), 2)
   assert.equal(stepEnabledPage(1, -1, noDash), 0)
 })
@@ -1544,7 +1551,6 @@ test('after Save a selected pen on a page that is not enabled moves to the same 
   assert.equal(pageAfterSave('3', { dashed: false, arrows: false }), '3')
 })
 
-// A segment as the line erase reads it off a cell: its value, cell and color character.
 const seg = (value, row, col, color = '1') => ({ value, row, col, color })
 
 test('linePoints gives the two grid points of every line value, in cell units from the grid top left', () => {
@@ -1638,10 +1644,10 @@ test('connectedLine counts both direction characters of an arrow pen as one pen'
   assert.deepEqual(new Set(connectedLine([forward, backward, otherPen], forward)), new Set([forward, backward]))
 })
 
-test('connectedLine does not join lines that only touch at different kinds of point', () => {
-  // A center line ends at a cell middle; an edge line runs corner to corner; they share no point.
+test('connectedLine does not join lines that only cross, sharing no end point', () => {
+  // The center line 1 and the edge line 7 of the same cell cross at (0.5, 1), each one's midpoint, and share no end point.
   const centre = seg('1', 0, 0)
-  const edge = seg('a', 0, 1)
+  const edge = seg('7', 0, 0)
   assert.deepEqual(connectedLine([centre, edge], centre), [centre])
 })
 
@@ -1658,7 +1664,6 @@ test('eraseLineActs removes each value from its own cells as one select and one 
   assert.deepEqual(eraseLineActs([], cellAt), [])
 })
 
-// Failing safely: one feature at a time.
 const newFeatures = () => {
   const logged = []
   const changes = []
@@ -1689,23 +1694,23 @@ test('a feature that works runs and keeps its result', () => {
 
 test('turning one feature off leaves the others on', () => {
   const { features } = newFeatures()
-  features.turnOff('chevrons', 'no renderPart')
-  for (const name of Object.keys(FEATURE_LABELS).filter((n) => n !== 'chevrons')) assert.equal(features.isOff(name), false, name)
+  features.turnOff('arrowLines', 'no renderPart')
+  for (const name of Object.keys(FEATURE_LABELS).filter((n) => n !== 'arrowLines')) assert.equal(features.isOff(name), false, name)
 })
 
 test('a feature that needs another is off with it, and the list names both in the dialog\'s order', () => {
   const { features } = newFeatures()
   features.turnOff('pages', 'no setSelectedColor')
-  assert.deepEqual(features.offLabels(), ['pen pages', 'dashes', 'arrow lines'])
+  assert.deepEqual(features.offNames(), ['pages', 'dashes', 'arrowLines'])
   const second = newFeatures().features
   second.turnOff('marks', 'no getInputRc')
-  assert.deepEqual(second.offLabels(), ['marks', 'right click'])
+  assert.deepEqual(second.offNames(), ['marks', 'rightClick'])
 })
 
 test('one throw turns off every feature the attempt names, and the others stay on', () => {
   const { features } = newFeatures()
   features.attempt(['sliders', 'outline'], () => { throw new Error('hint') })
-  assert.deepEqual(features.offLabels(), ['sliders', 'outline'])
+  assert.deepEqual(features.offNames(), ['sliders', 'outline'])
   assert.equal(features.isOff('marks'), false)
 })
 
@@ -1736,8 +1741,7 @@ test('a throw in a SudokuPad function the feature only called passes through and
 
 test('the dialog shows one plain line naming the features that are off, and nothing when none is', () => {
   assert.doesNotMatch(renderEditor(editorState({ off: [] })), /Off because/)
-  assert.doesNotMatch(renderEditor(editorState()), /Off because/)
-  assert.match(renderEditor(editorState({ off: ['chevrons'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
+  assert.match(renderEditor(editorState({ off: ['arrowLines'] })), />Off because SudokuPad changed: arrow lines<\/div>/)
   assert.match(renderEditor(editorState({ off: ['marks', 'rightClick'] })), />Off because SudokuPad changed: marks, right click<\/div>/)
 })
 
@@ -1747,11 +1751,301 @@ test('the dialog leaves out the controls of a feature that is off', () => {
   assert.doesNotMatch(html(['sliders']), /data-setting="thickness"|data-setting="opacity"|data-show=/)
   assert.doesNotMatch(html(['dashes']), /data-setting="dash"|data-style="dashed"/)
   assert.match(html(['dashes']), /data-style="arrows"/)
-  assert.doesNotMatch(html(['chevrons']), /data-setting="arrowSpacing"|data-style="arrows"/)
-  assert.doesNotMatch(html(['dashes', 'chevrons']), /Line styles/)
+  assert.doesNotMatch(html(['arrowLines']), /data-setting="arrowSpacing"|data-style="arrows"/)
+  assert.doesNotMatch(html(['dashes', 'arrowLines']), /Line styles/)
   assert.doesNotMatch(html(['marks']), /data-mark=|Marks a click/)
   assert.doesNotMatch(html(['outline']), /data-outline|outlineWidth/)
   assert.doesNotMatch(html(['lineErase']), /data-middle-erase/)
   assert.doesNotMatch(html(['outline', 'lineErase']), />Other</)
   assert.match(html(['colors']), /data-pen="1"/, 'the pickers set a saved color and need no SudokuPad internal')
+})
+
+test('inRange takes a whole number from min to max on the steps counted from min, and nothing else', () => {
+  const range = { min: 20, max: 100, step: 5, fallback: 80 }
+  for (const ok of [20, 25, 80, 100]) assert.equal(inRange(ok, range), true, String(ok))
+  for (const bad of [15, 105, 22, 20.5, '20', null, undefined, NaN, true, [20]]) assert.equal(inRange(bad, range), false, String(bad))
+})
+
+test('isPlainObject takes an object and no array, null or scalar', () => {
+  assert.equal(isPlainObject({}), true)
+  assert.equal(isPlainObject({ a: 1 }), true)
+  for (const bad of [null, undefined, [], [1], 'x', 1, true]) assert.equal(isPlainObject(bad), false, JSON.stringify(bad))
+})
+
+test('isHexColor takes #rrggbb in either case and nothing else', () => {
+  for (const ok of ['#000000', '#a1B2c3']) assert.equal(isHexColor(ok), true, ok)
+  for (const bad of ['#fff', '#12345g', '123456', ' #123456', '#1234567', null, undefined, 123456, ['#123456']]) assert.equal(isHexColor(bad), false, JSON.stringify(bad))
+})
+
+test('the table holds each setting\'s saved key and default', () => {
+  const rows = Object.fromEntries(Object.entries(SETTINGS).map(([name, row]) => [name, [row.key, row.fallback]]))
+  assert.deepEqual(rows, {
+    thickness: ['PenColor_thickness', 5],
+    opacity: ['PenColor_opacity', 80],
+    dash: ['PenColor_dash', 3],
+    arrowSpacing: ['PenColor_arrowspacing', 5],
+    outlineWidth: ['PenColor_outlinewidth', 2],
+    outline: ['PenColor_outline', true],
+    middleErase: ['PenColor_middleerase', true],
+    lineStyles: ['PenColor_linestyles', { dashed: true, arrows: true }],
+    show: ['PenColor_sliders', { thickness: true, opacity: true }]
+  })
+})
+
+test('a slider row built from a range normalizes and saves by that range alone', () => {
+  const row = slider('New_key', { min: 2, max: 10, step: 2, fallback: 4 }, () => {})
+  assert.equal(row.normalize(6), 6)
+  for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.normalize(bad), 4, JSON.stringify(bad))
+  const calls = []
+  const store = { setData: (key, value) => calls.push(['set', key, value]), removeData: (key) => calls.push(['remove', key]) }
+  saveSetting(store, row, 6)
+  saveSetting(store, row, 4)
+  assert.deepEqual(calls, [['set', 'New_key', 6], ['remove', 'New_key']])
+})
+
+test('a row built with no effect has one that does nothing', () => {
+  assert.equal(flag('Flag_key').effect(), undefined)
+  assert.equal(SETTINGS.middleErase.effect(), undefined)
+})
+
+test('saving what changed updates the values in force and names what changed', () => {
+  const saved = {}
+  const store = { setData: (key, value) => { saved[key] = value }, removeData: (key) => { delete saved[key] } }
+  const current = settingDefaults()
+  assert.deepEqual(saveChangedSettings(store, { ...current, thickness: 9, opacity: 55 }, current), ['thickness', 'opacity'])
+  assert.deepEqual([current.thickness, current.opacity], [9, 55])
+  assert.deepEqual(saved, { [SETTINGS.thickness.key]: 9, [SETTINGS.opacity.key]: 55 })
+})
+
+test('a failed write leaves the values in force alone, so a retry saves every change again', () => {
+  const saved = {}
+  let failing = true
+  const store = {
+    setData: (key, value) => {
+      if (failing && key === SETTINGS.opacity.key) throw new Error('quota')
+      saved[key] = value
+    },
+    removeData: (key) => { delete saved[key] }
+  }
+  const current = settingDefaults()
+  const draft = { ...current, thickness: 9, opacity: 55 }
+  assert.throws(() => saveChangedSettings(store, draft, current), /quota/)
+  assert.deepEqual(current, settingDefaults())
+  failing = false
+  assert.deepEqual(saveChangedSettings(store, draft, current), ['thickness', 'opacity'])
+})
+
+test('an effect two rows share runs once', () => {
+  assert.equal(SETTINGS.outline.effect, SETTINGS.outlineWidth.effect)
+  assert.deepEqual(effectsOf(['outline', 'outlineWidth', 'thickness']), [SETTINGS.outline.effect, SETTINGS.thickness.effect])
+})
+
+test('flags decode each name on its own: only a saved false is off, a non-object is all on, an unknown name is dropped', () => {
+  const row = flags('Flags_key', ['a', 'b'])
+  assert.deepEqual(row.fallback, { a: true, b: true })
+  assert.deepEqual(row.normalize({ a: false }), { a: false, b: true })
+  assert.deepEqual(row.normalize({ a: 0, b: false, c: false }), { a: true, b: false })
+  for (const bad of [null, undefined, 'x', 1, [false, false]]) assert.deepEqual(row.normalize(bad), { a: true, b: true }, JSON.stringify(bad))
+})
+
+test('readSettings normalizes what is saved under each key and falls back for the rest', () => {
+  const saved = { PenColor_thickness: 9, PenColor_opacity: 57, PenColor_outline: false, PenColor_sliders: { opacity: false } }
+  const read = readSettings({ getData: (key) => saved[key] })
+  assert.deepEqual(read, {
+    ...settingDefaults(),
+    thickness: 9,
+    outline: false,
+    show: { thickness: true, opacity: false }
+  })
+})
+
+test('settingDefaults holds every row\'s default', () => {
+  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, middleErase: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true } })
+})
+
+test('changedSettings names only the settings whose value differs, reading flags by value', () => {
+  const now = settingDefaults()
+  assert.deepEqual(changedSettings({ ...now }, now), [])
+  assert.deepEqual(changedSettings({ ...now, lineStyles: { dashed: true, arrows: true } }, now), [])
+  assert.deepEqual(changedSettings({ ...now, thickness: 9, lineStyles: { dashed: true, arrows: false } }, now), ['thickness', 'lineStyles'])
+  assert.deepEqual(changedSettings({ ...now, show: { thickness: false, opacity: true }, outline: false }, now), ['outline', 'show'])
+})
+
+test('saveSetting removes the key of a value at its default and sets any other', () => {
+  const calls = []
+  const store = {
+    setData: (key, value) => calls.push(['set', key, value]),
+    removeData: (key) => calls.push(['remove', key])
+  }
+  saveSetting(store, SETTINGS.thickness, 5)
+  saveSetting(store, SETTINGS.thickness, 9)
+  saveSetting(store, SETTINGS.outline, true)
+  saveSetting(store, SETTINGS.outline, false)
+  saveSetting(store, SETTINGS.lineStyles, { dashed: true, arrows: true })
+  saveSetting(store, SETTINGS.lineStyles, { dashed: false, arrows: true })
+  assert.deepEqual(calls, [
+    ['remove', 'PenColor_thickness'],
+    ['set', 'PenColor_thickness', 9],
+    ['remove', 'PenColor_outline'],
+    ['set', 'PenColor_outline', false],
+    ['remove', 'PenColor_linestyles'],
+    ['set', 'PenColor_linestyles', { dashed: false, arrows: true }]
+  ])
+})
+
+// The helpers a click and a redraw share, tested without SudokuPad.
+test('edgeMidpoint puts each edge value on the right side of the cell', () => {
+  assert.deepEqual(edgeMidpoint('3', 2, 4), [2.5, 5])
+  assert.deepEqual(edgeMidpoint('4', 2, 4), [3, 4.5])
+  assert.deepEqual(edgeMidpoint('b', 2, 4), [2.5, 4])
+  assert.deepEqual(edgeMidpoint('c', 2, 4), [2, 4.5])
+})
+
+test('isEdgeActs accepts a select then an edge pen action, and nothing else', () => {
+  const select = { type: 'select', arg: [] }
+  const pen = (arg) => ({ type: 'pen', arg })
+  assert.equal(isEdgeActs([select, pen('3')]), true)
+  assert.equal(isEdgeActs(null), false)
+  assert.equal(isEdgeActs([select]), false)
+  assert.equal(isEdgeActs([select, pen('3'), pen('4')]), false)
+  assert.equal(isEdgeActs([{ type: 'deselect' }, pen('3')]), false)
+  assert.equal(isEdgeActs([select, pen('1')]), false)
+  assert.equal(isEdgeActs([select, { type: 'select', arg: '3' }]), false)
+})
+
+test('arrowLineOf reads the way of an arrow line, and is null for anything else', () => {
+  const line = LINE_VALUES[0]
+  const way = arrowLineOf({ value: line, className: `cell-pen pen-1 pencolor-${PEN_PAGES[2].chars[0]}` })
+  assert.equal(way, arrowLineWayOf(PEN_PAGES[2].chars[0]))
+  assert.equal(typeof way, 'boolean')
+  assert.equal(arrowLineOf({ value: '3', className: `cell-pen pencolor-${PEN_PAGES[2].chars[0]}` }), null)
+  assert.equal(arrowLineOf({ value: line, className: 'cell-pen pen-1' }), null)
+  assert.equal(arrowLineOf({ value: line }), null)
+})
+
+test('addedMark draws an edge mark at its edge, a corner x as x and the other corner type as the circle, and a stock value as null', () => {
+  assert.equal(addedMark('1', 0, 0, 9), null)
+  assert.deepEqual(addedMark('h', 3, 4, 9), { point: edgeMidpoint('3', 3, 4), shape: '>' })
+  assert.deepEqual(addedMark('t', 3, 4, 9), { point: cornerPoint('tl', 3, 4, 9), shape: 'x' })
+  assert.deepEqual(addedMark('w', 3, 4, 9), { point: cornerPoint('tl', 3, 4, 9), shape: 'o' })
+  // The far corner's two cells sit on different corners, told apart by the grid's width.
+  assert.deepEqual(addedMark('v', 0, 8, 9), { point: [0, 9], shape: 'x' })
+  assert.deepEqual(addedMark('v', 0, 8, 12), { point: [1, 8], shape: 'x' })
+})
+
+test('penValuesOf lists the values of a cell without their colors, and none for a cell with no pen', () => {
+  assert.deepEqual(penValuesOf({ pen: ['3a', '4b'] }), ['3', '4'])
+  assert.deepEqual(penValuesOf({}), [])
+})
+
+test('planActs selects the cell, toggles off what the plan removes, then toggles on what it adds', () => {
+  const cell = { row: 1, col: 2 }
+  assert.deepEqual(planActs(cell, { remove: ['3', '4'], add: 'c' }), [
+    { type: 'select', arg: [cell] }, { type: 'pen', arg: '3' }, { type: 'pen', arg: '4' }, { type: 'pen', arg: 'c' }
+  ])
+  assert.deepEqual(planActs(cell, { remove: [], add: null }), [{ type: 'select', arg: [cell] }])
+})
+
+test('lineSegmentsOf lists the line values of every cell with their color, and leaves marks out', () => {
+  const line = LINE_VALUES[0]
+  const mark = MARK_VALUES[0]
+  const cells = [{ row: 1, col: 2, pen: [`${line}x`, `${mark}y`] }, { row: 0, col: 0 }]
+  assert.deepEqual(lineSegmentsOf(cells), [{ value: line, row: 1, col: 2, color: 'x' }])
+})
+
+// The requirement table: which SudokuPad internal each feature cannot work without.
+const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
+// A SudokuPad stand-in with every internal the features need.
+const completeSudokuPad = () => {
+  class Renderer {
+    static CellSize = 64
+    static rcToPathData () {}
+    renderPen () {}
+  }
+  const renderer = new Renderer()
+  renderer.renderPart = () => {}
+  const tool = { _actList: [] }
+  TOOL_FNS.forEach((name) => { tool[name] = () => {} })
+  const app = {
+    tools: { colour: {} },
+    svgRenderer: renderer,
+    grid: { rows: 9, cols: 9, getCell: () => {} },
+    puzzle: { cells: [] },
+    xyToRCExact: () => {}
+  }
+  return { app, tool }
+}
+
+test('a complete SudokuPad lacks nothing', () => {
+  const { app, tool } = completeSudokuPad()
+  assert.deepEqual(lackingInternals(app, tool), new Map())
+})
+
+// Each internal removed alone, and the features that go off with it.
+const LACKING_ALONE = [
+  ...['actStart', 'actAdd', 'actSend', 'clickCell', '_actList'].map((name) => [name, (s) => { delete s.tool[name] }, ['arrowLines', 'marks', 'lineErase']]),
+  ['getInputRc', (s) => { delete s.tool.getInputRc }, ['marks']],
+  ['setSelectedColor', (s) => { delete s.tool.setSelectedColor }, ['pages']],
+  ['handleToolEnter', (s) => { delete s.tool.handleToolEnter }, ['pages']],
+  ['handleToolExit', (s) => { delete s.tool.handleToolExit }, ['pages']],
+  ['drawLineHint', (s) => { delete s.tool.drawLineHint }, ['sliders', 'outline']],
+  ['getCell', (s) => { delete s.app.grid.getCell }, ['marks', 'lineErase']],
+  ['puzzle.cells', (s) => { delete s.app.puzzle.cells }, ['arrowLines', 'marks', 'lineErase']],
+  ['grid.rows', (s) => { s.app.grid.rows = '9' }, ['marks']],
+  ['grid.cols', (s) => { s.app.grid.cols = 9.5 }, ['marks']],
+  ['CellSize', (s) => { delete s.app.svgRenderer.constructor.CellSize }, ['marks']],
+  ['rcToPathData', (s) => { delete s.app.svgRenderer.constructor.rcToPathData }, ['marks']],
+  ['renderPen', (s) => { delete Object.getPrototypeOf(s.app.svgRenderer).renderPen }, ['arrowLines', 'marks']],
+  ['renderPart', (s) => { delete s.app.svgRenderer.renderPart }, ['arrowLines']],
+  ['xyToRCExact', (s) => { delete s.app.xyToRCExact }, ['lineErase']],
+  ['tools.colour', (s) => { delete s.app.tools.colour }, ['colors']]
+]
+for (const [internal, remove, featureNames] of LACKING_ALONE) {
+  test(`without ${internal}, exactly ${featureNames.join(', ')} are lacking`, () => {
+    const stub = completeSudokuPad()
+    remove(stub)
+    assert.deepEqual(lackingInternals(stub.app, stub.tool), new Map([[internal, featureNames]]))
+  })
+}
+
+test('every feature with a requirement of its own is lacking under some internal removed alone', () => {
+  // dashes and rightClick ride on another feature (FEATURE_NEEDS), gear needs nothing of SudokuPad's, and lineMode needs ToolPen.tool (the next test).
+  const own = Object.keys(FEATURE_LABELS).filter((name) => !['dashes', 'rightClick', 'gear', 'lineMode'].includes(name))
+  assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), own.sort())
+})
+
+test('without a pen tool, every feature that needs it is reported under the first internal it lacks', () => {
+  const { app } = completeSudokuPad()
+  assert.deepEqual(lackingInternals(app, undefined), new Map([
+    ['setSelectedColor', ['pages']],
+    ['actStart', ['arrowLines', 'marks', 'lineErase']],
+    ['drawLineHint', ['sliders', 'outline']],
+    ['ToolPen.tool', ['lineMode']]
+  ]))
+})
+
+// The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp is a SudokuPad the script cannot hook, which it reports.
+function loadWithFramework (framework) {
+  const file = require.resolve('./pen-tool-extras.user.js')
+  const warnings = []
+  const warn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  if (framework !== undefined) global.Framework = framework
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = warn
+    delete global.Framework
+    delete require.cache[file]
+  }
+  return warnings
+}
+
+test('a Framework with no getApp is reported once, naming the script', () => {
+  assert.deepEqual(loadWithFramework({}), ['pen-tool-extras: SudokuPad\'s Framework has no getApp, so nothing was changed'])
+})
+
+test('a page with no Framework is left alone without a word', () => {
+  assert.deepEqual(loadWithFramework(undefined), [])
 })

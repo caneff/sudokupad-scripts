@@ -94,9 +94,9 @@
   (at least one line width wide where it shows) is shortened to leave one, so a page 2 line is never solid; each cell's segment starts and ends with half a dash, so a line is
   inked at its ends, its turns and every join between cells, and two segments meet in one whole dash.
 - **SudokuPad colors button** — the settings dialog's button beside the Pen colors grid. It sets the nine pickers to SudokuPad's own pen colors
-  (`DEFAULT_COLORS`) as a draft: Save stores them as the user's colors, so they stop following the cell color page, and Cancel leaves the colors as
+  (`SUDOKUPAD_PEN_COLORS`) as a draft: Save stores them as the user's colors, so they stop following the cell color page, and Cancel leaves the colors as
   they were. Unlike Restore defaults, it touches no other setting.
-- **arrow line** — (`chevron` in the code: `CHEVRON`, `chevronLine`, `data-chevron-part`, the test and live file names, from before the arrows were filled triangles) a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of filled triangles (its arrows, in the pen's color) along it, pointing the way the line was
+- **arrow line** — a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of filled triangles (its arrows, in the pen's color) along it, pointing the way the line was
   dragged. Only lines are arrow lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Not a **direction arrow**, the `>` `<` `^` `v` mark a click on a cell edge cycles through. Its arrows' size and
   spacing scale with the thickness from the default up (an arrow is never smaller than at 5, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole arrows, half a space in from
   each end, so a run reads as one across a cell boundary.

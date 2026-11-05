@@ -699,6 +699,24 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
     }
   })
 
+  it('colors saved during the wait raise no warning that the pen keeps SudokuPad\'s own colors', async () => {
+    const { context, p } = await openPage(browser)
+    const warned = []
+    p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
+    try {
+      await startPuzzle(p)
+      await removePalette(p)
+      await p.addScriptTag({ content: script })
+      await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
+      await p.evaluate(() => Framework.setData('PenColor_colors', { 1: '#ff0000' }))
+      // The check is that nothing is logged when the script's wait runs out, so this one is a sleep.
+      await sleep(COLOR_TOOL_WAIT_MS + 2000)
+      assert.deepEqual(warned, [])
+    } finally {
+      await context.close()
+    }
+  })
+
   it('derived colors arriving after a thickness is set in the panel leave the thickness in place', async () => {
     const { context, p } = await openPage(browser)
     try {

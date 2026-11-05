@@ -205,11 +205,11 @@ function group (title, extra = []) {
       assert.equal(Math.abs(pattern.offset - pattern.array[0] / 2) < 1e-6, true, JSON.stringify(pattern))
     })
 
-    it('the page button shows the line of the page it turns to: chevrons from page 2, solid from page 3, dashes from page 1', async () => {
+    it('the page button shows the line of the page it turns to: arrows from page 2, solid from page 3, dashes from page 1', async () => {
       await openToolAndPageButton()
-      // The button shows the line of the page it turns to: from page 2 the chevrons of page 3, from page 3 page 1's solid line,
+      // The button shows the line of the page it turns to: from page 2 the arrows of page 3, from page 3 page 1's solid line,
       // from page 1 the dashes.
-      assert.equal(await settle(sample, 'chevrons'), 'chevrons')
+      assert.equal(await settle(sample, 'arrowLines'), 'arrowLines')
       await goToPage(PAGE_THREE)
       assert.equal(await settle(sample, 'solid'), 'solid')
       await goToPage(PAGE_ONE)

@@ -12,6 +12,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
@@ -19,6 +20,7 @@ import { drag, gridPoint, openPenTool, padValues, penEntries } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
+const { COLOR_TOOL_WAIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'EdgeMarks_marks']
 const PAGE_BUTTON = '.pen-tool-extras-page'
@@ -60,7 +62,7 @@ const CASES = [
   },
   // The arrows' own group is the only thing the script asks the renderer for that SudokuPad's pen does not.
   {
-    name: 'chevrons',
+    name: 'arrowLines',
     off: 'arrow lines',
     breaks: `const renderPart = Framework.app.svgRenderer.renderPart
       Framework.app.svgRenderer.renderPart = function (opts) { if (opts && opts.type === 'g') throw new TypeError('renderPart has no group'); return renderPart.apply(this, arguments) }`
@@ -82,6 +84,13 @@ const CASES = [
     breaks: `const insert = Element.prototype.insertAdjacentHTML
       Element.prototype.insertAdjacentHTML = function (where, html) { if (String(html).includes('pen-tool-extras-gear')) throw new TypeError('no gear'); return insert.apply(this, arguments) }`
   },
+  // The color tool never holds a palette, so the wait for it ends at its limit with a warning, not a turned-off feature (nothing in the script fails).
+  {
+    name: 'color tool never ready',
+    off: NOTHING_OFF,
+    warns: new RegExp(`^pen-tool-extras: the color tool was not ready after ${COLOR_TOOL_WAIT_MS / 1000} s, so the pen keeps SudokuPad's own colors$`),
+    breaks: 'Framework.app.tools.colour.palette = null'
+  },
   { name: 'nothing broken', off: NOTHING_OFF, breaks: '' }
 ]
 
@@ -95,7 +104,7 @@ const withBreak = (breaks) => `;Framework.getApp().then(() => { ${breaks} });\n$
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   for (const kase of CASES) {
     describe(kase.name, { concurrency: false }, () => {
-      let context, p, logged, errors
+      let context, p, logged, errors, warned
 
       const read = (fn, arg) => p.evaluate(fn, arg)
       // A click 2 px inside the top edge of cell (2, 2): an edge click, which SudokuPad stores as its X.
@@ -116,13 +125,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
       before(async () => {
         logged = []
+        warned = []
         ;({ context, p, errors } = await openPage(browser, {
-          seed: (page, errs) => captureConsoleErrors(page, errs, (text) => {
-            if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(text)) {
-              logged.push(text)
-              return true
-            }
-          })
+          seed: (page, errs) => {
+            page.on('console', (m) => {
+              if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
+            })
+            captureConsoleErrors(page, errs, (text) => {
+              if (/^pen-tool-extras: .* turned off because SudokuPad changed:/.test(text)) {
+                logged.push(text)
+                return true
+              }
+            })
+          }
         }))
         const source = withBreak(kase.breaks)
         await startPuzzle(p)
@@ -141,12 +156,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const triggerFailure = async () => {
         if (kase.name === 'panel row') assert.equal(await settle(async () => logged.length, 1, 5000, Infinity), 1, 'the panel check ended')
         if (kase.name === 'colors') assert.equal(await settle(async () => logged.length, 1, 20000, Infinity), 1, 'the wait for the color tool ended')
-        if (kase.name === 'chevrons') {
+        if (kase.warns) assert.equal(await settle(async () => warned.length, 1, 20000, Infinity), 1, 'the wait for the color tool ended')
+        if (kase.name === 'arrowLines') {
           await p.locator(PAGE_BUTTON).click()
           await p.locator(PAGE_BUTTON).click()
           await p.locator('.tool-pen button[data-key="3"]').click()
           await drag(p, [[2.5, 2.5], [2.5, 4.5]])
-          assert.equal(await read(() => document.querySelectorAll('#cell-pen [data-chevron-part]').length), 0, 'no arrow group')
+          assert.equal(await read(() => document.querySelectorAll('#cell-pen [data-arrow-line-part]').length), 0, 'no arrow group')
           assert.ok(await read(() => document.querySelectorAll('#cell-pen path.cell-pen').length) > 0, 'SudokuPad\'s plain line is drawn')
           await p.locator(PAGE_BUTTON).click()
         }
@@ -216,6 +232,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       it('the failure is logged once with the script\'s name, and nothing else throws', async () => {
         assert.equal(logged.length, kase.off === NOTHING_OFF ? 0 : 1, logged.join('\n'))
         assert.deepEqual(errors, [])
+      })
+
+      it('the script\'s own warning is logged once when the case calls for one, and not otherwise', () => {
+        if (kase.warns) {
+          assert.equal(warned.length, 1, warned.join('\n'))
+          assert.match(warned[0], kase.warns)
+        } else assert.deepEqual(warned, [])
       })
     })
   }
