@@ -12,8 +12,8 @@ import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, MODES, openPage, startPuzzle } from './page.mjs'
-import { openSettings } from './settings.mjs'
-import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
+import { closeDialogWith, openScriptDialog } from './settings.mjs'
+import { clickUntil, POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
 /* global Replay */
 
@@ -48,6 +48,7 @@ async function watch (read) {
 }
 
 const BUTTON = '#control-colorbydigit'
+const EDITOR = '#color-by-digit-editor'
 const BOX = '#control-colorbydigit [data-role="auto"]'
 const AUTO_KEY = 'ColorByDigit_auto'
 // Framework.setData prefixes the script's key with the site's own prefix.
@@ -109,32 +110,14 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   const chooseProfile = (index) => p.click(`#color-by-digit-editor [data-act=activate][data-index="${index}"]`)
   const boxChecked = () => boxCheckedOn(p)
   const dialogBox = () => p.locator('#color-by-digit-editor input[data-role="auto-draft"]')
-  const editor = () => p.locator('#color-by-digit-editor')
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  const openEditor = async () => {
-    await openSettings(p)
-    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Color by digit' }).first().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await dialogButton(text).click()
-    await editor().waitFor({ state: 'detached' })
-  }
-  // A click on the button proper, away from the box in its corner. SudokuPad throttles refreshControls,
-  // which binds a new button's click handler, so a click in the first moments is dead: clicks again
-  // until the board shows `expected` colored cells.
-  const pressUntil = async (expected) => {
-    const deadline = Date.now() + SETTLE_MS
-    let value
-    do {
-      const box = await p.locator(BUTTON).boundingBox()
-      await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7)
-      value = await settle(coloredCount, expected, 300)
-    } while (value !== expected && Date.now() < deadline)
-    return value
+  const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
+  // A click on the button proper, away from the box in its corner.
+  const pressButton = async () => {
+    const box = await p.locator(BUTTON).boundingBox()
+    await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7)
   }
 
   before(async () => {
@@ -157,7 +140,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 
   it('a click on the button colors the grid and leaves the box unticked', async () => {
-    assert.equal(await pressUntil(GIVEN_COUNT + 2), GIVEN_COUNT + 2)
+    assert.equal(await clickUntil(pressButton, coloredCount, GIVEN_COUNT + 2, SETTLE_MS), GIVEN_COUNT + 2)
     assert.equal(await boxChecked(), 'false')
     assert.equal(await getAuto(), null)
     await undo()
@@ -315,7 +298,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     await openEditor()
     assert.equal(await dialogBox().isChecked(), true)
     await dialogBox().uncheck()
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
     assert.equal(await boxChecked(), 'true')
     assert.equal(await getAuto(), true)
   })
@@ -324,7 +307,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     const colors = await allColors()
     await openEditor()
     await dialogBox().uncheck()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(boxChecked, 'false'), 'false')
     assert.equal(await getAuto(), false)
     assert.deepEqual(await watch(allColors), [colors])
@@ -334,13 +317,13 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     await select(0, 2); await p.keyboard.press('4')
     assert.equal(await settle(() => valueAt(0, 2), '4'), '4')
     assert.deepEqual(await watch(() => colorsAt(0, 2)), [[]])
-    assert.equal(await pressUntil(GIVEN_COUNT + 1), GIVEN_COUNT + 1)
+    assert.equal(await clickUntil(pressButton, coloredCount, GIVEN_COUNT + 1, SETTLE_MS), GIVEN_COUNT + 1)
   })
 
   it('with auto mode off, Save with changed groups colors nothing', async () => {
     await openEditor()
     await chooseProfile(1)
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(getGroups, LOW_FIVE_HIGH), LOW_FIVE_HIGH)
     const colors = JSON.stringify((await cellsState()).map((x) => x.colours))
     assert.deepEqual(await watch(async () => JSON.stringify((await cellsState()).map((x) => x.colours))), [colors])
@@ -350,7 +333,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     await undo() // the button press, so the givens carry the colors of the groups at the time of the press
     await openEditor()
     await dialogBox().check()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(boxChecked, 'true'), 'true')
     assert.equal(await settle(getAuto, true), true)
     // Every given is colored again, and r1c1 holds 5, which is key 5 in Low/5/High.
@@ -363,7 +346,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     const before = JSON.stringify((await cellsState()).map((x) => x.colours))
     await openEditor()
     await chooseProfile(0)
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     const oddEven = (x) => {
       const digit = x.given || x.value
       return digit ? [Number(digit) % 2 ? '1' : '2'] : []
@@ -383,7 +366,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     await openEditor()
     await chooseProfile(1)
     await dialogBox().check()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(boxChecked, 'true'), 'true')
     assert.deepEqual(await settle(() => colorsAt(0, 6), ['9']), ['9'])
   })

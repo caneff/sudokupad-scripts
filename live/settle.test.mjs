@@ -1,8 +1,8 @@
-// The shared `settle` and `stable` of the live checks, run against a fake read so no browser is needed. Each bound on elapsed time has
+// The shared `settle`, `stable` and `clickUntil` of the live checks, run against a fake read so no browser is needed. Each bound on elapsed time has
 // room for a loaded box: the lower one is the rule, the upper one only tells a stop at the rule from a wait for the backstop.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { FLOOR_MS, STABLE_MS, settle, stable } from './settle.mjs'
+import { CLICK_TAKES_MS, FLOOR_MS, STABLE_MS, clickUntil, settle, stable } from './settle.mjs'
 
 const timed = async (fn) => { const t = Date.now(); const value = await fn(); return { value, ms: Date.now() - t } }
 // A read whose value is `steps[i].value` from `steps[i].at` milliseconds after the first call.
@@ -93,5 +93,41 @@ describe('stable', () => {
   it('throws, naming the last value, when the value keeps moving until the timeout', async () => {
     let n = 0
     await assert.rejects(() => stable(async () => ({ n: n++ }), 700), /did not stop changing in 700 ms; last \{"n":\d+\}/)
+  })
+})
+
+describe('clickUntil', () => {
+  it('clicks once when the first click takes', async () => {
+    let clicks = 0
+    let value = 0
+    const click = async () => { clicks++; value = 1 }
+    assert.equal(await clickUntil(click, async () => value, 1, 5000), 1)
+    assert.equal(clicks, 1)
+  })
+
+  it('clicks again until a click takes: the first two are dead', async () => {
+    let clicks = 0
+    const click = async () => { clicks++ }
+    assert.equal(await clickUntil(click, async () => (clicks >= 3 ? 'on' : 'off'), 'on', 5000), 'on')
+    assert.equal(clicks, 3)
+  })
+
+  it('compares as JSON, so a fresh array each read matches', async () => {
+    assert.deepEqual(await clickUntil(async () => {}, async () => [1, 2], [1, 2], 5000), [1, 2])
+  })
+
+  it('stops clicking at the deadline and returns the last reading when no click ever takes', async () => {
+    let clicks = 0
+    const deadlineMs = 2 * CLICK_TAKES_MS
+    const { value, ms } = await timed(() => clickUntil(async () => { clicks++ }, async () => 'off', 'on', deadlineMs))
+    assert.equal(value, 'off')
+    assert.equal(clicks >= 2, true, `${clicks} clicks`)
+    assert.equal(ms >= deadlineMs && ms < deadlineMs + 5000, true, `took ${ms} ms`)
+  })
+
+  it('takes the deadline from its parameter: a shorter one ends sooner', async () => {
+    const { ms: short } = await timed(() => clickUntil(async () => {}, async () => 'off', 'on', 100))
+    const { ms: long } = await timed(() => clickUntil(async () => {}, async () => 'off', 'on', 3 * CLICK_TAKES_MS))
+    assert.equal(short < long, true, `short ${short} ms, long ${long} ms`)
   })
 })

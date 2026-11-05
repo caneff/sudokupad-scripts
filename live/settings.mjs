@@ -20,18 +20,23 @@ export async function openSettings (p) {
   return open
 }
 
-// Opens Pen Tool Extras' settings dialog the way a user finds it (its entry in the Experimental group) and waits for its editor.
-export async function openExtrasEditor (p) {
+// Opens a script's settings dialog the way a user finds it (its entry, named `entryText`, in the Experimental group) and waits for
+// its editor, the element matching `editorSel`.
+export async function openScriptDialog (p, entryText, editorSel) {
   await openSettings(p)
-  await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-  await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+  await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: entryText }).first().click()
+  await p.locator(editorSel).waitFor({ state: 'visible' })
 }
 
-// Presses Save or Cancel in Pen Tool Extras' dialog and waits for the dialog to go.
-export async function closeExtrasEditorWith (p, text) {
+// Presses the dialog button named `text` (Save or Cancel) and waits for the editor matching `editorSel` to go.
+export async function closeDialogWith (p, text, editorSel) {
   await p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first().click()
-  await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
+  await p.locator(editorSel).waitFor({ state: 'detached' })
 }
+
+const EXTRAS_EDITOR = '#pen-tool-extras-editor'
+export const openExtrasEditor = (p) => openScriptDialog(p, 'Pen tool extras', EXTRAS_EDITOR)
+export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRAS_EDITOR)
 
 // The opacity each element matching `selector` shows at, in document order: its own times every ancestor's, since
 // pen-tool-extras puts the slider's value on the pen layer and leaves each stroke solid. Rounded to 3 places.

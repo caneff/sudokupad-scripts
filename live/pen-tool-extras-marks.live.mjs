@@ -143,7 +143,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
   const openEditor = () => openExtrasEditor(p)
-  const closeWith = (text) => closeExtrasEditorWith(p, text)
   const box = (mark) => editor().locator(`input[data-mark="${mark}"]`)
 
   const boot = async () => {
@@ -577,7 +576,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await editor().locator(`label:has(> input[data-mark="${mark}"])`).textContent()).trim(), '', `${mark} has no word`)
       assert.equal((await p.getByRole('checkbox', { name: names[mark] }).count()), 1, `${mark} is found by its name`)
     }
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('cell marks and drawn lines still work', async () => {
@@ -615,13 +614,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(), null)
     await openEditor()
     for (const mark of MARK_BOXES) assert.equal(await box(mark).isChecked(), true, mark)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('Cancel saves nothing and changes nothing', async () => {
     await openEditor()
     await box('directions').uncheck()
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await saved(), null)
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'right')
@@ -632,7 +631,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('unticking Directions skips both directions and the boxes survive a reload', async () => {
     await openEditor()
     await box('directions').uncheck()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await saved(), { ...ALL_TICKED, directions: false })
     await reload()
     assert.deepEqual(await saved(), { ...ALL_TICKED, directions: false })
@@ -640,7 +639,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await box('x').isChecked(), true)
     assert.equal(await box('directions').isChecked(), false)
     assert.equal(await box('dot').isChecked(), true)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     for (const value of ['3', 'j', null]) {
       await clickEdge(3, 3, 'right')
       assert.deepEqual(await settle(() => penValues(3, 3), value === null ? [] : [value]), value === null ? [] : [value])
@@ -650,19 +649,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('a mark whose type is unticked stays until clicked, then moves on', async () => {
     await openEditor()
     await box('directions').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'right')
     assert.deepEqual(await settle(() => penValues(3, 3), ['j']), ['j'])
     await openEditor()
     await box('dot').uncheck()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await penValues(3, 3), ['j'])
     await clickEdge(3, 3, 'right')
     assert.deepEqual(await settle(() => penValues(3, 3), ['h']), ['h'])
     await openEditor()
     await box('dot').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
   })
 
@@ -670,7 +669,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openEditor()
     await box('cornerX').uncheck()
     await box('cornerDot').uncheck()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     // Cleared so that the click under test starts from an empty grid.
     await clearMarks()
     await clickCorner(3, 3, 'left', 0, 0.01)
@@ -681,7 +680,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
     await openEditor()
     await box('cornerDot').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
     await clickCorner(3, 3)
     assert.deepEqual(await settle(() => penValues(2, 2), ['x']), ['x'], 'only the circle is ticked')
@@ -689,19 +688,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(() => penValues(2, 2), []), [])
     await openEditor()
     await box('cornerX').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
   })
 
   it('with nothing ticked an edge click does nothing, and cell marks and existing marks are unaffected', async () => {
     await openEditor()
     await box('directions').check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clickEdge(3, 3, 'right')
     assert.deepEqual(await settle(() => penValues(3, 3), ['3']), ['3'])
     await openEditor()
     for (const mark of MARK_BOXES) await box(mark).uncheck()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     const undoable = await read(() => Framework.app.puzzle.undoStack.length)
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'bottom')
@@ -713,7 +712,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(() => penValues(...CELL_MARK), ['5']), ['5'])
     await openEditor()
     for (const mark of MARK_BOXES) await box(mark).check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await clearMarks()
   })
 
@@ -733,7 +732,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // the dialog shows the defaults too, so Save cannot store the corrupt value
       await openEditor()
       for (const mark of MARK_BOXES) assert.equal(await box(mark).isChecked(), true, `${bad}: ${mark}`)
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     }
     assert.deepEqual(errors.slice(errorsBefore), [])
   })
@@ -868,12 +867,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await editor().locator('input[data-setting="opacity"]').inputValue(), '80')
       assert.equal(await savedOpacity(), 30, 'nothing is saved before Save')
       assert.equal(await settle(sameAt('0.3'), true), true)
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await savedOpacity(), 30)
       assert.equal(await settle(sameAt('0.3'), true), true)
       await openEditor()
       await dialogButton('Restore defaults').click()
-      await closeWith('Save')
+      await closeExtrasEditorWith(p, 'Save')
       assert.equal(await savedOpacity(), null)
       assert.equal(await settle(() => slider().inputValue(), '80'), '80')
       assert.equal(await settle(sameAt('0.8'), true), true)
@@ -947,7 +946,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.click(x, y)
       await editor().waitFor({ state: 'visible' })
       assert.equal(await anyMark(), false)
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     })
   })
 
