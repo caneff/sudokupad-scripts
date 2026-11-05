@@ -9,11 +9,10 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, PUZZLE_URL, startPuzzle } from './page.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
 import { settle } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../digit-color.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'DigitColor_colors'
@@ -53,7 +52,6 @@ const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 5: 'rgb(0, 11
 const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
 const EIGHT = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
 
-const START = /Start Puzzle|Continue|Resume/i
 const STYLE = '#digit-color-style'
 
 let browser
@@ -66,7 +64,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const editor = () => p.locator('#digit-color-editor')
   const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-  const startButton = () => p.getByRole('button', { name: START }).first()
 
   // One computed style property of the elements that show `digit`, per place on the board.
   // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
@@ -166,11 +163,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
 
   const boot = async () => {
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    await startButton().waitFor({ state: 'visible' })
-    await startButton().click()
-    await startButton().waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator(STYLE).waitFor({ state: 'attached' })
   }
@@ -187,14 +180,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const pick = (digit, hex) => editor().locator(`input[data-digit="${digit}"]`).fill(hex)
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
+    ;({ context, p, errors } = await openPage(browser))
     // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
     decoder = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
     await boot()
   })
   after(async () => { await context.close() })
@@ -486,7 +474,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await read(async (id) => {
         const { parsePuzzleData, fetchPuzzle } = window.pageLoader
         await Framework.app.loadCTCPuzzle(await parsePuzzleData(await fetchPuzzle(id)))
-      }, url.replace(/^https?:\/\/[^/]+\//, ''))
+      }, PUZZLE_URL.replace(/^https?:\/\/[^/]+\//, ''))
       // The old givens are gone once the new board is drawn.
       await p.waitForFunction(() => document.querySelectorAll('#cell-givens text:not([data-old-board])').length > 0)
       await enter(0, 3, '4')

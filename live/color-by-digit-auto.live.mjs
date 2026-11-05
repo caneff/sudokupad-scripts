@@ -11,13 +11,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { gotoPuzzle, MODES, openPage, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
 import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
 /* global Replay */
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
 // The puzzle's givens, row by row, 0 for empty; the same board as color-by-digit.live.mjs.
@@ -48,7 +47,6 @@ async function watch (read) {
   return seen.map((s) => JSON.parse(s))
 }
 
-const START = /Start Puzzle|Continue|Resume/i
 const BUTTON = '#control-colorbydigit'
 const BOX = '#control-colorbydigit [data-role="auto"]'
 const AUTO_KEY = 'ColorByDigit_auto'
@@ -62,47 +60,33 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// The injection times a check can ask for: a script that waits on SudokuPad's own startup behaves differently at each.
-const MODES = ['document-idle', 'before-start', 'after-start']
-
-// Runs the page through load, the script's injection time for `mode` (document-idle is already set up by `openSession`), and Start Puzzle.
-const bootPage = async (p, mode = 'after-start') => {
-  await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-  const startButton = () => p.getByRole('button', { name: START }).first()
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  await startButton().waitFor({ state: 'visible' })
-  const inject = async () => {
-    await p.addScriptTag({ content: script })
-    await p.locator(BUTTON).waitFor({ state: 'attached' })
-  }
-  if (mode === 'before-start') await inject()
-  await startButton().click()
-  await startButton().waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-  if (mode === 'after-start') await inject()
+// Runs the loaded page through the script's injection time for `mode` (document-idle is already set up by `openSession`) and Start Puzzle.
+const startInjected = async (p, mode) => {
+  await startPuzzle(p, {
+    injection: { mode, code: script },
+    beforeStart: mode === 'before-start' ? () => p.locator(BUTTON).waitFor({ state: 'attached' }) : undefined
+  })
   await p.locator(BUTTON).waitFor({ state: 'visible' })
+}
+
+// Loads the page again and runs it through `startInjected`.
+const bootPage = async (p, mode) => {
+  await gotoPuzzle(p)
+  await startInjected(p, mode)
 }
 
 // A page injected at `mode`. `seedAuto` writes the saved auto mode before the page's own scripts run.
 const openSession = async (seedAuto, contextOptions = {}, mode = 'after-start') => {
-  const context = await browser.newContext({ viewport: { width: 1200, height: 900 }, ...contextOptions })
-  const errors = []
-  const p = await context.newPage()
-  p.on('pageerror', (e) => errors.push(String(e)))
-  await routeSudokuPad(p)
-  await p.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
-  if (seedAuto) await p.addInitScript(([key]) => window.localStorage.setItem(key, 'true'), [AUTO_STORAGE_KEY])
-  if (mode === 'document-idle') {
-    await p.addInitScript((src) => {
-      document.addEventListener('DOMContentLoaded', () => {
-        const s = document.createElement('script')
-        s.textContent = src
-        document.documentElement.appendChild(s)
-      })
-    }, script)
-  }
-  await bootPage(p, mode)
-  return { context, p, errors }
+  const opened = await openPage(browser, {
+    contextOptions,
+    injection: { mode, code: script },
+    seed: async (page) => {
+      await page.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
+      if (seedAuto) await page.addInitScript(([key]) => window.localStorage.setItem(key, 'true'), [AUTO_STORAGE_KEY])
+    }
+  })
+  await startInjected(opened.p, mode)
+  return opened
 }
 
 describe('auto mode, injected after Start Puzzle', { concurrency: false }, () => {

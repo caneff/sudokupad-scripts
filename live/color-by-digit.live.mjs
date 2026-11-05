@@ -10,11 +10,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
 import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by
@@ -61,7 +60,6 @@ async function watch (read) {
   return seen.map((s) => JSON.parse(s))
 }
 
-const START = /Start Puzzle|Continue|Resume/i
 const BUTTON = '#control-colorbydigit'
 
 let browser
@@ -84,7 +82,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const getSetting = () => read(() => Framework.getSetting('multicolour'))
   const editor = () => p.locator('#color-by-digit-editor')
   const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-  const startButton = () => p.getByRole('button', { name: START }).first()
 
   // What the board should show after a press, given each digit's key.
   const expectedColours = (keyOfDigit) => (x) => {
@@ -95,21 +92,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const lowFiveHigh = expectedColours((d) => (Number(d) < 5 ? '1' : d === '5' ? '5' : '9'))
   const wrongCount = async (expected) => (await cellsState()).filter((x) => JSON.stringify(x.colours) !== JSON.stringify(expected(x))).length
 
-  const inject = async () => {
-    await p.addScriptTag({ content: script })
-    await p.locator(BUTTON).waitFor({ state: 'attached' })
-  }
-  const start = async () => {
-    await startButton().click()
-    await startButton().waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
-  }
-  // Waits for the puzzle, then runs the page through Start Puzzle and injects the script.
+  // Runs the loaded page through Start Puzzle and injects the script.
   const boot = async () => {
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    await startButton().waitFor({ state: 'visible' })
-    await start()
-    await inject()
+    await startPuzzle(p, { injection: { mode: 'after-start', code: script } })
+    await p.locator(BUTTON).waitFor({ state: 'attached' })
   }
   const press = () => p.click(BUTTON)
   // SudokuPad throttles refreshControls, which binds a new button's click handler,
@@ -143,13 +129,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser, {
+      seed: (page) => page.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
+    }))
     await boot()
   })
   after(async () => { await context.close() })

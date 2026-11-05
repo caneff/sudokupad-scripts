@@ -11,11 +11,10 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
-import { closeExtrasEditorWith, drawnWidth, headerVersion, openExtrasEditor, openSettings } from './settings.mjs'
+import { drawnWidth, openPage, startPuzzle } from './page.mjs'
+import { closeExtrasEditorWith, headerVersion, openExtrasEditor, openSettings } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const { COLOR_TOOL_WAIT_MS, HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
@@ -47,7 +46,6 @@ const CUSTOM_CELL = { css: 'rgb(10, 20, 200)', pen: '#05008c' }
 const HOLD_QUIET_MS = HOLD_TO_EDIT_MS + 500
 const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 
-const START = /Start Puzzle|Continue|Resume/i
 const STYLE = '#pen-tool-extras-style'
 
 // Takes SudokuPad's color tool palette away, keeping it for `restorePalette`, so a script injected now waits for the tool.
@@ -75,7 +73,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const editor = () => p.locator('#pen-tool-extras-editor')
   const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-  const startButton = () => p.getByRole('button', { name: START }).first()
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
 
   // The computed stroke of every drawn stroke of pen color `n`, in drawing order.
@@ -127,11 +124,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const boot = async () => {
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    await startButton().waitFor({ state: 'visible' })
-    await startButton().click()
-    await startButton().waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator(STYLE).waitFor({ state: 'attached' })
     // The pen tool is off until its own setting turns it on.
@@ -144,12 +137,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const pick = (n, hex) => editor().locator(`input[data-pen="${n}"]`).fill(hex)
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser))
     await boot()
   })
   after(async () => { await context.close() })
@@ -740,16 +728,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
 describe('the color tool never becomes ready', { concurrency: false }, () => {
   it('after the wait, the pen keeps SudokuPad\'s own colors and the dialog still opens', async () => {
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    const { context, p, errors } = await openPage(browser)
     try {
-      const p = await context.newPage()
-      const errors = []
-      p.on('pageerror', (e) => errors.push(String(e)))
-      await routeSudokuPad(p)
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-      await p.getByRole('button', { name: START }).first().click()
-      await p.locator('#control-undo').waitFor({ state: 'visible' })
+      await startPuzzle(p)
       await removePalette(p)
       await p.addScriptTag({ content: script })
       // Nothing may happen for the script's whole wait, so this one is a sleep: the check is
@@ -768,14 +749,9 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
   })
 
   it('derived colors arriving after a thickness is set in the panel leave the thickness in place', async () => {
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    const { context, p } = await openPage(browser)
     try {
-      const p = await context.newPage()
-      await routeSudokuPad(p)
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-      await p.getByRole('button', { name: START }).first().click()
-      await p.locator('#control-undo').waitFor({ state: 'visible' })
+      await startPuzzle(p)
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await p.evaluate(() => Framework.setSetting('toolpen', true))
@@ -799,14 +775,9 @@ describe('the color tool never becomes ready', { concurrency: false }, () => {
   })
 
   it('a save made while the script waits for the color tool outranks the derived colors', async () => {
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    const { context, p } = await openPage(browser)
     try {
-      const p = await context.newPage()
-      await routeSudokuPad(p)
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-      await p.getByRole('button', { name: START }).first().click()
-      await p.locator('#control-undo').waitFor({ state: 'visible' })
+      await startPuzzle(p)
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await openExtrasEditor(p)

@@ -11,11 +11,10 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const noTabLetters = readFileSync(new URL('../no-tab-letters.user.js', import.meta.url), 'utf8')
 
@@ -24,21 +23,10 @@ const COLORS_KEY = 'PenColor_colors'
 const DASH_KEY = 'PenColor_dash'
 const THICKNESS_KEY = 'PenColor_thickness'
 const LINE_STYLES_KEY = 'PenColor_linestyles'
-const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_ONE = '123456789'
 const PAGE_TWO = 'abcdefghi'
 const PAGE_THREE = 'jlnprtvxz'
-
-// Waits for the puzzle, starts it, and returns once the controls exist.
-async function startPuzzle (page) {
-  await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = page.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await page.locator('#control-undo').waitFor({ state: 'visible' })
-}
 
 // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is
 // clicked again until the tool's buttons show.
@@ -124,12 +112,7 @@ function group (title, extra = []) {
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
     before(async () => {
-      context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-      errors = []
-      p = await context.newPage()
-      p.on('pageerror', (e) => errors.push(String(e)))
-      await routeSudokuPad(p)
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+      ;({ context, p, errors } = await openPage(browser))
       await boot()
       await read((keys) => keys.forEach((k) => Framework.removeData(k)), [PEN_KEY, COLORS_KEY, LINE_STYLES_KEY, 'ToolPen_color', 'ToolLetter_letterMode'])
       await press(1)
@@ -492,11 +475,8 @@ function group (title, extra = []) {
     })
 
     it('with the script gone, stock SudokuPad opens the pen tool on the saved digit with no error', async () => {
-      const bare = await context.newPage()
-      const bareErrors = []
-      bare.on('pageerror', (e) => bareErrors.push(String(e)))
-      await routeSudokuPad(bare)
-      await bare.goto(url, { waitUntil: 'load', timeout: 60000 })
+      const { p: bare, errors: bareErrors } = await newPage(context)
+      await gotoPuzzle(bare)
       await startPuzzle(bare)
       await bare.evaluate(() => Framework.setSetting('toolpen', true))
       await bare.locator('#control-pen').waitFor({ state: 'visible' })
@@ -529,12 +509,7 @@ group('injected after Start Puzzle, with No Tab Letters installed too', [noTabLe
 describe('injected after the pen tool is already on', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser))
     await startPuzzle(p)
     await p.evaluate(() => { Framework.setData('ToolPen_color', '3'); Framework.setSetting('toolpen', true) })
     await p.locator('#control-pen').waitFor({ state: 'visible' })

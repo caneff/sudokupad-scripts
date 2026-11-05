@@ -10,12 +10,10 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../no-tab-letters.user.js', import.meta.url), 'utf8')
 
-const START = /Start Puzzle|Continue|Resume/i
 const DIGITS = '1234567890'
 const LETTERS = 'ABCDEFGHIO'
 const MODE_KEY = 'ToolLetter_letterMode'
@@ -25,23 +23,6 @@ const WARNING = /no-tab-letters/
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
-
-// Loads the puzzle, running `beforeStart` while the Start Puzzle button still shows, and clicks it.
-async function openPuzzle (p, { beforeStart = async () => {} } = {}) {
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = p.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await beforeStart()
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
-}
-
-async function newPage (context) {
-  const p = await context.newPage()
-  await routeSudokuPad(p)
-  return p
-}
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -62,12 +43,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await newPage(context)
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-    await openPuzzle(p)
+    ;({ context, p, errors } = await openPage(browser))
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     // Enable Letter Tool, switched on after the page and the script are in.
     await p.evaluate(() => Framework.setSetting('toolletter', true))
@@ -127,14 +104,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
 describe('the Tab binding is not found', () => {
   it('warns in the console and changes nothing', async () => {
-    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
+    const warnings = []
+    let warned
+    const { context, p } = await openPage(browser, {
+      seed: (page) => {
+        page.on('console', (m) => { if (m.type() === 'warning') warnings.push(m.text()) })
+        warned = page.waitForEvent('console', { predicate: (m) => WARNING.test(m.text()), timeout: 30000 })
+      }
+    })
     try {
-      const p = await newPage(context)
-      const warnings = []
-      p.on('console', (m) => { if (m.type() === 'warning') warnings.push(m.text()) })
-      const warned = p.waitForEvent('console', { predicate: (m) => WARNING.test(m.text()), timeout: 30000 })
-      await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-      await openPuzzle(p, {
+      await startPuzzle(p, {
         beforeStart: async () => {
           // A SudokuPad whose letter tool binds no Tab.
           await p.evaluate(() => { ToolLetter.tool.keyHandlers = ToolLetter.tool.keyHandlers.filter((e) => e.key !== 'Tab') })

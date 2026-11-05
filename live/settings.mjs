@@ -33,13 +33,6 @@ export async function closeExtrasEditorWith (p, text) {
   await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
 }
 
-// The scale of a computed `transform` (a `matrix(s, 0, 0, s, 0, 0)` or `none`): pen-tool-extras grows edge and corner marks
-// by a CSS scale, so a mark's width on screen is its stroke width times this.
-export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
-
-// The width a stroke draws at on screen, from its computed `strokeWidth` and `transform`, rounded to 4 places.
-export const drawnWidth = ({ strokeWidth, transform }) => Math.round(parseFloat(strokeWidth) * scaleOf(transform) * 1e4) / 1e4
-
 // The opacity each element matching `selector` shows at, in document order: its own times every ancestor's, since
 // pen-tool-extras puts the slider's value on the pen layer and leaves each stroke solid. Rounded to 3 places.
 export const effectiveOpacities = (page, selector) => page.evaluate((sel) => [...document.querySelectorAll(sel)].map((e) => {
@@ -47,7 +40,3 @@ export const effectiveOpacities = (page, selector) => page.evaluate((sel) => [..
   for (let el = e; el && el.nodeType === 1; el = el.parentElement) product *= parseFloat(window.getComputedStyle(el).opacity)
   return Math.round(product * 1000) / 1000
 }), selector)
-
-// Empties the puzzle's replay and undo stack. Every earlier check in a file grows the replay, and `loadReplay` plays one back
-// at about 13 ms an action, so a check that loads a replay restarts first and holds only its own actions.
-export const restartPuzzle = (page) => page.evaluate(() => Framework.app.restartPuzzle())

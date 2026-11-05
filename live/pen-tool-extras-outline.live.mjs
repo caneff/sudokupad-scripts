@@ -10,17 +10,15 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { openPage, startPuzzle } from './page.mjs'
 import { openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const OUTLINE_KEY = 'PenColor_outline'
 const OPACITY_KEY = 'PenColor_opacity'
 const THICKNESS_KEY = 'PenColor_thickness'
-const START = /Start Puzzle|Continue|Resume/i
 // A line is 5 wide, so its edge is 2.5 units from its middle. The outline is 2 units wide by default (up to 8): 4 units out is outline at the default,
 // 5.5 is past the outline of width 1 (3.5 out, plus its soft edge), 7 is outline only from a width of 5 up, and 14 is clear of every width (the widest, 8, reaches 10.5 and fades out over about 3 units more).
 const OUTLINE_UNITS = 4
@@ -110,12 +108,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const boot = async () => {
-    await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-    const start = p.getByRole('button', { name: START }).first()
-    await start.waitFor({ state: 'visible' })
-    await start.click()
-    await start.waitFor({ state: 'hidden' })
-    await p.locator('#control-undo').waitFor({ state: 'visible' })
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
     await read(() => Framework.setSetting('toolpen', true))
@@ -129,13 +122,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const setWidth = (value) => widthSlider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
+    ;({ context, p, errors } = await openPage(browser))
     reader = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
     await boot()
     await clearSaved()
     await draw()

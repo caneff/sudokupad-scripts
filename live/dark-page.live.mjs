@@ -16,11 +16,10 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
+import { gotoPuzzle, openPage, START, startPuzzle } from './page.mjs'
 import { headerVersion, openSettings } from './settings.mjs'
 import { POLL_MS, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8')
 const { RECT_ID, STYLE_ID, SOLVER_REACH, DATA_KEY } = createRequire(import.meta.url)('../dark-page.user.js')
 
@@ -44,7 +43,6 @@ const OWN_PURPLE = 'rgb(106, 27, 154)'
 const PICKER = 'input[type=color]'
 // SudokuPad's red accent (`--main-color` of `.setting-uitheme-red`), read with no script installed.
 const ACCENT_RED = 'rgb(212, 17, 89)'
-const START = /Start Puzzle|Continue|Resume/i
 // The most white the rectangle may keep past the drawing on a side that has text on it, in page
 // pixels: the text's box is taller than its glyphs. The whole svg box leaves 20 or more.
 const TIGHT_SLACK_PX = 12
@@ -88,16 +86,6 @@ const OTHER_BOARDS = {
   'a 16x16 board with outside text': board({ size: 16, boxHeight: 4, boxWidth: 4, overlays: outsideText(16) }),
   'a 6x6 board with an arrow outside the grid': board({ size: 6, boxHeight: 2, boxWidth: 3, arrows: [{ wayPoints: [[-0.6, 1], [-0.6, 3]], headLength: 0.3, thickness: 2, color: '#000000' }] }),
   'an 11x11 board whose outer ring of cells is outside every region': board({ size: 11, boxHeight: 3, boxWidth: 3, offset: 1 })
-}
-
-// Loads the puzzle and clicks Start Puzzle.
-async function openPuzzle (p) {
-  await p.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = p.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await p.locator('#control-undo').waitFor({ state: 'visible' })
 }
 
 // Enters digits, corner marks, centre marks and colored cells, then deselects, so the board holds
@@ -265,18 +253,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const boot = async () => {
-    await openPuzzle(p)
+    await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator(STYLE).waitFor({ state: 'attached' })
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser))
     await boot()
     await p.addStyleTag({ content: HIDE_PAGE_UI })
   })
@@ -520,30 +503,30 @@ describe('the page color dialog', { concurrency: false }, () => {
     await p.locator(`.dialog ${PICKER}`).waitFor({ state: 'visible' })
   }
   const dialogButton = (name) => p.locator('.dialog').getByRole('button', { name, exact: true })
-  const load = async () => {
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
-    await openPuzzle(p)
+  const started = async () => {
+    await startPuzzle(p)
     await p.locator(STYLE).waitFor({ state: 'attached' })
+  }
+  const load = async () => {
+    await gotoPuzzle(p)
+    await started()
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    await routeSudokuPad(p)
-    // Records the script's CSS the moment its style first exists, before any frame paints with it.
-    // The style stays disabled until a board is on the page, so only its text says which color the
-    // first paint will use.
-    await p.addInitScript(([src, styleId]) => {
-      document.addEventListener('DOMContentLoaded', () => {
-        const s = document.createElement('script')
-        s.textContent = src
-        document.documentElement.appendChild(s)
-        window.__firstCss = document.getElementById(styleId).textContent
-      })
-    }, [script, STYLE_ID])
-    await load()
+    ;({ context, p, errors } = await openPage(browser, {
+      // Records the script's CSS the moment its style first exists, before any frame paints with it.
+      // The style stays disabled until a board is on the page, so only its text says which color the
+      // first paint will use.
+      seed: (page) => page.addInitScript(([src, styleId]) => {
+        document.addEventListener('DOMContentLoaded', () => {
+          const s = document.createElement('script')
+          s.textContent = src
+          document.documentElement.appendChild(s)
+          window.__firstCss = document.getElementById(styleId).textContent
+        })
+      }, [script, STYLE_ID])
+    }))
+    await started()
   })
   after(async () => { await context.close() })
 

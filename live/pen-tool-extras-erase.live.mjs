@@ -12,27 +12,16 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { routeSudokuPad } from './cache.mjs'
-import { closeExtrasEditorWith, openExtrasEditor, restartPuzzle } from './settings.mjs'
+import { openPage, restartPuzzle, startPuzzle } from './page.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
-const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 const MIDDLE_ERASE_KEY = 'PenColor_middleerase'
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', MIDDLE_ERASE_KEY]
-const START = /Start Puzzle|Continue|Resume/i
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGES = { 1: '123456789', 2: 'abcdefghi', 3: 'jlnprtvxz' }
-
-async function startPuzzle (page) {
-  await page.waitForFunction(() => typeof Framework !== 'undefined' && Framework.app && Framework.app.puzzle && Framework.app.puzzle.cells && Framework.app.puzzle.cells.length, null, { timeout: 30000 })
-  const start = page.getByRole('button', { name: START }).first()
-  await start.waitFor({ state: 'visible' })
-  await start.click()
-  await start.waitFor({ state: 'hidden' })
-  await page.locator('#control-undo').waitFor({ state: 'visible' })
-}
 
 // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is
 // clicked again until the tool's buttons show.
@@ -103,13 +92,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   before(async () => {
-    context = await browser.newContext({ viewport: { width: 1200, height: 900 } })
-    errors = []
-    p = await context.newPage()
-    p.on('pageerror', (e) => errors.push(String(e)))
-    p.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console.error: ${m.text()}`) })
-    await routeSudokuPad(p)
-    await p.goto(url, { waitUntil: 'load', timeout: 60000 })
+    ;({ context, p, errors } = await openPage(browser, {
+      seed: (page, errs) => {
+        page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errs.push(`console.error: ${m.text()}`) })
+      }
+    }))
     await boot()
     await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS)
   })
