@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
@@ -1064,7 +1064,8 @@ const editorState = (over = {}) => ({
 
 test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s buttons, each keeping its number', () => {
   const html = renderEditor(editorState())
-  assert.match(html, /grid-template-columns: repeat\(3, /)
+  assert.match(html, /<div class="pen-tool-extras-pen-grid">/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-pen-grid \{[^}]*grid-template-columns: repeat\(3, /)
   const cells = [...html.matchAll(/<b[^>]*>(\d)<\/b><input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})">/g)].map((m) => m.slice(1))
   assert.deepEqual(cells.map(([label, pen]) => [label, pen]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [String(n), String(n)]))
   assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
@@ -1074,9 +1075,9 @@ test('the dialog has a SudokuPad colors button beside the Pen colors grid, and i
   const html = renderEditor(editorState())
   const row = /data-colors-row[^>]*>([\s\S]*?SudokuPad colors<\/button>)<\/div>/.exec(html)
   assert.ok(row, 'a row holding the grid and the button')
-  assert.match(row[1], /grid-template-columns: repeat\(3, /)
+  assert.match(row[1], /<div class="pen-tool-extras-pen-grid">/)
   assert.match(row[1], /<button type="button" data-sudokupad-colors[^>]*>SudokuPad colors<\/button>/)
-  assert.match(row[1], /<button[^>]*style="[^"]*font-size:inherit[^"]*white-space:nowrap/, 'the text is the size of the dialog\'s other text and stays on one line')
+  assert.match(DIALOG_CSS, /\[data-sudokupad-colors\] \{ font-size: inherit; white-space: nowrap;/, 'the text is the size of the dialog\'s other text and stays on one line')
   assert.equal((html.match(/data-sudokupad-colors/g) || []).length, 1)
 })
 
@@ -1145,9 +1146,10 @@ test('a box ticked in the dialog sets its setting in the draft through the table
 
 test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
   const html = renderEditor(editorState())
-  const columns = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => /grid-template-columns:([^;]+);/.exec(rowOf(html, key))[1])
-  assert.equal(new Set(columns).size, 1, columns.join(' | '))
-  assert.equal(columns[0].trim().split(/ (?![^(]*\))/).length, 4)
+  const classes = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => /^<div data-row="[^"]+" class="([^"]+)"/.exec(rowOf(html, key))[1])
+  assert.equal(new Set(classes).size, 1, classes.join(' | '))
+  const columns = new RegExp(`\\.${classes[0]} \\{[^}]*grid-template-columns: ([^;]+);`).exec(DIALOG_CSS)[1]
+  assert.equal(columns.trim().split(/ (?![^(]*\))/).length, 4)
 })
 
 test('Line styles: Dashed lines and Directional arrow lines each have an Enable box, with Dash length and Arrow spacing indented under them', () => {
@@ -1158,8 +1160,8 @@ test('Line styles: Dashed lines and Directional arrow lines each have an Enable 
   const arrows = /<input type="checkbox" id="pen-tool-extras-style-arrows" data-style="arrows" aria-label="Enable Directional arrow lines"( checked)?/.exec(html)
   assert.equal(Boolean(dashed[1]) && Boolean(arrows[1]), true)
   assert.match(html, />Dashed lines<[\s\S]*data-style="dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-style="arrows"[\s\S]*>Arrow spacing</)
-  assert.match(rowOf(html, 'dash'), /padding-left:1\.2em/)
-  assert.match(rowOf(html, 'arrowSpacing'), /padding-left:1\.2em/)
+  assert.match(rowOf(html, 'dash'), /class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(rowOf(html, 'arrowSpacing'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.doesNotMatch(rowOf(html, 'dash'), /display:none/)
 })
 
@@ -1198,7 +1200,7 @@ test('Other: the White outline box has its own line with Outline width under it,
   assert.match(html, />Other</)
   assert.match(html, /<input type="checkbox" id="pen-tool-extras-outline" data-outline checked[^>]*>\s*<label for="pen-tool-extras-outline"[^>]*>White outline on lines and marks<\/label>/)
   assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-middle-erase'), true)
-  assert.match(rowOf(html, 'outlineWidth'), /padding-left:1\.2em/)
+  assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
   assert.doesNotMatch(rowOf(html, 'outlineWidth'), /display:none/)
   const off = renderEditor(editorState({ outline: false, outlineWidth: 5 }))
@@ -1216,7 +1218,8 @@ test('the middle click box is ticked unless the setting is off', () => {
 test('every section after the first has a divider above it, and Pen line mode is the last', () => {
   const html = renderEditor(editorState({ lineMode: 'both' }))
   const heads = ['Line settings', 'Line styles', 'Marks a click cycles through', 'Other', 'Pen line mode']
-  heads.forEach((head) => assert.match(html, new RegExp(`border-top:1px solid #e3dff0[^>]*></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
+  heads.forEach((head) => assert.match(html, new RegExp(`<div class="pen-tool-extras-divider"></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #e3dff0;/)
   assert.equal(html.lastIndexOf('Pen line mode') > html.indexOf('Other'), true)
 })
 
