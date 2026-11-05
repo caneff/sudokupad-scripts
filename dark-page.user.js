@@ -16,8 +16,7 @@
 (function () {
   'use strict'
 
-  // Shown in the settings, and the same as @version above. The script cannot read its own header
-  // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
+  // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
   const VERSION = '0.3.7'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
@@ -25,39 +24,32 @@
   const DATA_KEY = 'DarkPage_color'
   const DEFAULT_COLOR = '#000000'
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
-  // Page text that sits straight on the page background: light on a dark page, dark on a light one.
   const LIGHT_TEXT = '#dddddd'
   const DARK_TEXT = '#222222'
-  // SudokuPad's control buttons on a dark page: dark gray with light purple text and icons, so the
-  // light `#eee` buttons do not glare. A button that is on (`.selected`, or `.selectedperm` on the
-  // Select button) keeps SudokuPad's own fill and gets the light purple as its border.
+  // SudokuPad's own buttons are light `#eee`, which glare on a dark page. An on button (`.selected`,
+  // or `.selectedperm` on Select) keeps SudokuPad's fill and gets BUTTON_ACCENT as its border.
   const BUTTON_BG = '#2a2a2a'
   const BUTTON_ACCENT = '#d2a8f0'
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
-  // White kept beyond the tightest box, in page pixels, before it is rounded outward: covers the
-  // antialiasing and a text outline filter, which the elements' boxes leave out.
+  // Covers antialiasing and a text outline filter, which the elements' boxes leave out.
   const PAD = 1
-  // How far a solver's pen mark reaches past the box of the cell it is on: the farther of two marks at Pen Tool Extras' largest thickness
-  // (16). One is the edge X on an outer edge, whose edge and corner marks are then grown by 1.6, measured on sudokupad.app v0.611.0 at
-  // 18.53px in a 1200x900 window (10.07px at the default thickness of 5). The other is an arrow on a page 3 line along an outer edge,
-  // which reaches 24 cell units (a cell is 64) there, its base 1.5 line widths out: 21.4px at a cell 57px wide, 24px at 64px. 28 covers both on a board with cells up to about 73px wide; the reach is 32 so Pen Tool Extras' White outline has a little more room where this margin is what limits the rectangle. That is only where the puzzle's own edge, a quarter of a cell outside the cells, is farther out than this: cells wider than 128px. The rectangle
-  // keeps this much around the cells so the mark sits on white from the moment it is drawn, not from
-  // the next measurement.
+  // How far a solver's pen mark reaches past its cell, at Pen Tool Extras' largest thickness (16).
+  // Measured on sudokupad.app v0.611.0: the edge X on an outer edge reaches 18.53px in a 1200x900
+  // window, and an arrow on a page 3 line along an outer edge 24 cell units (a cell is 64), 21.4px at
+  // a cell 57px wide. 28 covers both up to cells about 73px wide; 32 leaves room for Pen Tool Extras'
+  // White outline. Only cells wider than 128px put the puzzle's own edge farther out than this.
   const SOLVER_REACH = 32
-  // What the puzzle draws as leaf elements. Elements in `defs`, `marker` and the like have no box.
+  // Elements in `defs`, `marker` and the like have no box.
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
   const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']
 
-  // A saved #rrggbb page color, lowercase; null for anything else, which leaves the default.
   function savedColor (data) {
     return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
   }
 
-  // The color saved through `framework`, or null when there is none or it cannot be read. A page
-  // without SudokuPad's Framework has nothing saved. A Framework whose storage throws (a frame with
-  // storage blocked) is reported and treated as nothing saved, so the page still gets the default
-  // darkening, which needs no Framework.
+  // Storage can throw (a frame with storage blocked); the page still gets the default darkening,
+  // which needs no Framework.
   function readSavedColor (framework) {
     if (!framework || typeof framework.getData !== 'function') return null
     try {
@@ -68,7 +60,7 @@
     }
   }
 
-  // The WCAG relative luminance of a #rrggbb color, 0 (black) to 1 (white).
+  // WCAG relative luminance.
   function luminance (color) {
     const [r, g, b] = [1, 3, 5].map((i) => {
       const c = parseInt(color.slice(i, i + 2), 16) / 255
@@ -77,27 +69,19 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  // Whichever of the two text colors contrasts more with the page color, so the text stays readable
-  // from black to white. The switch falls where the two contrasts are equal.
   function textColorFor (pageColor) {
     const page = luminance(pageColor) + 0.05
     const contrast = (text) => { const t = luminance(text) + 0.05; return Math.max(page, t) / Math.min(page, t) }
     return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
   }
 
-  // The rules never name anything inside the board or declare a variable: SudokuPad's theme
-  // variables sit on `:root` and color the grid too, so overriding one would reach it. Each
-  // declaration is `!important` so it outranks SudokuPad's own rules, `.setting-darkmode`'s included.
-  // The page is the page color, and the rectangle is a div behind the board that takes `--body-bg`, the value
-  // SudokuPad gives `body` itself: the puzzle has no background of its own and shows `body` through
-  // it, so the rectangle keeps what the board showed, SudokuPad's dark mode included. Painting the
-  // svg itself changes its antialiasing, so the board's own elements are left alone. The div's
-  // position, stacking and box are set inline, so with this stylesheet off it is a transparent div
-  // that changes nothing.
-  // The replay tool's readout ("Time: … / …") is the `::after` of `.controls-input`, drawn straight on the page, so it
-  // takes the footer's text color. The control buttons turn dark only when the page does (the same test the footer text uses). Only
-  // a button's own background, text color and border change: the svg-painted icons and the fills of
-  // the color swatches keep their colors.
+  // Nothing inside the board is named and no variable is declared: SudokuPad's theme variables sit on
+  // `:root` and color the grid too. `!important` outranks SudokuPad's rules, `.setting-darkmode`'s
+  // included. The rectangle takes `--body-bg`, what SudokuPad gives `body`: the puzzle has no
+  // background and shows `body` through it. Painting the svg itself changes its antialiasing. The
+  // div's position and box are inline, so with this stylesheet off it is a transparent div. The
+  // replay readout is the `::after` of `.controls-input`, drawn on the page. Svg-painted icons and
+  // color swatch fills keep their colors.
   function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     const textColor = textColorFor(pageColor)
@@ -115,7 +99,6 @@
     ].join('\n')
   }
 
-  // Boxes are { left, top, right, bottom } in page pixels.
   function unionBoxes (boxes) {
     if (!boxes.length) return null
     return boxes.reduce((u, b) => ({
@@ -128,14 +111,13 @@
 
   const growBox = (box, amount) => ({ left: box.left - amount, top: box.top - amount, right: box.right + amount, bottom: box.bottom + amount })
 
-  // Grows the box by `pad`, then rounds every edge away from it, so a partly covered pixel at the
-  // rim is inside the box and not left dark.
+  // Rounds outward so a partly covered pixel at the rim is not left dark.
   function snapOutward (box, pad) {
     const grown = growBox(box, pad)
     return { left: Math.floor(grown.left), top: Math.floor(grown.top), right: Math.ceil(grown.right), bottom: Math.ceil(grown.bottom) }
   }
 
-  // The alpha of a computed color, or of `none`; a paint server such as a url() counts as opaque.
+  // A paint server such as a url() counts as opaque.
   function paintAlpha (color) {
     const c = String(color).trim()
     if (c === 'none' || c === 'transparent') return 0
@@ -143,7 +125,6 @@
     return m ? Number(m[1]) : 1
   }
 
-  // `style` holds an element's computed values. A stroke of width 0 paints nothing.
   const strokeShows = (style) => paintAlpha(style.stroke) * Number(style.strokeOpacity) > 0 && parseFloat(style.strokeWidth) > 0
 
   function hasVisiblePaint (style) {
@@ -151,17 +132,12 @@
     return paintAlpha(style.fill) * Number(style.fillOpacity) > 0 || strokeShows(style)
   }
 
-  // Half the stroke width in page pixels, which an element's box leaves out; `scale` is page pixels
-  // per user unit.
+  // An element's box leaves out half its stroke. `scale` is page pixels per user unit.
   function halfStroke (style, scale) {
     return strokeShows(style) ? parseFloat(style.strokeWidth) * scale / 2 : 0
   }
 
-  // How far a marker's box extends from the point it sits on, in page pixels: the farthest of its
-  // four sides from its reference point. `marker` holds the marker element's `markerWidth`,
-  // `markerHeight`, `refX`, `refY` and `markerUnits` attribute values, null where absent (the SVG
-  // defaults are 3, 3, 0, 0 and `strokeWidth`); `strokeWidth` is the stroke width of the element that
-  // uses it, in user units, and `scale` is page pixels per user unit.
+  // The SVG defaults for an absent attribute are 3, 3, 0, 0 and `strokeWidth` (null here).
   function markerReach (marker, strokeWidth, scale) {
     const number = (value, fallback) => (value === null ? fallback : parseFloat(value))
     const width = number(marker.markerWidth, 3)
@@ -186,7 +162,6 @@
 
   const boxOf = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
 
-  // How far the markers an element uses extend past its own box, in page pixels.
   function markersReach (el, style, scale) {
     const strokeWidth = parseFloat(style.strokeWidth) || 0
     return MARKER_PROPERTIES.reduce((reach, property) => {
@@ -198,9 +173,7 @@
     }, 0)
   }
 
-  // The box of everything the puzzle visibly draws, with each element's stroke and markers, joined
-  // with every cell's box grown by what a solver's pen marks reach, padded and rounded outward;
-  // limited to the svg's own box, which clips what lies outside it. Null when there is no board.
+  // Limited to the svg's own box, which clips what lies outside it.
   function keptRectangle () {
     const svg = document.querySelector('#svgrenderer')
     const ctm = svg && svg.getScreenCTM()
@@ -223,8 +196,8 @@
     return drawn && clampBox(snapOutward(drawn, PAD), snapOutward(svgBox, 0))
   }
 
-  // The saved color is read before the first paint of the style, so a saved color never shows the
-  // default first. Framework.getData works as soon as Framework exists, before the app is ready.
+  // Read before the first paint so a saved color never shows the default first; Framework.getData
+  // works as soon as Framework exists, before the app is ready.
   let pageColor = readSavedColor(typeof Framework === 'undefined' ? null : Framework) || DEFAULT_COLOR
 
   const style = document.createElement('style')
@@ -239,8 +212,7 @@
   rect.style.setProperty('pointer-events', 'none', 'important')
   document.body.appendChild(rect)
 
-  // With no board on the page (before a puzzle loads, or on a page of the site that is not a
-  // puzzle) the page is left as it is: the page color would otherwise hide white the board has not drawn.
+  // With no board the page is left as it is: the page color would hide white the board has not drawn.
   function updateRect () {
     const kept = keptRectangle()
     style.disabled = !kept
@@ -253,7 +225,6 @@
     set('height', `${kept.bottom - kept.top}px`)
   }
 
-  // Recomputes before the next paint, once however many changes arrive.
   let queued = false
   function scheduleUpdate () {
     if (queued) return
@@ -262,8 +233,8 @@
   }
 
   updateRect()
-  // SudokuPad swaps the board's elements when a puzzle loads and changes them as a solver plays.
-  // The rectangle's own updates and the top bar's clock are not changes to the puzzle.
+  // SudokuPad swaps the board's elements when a puzzle loads. The rectangle's own updates and the top
+  // bar's clock are not puzzle changes.
   new window.MutationObserver((records) => {
     const target = (r) => (r.target.nodeType === 1 ? r.target : r.target.parentElement)
     if (records.some((r) => target(r) !== rect && !target(r)?.closest('.topbar'))) scheduleUpdate()
@@ -308,7 +279,7 @@
     const input = document.getElementById('dark-page-input')
     const reset = document.getElementById('dark-page-reset')
     if (!input || !reset) throw new Error('dark-page: the dialog has no color input')
-    // `input` fires while the picker moves; the swatch the user sees is the color Save keeps.
+    // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase() })
     reset.addEventListener('click', (event) => {
       event.preventDefault()
@@ -318,10 +289,8 @@
     })
   }
 
-  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
-  // has no Framework and keeps the default color. A Framework without `getApp` is a SudokuPad this
-  // script cannot hook for its settings entry: the darkening above still applies, and the skip is
-  // reported.
+  // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the
+  // default color.
   if (typeof Framework === 'undefined') return
   if (!Framework.getApp) {
     console.warn('dark-page: SudokuPad\'s Framework has no getApp, so the settings entry was skipped')
