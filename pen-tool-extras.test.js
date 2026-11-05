@@ -6,12 +6,13 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   normalizeColors, buildCss, DEFAULT_COLORS, parseColor, isTransparent, darkenColor, penColorsFromPage, savedColors, editedColors,
-  HOLD_TO_EDIT_MS, normalizeThickness, buildThicknessCss, normalizeOpacity, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, normalizeDash, normalizeSliderVisibility, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, normalizeOutline, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, normalizeOutlineWidth, OUTLINE_WIDTH,
+  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, COLOR_TOOL_WAIT_MS, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  SETTINGS, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath, DEFAULT_MARK_SETTINGS,
   CORNER_RADIUS, CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, stepPage, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, chevronWayOf, CHEVRON, lineSegment, splitLineActs, chevronLine,
-  ARROW_SPACING, normalizeArrowSpacing, normalizeMiddleErase, normalizeLineStyles, enabledPages, stepEnabledPage, pageAfterSave,
+  ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
   createFeatures, inStock, FEATURE_LABELS, FEATURE_NEEDS
 } = require('./pen-tool-extras.user.js')
@@ -309,13 +310,13 @@ test('the thickness runs 1 to 16 in whole steps from SudokuPad\'s own pen width 
   assert.deepEqual(THICKNESS, { min: 1, max: 16, step: 1, fallback: 5 })
 })
 
-test('normalizeThickness keeps a saved whole number from 1 to 16', () => {
-  for (const ok of [1, 5, 8, 12, 16]) assert.equal(normalizeThickness(ok), ok)
+test('the thickness setting keeps a saved whole number from 1 to 16', () => {
+  for (const ok of [1, 5, 8, 12, 16]) assert.equal(SETTINGS.thickness.normalize(ok), ok)
 })
 
-test('normalizeThickness falls back to 5 for nothing saved and for anything untrusted', () => {
+test('the thickness setting falls back to 5 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 17, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
-    assert.equal(normalizeThickness(bad), 5, String(bad))
+    assert.equal(SETTINGS.thickness.normalize(bad), 5, String(bad))
   }
 })
 
@@ -410,13 +411,13 @@ test('the opacity runs 20 to 100 percent in steps of 5 from SudokuPad\'s own pen
   assert.deepEqual(OPACITY, { min: 20, max: 100, step: 5, fallback: 80 })
 })
 
-test('normalizeOpacity keeps a saved whole number from 20 to 100 on the slider\'s steps', () => {
-  for (const ok of [20, 55, 80, 100]) assert.equal(normalizeOpacity(ok), ok)
+test('the opacity setting keeps a saved whole number from 20 to 100 on the slider\'s steps', () => {
+  for (const ok of [20, 55, 80, 100]) assert.equal(SETTINGS.opacity.normalize(ok), ok)
 })
 
-test('normalizeOpacity falls back to 80 for nothing saved and for anything untrusted', () => {
+test('the opacity setting falls back to 80 for nothing saved and for anything untrusted', () => {
   for (const bad of [null, undefined, 0, 19, 105, -80, 82, 80.5, NaN, Infinity, '70', [70], { a: 70 }, true]) {
-    assert.equal(normalizeOpacity(bad), 80, String(bad))
+    assert.equal(SETTINGS.opacity.normalize(bad), 80, String(bad))
   }
 })
 
@@ -940,9 +941,9 @@ test('the dash length runs from 0 (dots) to 8 line widths in whole steps, and st
   assert.deepEqual(DASH, { min: 0, max: 8, step: 1, fallback: 3 })
 })
 
-test('normalizeDash keeps a saved whole number from 0 to 8, a saved 0 included, and anything else is 3', () => {
-  for (const ok of [0, 1, 4, 8]) assert.equal(normalizeDash(ok), ok)
-  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(normalizeDash(bad), 3, String(bad))
+test('the dash setting keeps a saved whole number from 0 to 8, a saved 0 included, and anything else is 3', () => {
+  for (const ok of [0, 1, 4, 8]) assert.equal(SETTINGS.dash.normalize(ok), ok)
+  for (const bad of [null, undefined, -1, 9, 2.5, NaN, Infinity, '3', [3], { a: 3 }, true]) assert.equal(SETTINGS.dash.normalize(bad), 3, String(bad))
 })
 
 // The declarations of the first (orthogonal) and second (diagonal) page 2 line rule, as { dash, gap, offset } numbers
@@ -1014,13 +1015,13 @@ test('the page button samples dashes as long as the setting, and dots at 0', () 
 
 // Showing the sliders in the pen tool's panel.
 test('both sliders show unless saved as hidden, and saved data without the setting shows both', () => {
-  assert.deepEqual(normalizeSliderVisibility(undefined), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility(null), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility({}), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility({ thickness: false }), { thickness: false, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility({ opacity: false, thickness: false }), { thickness: false, opacity: false })
-  assert.deepEqual(normalizeSliderVisibility({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
-  assert.deepEqual(normalizeSliderVisibility([false, false]), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize(undefined), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize(null), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize({}), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize({ thickness: false }), { thickness: false, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize({ opacity: false, thickness: false }), { thickness: false, opacity: false })
+  assert.deepEqual(SETTINGS.show.normalize({ thickness: 0, opacity: 'no' }), { thickness: true, opacity: true })
+  assert.deepEqual(SETTINGS.show.normalize([false, false]), { thickness: true, opacity: true })
 })
 
 test('a hidden slider has no input, and the other keeps its place beside an empty row of the same height', () => {
@@ -1448,9 +1449,9 @@ test('an arrow line has at least one arrow on any segment at any thickness and a
 })
 
 // The white outline.
-test('normalizeOutline is off only for a saved false: nothing saved and anything untrusted is on', () => {
-  assert.equal(normalizeOutline(false), false)
-  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(normalizeOutline(ok), true, JSON.stringify(ok))
+test('the outline setting is off only for a saved false: nothing saved and anything untrusted is on', () => {
+  assert.equal(SETTINGS.outline.normalize(false), false)
+  for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.normalize(ok), true, JSON.stringify(ok))
 })
 
 test('buildOutlineCss is empty when the outline is off and filters the pen layer, and only it, when on', () => {
@@ -1476,10 +1477,10 @@ test('the outline filter grows the layer\'s combined shape by the default width 
   assert.match(svg, /<feMerge><feMergeNode in="halo"\/><feMergeNode in="SourceGraphic"\/><\/feMerge>/, 'the layer is merged over the white')
 })
 
-test('normalizeOutlineWidth keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 2', () => {
+test('the outline width setting keeps a saved whole number from 1 to 8 and reads anything else, nothing saved included, as 2', () => {
   assert.deepEqual(OUTLINE_WIDTH, { min: 1, max: 8, step: 1, fallback: 2 })
-  for (const ok of [1, 3, 8]) assert.equal(normalizeOutlineWidth(ok), ok)
-  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(normalizeOutlineWidth(bad), 2, JSON.stringify(bad))
+  for (const ok of [1, 3, 8]) assert.equal(SETTINGS.outlineWidth.normalize(ok), ok)
+  for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(SETTINGS.outlineWidth.normalize(bad), 2, JSON.stringify(bad))
 })
 
 test('the outline filter grows and blurs more for a wider outline, and refuses a width it cannot save', () => {
@@ -1490,23 +1491,23 @@ test('the outline filter grows and blurs more for a wider outline, and refuses a
   for (const bad of [0, 9, 2.5, '3']) assert.throws(() => renderOutlineFilter(bad), RangeError)
 })
 
-test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and normalizeArrowSpacing keeps a saved whole number in range', () => {
+test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
   assert.deepEqual(ARROW_SPACING, { min: 3, max: 12, step: 1, fallback: 5 })
-  for (const ok of [3, 5, 12]) assert.equal(normalizeArrowSpacing(ok), ok)
-  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(normalizeArrowSpacing(bad), 5, JSON.stringify(bad))
+  for (const ok of [3, 5, 12]) assert.equal(SETTINGS.arrowSpacing.normalize(ok), ok)
+  for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.normalize(bad), 5, JSON.stringify(bad))
 })
 
 test('middle click erase is on unless saved as the boolean false', () => {
-  assert.equal(normalizeMiddleErase(false), false)
-  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(normalizeMiddleErase(ok), true, JSON.stringify(ok))
+  assert.equal(SETTINGS.middleErase.normalize(false), false)
+  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(SETTINGS.middleErase.normalize(ok), true, JSON.stringify(ok))
 })
 
 test('both line styles are enabled unless saved as the boolean false, each on its own; saved junk enables both', () => {
-  assert.deepEqual(normalizeLineStyles(undefined), { dashed: true, arrows: true })
-  assert.deepEqual(normalizeLineStyles({ dashed: false }), { dashed: false, arrows: true })
-  assert.deepEqual(normalizeLineStyles({ arrows: false }), { dashed: true, arrows: false })
-  assert.deepEqual(normalizeLineStyles({ dashed: false, arrows: false }), { dashed: false, arrows: false })
-  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(normalizeLineStyles(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
+  assert.deepEqual(SETTINGS.lineStyles.normalize(undefined), { dashed: true, arrows: true })
+  assert.deepEqual(SETTINGS.lineStyles.normalize({ dashed: false }), { dashed: false, arrows: true })
+  assert.deepEqual(SETTINGS.lineStyles.normalize({ arrows: false }), { dashed: true, arrows: false })
+  assert.deepEqual(SETTINGS.lineStyles.normalize({ dashed: false, arrows: false }), { dashed: false, arrows: false })
+  for (const bad of [null, 0, 'no', [false, false], { dashed: 0, arrows: 'no' }]) assert.deepEqual(SETTINGS.lineStyles.normalize(bad), { dashed: true, arrows: true }, JSON.stringify(bad))
 })
 
 test('a wider arrow spacing gives fewer arrows on the same segment and the spacing sets their distance', () => {
@@ -1754,4 +1755,117 @@ test('the dialog leaves out the controls of a feature that is off', () => {
   assert.doesNotMatch(html(['lineErase']), /data-middle-erase/)
   assert.doesNotMatch(html(['outline', 'lineErase']), />Other</)
   assert.match(html(['colors']), /data-pen="1"/, 'the pickers set a saved color and need no SudokuPad internal')
+})
+
+test('inRange takes a whole number from min to max on the steps counted from min, and nothing else', () => {
+  const range = { min: 20, max: 100, step: 5, fallback: 80 }
+  for (const ok of [20, 25, 80, 100]) assert.equal(inRange(ok, range), true, String(ok))
+  for (const bad of [15, 105, 22, 20.5, '20', null, undefined, NaN, true, [20]]) assert.equal(inRange(bad, range), false, String(bad))
+})
+
+test('isPlainObject takes an object and no array, null or scalar', () => {
+  assert.equal(isPlainObject({}), true)
+  assert.equal(isPlainObject({ a: 1 }), true)
+  for (const bad of [null, undefined, [], [1], 'x', 1, true]) assert.equal(isPlainObject(bad), false, JSON.stringify(bad))
+})
+
+test('isHexColor takes #rrggbb in either case and nothing else', () => {
+  for (const ok of ['#000000', '#a1B2c3']) assert.equal(isHexColor(ok), true, ok)
+  for (const bad of ['#fff', '#12345g', '123456', ' #123456', '#1234567', null, undefined, 123456, ['#123456']]) assert.equal(isHexColor(bad), false, JSON.stringify(bad))
+})
+
+test('the table holds each setting\'s saved key and default', () => {
+  const rows = Object.fromEntries(Object.entries(SETTINGS).map(([name, row]) => [name, [row.key, row.fallback]]))
+  assert.deepEqual(rows, {
+    thickness: ['PenColor_thickness', 5],
+    opacity: ['PenColor_opacity', 80],
+    dash: ['PenColor_dash', 3],
+    arrowSpacing: ['PenColor_arrowspacing', 5],
+    outlineWidth: ['PenColor_outlinewidth', 2],
+    outline: ['PenColor_outline', true],
+    middleErase: ['PenColor_middleerase', true],
+    lineStyles: ['PenColor_linestyles', { dashed: true, arrows: true }],
+    show: ['PenColor_sliders', { thickness: true, opacity: true }]
+  })
+})
+
+test('the opacity row refuses a saved value off the slider\'s steps', () => {
+  assert.equal(SETTINGS.opacity.normalize(55), 55)
+  assert.equal(SETTINGS.opacity.normalize(57), 80)
+})
+
+test('a new slider is one builder call: its row normalizes and saves with nothing else added', () => {
+  const row = slider('New_key', { min: 2, max: 10, step: 2, fallback: 4 }, () => {})
+  assert.equal(row.normalize(6), 6)
+  for (const bad of [0, 12, 5, '6', null, {}]) assert.equal(row.normalize(bad), 4, JSON.stringify(bad))
+  const calls = []
+  const store = { setData: (key, value) => calls.push(['set', key, value]), removeData: (key) => calls.push(['remove', key]) }
+  saveSetting(store, row, 6)
+  saveSetting(store, row, 4)
+  assert.deepEqual(calls, [['set', 'New_key', 6], ['remove', 'New_key']])
+})
+
+test('a flag is off only for a saved false', () => {
+  const row = flag('Flag_key')
+  assert.equal(row.fallback, true)
+  assert.equal(row.normalize(false), false)
+  for (const ok of [true, undefined, null, 0, 'false', {}]) assert.equal(row.normalize(ok), true, JSON.stringify(ok))
+})
+
+test('a row built with no effect has one that does nothing', () => {
+  assert.equal(flag('Flag_key').effect(), undefined)
+  assert.equal(SETTINGS.middleErase.effect(), undefined)
+})
+
+test('flags decode each name on its own: only a saved false is off, a non-object is all on, an unknown name is dropped', () => {
+  const row = flags('Flags_key', ['a', 'b'])
+  assert.deepEqual(row.fallback, { a: true, b: true })
+  assert.deepEqual(row.normalize({ a: false }), { a: false, b: true })
+  assert.deepEqual(row.normalize({ a: 0, b: false, c: false }), { a: true, b: false })
+  for (const bad of [null, undefined, 'x', 1, [false, false]]) assert.deepEqual(row.normalize(bad), { a: true, b: true }, JSON.stringify(bad))
+})
+
+test('readSettings normalizes what is saved under each key and falls back for the rest', () => {
+  const saved = { PenColor_thickness: 9, PenColor_opacity: 57, PenColor_outline: false, PenColor_sliders: { opacity: false } }
+  const read = readSettings({ getData: (key) => saved[key] })
+  assert.deepEqual(read, {
+    ...settingDefaults(),
+    thickness: 9,
+    outline: false,
+    show: { thickness: true, opacity: false }
+  })
+})
+
+test('settingDefaults holds every row\'s default', () => {
+  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, middleErase: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true } })
+})
+
+test('changedSettings names only the settings whose value differs, reading flags by value', () => {
+  const now = settingDefaults()
+  assert.deepEqual(changedSettings({ ...now }, now), [])
+  assert.deepEqual(changedSettings({ ...now, lineStyles: { dashed: true, arrows: true } }, now), [])
+  assert.deepEqual(changedSettings({ ...now, thickness: 9, lineStyles: { dashed: true, arrows: false } }, now), ['thickness', 'lineStyles'])
+  assert.deepEqual(changedSettings({ ...now, show: { thickness: false, opacity: true }, outline: false }, now), ['outline', 'show'])
+})
+
+test('saveSetting removes the key of a value at its default and sets any other', () => {
+  const calls = []
+  const store = {
+    setData: (key, value) => calls.push(['set', key, value]),
+    removeData: (key) => calls.push(['remove', key])
+  }
+  saveSetting(store, SETTINGS.thickness, 5)
+  saveSetting(store, SETTINGS.thickness, 9)
+  saveSetting(store, SETTINGS.outline, true)
+  saveSetting(store, SETTINGS.outline, false)
+  saveSetting(store, SETTINGS.lineStyles, { dashed: true, arrows: true })
+  saveSetting(store, SETTINGS.lineStyles, { dashed: false, arrows: true })
+  assert.deepEqual(calls, [
+    ['remove', 'PenColor_thickness'],
+    ['set', 'PenColor_thickness', 9],
+    ['remove', 'PenColor_outline'],
+    ['set', 'PenColor_outline', false],
+    ['remove', 'PenColor_linestyles'],
+    ['set', 'PenColor_linestyles', { dashed: false, arrows: true }]
+  ])
 })

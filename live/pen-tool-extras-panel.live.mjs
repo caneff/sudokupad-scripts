@@ -196,6 +196,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await sliderValue(THICKNESS), '1')
     assert.equal(await settle(lineWidth, 1), 1)
     assert.equal(await saved(THICKNESS_KEY), 1)
+    await p.locator(THICKNESS).evaluate((el) => { el.value = 5; el.dispatchEvent(new Event('input', { bubbles: true })) })
+    assert.equal(await settle(lineWidth, 5), 5)
+    assert.equal(await saved(THICKNESS_KEY), null, 'a panel slider at its default removes its key')
   })
 
   it('a real drag on Opacity changes the line\'s computed opacity and saves at once, with no Save', async () => {
