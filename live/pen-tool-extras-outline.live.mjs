@@ -11,7 +11,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { openSettings } from './settings.mjs'
+import { openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -123,11 +123,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await selectPen()
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = async () => {
-    await openSettings(p)
-    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-    await editor().waitFor({ state: 'visible' })
-  }
+  const openEditor = () => openExtrasEditor(p)
   const clearSaved = () => read((keys) => keys.forEach((k) => Framework.removeData(k)), [OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY, THICKNESS_KEY, DASH_KEY])
   const widthSlider = () => editor().locator('input[data-setting="outlineWidth"]')
   const setWidth = (value) => widthSlider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)

@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { openSettings } from './settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -137,14 +137,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // The pen value of each stored entry, without its color character.
       const edgeValues = async () => (await penValues()).map((v) => v.split(':')[1][0])
       const dialogLine = async () => {
-        await openSettings(p)
-        await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-        await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+        await openExtrasEditor(p)
         const text = await p.locator('#pen-tool-extras-editor').innerText()
         const line = /Off because SudokuPad changed: (.*)/.exec(text)
         const editor = await p.locator('#pen-tool-extras-editor').innerHTML()
-        await p.locator('.dialog button').filter({ hasText: 'Cancel' }).click()
-        await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
+        await closeExtrasEditorWith(p, 'Cancel')
         return { line: line ? line[1].trim() : NOTHING_OFF, editor }
       }
 
@@ -170,7 +167,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         await openPenTool(p)
       })
       after(async () => {
-        await read((keys) => keys.forEach((k) => Framework.removeData(k)), KEYS).catch(() => {})
         await context.close()
       })
 

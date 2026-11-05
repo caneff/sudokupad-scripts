@@ -9,9 +9,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
-import { openSettings } from './settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const url = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
@@ -24,7 +25,6 @@ const DASH_KEY = 'PenColor_dash'
 const THICKNESS_KEY = 'PenColor_thickness'
 const LINE_STYLES_KEY = 'PenColor_linestyles'
 const START = /Start Puzzle|Continue|Resume/i
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_ONE = '123456789'
 const PAGE_TWO = 'abcdefghi'
@@ -104,12 +104,8 @@ function group (title, extra = []) {
     // The settings dialog's editor: open it from SudokuPad's settings, press one of its buttons, and wait for it to go.
     const editor = () => p.locator('#pen-tool-extras-editor')
     const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
-    const openEditor = async () => {
-      await openSettings(p)
-      await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first().click()
-      await editor().waitFor({ state: 'visible' })
-    }
-    const closeWith = async (text) => { await dialogButton(text).click(); await editor().waitFor({ state: 'detached' }) }
+    const openEditor = () => openExtrasEditor(p)
+    const closeWith = (text) => closeExtrasEditorWith(p, text)
     const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const turnPageWithWheel = async (deltaY) => {
       const box = await p.locator(PAGE_BUTTON).boundingBox()

@@ -9,6 +9,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { routeSudokuPad } from './cache.mjs'
 import { openSettings } from './settings.mjs'
@@ -19,7 +20,6 @@ const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url
 
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // Watches `read` for QUIET_MS and returns every distinct reading.
 async function watch (read) {
@@ -386,6 +386,9 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   })
 })
 
+// One touch event on the page's CDP session; a `touchEnd` carries no touch points.
+const touch = (cdp, type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
+
 describe('the menu on a touch screen, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors, t, cdp
 
@@ -395,8 +398,6 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
     cdp = await context.newCDPSession(p)
   })
   after(async () => { await context.close() })
-
-  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] })
 
   it('a tap on the arrow box opens the menu, and a tap on a row picks it', async () => {
     await p.tap(ARROW)
@@ -413,9 +414,9 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
     await t.undo() // the pick's colors, so a press that wrongly colored the grid would show
     assert.equal(await settle(t.coloredCount, 0), 0)
     const before = await t.coloursOf()
-    await touch('touchStart', x, y)
+    await touch(cdp, 'touchStart', x, y)
     await t.menu().waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
-    await touch('touchEnd', x, y)
+    await touch(cdp, 'touchEnd', x, y)
     assert.deepEqual(await watch(t.coloursOf), [before])
     await p.keyboard.press('Escape')
     await t.menu().waitFor({ state: 'detached' })
@@ -428,8 +429,8 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
     const deadline = Date.now() + SETTLE_MS
     let colored = 0
     while (colored === 0 && Date.now() < deadline) {
-      await touch('touchStart', x, y)
-      await touch('touchEnd', x, y)
+      await touch(cdp, 'touchStart', x, y)
+      await touch(cdp, 'touchEnd', x, y)
       colored = await settle(t.coloredCount, 1, 300)
     }
     assert.notEqual(colored, 0)
@@ -480,11 +481,11 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   // The same drag with a finger.
   const dragWithTouch = async (from, to) => {
     const { start, end } = await dragPoints(from, to)
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.x, y: start.y }] })
+    await touch(cdp, 'touchStart', start.x, start.y)
     for (let step = 1; step <= 6; step++) {
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.x, y: start.y + ((end.y - start.y) * step) / 6 }] })
+      await touch(cdp, 'touchMove', start.x, start.y + ((end.y - start.y) * step) / 6)
     }
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await touch(cdp, 'touchEnd', start.x, start.y)
   }
 
   it('the dialog lists each profile with its colors and shown digits, a count and the active radio', async () => {
