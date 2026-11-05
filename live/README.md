@@ -21,10 +21,12 @@ owns it; its header comment is the full rule.
 
 - The recording is SudokuPad's own code, so it lives outside the repo, shared by every worktree:
   `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`.
+- With no recording, a run records one from sudokupad.app, once per run, under a lock.
 - A recording older than a day is checked against SudokuPad's version with one plain request, and
   re-recorded only when the version changed. A recording of the same version is kept and its time
   restamped. A failed check replays the recording and warns.
 - `LIVE_REFRESH=1` records again at once, whatever the version. It needs the network.
 - `LIVE_OFFLINE=1` never touches the network: it replays what is there and fails when there is no
-  recording. It fails naming any request the recording lacks.
-- With neither set, a run replays the recording and touches the network only for the version check.
+  recording.
+- A replayed request the recording lacks is aborted, and the process then exits 1 naming each such
+  URL, with or without `LIVE_OFFLINE=1`. `LIVE_REFRESH=1` records again.

@@ -6,7 +6,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
 
 - **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
 - **Read an issue**: `gh issue view <number> --json title,body,labels,comments`; `--comments` alone prints no labels, and `--json` with it returns only the JSON.
-- **List issues**: `gh issue list --state open --json number,title,body,labels,comments,parent,blockedBy,issueType --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body], parent: .parent.number, blockedBy: [.blockedBy.nodes[] | select(.state == "OPEN") | .number], issueType: .issueType.name}]'` with appropriate `--label` and `--state` filters. `blockedBy` also lists closed blockers, so the `select` keeps the open ones, the live gate.
+- **List issues**: `gh issue list --state open --json number,title,body,labels,comments,parent,blockedBy --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body], parent: .parent.number, blockedBy: [.blockedBy.nodes[] | select(.state == "OPEN") | .number]}]'` with appropriate `--label` and `--state` filters. `blockedBy` also lists closed blockers, so the `select` keeps the open ones, the live gate.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Relationships (parent, dependencies, type)**: record these as first-class GitHub fields, not as body prose, so automation reads structured data via the `--json` fields above:
@@ -15,7 +15,7 @@ Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all o
   - Type: omit `--type`. This is a user-account repo (`gh api users/caneff --jq .type` is `User`), and types are unavailable there.
 - **Close**: `gh issue close <number> --comment "..."`
 
-Pass `--repo caneff/sudokupad-scripts` on every `gh` call; the samples on this page omit it for length. Without it `gh issue view` can print nothing and exit 0 (worktrees, cwd outside the clone), and `gh api` paths need the pair anyway.
+Pass `--repo caneff/sudokupad-scripts` on every `gh` call but `gh api`, which rejects the flag and names the repo in its path; the samples on this page omit it for length. Without it `gh issue view` can print nothing and exit 0 (worktrees, cwd outside the clone).
 
 ## Grilling gate on new tickets
 
@@ -55,7 +55,7 @@ Create a GitHub issue.
 
 ## When a skill says "fetch the relevant ticket"
 
-Run `gh issue view <number> --comments`.
+Run `gh issue view <number> --json title,body,labels,comments`.
 
 ## Wayfinding operations
 
@@ -63,7 +63,7 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 
 - **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
 - **Child ticket**: an issue linked to the map as a sub-issue via `gh issue create ... --parent <map>` (or `gh issue edit <n> --parent <map>`). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: GitHub's **native issue dependencies** — the canonical, UI-visible representation. Add an edge with `gh issue edit <child> --add-blocked-by <blocker>`. `gh issue view <child> --json blockedBy` lists the blockers; only those with `state` `OPEN` gate the child. Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
-- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (an `OPEN` entry in `blockedBy`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
+- **Blocking**: GitHub's **native issue dependencies** — the canonical, UI-visible representation. Add an edge with `gh issue edit <child> --add-blocked-by <blocker>`. GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only — the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
+- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me` — the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.

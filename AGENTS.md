@@ -8,7 +8,7 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
 - **Netlify**: serves `site/` from the `release` branch (`netlify.toml`). `git push origin main:release` publishes it and
   spends 15 of the plan's 300 credits a month (`docs/research/netlify-credits.md`). It is pushed very rarely, so it lags
   `main` by design: Chris kept Netlify on 2026-11-05.
-- **`docs/research/`**: what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
+- **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
 - **`GLOSSARY.md`**: the vocabulary.
 
 ## Agent skills
