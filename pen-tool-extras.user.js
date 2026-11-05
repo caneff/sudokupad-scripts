@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.11
+// @version      1.14.12
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -19,7 +19,7 @@
   'use strict'
 
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.14.11'
+  const VERSION = '1.14.12'
   const SETTINGS_GROUP = 'experimental'
   // Keys saved by the scripts this one replaced, kept so their saved data still reads.
   const COLORS_KEY = 'PenColor_colors'
@@ -768,12 +768,14 @@
   }
 
   const swatchMask = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, '%27')}") center / 100% no-repeat`
+  // Page 1 has no page attribute selector, so it applies with the extra pages off too, where nothing sets the attribute; the pages after it outrank it by that attribute.
   const swatchRule = (n, page, svg) => {
     const mask = swatchMask(svg)
-    return `.tool-pen button[data-key="${n}"][${PAGE_ATTRIBUTE}="${page}"]:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${mask}; mask: ${mask}; }`
+    return `.tool-pen button[data-key="${n}"]${page === 1 ? '' : `[${PAGE_ATTRIBUTE}="${page}"]`}:after { background-color: var(--puzzle-pencolor-${n}); -webkit-mask: ${mask}; mask: ${mask}; }`
   }
   const ARROW_LINE_SWATCH = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M2 12H22' stroke-width='2'/><path d='M5 6.5L12 12L5 17.5ZM13 6.5L20 12L13 17.5Z' fill='#000' stroke='none'/></svg>"
   const DASH_SWATCH = { width: 2, from: 2, to: 22 }
+  const SOLID_SWATCH = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}'/></svg>`
   function dashSwatch (dash) {
     const { on, gap, offset } = dashPattern(DASH_SWATCH.width, dash, DASH_SWATCH.to - DASH_SWATCH.from)
     const round = (x) => Math.round(x * 1000) / 1000
@@ -785,7 +787,7 @@
   function buildPagesCss (thickness, dash) {
     if (!inRange(thickness, THICKNESS)) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
     if (!inRange(dash, DASH)) throw new RangeError(`pen-tool-extras: ${dash} is not a dash length from ${DASH.min} to ${DASH.max}`)
-    const rules = []
+    const rules = PEN_COLOR_NUMBERS.map((n) => swatchRule(n, 1, SOLID_SWATCH))
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {

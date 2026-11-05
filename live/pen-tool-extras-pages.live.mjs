@@ -118,13 +118,19 @@ function group (title, extra = []) {
       assert.equal(await saved(PEN_KEY), 'c')
     })
 
-    it('a page 2 swatch is a dashed line cut out of the button\'s square, and a page 1 swatch is not', async () => {
-      const swatch = () => read(() => window.getComputedStyle(document.querySelector('.tool-pen button[data-key="2"]'), ':after').maskImage)
-      const decoded = decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(await swatch())[1])
-      assert.match(decoded, /stroke-dasharray='(?!0 )[\d.]+ [\d.]+'/)
-      assert.equal((decoded.match(/<path/g) || []).length, 1, 'one line')
+    it('a page 2 swatch is a dashed line cut out of the button\'s square, and a page 1 swatch is the same line solid, in the pen tool only', async () => {
+      const swatch = () => read(() => window.getComputedStyle(document.querySelector('.controls-input button[data-key="2"]'), ':after').maskImage)
+      const decode = async () => decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(await swatch())[1])
+      const dashed = await decode()
+      assert.match(dashed, /stroke-dasharray='(?!0 )[\d.]+ [\d.]+'/)
+      assert.equal((dashed.match(/<path/g) || []).length, 1, 'one line')
       await goToPage(PAGE_ONE)
-      assert.equal(await swatch(), 'none')
+      const solid = await decode()
+      assert.equal(solid, dashed.replace(/ stroke-dasharray='[^']*'/, '').replace(/ stroke-dashoffset='[^']*'/, ''), 'the page 2 line, solid')
+      await p.click('#control-colour')
+      await p.locator('.tool-pen').waitFor({ state: 'detached' })
+      assert.equal(await swatch(), 'none', 'the color tool keeps its own swatch')
+      await openPenTool(p)
       await goToPage(PAGE_TWO)
     })
 
