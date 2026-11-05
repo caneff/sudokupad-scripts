@@ -34,8 +34,12 @@ seam. These come from `twitch-rules-scroller` and
 
 ## Comments and docs
 
-6. **Comments describe what the code does and why, never its callers or its
-   history.** "Called by X" goes false when a second caller lands, and "used to"
+6. **A comment states only what the code cannot show: a fact about SudokuPad's
+   internals, or the reason for a choice. One line where one line can say it.**
+   A comment that restates a function's inputs, outputs or branches goes false
+   when the code changes and adds nothing while it is true. Where a comment
+   explains a name, give the code a clearer name. Never name its callers or its
+   history: "Called by X" goes false when a second caller lands, and "used to"
    belongs in git.
 7. **A change fixes every comment, test title and doc line it makes false, in the
    same diff.** A stale claim fails no gate, and the next reader acts on it. Search

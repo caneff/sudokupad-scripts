@@ -19,16 +19,12 @@
   const TOGGLE_KEY = '/'
   const TAB_KEY = 'Tab'
 
-  // What Tab does in play: nothing. SudokuPad's toggle handler also stops the key's default, so a
-  // Tab pressed over the puzzle leaves focus where it is; this handler keeps that and drops the toggle.
+  // SudokuPad's toggle handler also stops Tab's default, so focus stays on the puzzle; keep that.
   function ignoreKey (event) {
     event.preventDefault()
   }
 
-  // SudokuPad's key handlers for a tool are { key, handler } entries. Returns them with the Tab
-  // entry that shares the "/" entry's handler (the letter toggle) given `inert` as its handler;
-  // every other entry is kept as it is. Null when there is no such Tab entry to change: no "/"
-  // entry to name the toggle, or no Tab entry bound to it.
+  // The Tab entry is found by sharing the "/" entry's handler, the letter toggle.
   function withInertTab (handlers, inert) {
     if (!Array.isArray(handlers)) return null
     const toggle = handlers.find((entry) => entry.key === TOGGLE_KEY)
@@ -43,19 +39,15 @@
   }
   if (typeof document === 'undefined') return
 
-  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
-  // has no Framework and is left alone. A Framework without `getApp` is a SudokuPad this script
-  // cannot hook, which is reported.
+  // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
   if (!Framework.getApp) {
     console.warn('no-tab-letters: SudokuPad\'s Framework has no getApp, so nothing was changed')
     return
   }
 
-  // `ToolLetter` is the global tool-letter.js declares; its one `tool` object is what the
-  // "Enable Letter Tool" setting adds to and removes from the app, so a list set on it holds
-  // whenever the tool is switched on. The list is set on the object itself, which hides the shared
-  // prototype's list from it without editing that list.
+  // The "Enable Letter Tool" setting adds and removes ToolLetter's one `tool` object, so a list set
+  // on it holds whenever the tool is on. Setting it on the object shadows the shared prototype's list.
   Framework.getApp().then(() => {
     const tool = typeof ToolLetter === 'undefined' ? null : ToolLetter.tool
     if (!tool) {
