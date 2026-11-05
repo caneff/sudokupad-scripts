@@ -69,6 +69,12 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
+  it('the dialog title\'s version is faded to 0.6', async () => {
+    await openExtrasEditor(p)
+    assert.equal(await p.locator('.dialog small.pen-tool-extras-version').evaluate((el) => window.getComputedStyle(el).opacity), '0.6')
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
   it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its Enable box is unticked', async () => {
     await openExtrasEditor(p)
     const label = (key) => editor().locator(`[data-row="${key}"] label`)
