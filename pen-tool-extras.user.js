@@ -1051,31 +1051,32 @@
           return fallback()
         }
       },
-      // A throw from the original is SudokuPad's own and passes through; after the body's own throw the original's result answers, so it
-      // is never called twice for one event.
+      // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
+      // body's own throw, the original runs only if no SudokuPad code ran for this event: a click half sent must not be sent again.
       wrap (owner, name, body) {
         const original = owner[name]
         owner[name] = function (...args) {
           if (step.off) return original.apply(this, args)
-          let called = false
+          let reached = false
           let result
-          let stockFailure = null
-          const stock = (...stockArgs) => {
-            called = true
+          let failure = null
+          const sudokupad = (fn) => {
+            reached = true
             try {
-              result = original.apply(this, stockArgs)
-              return result
+              return fn()
             } catch (error) {
-              stockFailure = { error }
+              failure = { error }
               throw error
             }
           }
+          const stock = (...stockArgs) => sudokupad(() => { result = original.apply(this, stockArgs); return result })
+          stock.sudokupad = sudokupad
           try {
             return body.call(this, stock, ...args)
           } catch (error) {
-            if (stockFailure && stockFailure.error === error) throw error
+            if (failure && failure.error === error) throw error
             step.skip(error)
-            return called ? result : original.apply(this, args)
+            return reached ? result : original.apply(this, args)
           }
         }
       }
@@ -1267,13 +1268,14 @@
     })
   }
 
-  function queuedActs (tool, original, args) {
+  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back.
+  function queuedActs (tool, click) {
     const hadOwn = Object.prototype.hasOwnProperty.call(tool, 'actSend')
     const ownSend = tool.actSend
     let queued = null
     tool.actSend = function () { queued = this._actList.slice() }
     try {
-      original.apply(tool, args)
+      click()
     } finally {
       if (hadOwn) tool.actSend = ownSend
       else delete tool.actSend
@@ -1331,12 +1333,14 @@
     return cornerAt(r, c, rows, cols)
   }
 
-  function clickCorner (tool, corner) {
+  function cornerActs (corner) {
     const { rows, cols } = Framework.app.grid
     const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
     const cell = Framework.app.grid.getCell(row, col)
-    const acts = planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, steppingBackwards()))
-    tool.actStart()
+    return planActs(cell, planCornerClick(kind, penValuesOf(cell), markSettings, steppingBackwards()))
+  }
+
+  function sendActs (tool, acts) {
     acts.forEach((act) => tool.actAdd(act))
     tool.actSend()
   }
@@ -1346,8 +1350,7 @@
     const hit = segmentNear([r, c], segments, LINE_HIT_RADIUS)
     if (hit === null) return
     tool.actStart()
-    eraseLineActs(connectedLine(segments, hit), (row, col) => Framework.app.grid.getCell(row, col)).forEach((act) => tool.actAdd(act))
-    tool.actSend()
+    sendActs(tool, eraseLineActs(connectedLine(segments, hit), (row, col) => Framework.app.grid.getCell(row, col)))
   }
 
   // A middle press over the grid in the pen tool erases the line under the pointer and has its default prevented, which stops the
@@ -1374,8 +1377,11 @@
     steps.marks.wrap(tool, 'clickCell', function (stock, ...args) {
       if (lastButton === MIDDLE_BUTTON) return stock(...args)
       const corner = cornerUnderPointer(this)
-      if (corner !== null) return clickCorner(this, corner)
-      const queued = queuedActs(this, original, args)
+      if (corner !== null) {
+        const acts = cornerActs(corner)
+        return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
+      }
+      const queued = stock.sudokupad(() => queuedActs(this, () => original.apply(this, args)))
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {
@@ -1384,8 +1390,7 @@
         if (plan === null) return
         acts = planActs(cell, plan)
       }
-      acts.forEach((act) => this.actAdd(act))
-      this.actSend()
+      stock.sudokupad(() => sendActs(this, acts))
     })
   }
 
@@ -1394,7 +1399,7 @@
   }
 
   function markUnderPointer (tool, original) {
-    return cornerUnderPointer(tool) !== null || isEdgeActs(queuedActs(tool, original, []))
+    return cornerUnderPointer(tool) !== null || isEdgeActs(queuedActs(tool, () => original.apply(tool, [])))
   }
 
   // The pen tool steps a corner or an edge backwards on a right click, so the browser's menu must not open over one. The check runs the same hit test as the click, so a right click

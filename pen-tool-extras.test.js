@@ -1722,13 +1722,38 @@ test('a wrapper whose own code throws after SudokuPad\'s call answers with that 
   const { step, warned, restore } = newStep()
   t.after(restore)
   const calls = []
+  let ownRuns = 0
   const owner = { click (n) { calls.push(n); return n * 10 } }
-  step.wrap(owner, 'click', (stock, n) => { stock(n); throw new Error('own') })
+  step.wrap(owner, 'click', (stock, n) => { ownRuns++; stock(n); throw new Error('own') })
   assert.equal(owner.click(1), 10)
   assert.deepEqual(calls, [1])
   assert.equal(owner.click(2), 20)
   assert.deepEqual(calls, [1, 2])
+  assert.equal(ownRuns, 1, 'the wrapper\'s own code does not run once the step is skipped')
   assert.equal(warned.length, 1)
+})
+
+test('a wrapper whose own code throws after another SudokuPad function ran for the event does not call the original', (t) => {
+  const { step, warned, restore } = newStep()
+  t.after(restore)
+  const sent = []
+  const owner = { click () { sent.push('stock click') }, send (act) { sent.push(act) } }
+  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.send('mark')); throw new Error('own') })
+  assert.equal(owner.click(), undefined)
+  assert.deepEqual(sent, ['mark'], 'the click is not sent a second time')
+  assert.equal(warned.length, 1)
+})
+
+test('a throw from a SudokuPad function called through stock.sudokupad passes through, is not retried and leaves the step on', (t) => {
+  const { step, warned, skipped, restore } = newStep()
+  t.after(restore)
+  const stockError = new TypeError('render failed')
+  const sent = []
+  const owner = { click () { sent.push('stock click') }, send (act) { sent.push(act); throw stockError } }
+  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.send('mark')) })
+  assert.throws(() => owner.click(), (error) => error === stockError)
+  assert.deepEqual(sent, ['mark'])
+  assert.deepEqual([warned, skipped], [[], []])
 })
 
 test('a wrapper whose own code throws before SudokuPad\'s call makes that call with the arguments it was given', (t) => {

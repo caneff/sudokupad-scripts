@@ -126,6 +126,14 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
+async function dialogLineOf (p) {
+  await openExtrasEditor(p)
+  const text = await p.locator('#pen-tool-extras-editor').innerText()
+  const line = /Off because SudokuPad changed: (.*)/.exec(text)
+  await closeExtrasEditorWith(p, 'Cancel')
+  return line ? line[1].trim() : NOTHING_OFF
+}
+
 // The snippet runs on `Framework.getApp()` before the script's own, so the script's startup check sees the internal already broken.
 const withBreak = (kase) => `;Framework.getApp().then(() => { ${kase.breaks || ''} });\n${kase.source || script}`
 
@@ -143,13 +151,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // The pen value of each stored entry, without its color character.
       const edgeValues = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
       const undoAll = async () => { while ((await penEntries(p)).length) await p.click('#control-undo') }
-      const dialogLine = async () => {
-        await openExtrasEditor(p)
-        const text = await p.locator('#pen-tool-extras-editor').innerText()
-        const line = /Off because SudokuPad changed: (.*)/.exec(text)
-        await closeExtrasEditorWith(p, 'Cancel')
-        return line ? line[1].trim() : NOTHING_OFF
-      }
+      const dialogLine = () => dialogLineOf(p)
 
       before(async () => {
         warned = []
@@ -270,4 +272,54 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       })
     })
   }
+})
+
+// SudokuPad's own `actSend` throws once, after it has sent a click's actions (a render that fails, say). That throw is SudokuPad's: no
+// step is skipped, and the click is not sent a second time, which would step the mark on again.
+describe('SudokuPad throws after sending a click', { concurrency: false }, () => {
+  let context, p, errors, warned
+  const read = (fn, arg) => p.evaluate(fn, arg)
+  const clickEdge = async () => {
+    const [x, y] = await gridPoint(p, [2, 2.5])
+    await p.mouse.click(x, y + 2)
+  }
+  const edgeValues = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
+  const breaks = `const send = ToolPen.tool.actSend
+    window.failOnce = false
+    ToolPen.tool.actSend = function () {
+      const sent = send.apply(this, arguments)
+      if (window.failOnce) { window.failOnce = false; throw new TypeError('planted after the send') }
+      return sent
+    }`
+
+  before(async () => {
+    warned = []
+    ;({ context, p, errors } = await openPage(browser, {
+      seed: (page, errs) => {
+        page.on('console', (m) => {
+          if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
+        })
+        captureConsoleErrors(page, errs)
+      }
+    }))
+    await startPuzzle(p)
+    await p.addScriptTag({ content: withBreak({ breaks }) })
+    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
+    await read((keys) => { keys.forEach((k) => Framework.removeData(k)); Framework.setSetting('toolpen', true) }, KEYS)
+    await p.locator('#control-pen').waitFor({ state: 'visible' })
+    await openPenTool(p)
+  })
+  after(async () => { await context.close() })
+
+  // Undo is not used across the throw: SudokuPad's own release handler stops at it with its input state unreset, as it would with no script.
+  it('the click is sent once, nothing is skipped and the next click is this script\'s arrow', async () => {
+    await read(() => { window.failOnce = true })
+    await clickEdge()
+    assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'one X on the click that threw, not stepped on by a second send')
+    await clickEdge()
+    assert.deepEqual(await settle(edgeValues, ['m']), ['m'], 'marks are still on')
+    assert.deepEqual(warned, [])
+    assert.equal(await dialogLineOf(p), NOTHING_OFF)
+    assert.deepEqual(errors.filter((e) => !/planted after the send/.test(e)), [])
+  })
 })
