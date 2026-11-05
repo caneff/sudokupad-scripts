@@ -49,13 +49,13 @@ function group (title, extra = []) {
     const styleOf = (selector) => read((s) => { const st = window.getComputedStyle(document.querySelector(s)); return { dash: st.strokeDasharray, stroke: st.stroke, width: st.strokeWidth } }, selector)
     const pageErrors = () => errors.slice()
 
-    const selectPen = async () => {
+    const openToolAndPageButton = async () => {
       await openPenTool(p)
       await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     }
 
     // One free line across the middle of grid row `row`, a real drag; a second line takes another row.
-    const draw = async (row) => {
+    const drawFromColumn2 = async (row) => {
       const before = await strokeCount()
       const [x, y] = await cellCentre(p, row, 2)
       await p.mouse.move(x, y)
@@ -90,7 +90,7 @@ function group (title, extra = []) {
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await read(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolletter', true) })
       await p.locator('#control-pen').waitFor({ state: 'visible' })
-      await selectPen()
+      await openToolAndPageButton()
     }
     const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
 
@@ -139,7 +139,7 @@ function group (title, extra = []) {
 
     it('a line drawn with a page 2 pen is dashed in its partner\'s color; a line with its page 1 partner stays solid', async () => {
       const colorOf3 = await read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
-      await draw(8)
+      await drawFromColumn2(8)
       assert.deepEqual((await penStrings(p)).filter((v) => v.endsWith('c')), ['1c'])
       const dashed = await styleOf('.cell-pen.pencolor-c')
       assert.notEqual(dashed.dash, 'none')
@@ -148,7 +148,7 @@ function group (title, extra = []) {
       assert.equal(await read((c) => { const probe = document.createElement('span'); probe.style.color = c; document.body.appendChild(probe); const v = window.getComputedStyle(probe).color; probe.remove(); return v }, colorOf3), dashed.stroke)
       await goToPage(PAGE_ONE)
       assert.equal(await settle(selected, '3'), '3')
-      await draw(7)
+      await drawFromColumn2(7)
       assert.equal((await styleOf('.cell-pen.pencolor-3')).dash, 'none')
     })
 
@@ -197,7 +197,7 @@ function group (title, extra = []) {
       assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray), 'none', 'a cell mark stays solid')
       await reload()
       assert.equal(await settle(dashOn, 0), 0, 'a saved 0 stays after a reload')
-      await selectPen()
+      await openToolAndPageButton()
       await goToPage(PAGE_ONE)
       assert.equal(await settle(sample, 'dots'), 'dots', 'the page button shows dots at 0')
       await goToPage(PAGE_TWO)
@@ -215,7 +215,7 @@ function group (title, extra = []) {
     })
 
     it('the page button shows the line of the page it turns to: chevrons from page 2, solid from page 3, dashes from page 1', async () => {
-      await selectPen()
+      await openToolAndPageButton()
       // The button shows the line of the page it turns to: from page 2 the chevrons of page 3, from page 3 page 1's solid line,
       // from page 1 the dashes.
       assert.equal(await settle(sample, 'chevrons'), 'chevrons')
@@ -441,7 +441,7 @@ function group (title, extra = []) {
       await read(() => Framework.app.changeTool('normal'))
       assert.equal(await settle(padValues, PAGE_ONE), PAGE_ONE)
       assert.equal(await p.locator(PAGE_BUTTON).count(), 0)
-      await selectPen()
+      await openToolAndPageButton()
       assert.equal(await settle(padValues, PAGE_TWO), PAGE_TWO)
       assert.equal(await selected(), 'c')
       assert.equal(await currentButtonKey(), '3')

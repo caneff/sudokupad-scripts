@@ -15,7 +15,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, newPage, openPage, restartPuzzle, scaleOf, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, effectiveOpacities, openExtrasEditor, openSettings } from './settings.mjs'
-import { cellCentre, openPenTool, penValuesAt, plantSaved, setSlider } from './pen.mjs'
+import { cellCentre, openPenTool, penValuesAt, plantSaved, plantUnchecked, setSlider } from './pen.mjs'
 import { settle, SETTLE_MS, stable } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -856,7 +856,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('corrupt saved opacity falls back to 0.8 with no thrown error', async () => {
       const errorsBefore = errors.length
       for (const bad of ['{not json', '"40"', '99', '0', '37', '[40]', 'null', '105']) {
-        await plantSaved(p, OPACITY_KEY, bad)
+        await plantUnchecked(p, OPACITY_KEY, bad)
         await reload()
         await drawAll()
         assert.equal(await settle(sameAt('0.8'), true), true, bad)

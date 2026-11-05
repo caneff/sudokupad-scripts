@@ -46,7 +46,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   // One horizontal line in pen color 1 through the middle of grid row `row`, from column 3 to column 5 (a drag between cell
   // centers in the center-only mode, so it is straight), on pen page `page` (0 is the first).
-  const draw = async (row = 8, page = 0) => {
+  const drawCenterOnlyLine = async (row = 8, page = 0) => {
     await openPenTool(p)
     for (let i = 0; i < page; i++) await p.click('.pen-tool-extras-page')
     await read(() => { ToolPen.tool.lineMode = 'centeronly' })
@@ -69,7 +69,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const unback = () => read(() => document.getElementById('live-backing')?.remove())
 
   // The brightness (0 to 255, red channel) of the pixel `units` above the middle of the drawn line, read off a screenshot loaded
-  // into a second page's canvas. The line is the one `draw` made in the middle of its row.
+  // into a second page's canvas. The line is the one `drawCenterOnlyLine` made in the middle of its row.
   const brightnessAbove = async (units, row = 8) => {
     const geometry = await read((row) => {
       const box = Framework.app.puzzle.cells.find((c) => c.row === row && c.col === 4).elem.getBoundingClientRect()
@@ -109,7 +109,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     reader = await context.newPage()
     await boot()
     await clearSaved()
-    await draw()
+    await drawCenterOnlyLine()
   })
   after(async () => {
     await clearSaved()
@@ -275,7 +275,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const DOT_ROW = 3
     await read(([t, d, o, w, op]) => { Framework.setData(t, 1); Framework.setData(d, 0); Framework.setData(o, true); Framework.setData(w, 8); Framework.setData(op, 100) }, [THICKNESS_KEY, DASH_KEY, OUTLINE_KEY, OUTLINE_WIDTH_KEY, OPACITY_KEY])
     await reload()
-    await draw(DOT_ROW, 1)
+    await drawCenterOnlyLine(DOT_ROW, 1)
     await back()
     assert.equal(await settle(() => brightnessAbove(OUTLINE_UNITS, DOT_ROW).then((v) => v > 200), true), true, 'white 4 units above the dots at width 8')
     assert.equal(await brightnessAbove(WIDE_UNITS, DOT_ROW) > 200, true, 'white 7 units above the dots at width 8')

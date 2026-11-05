@@ -13,7 +13,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { drawnWidth, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, headerVersion, openExtrasEditor, openSettings } from './settings.mjs'
-import { openPenTool, plantSaved, setSlider } from './pen.mjs'
+import { openPenTool, plantUnchecked, setSlider } from './pen.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -100,7 +100,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   // Draws one stroke with pen color `n` in row `row` of the screen's first cell column, so
   // that no two strokes are the same line.
-  const draw = async (n, row) => {
+  const drawInFirstColumn = async (n, row) => {
     await openPenTool(p)
     await p.locator(`.tool-pen button[data-key="${n}"]`).click()
     const [x, y] = await read((row) => {
@@ -134,7 +134,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('a fresh install has nothing saved, and swatches and strokes show the darkened first color page', async () => {
     assert.equal(await saved(), null)
     await swatchesAre(PAGE_PENS[0])
-    await draw(4, 1)
+    await drawInFirstColumn(4, 1)
     assert.deepEqual(await settle(allStrokes(4), [rgbOf(PAGE_PENS[0][3])]), [rgbOf(PAGE_PENS[0][3])])
   })
 
@@ -190,8 +190,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await swatch(4), FOUR.rgb)
     assert.equal(await swatch(9), NINE.rgb)
     const oldCount = (await strokes(4)).length
-    await draw(4, 2)
-    await draw(9, 3)
+    await drawInFirstColumn(4, 2)
+    await drawInFirstColumn(9, 3)
     // One drag can draw more than one stroke element, so the count is only checked to grow.
     assert.equal(await settle(async () => (await strokes(4)).length > oldCount, true), true)
     assert.deepEqual(await allStrokes(4)(), [FOUR.rgb])
@@ -201,7 +201,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a pen color left unedited keeps its color', async () => {
     assert.equal(await swatch(1), rgbOf(PAGE_PENS[0][0]))
-    await draw(1, 4)
+    await drawInFirstColumn(1, 4)
     assert.deepEqual(await settle(allStrokes(1), [rgbOf(PAGE_PENS[0][0])]), [rgbOf(PAGE_PENS[0][0])])
   })
 
@@ -230,7 +230,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
     assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex, 9: NINE.hex })
     await swatchesAre(Object.values({ ...toObject(PAGE_PENS[0]), 4: FOUR.hex, 9: NINE.hex }))
-    await draw(4, 5)
+    await drawInFirstColumn(4, 5)
     assert.deepEqual(await settle(allStrokes(4), [FOUR.rgb]), [FOUR.rgb])
     await setCellColor(['1', CELL_VARS[1]])
   })
@@ -281,7 +281,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('cycling the color page mid-solve leaves the pen alone', async () => {
-    await draw(4, 6)
+    await drawInFirstColumn(4, 6)
     const before = await allStrokes(4)()
     await setCellColorPage(0)
     await swatchesAre(PAGE_PENS[2])
@@ -375,7 +375,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('corrupt saved settings fall back to the derived colors with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
-      await plantSaved(p, DATA_KEY, bad)
+      await plantUnchecked(p, DATA_KEY, bad)
       await reload()
       assert.equal(await settle(() => swatch(4), rgbOf(PAGE_PENS[2][3])), rgbOf(PAGE_PENS[2][3]), bad)
     }
@@ -404,7 +404,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await read((k) => Framework.removeData(k), THICKNESS_KEY)
       await read((k) => Framework.removeData(k), DATA_KEY)
       await reload()
-      await draw(1, 7)
+      await drawInFirstColumn(1, 7)
     })
     after(async () => { await read((k) => Framework.removeData(k), THICKNESS_KEY) })
 
@@ -430,14 +430,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await savedThickness(), 9)
       assert.equal(await saved(), null)
       assert.deepEqual(await settle(widths(1), [9]), [9])
-      await draw(2, 8)
+      await drawInFirstColumn(2, 8)
       assert.deepEqual(await settle(widths(2), [9]), [9])
       await reload()
       assert.equal(await saved(), null)
       await swatchesAre(PAGE_PENS[2])
       await openPenTool(p)
       assert.equal(await slider().inputValue(), '9')
-      await draw(3, 9)
+      await drawInFirstColumn(3, 9)
       assert.deepEqual(await settle(widths(3), [9]), [9])
     })
 
@@ -500,7 +500,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('corrupt saved thickness falls back to 5, the settings entry still opens the dialog, and nothing throws', async () => {
       const errorsBefore = errors.length
       for (const bad of ['{not json', '"9"', '99', '0', '2.5', '[7]', 'null']) {
-        await plantSaved(p, THICKNESS_KEY, bad)
+        await plantUnchecked(p, THICKNESS_KEY, bad)
         await reload()
         assert.deepEqual(await settle(allWidths, { full: [5], half: [2.5] }), { full: [5], half: [2.5] }, bad)
         // A startup that threw would stop before it added the settings entry.
@@ -625,7 +625,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('a picker input event alone recolors the swatch and strokes live and saves the whole set; the dialog shows it', async () => {
-      await draw(4, 7)
+      await drawInFirstColumn(4, 7)
       await holdToOpen(4)
       const depth = await undoDepth()
       // Only an `input` event, no `change`: the color must apply while the picker is still open.

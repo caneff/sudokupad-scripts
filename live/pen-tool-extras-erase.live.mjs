@@ -43,7 +43,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const undoAll = async () => { while ((await undoDepth()) > 0) await undo() }
 
   // Turns to pen page `page` and selects the pen on button `key`.
-  const selectPen = async (page, key) => {
+  const selectPenOnPage = async (page, key) => {
     await openPenTool(p)
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     for (let i = 0; i < 3 && (await padValues()) !== PAGES[page]; i++) await p.locator(PAGE_BUTTON).click()
@@ -82,11 +82,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it(`page ${page}: a middle click erases the whole line with its branch, leaves a crossing from another pen, and one undo brings it all back`, async () => {
       await restartPuzzle(p)
       // the other pen: a vertical line through the row, drawn first with the pen on button 6 of the same page
-      await selectPen(page, 6)
+      await selectPenOnPage(page, 6)
       await drag(p, [[0.5, 4.5], [4.5, 4.5]])
       const otherPen = await penEntries(p)
       assert.equal(otherPen.length, 4)
-      await selectPen(page, key)
+      await selectPenOnPage(page, key)
       await drag(p, [[2.5, 2.5], [2.5, 4.5]])
       // the second half goes the other way on page 3: drawn from its right end to the left
       await drag(p, [[2.5, 6.5], [2.5, 4.5]])
@@ -119,7 +119,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('with the Middle click box unticked a middle click erases nothing and prevents no default (autoscroll as stock); the box is ticked by default, saves as false, and ticking it again brings the erase back', async () => {
     await undoAll()
-    await selectPen(1, 3)
+    await selectPenOnPage(1, 3)
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     const lines = await penEntries(p)
     await openEditor()
@@ -150,7 +150,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), null, 'ticked is the default and is not kept')
     await undoAll()
-    await selectPen(1, 3)
+    await selectPenOnPage(1, 3)
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     await middleClick([2.5, 3.0])
     assert.deepEqual(await settle(() => penEntries(p), []), [], 'the erase is back')
@@ -161,7 +161,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a middle click where there is no line does nothing and makes no mark, not in a cell\'s middle, on an edge or off the grid', async () => {
     await undoAll()
-    await selectPen(1, 3)
+    await selectPenOnPage(1, 3)
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     const lines = await penEntries(p)
     const depth = await undoDepth()
@@ -177,7 +177,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('marks are never erased: a middle click on a line leaves a cell circle, a cross and an edge X', async () => {
     await undoAll()
-    await selectPen(1, 3)
+    await selectPenOnPage(1, 3)
     await drag(p, [[2.5, 2.5], [2.5, 5.5]])
     const line = await penEntries(p)
     // a cell circle and cross (left clicks in cell middles off the line), and an edge X on a cell's right edge
@@ -195,7 +195,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a middle click hits where the pointer is now, not the position SudokuPad last saw: a dialog stops its tracking, and a press right after it closes erases nothing', async () => {
     await undoAll()
-    await selectPen(1, 3)
+    await selectPenOnPage(1, 3)
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     const lines = await penEntries(p)
     await p.mouse.move(...await gridPoint(p, [2.5, 3.0]))
@@ -219,7 +219,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const presses = () => read(() => { const out = window.__presses; window.__presses = []; return out })
     // a browser that still sends `mousedown` after a prevented `pointerdown` (Chromium does not): one sent by hand on the grid
     const syntheticMousedown = (button) => read((b) => document.querySelector('#svgrenderer').dispatchEvent(new MouseEvent('mousedown', { button: b, bubbles: true, cancelable: true })), button)
-    await selectPen(1, 3)
+    await selectPenOnPage(1, 3)
     await presses()
     await middleClick([6.5, 6.5])
     assert.deepEqual(await presses(), [['pointerdown', 1, true]], 'the prevented pointerdown is the only event: no mouse events follow')
