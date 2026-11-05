@@ -619,6 +619,25 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
   }
 })
 
+test('entry point: a Framework without getApp warns and changes nothing', () => {
+  const path = require.resolve('./color-by-digit.user.js')
+  const saved = require.cache[path]
+  delete require.cache[path]
+  const warnings = []
+  const warn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  global.Framework = {}
+  try {
+    require(path)
+    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed'])
+  } finally {
+    console.warn = warn
+    delete global.Framework
+    delete require.cache[path]
+    if (saved) require.cache[path] = saved
+  }
+})
+
 // A SudokuPad stand-in for the auto mode wrapper: cells hold a digit and colors, `act` applies
 // value/clear/colour/select/deselect/group actions and records every call, and `puzzle.inGroup` follows the group actions.
 // `single` mimics SudokuPad with Multi-color off: a color toggle acts on the whole cell, so taking one

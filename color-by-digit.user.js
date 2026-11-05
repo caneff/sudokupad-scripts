@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.3
+// @version      0.5.4
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.5.3'
+  const VERSION = '0.5.4'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
@@ -192,11 +192,14 @@
     return out
   }
 
+  // A profile name as stored: trimmed and cut to MAX_NAME_LENGTH.
+  const cleanName = (name) => String(name).trim().slice(0, MAX_NAME_LENGTH)
+
   // A profile as saved data may hold it: a name that is not blank and clean groups, else null.
   function normalizeProfile (data) {
     if (!data || typeof data.name !== 'string' || data.name.trim() === '') return null
     const groups = normalizeGroups(data.groups)
-    return groups && { name: data.name.trim().slice(0, MAX_NAME_LENGTH), groups }
+    return groups && { name: cleanName(data.name), groups }
   }
 
   // Saved profiles are untrusted: a clean state, or null when no profile is usable. A profile that is
@@ -234,7 +237,7 @@
 
   // A copy of the active profile joins the end under `name`. Nothing at MAX_PROFILES or with a blank name.
   function addProfile (state, name) {
-    const trimmed = String(name).trim().slice(0, MAX_NAME_LENGTH)
+    const trimmed = cleanName(name)
     if (state.profiles.length >= MAX_PROFILES || trimmed === '') return state
     const copy = { name: trimmed, groups: cloneGroups(activeGroups(state)) }
     return { profiles: [...state.profiles.map(cloneProfile), copy], active: state.active }
@@ -414,9 +417,12 @@
     })
   }
 
+  // The ten slots of a laid-out page: index 0, then indices 1-9. An empty slot is null.
+  const pageSlots = (p) => [p.zero, ...p.rows.flat()]
+
   // Every visible color of the laid-out pages, page by page, index 0 first.
   function layoutColors (pages) {
-    return pages.flatMap((p) => [p.zero, ...p.rows.flat()]).filter(Boolean)
+    return pages.flatMap(pageSlots).filter(Boolean)
   }
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -440,7 +446,7 @@
   // The page a group opens on: the page that holds its color, the current page first when the
   // color is on several; the current page when no page holds it, and the first with none current.
   function initialPage (pages, key) {
-    const holds = (p) => [p.zero, ...p.rows.flat()].some((slot) => slot && slot.key === key)
+    const holds = (p) => pageSlots(p).some((slot) => slot && slot.key === key)
     const found = pages.find((p) => p.current && holds(p)) || pages.find(holds) || pages.find((p) => p.current)
     return found ? found.page : 0
   }
@@ -463,7 +469,7 @@
     const swatches = page.rows.flat().map((slot) => renderSwatch(slot, groupIndex, key)).join('')
     const zero = page.zero ? `<div style="${grid};margin-top:6px">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
     return '<div style="margin-bottom:6px">' +
-      `<select data-act="page" data-group="${groupIndex}" aria-label="Palette page" style="${PULLDOWN_LOOK}">${options}</select> ${renderChosen(colors, key)}</div>` +
+      `<select data-act="page" data-group="${groupIndex}" aria-label="Cell color page" style="${PULLDOWN_LOOK}">${options}</select> ${renderChosen(colors, key)}</div>` +
       `<div style="${grid}">${swatches}</div>${zero}`
   }
 
@@ -581,16 +587,25 @@
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
-  if (typeof Framework === 'undefined' || !Framework.getApp) return
+  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
+  // has no Framework and is left alone. A Framework without `getApp` is a SudokuPad this script
+  // cannot hook, which is reported.
+  if (typeof Framework === 'undefined') return
+  if (!Framework.getApp) {
+    console.warn('color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed')
+    return
+  }
+
+  // The name of the page variable that holds a palette key's color.
+  const colorVariable = (key) => `--cell-color-${key}`
 
   // The color tool's pages laid out as SudokuPad's buttons are, read now from the tool and
-  // the raw `--cell-color-<key>` values; [] until the tool holds a palette.
+  // the colors `readColor` resolves; [] until the tool holds a palette.
   function readPages () {
     const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
     const palette = tool && tool.palette
     if (!palette || !Array.isArray(palette.pages)) return []
-    const style = window.getComputedStyle(document.documentElement)
-    return layoutPages(palette.pages, tool.currentPage, (key) => style.getPropertyValue(`--cell-color-${key}`))
+    return layoutPages(palette.pages, tool.currentPage, readColor)
   }
 
   const loadState = () => stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
@@ -600,7 +615,7 @@
   // The CSS color of a palette key as the browser draws it (`rgb(...)`), or '' when the key has no
   // visible color. The raw `--cell-color-<key>` value can be any CSS color, so it is resolved on a probe.
   function readColor (key) {
-    const raw = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
+    const raw = window.getComputedStyle(document.documentElement).getPropertyValue(colorVariable(key)).trim()
     if (!isVisibleColor(raw)) return ''
     const probe = document.createElement('span')
     probe.style.color = raw
