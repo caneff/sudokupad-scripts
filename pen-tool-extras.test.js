@@ -8,8 +8,8 @@ const {
   normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
-  stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapeOf, shapePath,
-  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, cornerMarkOf, planCornerClick,
+  stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
+  CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
@@ -612,13 +612,14 @@ test('two marks on one edge, as a replay can hold, both go on the next click', (
   assert.deepEqual(planClick('3', ['3', 'i'], ALL), { remove: ['3', 'i'], add: 'j' })
 })
 
-test('shapeOf names the arrow each character draws, per edge', () => {
-  assert.deepEqual(['h', 'i', 'j'].map(shapeOf), ['>', '<', 'o'])
-  assert.deepEqual(['k', 'l', 'm'].map(shapeOf), ['^', 'v', 'o'])
-  assert.deepEqual(['n', 'o', 'p'].map(shapeOf), ['>', '<', 'o'])
-  assert.deepEqual(['q', 'r', 's'].map(shapeOf), ['^', 'v', 'o'])
-  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 't', 'z']) {
-    assert.equal(shapeOf(other), null, other)
+test('addedMark draws the arrow each edge character names, per edge, and nothing for a value it does not add', () => {
+  const shapes = (values) => values.map((v) => addedMark(v, 3, 4, 9).shape)
+  assert.deepEqual(shapes(['h', 'i', 'j']), ['>', '<', 'o'])
+  assert.deepEqual(shapes(['k', 'l', 'm']), ['^', 'v', 'o'])
+  assert.deepEqual(shapes(['n', 'o', 'p']), ['>', '<', 'o'])
+  assert.deepEqual(shapes(['q', 'r', 's']), ['^', 'v', 'o'])
+  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'z']) {
+    assert.equal(addedMark(other, 3, 4, 9), null, other)
   }
 })
 
@@ -751,7 +752,7 @@ test('the corner characters are lowercase letters SudokuPad does not use and the
     assert.equal(CORNER_VALUES[kind].length, 2)
     for (const value of CORNER_VALUES[kind]) {
       assert.match(value, /^[h-z]$/)
-      assert.equal(shapeOf(value), null, `${value} is an edge character`)
+      assert.deepEqual(addedMark(value, 3, 4, 9).point, cornerPoint(kind, 3, 4, 9), `${value} is drawn at its corner, not an edge`)
       assert.equal(used.has(value), false, value)
       used.add(value)
     }
@@ -759,11 +760,10 @@ test('the corner characters are lowercase letters SudokuPad does not use and the
   assert.equal(used.size, 6)
 })
 
-test('cornerMarkOf names the kind and type a corner character draws, and nothing for another character', () => {
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[0]), { kind: 'br', type: 'x' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.br[1]), { kind: 'br', type: 'circle' })
-  assert.deepEqual(cornerMarkOf(CORNER_VALUES.far[1]), { kind: 'far', type: 'circle' })
-  for (const other of ['3', '4', 'b', 'c', '0', '5', 'a', 'g', 'h', 's', 'z']) assert.equal(cornerMarkOf(other), null, other)
+test('addedMark draws a corner character at its kind\'s corner, the X as x and the circle as o', () => {
+  assert.deepEqual(addedMark(CORNER_VALUES.br[0], 3, 4, 9), { point: cornerPoint('br', 3, 4, 9), shape: 'x' })
+  assert.deepEqual(addedMark(CORNER_VALUES.br[1], 3, 4, 9), { point: cornerPoint('br', 3, 4, 9), shape: 'o' })
+  assert.deepEqual(addedMark(CORNER_VALUES.far[1], 0, 8, 9), { point: cornerPoint('far', 0, 8, 9), shape: 'o' })
 })
 
 test('the corner cycle is X, circle, empty, and a click on an empty corner adds the X', () => {
