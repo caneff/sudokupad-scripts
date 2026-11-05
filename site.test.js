@@ -82,7 +82,7 @@ test('the details page links back to the homepage and carries the Pen Tool Extra
 const WARNING = /<\/h1>\s*<p class="warning">([\s\S]*?)<\/p>/
 const WARNINGS = {
   [HOME]: "These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.",
-  [DETAILS]: "This script can break at any time, and there are no guarantees. It relies on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break it without notice. It isn't made or supported by SudokuPad."
+  [DETAILS]: "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad."
 }
 
 for (const [name, text] of Object.entries(WARNINGS)) {
@@ -99,29 +99,31 @@ for (const [name, text] of Object.entries(WARNINGS)) {
 }
 
 // The details page text is pinned word for word: each feature says what you can do, not which control the script adds.
+const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
 const section = (page, heading) => {
   const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
   assert.ok(m, `site/${DETAILS} has no <h2>${heading}</h2> followed by a list`)
-  return [...m[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map(li => plain(li[1]))
+  return items(m[1]).map(plain)
 }
 // An item's opening words are its bold lead-in: the first <strong> of the item.
-const leadIns = page => [...page.matchAll(/<li><strong>([^<]*)<\/strong>/g)].map(m => m[1])
+const leadIn = li => (li.match(/^<strong>([^<]*)<\/strong>/) || [])[1]
+const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
 test(`${DETAILS} intro says what the script adds`, () => {
-  const m = read(DETAILS).match(/<\/p>\s*<p>(Pen Tool Extras makes[\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${DETAILS} has no intro paragraph starting "Pen Tool Extras makes"`)
-  assert.equal(plain(m[1]), "Pen Tool Extras makes SudokuPad's pen tool more useful. It adds pen colors that match your cell colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
+  const m = read(DETAILS).match(/<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>'s pen tool[\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${DETAILS} has no intro paragraph starting "Adds to SudokuPad's pen tool", with SudokuPad linked`)
+  assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
 test(`${DETAILS} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(section(read(DETAILS), 'What it adds'), [
-    'Pen colors that match your cell colors. The nine pen colors are darker versions of your cell colors, so a line matches the cells it marks. Change any of them by holding its pen color button, or in the settings dialog. A button there brings back SudokuPad\'s own pen colors.',
-    'Dashed lines and arrow lines. Two extra pages of pens: one draws dashed lines, the other draws lines with arrows along them. Switch pages with the page button, the Tab key, or the mouse wheel over the page button. You can turn off either page, and set the dash length and the arrow spacing, in the settings.',
-    'Marks on cell edges. Click a cell edge to put an X, a circle or an arrow on it. Click again to cycle through them, or right-click to go back.',
-    'Marks on grid corners. Click near a grid corner for an X or a circle. Right-click goes back here too.',
-    'Erase a whole line in one click. A middle click removes the line under the pointer, branches and all, in one undo step. An arrow line goes in one click from either end. You can turn this off in the settings.',
-    'Thicker, fainter or outlined lines. Thickness and opacity sliders sit in the pen panel, and you can hide either one. A white outline, on by default, keeps lines readable over colored cells. You can set its width.',
-    'Settings one click away. A small gear on the pen tool button opens the settings dialog.'
+    'Pen colors that match your cell colors. Darker versions of your cell colors. Hold a pen color button to change one.',
+    'Dashed lines and arrow lines. Two more pages of pens. Switch with the page button.',
+    'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
+    'Marks on grid corners. Click near a corner for an X or a circle.',
+    'Erase a whole line. Middle-click a line to remove all of it.',
+    'Thicker, fainter or outlined lines. Sliders in the pen panel. A white outline keeps lines readable over colored cells.',
+    'A settings gear. On the pen tool button.'
   ])
 })
 
@@ -131,14 +133,46 @@ test(`${DETAILS} opens each feature with its bold lead-in`, () => {
     'Dashed lines and arrow lines.',
     'Marks on cell edges.',
     'Marks on grid corners.',
-    'Erase a whole line in one click.',
+    'Erase a whole line.',
     'Thicker, fainter or outlined lines.',
-    'Settings one click away.'
+    'A settings gear.'
   ])
 })
 
-test(`${DETAILS} good to know names the dashed and arrow pages`, () => {
-  assert.deepEqual(section(read(DETAILS), 'Good to know'), ["Other people can't see lines from the dashed or arrow pages unless they have the script too."])
+// Each feature a still picture can show has one picture inside its item; the erase item has none, since a
+// middle click does not show in a still picture. The page has no figure.
+const PICTURES = {
+  'Pen colors that match your cell colors.': 'colors',
+  'Dashed lines and arrow lines.': 'lines',
+  'Marks on cell edges.': 'edges',
+  'Marks on grid corners.': 'corners',
+  'Thicker, fainter or outlined lines.': 'sliders',
+  'A settings gear.': 'gear'
+}
+const NO_PICTURE = 'Erase a whole line.'
+const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
+
+test(`${DETAILS} puts one picture with alt text on each feature a picture can show`, () => {
+  const byLeadIn = new Map(items(read(DETAILS)).map(li => [leadIn(li), li]))
+  for (const [leadIn, name] of Object.entries(PICTURES)) {
+    const found = imgs(byLeadIn.get(leadIn) || '')
+    assert.equal(found.length, 1, `"${leadIn}" has ${found.length} images, not 1`)
+    assert.ok(found[0].includes(`src="${RAW}docs/research/pen-tool-extras-bullet-${name}.png"`), `"${leadIn}" does not show pen-tool-extras-bullet-${name}.png`)
+    assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${leadIn}" has an image with no alt text`)
+  }
+})
+
+test(`${DETAILS} has no picture on the erase item and no large example figure`, () => {
+  const page = read(DETAILS)
+  const erase = items(page).find(li => leadIn(li) === NO_PICTURE)
+  assert.ok(erase, `site/${DETAILS} has no "${NO_PICTURE}" item`)
+  assert.deepEqual(imgs(erase), [])
+  assert.doesNotMatch(page, /<figure\b/)
+  assert.equal(imgs(page).length, Object.keys(PICTURES).length)
+})
+
+test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
+  assert.deepEqual(section(read(DETAILS), 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
 })
 
 test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, () => {
