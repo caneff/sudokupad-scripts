@@ -171,7 +171,7 @@ test(`${DETAILS} has no picture on the erase item and no large example figure`, 
   assert.equal(imgs(page).length, Object.keys(PICTURES).length)
 })
 
-test(`${DETAILS} good to know names the dashed and arrow pages`, () => {
+test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
   assert.deepEqual(section(read(DETAILS), 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
 })
 
