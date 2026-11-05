@@ -34,8 +34,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   startup that way (it loads with no page error, its control appears, one action works), and the two "auto mode saved on"
   groups of `live/color-by-digit-auto.live.mjs` do too. Dark Page's page color dialog group injects at `DOMContentLoaded` only. SudokuPad is served from a recording (`live/cache.mjs`, kept in
   `${XDG_CACHE_HOME:-~/.cache}/sudokupad-scripts/live/`, shared by every worktree): a recording
-  older than a day is checked against SudokuPad's version with one plain request and re-recorded only when it changed, as is one
-  after `LIVE_REFRESH=1` (both need the network), and the rest replay it;
+  older than a day is checked against SudokuPad's version with one plain request and re-recorded only when it changed;
+  `LIVE_REFRESH=1` records again at once, whatever the version (both need the network), and the rest replay it;
   `LIVE_OFFLINE=1` never touches the network and fails naming any request the recording lacks.
   It also needs a Playwright Chromium
   (`npx playwright install chromium`), so it stays out of `npm test` and
