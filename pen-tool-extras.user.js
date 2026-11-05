@@ -649,14 +649,27 @@
   const PAGE_BUTTON = 'pen-tool-extras-page'
   const PAGE_ATTRIBUTE = 'data-pen-page'
 
+  // Each color character of the pen pages: its pen (the character on its button), its page, its color number, and `forward`, the way an arrow page's character was dragged
+  // (null off an arrow page). An arrow page's pen also gives its `reverse` character.
+  const COLOR_CHARS = new Map(PEN_PAGES.flatMap((page, index) => page.chars.flatMap((pen, i) => {
+    const entry = (forward) => ({ pen, page: index, number: PEN_COLOR_NUMBERS[i], forward, reverse: page.arrowLines ? page.reverse[i] : undefined })
+    return page.arrowLines ? [[pen, entry(true)], [page.reverse[i], entry(false)]] : [[pen, entry(null)]]
+  })))
+
   // An arrow page's reverse characters are on no button, so they are no pen.
+  function penOf (pen) {
+    const entry = COLOR_CHARS.get(pen)
+    return entry && entry.pen === pen ? entry : undefined
+  }
+
   function penPageOf (pen) {
-    return PEN_PAGES.findIndex((page) => page.chars.includes(pen))
+    const entry = penOf(pen)
+    return entry ? entry.page : -1
   }
 
   function penNumber (pen) {
-    const page = PEN_PAGES[penPageOf(pen)]
-    return page ? PEN_COLOR_NUMBERS[page.chars.indexOf(pen)] : undefined
+    const entry = penOf(pen)
+    return entry && entry.number
   }
 
   function penCharOn (page, number) {
@@ -684,7 +697,7 @@
 
   function pageAfterSave (pen, styles) {
     const page = penPageOf(pen)
-    return page === -1 || enabledPages(styles).includes(page) ? pen : penCharOn(0, penNumber(pen))
+    return page === -1 || enabledPages(styles).includes(page) ? pen : penNumber(pen)
   }
 
   const swatchMask = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, '%27')}") center / 100% no-repeat`
@@ -916,17 +929,13 @@
   const ARROW_LINE = { halfLength: 1.125, halfWidth: 1.5, line: 1 }
 
   function arrowLineWayOf (char) {
-    for (const page of PEN_PAGES) {
-      if (!page.arrowLines) continue
-      if (page.chars.includes(char)) return true
-      if (page.reverse.includes(char)) return false
-    }
-    return null
+    const entry = COLOR_CHARS.get(char)
+    return entry ? entry.forward : null
   }
 
   function directionCharOf (pen, forward) {
-    const page = PEN_PAGES[penPageOf(pen)]
-    return !page || !page.arrowLines || forward ? pen : page.reverse[page.chars.indexOf(pen)]
+    const entry = penOf(pen)
+    return forward || !entry || !entry.reverse ? pen : entry.reverse
   }
 
   function lineSegment (from, to) {
@@ -1328,10 +1337,8 @@
 
   // An arrow pen's two direction characters are one pen.
   function lineIdentityOf (color) {
-    for (const page of PEN_PAGES) {
-      if (page.reverse && page.reverse.includes(color)) return page.chars[page.reverse.indexOf(color)]
-    }
-    return color
+    const entry = COLOR_CHARS.get(color)
+    return entry ? entry.pen : color
   }
 
   function distanceToSegment (point, a, b) {
