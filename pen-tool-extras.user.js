@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.14.3
+// @version      1.14.4
 // @description  Pen tool extras: sets the pen's nine colors to your current cell color page, darkened (or your own, saved in a settings dialog or by holding a pen color button), adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are and put SudokuPad's own pen colors back with one button, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a feature: that feature turns off alone and the settings dialog says which, and SudokuPad's own pen drawing is left as it is.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '1.14.3'
+  const VERSION = '1.14.4'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // PenColor_colors and EdgeMarks_marks are the keys the scripts this one replaced saved under.
@@ -1418,7 +1418,13 @@
       HOLD_TO_EDIT_MS
     }
   }
-  if (typeof Framework === 'undefined' || !Framework.getApp) return
+  // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com) and is left alone;
+  // a Framework without `getApp` is a SudokuPad this script cannot hook, which is reported.
+  if (typeof Framework === 'undefined') return
+  if (!Framework.getApp) {
+    console.warn('pen-tool-extras: SudokuPad\'s Framework has no getApp, so nothing was changed')
+    return
+  }
 
   // Which features are off because SudokuPad changed. A feature that goes off leaves stock SudokuPad behavior; the dialog names it.
   const features = createFeatures(FEATURE_LABELS, FEATURE_NEEDS, {
@@ -2392,8 +2398,12 @@
     // the color tool never becomes ready, SudokuPad's own pen colors stay in force.
     if (features.isOff('colors')) return
     const tool = await waitForColorTool()
+    if (!tool) {
+      console.warn(`pen-tool-extras: the color tool was not ready after ${COLOR_TOOL_WAIT_MS / 1000} s, so the pen keeps SudokuPad's own colors`)
+      return
+    }
     // A save made in the dialog while waiting outranks the derived colors.
-    if (!tool || savedColors(Framework.getData(COLORS_KEY))) return
+    if (savedColors(Framework.getData(COLORS_KEY))) return
     const derived = features.attempt('colors', () => deriveFromTool(tool), () => null)
     if (derived) adoptColors(derived.colors, derived.missing)
   })
