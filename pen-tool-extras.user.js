@@ -348,6 +348,11 @@
     })
   }
 
+  // A pen button's line swatch: page 1 shows it solid, and the dashed page with its dashes.
+  const DASH_SWATCH = { width: 2, from: 2, to: 22 }
+  const lineSwatch = (dashes = '') => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}'${dashes}/></svg>`
+  const SOLID_SWATCH = lineSwatch()
+
   // 2. Pen colors: the saved set, derived colors and edit mode
   // Keys saved by the scripts this one replaced, kept so their saved data still reads.
   const COLORS_KEY = 'PenColor_colors'
@@ -697,6 +702,7 @@
     return next
   }
 
+  // A pen on a page that Save turns off goes back to its page 1 pen, whose character is its pen number.
   function pageAfterSave (pen, styles) {
     const page = penPageOf(pen)
     return page === -1 || enabledPages(styles).includes(page) ? pen : penNumber(pen)
@@ -918,9 +924,6 @@
     const { on, gap, offset } = dashPattern(thickness, dash, length)
     return `stroke-dasharray: ${on} ${gap};${dash === 0 ? '' : ` stroke-dashoffset: ${offset};`}`
   }
-  const DASH_SWATCH = { width: 2, from: 2, to: 22 }
-  const lineSwatch = (dashes = '') => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}'${dashes}/></svg>`
-  const SOLID_SWATCH = lineSwatch()
   function dashSwatch (dash) {
     const { on, gap, offset } = dashPattern(DASH_SWATCH.width, dash, DASH_SWATCH.to - DASH_SWATCH.from)
     const round = (x) => Math.round(x * 1000) / 1000
