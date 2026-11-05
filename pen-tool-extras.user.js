@@ -299,7 +299,7 @@
     return { key, fallback: true, normalize: (data) => data !== false, effect, dialog }
   }
 
-  // `dialog.attribute` names the boxes' data attribute when it is not the setting's name; `dialog.labels` gives each flag a row of its own.
+  // `dialog.attribute` names the boxes' data attribute when it is not the setting's name; `dialog.labels` gives each flag a row.
   function flags (key, names, effect, dialog) {
     return { key, fallback: decodeFlags(names), normalize: (data) => decodeFlags(names, data), effect, dialog }
   }
@@ -321,18 +321,13 @@
   const SETTING_NAMES = Object.keys(SETTINGS)
   const boxAttribute = (name) => SETTINGS[name].dialog.attribute || name
 
-  // The value of a box's setting in `state`, at `path` as a slider's `under` gives it.
-  function boxValue (state, path) {
-    const [name, flagName] = path.split('.')
-    return flagName ? state[name][flagName] : state[name]
-  }
+  const boxValue = (state, under) => under.split('.').reduce((value, name) => value[name], state)
 
   // `draft` with the box of `dataset` (a dialog checkbox's) ticked or not; undefined for a box no table row has.
   function draftWithBox (draft, dataset, checked) {
-    const name = SETTING_NAMES.find((n) => SETTINGS[n].dialog && boxAttribute(n) in dataset && !SETTINGS[n].range)
-    if (!name) return undefined
-    const flagName = dataset[boxAttribute(name)]
-    return { ...draft, [name]: flagName ? { ...draft[name], [flagName]: checked } : checked }
+    const name = SETTING_NAMES.find((n) => SETTINGS[n].dialog && !SETTINGS[n].range && boxAttribute(n) in dataset)
+    const flagName = name && dataset[boxAttribute(name)]
+    return name && { ...draft, [name]: flagName ? { ...draft[name], [flagName]: checked } : checked }
   }
 
   // Two values of one setting are the same when equal, name by name for a `flags` setting.
@@ -1116,11 +1111,8 @@
     `#${EDITOR_ID} select[data-line-mode] { font-size: 0.95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
   ].join('\n')
 
-  // The dialog's body at the state it holds: the nine pen colors as a 3 by 3 grid in the order of the pen
-  // tool's buttons (1 2 3, 4 5 6, 7 8 9), each with its number; Line settings (the thickness and opacity sliders, each with the box that
-  // shows it in the pen tool's panel); Line styles (dashed and arrow lines, each with an Enable box and a slider that is hidden while it is unticked);
-  // the table of marks a click cycles through; the outline and the middle click boxes; the line mode. A slider here is a draft that takes effect on
-  // Save, so the panel's own sliders and these show the same value when the dialog opens.
+  // The dialog's body: the pen colors in the order of the pen tool's buttons (1 2 3, 4 5 6, 7 8 9), the rows of SETTINGS by section, the marks
+  // and the line mode. Its values are drafts that take effect on Save, so the panel's sliders and these agree when the dialog opens.
   function renderEditor (state) {
     const cells = PEN_COLOR_NUMBERS.map((n) =>
       '<div style="display:flex;align-items:center;gap:8px">' +
@@ -1137,7 +1129,6 @@
       `${markPicture(picture)}</label>`
     const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} style="margin:0;justify-self:center">`
     const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
-    // The box of one flag of a `flags` setting, keyed by that flag's name.
     const flagBox = (name, flagName, extra = '') =>
       box(`id="pen-tool-extras-${boxAttribute(name)}-${flagName}" data-${boxAttribute(name)}="${flagName}"${extra}`, state[name][flagName], SETTINGS[name].dialog.title)
     const sliderRow = (key) => {
@@ -1149,13 +1140,9 @@
         `<output data-readout="${key}">${value}</output>${box ? flagBox(box, key) : '<span></span>'}</div>`
     }
     const rowsUnder = (path) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog?.under === path).map(sliderRow).join('')
-    const labelled = (name) => {
-      const id = `pen-tool-extras-${kebab(name)}`
-      return '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
-        `<input type="checkbox" id="${id}" data-${kebab(name)}${state[name] ? ' checked' : ''} style="margin:0">` +
-        `<label for="${id}" style="width:auto;text-align:left;margin:0">${SETTINGS[name].dialog.label}</label></div>`
-    }
-    // A name and its Enable box above the rows under it.
+    const labelled = (name) => '<div style="margin:4px 0;display:flex;justify-content:flex-start;align-items:center;gap:6px">' +
+      `<input type="checkbox" id="pen-tool-extras-${kebab(name)}" data-${kebab(name)}${state[name] ? ' checked' : ''} style="margin:0">` +
+      `<label for="pen-tool-extras-${kebab(name)}" style="width:auto;text-align:left;margin:0">${SETTINGS[name].dialog.label}</label></div>`
     const styleBlock = (name, flagName, text) =>
       `<div style="${SLIDER_COLUMNS};margin-bottom:0"><span style="grid-column:1 / 4">${text}</span>` +
       `${flagBox(name, flagName, ` aria-label="Enable ${text}"`)}</div>`
