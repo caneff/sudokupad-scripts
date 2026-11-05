@@ -1,4 +1,4 @@
-// Shared by the live checks: waits for a page to show an expected value (`settle`) or to stop changing (`stable`). Not a check itself, so
+// Shared by the live checks: waits for a page to show an expected value (`settle`) or to stop changing (`stable`), and clicks until a click takes (`clickUntil`). Not a check itself, so
 // `live/*.live.mjs` skips it.
 
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -11,6 +11,8 @@ export const SETTLE_MS = 10000
 export const STABLE_MS = 300
 // A value that never changes at all is read this long first, since the page may only start moving late.
 export const FLOOR_MS = 1000
+// How long one click gets to show its effect before `clickUntil` clicks again. The throttle it absorbs is a few hundred ms.
+export const CLICK_TAKES_MS = 300
 
 // Reads until the value equals `expected` (compared as JSON) and returns it. Otherwise it returns the last value
 // as soon as that value has stayed the same for `quietMs` after its last change, or for FLOOR_MS from the start
@@ -62,4 +64,18 @@ export async function stable (read, timeoutMs = SETTLE_MS) {
       return value
     }
   }
+}
+
+// SudokuPad throttles refreshControls, which binds a new button's click handler, so a click in the first moments after a script is
+// injected is dead. Clicks (`click` is an async function) until `read` shows `expected` (compared as JSON), giving each click
+// CLICK_TAKES_MS, and stops clicking once `deadlineMs` has passed; returns the last reading. A handler that never binds ends at
+// the deadline with the wrong value, so the caller's assert fails.
+export async function clickUntil (click, read, expected, deadlineMs) {
+  const deadline = Date.now() + deadlineMs
+  let value
+  do {
+    await click()
+    value = await settle(read, expected, CLICK_TAKES_MS)
+  } while (JSON.stringify(value) !== JSON.stringify(expected) && Date.now() < deadline)
+  return value
 }

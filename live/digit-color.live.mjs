@@ -10,12 +10,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, PUZZLE_URL, startPuzzle } from './page.mjs'
-import { headerVersion, openSettings } from './settings.mjs'
+import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../digit-color.user.js', import.meta.url), 'utf8')
 
 const DATA_KEY = 'DigitColor_colors'
+const EDITOR = '#digit-color-editor'
 // SudokuPad's own colors, read off the page with no script installed.
 const GIVEN_FILL = 'rgb(0, 0, 0)'
 const DEFAULT_FILL = 'rgb(29, 106, 229)'
@@ -62,7 +63,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, decoder, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const editor = () => p.locator('#digit-color-editor')
+  const editor = () => p.locator(EDITOR)
   const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
 
   // One computed style property of the elements that show `digit`, per place on the board.
@@ -168,15 +169,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(STYLE).waitFor({ state: 'attached' })
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = async () => {
-    await openSettings(p)
-    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Digit color' }).first().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await dialogButton(text).click()
-    await editor().waitFor({ state: 'detached' })
-  }
+  const openEditor = () => openScriptDialog(p, 'Digit color', EDITOR)
   const pick = (digit, hex) => editor().locator(`input[data-digit="${digit}"]`).fill(hex)
 
   before(async () => {
@@ -201,13 +194,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openEditor()
     const values = await editor().locator('input[type=color]').evaluateAll((es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.value])))
     assert.deepEqual(values, DEFAULTS)
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   it('Cancel saves nothing and changes no color', async () => {
     await openEditor()
     await pick('4', FOUR.hex)
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
     assert.equal(await saved(), null)
     assert.deepEqual(await allFills('entered', '4')(), [DEFAULT_RGB[4]])
   })
@@ -218,7 +211,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await pick('8', EIGHT.hex)
     await editor().locator('button[data-act=own][data-digit="6"]').click()
     await editor().locator('button[data-act=own][data-digit="7"]').click()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await saved(), { ...DEFAULTS, 4: FOUR.hex, 8: EIGHT.hex, 6: null, 7: null })
     assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
   })
@@ -492,7 +485,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('a digit can be set back to SudokuPad\'s own color from the dialog', async () => {
     await openEditor()
     await editor().locator('button[data-act=own][data-digit="4"]').click()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await saved(), { ...DEFAULTS, 4: null, 8: EIGHT.hex, 6: null, 7: null })
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
   })
@@ -509,7 +502,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('Restore defaults brings back every default color', async () => {
     await openEditor()
     await dialogButton('Restore defaults').click()
-    await closeWith('Save')
+    await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await saved(), DEFAULTS)
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
     assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_RGB[6]])
@@ -537,7 +530,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await editor().waitFor({ state: 'visible' })
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit color')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   it('no uncaught page errors', () => {

@@ -11,8 +11,8 @@ import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { headerVersion, openSettings } from './settings.mjs'
-import { POLL_MS, settle, SETTLE_MS } from './settle.mjs'
+import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
+import { clickUntil, POLL_MS, settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
@@ -31,15 +31,14 @@ const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', d
 const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
 // Framework.setData prefixes the script's key with the site's own prefix.
 // The key the script saves its profiles under, and the one Framework.setData stores it at.
+const EDITOR = '#color-by-digit-editor'
 const PROFILES_KEY = 'ColorByDigit_profiles'
 const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
-// How long one click gets to show its effect before pressUntil clicks again, and
-// how long pressUntil keeps clicking. The throttle it absorbs is a few hundred ms,
+// How long clickUntil keeps clicking. The throttle it absorbs is a few hundred ms,
 // so a button that ignores clicks for longer than this fails.
-const CLICK_TAKES_MS = 300
 const CLICK_DEADLINE_MS = 3000
 
 // How often settledLayout re-reads the controls, and how far a bottom edge may overlap the footer's top.
@@ -80,8 +79,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const getData = () => read((key) => Framework.getData(key), PROFILES_KEY)
   const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
   const getSetting = () => read(() => Framework.getSetting('multicolour'))
-  const editor = () => p.locator('#color-by-digit-editor')
-  const dialogButton = (text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()
+  const editor = () => p.locator(EDITOR)
 
   // What the board should show after a press, given each digit's key.
   const expectedColours = (keyOfDigit) => (x) => {
@@ -98,18 +96,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(BUTTON).waitFor({ state: 'attached' })
   }
   const press = () => p.click(BUTTON)
-  // SudokuPad throttles refreshControls, which binds a new button's click handler,
-  // so a click in the first moments after the script is injected is dead. Clicks
-  // again until `read` shows `expected`; a handler that never binds still times out.
-  const pressUntil = async (read, expected) => {
-    const deadline = Date.now() + CLICK_DEADLINE_MS
-    let value
-    do {
-      await press()
-      value = await settle(read, expected, CLICK_TAKES_MS)
-    } while (JSON.stringify(value) !== JSON.stringify(expected) && Date.now() < deadline)
-    return value
-  }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
@@ -118,15 +104,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     a.deselect(); a.select(a.grid.getCell(r, c)); a.act({ type: 'colour', arg: key }); a.deselect()
   }, [r, c, key])
   const setMultiColor = (v) => read((v) => Framework.setSetting('multicolour', v), v)
-  const openEditor = async () => {
-    await openSettings(p)
-    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Color by digit' }).first().click()
-    await editor().waitFor({ state: 'visible' })
-  }
-  const closeWith = async (text) => {
-    await dialogButton(text).click()
-    await editor().waitFor({ state: 'detached' })
-  }
+  const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
@@ -211,7 +189,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // The first press of the run, before any dialog has opened: a button whose click
   // handler was never bound fails here.
   it('a press colors every given and entered digit by Odd/Even, nothing else', async () => {
-    assert.equal(await pressUntil(() => wrongCount(oddEven), 0), 0)
+    assert.equal(await clickUntil(press, () => wrongCount(oddEven), 0, CLICK_DEADLINE_MS), 0)
     assert.equal(await coloredCount(), DIGIT_CELLS)
     assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
     const s = await cellsState()
@@ -301,7 +279,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('Cancel saves nothing', async () => {
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await getData(), SEED)
   })
 
@@ -309,7 +287,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('Save with Low/5/High made the active profile writes it and closes the dialog', async () => {
       await openEditor()
       await p.click('#color-by-digit-editor [data-act=activate][data-index="1"]')
-      await closeWith('Save')
+      await closeDialogWith(p, 'Save', EDITOR)
       const expected = { ...SEED, active: 1 }
       assert.deepEqual(await settle(getData, expected), expected)
     })
@@ -329,7 +307,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         a.deselect()
       })
       assert.equal(await settle(coloredCount, 0), 0)
-      assert.equal(await pressUntil(() => wrongCount(lowFiveHigh), 0), 0)
+      assert.equal(await clickUntil(press, () => wrongCount(lowFiveHigh), 0, CLICK_DEADLINE_MS), 0)
       assert.equal(await coloredCount() > 0, true)
       await undo()
       assert.equal(await settle(coloredCount, 0), 0)
@@ -344,7 +322,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.click('#control-normal')
       const marks = () => read(() => [[8, 0], [8, 1]].map(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join('')))
       assert.deepEqual(await settle(marks, ['679', '17']), ['679', '17'])
-      assert.equal(await pressUntil(coloredCount, DIGIT_CELLS + 1), DIGIT_CELLS + 1)
+      assert.equal(await clickUntil(press, coloredCount, DIGIT_CELLS + 1, CLICK_DEADLINE_MS), DIGIT_CELLS + 1)
       const s = await cellsState()
       assert.deepEqual(at(s, 8, 0).colours, ['9'])
       assert.deepEqual(at(s, 8, 1).colours, [])
@@ -374,7 +352,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           assert.equal(others.length > 0, true, `the box holds a pulldown and numpad to clear at width ${width}`)
           assert.deepEqual(others.filter((o) => overlap(x, o)), [], `clear of pulldown and numpad at width ${width}`)
         }
-        await closeWith('Cancel')
+        await closeDialogWith(p, 'Cancel', EDITOR)
       }
       await p.setViewportSize({ width: 1200, height: 900 })
     })
@@ -386,12 +364,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await p.locator('#color-by-digit-editor [data-role=profile-row]').count(), 2)
       await p.click('#color-by-digit-editor button[data-act=clear]')
       assert.equal(await groupCount(), 0)
-      await closeWith('Cancel')
+      await closeDialogWith(p, 'Cancel', EDITOR)
       assert.equal((await getGroups()).length, 3)
       await openEditor()
       assert.equal(await groupCount(), 3)
       await p.click('#color-by-digit-editor button[data-act=clear]')
-      await closeWith('Save')
+      await closeDialogWith(p, 'Save', EDITOR)
       assert.deepEqual(await settle(getGroups, []), [])
       assert.equal((await getData()).active, 1)
       await press()
@@ -438,7 +416,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         Framework.removeData('ToolColor_page')
         Framework.setData(profilesKey, savedState)
       }, [original, savedState, PROFILES_KEY])
-      if (await editor().count()) await closeWith('Cancel')
+      if (await editor().count()) await closeDialogWith(p, 'Cancel', EDITOR)
     })
 
     it('the pulldown lists four pages and marks SudokuPad\'s current page', async () => {
@@ -511,7 +489,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await editor().waitFor({ state: 'visible' })
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Color by digit')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-    await closeWith('Cancel')
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   // Runs after the press tests: it calls refreshControls itself, which would bind this script's

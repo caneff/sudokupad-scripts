@@ -146,7 +146,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   const editor = () => p.locator('#pen-tool-extras-editor')
   const openEditor = () => openExtrasEditor(p)
-  const closeWith = (text) => closeExtrasEditorWith(p, text)
 
   it('with the Middle click box unticked a middle click erases nothing and prevents no default (autoscroll as stock); the box is ticked by default, saves as false, and ticking it again brings the erase back', async () => {
     await undoAll()
@@ -158,11 +157,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await box.isChecked(), true, 'ticked on a fresh install')
     assert.equal(await p.getByLabel('Middle click erases a whole line').isChecked(), true)
     await box.uncheck()
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), null, 'Cancel saves nothing')
     await openEditor()
     await box.uncheck()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), false)
     await read(() => {
       window.__middleLog = []
@@ -178,7 +177,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openEditor()
     assert.equal(await box.isChecked(), false, 'the dialog opens with the box as saved')
     await box.check()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), null, 'ticked is the default and is not kept')
     await undoAll()
     await selectPen(1, 3)

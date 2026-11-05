@@ -25,7 +25,6 @@ describe('the settings dialog layout', { concurrency: false }, () => {
 
   const editor = () => p.locator('#pen-tool-extras-editor')
   const openEditor = () => openExtrasEditor(p)
-  const closeWith = (text) => closeExtrasEditorWith(p, text)
   // The horizontal middle of an element, rounded to a pixel.
   const centreX = (locator) => locator.evaluate((el) => { const box = el.getBoundingClientRect(); return Math.round(box.x + box.width / 2) })
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
@@ -46,7 +45,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     assert.equal(order.every((at) => at >= 0), true, `all present: ${order}`)
     const dividers = await editor().evaluate((el) => [...el.children].filter((child) => child.children.length === 0 && window.getComputedStyle(child).borderTopWidth === '1px').length)
     assert.equal(dividers, SECTIONS.length - 1)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the SudokuPad colors button looks like Cancel and sits level with the middle row of pickers', async () => {
@@ -57,7 +56,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     // Both in one read, so a dialog that is still moving into place cannot put them in different frames.
     const [middle, buttonMiddle] = await editor().evaluate((el) => [el.querySelector('input[data-pen="5"]'), el.querySelector('button[data-sudokupad-colors]')].map((e) => { const box = e.getBoundingClientRect(); return Math.round(box.y + box.height / 2) }))
     assert.equal(Math.abs(middle - buttonMiddle) <= 3, true, `middle row ${middle}, button ${buttonMiddle}`)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the sliders of Line settings, Line styles and the outline are in one column, and the Slider in panel, Enable and outline boxes are in another', async () => {
@@ -72,7 +71,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     assert.equal(Math.abs((await centreX(heading('Slider in panel'))) - centres[0]) <= 2, true, 'Slider in panel is over its boxes')
     assert.equal(Math.abs((await centreX(heading('Enable'))) - centres[0]) <= 2, true, 'Enable is over its boxes')
     assert.equal(await left(editor().locator('input[data-outline]')) < lefts[0], true, 'the outline box is at the left, not in the slider column')
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its Enable box is unticked', async () => {
@@ -87,7 +86,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
       await editor().locator(`input[data-style="${style}"]`).check()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), true, `${row} back`)
     }
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the buttons are one row at the bottom: Restore defaults at the left, Cancel and Save at the right', async () => {
@@ -97,7 +96,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     assert.equal(Math.abs(restore.y + restore.height / 2 - (save.y + save.height / 2)) <= 3, true, 'one row')
     const dialog = await p.locator('.dialog').boundingBox()
     assert.equal(save.x + save.width <= dialog.x + dialog.width, true)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('at a phone width the dialog does not run off the screen sideways', async () => {
@@ -112,7 +111,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
       })
       assert.equal(fits.dialogRight <= fits.width + 1, true, JSON.stringify(fits))
       assert.deepEqual(fits.overflowing, [])
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     } finally {
       await p.setViewportSize({ width: 1200, height: 1000 })
     }

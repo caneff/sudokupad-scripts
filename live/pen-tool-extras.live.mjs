@@ -133,7 +133,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
   const openEditor = () => openExtrasEditor(p)
-  const closeWith = (text) => closeExtrasEditorWith(p, text)
   const pick = (n, hex) => editor().locator(`input[data-pen="${n}"]`).fill(hex)
 
   before(async () => {
@@ -156,7 +155,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('the dialog has a Pen tool extras entry in settings with a picker for each of the nine pen colors, set to the derived colors', async () => {
     await openEditor()
     assert.deepEqual(await pickerValues(), PAGE_PENS[0])
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the dialog lays the nine pen colors out as a 3 by 3 grid like the pen tool\'s buttons, each keeping its number', async () => {
@@ -175,7 +174,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(rows[0][0].y < rows[1][0].y && rows[1][0].y < rows[2][0].y, true, 'top to bottom')
     for (const col of [0, 1, 2]) assert.equal(Math.abs(rows[0][col].x - rows[2][col].x) < 2, true, `column ${col} lines up`)
     // The pen tool's own buttons are in the same arrangement.
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     await selectPen()
     const buttons = await p.locator('.tool-pen button[data-key]').evaluateAll((els) => els.filter((el) => el.dataset.key !== '0').map((el) => { const r = el.getBoundingClientRect(); return [el.dataset.key, Math.round(r.x), Math.round(r.y)] }))
     assert.deepEqual(buttons.map((b) => b[0]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
@@ -185,7 +184,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('Cancel saves nothing and changes no color', async () => {
     await openEditor()
     await pick('4', FOUR.hex)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await saved(), null)
     assert.deepEqual(await allStrokes(4)(), [rgbOf(PAGE_PENS[0][3])])
     await swatchesAre(PAGE_PENS[0])
@@ -195,7 +194,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openEditor()
     await pick('4', FOUR.hex)
     await pick('9', NINE.hex)
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex, 9: NINE.hex })
     assert.deepEqual(await settle(allStrokes(4), [FOUR.rgb]), [FOUR.rgb])
     assert.equal(await swatch(4), FOUR.rgb)
@@ -254,7 +253,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await openEditor()
       await restoreDefaults()
       assert.deepEqual(await pickerValues(), want, `page ${page}`)
-      await closeWith('Save')
+      await closeExtrasEditorWith(p, 'Save')
       assert.equal(await saved(), null, `page ${page}`)
       await swatchesAre(want)
     }
@@ -264,11 +263,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('Restore defaults then Cancel changes nothing', async () => {
     await openEditor()
     await pick('4', FOUR.hex)
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     const savedSet = await saved()
     await openEditor()
     await restoreDefaults()
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     assert.deepEqual(await saved(), savedSet)
     assert.deepEqual(await allStrokes(4)(), [FOUR.rgb])
   })
@@ -277,12 +276,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openEditor()
     await restoreDefaults()
     await pick('9', NINE.hex)
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[2]), 9: NINE.hex })
     // Clear it again for the checks below.
     await openEditor()
     await restoreDefaults()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(), null)
   })
 
@@ -315,7 +314,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // Picking a pen color by hand takes it off the list; the others stay on it.
     await pick('4', FOUR.hex)
     assert.match(await editor().innerText(), /pen colors 5, 6, 7, 8, 9 keep SudokuPad's own/)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     // setPalette clamped and saved the current page; put the stored palette and page 2 back.
     await read(() => {
       const t = Framework.app.tools.colour
@@ -336,7 +335,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // blue-grey rgb(10 20 30), the darkest grey, so pen 6 is black.
     assert.deepEqual(await pickerValues(), ['#ae0000', '#0000ae', '#008700', OWN_PEN_HEX[3], '#aeae00', '#000000', '#00aeae', '#ae00ae', '#ae6f00'])
     assert.match(await editor().innerText(), /pen color 4 keeps SudokuPad's own/)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
     await read(() => {
       const t = Framework.app.tools.colour
       t.setPalette(Framework.getData('ToolColor_palette'))
@@ -358,7 +357,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }, cells)
     await openEditor()
     await restoreDefaults()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     await p.click('#control-colour')
     // A cell button shows the page's color at its data-key: its data-value names the color key,
     // and that key's `--cell-color-<key>` variable is the color it shows.
@@ -379,7 +378,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await read((k) => Framework.removeData(k), DATA_KEY)
     await reload()
     await openEditor()
-    await closeWith('Save')
+    await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(), null)
   })
 
@@ -475,12 +474,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await editor().locator('input[data-setting="thickness"]').inputValue(), '5')
       assert.equal(await savedThickness(), 7, 'nothing is saved before Save')
       assert.deepEqual(await widths(1)(), [7])
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await savedThickness(), 7)
       assert.deepEqual(await allWidths(), { full: [7], half: [3.5] })
       await openEditor()
       await restoreDefaults()
-      await closeWith('Save')
+      await closeExtrasEditorWith(p, 'Save')
       assert.equal(await savedThickness(), null)
       assert.deepEqual(await settle(widths(1), [5]), [5])
       assert.equal(await slider().inputValue(), '5')
@@ -510,7 +509,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         return { top: style.borderTopWidth, flex: style.display }
       })
       assert.deepEqual(row, { top: '1px', flex: 'flex' }, 'a divider above the row')
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     })
 
     it('corrupt saved thickness falls back to 5, the settings entry still opens the dialog, and nothing throws', async () => {
@@ -521,7 +520,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.deepEqual(await settle(allWidths, { full: [5], half: [2.5] }), { full: [5], half: [2.5] }, bad)
         // A startup that threw would stop before it added the settings entry.
         await openEditor()
-        await closeWith('Cancel')
+        await closeExtrasEditorWith(p, 'Cancel')
         await selectPen()
         assert.equal(await slider().inputValue(), '5', bad)
       }
@@ -660,7 +659,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await leaveEditMode()
       await openEditor()
       assert.deepEqual(await pickerValues(), Object.values({ ...toObject(PAGE_PENS[2]), 4: FOUR.hex }))
-      await closeWith('Cancel')
+      await closeExtrasEditorWith(p, 'Cancel')
     })
 
     it('the edit is kept after a reload, and the set no longer follows the color page', async () => {
@@ -676,7 +675,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await holdToOpen(4)
       await openEditor()
       await restoreDefaults()
-      await closeWith('Save')
+      await closeExtrasEditorWith(p, 'Save')
       assert.equal(await saved(), null)
       assert.deepEqual(await settle(penPickerValues, PAGE_PENS[2]), PAGE_PENS[2])
       await leaveEditMode()
@@ -718,7 +717,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await editor().waitFor({ state: 'visible' })
     assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen tool extras')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-    await closeWith('Cancel')
+    await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('no uncaught page errors', () => {

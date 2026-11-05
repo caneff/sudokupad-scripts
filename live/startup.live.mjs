@@ -16,14 +16,12 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { MODES, openPage, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
 // How many scripts-at-a-time pages run at once: each is its own browser context.
 const CONCURRENCY = 5
-// How long one click gets to show its effect before it is made again: SudokuPad binds a new button's click handler a moment late.
-const CLICK_TAKES_MS = 300
 
 const BLACK = 'rgb(0, 0, 0)'
 // The color Digit Color gives an entered 4.
@@ -37,17 +35,6 @@ const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
   await group.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })
-}
-
-// Clicks until `read` shows `expected`, as long as SETTLE_MS allows; returns the last reading.
-async function clickUntil (p, selector, read, expected) {
-  const deadline = Date.now() + SETTLE_MS
-  let value
-  do {
-    await p.click(selector)
-    value = await settle(read, expected, CLICK_TAKES_MS)
-  } while (JSON.stringify(value) !== JSON.stringify(expected) && Date.now() < deadline)
-  return value
 }
 
 const penValues = (p) => p.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
@@ -64,7 +51,7 @@ const SCRIPTS = [
     // The button colors the board's givens.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
-      assert.equal(await clickUntil(p, '#control-colorbydigit', colored, true), true, 'the button colored a cell')
+      assert.equal(await clickUntil(() => p.click('#control-colorbydigit'), colored, true, SETTLE_MS), true, 'the button colored a cell')
     }
   },
   {
@@ -124,7 +111,7 @@ const SCRIPTS = [
       await p.locator('#control-pen').waitFor({ state: 'visible' })
       // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears.
       const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-      assert.equal(await clickUntil(p, '#control-pen', shown, true), true, 'the pen tool opened')
+      assert.equal(await clickUntil(() => p.click('#control-pen'), shown, true, SETTLE_MS), true, 'the pen tool opened')
     },
     control: (p) => p.locator(PEN_PAGE_BUTTON).waitFor({ state: 'visible' }),
     // Two clicks on one cell edge: SudokuPad's own X, then this script's arrow 'm'.
