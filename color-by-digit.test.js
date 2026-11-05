@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -925,4 +925,57 @@ test('renderEditor gives each group a red × in its box\'s upper right corner, n
 test('renderEditor reserves room beside the numpad for the group\'s × so it cannot cover the pulldown or the digits', () => {
   const html = editor([{ key: 'a', digits: [] }], [], [0])
   assert.match(html, /position:relative;[^"]*padding:8px 40px 8px 8px/)
+})
+
+const G = [{ key: 'a', digits: ['1'] }, { key: 'b', digits: ['2'] }, { key: 'c', digits: [] }]
+const COLORS = [{ key: 'a' }, { key: 'b' }, { key: 'c' }, { key: 'd' }]
+
+test('editGroupsFor color changes that group\'s key and keeps its digits and the shown pages', () => {
+  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'color', { group: 1, key: 'z' }, COLORS), {
+    groups: [G[0], { key: 'z', digits: ['2'] }, G[2]], shown: [0, 1, 2]
+  })
+})
+
+test('editGroupsFor digit moves the digit into the chosen group', () => {
+  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'digit', { group: 2, digit: '1' }, COLORS).groups, [
+    { key: 'a', digits: [] }, { key: 'b', digits: ['2'] }, { key: 'c', digits: ['1'] }
+  ])
+})
+
+test('editGroupsFor add-group picks the first unused color', () => {
+  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'add-group', {}, COLORS), {
+    groups: [...G, { key: 'd', digits: [] }], shown: [0, 1, 2]
+  })
+})
+
+test('editGroupsFor add-group falls back to the first color when all are used', () => {
+  const all = COLORS.slice(0, 3)
+  assert.deepEqual(editGroupsFor(G, [], 'add-group', {}, all).groups[3], { key: 'a', digits: [] })
+})
+
+test('editGroupsFor add-group adds nothing with no colors', () => {
+  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'add-group', {}, []), { groups: G, shown: [0, 1, 2] })
+})
+
+test('editGroupsFor remove drops that group and its shown entry and shifts the rest', () => {
+  assert.deepEqual(editGroupsFor(G, [5, 6, 7], 'remove', { group: 1 }, COLORS), { groups: [G[0], G[2]], shown: [5, 7] })
+})
+
+test('editGroupsFor clear empties groups and shown', () => {
+  assert.deepEqual(editGroupsFor(G, [5, 6, 7], 'clear', {}, COLORS), { groups: [], shown: [] })
+})
+
+test('editGroupsFor leaves both unchanged for an act it does not edit', () => {
+  assert.deepEqual(editGroupsFor(G, [5], 'delete', {}, COLORS), { groups: G, shown: [5] })
+})
+
+test('rowAfterKey: Enter and Space stay, the arrows step and wrap at both ends, other keys give null', () => {
+  assert.equal(rowAfterKey('Enter', 1, 3), 1)
+  assert.equal(rowAfterKey(' ', 2, 3), 2)
+  assert.equal(rowAfterKey('ArrowDown', 1, 3), 2)
+  assert.equal(rowAfterKey('ArrowRight', 2, 3), 0)
+  assert.equal(rowAfterKey('ArrowUp', 1, 3), 0)
+  assert.equal(rowAfterKey('ArrowLeft', 0, 3), 2)
+  assert.equal(rowAfterKey('a', 1, 3), null)
+  assert.equal(rowAfterKey('Tab', 1, 3), null)
 })

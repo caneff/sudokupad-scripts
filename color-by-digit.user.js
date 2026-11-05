@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.2
+// @version      0.5.3
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.5.2'
+  const VERSION = '0.5.3'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
@@ -147,6 +147,35 @@
       const digits = had ? rest : [...rest, digit].sort()
       return { key: g.key, digits }
     })
+  }
+
+  // The dialog's edit of the groups for one button: `act` is 'color', 'digit', 'remove', 'clear' or
+  // 'add-group', `group` the group index, `key` the chosen palette key, `digit` the chosen digit, and
+  // `colors` the visible palette colors ([{ key }]). Returns the new { groups, shown }, `shown` being the page each
+  // group shows, which follows a removal; any other act returns both unchanged. A new group takes the
+  // first color no group has, else the first color, and none when there are no colors.
+  function editGroupsFor (groups, shown, act, { group, key, digit }, colors) {
+    switch (act) {
+      case 'color': return { groups: groups.map((g, j) => (j === group ? { key, digits: g.digits } : g)), shown }
+      case 'digit': return { groups: assignDigit(groups, group, digit), shown }
+      case 'remove': return { groups: groups.filter((_, j) => j !== group), shown: shown.filter((_, j) => j !== group) }
+      case 'clear': return { groups: [], shown: [] }
+      case 'add-group': {
+        const used = groups.map((g) => g.key)
+        const free = colors.find((c) => !used.includes(c.key)) || colors[0]
+        return { groups: free ? [...groups, { key: free.key, digits: [] }] : groups, shown }
+      }
+      default: return { groups, shown }
+    }
+  }
+
+  const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
+  // The row a key on a profile row goes to: Enter and Space stay on the row, an arrow moves to the next or
+  // previous row and wraps at both ends; any other key gives null.
+  function rowAfterKey (key, index, count) {
+    if (key === 'Enter' || key === ' ') return index
+    if (ARROW_STEP[key]) return (index + ARROW_STEP[key] + count) % count
+    return null
   }
 
   // Saved data is untrusted: returns clean groups, or null when it is not a list of groups.
@@ -550,7 +579,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   if (typeof Framework === 'undefined' || !Framework.getApp) return
 
@@ -950,15 +979,10 @@
     }
     // Enter and Space activate the focused row; the arrow keys move the choice to the next or previous row,
     // wrapping, as a radio group does. Only the active row is a tab stop.
-    const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="activate"]')) return
-      const count = draft.profiles.length
-      const index = Number(event.target.dataset.index)
-      let target
-      if (event.key === 'Enter' || event.key === ' ') target = index
-      else if (ARROW_STEP[event.key]) target = (index + ARROW_STEP[event.key] + count) % count
-      else return
+      const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)
+      if (target === null) return
       event.preventDefault()
       event.stopPropagation()
       activateRow(target, true)
@@ -975,21 +999,14 @@
       if (!el) return
       event.preventDefault()
       event.stopPropagation()
-      const i = Number(el.dataset.group)
-      const groups = activeGroups(draft)
-      switch (el.dataset.act) {
-        case 'color': editGroups(groups.map((g, j) => (j === i ? { key: el.dataset.key, digits: g.digits } : g))); break
-        case 'digit': editGroups(assignDigit(groups, i, el.dataset.digit)); break
-        case 'remove': editGroups(groups.filter((_, j) => j !== i)); shown = shown.filter((_, j) => j !== i); break
-        case 'clear': editGroups([]); shown = []; break
-        case 'add-group': {
-          const used = groups.map((g) => g.key)
-          const free = colors.find((c) => !used.includes(c.key)) || colors[0]
-          if (free) editGroups([...groups, { key: free.key, digits: [] }])
-          break
-        }
-        case 'delete': reshow(deleteProfile(draft, Number(el.dataset.index))); break
-        case 'add': addProfileFromField(); return
+      const act = el.dataset.act
+      if (act === 'add') { addProfileFromField(); return }
+      if (act === 'delete') {
+        reshow(deleteProfile(draft, Number(el.dataset.index)))
+      } else {
+        const edit = editGroupsFor(activeGroups(draft), shown, act, { group: Number(el.dataset.group), key: el.dataset.key, digit: el.dataset.digit }, colors)
+        editGroups(edit.groups)
+        shown = edit.shown
       }
       draw()
     })
