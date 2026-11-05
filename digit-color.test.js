@@ -146,12 +146,13 @@ test('a color containing a double quote is escaped in the editor', () => {
   assert.ok(!html.includes('onfocus="x"'), html)
 })
 
-test('a Framework without getApp makes the script warn and change nothing', () => {
+// The warnings the script prints starting on a page whose Framework is `framework`, or with none at all.
+function startupWarnings (framework) {
   const file = require.resolve('./digit-color.user.js')
   const warnings = []
   const realWarn = console.warn
   console.warn = (...args) => warnings.push(args.join(' '))
-  global.Framework = {}
+  if (framework) global.Framework = framework
   delete require.cache[file]
   try {
     require(file)
@@ -160,21 +161,15 @@ test('a Framework without getApp makes the script warn and change nothing', () =
     delete global.Framework
     delete require.cache[file]
   }
+  return warnings
+}
+
+test('a Framework without getApp makes the script warn and change nothing', () => {
+  const warnings = startupWarnings({})
   assert.equal(warnings.length, 1)
   assert.match(warnings[0], /^digit-color: .*getApp/)
 })
 
 test('no Framework at all is left alone without a warning', () => {
-  const file = require.resolve('./digit-color.user.js')
-  const warnings = []
-  const realWarn = console.warn
-  console.warn = (...args) => warnings.push(args.join(' '))
-  delete require.cache[file]
-  try {
-    require(file)
-  } finally {
-    console.warn = realWarn
-    delete require.cache[file]
-  }
-  assert.deepEqual(warnings, [])
+  assert.deepEqual(startupWarnings(), [])
 })

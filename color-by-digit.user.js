@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.5
+// @version      0.5.6
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.5.5'
+  const VERSION = '0.5.6'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -148,7 +148,7 @@
   // The dialog's edit of the groups for one button: `act` is 'color', 'digit', 'remove', 'clear' or
   // 'add-group', `group` the group index, `key` the chosen palette key, `digit` the chosen digit, and
   // `colors` the visible palette colors ([{ key }]). Returns the new { groups, shown }, `shown` being the page each
-  // group shows, which follows a removal; any other act returns both unchanged. A new group takes the
+  // group shows, which follows a removal. A new group takes the
   // first color no group has, else the first color, and none when there are no colors.
   function editGroupsFor (groups, shown, act, { group, key, digit }, colors) {
     switch (act) {
@@ -161,7 +161,6 @@
         const free = colors.find((c) => !used.includes(c.key)) || colors[0]
         return { groups: free ? [...groups, { key: free.key, digits: [] }] : groups, shown }
       }
-      default: return { groups, shown }
     }
   }
 
@@ -577,7 +576,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
   // has no Framework and is left alone. A Framework without `getApp` is a SudokuPad this script
@@ -587,9 +586,6 @@
     console.warn('color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed')
     return
   }
-
-  // The name of the page variable that holds a palette key's color.
-  const colorVariable = (key) => `--cell-color-${key}`
 
   // The color tool's pages laid out as SudokuPad's buttons are, read now from the tool and
   // the colors `readColor` resolves; [] until the tool holds a palette.
@@ -607,7 +603,7 @@
   // The CSS color of a palette key as the browser draws it (`rgb(...)`), or '' when the key has no
   // visible color. The raw `--cell-color-<key>` value can be any CSS color, so it is resolved on a probe.
   function readColor (key) {
-    const raw = window.getComputedStyle(document.documentElement).getPropertyValue(colorVariable(key)).trim()
+    const raw = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
     if (!isVisibleColor(raw)) return ''
     const probe = document.createElement('span')
     probe.style.color = raw
@@ -919,7 +915,6 @@
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
       box.innerHTML = renderEditor(groups, pages, shown, auto, renderProfiles(draft, readColor, newName))
     }
-    const editGroups = (groups) => { draft = setActiveGroups(draft, groups) }
     // Another profile's groups are showing: its groups open on their own pages.
     const reshow = (next) => { draft = next; shown = [] }
     const addProfileFromField = () => {
@@ -1010,7 +1005,7 @@
         reshow(deleteProfile(draft, Number(el.dataset.index)))
       } else {
         const edit = editGroupsFor(activeGroups(draft), shown, act, { group: Number(el.dataset.group), key: el.dataset.key, digit: el.dataset.digit }, colors)
-        editGroups(edit.groups)
+        draft = setActiveGroups(draft, edit.groups)
         shown = edit.shown
       }
       draw()

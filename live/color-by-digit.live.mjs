@@ -412,6 +412,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.setViewportSize({ width: 1200, height: 900 })
     })
 
+    it('Add group adds a group in a color no group has, and Cancel drops it', async () => {
+      await openEditor()
+      const chosenKeys = () => p.$$eval('#color-by-digit-editor select[data-act="page"] + [data-role="chosen"]', (es) => es.map((e) => e.title))
+      const before = await chosenKeys()
+      assert.equal(before.length, 3)
+      await p.click('#color-by-digit-editor button[data-act=add-group]')
+      const after = await chosenKeys()
+      assert.equal(after.length, 4)
+      assert.deepEqual(after.slice(0, 3), before)
+      assert.equal(before.includes(after[3]), false)
+      await closeWith('Cancel')
+      assert.equal((await getGroups()).length, 3)
+    })
+
     it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a press does nothing', async () => {
       await openEditor()
       const groupCount = () => p.locator('#color-by-digit-editor button[data-act=remove]').count()

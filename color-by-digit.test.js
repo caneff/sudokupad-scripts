@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, planAuto, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -199,6 +199,13 @@ test('addProfile does nothing at four profiles or with a blank name', () => {
   assert.equal(MAX_PROFILES, 4)
   assert.deepEqual(addProfile(four, 'E'), four)
   assert.deepEqual(addProfile(three, '   '), three)
+})
+
+test('a profile name is cut to the longest name allowed, typed or saved', () => {
+  const long = 'x'.repeat(MAX_NAME_LENGTH + 5)
+  const cut = 'x'.repeat(MAX_NAME_LENGTH)
+  assert.equal(addProfile(three, long).profiles[3].name, cut)
+  assert.equal(stateFromStored({ profiles: [{ name: long, groups: [] }], active: 0 }).profiles[0].name, cut)
 })
 
 test('edits never change the state they are given', () => {
@@ -642,6 +649,23 @@ test('entry point: a Framework without getApp warns and changes nothing', () => 
   }
 })
 
+test('entry point: no Framework at all is left alone without a warning', () => {
+  const path = require.resolve('./color-by-digit.user.js')
+  const saved = require.cache[path]
+  delete require.cache[path]
+  const warnings = []
+  const warn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  try {
+    require(path)
+    assert.deepEqual(warnings, [])
+  } finally {
+    console.warn = warn
+    delete require.cache[path]
+    if (saved) require.cache[path] = saved
+  }
+})
+
 // A SudokuPad stand-in for the auto mode wrapper: cells hold a digit and colors, `act` applies
 // value/clear/colour/select/deselect/group actions and records every call, and `puzzle.inGroup` follows the group actions.
 // `single` mimics SudokuPad with Multi-color off: a color toggle acts on the whole cell, so taking one
@@ -944,46 +968,42 @@ test('renderEditor gives each group a red × in its box\'s upper right corner, n
   assert.match(tag, /color:#c0392b/)
 })
 
-const G = [{ key: 'a', digits: ['1'] }, { key: 'b', digits: ['2'] }, { key: 'c', digits: [] }]
+const THREE_GROUPS = [{ key: 'a', digits: ['1'] }, { key: 'b', digits: ['2'] }, { key: 'c', digits: [] }]
 const COLORS = [{ key: 'a' }, { key: 'b' }, { key: 'c' }, { key: 'd' }]
 
 test('editGroupsFor color changes that group\'s key and keeps its digits and the shown pages', () => {
-  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'color', { group: 1, key: 'z' }, COLORS), {
-    groups: [G[0], { key: 'z', digits: ['2'] }, G[2]], shown: [0, 1, 2]
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [0, 1, 2], 'color', { group: 1, key: 'z' }, COLORS), {
+    groups: [THREE_GROUPS[0], { key: 'z', digits: ['2'] }, THREE_GROUPS[2]], shown: [0, 1, 2]
   })
 })
 
 test('editGroupsFor digit moves the digit into the chosen group', () => {
-  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'digit', { group: 2, digit: '1' }, COLORS).groups, [
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [0, 1, 2], 'digit', { group: 2, digit: '1' }, COLORS).groups, [
     { key: 'a', digits: [] }, { key: 'b', digits: ['2'] }, { key: 'c', digits: ['1'] }
   ])
 })
 
 test('editGroupsFor add-group picks the first unused color', () => {
-  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'add-group', {}, COLORS), {
-    groups: [...G, { key: 'd', digits: [] }], shown: [0, 1, 2]
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [0, 1, 2], 'add-group', {}, COLORS), {
+    groups: [...THREE_GROUPS, { key: 'd', digits: [] }], shown: [0, 1, 2]
   })
 })
 
 test('editGroupsFor add-group falls back to the first color when all are used', () => {
   const all = COLORS.slice(0, 3)
-  assert.deepEqual(editGroupsFor(G, [], 'add-group', {}, all).groups[3], { key: 'a', digits: [] })
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [], 'add-group', {}, all).groups[3], { key: 'a', digits: [] })
 })
 
 test('editGroupsFor add-group adds nothing with no colors', () => {
-  assert.deepEqual(editGroupsFor(G, [0, 1, 2], 'add-group', {}, []), { groups: G, shown: [0, 1, 2] })
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [0, 1, 2], 'add-group', {}, []), { groups: THREE_GROUPS, shown: [0, 1, 2] })
 })
 
 test('editGroupsFor remove drops that group and its shown entry and shifts the rest', () => {
-  assert.deepEqual(editGroupsFor(G, [5, 6, 7], 'remove', { group: 1 }, COLORS), { groups: [G[0], G[2]], shown: [5, 7] })
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [5, 6, 7], 'remove', { group: 1 }, COLORS), { groups: [THREE_GROUPS[0], THREE_GROUPS[2]], shown: [5, 7] })
 })
 
 test('editGroupsFor clear empties groups and shown', () => {
-  assert.deepEqual(editGroupsFor(G, [5, 6, 7], 'clear', {}, COLORS), { groups: [], shown: [] })
-})
-
-test('editGroupsFor leaves both unchanged for an act it does not edit', () => {
-  assert.deepEqual(editGroupsFor(G, [5], 'delete', {}, COLORS), { groups: G, shown: [5] })
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [5, 6, 7], 'clear', {}, COLORS), { groups: [], shown: [] })
 })
 
 test('rowAfterKey: Enter and Space stay, the arrows step and wrap at both ends, other keys give null', () => {

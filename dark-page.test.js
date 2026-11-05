@@ -196,21 +196,29 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'dark-page.user.js'), 'utf8')))
 })
 
-test('a Framework without getApp warns that the settings entry was skipped, and the page still darkens', () => {
+const SVG_BOX = { left: 0, top: 0, right: 500, bottom: 500 }
+const CELL_BOX = { left: 100, top: 100, right: 200, bottom: 200 }
+
+// Starts the script on a page holding a board of one cell, with `framework` as the page's Framework, or none.
+function startOnBoard (framework) {
   const file = require.resolve('./dark-page.user.js')
   const appended = []
-  const element = () => ({ style: { setProperty () {} } })
+  const observed = []
+  const element = () => ({ style: { setProperty (name, value) { this[name] = value } } })
+  const svg = { getScreenCTM: () => ({ a: 1 }), getBoundingClientRect: () => SVG_BOX, querySelectorAll: () => [] }
+  const cell = { getBoundingClientRect: () => ({ ...CELL_BOX, width: 100, height: 100 }) }
   const saved = { document: global.document, window: global.window, Framework: global.Framework }
   global.document = {
     createElement: element,
     head: { appendChild: (el) => appended.push(el) },
     body: { appendChild: (el) => appended.push(el) },
-    querySelector: () => null,
-    querySelectorAll: () => [],
+    querySelector: (selector) => (selector === '#svgrenderer' ? svg : null),
+    querySelectorAll: (selector) => (selector === '.cells .cell' ? [cell] : []),
     fonts: null
   }
-  global.window = { MutationObserver: class { observe () {} }, addEventListener () {}, requestAnimationFrame () {} }
-  global.Framework = {}
+  global.window = { MutationObserver: class { observe (target) { observed.push(target) } }, addEventListener () {}, requestAnimationFrame () {} }
+  delete global.Framework
+  if (framework) global.Framework = framework
   const warnings = []
   const realWarn = console.warn
   console.warn = (...args) => warnings.push(args.join(' '))
@@ -225,8 +233,33 @@ test('a Framework without getApp warns that the settings entry was skipped, and 
     }
     delete require.cache[file]
   }
-  assert.equal(warnings.length, 1)
-  assert.match(warnings[0], /^dark-page: .*getApp/)
-  const style = appended.find((el) => el.id === 'dark-page-style')
+  return {
+    warnings,
+    observed,
+    style: appended.find((el) => el.id === 'dark-page-style'),
+    rect: appended.find((el) => el.id === RECT_ID)
+  }
+}
+
+function assertDarkens ({ style, rect, observed }) {
+  const kept = clampBox(snapOutward(growBox(CELL_BOX, SOLVER_REACH), PAD), snapOutward(SVG_BOX, 0))
   assert.equal(style.textContent, buildCss(DEFAULT_COLOR))
+  assert.equal(style.disabled, false)
+  assert.equal(rect.style.display, 'block')
+  assert.equal(rect.style.left, `${kept.left}px`)
+  assert.equal(rect.style.width, `${kept.right - kept.left}px`)
+  assert.equal(observed.length, 1)
+}
+
+test('a Framework without getApp warns that the settings entry was skipped, and the page still darkens', () => {
+  const page = startOnBoard({})
+  assert.equal(page.warnings.length, 1)
+  assert.match(page.warnings[0], /^dark-page: .*getApp/)
+  assertDarkens(page)
+})
+
+test('a page with no Framework at all darkens without a warning', () => {
+  const page = startOnBoard()
+  assert.deepEqual(page.warnings, [])
+  assertDarkens(page)
 })
