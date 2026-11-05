@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, PUZZLE_URL, startPuzzle } from './page.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
+import { plantSaved } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../digit-color.user.js', import.meta.url), 'utf8')
@@ -511,11 +512,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('corrupt saved settings fall back to the default colors with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
-      await read(([k, raw]) => {
-        const key = Object.keys(window.localStorage).find((n) => n.endsWith(k))
-        if (!key) throw new Error('no stored key for ' + k)
-        window.localStorage.setItem(key, raw)
-      }, [DATA_KEY, bad])
+      await plantSaved(p, DATA_KEY, bad)
       await reload()
       assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]], bad)
     }

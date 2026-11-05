@@ -15,7 +15,8 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { effectiveOpacities, openExtrasEditor } from './settings.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { draw, openPenTool, penValuesNoColor } from './pen.mjs'
+import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
@@ -39,7 +40,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const editor = () => p.locator('#pen-tool-extras-editor')
   const sliderValue = (selector) => p.locator(selector).inputValue()
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
-  const penValues = () => read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => v[0])).sort())
   const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
   const activeElementTag = () => read(() => document.activeElement.tagName)
   // The computed stroke width and opacity of the first stroke of pen color 1, drawn by `draw`.
@@ -47,33 +47,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const effectiveOpacity = async (selector) => (await effectiveOpacities(p, selector))[0]
   const lineOpacity = () => effectiveOpacity('.cell-pen.pencolor-1')
   const strokeOwnOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).opacity))
-
-  // The pen button toggles the tool, and SudokuPad binds its handler a moment after the
-  // button appears, so it is clicked again until the tool's buttons show.
-  const selectPen = async () => {
-    const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-    const deadline = Date.now() + SETTLE_MS
-    while (!(await shown()) && Date.now() < deadline) {
-      await p.click('#control-pen')
-      await settle(shown, true, 500)
-    }
-  }
-
-  // One free line in pen color 1 across the middle of grid row `row`. A line drawn over an existing one
-  // erases it, so a second line takes another row.
-  const draw = async (row = 8) => {
-    await selectPen()
-    await p.locator('.tool-pen button[data-key="1"]').click()
-    const [x, y] = await read((row) => {
-      const box = Framework.app.puzzle.cells.find((c) => c.row === row && c.col === 4).elem.getBoundingClientRect()
-      return [box.x + box.width / 2, box.y + box.height / 2]
-    }, row)
-    await p.mouse.move(x, y)
-    await p.mouse.down()
-    await p.mouse.move(x + 110, y + 10, { steps: 6 })
-    await p.mouse.up()
-    await p.locator('.cell-pen.pencolor-1').first().waitFor({ state: 'attached' })
-  }
 
   // Presses on the middle of the slider and drags to `toX` (a page x), a real mouse drag.
   const dragSlider = async (selector, toX) => {
@@ -95,7 +68,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // The pen tool is off until its own setting turns it on.
     await read(() => Framework.setSetting('toolpen', true))
     await p.locator('#control-pen').waitFor({ state: 'visible' })
-    await selectPen()
+    await openPenTool(p)
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
   const openEditor = () => openExtrasEditor(p)
@@ -104,7 +77,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     ;({ context, p, errors } = await openPage(browser))
     await boot()
     await read(([a, b]) => { Framework.removeData(a); Framework.removeData(b) }, [THICKNESS_KEY, OPACITY_KEY])
-    await draw()
+    await draw(p, 8)
   })
   after(async () => {
     await read(([a, b]) => { Framework.removeData(a); Framework.removeData(b) }, [THICKNESS_KEY, OPACITY_KEY])
@@ -171,7 +144,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a real drag on Thickness changes the line\'s computed width and saves at once, with no Save', async () => {
     await read((k) => Framework.removeData(k), THICKNESS_KEY)
-    await selectPen()
+    await openPenTool(p)
     await dragToMax(THICKNESS)
     assert.equal(await sliderValue(THICKNESS), '16')
     assert.equal(await settle(lineWidth, 16), 16)
@@ -184,7 +157,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('a real drag on Opacity changes the line\'s computed opacity and saves at once, with no Save', async () => {
     await read((k) => Framework.removeData(k), OPACITY_KEY)
-    await selectPen()
+    await openPenTool(p)
     await dragSlider(OPACITY, GRID_X)
     assert.equal(await sliderValue(OPACITY), '20')
     assert.equal(await settle(lineOpacity, 0.2), 0.2)
@@ -226,7 +199,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('a slider drag adds nothing to the undo stack or the replay, draws no pen stroke and leaves every pen mark as it was', async () => {
-    const before = { depth: await undoDepth(), strokes: await strokeCount(), pen: await penValues(), replay: await read(() => Framework.app.getReplay()) }
+    const before = { depth: await undoDepth(), strokes: await strokeCount(), pen: await penValuesNoColor(p), replay: await read(() => Framework.app.getReplay()) }
     // Both drags end over the grid, so a stroke drawn by the slider's pointer events would show.
     await dragSlider(THICKNESS, GRID_X)
     await dragSlider(OPACITY, GRID_X)
@@ -234,7 +207,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await dragToMax(OPACITY)
     assert.equal(await undoDepth(), before.depth)
     assert.equal(await strokeCount(), before.strokes)
-    assert.deepEqual(await penValues(), before.pen)
+    assert.deepEqual(await penValuesNoColor(p), before.pen)
     assert.equal(await read(() => Framework.app.getReplay()), before.replay)
   })
 
@@ -254,7 +227,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
     assert.equal(await sliderValue(THICKNESS), '16')
     assert.equal(await sliderValue(OPACITY), '100')
-    await draw(7)
+    await draw(p, 7)
     assert.equal(await settle(lineWidth, 16), 16)
     assert.equal(await settle(lineOpacity, 1), 1)
   })
@@ -264,7 +237,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator('.pen-tool-extras-sliders').waitFor({ state: 'detached' })
     assert.equal(await p.locator(THICKNESS).count(), 0)
     assert.equal(await p.locator(OPACITY).count(), 0)
-    await selectPen()
+    await openPenTool(p)
     await p.locator('.pen-tool-extras-sliders').waitFor({ state: 'visible' })
     assert.equal(await p.locator('.pen-tool-extras-sliders').count(), 1)
     assert.equal(await sliderValue(THICKNESS), '16')

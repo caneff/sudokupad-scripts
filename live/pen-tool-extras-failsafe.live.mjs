@@ -16,7 +16,8 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { gridPoint, openPenTool, penEntries } from './pen.mjs'
+import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
@@ -85,16 +86,6 @@ const CASES = [
   { name: 'nothing broken', off: NOTHING_OFF, breaks: '' }
 ]
 
-// The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is clicked again until the tool's buttons show.
-async function openPenTool (page) {
-  const shown = () => page.locator('.tool-pen button[data-key="1"]').isVisible()
-  const deadline = Date.now() + SETTLE_MS
-  while (!(await shown()) && Date.now() < deadline) {
-    await page.click('#control-pen')
-    await settle(shown, true, 500)
-  }
-}
-
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
@@ -108,23 +99,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       let context, p, logged, errors
 
       const read = (fn, arg) => p.evaluate(fn, arg)
-      const penValues = () => read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
-      const cellBox = (row, col) => read(([r, c]) => {
-        const box = Framework.app.puzzle.cells.find((cell) => cell.row === r && cell.col === c).elem.getBoundingClientRect()
-        return [box.x, box.y, box.width]
-      }, [row, col])
-      // A point [row, col] in cells from the grid's top left, as page pixels.
-      const pixel = async ([r, c]) => {
-        const [x0, y0, size] = await cellBox(0, 0)
-        return [x0 + c * size, y0 + r * size]
-      }
       // A click 2 px inside the top edge of cell (2, 2): an edge click, which SudokuPad stores as its X.
       const clickEdge = async (button = 'left') => {
-        const [x, y] = await pixel([2, 2.5])
+        const [x, y] = await gridPoint(p, [2, 2.5])
         await p.mouse.click(x, y + 2, { button })
       }
       // The pen value of each stored entry, without its color character.
-      const edgeValues = async () => (await penValues()).map((v) => v.split(':')[1][0])
+      const edgeValues = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
       const dialogLine = async () => {
         await openExtrasEditor(p)
         const text = await p.locator('#pen-tool-extras-editor').innerText()
@@ -166,19 +147,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           await p.locator(PAGE_BUTTON).click()
           await p.locator(PAGE_BUTTON).click()
           await p.locator('.tool-pen button[data-key="3"]').click()
-          const [x0, y0] = await pixel([2.5, 2.5])
-          const [x1] = await pixel([2.5, 4.5])
+          const [x0, y0] = await gridPoint(p, [2.5, 2.5])
+          const [x1] = await gridPoint(p, [2.5, 4.5])
           await p.mouse.move(x0, y0)
           await p.mouse.down()
           await p.mouse.move(x1, y0, { steps: 8 })
           await p.mouse.up()
-          assert.equal(await settle(async () => (await penValues()).length > 0, true), true, 'the drag stored a line')
+          assert.equal(await settle(async () => (await penEntries(p)).length > 0, true), true, 'the drag stored a line')
           assert.equal(await read(() => document.querySelectorAll('#cell-pen [data-chevron-part]').length), 0, 'no arrow group')
           assert.ok(await read(() => document.querySelectorAll('#cell-pen path.cell-pen').length) > 0, 'SudokuPad\'s plain line is drawn')
           await p.locator(PAGE_BUTTON).click()
         }
         if (kase.name === 'line erase') {
-          const [x, y] = await pixel([2.5, 2.5])
+          const [x, y] = await gridPoint(p, [2.5, 2.5])
           await p.mouse.click(x, y, { button: 'middle' })
         }
         if (kase.name === 'right click') {
@@ -190,7 +171,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
             await clickEdge('right')
             assert.equal(await answer, false, 'the menu is not suppressed once the feature is off')
           }
-          while ((await penValues()).length) await p.click('#control-undo')
+          while ((await penEntries(p)).length) await p.click('#control-undo')
         }
       }
 
@@ -202,13 +183,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       })
 
       it('SudokuPad\'s own edge X still draws, and the next click is this script\'s arrow, or SudokuPad\'s own toggle off when marks are off', async () => {
-        while ((await penValues()).length) await p.click('#control-undo')
+        while ((await penEntries(p)).length) await p.click('#control-undo')
         await clickEdge()
         assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'the X on the bottom edge of the cell above')
         await clickEdge()
         const second = kase.edgeAgain === null ? [] : ['m']
         assert.deepEqual(await settle(edgeValues, second), second)
-        while ((await penValues()).length) await p.click('#control-undo')
+        while ((await penEntries(p)).length) await p.click('#control-undo')
       })
 
       it('the features that are not off still work', async () => {
@@ -235,15 +216,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // A dragged line is SudokuPad's own drawing; it needs the drag highlight, which one case removes.
       if (!kase.noDrag) {
         it('SudokuPad\'s own dragged line still draws', async () => {
-          while ((await penValues()).length) await p.click('#control-undo')
-          const [x0, y0] = await pixel([4.5, 2.5])
-          const [x1] = await pixel([4.5, 4.5])
+          while ((await penEntries(p)).length) await p.click('#control-undo')
+          const [x0, y0] = await gridPoint(p, [4.5, 2.5])
+          const [x1] = await gridPoint(p, [4.5, 4.5])
           await p.mouse.move(x0, y0)
           await p.mouse.down()
           await p.mouse.move(x1, y0, { steps: 8 })
           await p.mouse.up()
-          assert.equal(await settle(async () => (await penValues()).length > 0, true), true, 'the drag stored a line')
-          while ((await penValues()).length) await p.click('#control-undo')
+          assert.equal(await settle(async () => (await penEntries(p)).length > 0, true), true, 'the drag stored a line')
+          while ((await penEntries(p)).length) await p.click('#control-undo')
         })
       }
 

@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { MODES, openPage, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
+import { keydownDefaults, openPenTool, penEntries } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
@@ -37,7 +38,6 @@ const settingsEntry = async (p, text) => {
   await group.locator('button, [role=button]').filter({ hasText: text }).first().waitFor({ state: 'visible' })
 }
 
-const penValues = (p) => p.evaluate(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => `${c.row},${c.col}:${v}`)).sort())
 const select = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
 
 // Per script: its file, what shows it has started (`ready`), its control (`control`) and one representative action (`act`).
@@ -91,12 +91,7 @@ const SCRIPTS = [
     // Tab is swallowed: it leaves the number pad on digits and saves no letter mode. The keydown default is prevented
     // either way, since SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script.
     act: async (p) => {
-      await p.evaluate(() => {
-        window.__keydowns = []
-        window.addEventListener('keydown', (e) => window.__keydowns.push(e.defaultPrevented), { once: true })
-      })
-      await p.keyboard.press('Tab')
-      assert.deepEqual(await p.evaluate(() => window.__keydowns), [true])
+      assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
       const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
       assert.equal(await settle(pad, DIGITS), DIGITS, 'the number pad stayed on digits')
       assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
@@ -109,9 +104,7 @@ const SCRIPTS = [
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       await p.evaluate(() => Framework.setSetting('toolpen', true))
       await p.locator('#control-pen').waitFor({ state: 'visible' })
-      // The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears.
-      const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-      assert.equal(await clickUntil(() => p.click('#control-pen'), shown, true, SETTLE_MS), true, 'the pen tool opened')
+      assert.equal(await openPenTool(p), true, 'the pen tool opened')
     },
     control: (p) => p.locator(PEN_PAGE_BUTTON).waitFor({ state: 'visible' }),
     // Two clicks on one cell edge: SudokuPad's own X, then this script's arrow 'm'.
@@ -122,7 +115,7 @@ const SCRIPTS = [
       })
       // 2 px inside the top edge of cell (2, 2).
       const [x, y] = [x0 + 2.5 * size, y0 + 2 * size + 2]
-      const edge = async () => (await penValues(p)).map((v) => v.split(':')[1][0])
+      const edge = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
       await p.mouse.click(x, y)
       assert.deepEqual(await settle(edge, ['4']), ['4'], 'the first click made SudokuPad\'s X')
       await p.mouse.click(x, y)

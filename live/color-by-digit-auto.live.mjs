@@ -9,50 +9,21 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { gotoPuzzle, MODES, openPage, startPuzzle } from './page.mjs'
+import { AUTO_KEY, AUTO_STORAGE_KEY, GIVENS, LOW_FIVE_HIGH, openSession, PROFILES_KEY, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { gotoPuzzle, MODES } from './page.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
-import { clickUntil, POLL_MS, settle, SETTLE_MS } from './settle.mjs'
+import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 /* global Replay */
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
-// The puzzle's givens, row by row, 0 for empty; the same board as color-by-digit.live.mjs.
-const GIVENS = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
 const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
-
-// The saved profiles every session starts with: Odd/Even active, Low/5/High to switch to. The fresh
-// install and the migration are checked in color-by-digit-profiles.live.mjs.
-const LOW_FIVE_HIGH = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
-const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
-const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
-// The key the script saves its profiles under, and the one Framework.setData stores it at.
-const PROFILES_KEY = 'ColorByDigit_profiles'
-const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
-
-// How long a "nothing happened" check watches. A fixed sleep is correct only here.
-const QUIET_MS = 500
-
-// Watches `read` for QUIET_MS and returns every distinct reading.
-async function watch (read) {
-  const seen = [JSON.stringify(await read())]
-  const deadline = Date.now() + QUIET_MS
-  while (Date.now() < deadline) {
-    await sleep(POLL_MS)
-    const now = JSON.stringify(await read())
-    if (now !== seen[seen.length - 1]) seen.push(now)
-  }
-  return seen.map((s) => JSON.parse(s))
-}
 
 const BUTTON = '#control-colorbydigit'
 const EDITOR = '#color-by-digit-editor'
 const BOX = '#control-colorbydigit [data-role="auto"]'
-const AUTO_KEY = 'ColorByDigit_auto'
-// Framework.setData prefixes the script's key with the site's own prefix.
-const AUTO_STORAGE_KEY = `svencodes_${AUTO_KEY}`
 
 const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
 const boxCheckedOn = (p) => p.locator(BOX).getAttribute('aria-checked')
@@ -61,34 +32,14 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Runs the loaded page through the script's injection time for `mode` (document-idle is already set up by `openSession`) and Start Puzzle.
-const startInjected = async (p, mode) => {
-  await startPuzzle(p, {
-    injection: { mode, code: script },
-    beforeStart: mode === 'before-start' ? () => p.locator(BUTTON).waitFor({ state: 'attached' }) : undefined
-  })
-  await p.locator(BUTTON).waitFor({ state: 'visible' })
-}
-
 // Loads the page again and runs it through `startInjected`.
 const bootPage = async (p, mode) => {
   await gotoPuzzle(p)
-  await startInjected(p, mode)
+  await startInjected(p, script, mode)
 }
 
-// A page injected at `mode`. `seedAuto` writes the saved auto mode before the page's own scripts run.
-const openSession = async (seedAuto, contextOptions = {}, mode = 'after-start') => {
-  const opened = await openPage(browser, {
-    contextOptions,
-    injection: { mode, code: script },
-    seed: async (page) => {
-      await page.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
-      if (seedAuto) await page.addInitScript(([key]) => window.localStorage.setItem(key, 'true'), [AUTO_STORAGE_KEY])
-    }
-  })
-  await startInjected(opened.p, mode)
-  return opened
-}
+// A page injected at `mode`. `seedAuto` saves the auto mode on before the page's own scripts run.
+const openAuto = (seedAuto, contextOptions = {}, mode = 'after-start') => openSession(browser, script, { force: seedAuto ? { [AUTO_STORAGE_KEY]: true } : {}, contextOptions, mode })
 
 describe('auto mode, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
@@ -121,7 +72,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   }
 
   before(async () => {
-    ({ context, p, errors } = await openSession(false))
+    ({ context, p, errors } = await openAuto(false))
   })
   after(async () => { await context.close() })
 
@@ -390,7 +341,7 @@ for (const mode of MODES) {
     let context, p, errors
 
     before(async () => {
-      ({ context, p, errors } = await openSession(true, {}, mode))
+      ({ context, p, errors } = await openAuto(true, {}, mode))
     })
     after(async () => { await context.close() })
 
@@ -408,7 +359,7 @@ for (const mode of MODES) {
     let context, p, errors
 
     before(async () => {
-      ({ context, p, errors } = await openSession(false, {}, mode))
+      ({ context, p, errors } = await openAuto(false, {}, mode))
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
       await p.keyboard.press('4')
       // SudokuPad saves progress a moment after a change.
@@ -433,7 +384,7 @@ describe('auto mode box on a touch screen, injected after Start Puzzle', { concu
   let context, p, errors
 
   before(async () => {
-    ({ context, p, errors } = await openSession(false, { hasTouch: true }))
+    ({ context, p, errors } = await openAuto(false, { hasTouch: true }))
   })
   after(async () => { await context.close() })
 

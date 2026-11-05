@@ -13,6 +13,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { drawnWidth, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, headerVersion, openExtrasEditor, openSettings } from './settings.mjs'
+import { openPenTool, plantSaved, setSlider } from './pen.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -83,7 +84,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const swatch = (n) => read((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor, n)
   // All nine swatches, as rgb(), once the pen tool's buttons are showing.
   const swatches = async () => {
-    await selectPen()
+    await openPenTool(p)
     return read(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor))
   }
   const swatchesAre = async (hexes) => {
@@ -97,21 +98,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const restoreDefaults = () => dialogButton('Restore defaults').click()
   const pickerValues = () => editor().locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value))
 
-  // The pen button toggles the tool, and SudokuPad binds its handler a moment after the
-  // button appears, so it is clicked again until the tool's buttons show.
-  const selectPen = async () => {
-    const shown = () => p.locator('.tool-pen button[data-key="1"]').isVisible()
-    const deadline = Date.now() + SETTLE_MS
-    while (!(await shown()) && Date.now() < deadline) {
-      await p.click('#control-pen')
-      await settle(shown, true, 500)
-    }
-  }
-
   // Draws one stroke with pen color `n` in row `row` of the screen's first cell column, so
   // that no two strokes are the same line.
   const draw = async (n, row) => {
-    await selectPen()
+    await openPenTool(p)
     await p.locator(`.tool-pen button[data-key="${n}"]`).click()
     const [x, y] = await read((row) => {
       const r = document.querySelector('#cell-givens text').getBoundingClientRect()
@@ -175,7 +165,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     for (const col of [0, 1, 2]) assert.equal(Math.abs(rows[0][col].x - rows[2][col].x) < 2, true, `column ${col} lines up`)
     // The pen tool's own buttons are in the same arrangement.
     await closeExtrasEditorWith(p, 'Cancel')
-    await selectPen()
+    await openPenTool(p)
     const buttons = await p.locator('.tool-pen button[data-key]').evaluateAll((els) => els.filter((el) => el.dataset.key !== '0').map((el) => { const r = el.getBoundingClientRect(); return [el.dataset.key, Math.round(r.x), Math.round(r.y)] }))
     assert.deepEqual(buttons.map((b) => b[0]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
     assert.equal(buttons[0][1] < buttons[1][1] && buttons[3][2] > buttons[0][2], true, 'the panel runs left to right, then down')
@@ -385,9 +375,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('corrupt saved settings fall back to the derived colors with no thrown error', async () => {
     const errorsBefore = errors.length
     for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
-      await read(([k, raw]) => {
-        window.localStorage.setItem(Framework.makeDataKey(k), raw)
-      }, [DATA_KEY, bad])
+      await plantSaved(p, DATA_KEY, bad)
       await reload()
       assert.equal(await settle(() => swatch(4), rgbOf(PAGE_PENS[2][3])), rgbOf(PAGE_PENS[2][3]), bad)
     }
@@ -398,10 +386,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // The slider in the pen tool's panel. The real drag is checked in pen-tool-extras-panel.live.mjs;
     // these checks only need the value set, with the same `input` event a drag fires.
     const slider = () => p.locator('#pen-tool-extras-thickness')
-    const setSlider = async (value) => {
-      await selectPen()
-      await slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
-    }
+    const setThickness = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
     const savedThickness = () => read((k) => Framework.getData(k), THICKNESS_KEY)
     // The computed stroke width of every drawn stroke of pen color `n` (a drag draws a line and a
     // cell circle), as numbers.
@@ -426,22 +411,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('with nothing saved lines, circles and crosses are SudokuPad\'s 5 wide and every edge mark 2.5, and the slider runs 1 to 16 at 5', async () => {
       assert.deepEqual(await widths(1)(), [5])
       assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
-      await selectPen()
+      await openPenTool(p)
       assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '1', '5'])
     })
 
     it('moving the slider scales lines, circles, crosses and edge marks by one factor, live, and saves it with no Save', async () => {
-      await setSlider(10)
+      await setThickness(10)
       assert.deepEqual(await settle(widths(1), [10]), [10])
       assert.deepEqual(await allWidths(), { full: [10], half: [5] })
       assert.equal(await savedThickness(), 10)
-      await setSlider(2)
+      await setThickness(2)
       assert.deepEqual(await settle(widths(1), [2]), [2])
       assert.equal(await savedThickness(), 2)
     })
 
     it('a saved thickness leaves the colors unsaved, and a new line, a reload and the old lines all use it', async () => {
-      await setSlider(9)
+      await setThickness(9)
       assert.equal(await savedThickness(), 9)
       assert.equal(await saved(), null)
       assert.deepEqual(await settle(widths(1), [9]), [9])
@@ -450,7 +435,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await reload()
       assert.equal(await saved(), null)
       await swatchesAre(PAGE_PENS[2])
-      await selectPen()
+      await openPenTool(p)
       assert.equal(await slider().inputValue(), '9')
       await draw(3, 9)
       assert.deepEqual(await settle(widths(3), [9]), [9])
@@ -467,7 +452,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('Restore defaults sets the dialog\'s thickness slider to 5 for Save: Cancel afterwards leaves the saved thickness and the marks, Save clears it and draws at 5', async () => {
-      await setSlider(7)
+      await setThickness(7)
       assert.equal(await savedThickness(), 7)
       await openEditor()
       await restoreDefaults()
@@ -515,13 +500,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('corrupt saved thickness falls back to 5, the settings entry still opens the dialog, and nothing throws', async () => {
       const errorsBefore = errors.length
       for (const bad of ['{not json', '"9"', '99', '0', '2.5', '[7]', 'null']) {
-        await read(([k, raw]) => { window.localStorage.setItem(Framework.makeDataKey(k), raw) }, [THICKNESS_KEY, bad])
+        await plantSaved(p, THICKNESS_KEY, bad)
         await reload()
         assert.deepEqual(await settle(allWidths, { full: [5], half: [2.5] }), { full: [5], half: [2.5] }, bad)
         // A startup that threw would stop before it added the settings entry.
         await openEditor()
         await closeExtrasEditorWith(p, 'Cancel')
-        await selectPen()
+        await openPenTool(p)
         assert.equal(await slider().inputValue(), '5', bad)
       }
       assert.deepEqual(errors.slice(errorsBefore), [])
@@ -540,7 +525,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
     // Presses `which` over pen button `n` and leaves it down; the caller releases it.
     const press = async (n, which) => {
-      await selectPen()
+      await openPenTool(p)
       const [x, y] = await centre(button(n))
       await p.mouse.move(x, y)
       await p.mouse.down({ button: which })
@@ -689,7 +674,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await p.locator('.tool-pen.pen-tool-extras-editing').count(), 0)
       await holdToOpen(4)
       await p.click('#control-colour')
-      await selectPen()
+      await openPenTool(p)
       assert.equal(await pickerCount(), 0)
       assert.equal(await p.locator('.tool-pen.pen-tool-extras-editing').count(), 0)
     })

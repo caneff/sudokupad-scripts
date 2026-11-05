@@ -13,7 +13,8 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
-import { settle, SETTLE_MS } from './settle.mjs'
+import { cellCentre, openPenTool, penStrings } from './pen.mjs'
+import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const noTabLetters = readFileSync(new URL('../no-tab-letters.user.js', import.meta.url), 'utf8')
@@ -27,17 +28,6 @@ const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGE_ONE = '123456789'
 const PAGE_TWO = 'abcdefghi'
 const PAGE_THREE = 'jlnprtvxz'
-
-// The pen button toggles the tool, and SudokuPad binds its handler a moment after the button appears, so it is
-// clicked again until the tool's buttons show.
-async function openPenTool (page) {
-  const shown = () => page.locator('.tool-pen button[data-key="1"]').isVisible()
-  const deadline = Date.now() + SETTLE_MS
-  while (!(await shown()) && Date.now() < deadline) {
-    await page.click('#control-pen')
-    await settle(shown, true, 500)
-  }
-}
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -54,7 +44,6 @@ function group (title, extra = []) {
     const selected = () => read(() => ToolPen.tool.selectedColor)
     const padValues = () => read(() => [...document.querySelectorAll('.controls-input button[data-key]')].filter((b) => b.dataset.key !== '0').map((b) => b.dataset.value).join(''))
     const currentButtonKey = () => read(() => { const b = document.querySelector('.tool-pen button.current'); return b && b.dataset.key })
-    const penValues = () => read(() => Framework.app.puzzle.cells.flatMap((c) => c.pen.map((v) => String(v))).sort())
     const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
     const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
     const styleOf = (selector) => read((s) => { const st = window.getComputedStyle(document.querySelector(s)); return { dash: st.strokeDasharray, stroke: st.stroke, width: st.strokeWidth } }, selector)
@@ -65,15 +54,10 @@ function group (title, extra = []) {
       await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     }
 
-    const cellCentre = (row, col) => read(([r, c]) => {
-      const box = Framework.app.puzzle.cells.find((cell) => cell.row === r && cell.col === c).elem.getBoundingClientRect()
-      return [box.x + box.width / 2, box.y + box.height / 2]
-    }, [row, col])
-
     // One free line across the middle of grid row `row`, a real drag; a second line takes another row.
     const draw = async (row) => {
       const before = await strokeCount()
-      const [x, y] = await cellCentre(row, 2)
+      const [x, y] = await cellCentre(p, row, 2)
       await p.mouse.move(x, y)
       await p.mouse.down()
       await p.mouse.move(x + 110, y + 4, { steps: 6 })
@@ -156,7 +140,7 @@ function group (title, extra = []) {
     it('a line drawn with a page 2 pen is dashed in its partner\'s color; a line with its page 1 partner stays solid', async () => {
       const colorOf3 = await read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
       await draw(8)
-      assert.deepEqual((await penValues()).filter((v) => v.endsWith('c')), ['1c'])
+      assert.deepEqual((await penStrings(p)).filter((v) => v.endsWith('c')), ['1c'])
       const dashed = await styleOf('.cell-pen.pencolor-c')
       assert.notEqual(dashed.dash, 'none')
       // 3 line widths of 5 is a dash of 15 on a cell of 64, which holds whole periods.
@@ -171,9 +155,9 @@ function group (title, extra = []) {
     it('a cell mark drawn with a page 2 pen stays solid', async () => {
       await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
-      const [x, y] = await cellCentre(2, 2)
+      const [x, y] = await cellCentre(p, 2, 2)
       await p.mouse.click(x, y)
-      assert.equal(await settle(async () => (await penValues()).includes('5c'), true), true)
+      assert.equal(await settle(async () => (await penStrings(p)).includes('5c'), true), true)
       assert.equal((await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray)), 'none')
     })
 
@@ -184,7 +168,7 @@ function group (title, extra = []) {
       assert.equal(await settle(strokeCount, 0), 0)
       await read((r) => Framework.app.loadReplay(r), replay)
       assert.equal(await settle(strokeCount, total), total)
-      assert.deepEqual((await penValues()).filter((v) => v.endsWith('c')), ['1c', '5c'])
+      assert.deepEqual((await penStrings(p)).filter((v) => v.endsWith('c')), ['1c', '5c'])
       assert.notEqual((await styleOf('.cell-pen.pencolor-c')).dash, 'none')
     })
 
@@ -261,14 +245,14 @@ function group (title, extra = []) {
       await read((k) => Framework.removeData(k), COLORS_KEY)
       const before = await colorOf3()
       assert.notEqual(before, own[2], 'the colors in force are not SudokuPad\'s own')
-      const marks = await penValues()
+      const marks = await penStrings(p)
       const depth = await undoDepth()
       await openEditor()
       assert.notDeepEqual(await pickers(), own)
       await editor().locator('button[data-sudokupad-colors]').click()
       assert.deepEqual(await pickers(), own)
       assert.equal(await editor().locator('button[data-sudokupad-colors]').count(), 1, 'the dialog is still open, with the button in it')
-      assert.deepEqual(await penValues(), marks, 'the click left no pen mark')
+      assert.deepEqual(await penStrings(p), marks, 'the click left no pen mark')
       assert.equal(await undoDepth(), depth, 'the click is no undo step')
       await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await colorOf3(), before, 'Cancel leaves the colors as they were')
@@ -278,7 +262,7 @@ function group (title, extra = []) {
       await closeExtrasEditorWith(p, 'Save')
       assert.equal(await settle(colorOf3, own[2]), own[2])
       assert.deepEqual(await saved(COLORS_KEY), Object.fromEntries(own.map((c, i) => [i + 1, c])), 'all nine are saved as the user\'s colors')
-      assert.deepEqual(await penValues(), marks, 'closing the dialog left no pen mark either')
+      assert.deepEqual(await penStrings(p), marks, 'closing the dialog left no pen mark either')
       // Pen 3 on page 1 is 3, on page 2 c, on page 3 n and its reverse o: every page follows the color.
       assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, rgbOf(own[2]))
       assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, rgbOf(own[2]))

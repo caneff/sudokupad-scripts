@@ -10,33 +10,20 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
+import { startPuzzle } from './page.mjs'
+import { GIVENS, openSession, PROFILES_KEY, SEED, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
-import { clickUntil, POLL_MS, settle, SETTLE_MS } from './settle.mjs'
+import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
-// The puzzle's givens, row by row, 0 for empty. Must match the board built by
-// puzzle-url.txt; the 'the board holds the givens' test checks it.
-const GIVENS = '530070000600195000098000060800060003400803001700020006060000280000419005000080079'
 const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 // Two entered digits sit on empty cells: r1c3 = 4, r1c4 = 7.
 const ENTERED = { '0,2': '4', '0,3': '7' }
 const DIGIT_CELLS = GIVEN_COUNT + Object.keys(ENTERED).length
 
-// The saved profiles every session of this file starts with, so the checks below run on Odd/Even with
-// Low/5/High to switch to. The fresh install and the migration are checked in color-by-digit-profiles.live.mjs.
-const LOW_FIVE_HIGH = [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: '5', digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }]
-const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
-const SEED = { profiles: [{ name: 'Odd/Even', groups: ODD_EVEN }, { name: 'Low/5/High', groups: LOW_FIVE_HIGH }], active: 0 }
-// Framework.setData prefixes the script's key with the site's own prefix.
-// The key the script saves its profiles under, and the one Framework.setData stores it at.
 const EDITOR = '#color-by-digit-editor'
-const PROFILES_KEY = 'ColorByDigit_profiles'
-const PROFILES_STORAGE_KEY = `svencodes_${PROFILES_KEY}`
 
-// How long a "nothing happened" check watches. A fixed sleep is correct only here.
-const QUIET_MS = 500
 // How long clickUntil keeps clicking. The throttle it absorbs is a few hundred ms,
 // so a button that ignores clicks for longer than this fails.
 const CLICK_DEADLINE_MS = 3000
@@ -46,18 +33,6 @@ const LAYOUT_POLL_MS = 250
 const FIT_SLACK_PX = 1
 // How many stand-in buttons another script's row gets in the wrap test; enough to fill a second row.
 const OTHER_BUTTONS = 8
-
-// Watches `read` for QUIET_MS and returns every distinct reading.
-async function watch (read) {
-  const seen = [JSON.stringify(await read())]
-  const deadline = Date.now() + QUIET_MS
-  while (Date.now() < deadline) {
-    await sleep(POLL_MS)
-    const now = JSON.stringify(await read())
-    if (now !== seen[seen.length - 1]) seen.push(now)
-  }
-  return seen.map((s) => JSON.parse(s))
-}
 
 const BUTTON = '#control-colorbydigit'
 
@@ -107,10 +82,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, {
-      seed: (page) => page.addInitScript(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) }, [PROFILES_STORAGE_KEY, JSON.stringify(SEED)])
-    }))
-    await boot()
+    ;({ context, p, errors } = await openSession(browser, script))
   })
   after(async () => { await context.close() })
 
