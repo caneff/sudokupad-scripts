@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.3
+// @version      0.3.4
 // @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark gets a small red circle behind it, keeping its digit color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -18,7 +18,7 @@
 
   // Shown in the options dialog, and the same as @version above. The script cannot read its own header
   // (GM_info is absent when it runs without Tampermonkey), so the number is kept here too.
-  const VERSION = '0.3.3'
+  const VERSION = '0.3.4'
   // The settings group the entry goes in; SudokuPad declares it, and the dialog starts it collapsed.
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'DigitColor_colors'
@@ -86,8 +86,7 @@
   function buildCss (colors) {
     return Object.entries(colors).filter(([, color]) => color !== null).map(([digit, color]) => [
       `#cell-values [${DIGIT_ATTR}="${digit}"] { fill: ${color} }`,
-      `#svgrenderer #cell-pencilmarks .cell-pencilmark[data-val="${digit}"] { fill: ${color} }`,
-      `#svgrenderer #cell-candidates tspan[data-val="${digit}"] { fill: ${color} }`
+      ...MARK_SELECTORS.map((selector) => `#svgrenderer ${selector}[data-val="${digit}"] { fill: ${color} }`)
     ].join('\n')).join('\n')
   }
 
@@ -122,10 +121,30 @@
     }
   }
 
-  if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  function renderEditor (colors) {
+    const rows = DIGITS.map((d) => {
+      const own = colors[d] === null
+      return '<div style="margin:3px 0;display:flex;align-items:center;gap:8px">' +
+        `<b style="width:1.2em;text-align:right">${d}</b>` +
+        `<input type="color" data-digit="${d}" value="${esc(own ? SUDOKUPAD_BLUE : colors[d])}" style="opacity:${own ? 0.4 : 1}">` +
+        `<button type="button" data-act="own" data-digit="${d}"${own ? ' disabled' : ''}>SudokuPad color</button></div>`
+    }).join('')
+    return rows + '<button type="button" data-act="defaults" style="margin-top:6px">Restore defaults</button>'
   }
-  if (typeof Framework === 'undefined' || !Framework.getApp) return
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { VERSION, normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
+  }
+  // The page may not be SudokuPad's (the match covers other pages of crackingthecryptic.com), which
+  // has no Framework and is left alone. A Framework without `getApp` is a SudokuPad this script
+  // cannot hook, which is reported.
+  if (typeof Framework === 'undefined') return
+  if (!Framework.getApp) {
+    console.warn('digit-color: SudokuPad\'s Framework has no getApp, so nothing was changed')
+    return
+  }
 
   function loadColors () {
     return normalizeColors(Framework.getData(DATA_KEY))
@@ -225,19 +244,6 @@
     }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] })
     stampEnteredDigits()
     syncCircles()
-  }
-
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-
-  function renderEditor (colors) {
-    const rows = DIGITS.map((d) => {
-      const own = colors[d] === null
-      return '<div style="margin:3px 0;display:flex;align-items:center;gap:8px">' +
-        `<b style="width:1.2em;text-align:right">${d}</b>` +
-        `<input type="color" data-digit="${d}" value="${esc(own ? SUDOKUPAD_BLUE : colors[d])}" style="opacity:${own ? 0.4 : 1}">` +
-        `<button type="button" data-act="own" data-digit="${d}"${own ? ' disabled' : ''}>SudokuPad color</button></div>`
-    }).join('')
-    return rows + '<button type="button" data-act="defaults" style="margin-top:6px">Restore defaults</button>'
   }
 
   function openDialog () {
