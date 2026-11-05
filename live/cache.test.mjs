@@ -1,13 +1,13 @@
 // The pure parts of live/cache.mjs: where the recording lives, whether a run records or replays it,
 // and how a fresh recording is cleaned. Network-free, so it runs in `npm test`; the recording and
 // replay themselves are what `npm run test:live` exercises.
-import { after, before, describe, it } from 'node:test'
+import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, utimesSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { cleanHar, ensureRecording, harPath, MAX_AGE_MS, misses, modeFor, routeSudokuPad } from './cache.mjs'
+import { checkVersion, cleanHar, ensureRecording, harPath, LOCK_STALE_MS, MAX_AGE_MS, misses, modeFor, pageVersion, puzzleUrl, routeSudokuPad } from './cache.mjs'
 
 const HOUR = 60 * 60 * 1000
 
@@ -34,9 +34,31 @@ describe('modeFor', () => {
     assert.equal(modeFor({ env: {}, exists: false, mtimeMs: 0, now }), 'record')
   })
 
-  it('records a recording older than 24 hours', () => {
+  const stale = { exists: true, mtimeMs: now - 25 * HOUR, now }
+
+  it('asks for the version check when the recording is older than 24 hours and none has run', () => {
     assert.equal(MAX_AGE_MS, 24 * HOUR)
-    assert.equal(modeFor({ env: {}, exists: true, mtimeMs: now - 25 * HOUR, now }), 'record')
+    assert.equal(modeFor({ env: {}, ...stale }), 'needs-check')
+  })
+
+  it('restamps a stale recording when the check found the same version', () => {
+    assert.equal(modeFor({ env: {}, ...stale, versionCheck: 'same' }), 'restamp')
+  })
+
+  it('records a stale recording when the check found a new version', () => {
+    assert.equal(modeFor({ env: {}, ...stale, versionCheck: 'changed' }), 'record')
+  })
+
+  it('replays a stale recording when the check failed', () => {
+    assert.equal(modeFor({ env: {}, ...stale, versionCheck: 'failed' }), 'replay')
+  })
+
+  it('records with no recording whatever the check says', () => {
+    assert.equal(modeFor({ env: {}, exists: false, mtimeMs: 0, now, versionCheck: 'same' }), 'record')
+  })
+
+  it('LIVE_REFRESH=1 records a stale recording without a check', () => {
+    assert.equal(modeFor({ env: { LIVE_REFRESH: '1' }, ...stale }), 'record')
   })
 
   it('LIVE_REFRESH=1 records over a fresh recording', () => {
@@ -57,6 +79,82 @@ describe('modeFor', () => {
 
   it('LIVE_OFFLINE=1 together with LIVE_REFRESH=1 is an error', () => {
     assert.throws(() => modeFor({ env: { LIVE_OFFLINE: '1', LIVE_REFRESH: '1' }, ...fresh }), /LIVE_OFFLINE=1.*LIVE_REFRESH=1/)
+  })
+})
+
+describe('pageVersion', () => {
+  it('reads the version off the first asset reference', () => {
+    assert.equal(pageVersion('<link href="/style.css?v=0.611.0"><script src="/a.js?v=0.611.0">'), '0.611.0')
+  })
+
+  it('is null when the page names no version', () => {
+    assert.equal(pageVersion('<html>puzzle list</html>'), null)
+  })
+})
+
+describe('checkVersion', () => {
+  let dir
+  const page = (v) => `<script src="/framework.js?v=${v}"></script>`
+  const entry = (url, html) => ({ request: { url }, response: { status: 200, content: { mimeType: 'text/html; charset=utf-8', text: html } } })
+  const har = (...entries) => JSON.stringify({ log: { entries } })
+  before(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cache-check-'))
+    writeFileSync(join(dir, 'a.har'), har(entry(puzzleUrl(), page('0.611.0'))))
+    writeFileSync(join(dir, 'blank.har'), har(entry(puzzleUrl(), '<html></html>')))
+    writeFileSync(join(dir, 'crowded.har'), har(entry('https://sudokupad.app/other', page('0.1.0')), entry(puzzleUrl(), page('0.611.0')), entry('https://sudokupad.app/late', page('0.2.0'))))
+    writeFileSync(join(dir, 'no-page.har'), har(entry('https://sudokupad.app/other', page('0.611.0'))))
+    writeFileSync(join(dir, 'not-json.har'), '{"log":')
+    writeFileSync(join(dir, 'wrong-shape.har'), '{"log":{}}')
+  })
+  after(() => rmSync(dir, { recursive: true, force: true }))
+
+  it('is same when the live page names the recorded version', async () => {
+    assert.equal(await checkVersion(join(dir, 'a.har'), async () => page('0.611.0')), 'same')
+  })
+
+  it('is changed when the live page names another version', async () => {
+    assert.equal(await checkVersion(join(dir, 'a.har'), async () => page('0.612.0')), 'changed')
+  })
+
+  it('is changed when the recording names no version', async () => {
+    assert.equal(await checkVersion(join(dir, 'blank.har'), async () => page('0.611.0')), 'changed')
+  })
+
+  it('reads the recorded version off the puzzle page, among other entries that name others', async () => {
+    assert.equal(await checkVersion(join(dir, 'crowded.har'), async () => page('0.611.0')), 'same')
+    assert.equal(await checkVersion(join(dir, 'crowded.har'), async () => page('0.1.0')), 'changed')
+  })
+
+  it('is changed when the recording lacks the puzzle page, whatever else in it names the live version', async () => {
+    assert.equal(await checkVersion(join(dir, 'no-page.har'), async () => page('0.611.0')), 'changed')
+  })
+
+  it('is changed when the recording cannot be read', async () => {
+    assert.equal(await checkVersion(join(dir, 'not-json.har'), async () => page('0.611.0')), 'changed')
+    assert.equal(await checkVersion(join(dir, 'wrong-shape.har'), async () => page('0.611.0')), 'changed')
+    assert.equal(await checkVersion(join(dir, 'gone.har'), async () => page('0.611.0')), 'changed')
+  })
+
+  it('still fails on a failed live read when the recording cannot be read either', async () => {
+    await assert.rejects(checkVersion(join(dir, 'not-json.har'), async () => { throw new Error('offline') }), /offline/)
+  })
+
+  it('refuses an error status by default, though the error page names a version', async () => {
+    const realFetch = globalThis.fetch
+    globalThis.fetch = async () => new Response(page('0.611.0'), { status: 500 })
+    try {
+      await assert.rejects(checkVersion(join(dir, 'a.har')), /answered 500/)
+    } finally {
+      globalThis.fetch = realFetch
+    }
+  })
+
+  it('throws when the live page names no version', async () => {
+    await assert.rejects(checkVersion(join(dir, 'a.har'), async () => '<html></html>'), /names no version/)
+  })
+
+  it('lets a failed request through', async () => {
+    await assert.rejects(checkVersion(join(dir, 'a.har'), async () => { throw new Error('offline') }), /offline/)
   })
 })
 
@@ -105,20 +203,22 @@ describe('cleanHar', () => {
 
 describe('ensureRecording', () => {
   const HOUR = 60 * 60 * 1000
-  let home, calls
+  let home, calls, checks, warnings
   const recorder = (wait = 0) => async (file) => {
     calls.push(file)
     await new Promise((resolve) => setTimeout(resolve, wait))
     mkdirSync(join(file, '..'), { recursive: true })
     writeFileSync(file, '{"log":{"entries":[]}}')
   }
-  const ensure = (env, { ppid = 4242, record = recorder() } = {}) => ensureRecording({ env, home, ppid, record })
+  const answer = (outcome) => async () => { checks.push(outcome); if (outcome === 'failed') throw new Error('network down'); return outcome }
+  const ensure = (env, { ppid = 4242, record = recorder(), checkVersion = answer('changed') } = {}) =>
+    ensureRecording({ env, home, ppid, record, checkVersion, warn: (m) => warnings.push(m) })
   const file = () => harPath({}, home)
   const age = (hours) => { const t = (Date.now() - hours * HOUR) / 1000; utimesSync(file(), t, t) }
 
   before(() => { home = mkdtempSync(join(tmpdir(), 'cache-test-')) })
   after(() => rmSync(home, { recursive: true, force: true }))
-  const reset = () => { calls = []; rmSync(join(home, '.cache'), { recursive: true, force: true }) }
+  const reset = () => { calls = []; checks = []; warnings = []; rmSync(join(home, '.cache'), { recursive: true, force: true }) }
 
   it('records when there is no recording, and replays the next call', async () => {
     reset()
@@ -135,12 +235,87 @@ describe('ensureRecording', () => {
     assert.equal(calls.length, 1)
   })
 
-  it('records again when the recording is older than 24 hours', async () => {
+  it('records again when the recording is older than 24 hours and the version changed', async () => {
     reset()
     await ensure({})
     age(25)
     await ensure({})
     assert.equal(calls.length, 2)
+    assert.equal(checks.length, 1)
+  })
+
+  it('keeps a stale recording of the same version and restamps it, so the next call does not check', async () => {
+    reset()
+    await ensure({})
+    age(25)
+    await ensure({}, { checkVersion: answer('same') })
+    await ensure({}, { checkVersion: answer('same') })
+    assert.equal(calls.length, 1)
+    assert.deepEqual(checks, ['same'])
+    assert.ok(Date.now() - statSync(file()).mtimeMs < HOUR, 'the recording is stamped now')
+  })
+
+  it('replays a stale recording and warns when the check fails, leaving its time alone so the next run checks', async () => {
+    reset()
+    await ensure({})
+    age(25)
+    const stamped = statSync(file()).mtimeMs
+    await ensure({}, { checkVersion: answer('failed') })
+    assert.equal(calls.length, 1)
+    assert.equal(warnings.length, 1)
+    assert.match(warnings[0], /network down/)
+    assert.equal(statSync(file()).mtimeMs, stamped)
+  })
+
+  it('a failed check warns once per run: a later test file of the run replays with no request and no warning', async () => {
+    reset()
+    await ensure({})
+    age(25)
+    const stamped = statSync(file()).mtimeMs
+    const env = { NODE_TEST_CONTEXT: 'child-v8' }
+    await ensure(env, { checkVersion: answer('failed') })
+    await ensure(env, { checkVersion: answer('failed') })
+    assert.deepEqual(checks, ['failed'])
+    assert.equal(warnings.length, 1)
+    assert.equal(calls.length, 1)
+    assert.equal(statSync(file()).mtimeMs, stamped)
+  })
+
+  it('a new runner checks again after another run\'s failed check', async () => {
+    reset()
+    await ensure({})
+    age(25)
+    const env = { NODE_TEST_CONTEXT: 'child-v8' }
+    await ensure(env, { ppid: 1, checkVersion: answer('failed') })
+    await ensure(env, { ppid: 2, checkVersion: answer('same') })
+    assert.deepEqual(checks, ['failed', 'same'])
+  })
+
+  it('outside a test runner a failed check runs and warns on every call', async () => {
+    reset()
+    await ensure({})
+    age(25)
+    await ensure({}, { checkVersion: answer('failed') })
+    await ensure({}, { checkVersion: answer('failed') })
+    assert.deepEqual(checks, ['failed', 'failed'])
+    assert.equal(warnings.length, 2)
+  })
+
+  it('does not check a recording younger than 24 hours', async () => {
+    reset()
+    await ensure({})
+    age(23)
+    await ensure({})
+    assert.deepEqual(checks, [])
+  })
+
+  it('LIVE_OFFLINE=1 replays a stale recording without checking', async () => {
+    reset()
+    await ensure({})
+    age(99)
+    await ensure({ LIVE_OFFLINE: '1' })
+    assert.deepEqual(checks, [])
+    assert.equal(calls.length, 1)
   })
 
   it('two callers started together record once', async () => {
@@ -173,6 +348,18 @@ describe('ensureRecording', () => {
     assert.equal(calls.length, 2)
   })
 
+  // The timeout is far under LOCK_WAIT_MS, so a takeover that stops working fails here and does not stall `npm test`.
+  it('takes over a lock left by a dead run, records, and releases it', { timeout: 30000 }, async () => {
+    reset()
+    const lock = `${file()}.lock`
+    mkdirSync(lock, { recursive: true })
+    const old = (Date.now() - LOCK_STALE_MS - 60 * 1000) / 1000
+    utimesSync(lock, old, old)
+    await ensure({})
+    assert.equal(calls.length, 1)
+    assert.equal(existsSync(lock), false)
+  })
+
   it('LIVE_OFFLINE=1 with no recording throws and records nothing', async () => {
     reset()
     await assert.rejects(ensure({ LIVE_OFFLINE: '1' }), /LIVE_OFFLINE=1/)
@@ -182,7 +369,7 @@ describe('ensureRecording', () => {
 })
 
 describe('routeSudokuPad', () => {
-  const PUZZLE = readFileSync(new URL('./puzzle-url.txt', import.meta.url), 'utf8').trim()
+  const PUZZLE = puzzleUrl()
   const RECORDED = ['https://sudokupad.app/framework.js?v=1', PUZZLE]
   let cache, saved
 
@@ -216,6 +403,7 @@ describe('routeSudokuPad', () => {
     }
   }
 
+  beforeEach(() => misses.clear())
   before(() => {
     saved = { XDG: process.env.XDG_CACHE_HOME, OFFLINE: process.env.LIVE_OFFLINE }
     cache = mkdtempSync(join(tmpdir(), 'cache-route-'))
@@ -244,7 +432,6 @@ describe('routeSudokuPad', () => {
     const url = 'https://sudokupad.app/assets/fonts/Other.ttf'
     assert.deepEqual(await t.request(url, 'font'), { aborted: true })
     assert.deepEqual([...misses], [url])
-    misses.clear()
   })
 
   it('aborts a tracker without listing it as a miss', async () => {
@@ -259,6 +446,31 @@ describe('routeSudokuPad', () => {
     const t = stubTarget()
     await routeSudokuPad(t)
     assert.deepEqual(await t.request('https://sudokupad.app/some-other-puzzle', 'document'), { fulfilled: PUZZLE })
+  })
+})
+
+// The real wiring of the version check, with `fetch` failing as it does off the network: no browser and no request.
+describe('routeSudokuPad on a stale recording when the network fails', () => {
+  let cache
+  before(() => {
+    cache = mkdtempSync(join(tmpdir(), 'cache-wiring-'))
+    const file = harPath({ XDG_CACHE_HOME: cache }, '')
+    mkdirSync(join(file, '..'), { recursive: true })
+    writeFileSync(file, '{"log":{"entries":[]}}')
+    const old = (Date.now() - MAX_AGE_MS - HOUR) / 1000
+    utimesSync(file, old, old)
+  })
+  after(() => rmSync(cache, { recursive: true, force: true }))
+
+  it('warns and replays, and the process exits cleanly', () => {
+    const { NODE_TEST_CONTEXT, LIVE_OFFLINE, LIVE_REFRESH, ...env } = process.env
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', `
+      import { routeSudokuPad } from ${JSON.stringify(new URL('./cache.mjs', import.meta.url).href)}
+      globalThis.fetch = async () => { throw new Error('no network here') }
+      await routeSudokuPad({ route: async () => {}, routeFromHAR: async () => {} })
+    `], { encoding: 'utf8', env: { ...env, XDG_CACHE_HOME: cache } })
+    assert.equal(r.status, 0, r.stderr)
+    assert.match(r.stderr, /could not check SudokuPad's version \(no network here\)/)
   })
 })
 

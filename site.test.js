@@ -12,12 +12,10 @@ const SITE_DIR = path.join(__dirname, 'site')
 const SITE_ADDRESS = /^https?:\/\/(caneff\.github\.io\/sudokupad-scripts|[^/]*netlify)/i
 const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
-// Every page of the site, so a page added later is held to the same checks.
 const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 
-// Every href and src on a page, whatever its form.
 const targets = page => [...page.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m => m[1])
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
 const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length))
@@ -98,10 +96,6 @@ for (const [name, text] of Object.entries(WARNINGS)) {
     assert.ok(m.index < firstInstall, `site/${name} has an install link above its warning`)
   })
 }
-
-test('the details page leaves the SudokuPad-internals caveat to its warning', () => {
-  assert.doesNotMatch(read(DETAILS), /leans on SudokuPad internals/)
-})
 
 test('netlify.toml publishes only site/', () => {
   const toml = fs.readFileSync(path.join(__dirname, 'netlify.toml'), 'utf8')

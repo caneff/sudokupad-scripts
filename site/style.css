@@ -1,4 +1,3 @@
-/* Shared by every page of the site. */
 :root {
   color-scheme: light dark;
   /* SudokuPad's own button purple, read from its controls: rgb(106, 27, 154). */
