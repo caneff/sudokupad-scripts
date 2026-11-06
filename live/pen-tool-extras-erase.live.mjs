@@ -113,7 +113,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     const lines = await penEntries(p)
     await openExtrasEditor(p)
-    const box = editor().locator('input[data-middle-erase]')
+    const box = editor().locator('input[data-box="middleErase"]')
     assert.equal(await box.isChecked(), true, 'ticked on a fresh install')
     assert.equal(await p.getByLabel('Middle click erases a whole line').isChecked(), true)
     await box.uncheck()

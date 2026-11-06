@@ -68,14 +68,14 @@ if (wants('panel')) {
   const shots = []
   for (const [caption, thickness, opacity] of [['both sliders', true, true], ['thickness hidden', false, true], ['opacity hidden', true, false], ['both hidden', false, false]]) {
     await setDialog(async () => {
-      await page.locator('input[data-show="thickness"]').setChecked(thickness)
-      await page.locator('input[data-show="opacity"]').setChecked(opacity)
+      await page.locator('input[data-box="show.thickness"]').setChecked(thickness)
+      await page.locator('input[data-box="show.opacity"]').setChecked(opacity)
     })
     shots.push({ caption, buffer: await page.screenshot({ clip: await panelClip() }) })
   }
   await setDialog(async () => {
-    await page.locator('input[data-show="thickness"]').setChecked(true)
-    await page.locator('input[data-show="opacity"]').setChecked(true)
+    await page.locator('input[data-box="show.thickness"]').setChecked(true)
+    await page.locator('input[data-box="show.opacity"]').setChecked(true)
   })
   await stitch('pen-tool-extras-grid-panel.png', shots)
 }

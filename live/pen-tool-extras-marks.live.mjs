@@ -116,7 +116,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
-  const box = (mark) => editor().locator(`input[data-mark="${mark}"]`)
+  const box = (mark) => editor().locator(`input[data-box="marks.${mark}"]`)
 
   const boot = async () => {
     await startPuzzle(p)
@@ -536,13 +536,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the dialog shows one table of marks: a picture and no word beside each box, the mark\'s name as the box\'s name and hover title', async () => {
     await openExtrasEditor(p)
-    const labels = editor().locator('label:has(> input[data-mark])')
+    const labels = editor().locator('label:has(> input[data-box^="marks."])')
     assert.equal(await labels.count(), 5)
     const names = { x: 'Edge X Mark', circle: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerCircle: 'Corner Circle' }
     for (const mark of MARK_BOXES) {
-      assert.equal(await editor().locator(`label:has(> input[data-mark="${mark}"]) > svg`).count(), 1, mark)
+      assert.equal(await editor().locator(`label:has(> input[data-box="marks.${mark}"]) > svg`).count(), 1, mark)
       assert.equal(await box(mark).getAttribute('title'), names[mark], mark)
-      assert.equal((await editor().locator(`label:has(> input[data-mark="${mark}"])`).textContent()).trim(), '', `${mark} has no word`)
+      assert.equal((await editor().locator(`label:has(> input[data-box="marks.${mark}"])`).textContent()).trim(), '', `${mark} has no word`)
       assert.equal((await p.getByRole('checkbox', { name: names[mark] }).count()), 1, `${mark} is found by its name`)
     }
     await closeExtrasEditorWith(p, 'Cancel')
