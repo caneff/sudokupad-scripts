@@ -11,7 +11,7 @@ const {
   copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
@@ -888,7 +888,7 @@ test('wrapIndex goes round a list of any length in either direction', () => {
 const rulesOf = (css) => css.split('\n').filter(Boolean).map((rule) => { const i = rule.indexOf(' { '); return { selector: rule.slice(0, i), body: rule.slice(i + 3, -2) } })
 
 test('every page 2 color character strokes in the color of its page 1 partner, so one recolor changes both', () => {
-  const rules = rulesOf(buildPagesCss(5, 0, ARROW_SPACING.fallback))
+  const rules = rulesOf(buildPagesCss(5, 0))
   for (let i = 0; i < 9; i++) {
     const rule = rules.find((r) => r.selector === `.pencolor-${PEN_PAGES[1].chars[i]}`)
     assert.equal(rule && rule.body, `stroke: var(--puzzle-pencolor-${i + 1});`)
@@ -896,7 +896,7 @@ test('every page 2 color character strokes in the color of its page 1 partner, s
 })
 
 test('dashes are on lines only: the free lines and the edge and diagonal lines, never 5, 6 or a mark', () => {
-  const dashes = rulesOf(buildPagesCss(5, 0, ARROW_SPACING.fallback)).filter((r) => r.body.startsWith('stroke-dasharray'))
+  const dashes = rulesOf(buildPagesCss(5, 0)).filter((r) => r.body.startsWith('stroke-dasharray'))
   const named = dashes.flatMap((r) => r.selector.match(/\.pen-([0-9a-z])/g)).map((v) => v.slice(5))
   assert.deepEqual([...new Set(named)].sort(), ['1', '2', '7', '8', '9', 'a', 'd', 'e', 'f', 'g'])
   for (const r of dashes) {
@@ -906,7 +906,7 @@ test('dashes are on lines only: the free lines and the edge and diagonal lines, 
 })
 
 test('the dot spacing is two line widths, snapped so a cell of 64 holds whole dots and a diagonal cell of 90.51 does too, the last dot a hair before the segment\'s end', () => {
-  const gaps = (t) => rulesOf(buildPagesCss(t, 0, ARROW_SPACING.fallback)).filter((r) => r.body.startsWith('stroke-dasharray')).map((r) => Number(r.body.match(/^stroke-dasharray: 0 ([\d.]+);$/)[1]))
+  const gaps = (t) => rulesOf(buildPagesCss(t, 0)).filter((r) => r.body.startsWith('stroke-dasharray')).map((r) => Number(r.body.match(/^stroke-dasharray: 0 ([\d.]+);$/)[1]))
   const [ortho, diagonal] = [64, 64 * Math.SQRT2]
   // [thickness, dots in a cell, dots in a diagonal]: 64 / 10 = 6.4 -> 6 and 90.51 / 10 = 9.05 -> 9; 64 / 24 = 2.67 -> 3 and 90.51 / 24 = 3.77 -> 4; 32 dots at 1
   for (const [thickness, cell, diag] of [[5, 6, 9], [12, 3, 4], [1, 32, 45]]) {
@@ -922,7 +922,7 @@ test('the dot spacing is two line widths, snapped so a cell of 64 holds whole do
 const maskSvg = (rule) => decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
 
 test('a page 2 swatch is a single dashed line in the pen color of its button, as a mask so the color follows a recolor, and no rule names page 1\'s attribute', () => {
-  const css = buildPagesCss(5, 3, ARROW_SPACING.fallback)
+  const css = buildPagesCss(5, 3)
   for (let n = 1; n <= 9; n++) {
     const rule = rulesOf(css).find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="2"]:after`)
     assert.ok(rule, `swatch ${n}`)
@@ -934,7 +934,7 @@ test('a page 2 swatch is a single dashed line in the pen color of its button, as
 })
 
 test('a page 1 swatch is a solid line of the page 2 line\'s position and width in the pen color, as a mask, with no page attribute so it holds with the pages off', () => {
-  const css = buildPagesCss(5, 3, ARROW_SPACING.fallback)
+  const css = buildPagesCss(5, 3)
   const dashed = maskSvg(rulesOf(css).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after'))
   for (let n = 1; n <= 9; n++) {
     const rule = rulesOf(css).find((r) => r.selector === `.tool-pen button[data-key="${n}"]:after`)
@@ -947,7 +947,7 @@ test('a page 1 swatch is a solid line of the page 2 line\'s position and width i
 })
 
 const swatchDashes = (dash) => {
-  const rule = rulesOf(buildPagesCss(5, dash, ARROW_SPACING.fallback)).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after')
+  const rule = rulesOf(buildPagesCss(5, dash)).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="2"]:after')
   const svg = maskSvg(rule)
   const paths = svg.match(/<path[^>]*>/g)
   assert.equal(paths.length, 1, 'one line')
@@ -964,25 +964,27 @@ test('the page 2 swatch follows the dash length: dots at 0, longer dashes as it 
 })
 
 const BOTH_STYLES = { dashed: true, arrows: true }
+// What a swatch draws, without its own svg element: the page button draws it inside its own, whose viewBox holds the icon's correction.
+const pictureOf = (svg) => svg.replace(/^<svg[^>]*>|<\/svg>$/g, '')
 const dashArrayOf = (svg) => /stroke-dasharray='([\d. ]+)'/.exec(svg)[1].split(' ').map(Number)
 test('the page button shows the picture of the page it turns to, slanted 35 degrees, and a dot for each page with the current one filled', () => {
   for (const [current, next] of [[0, 1], [1, 2], [2, 0]]) {
-    const icon = renderPageIcon(current, 3, ARROW_SPACING.fallback, BOTH_STYLES)
-    assert.ok(icon.includes(pageSwatch(PEN_PAGES[next], 3, ARROW_SPACING.fallback, PAGE_BUTTON_ANGLE)), `from page ${current + 1}: ${icon}`)
+    const icon = renderPageIcon(current, 3, BOTH_STYLES)
+    assert.ok(icon.includes(pictureOf(pageSwatch(PEN_PAGES[next], 3, PAGE_BUTTON_ANGLE))), `from page ${current + 1}: ${icon}`)
     assert.match(icon, new RegExp(`data-page-sample="${next + 1}"`))
     assert.equal((icon.match(/<circle/g) || []).length, 3)
     assert.equal((icon.match(/data-page-dot="filled"/g) || []).length, 1)
     assert.equal((icon.match(/data-page-dot="outline"/g) || []).length, 2)
   }
-  assert.match(renderPageIcon(0, 3, ARROW_SPACING.fallback, BOTH_STYLES), /<circle[^>]*data-page-dot="filled"[^>]*\/>[^]*<circle[^>]*data-page-dot="outline"/)
-  assert.match(renderPageIcon(2, 3, ARROW_SPACING.fallback, BOTH_STYLES), /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
+  assert.match(renderPageIcon(0, 3, BOTH_STYLES), /<circle[^>]*data-page-dot="filled"[^>]*\/>[^]*<circle[^>]*data-page-dot="outline"/)
+  assert.match(renderPageIcon(2, 3, BOTH_STYLES), /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
   assert.equal(PAGE_BUTTON_ANGLE, 35)
-  assert.match(pageSwatch(PEN_PAGES[1], 3, ARROW_SPACING.fallback, PAGE_BUTTON_ANGLE), /rotate\(-35 12 12\)/)
-  assert.match(pageSwatch(PEN_PAGES[1], 3, ARROW_SPACING.fallback, 0), /rotate\(0 12 12\)/)
+  assert.match(pageSwatch(PEN_PAGES[1], 3, PAGE_BUTTON_ANGLE), /rotate\(-35 12 12\)/)
+  assert.match(pageSwatch(PEN_PAGES[1], 3, 0), /rotate\(0 12 12\)/)
 })
 
 test('the page button shows dots at dash 0 and dashes as long as the setting from there', () => {
-  const sampleOf = (dash) => renderPageIcon(0, dash, ARROW_SPACING.fallback, BOTH_STYLES)
+  const sampleOf = (dash) => renderPageIcon(0, dash, BOTH_STYLES)
   assert.equal(dashArrayOf(sampleOf(0))[0], 0)
   assert.match(sampleOf(0), /stroke-linecap='round'/, 'a zero-length dash is a dot only with a round cap')
   const [short, long] = [dashArrayOf(sampleOf(1))[0], dashArrayOf(sampleOf(4))[0]]
@@ -1006,7 +1008,7 @@ test('the dash setting keeps a saved whole number from 0 to 8, a saved 0 include
 
 // The declarations of the first (orthogonal) and second (diagonal) page 2 line rule, as { dash, gap, offset } numbers
 // (offset 0 where a rule has no dashoffset).
-const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash, ARROW_SPACING.fallback)).filter((r) => r.body.startsWith('stroke-dasharray'))
+const dashesOf = (thickness, dash) => rulesOf(buildPagesCss(thickness, dash)).filter((r) => r.body.startsWith('stroke-dasharray'))
   .map((r) => {
     const [, on, gap] = /^stroke-dasharray: ([\d.]+) ([\d.]+);/.exec(r.body)
     const offset = /stroke-dashoffset: ([\d.]+);$/.exec(r.body)
@@ -1156,21 +1158,21 @@ test('the missing-color note names the page the colors came from and the pens th
 })
 
 test('the page button turns to the next enabled page and has a dot for each enabled page only', () => {
-  const noDash = renderPageIcon(0, 3, ARROW_SPACING.fallback, { dashed: false, arrows: true })
-  assert.ok(noDash.includes(pageSwatch(PEN_PAGES[2], 3, ARROW_SPACING.fallback, PAGE_BUTTON_ANGLE)), noDash)
+  const noDash = renderPageIcon(0, 3, { dashed: false, arrows: true })
+  assert.ok(noDash.includes(pictureOf(pageSwatch(PEN_PAGES[2], 3, PAGE_BUTTON_ANGLE))), noDash)
   assert.equal((noDash.match(/<circle/g) || []).length, 2)
   assert.equal((noDash.match(/data-page-dot="filled"/g) || []).length, 1)
-  const noArrows = renderPageIcon(1, 3, ARROW_SPACING.fallback, { dashed: true, arrows: false })
-  assert.ok(noArrows.includes(pageSwatch(PEN_PAGES[0], 3, ARROW_SPACING.fallback, PAGE_BUTTON_ANGLE)), noArrows)
+  const noArrows = renderPageIcon(1, 3, { dashed: true, arrows: false })
+  assert.ok(noArrows.includes(pictureOf(pageSwatch(PEN_PAGES[0], 3, PAGE_BUTTON_ANGLE))), noArrows)
   assert.equal((noArrows.match(/<circle/g) || []).length, 2)
   assert.match(noArrows, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
 })
 
 test('every pen button swatch is the page\'s pageSwatch at angle 0, on every page', () => {
-  const rules = rulesOf(buildPagesCss(5, 2, ARROW_SPACING.fallback))
+  const rules = rulesOf(buildPagesCss(5, 2))
   PEN_PAGES.forEach((page, index) => {
     const selector = `.tool-pen button[data-key="4"]${index === 0 ? '' : `[data-pen-page="${index + 1}"]`}:after`
-    assert.equal(maskSvg(rules.find((r) => r.selector === selector)), pageSwatch(page, 2, ARROW_SPACING.fallback, 0), `page ${index + 1}`)
+    assert.equal(maskSvg(rules.find((r) => r.selector === selector)), pageSwatch(page, 2, 0), `page ${index + 1}`)
   })
 })
 
@@ -1395,38 +1397,85 @@ test('the line mode icon draws the faint 2x2 grid, with the center line, the edg
   // The lines are solid: only the grid carries a stroke opacity.
   assert.equal(renderLineModeButton('both').match(/stroke-opacity/g).length, 1)
   // SudokuPad's CSS fills every `svg path`, so each path has to turn the fill off to draw as a line.
-  assert.match(PANEL_CSS, /\.pen-tool-extras-mode path \{ fill: none !important;/)
+  assert.match(PANEL_CSS, /\.pen-tool-extras-mode path, [^{]*\{ fill: none !important;/)
 })
 
 const ruleOf = (selector) => (new RegExp(`^${selector.replace(/[.[\]~]/g, '\\$&')} \\{([^}]*)\\}`, 'm').exec(PANEL_CSS) || [])[1]
 const BUTTON_SIZE = /width: 4rem; height: 4rem;/
 
-test('the line mode button is the page button\'s size and style, between the sliders and the page button', () => {
-  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode, .tool-pen .controls-input button.pen-tool-extras-page'), BUTTON_SIZE)
-  // No other rule gives either button a size of its own.
-  assert.equal(PANEL_CSS.split('\n').filter((rule) => /button\.pen-tool-extras-(mode|page)/.test(rule) && /width|height/.test(rule)).length, 1)
-  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode'), /right: 4\.3rem;/)
-  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-page'), /right: 0;/)
-  assert.match(ruleOf('.pen-tool-extras-sliders'), /right: 8\.6rem;/)
+test('the three controls are one 4rem square size, in one rule, in the order mode, line type, settings, in the fourth grid row', () => {
+  const controls = ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode, .tool-pen .controls-input button.pen-tool-extras-page, .tool-pen .controls-input button.pen-tool-extras-settings')
+  assert.match(controls, BUTTON_SIZE)
+  assert.match(controls, /grid-row: 4;/)
+  // No other rule gives a control a size of its own.
+  assert.equal(PANEL_CSS.split('\n').filter((rule) => /button\.pen-tool-extras-(mode|page|settings)/.test(rule) && /width|height/.test(rule)).length, 1)
+  ;[['mode', 1], ['page', 2], ['settings', 3]].forEach(([name, order]) => assert.match(ruleOf(`.tool-pen .controls-input button.pen-tool-extras-${name}`), new RegExp(`order: ${order};`)))
 })
 
-test('with no page button the line mode button takes the row\'s right end and the sliders reach it', () => {
-  assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ button.pen-tool-extras-mode'), /right: 0;/)
-  assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ .pen-tool-extras-sliders'), /right: 4\.3rem;/)
+test('the color buttons are 2.5rem tall at 4rem wide with 0.15rem margins and keep position: relative, which their color line is placed against', () => {
+  const colors = ruleOf('.tool-pen .controls-input button[data-key]')
+  assert.match(colors, /position: relative;/)
+  assert.match(colors, /width: 4rem !important; height: 2\.5rem !important;/)
+  assert.match(colors, /margin: 0\.15rem !important;/)
 })
 
-test('the sliders block takes a real button behind it for its box, filling the block, with the buttons\' margin on the block so it spans the left column', () => {
+test('the panel keeps SudokuPad\'s outer size, 3 columns of 4.3rem and 17.2rem tall, as a grid of three color rows, the controls and the sliders', () => {
+  const panel = ruleOf('.tool-pen .controls-input')
+  assert.match(panel, /grid-template-columns: repeat\(3, 4\.3rem\);/)
+  assert.match(panel, /grid-template-rows: repeat\(3, 2\.8rem\) 5\.05rem 1fr;/)
+  assert.match(panel, /height: 17\.2rem !important;/)
+  assert.match(ruleOf('.tool-pen .controls-input button[data-key="0"], .tool-pen .controls-input button[data-control="delete"]'), /display: none !important;/)
+})
+
+test('the tray is #efeaf4 with 14px corners, reaches 0.25rem past the color block and starts 0.5rem under it, behind the controls and the sliders, taking no cell', () => {
+  const tray = ruleOf('.pen-tool-extras-tray')
+  assert.match(tray, /background: #efeaf4; border-radius: 14px;/)
+  assert.match(tray, /margin: 0\.5rem -0\.25rem 0;/)
+  assert.match(tray, /grid-row: 4 \/ 6; grid-column: 1 \/ 4;/)
+  assert.match(tray, /position: absolute; inset: 0;/)
+  assert.equal(PANEL_CSS.includes('.tool-pen .controls-input:not(:has(.pen-tool-extras-sliders)) .pen-tool-extras-tray { grid-row: 4 / 5; margin-bottom: -0.25rem; }'), true, 'with no sliders the tray ends under the controls, with an end line since a box placed by its start alone runs to the panel\'s edge')
+})
+
+test('the sliders block spans the three columns of the fifth grid row, with the buttons\' margin and 0.4rem below, over a real button for its box', () => {
   const rule = ruleOf('.pen-tool-extras-sliders')
+  assert.match(rule, /grid-row: 5; grid-column: 1 \/ 4;/)
   assert.match(rule, /box-sizing: border-box;/)
-  assert.match(rule, /margin: 0\.15rem;/)
-  assert.match(rule, /height: 4rem;/)
+  assert.match(rule, /margin: 0\.15rem 0\.15rem 0\.4rem;/)
   assert.doesNotMatch(rule, /border:|background/)
   assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><button class="pen-tool-extras-sliders-box" tabindex="-1" aria-hidden="true"><\/button>/)
   const box = ruleOf('.tool-pen .controls-input button.pen-tool-extras-sliders-box')
   assert.match(box, /position: absolute; z-index: -1; inset: 0;/)
-  assert.match(rule, /z-index: 0;/)
+  assert.match(rule, /z-index: 1;/)
   assert.match(box, /background-color: var\(--body-bg\);/)
   assert.match(box, /pointer-events: none;/)
+})
+
+test('the settings button is a button named Pen Tool Extras settings, drawing an outline gear in the panel color and no fill', () => {
+  const html = renderSettingsButton()
+  assert.match(html, /^<button class="pen-tool-extras-settings" data-control="penextras-settings" title="Pen Tool Extras settings" aria-label="Pen Tool Extras settings">/)
+  assert.match(html, /<svg viewBox="[^"]+" fill="none" stroke="currentColor"/)
+  assert.match(html, /<circle cx="12" cy="12" r="3"\/>/)
+  assert.match(PANEL_CSS, /\.pen-tool-extras-settings path, \.pen-tool-extras-settings circle \{ fill: none !important; \}/)
+})
+
+test('each control icon is drawn from a square viewBox that is not the plain 24 box, for every picture an icon shows', () => {
+  const icons = [...LINE_MODES.map(([mode]) => renderLineModeButton(mode)), renderSettingsButton(), ...PEN_PAGES.map((_, page) => renderPageIcon(page, 3, BOTH_STYLES))]
+  assert.equal(icons.length, 7)
+  icons.forEach((html) => {
+    const box = /viewBox="([^"]+)"/.exec(html)[1]
+    const [, , w, h] = box.split(' ').map(Number)
+    assert.equal(w, h, box)
+    assert.notEqual(box, '0 0 24 24', 'the icon carries its measured correction')
+  })
+})
+
+test('every page has a measured icon viewBox, so the line type button never shows viewBox="undefined"', () => {
+  PEN_PAGES.forEach((_, page) => assert.doesNotMatch(renderPageIcon(page, 3, BOTH_STYLES), /viewBox="undefined"/, `page ${page + 1}`))
+})
+
+test('Keypad Flipped swaps the rows of colors by grid row, since its transform on each button row has no box here', () => {
+  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input button\\[data-key="${key}"\\] \\{ grid-row: (\\d); \\}`).exec(PANEL_CSS)[1]
+  assert.deepEqual([1, 2, 3, 7, 8, 9].map(rule), ['3', '3', '3', '1', '1', '1'])
 })
 
 test('the thickness track is a wedge wider at the right than at the left, and the opacity track fades from faint to solid', () => {
@@ -1492,7 +1541,7 @@ test('arrowLineWayOf reads a stored character back as the way its line was dragg
 })
 
 test('the page 3 characters stroke in the color of their page 1 partner, both ways, and are never dashed', () => {
-  const rules = rulesOf(buildPagesCss(5, 3, ARROW_SPACING.fallback))
+  const rules = rulesOf(buildPagesCss(5, 3))
   PEN_PAGES[2].chars.forEach((char, i) => {
     for (const c of [char, PEN_PAGES[2].reverse[i]]) {
       const rule = rules.find((r) => r.selector === `.pencolor-${c}`)
@@ -1503,7 +1552,7 @@ test('the page 3 characters stroke in the color of their page 1 partner, both wa
 })
 
 test('a page 3 arrow is filled and not stroked, in the pen color of its character, for the way it was stored and the way back', () => {
-  const css = buildPagesCss(5, 0, ARROW_SPACING.fallback)
+  const css = buildPagesCss(5, 0)
   const page = PEN_PAGES[2]
   page.chars.forEach((char, i) => [char, page.reverse[i]].forEach((c) => {
     assert.ok(css.includes(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${i + 1}); stroke: none; }`), `character ${c}`)
@@ -1511,7 +1560,7 @@ test('a page 3 arrow is filled and not stroked, in the pen color of its characte
 })
 
 test('a page 3 swatch is an arrow in the pen color of its button, as a mask so the color follows a recolor', () => {
-  const rules = rulesOf(buildPagesCss(5, 0, ARROW_SPACING.fallback))
+  const rules = rulesOf(buildPagesCss(5, 0))
   for (let n = 1; n <= 9; n++) {
     const rule = rules.find((r) => r.selector === `.tool-pen button[data-key="${n}"][data-pen-page="3"]:after`)
     assert.ok(rule, `swatch ${n}`)
@@ -1523,33 +1572,50 @@ test('a page 3 swatch is an arrow in the pen color of its button, as a mask so t
   const svg = decodeURIComponent(/url\("data:image\/svg\+xml,([^"]+)"\)/.exec(mask)[1])
   const triangles = /<path d='([^']+)' fill='currentColor' stroke='none'\/>/.exec(svg)
   assert.ok(triangles, `the arrows are filled paths with no stroke: ${svg}`)
-  assert.equal(triangles[1].split('Z').length - 1, 1, 'one closed arrow at the default spacing')
+  assert.equal(triangles[1].split('Z').length - 1, 2, 'two closed arrows')
 })
 
-// The swatch line is 2 wide in a 24 box, from x 2 to 22; its arrows are those of a line of thickness 5, drawn at 2/5 of their size.
-const swatchArrows = (spacing) => {
-  const svg = pageSwatch(PEN_PAGES[2], 3, spacing, 0)
+// The swatch line is 3 wide in a 24 box, from x 2 to 22; its two arrows are those of a line of thickness 5, drawn at 0.4588 of their size.
+const swatchArrows = () => {
+  const svg = pageSwatch(PEN_PAGES[2], 3, 0)
   const d = /<path d='([^']+)' fill='currentColor' stroke='none'\/>/.exec(svg)[1]
-  return d.split('Z').filter(Boolean).map((arrow) => arrow.match(/-?[\d.]+/g).map(Number)).map(([wx, wy, tx, ty, ox, oy]) => ({ length: tx - wx, width: oy - wy, tipAt: tx, middle: ty }))
+  return d.split('Z').filter(Boolean).map((arrow) => arrow.match(/-?[\d.]+/g).map(Number)).map(([wx, wy, tx, ty, ox, oy]) => ({ length: tx - wx, width: oy - wy, centre: (wx + tx) / 2, middle: ty }))
 }
 
-test('the page 3 swatch arrows are ARROW_LINE\'s proportions at the default thickness (head 0.8 * 5 line widths), drawn at 2/5 of their size: 4.6 long and 6.8 wide', () => {
-  const lineWidth = 2 * 0.8
-  for (const arrow of swatchArrows(ARROW_SPACING.fallback)) {
+test('the page 3 swatch has two arrows, centred a quarter and three quarters along its line, each 7.8 wide so it sticks out 2.4 past the 3 wide line', () => {
+  const arrows = swatchArrows()
+  assert.equal(arrows.length, 2)
+  assert.deepEqual(arrows.map((a) => Math.round(a.centre * 10) / 10), [7, 17])
+  for (const arrow of arrows) {
     // the path text rounds to 2 places
-    assert.equal(Math.abs(arrow.length - 2 * ARROW_LINE.halfLength * lineWidth) < 0.011, true, `length ${arrow.length}`)
-    assert.equal(Math.abs(-arrow.width - 2 * ARROW_LINE.halfWidth * lineWidth) < 0.011, true, `width ${-arrow.width}`)
+    assert.equal(Math.abs(-arrow.width - 7.8) < 0.011, true, `width ${-arrow.width}`)
+    assert.equal(Math.abs(arrow.length - 5.28) < 0.011, true, `length ${arrow.length}`)
     assert.equal(arrow.middle, 12)
   }
-  assert.deepEqual([4.6, 6.8], [2 * ARROW_LINE.halfLength * lineWidth, 2 * ARROW_LINE.halfWidth * lineWidth].map((x) => Math.round(x * 100) / 100))
 })
 
-test('the page 3 swatch holds as many whole arrows as the arrow spacing fits on its line, at least one, and the spacing reaches the pen buttons and the page button', () => {
-  // [spacing, arrows]: 20 / (spacing * 8 * 2 / 5) rounded
-  for (const [spacing, count] of [[3, 2], [4, 2], [5, 1], [12, 1]]) assert.equal(swatchArrows(spacing).length, count, `spacing ${spacing}`)
-  const maskOf = (css) => rulesOf(css).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="3"]:after').body
-  assert.notEqual(maskOf(buildPagesCss(5, 3, 3)), maskOf(buildPagesCss(5, 3, 12)))
-  assert.notEqual(renderPageIcon(1, 3, 3, BOTH_STYLES), renderPageIcon(1, 3, 12, BOTH_STYLES))
+test('every swatch line is 3 wide', () => {
+  PEN_PAGES.forEach((page) => assert.match(pageSwatch(page, 3, 0), /<path d='M2 12H22' stroke-width='3'/))
+})
+
+test('the page 2 swatch keeps width 2\'s dash layout, each dash 1 shorter and each gap 1 longer, with the offset moved to keep each dash centred', () => {
+  // [dash length, dasharray, dashoffset]: worked at width 2 on a line of 20 (dash 0: 5 periods of 4, rounded to 3 places; 1: 3 of 6.667; 3: 2 of 10; 8: 1 of 20), then on - 1, gap + 1, offset - 0.5.
+  const want = [[0, [0, 5], 0], [1, [1, 5.667], 0.5], [3, [5, 5], 2.5], [8, [15, 5], 7.5]]
+  for (const [dash, array, offset] of want) {
+    const got = swatchDashes(dash)
+    assert.deepEqual(got.array.map((x) => Math.round(x * 1000) / 1000), array, `dash ${dash}`)
+    assert.equal(got.offset, offset, `dash ${dash}`)
+  }
+})
+
+test('at every dash length the page 2 swatch has a dash of 0 or more, 2 units visible between the 3 wide round caps, and whole periods in its line', () => {
+  for (let dash = DASH.min; dash <= DASH.max; dash++) {
+    const { array } = swatchDashes(dash)
+    assert.equal(array[0] >= 0, true, `dash ${dash}`)
+    assert.equal(array[1] - 3 > 1.99, true, `gap ${array[1]} leaves 2 visible between 3 wide caps`)
+    const periods = 20 / (array[0] + array[1])
+    assert.equal(Math.abs(periods - Math.round(periods)) < 0.01, true, `dash ${dash}: ${periods} periods`)
+  }
 })
 
 // The segments a drag is made of, as SudokuPad's own pen tool stores them: the value, the cell that holds it,
@@ -2361,8 +2427,8 @@ for (const [internal, remove, featureNames] of LACKING_ALONE) {
 }
 
 test('every step with a requirement is lacking under some internal removed alone', () => {
-  // gear needs nothing of SudokuPad's, and penPanel needs ToolPen.tool (the next test).
-  const own = Object.keys(STEP_LABELS).filter((name) => !['gear', 'penPanel'].includes(name))
+  // penPanel needs ToolPen.tool (the next test).
+  const own = Object.keys(STEP_LABELS).filter((name) => name !== 'penPanel')
   assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), own.sort())
 })
 

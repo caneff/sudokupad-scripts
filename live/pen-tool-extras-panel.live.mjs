@@ -74,19 +74,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await context.close()
   })
 
-  it('with the pen tool on, Thickness is above Opacity in the pad\'s last row beside the page button, at SudokuPad\'s own 5 and 0.8, with no pad growth', async () => {
-    const [thickness, opacity, row, page, input] = await Promise.all([THICKNESS, OPACITY, '.pen-tool-extras-sliders', '.pen-tool-extras-page', '.tool-pen .controls-input'].map((s) => p.locator(s).boundingBox()))
+  it('with the pen tool on, Thickness is above Opacity in the sliders row under the three controls, at SudokuPad\'s own 5 and 0.8, with no pad growth', async () => {
+    const [thickness, opacity, row, controls] = await Promise.all([THICKNESS, OPACITY, '.pen-tool-extras-sliders', '.pen-tool-extras-page'].map((s) => p.locator(s).boundingBox()))
     assert.equal(thickness.y < opacity.y, true, 'Thickness above Opacity')
     assert.deepEqual(await p.locator(THICKNESS).evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '1', '5'])
     assert.deepEqual(await p.locator(OPACITY).evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
     assert.equal(await lineWidth(), 5)
     assert.equal(await lineOpacity(), 0.8)
-    // The sliders fill the row left of the line mode button and the page button, which is one square button at the row's right end.
-    assert.equal(row.x + row.width <= page.x, true, JSON.stringify({ row, page }))
-    assert.equal(page.x + page.width <= input.x + input.width + 1, true, JSON.stringify({ page, input }))
-    assert.equal(Math.abs(page.width - page.height) <= 2, true, `page button ${page.width} x ${page.height}`)
-    const lastKeyRow = await p.locator('.tool-pen button[data-key="9"]').boundingBox()
-    assert.equal(row.y >= lastKeyRow.y + lastKeyRow.height && page.y >= lastKeyRow.y + lastKeyRow.height, true, 'both are below the digit rows')
+    assert.equal(row.y >= controls.y + controls.height, true, JSON.stringify({ row, controls }))
     // The pad is no taller with the sliders than without.
     const height = () => p.locator('.controls-buttons').evaluate((el) => el.getBoundingClientRect().height)
     const withSliders = await height()
@@ -111,22 +106,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const acrossMiddles = (row) => [[row + 0.5, 1.5], [row + 1.5, 2.5]]
   const alongEdge = (row) => [[row, 5], [row, 6]]
 
-  it('SudokuPad\'s line mode pulldown is hidden, and the line mode button sits between the sliders and the page button, a 4rem square like the page button', async () => {
+  it('SudokuPad\'s line mode pulldown is hidden, and the line mode, line type and settings buttons sit in one row in that order, a 4rem square each', async () => {
     assert.equal(await p.locator('.penlinemode').isVisible(), false)
-    const [sliders, mode, page] = await Promise.all(['.pen-tool-extras-sliders', '.pen-tool-extras-mode', '.pen-tool-extras-page'].map((s) => p.locator(s).boundingBox()))
-    assert.equal(sliders.x + sliders.width <= mode.x && mode.x + mode.width <= page.x, true, JSON.stringify({ sliders, mode, page }))
-    assert.equal(mode.y, page.y)
-    assert.equal(Math.abs(mode.width - page.width) < 1 && Math.abs(mode.height - page.height) < 1, true, JSON.stringify({ mode, page }))
+    const [mode, page, settings] = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-page', '.pen-tool-extras-settings'].map((s) => p.locator(s).boundingBox()))
+    assert.equal(mode.x + mode.width <= page.x && page.x + page.width <= settings.x, true, JSON.stringify({ mode, page, settings }))
+    assert.deepEqual([mode.y, settings.y], [page.y, page.y], 'one row')
+    assert.deepEqual([mode.width, settings.width, mode.height, settings.height].map((v) => Math.round(v)), [page.width, page.width, page.height, page.height].map((v) => Math.round(v)), 'one size')
   })
 
-  it('the line mode button sits under key 8 and the sliders block ends at key 7, and its box is styled like a pen button, within half a pixel', async () => {
-    const key = (n) => p.locator(`.tool-pen button[data-key="${n}"]`).boundingBox()
-    const [key7, key8, key9, mode, page, box] = await Promise.all([key(7), key(8), key(9), modeButton().boundingBox(), p.locator('.pen-tool-extras-page').boundingBox(), p.locator('.pen-tool-extras-sliders').boundingBox()])
-    const near = (a, b, what) => assert.equal(Math.abs(a - b) <= 0.5, true, `${what}: ${a} vs ${b}`)
-    near(mode.x, key8.x, 'mode left'); near(mode.x + mode.width, key8.x + key8.width, 'mode right')
-    near(page.x, key9.x, 'page left'); near(page.x + page.width, key9.x + key9.width, 'page right')
-    near(box.x + box.width, key7.x + key7.width, 'box right')
-    near(box.x, key7.x, 'box left')
+  it('the sliders block\'s box is styled like a pen button', async () => {
     const style = (selector) => p.locator(selector).evaluate((el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopWidth, s.borderTopStyle, s.borderTopColor, s.borderTopLeftRadius, s.boxShadow] })
     assert.deepEqual(await style('.pen-tool-extras-sliders-box'), await style('.tool-pen button[data-key="9"]'))
   })
@@ -171,7 +159,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
   })
 
-  it('with no page to turn to the page button is gone, and the line mode button takes the row\'s right end with the sliders reaching it', async () => {
+  it('with no page to turn to the line type button is gone, and the settings button takes its place beside the line mode button', async () => {
     const setStyles = async (on) => {
       await openExtrasEditor(p)
       for (const key of ['dashed', 'arrows']) await editor().locator(`input[data-box="lineStyles.${key}"]`).setChecked(on)
@@ -180,13 +168,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const pageBox = await p.locator('.pen-tool-extras-page').boundingBox()
     await setStyles(false)
     assert.equal(await p.locator('.pen-tool-extras-page').count(), 0)
-    const [mode, sliders] = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-sliders'].map((s) => p.locator(s).boundingBox()))
-    assert.equal(Math.abs(mode.x + mode.width - (pageBox.x + pageBox.width)) <= 1, true, JSON.stringify({ mode, pageBox }))
-    assert.equal(sliders.x + sliders.width <= mode.x, true, JSON.stringify({ sliders, mode }))
+    const [mode, settings] = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-settings'].map((s) => p.locator(s).boundingBox()))
+    assert.equal(Math.abs(settings.x - pageBox.x) <= 1, true, JSON.stringify({ settings, pageBox }))
+    assert.equal(mode.x + mode.width <= settings.x, true, JSON.stringify({ mode, settings }))
     await setStyles(true)
     assert.equal(await p.locator('.pen-tool-extras-page').count(), 1)
-    const [page, modeAgain] = await Promise.all(['.pen-tool-extras-page', '.pen-tool-extras-mode'].map((s) => p.locator(s).boundingBox()))
-    assert.equal(modeAgain.x + modeAgain.width <= page.x, true)
+    const [page, modeAgain, settingsAgain] = await Promise.all(['.pen-tool-extras-page', '.pen-tool-extras-mode', '.pen-tool-extras-settings'].map((s) => p.locator(s).boundingBox()))
+    assert.equal(modeAgain.x + modeAgain.width <= page.x && page.x + page.width <= settingsAgain.x, true)
   })
 
   it('the line mode survives a reload, and the button shows it', async () => {
@@ -207,9 +195,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the sliders have no line pictures, keep their hover labels, and the tracks draw: a wedge for thickness, a fade for opacity', async () => {
     assert.equal(await p.locator('.pen-tool-extras-slider svg').count(), 0)
-    // The sliders fill the box over the pad's left column, less its padding.
-    const length = (await p.locator(THICKNESS).boundingBox()).width
-    assert.equal(length >= 35 && length <= 55, true, `slider length ${length}`)
+    // The sliders fill the box across the pad, less its padding.
+    const [length, box] = await Promise.all([THICKNESS, '.pen-tool-extras-sliders'].map(async (selector) => (await p.locator(selector).boundingBox()).width))
+    assert.equal(length > 0.8 * box && length < box, true, `slider length ${length} in a box of ${box}`)
     assert.deepEqual(await p.locator('.pen-tool-extras-slider').evaluateAll((els) => els.map((e) => e.title)), ['Thickness', 'Opacity'])
     // The tracks are shadow parts getComputedStyle cannot read, so the rendered pixels are: how dark the track is near each end.
     const ink = async (selector) => {

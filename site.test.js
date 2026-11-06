@@ -118,24 +118,26 @@ test(`${DETAILS} intro says what the script adds`, () => {
 test(`${DETAILS} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(section(read(DETAILS), 'What it adds'), [
     'Pen colors from your cell colors. Darker versions of one cell color page, kept until you pick another in the settings. Hold a pen color button to change one.',
-    'Dashed lines and arrow lines. Two more pages of pens. Switch with the page button.',
+    'Dashed lines and arrow lines. Two more pages of pens. Switch with the line type button.',
+    'A line mode button. Steps SudokuPad\'s line mode: Center &amp; Edge, Center only, Edge only.',
     'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
     'Erase a whole line. Middle-click a line to remove all of it.',
-    'Thicker, fainter or outlined lines. Sliders in the pen panel. A white outline keeps lines readable over colored cells.',
-    'A settings gear. On the pen tool button.'
+    'Thicker, fainter or outlined lines. Two full-width sliders in the pen panel. A white outline keeps lines readable over colored cells.',
+    'A settings button. In the pen panel, beside the line mode and line type buttons.'
   ])
 })
 
 test(`${DETAILS} opens each feature with its bold lead-in`, () => {
-  assert.deepEqual(leadIns(read(DETAILS)).slice(0, 7), [
+  assert.deepEqual(leadIns(read(DETAILS)).slice(0, 8), [
     'Pen colors from your cell colors.',
     'Dashed lines and arrow lines.',
+    'A line mode button.',
     'Marks on cell edges.',
     'Marks on grid corners.',
     'Erase a whole line.',
     'Thicker, fainter or outlined lines.',
-    'A settings gear.'
+    'A settings button.'
   ])
 })
 
@@ -147,7 +149,7 @@ const PICTURES = {
   'Marks on cell edges.': 'edges',
   'Marks on grid corners.': 'corners',
   'Thicker, fainter or outlined lines.': 'sliders',
-  'A settings gear.': 'gear'
+  'A settings button.': 'settings'
 }
 const NO_PICTURE = 'Erase a whole line.'
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])

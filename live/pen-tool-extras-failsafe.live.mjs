@@ -31,7 +31,7 @@ function planted (anchor, line) {
   return script.replace(anchor, anchor + line)
 }
 
-// What each case leaves different: `noPageButton` and `noGear` for a panel or button without them, `noSliders` for a panel without the
+// What each case leaves different: `noPageButton` and `noSettings` for a panel without those buttons, `noSliders` for a panel without the
 // sliders, `pulldown` for SudokuPad's line mode pulldown ('hidden' unless the pen panel step is skipped), `edgeAgain` null when a second
 // click on an edge is SudokuPad's own toggle off rather than this script's arrow 'm', `noDrag` for a case that removes what a drag needs.
 const CASES = [
@@ -55,12 +55,13 @@ const CASES = [
       window.addEventListener('pointerdown', (e) => { window.middle = e.button === 1; setTimeout(() => { window.middle = false }) }, true)
       Framework.app.xyToRCExact = function () { if (window.middle) throw new TypeError('xyToRCExact is gone'); return xyToRCExact.apply(this, arguments) }`
   },
-  // SudokuPad builds the pen tool's panel without the element the sliders and the page button sit beside.
+  // SudokuPad builds the pen tool's panel without the element the sliders and the buttons sit beside.
   {
     name: 'panel row',
     off: 'pen panel',
     warns: /^pen-tool-extras: pen panel skipped because SudokuPad changed: the pen tool panel has no \.penlinemode$/,
     noPageButton: true,
+    noSettings: true,
     noSliders: true,
     pulldown: 'absent',
     breaks: `new MutationObserver(() => document.querySelectorAll('.penlinemode').forEach((el) => el.classList.replace('penlinemode', 'renamed')))
@@ -84,15 +85,6 @@ const CASES = [
       window.addEventListener('contextmenu', () => { window.asking = true }, true)
       window.addEventListener('contextmenu', () => { window.asking = false })
       ToolPen.tool.getInputRc = function () { if (window.asking) throw new TypeError('getInputRc is gone'); return getInputRc.apply(this, arguments) }`
-  },
-  // The gear is put into the pen tool button with insertAdjacentHTML; here that call fails only for the gear's markup.
-  {
-    name: 'settings gear',
-    off: 'settings gear',
-    warns: changed('settings gear'),
-    noGear: true,
-    breaks: `const insert = Element.prototype.insertAdjacentHTML
-      Element.prototype.insertAdjacentHTML = function (where, html) { if (String(html).includes('pen-tool-extras-gear')) throw new TypeError('no gear'); return insert.apply(this, arguments) }`
   },
   // A throw in the click wrapper's own code, after SudokuPad's click has queued its actions and before they are sent.
   {
@@ -238,7 +230,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       it('the steps that are not skipped still work', async () => {
         const pageButtons = await p.locator(PAGE_BUTTON).count()
         assert.equal(pageButtons, kase.noPageButton ? 0 : 1, 'the page button')
-        assert.equal(await p.locator('#control-pen .pen-tool-extras-gear').count(), kase.noGear ? 0 : 1, 'the settings gear')
+        assert.equal(await p.locator('.pen-tool-extras-settings').count(), kase.noSettings ? 0 : 1, 'the settings button')
         assert.equal(await p.locator(SLIDERS).count(), kase.noSliders ? 0 : 1, 'the thickness slider')
         assert.equal(await padValues(p), '123456789')
         if (pageButtons) {

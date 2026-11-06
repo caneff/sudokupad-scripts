@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.21.0
+// @version      1.22.0
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.21.0'
+  const VERSION = '1.22.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -175,8 +175,7 @@
     dragHint: 'drag highlight',
     marks: 'marks',
     lineErase: 'line erase',
-    penPanel: 'pen panel',
-    gear: 'settings gear'
+    penPanel: 'pen panel'
   }
 
   // A step stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for a step never installed.
@@ -284,8 +283,7 @@
     penPanel: createStep(STEP_LABELS.penPanel, skipped, () => {
       applyStyle()
       syncPenPanel()
-    }),
-    gear: createStep(STEP_LABELS.gear, skipped, () => document.querySelectorAll(`.${GEAR_CLASS}`).forEach((el) => el.remove()))
+    })
   }
   const inForce = settingDefaults()
 
@@ -323,10 +321,9 @@
       buildThicknessCss(inForce.thickness),
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
-      buildPagesCss(inForce.thickness, inForce.dash, inForce.arrowSpacing),
+      buildPagesCss(inForce.thickness, inForce.dash),
       EDIT_CSS,
       DIALOG_CSS,
-      GEAR_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
     ].join('\n')
   }
@@ -833,8 +830,8 @@
   // The look of the pages after the first, which SudokuPad's own CSS knows nothing about, and the pen buttons' line swatches of every page: each pen character strokes in the color of its partner on the first page. A dash of 0
   // is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider. `:root:root` outranks SudokuPad's own rules whichever
   // stylesheet loads last.
-  function buildPagesCss (thickness, dash, spacing) {
-    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_NUMBERS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, spacing, 0))))
+  function buildPagesCss (thickness, dash) {
+    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_NUMBERS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
@@ -852,13 +849,16 @@
 
   // The slant is atan(28 / 40), the rise over the run of the line the button first showed. Under the line is a dot for each enabled page with the current one filled, as SudokuPad's color tool's page button has.
   const PAGE_BUTTON_ANGLE = 35
-  function renderPageIcon (current, dash, spacing, styles) {
+  // The viewBox of the icon that shows each page's style (the page the button turns to), drawn 34 px on its longest side and centred on its ink: see MODE_ICON_VIEWBOX.
+  const PAGE_ICON_VIEWBOX = ['0.09 -2.31 24.352 24.352', '0 -2.5 24.6 24.6', '0.12 -2.18 24.352 24.352']
+  function renderPageIcon (current, dash, styles) {
     const next = stepEnabledPage(current, 1, styles)
     const pages = enabledPages(styles)
     const dots = pages.map((page, i) =>
       `<circle cx="${20 - 3 * (pages.length - i - 1)}" cy="3" r="1.1" data-page-dot="${page === current ? 'filled' : 'outline'}"${page === current ? '' : ' fill="none"'}/>`)
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" fill="currentColor" stroke-width="0.5">' +
-      `<g data-page-sample="${next + 1}">${pageSwatch(PEN_PAGES[next], dash, spacing, PAGE_BUTTON_ANGLE)}</g><g>${dots.join('')}</g></svg>`
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="${PAGE_ICON_VIEWBOX[next]}">` +
+      `<g data-page-sample="${next + 1}" ${SWATCH_PAINT}>${swatchPicture(PEN_PAGES[next], dash, PAGE_BUTTON_ANGLE)}</g>` +
+      `<g stroke="currentColor" fill="currentColor" stroke-width="0.5">${dots.join('')}</g></svg>`
   }
 
   // Lines already drawn in a page that is not enabled still draw: its rules stay in the style.
@@ -910,9 +910,9 @@
         mode.insertAdjacentHTML('afterend', `<button class="${PAGE_BUTTON}" data-control="penpage" title="Next pen page"></button>`)
         button = document.querySelector(`.${PAGE_BUTTON}`)
       }
-      const shown = `${currentPage()}:${inForce.dash}:${inForce.arrowSpacing}:${enabledPages(inForce.lineStyles)}`
+      const shown = `${currentPage()}:${inForce.dash}:${enabledPages(inForce.lineStyles)}`
       if (button.dataset.shown === shown) return
-      button.innerHTML = renderPageIcon(currentPage(), inForce.dash, inForce.arrowSpacing, inForce.lineStyles)
+      button.innerHTML = renderPageIcon(currentPage(), inForce.dash, inForce.lineStyles)
       button.dataset.shown = shown
     }, removePageButtons)
   }
@@ -1013,14 +1013,35 @@
     return `stroke-dasharray: ${on} ${gap};${dash === 0 ? '' : ` stroke-dashoffset: ${offset};`}`
   }
   // `currentColor`, so one picture works both as a CSS mask and inline. The round cap is what makes a zero-length dash a dot.
-  const SWATCH_LINE = { width: 2, from: 2, to: 22, middle: 12 }
-  function pageSwatch (page, dash, spacing, angle) {
-    const { on, gap, offset } = dashPattern(SWATCH_LINE.width, dash, SWATCH_LINE.to - SWATCH_LINE.from)
+  const SWATCH_LINE = { width: 3, from: 2, to: 22, middle: 12 }
+  // The dash layout was worked out at width 2. The width 3 round caps add 0.5 to each end of a dash, so each dash is 1 shorter and each gap 1 longer to show the same gaps, and
+  // the offset moves by half of that to keep each dash centred. A dot (a dash of 0) cannot be shorter.
+  const SWATCH_PATTERN_WIDTH = 2
+  // Two heads a quarter and three quarters along the line, at the scale that sticks out 2.4 past the width 3 line, whatever the arrow spacing.
+  const SWATCH_ARROW_SCALE = 0.4588
+  function swatchDashes (dash) {
+    const { on, gap } = dashPattern(SWATCH_PATTERN_WIDTH, dash, SWATCH_LINE.to - SWATCH_LINE.from)
+    const shown = Math.max(0, on - 1)
+    return { on: shown, gap: gap + 1, offset: shown / 2 }
+  }
+  function swatchArrows () {
+    const headScale = arrowHeadScaleOf(THICKNESS.fallback) * SWATCH_ARROW_SCALE
+    const [half, wide] = [ARROW_LINE.halfLength * headScale, ARROW_LINE.halfWidth * headScale]
+    const length = SWATCH_LINE.to - SWATCH_LINE.from
+    return [0.25, 0.75].map((along) => {
+      const [wing, tip, other] = arrowCorners(SWATCH_LINE.from + along * length, SWATCH_LINE.middle, 1, 0, half, wide)
+      return `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}Z`
+    }).join('')
+  }
+  const SWATCH_PAINT = "fill='none' stroke='currentColor' stroke-linecap='round'"
+  function swatchPicture (page, dash, angle) {
+    const { on, gap, offset } = swatchDashes(dash)
     const round = (x) => Math.round(x * 1000) / 1000
     const dashes = page.dashed ? ` stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'` : ''
-    const line = `<path d='M${SWATCH_LINE.from} ${SWATCH_LINE.middle}H${SWATCH_LINE.to}' stroke-width='${SWATCH_LINE.width}'${dashes}/>${page.arrowLines ? `<path d='${arrowRun([SWATCH_LINE.from, SWATCH_LINE.middle], [SWATCH_LINE.to, SWATCH_LINE.middle], THICKNESS.fallback, spacing, SWATCH_LINE.width / THICKNESS.fallback)}' fill='currentColor' stroke='none'/>` : ''}`
-    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-linecap='round'><g transform='rotate(${-angle} ${SWATCH_LINE.middle} ${SWATCH_LINE.middle})'>${line}</g></svg>`
+    const line = `<path d='M${SWATCH_LINE.from} ${SWATCH_LINE.middle}H${SWATCH_LINE.to}' stroke-width='${SWATCH_LINE.width}'${dashes}/>${page.arrowLines ? `<path d='${swatchArrows()}' fill='currentColor' stroke='none'/>` : ''}`
+    return `<g transform='rotate(${-angle} ${SWATCH_LINE.middle} ${SWATCH_LINE.middle})'>${line}</g>`
   }
+  const pageSwatch = (page, dash, angle) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ${SWATCH_PAINT}>${swatchPicture(page, dash, angle)}</svg>`
 
   // 5. Arrow lines
   // An arrow is a filled triangle on the line: its base `halfWidth` out to each side of the line's middle and `halfLength` back from it, its tip `halfLength` forward, all times
@@ -1632,21 +1653,31 @@
     return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
   }
 
-  // SudokuPad draws `.penlinemode` as a box across the panel's last row, 4rem tall, absolutely placed 13rem down `.controls-input`. That box is hidden, and the row holds
-  // the two sliders, the line mode button and the page button instead, so the pad is no taller.
-  const PANEL_ROW_TOP_REM = 13
-  const PANEL_ROW_HEIGHT_REM = 4
-  // The line mode button and the page button are both 4rem squares.
-  const PANEL_BUTTON_REM = PANEL_ROW_HEIGHT_REM
-  // The pad's buttons carry a 0.15rem margin each side, so its columns are 0.3rem apart; the two buttons and the sliders block keep that gap and margin to line up with the pad.
-  const PANEL_BUTTON_MARGIN_REM = 0.15
+  // SudokuPad draws `.penlinemode` as a box across the panel's last row, which is hidden here. The panel keeps SudokuPad's outer size (four rows of a 4rem button between 0.15rem margins)
+  // and lays itself out as a grid: the nine color buttons shortened to 2.5rem, a gap, a row of the line mode, line type and settings buttons at the full 4rem on the color columns, and
+  // the sliders across the rest. A tray sits behind the last two rows; it is placed in their area but takes no cell, so the buttons fill the row.
   const rem = (value) => Math.round(value * 100) / 100
-  const PANEL_COLUMN_GAP_REM = rem(2 * PANEL_BUTTON_MARGIN_REM)
+  const PANEL_BUTTON_REM = 4
+  const COLOR_BUTTON_REM = 2.5
+  const PANEL_BUTTON_MARGIN_REM = 0.15
+  const PANEL_CELL_REM = rem(PANEL_BUTTON_REM + 2 * PANEL_BUTTON_MARGIN_REM)
+  const COLOR_CELL_REM = rem(COLOR_BUTTON_REM + 2 * PANEL_BUTTON_MARGIN_REM)
+  const PANEL_HEIGHT_REM = 4 * PANEL_CELL_REM
+  const PANEL_COLUMNS = 3
+  const COLOR_ROWS = 3
+  const CONTROLS_ROW = COLOR_ROWS + 1
+  const SLIDERS_ROW = CONTROLS_ROW + 1
+  const CONTROLS_GAP_REM = 0.75
+  const TRAY_COLOR = '#efeaf4'
+  const TRAY_RADIUS_PX = 14
+  // The tray reaches this far past the color block on each side, and holds its buttons this far from its edge on every side, so the margin of a button and the reach make up most of it.
+  const TRAY_REACH_REM = 0.25
+  const TRAY_PADDING_REM = 0.4
+  const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
   const MODE_BUTTON = 'pen-tool-extras-mode'
-  const MODE_BUTTON_RIGHT_REM = rem(PANEL_BUTTON_REM + PANEL_COLUMN_GAP_REM)
-  // With no page button (no page to turn to) the line mode button takes the row's right end and the sliders block reaches it.
-  const SLIDERS_RIGHT_REM = rem(MODE_BUTTON_RIGHT_REM + PANEL_BUTTON_REM + PANEL_COLUMN_GAP_REM)
-  const NO_PAGE_ATTRIBUTE = 'data-no-page'
+  const SETTINGS_BUTTON = 'pen-tool-extras-settings'
+  const SETTINGS_LABEL = 'Pen Tool Extras settings'
+  const TRAY = 'pen-tool-extras-tray'
   const SLIDER_TRACK_REM = 0.8
   const SLIDER_THUMB_REM = 1.1
   const SLIDER_THUMB_RING_REM = 0.2
@@ -1660,9 +1691,23 @@
   // A hidden slider's empty row has the same height, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
   // The sliders block's box is a real `button` behind the sliders, so SudokuPad's button styling (and Dark Page's) reaches it wherever it changes; its background is `var(--body-bg)` as on the pad's pen buttons.
+  // Each color button keeps `position: relative`, since its color line is its `::after`. The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
+  const CONTROL_BUTTONS = [MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
+  const controlButtons = CONTROL_BUTTONS.map((name) => `.tool-pen .controls-input button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
-    `.${SLIDERS} { position: absolute; left: 0; right: ${SLIDERS_RIGHT_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; z-index: 0; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0 0.6rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
+    `.tool-pen .controls-input { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; }`,
+    '.tool-pen .controls-input > .button-row { display: contents !important; }',
+    '.tool-pen .controls-input button[data-key="0"], .tool-pen .controls-input button[data-control="delete"] { display: none !important; }',
+    `.tool-pen .controls-input button[data-key] { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
+    `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    ...CONTROL_BUTTONS.map((name, i) => `.tool-pen .controls-input button.${name} { order: ${i + 1}; }`),
+    `.${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
+    // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
+    `.tool-pen .controls-input:not(:has(.${SLIDERS})) .${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
+    // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
+    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad .tool-pen .controls-input button[data-key="${key}"] { grid-row: ${row}; }`)),
+    `.${SLIDERS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
     `.tool-pen .controls-input button.${SLIDERS_BOX} { position: absolute; z-index: -1; inset: 0; width: auto; height: auto; margin: 0; padding: 0; background-color: var(--body-bg); pointer-events: none; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
     `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
@@ -1674,14 +1719,9 @@
     `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
     `.${SLIDER_ROW} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
     `.${SLIDER_ROW} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
-    `.tool-pen .controls-input button.${MODE_BUTTON}, .tool-pen .controls-input button.${PAGE_BUTTON} { position: absolute; top: ${PANEL_ROW_TOP_REM}rem; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
-    `.tool-pen .controls-input button.${MODE_BUTTON} { right: ${MODE_BUTTON_RIGHT_REM}rem; }`,
-    `.tool-pen .controls-input button.${PAGE_BUTTON} { right: 0; }`,
-    `${LINE_MODE_BOX}[${NO_PAGE_ATTRIBUTE}] ~ button.${MODE_BUTTON} { right: 0; }`,
-    `${LINE_MODE_BOX}[${NO_PAGE_ATTRIBUTE}] ~ .${SLIDERS} { right: ${rem(PANEL_BUTTON_REM + PANEL_COLUMN_GAP_REM)}rem; }`,
-    `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
+    `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
-    `.${MODE_BUTTON} path { fill: none !important; }`
+    `.${MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`
   ].join('\n')
 
   // A 2x2 cell grid, faint, with the center line (through the cell centers) and the edge line (along the cell edges) drawn over it.
@@ -1689,6 +1729,10 @@
     center: '<path data-line="center" d="M7.5 7.5H16.5V16.5"/>',
     edge: '<path data-line="edge" d="M3 12H12V21"/>'
   }
+  // Each icon is drawn at one size, 34 px on the longest side of its visible ink, centred on its ink, at 1200x900 (docs/research/pen-tool-extras-panel-redesign-mockup.png). The
+  // corrections were measured from rendered pixels, one for each picture an icon can show, and live in its viewBox (live/pen-tool-extras-panel-layout.live.mjs measures them again).
+  const MODE_ICON_VIEWBOX = { both: '-0.62 -0.8 25.059 25.059', centeronly: '0.25 -0.57 24 24', edgeonly: '-0.54 -0.7 24.882 24.882' }
+  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }
 
   function nextLineMode (lineMode) {
@@ -1701,7 +1745,7 @@
     const mode = normalizeLineMode(lineMode)
     const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
     return `<button class="${MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>' +
+      `<svg viewBox="${MODE_ICON_VIEWBOX[mode]}" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>` +
       `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MODE_ICON_SHOWS[mode].map((name) => MODE_ICON_LINES[name]).join('')}</g></svg></button>`
   }
 
@@ -1718,6 +1762,16 @@
       '</div>'
   }
 
+  // The settings icon is Lucide's `settings` (https://lucide.dev, ISC licence). Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT);
+  // all other copyright (c) for Lucide are held by Lucide Contributors 2022. Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is
+  // hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
+
+  function renderSettingsButton () {
+    return `<button class="${SETTINGS_BUTTON}" data-control="penextras-settings" title="${SETTINGS_LABEL}" aria-label="${SETTINGS_LABEL}">` +
+      `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg></button>`
+  }
+
   // The saved mode: SudokuPad's pen tool holds its default until it first opens and reads the saved mode then, and with the pulldown hidden only the panel's button changes it.
   // It does not depend on the page support in `installPenPages`.
   function currentLineMode () {
@@ -1731,6 +1785,10 @@
     if (button && button.dataset.mode === lineMode) return
     if (button) button.remove()
     mode.insertAdjacentHTML('afterend', renderLineModeButton(lineMode))
+  }
+
+  function syncPart (mode, selector, markup) {
+    if (!document.querySelector(selector)) mode.insertAdjacentHTML('afterend', markup)
   }
 
   // Saved where SudokuPad saves it, so its hidden pulldown, when the pen tool is on, shows it too.
@@ -1760,7 +1818,7 @@
   const TAP_CLICK_MS = 1000
   let panelCheck = null
 
-  // A panel with no pulldown, whose row the sliders and the two buttons take, means SudokuPad renamed the element, so the row is not ours.
+  // A panel with no pulldown, whose row the controls take, means SudokuPad renamed the element, so the row is not ours.
   function checkPanelRow () {
     if (panelCheck !== null || !document.querySelector(PEN_PANEL)) return
     panelCheck = setTimeout(() => {
@@ -1769,7 +1827,7 @@
     }, PANEL_CHECK_MS)
   }
 
-  // SudokuPad builds `.penlinemode` each time the pen tool is turned on and removes it when another tool is. The sliders, the line mode button and the page button are added beside it (it is hidden,
+  // SudokuPad builds `.penlinemode` each time the pen tool is turned on and removes it when another tool is. The sliders, the tray and the three buttons are added beside it (it is hidden,
   // not removed, so SudokuPad's own handlers keep their element) and taken away with it. Safe to run any number of times.
   function syncPenPanel () {
     steps.penPanel.run(() => {
@@ -1781,15 +1839,16 @@
       const markup = renderPanelSliders(inForce.thickness, inForce.opacity, inForce.show)
       const sliders = document.querySelector(`.${SLIDERS}`)
       if (!markup && sliders) sliders.remove()
-      if (markup && !sliders) mode.insertAdjacentHTML('afterend', markup)
+      if (markup) syncPart(mode, `.${SLIDERS}`, markup)
+      syncPart(mode, `.${TRAY}`, `<div class="${TRAY}"></div>`)
+      syncPart(mode, `.${SETTINGS_BUTTON}`, renderSettingsButton())
       syncModeButton(mode)
       syncPageButton(mode)
-      mode.toggleAttribute(NO_PAGE_ATTRIBUTE, !document.querySelector(`.${PAGE_BUTTON}`))
     }, removePanelParts)
   }
 
   function removePanelParts () {
-    document.querySelectorAll(`.${SLIDERS}, .${MODE_BUTTON}`).forEach((el) => el.remove())
+    document.querySelectorAll(`.${SLIDERS}, .${MODE_BUTTON}, .${SETTINGS_BUTTON}, .${TRAY}`).forEach((el) => el.remove())
     removePageButtons()
   }
 
@@ -1799,18 +1858,20 @@
     document.addEventListener('input', (event) => {
       if (event.target.matches(`.${SLIDERS} input`)) saveSlider(event.target)
     })
-    // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap steps the mode at `touchstart`. The click a
-    // browser may still send after that tap must not step it a second time.
+    // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap acts at `touchstart`. The click a
+    // browser may still send after that tap must not act a second time.
     let tappedAt = -Infinity
-    const stepMode = () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))
+    const actions = [[MODE_BUTTON, () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))], [SETTINGS_BUTTON, openDialog]]
     window.addEventListener('touchstart', (event) => {
-      if (!event.target.closest(`.${MODE_BUTTON}`)) return
+      const action = actions.find(([name]) => event.target.closest(`.${name}`))
+      if (!action) return
       event.stopPropagation()
       tappedAt = Date.now()
-      stepMode()
+      action[1]()
     }, true)
     document.addEventListener('click', (event) => {
-      if (event.target.closest(`.${MODE_BUTTON}`) && Date.now() - tappedAt > TAP_CLICK_MS) stepMode()
+      const action = actions.find(([name]) => event.target.closest(`.${name}`))
+      if (action && Date.now() - tappedAt > TAP_CLICK_MS) action[1]()
     })
     // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops
     // the browser dragging a slider's thumb. A mouse move over a slider is kept from SudokuPad's
@@ -1824,22 +1885,8 @@
     }, true)
   }
 
-  // 10. Settings dialog and settings gear
+  // 10. Settings dialog
   const EDITOR_ID = 'pen-tool-extras-editor'
-  const GEAR_BUTTON = '#control-pen'
-  const GEAR_CLASS = 'pen-tool-extras-gear'
-  const GEAR_LABEL = 'Pen Tool Extras settings'
-  const GEAR_SIZE_PX = 13
-  const GEAR_INSET_PX = 2
-  const GEAR_ICON_PX = 9
-  // SudokuPad's own CSS turns pointer events off on what is inside a tool button, so the gear turns them back on.
-  const GEAR_CSS = [
-    `${GEAR_BUTTON} { position: relative; }`,
-    `.${GEAR_CLASS} { position: absolute; right: ${GEAR_INSET_PX}px; top: ${GEAR_INSET_PX}px; box-sizing: border-box; width: ${GEAR_SIZE_PX}px; height: ${GEAR_SIZE_PX}px; border: 1.5px solid ${PANEL_COLOR}; border-radius: 3px; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; }`,
-    // A selected tool's icons are turned white, which would hide the glyph on its white box.
-    `.${GEAR_CLASS} path { fill: ${PANEL_COLOR} !important; }`
-  ].join('\n')
-  const GEAR_MARKUP = `<span class="${GEAR_CLASS}" role="button" aria-label="${GEAR_LABEL}" title="${GEAR_LABEL}"><svg viewBox="0 0 24 24" width="${GEAR_ICON_PX}" height="${GEAR_ICON_PX}" fill="${PANEL_COLOR}" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7 7 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.88 2h-3.84a.5.5 0 0 0-.49.42l-.36 2.54a7 7 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.61.22L2.64 8.48a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .61.22l2.39-.96c.5.38 1.05.7 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.84a.5.5 0 0 0 .49-.42l.36-2.54a7 7 0 0 0 1.63-.94l2.39.96a.5.5 0 0 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg></span>`
 
   const MARK_PICTURES = {
     x: ['16', '<path d="M3 3 L13 13 M13 3 L3 13"/>'],
@@ -2168,43 +2215,15 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     })
   }
 
-  // A page without the button (the pen tool is off, or the controls are not built yet) gets none.
-  function syncGear () {
-    steps.gear.run(() => {
-      const button = document.querySelector(GEAR_BUTTON)
-      if (button && !button.querySelector(`.${GEAR_CLASS}`)) button.insertAdjacentHTML('beforeend', GEAR_MARKUP)
-    })
-  }
-
-  // SudokuPad runs a tool button's action on the press and cancels the touch events of a tap, which stops the browser sending the click. A press
-  // or touch on the gear is kept from SudokuPad's handlers (the capture phase on the window runs before the document's and the button's own); the
-  // click then opens the dialog and selects nothing.
-  function installGear () {
-    const onGear = (event) => event.target.closest && event.target.closest(`.${GEAR_CLASS}`)
-    ;['mousedown', 'touchstart', 'touchend', 'pointerdown'].forEach((type) => {
-      window.addEventListener(type, (event) => { if (onGear(event)) event.stopPropagation() }, true)
-    })
-    window.addEventListener('click', (event) => {
-      if (!onGear(event)) return
-      event.stopPropagation()
-      openDialog()
-    }, true)
-  }
-
-  // SudokuPad builds its controls after Start Puzzle and can rebuild them, and builds the line mode pulldown each time the pen tool is turned on, so both syncs run on
-  // every change to the page. Each runs in its own step, so one turned off leaves the other running.
+  // SudokuPad builds its controls after Start Puzzle and can rebuild them, and builds the line mode pulldown each time the pen tool is turned on, so the panel syncs on every change to the page.
   function watchControls () {
-    const sync = () => {
-      syncPenPanel()
-      syncGear()
-    }
-    new window.MutationObserver(sync).observe(document.body, { childList: true, subtree: true })
-    sync()
+    new window.MutationObserver(syncPenPanel).observe(document.body, { childList: true, subtree: true })
+    syncPenPanel()
   }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
@@ -2228,7 +2247,6 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     steps.dragHint.run(() => installHintLayer(ToolPen.tool))
     steps.colors.run(installHoldToEdit)
     steps.penPanel.run(installPenPanel)
-    steps.gear.run(installGear)
     watchControls()
     installOverlayPressSwallow()
     effectsOf(SETTING_NAMES).forEach((effect) => effect())

@@ -41,11 +41,11 @@ test('spec 191 cuts the scripts without losing a feature or a saved setting', ()
     assert.match(text, /^ {4}module\.exports = \{[^\n]*\}$/m, file)
   }
 
-  // The per-feature failsafe is gone; every step but the gear has a requirement, so a missing internal skips a named step.
+  // The per-feature failsafe is gone; every step has a requirement, so a missing internal skips a named step.
   const pen = read('pen-tool-extras.user.js')
   for (const gone of ['createFeatures', 'FEATURE_NEEDS', 'StockFailure', 'inStock']) assert.doesNotMatch(pen, new RegExp(`\\b${gone}\\b`), gone)
   const held = [...extras.lackingInternals({}, undefined).values()].flat().sort()
-  assert.deepEqual(held, Object.keys(extras.STEP_LABELS).filter((name) => name !== 'gear').sort())
+  assert.deepEqual(held, Object.keys(extras.STEP_LABELS).sort())
 
   // The dialog's slider rows come from the table: each slider's own label is drawn in its row, and a label changed in the table is
   // the label drawn.
