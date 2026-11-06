@@ -128,7 +128,7 @@
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
   saved by SudokuPad under `ToolPen_linemode`. The pen panel's **line mode button** steps it: a click goes Center & Edge, Center only, Edge only, and round.
 - **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
-  another in the Dark page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
+  another in the Dark Page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
   with the color.
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,

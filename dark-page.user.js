@@ -314,7 +314,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Dark page</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<b>Dark Page</b> <small style="opacity:.6">v${VERSION}</small>` },
         {
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
@@ -368,7 +368,7 @@
       tag: 'button',
       name: 'darkpage',
       group: SETTINGS_GROUP,
-      content: 'Dark page',
+      content: 'Dark Page',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

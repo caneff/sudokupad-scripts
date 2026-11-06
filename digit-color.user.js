@@ -290,7 +290,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Digit color</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<b>Digit Color</b> <small style="opacity:.6">v${VERSION}</small>` },
         { tag: 'text', innerHTML: '<div id="digit-color-editor"></div>' },
         { tag: 'text', innerHTML: COPY_PASTE_HTML },
         {
@@ -343,7 +343,7 @@
       tag: 'button',
       name: 'digitcolor',
       group: SETTINGS_GROUP,
-      content: 'Digit color',
+      content: 'Digit Color',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

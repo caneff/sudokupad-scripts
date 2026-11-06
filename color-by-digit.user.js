@@ -911,7 +911,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Color by digit</b> <small class="cbd-version">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<b>Color by Digit</b> <small class="cbd-version">v${VERSION}</small>` },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         { tag: 'text', innerHTML: COPY_PASTE_HTML },
         {
@@ -1044,7 +1044,7 @@
       tag: 'button',
       name: 'colorbydigit',
       group: SETTINGS_GROUP,
-      content: 'Color by digit',
+      content: 'Color by Digit',
       handler: openEditor
     })
     addPreloadsOnce()

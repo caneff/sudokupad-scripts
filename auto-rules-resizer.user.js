@@ -540,7 +540,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Rules resizer</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<b>Rules Resizer</b> <small style="opacity:.6">v${VERSION}</small>` },
         {
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
@@ -613,7 +613,7 @@
       tag: 'button',
       name: 'rulesresizer',
       group: SETTINGS_GROUP,
-      content: 'Rules resizer',
+      content: 'Rules Resizer',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)
