@@ -77,7 +77,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('with the pen tool on, Thickness is above Opacity in the sliders row under the three controls, at SudokuPad\'s own 5 and 0.8, with no pad growth', async () => {
     const [thickness, opacity, row, controls] = await Promise.all([THICKNESS, OPACITY, '.pen-tool-extras-sliders', '.pen-tool-extras-page'].map((s) => p.locator(s).boundingBox()))
     assert.equal(thickness.y < opacity.y, true, 'Thickness above Opacity')
-    assert.deepEqual(await p.locator(THICKNESS).evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '1', '5'])
+    assert.deepEqual(await p.locator(THICKNESS).evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '0.5', '5'])
     assert.deepEqual(await p.locator(OPACITY).evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
     assert.equal(await lineWidth(), 5)
     assert.equal(await lineOpacity(), 0.8)
@@ -234,6 +234,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(THICKNESS_KEY), null, 'a panel slider at its default removes its key')
   })
 
+  it('Thickness moves in half steps: a drag to the thin end and one step on lands on 1.5, which draws a 1.5 wide line and saves', async () => {
+    await openPenTool(p)
+    await dragSlider(THICKNESS, GRID_X)
+    assert.equal(await sliderValue(THICKNESS), '1')
+    await p.locator(THICKNESS).focus()
+    await p.keyboard.press('ArrowRight')
+    assert.equal(await sliderValue(THICKNESS), '1.5')
+    assert.equal(await settle(lineWidth, 1.5), 1.5)
+    assert.equal(await saved(THICKNESS_KEY), 1.5)
+    await p.locator(THICKNESS).evaluate((el) => { el.value = 5; el.dispatchEvent(new Event('input', { bubbles: true })) })
+    assert.equal(await settle(lineWidth, 5), 5)
+  })
+
   it('a real drag on Opacity changes the line\'s computed opacity and saves at once, with no Save', async () => {
     await read((k) => Framework.removeData(k), OPACITY_KEY)
     await openPenTool(p)
@@ -327,7 +340,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openExtrasEditor(p)
     const dialogRange = (key) => editor().locator(`input[type=range][data-setting="${key}"]`)
     assert.deepEqual(await Promise.all(['thickness', 'opacity'].map((k) => dialogRange(k).inputValue())), [await sliderValue(THICKNESS), await sliderValue(OPACITY)])
-    assert.deepEqual(await dialogRange('thickness').evaluate((el) => [el.min, el.max, el.step]), ['1', '16', '1'])
+    assert.deepEqual(await dialogRange('thickness').evaluate((el) => [el.min, el.max, el.step]), ['1', '16', '0.5'])
     await dialogRange('thickness').fill('9')
     await dialogRange('opacity').fill('40')
     assert.equal(await sliderValue(THICKNESS), '16', 'a dialog slider moves nothing before Save')

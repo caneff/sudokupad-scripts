@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.23.0
+// @version      1.24.0
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.23.0'
+  const VERSION = '1.24.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -31,7 +31,7 @@
   const PEN_COLOR_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad draws free lines, the cell circle and the cross 5 wide (in cell units, a cell being 64) and the edge X 2.5 wide. The slider's value is the first width
   // and everything else scales with it.
-  const THICKNESS = { min: 1, max: 16, step: 1, fallback: 5 }
+  const THICKNESS = { min: 1, max: 16, step: 0.5, fallback: 5 }
   // A page 2 dash's length in line widths; 0 draws dots.
   const DASH = { min: 0, max: 8, step: 1, fallback: 3 }
   // Scales the distance between two page 3 arrows' middles (see `arrowGapOf`); 5 gives a run of arrows rather than a solid row.
@@ -54,8 +54,9 @@
     return (((index + delta) % count) + count) % count
   }
 
+  // Counted in steps from the minimum, so a half step does not meet a floating-point remainder.
   function inRange (value, range) {
-    return Number.isInteger(value) && value >= range.min && value <= range.max && (value - range.min) % range.step === 0
+    return typeof value === 'number' && value >= range.min && value <= range.max && Number.isInteger((value - range.min) / range.step)
   }
 
   // Data saved before a name existed reads as true.
