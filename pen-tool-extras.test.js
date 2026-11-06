@@ -1403,14 +1403,15 @@ const swatchArrows = (spacing) => {
   return d.split('Z').filter(Boolean).map((arrow) => arrow.match(/-?[\d.]+/g).map(Number)).map(([wx, wy, tx, ty, ox, oy]) => ({ length: tx - wx, width: oy - wy, tipAt: tx, middle: ty }))
 }
 
-test('the page 3 swatch arrows are ARROW_LINE\'s proportions of the swatch line, 4.5 long and 6 wide on a line 2 wide', () => {
+test('the page 3 swatch arrows are ARROW_LINE\'s proportions of the swatch line, 5.75 long and 8.5 wide on a line 2 wide', () => {
   const lineWidth = 2
   for (const arrow of swatchArrows(ARROW_SPACING.fallback)) {
-    assert.equal(arrow.length, 2 * ARROW_LINE.halfLength * lineWidth)
-    assert.equal(-arrow.width, 2 * ARROW_LINE.halfWidth * lineWidth)
+    // the path text rounds to 2 places
+    assert.equal(Math.abs(arrow.length - 2 * ARROW_LINE.halfLength * lineWidth) < 0.011, true, `length ${arrow.length}`)
+    assert.equal(Math.abs(-arrow.width - 2 * ARROW_LINE.halfWidth * lineWidth) < 0.011, true, `width ${-arrow.width}`)
     assert.equal(arrow.middle, 12)
   }
-  assert.deepEqual([4.5, 6], [2 * ARROW_LINE.halfLength * lineWidth, 2 * ARROW_LINE.halfWidth * lineWidth])
+  assert.deepEqual([5.75, 8.5], [2 * ARROW_LINE.halfLength * lineWidth, 2 * ARROW_LINE.halfWidth * lineWidth])
 })
 
 test('the page 3 swatch holds as many whole arrows as the arrow spacing fits on its line, at least one, and the spacing reaches the pen buttons and the page button', () => {
@@ -1502,7 +1503,7 @@ test('an arrow line draws the line along the whole segment and the arrows as clo
   for (let i = 0; i < points.length; i += 3) {
     const [wing, tip, other] = points.slice(i, i + 3)
     assert.equal(tip[0] > wing[0] && tip[0] > other[0], true, `the tip points the way the line was dragged (right): wing ${wing}, tip ${tip}, wing ${other}`)
-    assert.equal(wing[1] - tip[1], tip[1] - other[1], 'the wings are either side of the line')
+    assert.equal(Math.abs(wing[1] - tip[1] - (tip[1] - other[1])) < 0.011, true, 'the wings are either side of the line, to the 2 places the path text keeps')
     assert.equal(tip[1], 160)
   }
 })
@@ -1562,11 +1563,11 @@ test('the line under the arrows is as thick as a page 1 line at every slider val
   }
 })
 
-test('the arrow sizes are the ruled ones: base 1.5 line widths out to each side, 2.25 long, one spacing of 5', () => {
-  assert.deepEqual([ARROW_LINE.halfWidth, 2 * ARROW_LINE.halfLength, ARROW_LINE.line, ARROW_SPACING.fallback], [1.5, 2.25, 1, 5])
+test('the arrow sizes are the ruled ones: base 2.125 line widths out to each side, 2.875 long, one spacing of 5', () => {
+  assert.deepEqual([ARROW_LINE.halfWidth, 2 * ARROW_LINE.halfLength, ARROW_LINE.line, ARROW_SPACING.fallback], [2.125, 2.875, 1, 5])
 })
 
-test('from thickness 5 up an arrow\'s base reaches ARROW_LINE.halfWidth (1.5) times the thickness to each side, it is twice ARROW_LINE.halfLength (1.125) times the thickness long, and the spacing scales with it', () => {
+test('from thickness 5 up an arrow\'s base reaches ARROW_LINE.halfWidth (2.125) times the thickness to each side, it is twice ARROW_LINE.halfLength (1.4375) times the thickness long, and the spacing scales with it', () => {
   for (const t of [5, 8, 10, 13, 16]) {
     const shape = arrowLineAt('a', true, 0, 0, t)
     const points = pointsOf(shape.arrows)
