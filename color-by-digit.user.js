@@ -76,6 +76,9 @@
 
   const everyIndex = (cells) => cells.map((_, i) => i)
 
+  // A cell with no digit and no centre marks is left alone, so a group color painted on it by hand stays.
+  const enteredIndices = (cells) => cells.flatMap((cell, index) => (String(cell.given || cell.value || '') === '' && cell.centre.length === 0 ? [] : [index]))
+
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
   // SudokuPad's action names: `value` (digit), `candidates` (centre mark), `pencilmarks` (corner mark).
@@ -603,7 +606,7 @@
 
   const colorCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), everyIndex(plans), []))
 
-  const colorAutoCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), everyIndex(plans)))
+  const colorEnteredCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), enteredIndices(plans)))
 
   let autoMode = false
 
@@ -626,7 +629,7 @@
     autoMode = on
     Framework.setData(AUTO_KEY, on)
     showButton()
-    if (turnedOn) colorAutoCells(app)
+    if (turnedOn) colorEnteredCells(app)
   }
 
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
@@ -657,7 +660,7 @@
       }
       return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
     }
-    app.on('restarted', () => { if (autoMode) colorAutoCells(app) })
+    app.on('restarted', () => { if (autoMode) colorEnteredCells(app) })
   }
 
   let menu = null
@@ -945,6 +948,6 @@
     listenForButton(app, openEditor)
     // The puzzle's own palette is in the page's colors once it has loaded: the icon shows those.
     whenProgressLoaded(app, showButton)
-    if (autoMode) whenProgressLoaded(app, () => colorAutoCells(app))
+    if (autoMode) whenProgressLoaded(app, () => colorEnteredCells(app))
   })
 })()

@@ -39,6 +39,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   const givensColored = () => givensColoredOn(p)
   const cellAt = async (r, c) => at(await cellsState(), r, c)
   const colorsAt = async (r, c) => (await cellAt(r, c)).colours
+  const marks = (r, c) => read(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join(''), [r, c])
   const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
   const getAuto = () => read((key) => Framework.getData(key), AUTO_KEY)
   const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
@@ -82,7 +83,6 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 
   it('a click on the box turns auto mode on, saves it, colors the givens and the entered digits and centre marks, and is not a click on the button', async () => {
-    const marks = (r, c) => read(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join(''), [r, c])
     await select(8, 5); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3'); await p.click('#control-normal')
     assert.equal(await settle(() => marks(8, 5), '13'), '13')
     assert.equal(await coloredCount(), 0)
@@ -99,17 +99,30 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   it('undo and redo do not trigger auto mode: an entered digit recorded without a color comes back without one', async () => {
     await undo() // the colors
     assert.equal(await settle(coloredCount, 0), 0)
-    await undo() // the centre mark 3 at r9c1
+    await undo() // the centre mark 3 at r9c6
     await undo() // the centre mark 1
     await undo() // the 7 at r1c4
     assert.equal(await settle(() => valueAt(0, 3), ''), '')
+    await redo() // the 7 comes back first
     await redo() // the centre mark 1
     await redo() // the centre mark 3
-    await redo() // the 7 comes back first
     assert.equal(await settle(() => valueAt(0, 3), '7'), '7')
     assert.deepEqual(await watch(coloredCount), [0])
     await redo() // then the colors
     assert.equal(await settle(coloredCount, GIVEN_COUNT + 3), GIVEN_COUNT + 3)
+  })
+
+  it('turning auto mode on again leaves a group color painted by hand on an empty cell with no marks', async () => {
+    const paintedAt = (key) => read((key) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(1, 1)); a.act(key ? { type: 'colour', arg: key } : { type: 'clear', arg: 'colour' }); a.deselect() }, key)
+    await p.click(BOX) // off
+    assert.equal(await settle(boxChecked, 'false'), 'false')
+    await paintedAt('2')
+    assert.deepEqual(await settle(() => colorsAt(1, 1), ['2']), ['2'])
+    await p.click(BOX) // on
+    assert.equal(await settle(boxChecked, 'true'), 'true')
+    assert.deepEqual(await watch(() => colorsAt(1, 1)), [['2']])
+    await paintedAt(null)
+    assert.deepEqual(await settle(() => colorsAt(1, 1), []), [])
   })
 
   it('the keyboard stays with the puzzle right after a box click: a digit typed next lands and takes its color', async () => {
@@ -182,7 +195,6 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 
   it('centre marks of one group color an empty cell, marks of two groups take it away, and corner marks are ignored', async () => {
-    const marks = (r, c) => read(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join(''), [r, c])
     await select(8, 0); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3')
     assert.equal(await settle(() => marks(8, 0), '13'), '13')
     assert.deepEqual(await settle(() => colorsAt(8, 0), ['1']), ['1'])
@@ -326,7 +338,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   })
 })
 
-// These two depend on the injection time: at document-idle the script waits for SudokuPad's progress to load before it colors the givens.
+// These two depend on the injection time: at document-idle the script waits for SudokuPad's progress to load before it colors the grid.
 for (const mode of MODES) {
   describe(`auto mode saved on, injected ${mode}`, { concurrency: false }, () => {
     let context, p, errors
