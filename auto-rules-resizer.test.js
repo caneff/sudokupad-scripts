@@ -1,7 +1,11 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const path = require('node:path')
+const { headerVersion } = require('./header-version.js')
 const {
+  VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
   dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, streamScriptActive, makeTrailing, watchCornerDrag
 } = require('./auto-rules-resizer.user.js')
@@ -44,6 +48,13 @@ test('rulesWidth: to the window\'s right edge less 8 px, in the pane\'s own css 
   assert.equal(rulesWidth({ natural: 480, rulesLeft: 1050, scale: 1.25, viewportWidth: 2048 }), 792)
 })
 
+test('rulesWidth: a max auto width stops it short of the edge, and never under the natural width', () => {
+  assert.equal(rulesWidth({ natural: 480, rulesLeft: 1050, scale: 1.25, viewportWidth: 2048, maxWidth: 700 }), 700)
+  assert.equal(rulesWidth({ natural: 480, rulesLeft: 1050, scale: 1.25, viewportWidth: 2048, maxWidth: 9999 }), 792)
+  assert.equal(rulesWidth({ natural: 480, rulesLeft: 1050, scale: 1.25, viewportWidth: 2048, maxWidth: 300 }), 480)
+  assert.equal(rulesWidth({ natural: 480, rulesLeft: 1050, scale: 1.25, viewportWidth: 2048, maxWidth: null }), 792)
+})
+
 test('rulesWidth: never narrower than the natural width, and no widening without a usable scale', () => {
   assert.equal(rulesWidth({ natural: 480, rulesLeft: 1900, scale: 1, viewportWidth: 2048 }), 480)
   assert.equal(rulesWidth({ natural: 480, rulesLeft: 1000, scale: 0, viewportWidth: 2048 }), 480)
@@ -72,7 +83,7 @@ function fakePane (chars, scale = 1) {
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
   const scrollHeight = () => Math.ceil((chars * font() * 0.5) / (width() - 32)) * font() * 1.2 + 32
-  const height = () => Math.min(224, scrollHeight())
+  const height = () => Math.min(parseFloat(style.maxHeight) || 224, scrollHeight())
   const rules = {
     style,
     get offsetWidth () { return width() },
@@ -81,7 +92,7 @@ function fakePane (chars, scale = 1) {
     getBoundingClientRect: () => ({ left: 1000, top: 300, width: width() * scale, height: height() * scale })
   }
   const container = { getBoundingClientRect: () => ({ bottom: 300 + height() * scale + 8 }) }
-  const getStyle = (el) => (el === rules ? { fontSize: `${font()}px` } : { paddingBottom: '0' })
+  const getStyle = (el) => (el === rules ? { fontSize: `${font()}px`, maxHeight: '224px' } : { paddingBottom: '0' })
   // The controls column holds the pane, from 60 px above it to 400 px below its top.
   const controls = { style: { translate: '' }, getBoundingClientRect: () => ({ top: 240, bottom: 700 }) }
   const fit = (opts = {}) => fitRulesPane({
@@ -90,17 +101,117 @@ function fakePane (chars, scale = 1) {
   return { rules, container, controls, fit, height }
 }
 
-test('fitRulesPane: widens the pane and grows the font of rules that fit, and a second fit changes nothing', () => {
-  for (const chars of [26, 140, 420]) {
+test('fitRulesPane: rules that fit at SudokuPad\'s width keep that width and take a larger font, and a second fit changes nothing', () => {
+  for (const chars of [26, 140]) {
     const { rules, fit } = fakePane(chars)
     assert.deepEqual(fit(), noRulesDrag())
     const first = { ...rules.style }
-    assert.ok(parseFloat(first.width) > 480, `${chars} chars: widened to ${first.width}`)
+    assert.equal(first.width, '', `${chars} chars: SudokuPad's own width`)
     assert.ok(parseFloat(first.fontSize) > 17.6, `${chars} chars: font grew to ${first.fontSize}`)
     assert.equal(rules.scrollHeight <= rules.clientHeight, true, `${chars} chars: no scrolling`)
     for (let i = 0; i < 5; i++) fit()
     assert.deepEqual(rules.style, first, `${chars} chars: refits are stable`)
   }
+})
+
+test('fitRulesPane: rules too long for SudokuPad\'s size widen just enough to stop scrolling at that size', () => {
+  const { rules, fit } = fakePane(800)
+  fit()
+  const width = parseFloat(rules.style.width)
+  assert.equal(rules.style.fontSize, '17.6px')
+  assert.ok(width > 480 && width < 1040, `widened to ${width}, short of the right edge`)
+  assert.equal(rules.scrollHeight <= rules.clientHeight, true, 'no scrolling')
+  rules.style.width = `${width - 1}px`
+  assert.equal(rules.scrollHeight > rules.clientHeight, true, 'one px narrower scrolls')
+})
+
+test('fitRulesPane: the max auto width stops the widening, and a max under SudokuPad\'s width changes nothing', () => {
+  const capped = fakePane(800)
+  capped.fit({ limits: { maxWidth: 600, maxHeight: null } })
+  assert.equal(capped.rules.style.width, '600px')
+  assert.equal(capped.rules.style.fontSize, '17.6px')
+  const under = fakePane(800)
+  under.fit({ limits: { maxWidth: 300, maxHeight: null } })
+  assert.equal(under.rules.style.width, '', 'never narrower than SudokuPad\'s own')
+})
+
+test('fitRulesPane: the max auto height caps the room the font is fitted to', () => {
+  const { rules, fit } = fakePane(26)
+  fit({ limits: { maxWidth: null, maxHeight: 60 } })
+  // One line is 1.2 x font + 32: 23 px fits a room of 60, 24 does not.
+  assert.equal(rules.style.fontSize, '23px')
+  assert.equal(rules.scrollHeight <= 60, true)
+})
+
+test('fitRulesPane: f+ widens the pane when the bigger font would scroll, up to the max auto width, then only the font grows', () => {
+  const free = fakePane(140)
+  free.fit({ nudgePx: 1 })
+  const bigger = parseFloat(free.rules.style.fontSize)
+  assert.ok(parseFloat(free.rules.style.width) > 480, `widened to ${free.rules.style.width}`)
+  assert.equal(free.rules.scrollHeight <= free.rules.clientHeight, true, `no scrolling at ${bigger}px`)
+  const capped = fakePane(140)
+  capped.fit({ nudgePx: 1, limits: { maxWidth: 520, maxHeight: null } })
+  assert.equal(capped.rules.style.width, '520px')
+  assert.equal(capped.rules.style.fontSize, `${bigger}px`, 'the font grows as it does without a cap')
+  const atNatural = fakePane(140)
+  atNatural.fit({ nudgePx: 1, limits: { maxWidth: 480, maxHeight: null } })
+  assert.equal(atNatural.rules.style.width, '', 'a max at SudokuPad\'s width: f+ is as it was')
+  assert.equal(atNatural.rules.style.fontSize, `${bigger}px`)
+})
+
+test('fitRulesPane: f- leaves the width where the fit put it', () => {
+  const { rules, fit } = fakePane(800)
+  fit()
+  const width = rules.style.width
+  fit({ nudgePx: -2 })
+  assert.equal(rules.style.width, width)
+  assert.equal(parseFloat(rules.style.fontSize).toFixed(1), '15.6')
+})
+
+test('autoPaneFit: SudokuPad\'s width and the largest font when the rules fit at its own size', () => {
+  const fits = (width, font) => font <= 30
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 480, fontPx: 30 })
+})
+
+test('autoPaneFit: the least width at which SudokuPad\'s own size fits, else the limit', () => {
+  const fits = (width, font) => width >= 700 && font <= 17.6
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 700, fontPx: 17.6 })
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 17.6, nudgePx: 0, fits }), { width: 650, fontPx: 17.6 })
+})
+
+test('normalizeLimit: a positive whole number of css px, else no limit', () => {
+  assert.equal(normalizeLimit(640), 640)
+  assert.equal(normalizeLimit('640'), 640)
+  assert.equal(normalizeLimit(' 640.4 '), 640)
+  for (const empty of [null, undefined, '', '  ', 0, -5, 'abc', NaN, Infinity, 0.2]) assert.equal(normalizeLimit(empty), null, String(empty))
+})
+
+function fakeStore (saved = {}) {
+  const data = { ...saved }
+  return {
+    data,
+    getData: (key) => (key in data ? data[key] : null),
+    setData: (key, value) => { data[key] = value },
+    removeData: (key) => { delete data[key] }
+  }
+}
+
+test('readLimits: what is saved, and no limit for what is not or is unusable', () => {
+  assert.deepEqual(readLimits(fakeStore()), noLimits())
+  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: '500' })), { maxWidth: 700, maxHeight: 500 })
+  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: 'wide' })), noLimits())
+})
+
+test('saveLimits: saves a limit and removes the key of an empty one, so a fresh install saves nothing', () => {
+  const store = fakeStore({ [MAX_HEIGHT_KEY]: 500 })
+  saveLimits(store, { maxWidth: 700, maxHeight: null })
+  assert.deepEqual(store.data, { [MAX_WIDTH_KEY]: 700 })
+  saveLimits(store, noLimits())
+  assert.deepEqual(store.data, {})
+})
+
+test('VERSION is the @version in the script header', () => {
+  assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'auto-rules-resizer.user.js'), 'utf8')))
 })
 
 test('fitRulesPane: rules that scroll even when widened keep SudokuPad\'s own font', () => {

@@ -19,11 +19,11 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 | Pen Tool Extras | Adds pen colors, solid, dashed and arrow pens, sliders, and edge and corner marks. [Details](docs/pen-tool-extras.md) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |
 | No Tab Letters | Stops Tab from toggling SudokuPad's letter mode. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/no-tab-letters.user.js) |
-| Auto Rules Resizer | Fits the rules pane to the screen in landscape: wider, with the largest text that fits. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
+| Auto Rules Resizer | Fits the rules pane to the screen in landscape: the largest text that fits, widening the pane only when the rules need it. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js) |
 
 ## Settings
 
-Each script except No Tab Letters and Auto Rules Resizer adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. A script's dialog shows its version beside the heading.
+Each script except No Tab Letters adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. A script's dialog shows its version beside the heading.
 
 ## Script notes
 
@@ -64,11 +64,12 @@ SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a s
 
 Ported from the rules-pane fit of twitch-rules-scroller's stream script, which grew from Nell Gwynn's resizing scripts.
 
-- In landscape, the rules pane widens to the window's right edge, less 8 px, and takes the largest font at which all the rules fit in the room SudokuPad gives the pane. The font never goes below SudokuPad's own, so long rules still scroll. It refits on a window resize and on each SudokuPad layout.
+- In landscape, the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the room SudokuPad gives the pane. Only when the rules would still scroll at SudokuPad's own font size does it widen, as far as it takes to stop the scroll at that size and no further than the window's right edge, less 8 px. The font never goes below SudokuPad's own, so rules too long still scroll. It refits on a window resize and on each SudokuPad layout.
 - In portrait it leaves SudokuPad as it is.
-- f+ and f-, on the pane's top-right corner, move the font a pixel at a time from the fitted size; f- may go below SudokuPad's own.
+- f+ and f-, on the pane's top-right corner, move the font a pixel at a time from the fitted size; f- may go below SudokuPad's own. f+ also widens the pane when the bigger font would scroll at the current width, only as far as it takes. The two buttons show only while the pointer is over the pane, a corner or the buttons.
 - Two corners show while the pointer is over the pane. The top right grows the pane right and up, moving the controls up; the bottom left grows it left and down. The pane never grows onto the board, the controls never go off the window, even after the window gets smaller, and a drag never shrinks the pane under 15 × 7 rem.
-- Nothing is saved: the font change and the drag last until a reload, and a new puzzle resets the drag.
+- A "Rules resizer" entry in SudokuPad's settings opens a dialog with a max auto width and a max auto height, in CSS px. An empty box means no limit, and both start empty. The limits cap only the automatic fit, so a corner drag can still go past them, and the height limit caps the room the font is fitted to. They are saved in SudokuPad's own storage.
+- The font change and the drag are not saved: they last until a reload, and a new puzzle resets the drag.
 - On a page where twitch-rules-scroller's stream script runs, it does nothing, so the two never set the pane's font against each other.
 
 ## License

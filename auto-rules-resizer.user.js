@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.0
-// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane widens to the window's right edge and takes the largest font at which all the rules fit, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. Nothing is saved.
+// @version      0.2.0
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,6 +16,11 @@
 (function () {
   'use strict'
 
+  // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
+  const VERSION = '0.2.0'
+  const SETTINGS_GROUP = 'experimental'
+  const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
+  const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
   const MIN_FONT_PX = 8 // the smallest font f- goes to
   const MAX_FONT_PX = 200
@@ -37,6 +42,26 @@
     return lo
   }
 
+  const noLimits = () => ({ maxWidth: null, maxHeight: null })
+
+  // A positive whole number of css px, else null: no limit.
+  function normalizeLimit (raw) {
+    const px = Math.round(Number(raw))
+    return Number.isFinite(px) && px > 0 ? px : null
+  }
+
+  function readLimits (store) {
+    return { maxWidth: normalizeLimit(store.getData(MAX_WIDTH_KEY)), maxHeight: normalizeLimit(store.getData(MAX_HEIGHT_KEY)) }
+  }
+
+  // No limit is no key, so a fresh install saves nothing.
+  function saveLimits (store, limits) {
+    for (const [key, px] of [[MAX_WIDTH_KEY, limits.maxWidth], [MAX_HEIGHT_KEY, limits.maxHeight]]) {
+      if (px === null) store.removeData(key)
+      else store.setData(key, px)
+    }
+  }
+
   function rulesRoom ({ rulesTop, containerBottom, viewportBottom, paddingBottom }) {
     return Math.max(0, Math.min(containerBottom, viewportBottom) - paddingBottom - rulesTop)
   }
@@ -50,11 +75,12 @@
     return rules.parentElement
   }
 
-  // `scale` is visual px per css px: SudokuPad scales the whole controls column. Nothing sits right of the
-  // pane, so the space up to the window's edge is the pane's to take.
-  function rulesWidth ({ natural, rulesLeft, scale, viewportWidth }) {
+  // The widest the automatic fit may make the pane. `scale` is visual px per css px: SudokuPad scales the whole
+  // controls column. Nothing sits right of the pane, so the space up to the window's edge is the pane's to take.
+  function rulesWidth ({ natural, rulesLeft, scale, viewportWidth, maxWidth = null }) {
     if (!(scale > 0)) return natural
-    return Math.max(natural, Math.floor((viewportWidth - rulesLeft - EDGE_PX) / scale))
+    const edge = Math.floor((viewportWidth - rulesLeft - EDGE_PX) / scale)
+    return Math.max(natural, maxWidth === null ? edge : Math.min(edge, maxWidth))
   }
 
   // Never under SudokuPad's own size, so rules too long to fit still scroll at the size SudokuPad gives them.
@@ -75,6 +101,23 @@
       return rules.scrollHeight <= Math.min(room, rules.clientHeight)
     }
     rules.style.fontSize = `${nudgedFontPx(autoFontPx(fits, ownPx), nudgePx)}px`
+  }
+
+  // The pane's width and font: SudokuPad's width unless the rules would still scroll at SudokuPad's font size,
+  // then the least width, up to `widthLimit`, at which they stop. With f+ pressed, the same for the bigger font,
+  // which is the nudge on the automatic size at the width before it. `fits(width, font)` is true from some width up.
+  function autoPaneFit ({ natural, widthLimit, ownPx, nudgePx, fits }) {
+    const limit = Math.max(natural, widthLimit)
+    const narrowest = (from, fitsAt) => limit - largestSize((slack) => fitsAt(limit - slack), 0, limit - from)
+    let width = fits(natural, ownPx) ? natural : narrowest(natural, (w) => fits(w, ownPx))
+    const fontPx = nudgedFontPx(autoFontPx((n) => fits(width, n), ownPx), nudgePx)
+    if (nudgePx > 0 && !fits(width, fontPx)) width = narrowest(width, (w) => fits(w, fontPx))
+    return { width, fontPx }
+  }
+
+  function setPaneWidth (rules, width, natural) {
+    if (width === natural) Object.assign(rules.style, { boxSizing: '', maxWidth: '', width: '' })
+    else Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${width}px` })
   }
 
   // A drag is {w, h, x, y} in visual px: extra width, extra height, and how far the controls column moved. The
@@ -143,10 +186,10 @@
     controls.style.translate = ''
   }
 
-  // Widens the pane into the free space at its right, then takes the largest font that fits, and returns the
-  // drag it applied. Returns null when the pane is not shown, with the fit taken off, or has no room yet, with
-  // the last fit put back.
-  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box }) {
+  // Fits the pane to the room below it at SudokuPad's width, widening only as the rules need, and returns the
+  // drag it applied. `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with
+  // the fit taken off, or has no room yet, with the last fit put back.
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box, limits = noLimits() }) {
     const before = FIT_STYLES.map((k) => rules.style[k])
     const movedBefore = controls.style.translate
     // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
@@ -172,7 +215,21 @@
       controls.style.translate = movedBefore
       return null
     }
-    const width = rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width })
+    const autoRoom = limits.maxHeight === null ? visualRoom / scale : Math.min(visualRoom / scale, limits.maxHeight)
+    // SudokuPad caps the pane at 14rem; the fit may use the whole room, and never less than SudokuPad gives.
+    rules.style.maxHeight = `${Math.max(autoRoom, parseFloat(getStyle(rules).maxHeight) || 0)}px`
+    const fitsAt = (width, font) => {
+      setPaneWidth(rules, width, natural)
+      rules.style.fontSize = `${font}px`
+      return rules.scrollHeight <= Math.min(autoRoom, rules.clientHeight)
+    }
+    const { width, fontPx } = autoPaneFit({
+      natural,
+      widthLimit: rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width, maxWidth: limits.maxWidth }),
+      ownPx,
+      nudgePx,
+      fits: fitsAt
+    })
     const column = controls.getBoundingClientRect()
     const applied = clampDrag(box, {
       pane: { left: home.left, right: home.left + width * scale },
@@ -182,11 +239,12 @@
     })
     // A drag that changes the height starts from the pane's own height, not the room under it, so the pane
     // grows by what the corner moved.
-    const fitted = draggedPane({ width, room: (applied.h ? home.height : visualRoom) / scale, box: applied, scale })
+    const fitted = draggedPane({ width, room: applied.h ? home.height / scale : autoRoom, box: applied, scale })
     if (applied.h) rules.style.maxHeight = `${fitted.room}px`
     if (applied.x || applied.y) controls.style.translate = `${applied.x}px ${applied.y}px`
-    if (fitted.width > natural || applied.w) Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${fitted.width}px` })
-    fitRulesFont(rules, fitted.room, ownPx, nudgePx)
+    setPaneWidth(rules, fitted.width, natural)
+    if (applied.w || applied.h) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
+    else rules.style.fontSize = `${fontPx}px`
     return applied
   }
 
@@ -229,6 +287,14 @@
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+      VERSION,
+      MAX_WIDTH_KEY,
+      MAX_HEIGHT_KEY,
+      normalizeLimit,
+      readLimits,
+      saveLimits,
+      noLimits,
+      autoPaneFit,
       largestSize,
       rulesRoom,
       rulesContainer,
@@ -261,24 +327,27 @@
   const FONT_BAR_ID = `${ID}-font`
   const CORNER_CLASS = `${ID}-corner`
   const SHOWN_CLASS = `${ID}-shown` // on the body while the pane is fitted: the font bar shows
-  const HOVER_CLASS = `${ID}-hover` // on the body while the pointer is over the pane or a corner: the corners show
+  const HOVER_CLASS = `${ID}-hover` // on the body while the pointer is over the pane, a corner or the font bar, or a drag is under way: the corners and the bar show
+  const MAX_WIDTH_INPUT_ID = `${ID}-max-width`
+  const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
   const CORNER_PX = 28
-  const BAR_GAP_PX = 2
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
   const STYLE = `
-    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; gap: 4px; font: 14px monospace; }
+    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; font: 14px monospace; }
     #${FONT_BAR_ID} button { all: revert; padding: 0 6px; border-radius: 8px; opacity: .7; cursor: pointer; font: inherit; }
     .${CORNER_CLASS} { position: fixed; z-index: 99999; display: none; width: ${CORNER_PX}px; height: ${CORNER_PX}px;
       box-sizing: border-box; border-radius: 8px; background: rgba(85, 255, 255, .4); border: 1px dotted rgba(85, 255, 255, .8);
       touch-action: none; }
     body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
+    body.${SHOWN_CLASS}.${HOVER_CLASS} #${FONT_BAR_ID} { visibility: visible; }
     body.${SHOWN_CLASS}.${HOVER_CLASS} .${CORNER_CLASS} { display: block; }
   `
 
   let nudgePx = 0
   let fitted = false // whether the fit's output may be on the pane
+  let limits = noLimits()
   let hovering = false
   let dragging = false
 
@@ -326,10 +395,11 @@
     document.body.appendChild(el)
   }
 
-  // The corners show only while the pointer is over the pane or a corner, or a drag is under way.
+  // The corners and the font bar show only while the pointer is over the pane, a corner or the bar, or a drag is
+  // under way. The bar sits flush against the pane, so the pointer never leaves them on its way up.
   function watchHover () {
     document.addEventListener('pointerover', (e) => {
-      hovering = Boolean(e.target.closest?.(`.puzzle-rules, .${CORNER_CLASS}`))
+      hovering = Boolean(e.target.closest?.(`.puzzle-rules, .${CORNER_CLASS}, #${FONT_BAR_ID}`))
       showHover()
     })
     document.addEventListener('pointerout', (e) => {
@@ -345,13 +415,13 @@
     el.style.top = `${Math.max(0, Math.min(top, window.innerHeight - height))}px`
   }
 
-  // The font bar sits on the pane's top-right corner, just above the pane so it covers none of the rules, or
-  // just below it when the pane reaches the window's top.
+  // The font bar sits on the pane's top-right corner, directly above the pane so it covers none of the rules, or
+  // directly below it when the pane reaches the window's top.
   function placeControls (rules) {
     const r = rules.getBoundingClientRect()
     const bar = document.getElementById(FONT_BAR_ID)
-    const above = r.top - bar.offsetHeight - BAR_GAP_PX
-    place(bar, r.right - bar.offsetWidth, above >= 0 ? above : r.bottom + BAR_GAP_PX, bar.offsetWidth, bar.offsetHeight)
+    const above = r.top - bar.offsetHeight
+    place(bar, r.right - bar.offsetWidth, above >= 0 ? above : r.bottom, bar.offsetWidth, bar.offsetHeight)
     place(document.getElementById(cornerId('ur')), r.right - CORNER_PX, r.top, CORNER_PX, CORNER_PX)
     place(document.getElementById(cornerId('dl')), r.left, r.bottom - CORNER_PX, CORNER_PX, CORNER_PX)
   }
@@ -387,7 +457,8 @@
         viewport: { width: window.innerWidth, height: window.innerHeight },
         boardRight: board ? board.getBoundingClientRect().right : 0,
         nudgePx,
-        box
+        box,
+        limits
       })
       if (applied) Object.assign(box, applied) // a later drag starts from where this one stopped
       fitted = fitted || Boolean(applied)
@@ -396,6 +467,44 @@
     } catch (err) {
       console.error('auto-rules-resizer: the rules fit failed', err)
     }
+  }
+
+  function openDialog () {
+    const row = (id, label, value) => `<label for="${id}">${label}</label>` +
+      `<input type="number" id="${id}" min="1" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
+      '<span>px</span>'
+    Framework.showDialog({
+      centerOverBoard: true,
+      parts: [
+        { tag: 'text', innerHTML: `<b>Rules resizer</b> <small style="opacity:.6">v${VERSION}</small>` },
+        {
+          tag: 'text',
+          innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
+            row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
+            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
+        },
+        {
+          tag: 'options',
+          options: [
+            {
+              tag: 'button',
+              content: 'Save',
+              handler: () => {
+                limits = {
+                  maxWidth: normalizeLimit(document.getElementById(MAX_WIDTH_INPUT_ID).value),
+                  maxHeight: normalizeLimit(document.getElementById(MAX_HEIGHT_INPUT_ID).value)
+                }
+                saveLimits(Framework, limits)
+                Framework.closeDialog()
+                fitPage()
+              }
+            },
+            { tag: 'button', content: 'Cancel', action: 'close' }
+          ]
+        }
+      ]
+    })
+    if (!document.getElementById(MAX_WIDTH_INPUT_ID) || !document.getElementById(MAX_HEIGHT_INPUT_ID)) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
   }
 
   function dragRules (corner, dx, dy) {
@@ -425,6 +534,17 @@
   }
 
   Framework.getApp().then((app) => {
+    limits = readLimits(Framework)
+    Framework.addSetting({
+      tag: 'button',
+      name: 'rulesresizer',
+      group: SETTINGS_GROUP,
+      content: 'Rules resizer',
+      handler: () => {
+        Framework.closeDialog()
+        setTimeout(openDialog, 0)
+      }
+    })
     addStyle()
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)

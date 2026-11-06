@@ -104,11 +104,16 @@ const SCRIPTS = [
         Framework.app.resize()
       })
     },
-    control: (p) => p.locator('#auto-rules-resizer-font').waitFor({ state: 'visible' }),
-    // The rules pane widens to 8 px from the window's right edge.
+    // The font bar shows while the pointer is over the pane.
+    control: async (p) => {
+      const box = await p.locator('.puzzle-rules').boundingBox()
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.locator('#auto-rules-resizer-font').waitFor({ state: 'visible' })
+    },
+    // The rules get a larger font than SudokuPad's own 17.6 px.
     act: async (p) => {
-      const gap = () => p.evaluate(() => Math.round(window.innerWidth - document.querySelector('.puzzle-rules').getBoundingClientRect().right))
-      assert.equal(await settle(gap, 8), 8)
+      const font = () => p.evaluate(() => parseFloat(window.getComputedStyle(document.querySelector('.puzzle-rules')).fontSize))
+      assert.equal(await settle(async () => (await font()) > 17.6, true), true)
     }
   },
   {
