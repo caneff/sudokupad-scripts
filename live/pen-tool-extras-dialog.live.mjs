@@ -98,6 +98,13 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     near(boxes[0].left, pad.left, 'the squares fill the pad: left')
     near(boxes[2].right, pad.right, 'the squares fill the pad: right')
     assert.equal(await editor().locator('.pen-tool-extras-pen-grid b').count(), 0)
+    const lastMarksColumn = await rect('#pen-tool-extras-editor .pen-tool-extras-marks-table > :nth-child(4)')
+    near(pad.right, lastMarksColumn.right, 'the pad fills the column the marks table sets, and does not widen it')
+    // A select is as wide as its longest option, so the longest label a preset could have must not move the column.
+    await editor().locator('select[data-pen-preset] option').first().evaluate((option) => { option.textContent = 'A preset name much longer than the pad is wide' })
+    const widened = await rect('#pen-tool-extras-editor select[data-pen-preset]')
+    near(widened.right, pad.right, 'a long option leaves the pulldown at the pad\'s width')
+    near((await rect('#pen-tool-extras-editor .pen-tool-extras-marks-table > :nth-child(4)')).right, lastMarksColumn.right, 'and the column where it was')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 

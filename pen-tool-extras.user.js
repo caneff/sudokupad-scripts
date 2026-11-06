@@ -1946,7 +1946,7 @@
     `${EDITOR} .pen-tool-extras-box { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-check { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-check-row { margin: 4px 0; display: flex; justify-content: flex-start; align-items: center; gap: 6px; }`,
-    `${EDITOR} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; width: 0; min-width: 100%; margin: 6px 0; }`,
+    `${EDITOR} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 6px 0; }`,
     `${EDITOR} .pen-tool-extras-pen-grid input[type=color] { -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 100%; height: auto; aspect-ratio: 1; padding: 0; margin: 0; border: 1px solid rgb(0 0 0 / .25); border-radius: 6px; background: none; cursor: pointer; }`,
     `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }`,
     `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-webkit-color-swatch { border: none; border-radius: 5px; }`,
