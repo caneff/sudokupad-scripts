@@ -97,13 +97,13 @@ describe('the pen panel layout', { concurrency: false }, () => {
     near(Math.max(...values), Math.min(...values), 'padding is even')
   })
 
-  it('the sliders are in the button-style box across the full width of the controls, under them, and end at the bottom of the panel less the padding', async () => {
+  it('the sliders are across the full width of the controls, under them, and end at the bottom of the panel less the padding', async () => {
     const [sliders, panel, mode, settings] = await Promise.all([rect('.pen-tool-extras-sliders'), rect('.tool-pen .controls-input'), rect('.pen-tool-extras-mode'), rect('.pen-tool-extras-settings')])
     near(sliders.x, mode.x, 'sliders left')
     near(sliders.right, settings.right, 'sliders right')
     assert.equal(sliders.y >= mode.bottom, true, 'under the controls')
     assert.equal(panel.bottom - sliders.bottom > 5 && panel.bottom - sliders.bottom < 8, true, 'inside the panel')
-    assert.equal(await p.locator('.pen-tool-extras-sliders-box').count(), 1)
+    assert.equal(await p.locator('.pen-tool-extras-sliders-box').count(), 0, 'no box behind the sliders')
   })
 
   // The ink of an icon: the bounding box of the screenshot's pixels that differ from the corner pixel's color, in layout pixels from the clip's top left.

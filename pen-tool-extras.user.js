@@ -1642,7 +1642,6 @@
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
-  const SLIDERS_BOX = 'pen-tool-extras-sliders-box'
   // SudokuPad's line mode pulldown (hidden here, stepped by the panel's line mode button), the key it saves the mode under, and its three values with SudokuPad's labels.
   const LINE_MODE_BOX = '.tool-pen .penlinemode'
   const LINE_MODE_KEY = 'ToolPen_linemode'
@@ -1708,7 +1707,6 @@
     // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
     ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad .tool-pen .controls-input button[data-key="${key}"] { grid-row: ${row}; }`)),
     `.${SLIDERS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
-    `.tool-pen .controls-input button.${SLIDERS_BOX} { position: absolute; z-index: -1; inset: 0; width: auto; height: auto; margin: 0; padding: 0; background-color: var(--body-bg); pointer-events: none; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
     `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
     `.${SLIDER_ROW} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
@@ -1756,7 +1754,7 @@
       ? `<div class="${SLIDER_ROW}" title="${label}">` +
         `<input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
       : `<div class="${SLIDER_ROW}" data-empty></div>`
-    return `<div class="${SLIDERS}"><button class="${SLIDERS_BOX}" tabindex="-1" aria-hidden="true"></button>` +
+    return `<div class="${SLIDERS}">` +
       row(show.thickness, THICKNESS_SLIDER, 'Thickness', THICKNESS, thickness) +
       row(show.opacity, OPACITY_SLIDER, 'Opacity', OPACITY, opacity) +
       '</div>'
