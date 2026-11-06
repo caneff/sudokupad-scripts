@@ -67,7 +67,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     a.deselect(); a.select(a.grid.getCell(r, c)); a.act({ type: 'colour', arg: key }); a.deselect()
   }, [r, c, key])
   const setMultiColor = (v) => read((v) => Framework.setSetting('multicolour', v), v)
-  const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
+  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
 
   before(async () => {
     ;({ context, p, errors } = await openSession(browser, script))
@@ -458,11 +458,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
     const group = await openSettings(p)
-    const entry = group.locator('button').filter({ hasText: 'Color by digit' })
-    assert.equal((await entry.textContent()).trim(), 'Color by digit')
+    const entry = group.locator('button').filter({ hasText: 'Color by Digit' })
+    assert.equal((await entry.textContent()).trim(), 'Color by Digit')
     await entry.click()
     await editor().waitFor({ state: 'visible' })
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Color by digit')
+    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Color by Digit')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
     await closeDialogWith(p, 'Cancel', EDITOR)
   })

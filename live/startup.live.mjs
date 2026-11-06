@@ -54,7 +54,7 @@ const SCRIPTS = [
     name: 'Digit Color',
     file: 'digit-color.user.js',
     ready: (p) => p.locator('#digit-color-style').waitFor({ state: 'attached' }),
-    control: (p) => settingsEntry(p, 'Digit color'),
+    control: (p) => settingsEntry(p, 'Digit Color'),
     // An entered digit takes its digit's default color.
     act: async (p) => {
       await select(p, 0, 2)
@@ -68,7 +68,7 @@ const SCRIPTS = [
     name: 'Dark Page',
     file: 'dark-page.user.js',
     ready: (p) => p.locator('#dark-page-style').waitFor({ state: 'attached' }),
-    control: (p) => settingsEntry(p, /^\s*Dark page\s*$/),
+    control: (p) => settingsEntry(p, /^\s*Dark Page\s*$/),
     // The page paints black.
     act: async (p) => {
       const background = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)

@@ -302,7 +302,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
   })
 
-  describe('set in the Rules resizer dialog', { concurrency: false }, () => {
+  describe('set in the Rules Resizer dialog', { concurrency: false }, () => {
     let context, p, errors
 
     before(async () => {
@@ -315,7 +315,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
 
     it('opens from the settings entry with both boxes empty, and typing in a box enters no digit on the board', async () => {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
-      await openScriptDialog(p, 'Rules resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
@@ -335,7 +335,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('a box holding no usable number keeps the saved limit', async () => {
-      await openScriptDialog(p, 'Rules resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
       await p.locator(MAX_WIDTH_INPUT).evaluate((el) => { el.value = '0' })
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), 600)
@@ -343,7 +343,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('shows the saved values on reopening, and clearing both and saving removes the keys and lifts the cap', async () => {
-      await openScriptDialog(p, 'Rules resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '600')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '50')
       await p.locator(MAX_WIDTH_INPUT).fill('')
@@ -356,7 +356,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
 
     it('Cancel saves nothing', async () => {
-      await openScriptDialog(p, 'Rules resizer', MAX_WIDTH_INPUT)
+      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
       await p.locator(MAX_WIDTH_INPUT).fill('300')
       await closeDialogWith(p, 'Cancel', MAX_WIDTH_INPUT)
       assert.equal(await data(MAX_WIDTH_KEY), null)
