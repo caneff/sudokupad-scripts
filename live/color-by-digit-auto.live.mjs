@@ -49,7 +49,7 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
+  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
   const pressButton = async () => {
     const box = await p.locator(BUTTON).boundingBox()
     await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7)

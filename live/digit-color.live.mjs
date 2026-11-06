@@ -160,7 +160,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(STYLE).waitFor({ state: 'attached' })
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = () => openScriptDialog(p, 'Digit color', EDITOR)
+  const openEditor = () => openScriptDialog(p, 'Digit Color', EDITOR)
   const pick = (digit, hex) => editor().locator(`input[data-digit="${digit}"]`).fill(hex)
 
   before(async () => {
@@ -181,7 +181,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
   })
 
-  it('the dialog has a Digit color entry in settings with a picker for each digit, set to the defaults', async () => {
+  it('the dialog has a Digit Color entry in settings with a picker for each digit, set to the defaults', async () => {
     await openEditor()
     const values = await editor().locator('input[type=color]').evaluateAll((es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.value])))
     assert.deepEqual(values, DEFAULTS)
@@ -511,11 +511,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
     const group = await openSettings(p)
-    const entry = group.locator('button').filter({ hasText: 'Digit color' })
-    assert.equal((await entry.textContent()).trim(), 'Digit color')
+    const entry = group.locator('button').filter({ hasText: 'Digit Color' })
+    assert.equal((await entry.textContent()).trim(), 'Digit Color')
     await entry.click()
     await editor().waitFor({ state: 'visible' })
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit color')
+    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit Color')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
     await closeDialogWith(p, 'Cancel', EDITOR)
   })

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.0
+// @version      0.4.1
 // @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark gets a small red circle behind it, keeping its digit color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.0'
+  const VERSION = '0.4.1'
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'DigitColor_colors'
   const STYLE_ID = 'digit-color-style'
@@ -290,7 +290,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Digit color</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<b>Digit Color</b> <small style="opacity:.6">v${VERSION}</small>` },
         { tag: 'text', innerHTML: '<div id="digit-color-editor"></div>' },
         { tag: 'text', innerHTML: COPY_PASTE_HTML },
         {
@@ -343,7 +343,7 @@
       tag: 'button',
       name: 'digitcolor',
       group: SETTINGS_GROUP,
-      content: 'Digit color',
+      content: 'Digit Color',
       handler: () => {
         Framework.closeDialog()
         setTimeout(openDialog, 0)

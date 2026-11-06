@@ -53,7 +53,7 @@ const tools = (p) => {
   const menuRows = () => p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => ({ name: e.querySelector('[data-role=name]').textContent, active: e.getAttribute('aria-checked') === 'true' })))
   const iconShownDigits = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
   const editor = () => p.locator(EDITOR)
-  const openEditor = () => openScriptDialog(p, 'Color by digit', EDITOR)
+  const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
   const rowNames = () => p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label')))
   const activeRow = () => p.$$eval(ROWS, (es) => es.findIndex((e) => e.getAttribute('aria-checked') === 'true'))
   // A click on the button proper, away from the AUTO box and the arrow box.

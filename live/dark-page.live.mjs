@@ -16,7 +16,7 @@ const script = readFileSync(new URL('../dark-page.user.js', import.meta.url), 'u
 const { RECT_ID, STYLE_ID, SOLVER_REACH } = createRequire(import.meta.url)('../dark-page.user.js')
 const DATA_KEY = 'DarkPage_color'
 
-const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark page\s*$/ })
+const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark Page\s*$/ })
 const RECT = `#${RECT_ID}`
 const STYLE = `#${STYLE_ID}`
 const BLACK = 'rgb(0, 0, 0)'
@@ -445,13 +445,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     for (const [side, white] of Object.entries(slack)) assert.equal(white >= 0 && white <= TIGHT_SLACK_PX, true, `${side}: ${white}px of white past the drawing, ${JSON.stringify(slack)}`)
   })
 
-  it('the settings entry is a button named Dark page in the Experimental group, and it opens a dialog with the version as small text', async () => {
+  it('the settings entry is a button named Dark Page in the Experimental group, and it opens a dialog with the version as small text', async () => {
     const group = await openSettings(p)
     const entry = settingsEntry(group)
     assert.equal(await entry.count(), 1)
     await entry.click()
     const dialog = p.locator('.dialog')
     await dialog.locator(PICKER).waitFor({ state: 'visible' })
+    assert.equal((await dialog.locator('b').first().textContent()).trim(), 'Dark Page')
     assert.equal((await dialog.locator('small').textContent()).trim(), `v${headerVersion(script)}`)
     assert.equal(await dialog.locator(PICKER).inputValue(), '#000000')
     await dialog.getByRole('button', { name: 'Cancel' }).click()
