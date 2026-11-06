@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, editedColors,
   readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS,
-  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
@@ -1320,10 +1320,67 @@ test('the middle click box is ticked unless the setting is off', () => {
 
 test('every section after the first has a divider above it, and Pen line mode is the last', () => {
   const html = renderEditor(editorState({ lineMode: 'both' }))
-  const heads = ['Line settings', 'Line styles', 'Marks a click cycles through', 'Other', 'Pen line mode']
+  const heads = ['Line settings', 'Line styles', 'Marks a click cycles through', 'Other']
   heads.forEach((head) => assert.match(html, new RegExp(`<div class="pen-tool-extras-divider"></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
   assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #e3dff0;/)
-  assert.equal(html.lastIndexOf('Pen line mode') > html.indexOf('Other'), true)
+})
+
+test('the settings dialog has no line mode pulldown: the panel button is the one control', () => {
+  const html = renderEditor(editorState({ lineMode: 'both' }))
+  assert.equal(html.includes('Pen line mode'), false)
+  assert.equal(html.includes('data-line-mode'), false)
+})
+
+test('the line mode button steps Center & Edge, Center only, Edge only and back round', () => {
+  assert.equal(nextLineMode('both'), 'centeronly')
+  assert.equal(nextLineMode('centeronly'), 'edgeonly')
+  assert.equal(nextLineMode('edgeonly'), 'both')
+})
+
+test('the line mode button names the current mode with SudokuPad\'s label, as its hover title and its aria-label', () => {
+  const labels = { both: 'Center &amp; Edge', centeronly: 'Center only', edgeonly: 'Edge only' }
+  Object.entries(labels).forEach(([mode, label]) => {
+    const html = renderLineModeButton(mode)
+    assert.match(html, /^<button [^>]*class="pen-tool-extras-mode"[^>]*>/)
+    assert.match(html, new RegExp(`title="${label}"`))
+    assert.match(html, new RegExp(`aria-label="${label}"`))
+  })
+})
+
+test('the line mode icon draws the faint 2x2 grid, with the center line, the edge line, or both', () => {
+  const lines = (mode) => [...renderLineModeButton(mode).matchAll(/<path data-line="(\w+)"/g)].map((m) => m[1])
+  assert.deepEqual(lines('both'), ['center', 'edge'])
+  assert.deepEqual(lines('centeronly'), ['center'])
+  assert.deepEqual(lines('edgeonly'), ['edge'])
+  assert.match(renderLineModeButton('both'), /<path data-grid /)
+  // SudokuPad's CSS fills every `svg path`, so each path has to turn the fill off to draw as a line.
+  assert.match(PANEL_CSS, /\.pen-tool-extras-mode path \{ fill: none !important;/)
+})
+
+test('the line mode button is the page button\'s size and style, between the sliders and the page button', () => {
+  const rule = (selector) => (new RegExp(`^${selector.replace(/[.]/g, '\\.')} \\{([^}]*)\\}`, 'm').exec(PANEL_CSS) || [])[1]
+  const shared = rule('.tool-pen .controls-input button.pen-tool-extras-mode, .tool-pen .controls-input button.pen-tool-extras-page')
+  assert.match(shared, /width: 4rem; height: 4rem;/)
+  assert.match(rule('.tool-pen .controls-input button.pen-tool-extras-mode'), /right: 4\.5rem;/)
+  assert.match(rule('.tool-pen .controls-input button.pen-tool-extras-page'), /right: 0;/)
+  assert.match(rule('.pen-tool-extras-sliders'), /right: 8\.75rem;/)
+})
+
+test('the sliders carry no line pictures, and keep their hover labels', () => {
+  const html = renderPanelSliders(9, 35, { thickness: true, opacity: true })
+  assert.equal(html.includes('<svg'), false)
+  assert.match(html, /class="pen-tool-extras-slider" title="Thickness"/)
+  assert.match(html, /class="pen-tool-extras-slider" title="Opacity"/)
+})
+
+test('the slider tracks are styled for Chromium and Firefox: a wedge for thickness, a fade for opacity, a white thumb with a purple ring', () => {
+  ;['::-webkit-slider-runnable-track', '::-moz-range-track', '::-webkit-slider-thumb', '::-moz-range-thumb'].forEach((part) => assert.equal(PANEL_CSS.includes(part), true, part))
+  assert.match(PANEL_CSS, /#pen-tool-extras-thickness::-webkit-slider-runnable-track \{[^}]*polygon/)
+  assert.match(PANEL_CSS, /#pen-tool-extras-thickness::-moz-range-track \{[^}]*polygon/)
+  assert.match(PANEL_CSS, /#pen-tool-extras-opacity::-webkit-slider-runnable-track \{[^}]*linear-gradient/)
+  assert.match(PANEL_CSS, /#pen-tool-extras-opacity::-moz-range-track \{[^}]*linear-gradient/)
+  assert.match(PANEL_CSS, /::-webkit-slider-thumb \{[^}]*background: #fff; border: [^;]*#6a1b9a/)
+  assert.match(PANEL_CSS, /::-moz-range-thumb \{[^}]*background: #fff; border: [^;]*#6a1b9a/)
 })
 
 const HEADER = fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8')

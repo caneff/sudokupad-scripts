@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.16.3
+// @version      1.17.0
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.16.3'
+  const VERSION = '1.17.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -1551,7 +1551,7 @@
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
-  // SudokuPad's line mode pulldown (hidden here, offered in the dialog), the key it saves the mode under, and its three values with SudokuPad's labels.
+  // SudokuPad's line mode pulldown (hidden here, stepped by the panel's line mode button), the key it saves the mode under, and its three values with SudokuPad's labels.
   const LINE_MODE_BOX = '.tool-pen .penlinemode'
   const LINE_MODE_KEY = 'ToolPen_linemode'
   const LINE_MODES = [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']]
@@ -1562,51 +1562,95 @@
   }
 
   // SudokuPad draws `.penlinemode` as a box across the panel's last row, 4rem tall, absolutely placed 13rem down `.controls-input`. That box is hidden, and the row holds
-  // the two sliders and the page button instead, so the pad is no taller.
+  // the two sliders, the line mode button and the page button instead, so the pad is no taller.
   const PANEL_ROW_TOP_REM = 13
   const PANEL_ROW_HEIGHT_REM = 4
   const PAGE_BUTTON_WIDTH_REM = PANEL_ROW_HEIGHT_REM
   const PAGE_GAP_REM = 0.5
-  const LINE_PICTURE_WIDTH = 3.4
+  const MODE_BUTTON = 'pen-tool-extras-mode'
+  const MODE_BUTTON_RIGHT_REM = PAGE_BUTTON_WIDTH_REM + PAGE_GAP_REM
+  // The sliders sit a little closer to the line mode button than the buttons do to each other: without their pictures they keep about two-thirds of their former length.
+  const SLIDERS_RIGHT_REM = MODE_BUTTON_RIGHT_REM + PAGE_BUTTON_WIDTH_REM + 0.25
+  const SLIDER_TRACK_REM = 0.8
+  const SLIDER_THUMB_REM = 1.1
+  const SLIDER_THUMB_RING_REM = 0.2
+  // The tracks say what the sliders do: thickness is a wedge widening to the right, opacity fades from faint to solid. The wedge is a data-URI picture, since a CSS gradient
+  // cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
+  const WEDGE_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='#6a1b9a'/></svg>"
+  const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
+  const FADE_PICTURE = 'linear-gradient(to right, rgb(106 27 154 / 0.08), rgb(106 27 154 / 1))'
+  const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
+  const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
   // A hidden slider's empty row has the same height, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
-    `.${SLIDERS} { position: absolute; left: 0.2rem; right: ${PAGE_BUTTON_WIDTH_REM + PAGE_GAP_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
+    `.${SLIDERS} { position: absolute; left: 0; right: ${SLIDERS_RIGHT_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
-    `.${SLIDER_ROW} svg { flex: none; width: 1.4rem; height: 1.1rem; }`,
-    `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; accent-color: ${PANEL_COLOR}; }`,
-    `.tool-pen .controls-input button.${PAGE_BUTTON} { position: absolute; right: 0; top: ${PANEL_ROW_TOP_REM}rem; width: ${PAGE_BUTTON_WIDTH_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
-    `.${PAGE_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`
+    `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
+    `.${SLIDER_ROW} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
+    `.${SLIDER_ROW} input::-moz-range-track { ${TRACK_SHAPE} }`,
+    `#${THICKNESS_SLIDER}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
+    `#${THICKNESS_SLIDER}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
+    `#${OPACITY_SLIDER}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
+    `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
+    `.${SLIDER_ROW} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
+    `.${SLIDER_ROW} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
+    `.tool-pen .controls-input button.${MODE_BUTTON}, .tool-pen .controls-input button.${PAGE_BUTTON} { position: absolute; top: ${PANEL_ROW_TOP_REM}rem; width: ${PAGE_BUTTON_WIDTH_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    `.tool-pen .controls-input button.${MODE_BUTTON} { right: ${MODE_BUTTON_RIGHT_REM}rem; }`,
+    `.tool-pen .controls-input button.${PAGE_BUTTON} { right: 0; }`,
+    `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
+    // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
+    `.${MODE_BUTTON} path { fill: none !important; }`
   ].join('\n')
 
-  const linePicture = (width, strokeOpacity) =>
-    `<svg viewBox="0 0 20 16" fill="none" stroke="currentColor" stroke-width="${width}" stroke-opacity="${strokeOpacity}" stroke-linecap="round" aria-hidden="true"><path d="M3 13 L17 3"/></svg>`
+  // A 2x2 cell grid, faint, with the center line (through the cell centers) and the edge line (along the cell edges) drawn over it.
+  const MODE_ICON_LINES = {
+    center: '<path data-line="center" d="M7.5 7.5H16.5V16.5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
+    edge: '<path data-line="edge" d="M3 12H12V21" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
+  }
+  const MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }
+
+  function nextLineMode (lineMode) {
+    const values = LINE_MODES.map(([value]) => value)
+    return values[wrapIndex(values.indexOf(normalizeLineMode(lineMode)), 1, values.length)]
+  }
+
+  // The hover label is SudokuPad's own label for the current mode (the markup's `&amp;` reads as the label's `&`).
+  function renderLineModeButton (lineMode) {
+    const mode = normalizeLineMode(lineMode)
+    const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
+    return `<button class="${MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.3" stroke-width="1"/>' +
+      `${MODE_ICON_SHOWS[mode].map((name) => MODE_ICON_LINES[name]).join('')}</svg></button>`
+  }
 
   // A hidden slider keeps an empty row so the other keeps its place. Neither slider takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
   function renderPanelSliders (thickness, opacity, show) {
     if (!show.thickness && !show.opacity) return ''
-    const row = (shown, id, label, picture, range, value) => shown
-      ? `<div class="${SLIDER_ROW}" title="${label}">${picture}` +
+    const row = (shown, id, label, range, value) => shown
+      ? `<div class="${SLIDER_ROW}" title="${label}">` +
         `<input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
       : `<div class="${SLIDER_ROW}" data-empty></div>`
     return `<div class="${SLIDERS}">` +
-      row(show.thickness, THICKNESS_SLIDER, 'Thickness', linePicture(LINE_PICTURE_WIDTH, 1), THICKNESS, thickness) +
-      row(show.opacity, OPACITY_SLIDER, 'Opacity', linePicture(LINE_PICTURE_WIDTH, 0.35), OPACITY, opacity) +
+      row(show.thickness, THICKNESS_SLIDER, 'Thickness', THICKNESS, thickness) +
+      row(show.opacity, OPACITY_SLIDER, 'Opacity', OPACITY, opacity) +
       '</div>'
   }
 
-  function lineModeChoice (lineMode) {
-    if (lineMode === undefined) return ''
-    const options = LINE_MODES.map(([value, label]) => `<option value="${value}"${value === lineMode ? ' selected' : ''}>${label}</option>`).join('')
-    return sectionHeading('Pen line mode') +
-      `<select data-line-mode>${options}</select>`
+  // The saved mode: SudokuPad's pen tool holds its default until it first opens and reads the saved mode then, and with the pulldown hidden only the panel's button changes it.
+  // It does not depend on the page support in `installPenPages`.
+  function currentLineMode () {
+    return normalizeLineMode(Framework.getData(LINE_MODE_KEY))
   }
 
-  // The saved mode: SudokuPad's pen tool holds its default until it first opens and reads the saved mode then, and with the pulldown hidden only this dialog changes it. It does not
-  // depend on the page support in `installPenPages`.
-  function currentLineMode () {
-    return steps.penPanel.off ? undefined : normalizeLineMode(Framework.getData(LINE_MODE_KEY))
+  // The button is rewritten only when the mode it shows changed, so the page's mutation watcher does not loop on it.
+  function syncModeButton (mode) {
+    const lineMode = currentLineMode()
+    const button = document.querySelector(`.${MODE_BUTTON}`)
+    if (button && button.dataset.mode === lineMode) return
+    if (button) button.remove()
+    mode.insertAdjacentHTML('afterend', renderLineModeButton(lineMode))
   }
 
   // Saved where SudokuPad saves it, so its hidden pulldown, when the pen tool is on, shows it too.
@@ -1615,6 +1659,7 @@
     Framework.setData(LINE_MODE_KEY, lineMode)
     const select = document.querySelector(`${LINE_MODE_BOX} select`)
     if (select) select.value = lineMode
+    syncPenPanel()
   }
 
   function adoptShow () {
@@ -1655,12 +1700,13 @@
       const sliders = document.querySelector(`.${SLIDERS}`)
       if (!markup && sliders) sliders.remove()
       if (markup && !sliders) mode.insertAdjacentHTML('afterend', markup)
+      syncModeButton(mode)
       syncPageButton(mode)
     }, removePanelParts)
   }
 
   function removePanelParts () {
-    document.querySelectorAll(`.${SLIDERS}`).forEach((el) => el.remove())
+    document.querySelectorAll(`.${SLIDERS}, .${MODE_BUTTON}`).forEach((el) => el.remove())
     removePageButtons()
   }
 
@@ -1670,6 +1716,9 @@
     document.addEventListener('input', (event) => {
       if (event.target.matches(`.${SLIDERS} input`)) saveSlider(event.target)
     })
+    document.addEventListener('click', (event) => steps.penPanel.run(() => {
+      if (event.target.closest(`.${MODE_BUTTON}`)) applyLineMode(nextLineMode(currentLineMode()))
+    }))
     // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops
     // the browser dragging a slider's thumb. A mouse move over a slider is kept from SudokuPad's
     // handlers, so the thumb drags and the drag reaches nothing else on the page.
@@ -1772,7 +1821,7 @@
     `#${EDITOR_ID} .pen-tool-extras-mark { display: flex; align-items: center; gap: 6px; margin: 0; width: auto; }`,
     `#${EDITOR_ID} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(3, max-content); column-gap: 28px; row-gap: 6px; align-items: center; margin: 4px 0; }`,
     `#${EDITOR_ID} .pen-tool-extras-mark-head { font-size: .85rem; color: #666; }`,
-    `#${EDITOR_ID} select:is([data-line-mode], [data-pen-preset]) { margin: 4px 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
+    `#${EDITOR_ID} select[data-pen-preset] { margin: 4px 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
   ].join('\n')
 
   const boxId = (path) => `pen-tool-extras-box-${path.replace('.', '-')}`
@@ -1831,8 +1880,7 @@
       heading('Line settings', 'Slider in panel') + sectionRows('Line settings') +
       heading('Line styles', 'Enable') + sectionRows('Line styles') +
       sectionHeading('Marks a click cycles through') + marksTable +
-      sectionHeading('Other') + sectionRows('Other') +
-      lineModeChoice(state.lineMode)
+      sectionHeading('Other') + sectionRows('Other')
   }
 
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
@@ -1889,11 +1937,10 @@
     let pickedPreset = activePickedPreset
     // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
     let colorsChosen = false
-    let lineMode = currentLineMode()
     let draft = { ...inForce }
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ ...set, pickedPreset, presets: availablePresets(), lineMode, ...draft, off: skipped })
+      box.innerHTML = renderEditor({ ...set, pickedPreset, presets: availablePresets(), ...draft, off: skipped })
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
@@ -1926,7 +1973,6 @@
               handler: () => {
                 if (colorsChosen) saveColors(set, pickedPreset)
                 saveSettings(draft)
-                if (lineMode !== undefined && lineMode !== currentLineMode()) steps.penPanel.run(() => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
               }
             },
@@ -1943,7 +1989,7 @@
     })
     draw()
     arrangeButtons(box)
-    // `change` fires when a color picker closes (the swatch the user sees is already the new color), when a mark box or a slider box is ticked and when the line mode is chosen.
+    // `change` fires when a color picker closes (the swatch the user sees is already the new color), and when a mark box or a slider box is ticked.
     box.addEventListener('input', (event) => {
       const el = event.target.closest('input[type="range"]')
       if (!el) return
@@ -1956,11 +2002,6 @@
       const choice = event.target.closest('select[data-pen-preset]')
       if (choice) {
         pickPreset(choice.value)
-        return
-      }
-      const mode = event.target.closest('select[data-line-mode]')
-      if (mode) {
-        lineMode = normalizeLineMode(mode.value)
         return
       }
       const ticked = event.target.closest('input[type="checkbox"]')
@@ -2015,7 +2056,7 @@
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return

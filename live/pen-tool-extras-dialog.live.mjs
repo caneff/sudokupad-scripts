@@ -11,7 +11,7 @@ import { openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const SECTIONS = ['Pen colors', 'Line settings', 'Line styles', 'Marks a click cycles through', 'Other', 'Pen line mode']
+const SECTIONS = ['Pen colors', 'Line settings', 'Line styles', 'Marks a click cycles through', 'Other']
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -33,7 +33,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('the sections run Pen colors, Line settings, Line styles, Marks, Other, Pen line mode, each after the first under a divider line', async () => {
+  it('the sections run Pen colors, Line settings, Line styles, Marks, Other, each after the first under a divider line', async () => {
     await openExtrasEditor(p)
     const order = await editor().evaluate((el, names) => names.map((name) => el.textContent.indexOf(name)), SECTIONS)
     assert.deepEqual(order, [...order].sort((a, b) => a - b), 'in order')
@@ -43,11 +43,8 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('the pen color preset pulldown sits under the Pen colors heading, above the pickers, styled like the line mode pulldown, and there is no SudokuPad colors button', async () => {
+  it('the pen color preset pulldown sits under the Pen colors heading, above the pickers, and there is no SudokuPad colors button', async () => {
     await openExtrasEditor(p)
-    const menu = editor().locator('select[data-pen-preset]')
-    const look = (locator) => locator.evaluate((el) => { const style = window.getComputedStyle(el); return { background: style.backgroundImage, border: style.borderTopColor, radius: style.borderTopLeftRadius } })
-    assert.deepEqual(await look(menu), await look(editor().locator('select[data-line-mode]')))
     const [heading, pulldown, firstPicker] = await editor().evaluate((el) => [[...el.querySelectorAll('div')].find((d) => d.textContent === 'Pen colors'), el.querySelector('select[data-pen-preset]'), el.querySelector('input[data-pen="1"]')].map((e) => Math.round(e.getBoundingClientRect().y)))
     assert.equal(heading < pulldown && pulldown < firstPicker, true, `heading ${heading}, pulldown ${pulldown}, pickers ${firstPicker}`)
     assert.equal(await editor().locator('button').count(), 0)

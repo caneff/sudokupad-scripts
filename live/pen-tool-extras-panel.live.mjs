@@ -1,15 +1,15 @@
 // Live check of pen-tool-extras.user.js's thickness and opacity sliders in the pen tool's panel, of the
-// hidden line mode pulldown whose choice moved to the dialog, and of the opacity of the pen layer, on
+// line mode button that steps SudokuPad's hidden line mode pulldown, and of the opacity of the pen layer, on
 // sudokupad.app in headless Chromium. A touch screen stays untested.
 // Every slider move is a real mouse drag.
-/* global Framework, ToolPen */
+/* global Framework, ToolPen, Image */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { dialogButton, effectiveOpacities, openExtrasEditor } from './settings.mjs'
-import { draw, openPenTool, penValuesNoColor, setSlider } from './pen.mjs'
+import { draw, gridPoint as gridPointOf, openPenTool, penEntries, penValuesNoColor, setSlider } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -81,7 +81,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await p.locator(OPACITY).evaluate((el) => [el.min, el.max, el.step, el.value]), ['20', '100', '5', '80'])
     assert.equal(await lineWidth(), 5)
     assert.equal(await lineOpacity(), 0.8)
-    // The sliders fill the row left of the page button, which is one square button at the row's right end.
+    // The sliders fill the row left of the line mode button and the page button, which is one square button at the row's right end.
     assert.equal(row.x + row.width <= page.x, true, JSON.stringify({ row, page }))
     assert.equal(page.x + page.width <= input.x + input.width + 1, true, JSON.stringify({ page, input }))
     assert.equal(Math.abs(page.width - page.height) <= 2, true, `page button ${page.width} x ${page.height}`)
@@ -95,41 +95,101 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator('.pen-tool-extras-sliders').evaluate((el) => { el.style.display = '' })
   })
 
-  it('SudokuPad\'s line mode pulldown is hidden, and the dialog holds the choice: Cancel leaves the mode, Save sets and saves it, and a slider move leaves it alone', async () => {
+  const modeButton = () => p.locator('.pen-tool-extras-mode')
+  const pressMode = () => modeButton().click()
+  // SudokuPad's line mode decides where a drag's ends snap, so a line is stored as a center line or an edge line whichever way it was dragged. The values of each kind
+  // (see LINE_PATHS in the script): a center line joins cell middles, an edge line runs along the cell edges between cell corners.
+  const CENTER_LINES = ['1', '2', 'd', 'e']
+  const EDGE_LINES = ['7', '8', '9', 'a', 'f', 'g']
+  // The kinds of line a real drag adds: one drag of each shape, over cell middles and over cell corners.
+  const dragKinds = async (points) => {
+    const before = await penEntries(p)
+    await p.mouse.move(...await gridPointOf(p, points[0]))
+    await p.mouse.down()
+    for (const point of points.slice(1)) await p.mouse.move(...await gridPointOf(p, point), { steps: 8 })
+    await p.mouse.up()
+    await settle(async () => (await penEntries(p)).length, -1)
+    const added = (await penEntries(p)).filter((entry) => !before.includes(entry)).map((entry) => entry.split(':')[1][0])
+    return [...new Set(added.map((value) => CENTER_LINES.includes(value) ? 'center' : EDGE_LINES.includes(value) ? 'edge' : value))]
+  }
+  const acrossMiddles = (row) => [[row + 0.5, 1.5], [row + 1.5, 2.5]]
+  const alongEdge = (row) => [[row, 5], [row, 6]]
+
+  it('SudokuPad\'s line mode pulldown is hidden, and the line mode button sits between the sliders and the page button, a 4rem square like the page button', async () => {
     assert.equal(await p.locator('.penlinemode').isVisible(), false)
-    const before = await read(() => ToolPen.tool.lineMode)
-    await openExtrasEditor(p)
-    const select = editor().locator('select[data-line-mode]')
-    assert.deepEqual(await select.locator('option').evaluateAll((os) => os.map((o) => [o.value, o.textContent])), [['both', 'Center & Edge'], ['centeronly', 'Center only'], ['edgeonly', 'Edge only']])
-    await select.selectOption('edgeonly')
-    await dialogButton(p, 'Cancel').click()
-    assert.equal(await read(() => ToolPen.tool.lineMode), before)
-    await openExtrasEditor(p)
-    await editor().locator('select[data-line-mode]').selectOption('edgeonly')
-    await dialogButton(p, 'Save').click()
-    assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
-    assert.equal(await saved(LINE_MODE_KEY), 'edgeonly')
-    assert.equal(await p.locator('.penlinemode select').inputValue(), 'edgeonly')
-    await dragToMax(THICKNESS)
-    assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
-    assert.equal(await saved(LINE_MODE_KEY), 'edgeonly')
-    await openExtrasEditor(p)
-    assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
-    await editor().locator('select[data-line-mode]').selectOption('both')
-    await dialogButton(p, 'Save').click()
-    assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
+    const [sliders, mode, page] = await Promise.all(['.pen-tool-extras-sliders', '.pen-tool-extras-mode', '.pen-tool-extras-page'].map((s) => p.locator(s).boundingBox()))
+    assert.equal(sliders.x + sliders.width <= mode.x && mode.x + mode.width <= page.x, true, JSON.stringify({ sliders, mode, page }))
+    assert.equal(mode.y, page.y)
+    assert.equal(Math.abs(mode.width - page.width) < 1 && Math.abs(mode.height - page.height) < 1, true, JSON.stringify({ mode, page }))
   })
 
-  it('the dialog shows the saved line mode while SudokuPad\'s pen tool still holds its default, and a change to the default saves', async () => {
-    await read((k) => Framework.setData(k, 'edgeonly'), LINE_MODE_KEY)
-    // Before SudokuPad's pen tool first opens it holds 'both' and reads the saved mode only on entry.
-    await read(() => { ToolPen.tool.lineMode = 'both' })
-    await openExtrasEditor(p)
-    assert.equal(await editor().locator('select[data-line-mode]').inputValue(), 'edgeonly')
-    await editor().locator('select[data-line-mode]').selectOption('both')
-    await dialogButton(p, 'Save').click()
-    assert.equal(await saved(LINE_MODE_KEY), 'both')
+  it('the line mode button names the mode, steps it through SudokuPad, and the lines drawn after each click follow it', async () => {
+    await read((k) => Framework.removeData(k), LINE_MODE_KEY)
+    await reload()
+    assert.equal(await modeButton().getAttribute('title'), 'Center & Edge')
+    assert.equal(await modeButton().getAttribute('aria-label'), 'Center & Edge')
+    // SudokuPad's CSS fills every `svg path`; the icon's paths must draw as lines.
+    assert.deepEqual(await modeButton().locator('path').evaluateAll((ps) => ps.map((e) => window.getComputedStyle(e).fill)), ['none', 'none', 'none'])
+    assert.deepEqual([await dragKinds(acrossMiddles(1)), await dragKinds(alongEdge(3))], [['center'], ['edge']], 'center and edge: each drag stays what it was')
+    await pressMode()
+    assert.equal(await modeButton().getAttribute('title'), 'Center only')
+    assert.equal(await read(() => ToolPen.tool.lineMode), 'centeronly')
+    assert.equal(await saved(LINE_MODE_KEY), 'centeronly')
+    assert.deepEqual([await dragKinds(acrossMiddles(4)), await dragKinds(alongEdge(6))], [['center'], ['center']], 'center-only stores center lines only')
+    await pressMode()
+    assert.equal(await modeButton().getAttribute('title'), 'Edge only')
+    assert.equal(await read(() => ToolPen.tool.lineMode), 'edgeonly')
+    assert.deepEqual([await dragKinds(acrossMiddles(7)), await dragKinds(alongEdge(1))], [['edge'], ['edge']], 'edge-only stores edge lines only')
+    await pressMode()
+    assert.equal(await modeButton().getAttribute('title'), 'Center & Edge')
     assert.equal(await read(() => ToolPen.tool.lineMode), 'both')
+    assert.equal(await saved(LINE_MODE_KEY), 'both')
+  })
+
+  it('the line mode survives a reload, and the button shows it', async () => {
+    await pressMode()
+    assert.equal(await saved(LINE_MODE_KEY), 'centeronly')
+    await reload()
+    assert.equal(await modeButton().getAttribute('title'), 'Center only')
+    assert.equal(await read(() => ToolPen.tool.lineMode), 'centeronly')
+    await read((k) => Framework.removeData(k), LINE_MODE_KEY)
+    await reload()
+  })
+
+  it('the settings dialog has no line mode pulldown', async () => {
+    await openExtrasEditor(p)
+    assert.equal(await editor().locator('select[data-line-mode]').count(), 0)
+    await dialogButton(p, 'Cancel').click()
+  })
+
+  it('the sliders have no line pictures, keep their hover labels, and the tracks draw: a wedge for thickness, a fade for opacity', async () => {
+    assert.equal(await p.locator('.pen-tool-extras-slider svg').count(), 0)
+    // Without their pictures the sliders keep about two-thirds of their former 105 px.
+    const length = (await p.locator(THICKNESS).boundingBox()).width
+    assert.equal(length >= 60 && length <= 80, true, `slider length ${length}`)
+    assert.deepEqual(await p.locator('.pen-tool-extras-slider').evaluateAll((els) => els.map((e) => e.title)), ['Thickness', 'Opacity'])
+    // The tracks are shadow parts getComputedStyle cannot read, so the rendered pixels are: how dark the track is near each end.
+    const ink = async (selector) => {
+      const shot = (await p.locator(selector).screenshot()).toString('base64')
+      return p.evaluate(async (b64) => {
+        const img = new Image()
+        img.src = `data:image/png;base64,${b64}`
+        await img.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = img.width
+        canvas.height = img.height
+        const g = canvas.getContext('2d')
+        g.drawImage(img, 0, 0)
+        const data = g.getImageData(0, 0, img.width, img.height).data
+        const dark = (x0, x1) => { let sum = 0; for (let x = x0; x < x1; x++) for (let y = 0; y < img.height; y++) sum += 255 - data[(y * img.width + x) * 4 + 1]; return sum }
+        const edge = Math.floor(img.width * 0.08)
+        return [dark(0, edge), dark(img.width - edge, img.width)]
+      }, shot)
+    }
+    const [thinEnd, thickEnd] = await ink(THICKNESS)
+    assert.equal(thickEnd > thinEnd * 2, true, `the wedge is thicker at the right: ${thinEnd} -> ${thickEnd}`)
+    const [faintEnd, solidEnd] = await ink(OPACITY)
+    assert.equal(solidEnd > faintEnd * 2 && faintEnd > 0, true, `the fade is fainter at the left: ${faintEnd} -> ${solidEnd}`)
   })
 
   it('a real drag on Thickness changes the line\'s computed width and saves at once, with no Save', async () => {
