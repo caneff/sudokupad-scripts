@@ -11,7 +11,7 @@ const {
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
@@ -992,26 +992,27 @@ test('the page 2 swatch follows the dash length: dots at 0, longer dashes as it 
 })
 
 const BOTH_STYLES = { dashed: true, arrows: true }
-test('the page button samples the page it turns to: dashes on page 2, an arrow line on page 3, a solid line on page 1, and a dot for each page with the current one filled', () => {
-  const fromOne = renderPageIcon(0, 3, BOTH_STYLES)
-  assert.match(fromOne, /data-page-sample="dashed"/)
-  assert.equal((fromOne.match(/<circle/g) || []).length, 3)
-  assert.equal((fromOne.match(/<path[^>]*data-dash/g) || []).length, 2)
-  const fromTwo = renderPageIcon(1, 0, BOTH_STYLES)
-  assert.match(fromTwo, /data-page-sample="arrowLines"/)
-  assert.equal((fromTwo.match(/<circle/g) || []).length, 3)
-  assert.equal((fromTwo.match(/<path[^>]*data-arrow/g) || []).length, 3)
-  assert.equal((fromTwo.match(/<path[^>]*data-sample-line/g) || []).length, 1)
-  const fromThree = renderPageIcon(2, 0, BOTH_STYLES)
-  assert.match(fromThree, /data-page-sample="solid"/)
-  assert.equal((fromThree.match(/<circle/g) || []).length, 3)
-  assert.equal((fromThree.match(/<path/g) || []).length, 1)
-  for (const icon of [fromOne, fromTwo, fromThree]) {
+const dashArrayOf = (svg) => /stroke-dasharray='([\d. ]+)'/.exec(svg)[1].split(' ').map(Number)
+test('the page button shows the picture of the page it turns to, slanted 35 degrees, and a dot for each page with the current one filled', () => {
+  for (const [current, next] of [[0, 1], [1, 2], [2, 0]]) {
+    const icon = renderPageIcon(current, 3, BOTH_STYLES)
+    assert.ok(icon.includes(pageSwatch(PEN_PAGES[next], 3, 35)), `from page ${current + 1}`)
+    assert.match(icon, new RegExp(`data-page-sample="${next + 1}"`))
+    assert.equal((icon.match(/<circle/g) || []).length, 3)
     assert.equal((icon.match(/data-page-dot="filled"/g) || []).length, 1)
     assert.equal((icon.match(/data-page-dot="outline"/g) || []).length, 2)
   }
-  assert.match(fromOne, /<circle[^>]*data-page-dot="filled"[^>]*\/>[^]*<circle[^>]*data-page-dot="outline"/)
-  assert.match(fromThree, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
+  assert.match(renderPageIcon(0, 3, BOTH_STYLES), /<circle[^>]*data-page-dot="filled"[^>]*\/>[^]*<circle[^>]*data-page-dot="outline"/)
+  assert.match(renderPageIcon(2, 3, BOTH_STYLES), /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
+  assert.match(pageSwatch(PEN_PAGES[1], 3, 35), /rotate\(-35 12 12\)/)
+  assert.match(pageSwatch(PEN_PAGES[1], 3, 0), /rotate\(0 12 12\)/)
+})
+
+test('the page button shows dots at dash 0 and dashes as long as the setting from there', () => {
+  const sampleOf = (dash) => renderPageIcon(0, dash, BOTH_STYLES)
+  assert.equal(dashArrayOf(sampleOf(0))[0], 0)
+  const [short, long] = [dashArrayOf(sampleOf(1))[0], dashArrayOf(sampleOf(4))[0]]
+  assert.equal(short > 0 && long > short, true, `dashes ${short} and ${long}`)
 })
 
 test('the line mode choices are SudokuPad\'s three, and anything else saved reads as both', () => {
@@ -1082,20 +1083,6 @@ test('buildPagesCss refuses a dash it cannot save', () => {
   assert.throws(() => buildPagesCss(5, 9), RangeError)
   assert.throws(() => buildPagesCss(5, 1.5), RangeError)
 })
-
-test('the page button samples dashes as long as the setting, and dots at 0', () => {
-  const dots = renderPageIcon(0, 0, BOTH_STYLES)
-  assert.match(dots, /data-page-sample="dots"/)
-  assert.equal((dots.match(/<circle/g) || []).length, 5 + 3)
-  const dashed = renderPageIcon(0, 4, BOTH_STYLES)
-  assert.match(dashed, /data-page-sample="dashed"/)
-  const short = renderPageIcon(0, 1, BOTH_STYLES).match(/<path[^>]*data-dash/g)
-  const long = dashed.match(/<path[^>]*data-dash/g)
-  assert.equal(short.length >= 2 && long.length >= 2, true)
-  const span = (path) => { const [x1, y1, x2, y2] = path.match(/M([\d.]+) ([\d.]+) L([\d.]+) ([\d.]+)/).slice(1).map(Number); return Math.hypot(x2 - x1, y2 - y1) }
-  assert.equal(span(long[0]) > span(short[0]), true)
-})
-
 test('both sliders show unless saved as hidden, and saved data without the setting shows both', () => {
   assert.deepEqual(SETTINGS.show.normalize(undefined), { thickness: true, opacity: true })
   assert.deepEqual(SETTINGS.show.normalize(null), { thickness: true, opacity: true })
@@ -1201,13 +1188,21 @@ test('the missing-color note names the page the colors came from and the pens th
 
 test('the page button turns to the next enabled page and has a dot for each enabled page only', () => {
   const noDash = renderPageIcon(0, 3, { dashed: false, arrows: true })
-  assert.match(noDash, /data-page-sample="arrowLines"/)
+  assert.ok(noDash.includes(pageSwatch(PEN_PAGES[2], 3, 35)))
   assert.equal((noDash.match(/<circle/g) || []).length, 2)
   assert.equal((noDash.match(/data-page-dot="filled"/g) || []).length, 1)
   const noArrows = renderPageIcon(1, 3, { dashed: true, arrows: false })
-  assert.match(noArrows, /data-page-sample="solid"/)
+  assert.ok(noArrows.includes(pageSwatch(PEN_PAGES[0], 3, 35)))
   assert.equal((noArrows.match(/<circle/g) || []).length, 2)
   assert.match(noArrows, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
+})
+
+test('every pen button swatch is the page\'s pageSwatch at angle 0, on every page', () => {
+  const rules = rulesOf(buildPagesCss(5, 2))
+  PEN_PAGES.forEach((page, index) => {
+    const selector = `.tool-pen button[data-key="4"]${index === 0 ? '' : `[data-pen-page="${index + 1}"]`}:after`
+    assert.equal(maskSvg(rules.find((r) => r.selector === selector)), pageSwatch(page, 2, 0), `page ${index + 1}`)
+  })
 })
 
 const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?</div>`).exec(html)[0]
@@ -1400,7 +1395,7 @@ test('a page 3 swatch is an arrow in the pen color of its button, as a mask so t
   // The picture itself: a stroked line and two closed triangles that are filled, since an unfilled triangle is an outline of an arrow, not one.
   const mask = rules.find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="3"]:after').body
   const svg = decodeURIComponent(/url\("data:image\/svg\+xml,([^"]+)"\)/.exec(mask)[1])
-  const triangles = /<path d='([^']+)' fill='#000' stroke='none'\/>/.exec(svg)
+  const triangles = /<path d='([^']+)' fill='currentColor' stroke='none'\/>/.exec(svg)
   assert.ok(triangles, `the arrows are filled paths with no stroke: ${svg}`)
   assert.equal(triangles[1].split('Z').length - 1, 2, 'two closed arrows')
 })

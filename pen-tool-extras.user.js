@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.15.0
+// @version      1.16.0
 // @description  Pen tool extras: sets the pen's nine colors once, at install, to cell color page 1 darkened, and after that changes them only when you pick a preset (a darker cell color page or SudokuPad's own colors) in a settings dialog or edit a color there or by holding a pen color button, adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.15.0'
+  const VERSION = '1.16.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -347,11 +347,6 @@
       console.warn(`pen-tool-extras: ${names.map((name) => STEP_LABELS[name]).join(', ')} skipped because SudokuPad has no ${missing}`)
     })
   }
-
-  // A pen button's line swatch: page 1 shows it solid, and the dashed page with its dashes.
-  const DASH_SWATCH = { width: 2, from: 2, to: 22 }
-  const lineSwatch = (dashes = '') => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M${DASH_SWATCH.from} 12H${DASH_SWATCH.to}' stroke-width='${DASH_SWATCH.width}'${dashes}/></svg>`
-  const SOLID_SWATCH = lineSwatch()
 
   // 2. Pen colors: the saved set, derived colors and edit mode
   // Keys saved by the scripts this one replaced, kept so their saved data still reads.
@@ -778,7 +773,7 @@
   function buildPagesCss (thickness, dash) {
     if (!inRange(thickness, THICKNESS)) throw new RangeError(`pen-tool-extras: ${thickness} is not a thickness from ${THICKNESS.min} to ${THICKNESS.max}`)
     if (!inRange(dash, DASH)) throw new RangeError(`pen-tool-extras: ${dash} is not a dash length from ${DASH.min} to ${DASH.max}`)
-    const rules = PEN_COLOR_NUMBERS.map((n) => swatchRule(n, 1, SOLID_SWATCH))
+    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_NUMBERS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
@@ -786,49 +781,23 @@
         // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
         if (page.arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${PEN_COLOR_NUMBERS[i]}); stroke: none; }`)
       }))
-      if (page.arrowLines) PEN_COLOR_NUMBERS.forEach((n) => rules.push(swatchRule(n, index + 1, ARROW_LINE_SWATCH)))
       if (!page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
       const lines = (values, length) => `:root:root .cell-pen:is(${values.map((v) => `.pen-${v}`).join(',')})${colors} { ${dashDeclarations(thickness, dash, length)} }`
       rules.push(lines(ORTHOGONAL_LINES, CELL_UNITS), lines(DIAGONAL_LINES, CELL_UNITS * Math.SQRT2))
-      PEN_COLOR_NUMBERS.forEach((n) => rules.push(swatchRule(n, index + 1, dashSwatch(dash))))
     })
     return rules.join('\n')
   }
 
-  // A sample of the line the button turns to, under a dot for each enabled page with the current one filled, as SudokuPad's color tool's page button has.
-  const SAMPLE_FROM = [12, 54]
-  const SAMPLE_TO = [52, 26]
-  const SAMPLE_WIDTH = 7.2
-  const SAMPLE_DASH_SHARE = 0.42
-  const SAMPLE_ARROW_LINE = { line: 3.2, at: [0.25, 0.5, 0.75] }
+  // The line the button turns to, slanted as it was when the sample was drawn by hand (28 up over 40 across), under a dot for each enabled page with the current one filled, as SudokuPad's color tool's page button has.
+  const PAGE_BUTTON_ANGLE = 35
   function renderPageIcon (current, dash, styles) {
-    const next = PEN_PAGES[stepEnabledPage(current, 1, styles)]
-    const kind = next.arrowLines ? 'arrowLines' : !next.dashed ? 'solid' : dash === 0 ? 'dots' : 'dashed'
-    let sample
-    const [dx, dy] = [SAMPLE_TO[0] - SAMPLE_FROM[0], SAMPLE_TO[1] - SAMPLE_FROM[1]]
-    const length = Math.hypot(dx, dy)
-    if (kind === 'arrowLines') {
-      sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_ARROW_LINE.line}" stroke-linecap="round" fill="none" data-sample-line/>` +
-        SAMPLE_ARROW_LINE.at.map((t) => {
-          const [wing, tip, other] = arrowCorners(SAMPLE_FROM[0] + dx * t, SAMPLE_FROM[1] + dy * t, dx / length, dy / length, ARROW_LINE.halfLength * SAMPLE_ARROW_LINE.line, ARROW_LINE.halfWidth * SAMPLE_ARROW_LINE.line)
-          return `<path d="M${pointText(wing)} L${pointText(tip)} L${pointText(other)}Z" stroke="none" data-arrow/>`
-        }).join('')
-    } else if (kind === 'dots') {
-      sample = [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + 9 * k}" cy="${52 - 7 * k}" r="3.6" fill="currentColor" stroke="none"/>`).join('')
-    } else if (kind === 'dashed') {
-      const share = Math.min(dash * SAMPLE_WIDTH, SAMPLE_DASH_SHARE * length) / length
-      const point = (t) => `${(SAMPLE_FROM[0] + dx * t).toFixed(1)} ${(SAMPLE_FROM[1] + dy * t).toFixed(1)}`
-      sample = [[0, share], [1 - share, 1]].map(([a, b]) =>
-        `<path d="M${point(a)} L${point(b)}" stroke-width="${SAMPLE_WIDTH}" stroke-linecap="round" fill="none" data-dash/>`).join('')
-    } else {
-      sample = `<path d="M${SAMPLE_FROM.join(' ')} L${SAMPLE_TO.join(' ')}" stroke-width="${SAMPLE_WIDTH}" stroke-linecap="round" fill="none"/>`
-    }
+    const next = stepEnabledPage(current, 1, styles)
     const pages = enabledPages(styles)
     const dots = pages.map((page, i) =>
-      `<circle cx="${54 - 8 * (pages.length - i - 1)}" cy="10" r="3" data-page-dot="${page === current ? 'filled' : 'outline'}"${page === current ? '' : ' fill="none"'}/>`)
-    return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 64 64" stroke="currentColor" fill="currentColor" stroke-width="1">' +
-      `<g data-page-sample="${kind}">${sample}</g><g>${dots.join('')}</g></svg>`
+      `<circle cx="${20 - 3 * (pages.length - i - 1)}" cy="3" r="1.1" data-page-dot="${page === current ? 'filled' : 'outline'}"${page === current ? '' : ' fill="none"'}/>`)
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" fill="currentColor" stroke-width="0.5">' +
+      `<g data-page-sample="${next + 1}">${pageSwatch(PEN_PAGES[next], dash, PAGE_BUTTON_ANGLE)}</g><g>${dots.join('')}</g></svg>`
   }
 
   // Lines already drawn in a page that is not enabled still draw: its rules stay in the style.
@@ -982,10 +951,16 @@
     const { on, gap, offset } = dashPattern(thickness, dash, length)
     return `stroke-dasharray: ${on} ${gap};${dash === 0 ? '' : ` stroke-dashoffset: ${offset};`}`
   }
-  function dashSwatch (dash) {
-    const { on, gap, offset } = dashPattern(DASH_SWATCH.width, dash, DASH_SWATCH.to - DASH_SWATCH.from)
+  // The picture of a page's line, drawn in `currentColor` so it serves as a CSS mask on a pen button and inline in the page button: the page's line, or its dashes, or its arrows,
+  // turned `angle` degrees up from left to right about the middle of a 24 box.
+  const SWATCH_LINE = { width: 2, from: 2, to: 22, middle: 12 }
+  const ARROW_SWATCH = "<path d='M5 6.5L12 12L5 17.5ZM13 6.5L20 12L13 17.5Z' fill='currentColor' stroke='none'/>"
+  function pageSwatch (page, dash, angle) {
+    const { on, gap, offset } = dashPattern(SWATCH_LINE.width, dash, SWATCH_LINE.to - SWATCH_LINE.from)
     const round = (x) => Math.round(x * 1000) / 1000
-    return lineSwatch(` stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'`)
+    const dashes = page.dashed ? ` stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'` : ''
+    const line = `<path d='M${SWATCH_LINE.from} ${SWATCH_LINE.middle}H${SWATCH_LINE.to}' stroke-width='${SWATCH_LINE.width}'${dashes}/>${page.arrowLines ? ARROW_SWATCH : ''}`
+    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-linecap='round'><g transform='rotate(${-angle} ${SWATCH_LINE.middle} ${SWATCH_LINE.middle})'>${line}</g></svg>`
   }
 
   // 5. Arrow lines
@@ -1075,7 +1050,6 @@
       lineWidth: ARROW_LINE.line * thickness
     }
   }
-  const ARROW_LINE_SWATCH = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='#000' stroke-linecap='round'><path d='M2 12H22' stroke-width='2'/><path d='M5 6.5L12 12L5 17.5ZM13 6.5L20 12L13 17.5Z' fill='#000' stroke='none'/></svg>"
 
   // An arrow line's class holds a page 3 color character, as in `cell-pen pen-1 pencolor-j`.
   function arrowLineOf (opts) {
@@ -2042,7 +2016,7 @@
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, renderPageIcon, renderPanelSliders, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, normalizeColors, savedColors, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, renderPageIcon, renderPanelSliders, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
