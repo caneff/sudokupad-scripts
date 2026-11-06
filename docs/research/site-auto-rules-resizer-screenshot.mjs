@@ -18,6 +18,7 @@ const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit
   'Digits in a grey-shaded region form a palindrome, reading the same from either end. ' +
   'Two cells joined by a line between their centers differ by at least five.'
 const MARGIN = 12
+const BUTTONS_PX = 24 // room above the pane for the font buttons
 
 const browser = await chromium.launch()
 const { p } = await openPage(browser, { contextOptions: { viewport: { width: 1920, height: 1080 } } })
@@ -37,14 +38,14 @@ const area = await p.evaluate(() => {
   return { left: rules.left, right: rules.right, top: header.top, bottom: rules.bottom, centerX: (rules.left + rules.right) / 2, centerY: (rules.top + rules.bottom) / 2 }
 })
 await p.mouse.move(area.centerX, area.centerY) // over the pane, so the drag corners and the f+ and f- buttons show
-await p.waitForTimeout(300) // the buttons fade in on hover; no condition says they are done
+await p.locator('#auto-rules-resizer-font').waitFor({ state: 'visible' }) // the bar and the corners show on the same hover class
 await p.screenshot({
   path: out,
   clip: {
     x: Math.floor(area.left - MARGIN),
-    y: Math.floor(area.top - MARGIN - 24), // room for the font buttons above the pane
+    y: Math.floor(area.top - MARGIN - BUTTONS_PX),
     width: Math.ceil(area.right - area.left + 2 * MARGIN),
-    height: Math.ceil(area.bottom - area.top + MARGIN + 24 + 4) // 4px under the pane: the buttons below it stay out
+    height: Math.ceil(area.bottom - area.top + MARGIN + BUTTONS_PX + 4) // 4px under the pane: the buttons below it stay out
   }
 })
 await browser.close()
