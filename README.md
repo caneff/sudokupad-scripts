@@ -70,7 +70,6 @@ Ported from the rules-pane fit of twitch-rules-scroller's stream script, which g
 - Two corners show while the pointer is over the pane. The top right grows the pane right and up, moving the controls up; the bottom left grows it left and down. The pane never grows onto the board, the controls never go off the window, even after the window gets smaller, and a drag never shrinks the pane under 15 × 7 rem.
 - A "Rules resizer" entry in SudokuPad's settings opens a dialog with a max auto width and a max auto height, in CSS px. An empty box means no limit, and both start empty. The limits cap only the automatic fit, so a corner drag can still go past them, and the height limit caps the room the font is fitted to. They are saved in SudokuPad's own storage.
 - The font change and the drag are not saved: they last until a reload, and a new puzzle resets the drag.
-- On a page where twitch-rules-scroller's stream script runs, it does nothing, so the two never set the pane's font against each other.
 
 ## License
 

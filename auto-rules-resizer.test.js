@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
-  dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, streamScriptActive, makeTrailing, watchCornerDrag
+  dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag
 } = require('./auto-rules-resizer.user.js')
 
 test('largestSize: the biggest integer in [min, max] the predicate accepts, min when none does', () => {
@@ -386,26 +386,6 @@ test('isLandscape: SudokuPad\'s own rule, the game area wider than it is tall', 
   assert.equal(isLandscape({ width: 1200, height: 860 }), true)
   assert.equal(isLandscape({ width: 600, height: 860 }), false)
   assert.equal(isLandscape({ width: 860, height: 860 }), false, 'square is portrait, as SudokuPad has it')
-})
-
-// A document holding elements with the given ids, answering the two lookups a page script uses.
-function fakeDocument (ids) {
-  return {
-    getElementById: (id) => (ids.includes(id) ? { id } : null),
-    querySelector: (selector) => {
-      const prefix = /^\[id\^="([^"]+)"\]$/.exec(selector)
-      if (!prefix) throw new Error(`the fake document does not answer ${selector}`)
-      const id = ids.find((i) => i.startsWith(prefix[1]))
-      return id ? { id } : null
-    }
-  }
-}
-
-test('streamScriptActive: true when the stream script\'s nudge bar or a drag corner of its is on the page', () => {
-  assert.equal(streamScriptActive(fakeDocument(['sudokupad-sync-nudge'])), true)
-  assert.equal(streamScriptActive(fakeDocument(['sudokupad-sync-drag-rules-ur'])), true)
-  assert.equal(streamScriptActive(fakeDocument(['sudokupad-sync-drag-rules-dl'])), true)
-  assert.equal(streamScriptActive(fakeDocument(['controls', 'board', 'sudokupad-sync-badge'])), false)
 })
 
 test('makeTrailing: runs once, the given time after the last call', () => {

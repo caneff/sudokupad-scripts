@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.2.0
+// @version      0.2.1
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.2.0'
+  const VERSION = '0.2.1'
   const SETTINGS_GROUP = 'experimental'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
@@ -179,10 +179,6 @@
   // SudokuPad's own rule in App.resize.
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
-  // twitch-rules-scroller's sync script sizes the same pane: on a page where it runs, this script leaves the
-  // pane to it.
-  const streamScriptActive = (doc) => Boolean(doc.getElementById('sudokupad-sync-nudge') || doc.querySelector('[id^="sudokupad-sync-drag-"]'))
-
   // Every style property the fit writes on the pane; it also moves the controls column by its `translate`.
   const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight']
 
@@ -318,7 +314,6 @@
       draggedBox,
       noRulesDrag,
       isLandscape,
-      streamScriptActive,
       makeTrailing,
       watchCornerDrag
     }
@@ -444,11 +439,6 @@
       const rules = rulesPane()
       const controls = controlsColumn()
       if (!rules || !controls) return
-      if (streamScriptActive(document)) {
-        // The stream script's own fit clears and rewrites the same styles each time, so they are left to it.
-        showControls(false)
-        return
-      }
       const game = document.querySelector('.game')
       if (!game || !isLandscape(game.getBoundingClientRect())) {
         if (fitted) clearFit(rules, controls)
