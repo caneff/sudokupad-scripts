@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.22.0
+// @version      1.23.0
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.22.0'
+  const VERSION = '1.23.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -1689,7 +1689,6 @@
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
   // A hidden slider's empty row has the same height, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
-  // The sliders block's box is a real `button` behind the sliders, so SudokuPad's button styling (and Dark Page's) reaches it wherever it changes; its background is `var(--body-bg)` as on the pad's pen buttons.
   // Each color button keeps `position: relative`, since its color line is its `::after`. The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
   const CONTROL_BUTTONS = [MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
   const controlButtons = CONTROL_BUTTONS.map((name) => `.tool-pen .controls-input button.${name}`).join(', ')

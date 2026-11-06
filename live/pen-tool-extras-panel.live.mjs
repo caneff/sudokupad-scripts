@@ -462,6 +462,7 @@ describe('with Dark Page on', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the sliders sit on the tray, which stays light on Dark Page, with no box behind them', async () => {
+    assert.notEqual(await p.locator('.tool-pen button[data-key="9"]').evaluate((el) => getComputedStyle(el).borderTopColor), 'rgb(204, 204, 204)', 'Dark Page restyles the buttons')
     assert.equal(await p.locator('.pen-tool-extras-sliders-box').count(), 0)
     assert.equal(await p.locator('.pen-tool-extras-tray').evaluate((el) => getComputedStyle(el).backgroundColor), 'rgb(239, 234, 244)')
   })
