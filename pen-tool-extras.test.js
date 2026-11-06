@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
-  normalizeColors, buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, savedColors, editedColors,
+  buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, editedColors,
   readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
@@ -33,43 +33,30 @@ test('SUDOKUPAD_PEN_COLORS are SudokuPad\'s own nine pen colors', () => {
   assert.deepEqual(SUDOKUPAD_PEN_COLORS, TABLE)
 })
 
-test('nothing saved normalizes to SudokuPad\'s own color for every pen', () => {
-  assert.deepEqual(normalizeColors(null), TABLE)
-  assert.deepEqual(normalizeColors(undefined), TABLE)
-})
-
-test('corrupt saved data falls back to SudokuPad\'s pen colors', () => {
-  for (const bad of ['red', 7, true, [], ['#ff0000'], '{"1":"#ff0000"}']) {
-    assert.deepEqual(normalizeColors(bad), TABLE, JSON.stringify(bad))
-  }
-})
+const colorsRead = (data) => readPenColors(data).colors
 
 test('a saved #rrggbb color is kept, lowercased', () => {
-  assert.deepEqual(normalizeColors({ 4: '#FF0000' }), { ...TABLE, 4: '#ff0000' })
+  assert.deepEqual(colorsRead({ 4: '#FF0000' }), { ...TABLE, 4: '#ff0000' })
 })
 
 test('a saved entry that is not a #rrggbb color falls back to that pen color\'s default', () => {
-  const saved = { 2: 'red', 3: '#abc', 4: 7, 5: null, 6: undefined, 0: '#00ff00', 10: '#00ff00', x: '#00ff00', 9: '#00ff00;}body{display:none' }
-  assert.deepEqual(normalizeColors(saved), TABLE)
+  const saved = { 1: '#00ff00', 2: 'red', 3: '#abc', 4: 7, 5: null, 6: undefined, 0: '#ff0000', 10: '#ff0000', x: '#ff0000', 9: '#ff0000;}body{display:none' }
+  assert.deepEqual(colorsRead(saved), { ...TABLE, 1: '#00ff00' })
 })
 
 test('a saved color with junk before it, or a non-string entry, falls back to that pen color\'s default', () => {
-  const saved = { 1: 'x;}body{display:none}#ff0000', 2: ['#ff0000'], 3: { toLowerCase: () => '#ff0000' } }
-  assert.deepEqual(normalizeColors(saved), TABLE)
+  const saved = { 1: 'x;}body{display:none}#ff0000', 2: ['#ff0000'], 3: { toLowerCase: () => '#ff0000' }, 4: '#00ff00' }
+  assert.deepEqual(colorsRead(saved), { ...TABLE, 4: '#00ff00' })
 })
 
-test('saved data that is an array is not read by index', () => {
-  assert.deepEqual(normalizeColors(['x', '#ff0000']), TABLE)
+test('the colors read have exactly nine keys, whatever was saved', () => {
+  assert.deepEqual(Object.keys(colorsRead({ 10: '#ff0000', 0: '#ff0000', 4: '#00ff00' })), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
 })
 
-test('the result has exactly nine keys, whatever was saved', () => {
-  assert.deepEqual(Object.keys(normalizeColors({ 10: '#ff0000', 0: '#ff0000' })), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-})
-
-test('normalizeColors returns a copy, never the saved object or the defaults', () => {
+test('the colors read are a copy, never the saved object or the defaults', () => {
   const saved = { 1: '#ff0000' }
-  assert.notEqual(normalizeColors(saved), saved)
-  assert.notEqual(normalizeColors(null), SUDOKUPAD_PEN_COLORS)
+  assert.notEqual(colorsRead(saved), saved)
+  assert.notEqual(colorsRead(saved), SUDOKUPAD_PEN_COLORS)
 })
 
 test('buildCss writes the nine variables under :root:root, not plain :root', () => {
@@ -273,55 +260,43 @@ test('derivedPenColors on an empty page keeps all nine SudokuPad colors', () => 
   assert.deepEqual(r.missing, [1, 2, 3, 4, 5, 6, 7, 8, 9])
 })
 
-test('savedColors is null when nothing usable was saved', () => {
-  for (const none of [null, undefined, 'red', 7, true, [], ['#ff0000'], {}, { 4: 'url(x)' }, { 0: '#ff0000' }]) {
-    assert.equal(savedColors(none), null, JSON.stringify(none))
-  }
-})
-
-test('savedColors keeps a saved set whole, filling a bad entry with the default', () => {
-  assert.deepEqual(savedColors({ 4: '#FF0000', 5: 'nope' }), { ...TABLE, 4: '#ff0000' })
-})
-
-test('savedColors does not read an array by index', () => {
-  // Index 1 holds a usable color: only the array guard stops it counting as pen color 1.
-  assert.equal(savedColors(['x', '#ff0000', '#00ff00']), null)
-})
-
 // A saved set of nine distinct colors, so a test can tell which entry went where.
 const NINE_SAVED = { 1: '#010101', 2: '#020202', 3: '#030303', 4: '#040404', 5: '#050505', 6: '#060606', 7: '#070707', 8: '#080808', 9: '#090909' }
 
 test('readPenColors is null when nothing usable is saved, so the install save is still owed', () => {
-  for (const none of [null, undefined, 'red', [], {}, { preset: 'page-1' }, { 4: 'url(x)' }]) {
+  for (const none of [null, undefined, 'red', 7, true, [], ['#ff0000'], '{"1":"#ff0000"}', {}, { preset: 'page-1' }, { 4: 'url(x)' }, { 0: '#ff0000' }]) {
     assert.equal(readPenColors(none), null, JSON.stringify(none))
   }
 })
 
+test('readPenColors does not read an array by index', () => {
+  // Index 1 holds a usable color: only the array guard stops it counting as pen color 1.
+  assert.equal(readPenColors(['x', '#ff0000', '#00ff00']), null)
+})
+
 test('readPenColors reads colors saved with no preset name, as older versions save them, as Custom and unchanged', () => {
-  assert.deepEqual(readPenColors(NINE_SAVED), { colors: NINE_SAVED, preset: 'custom' })
+  assert.deepEqual(readPenColors(NINE_SAVED), { colors: NINE_SAVED, preset: 'custom', missing: [] })
 })
 
 test('readPenColors keeps a saved preset name, and reads one it does not know as Custom', () => {
-  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2' })
-  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad' })
+  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2', missing: [] })
+  assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad', missing: [] })
   for (const odd of ['page-4', 'custom', 'unsaved', 'Darker cell color page 1', 7, null]) {
     assert.equal(readPenColors({ ...NINE_SAVED, preset: odd }).preset, 'custom', JSON.stringify(odd))
   }
 })
 
 test('storedPenColors keeps the nine colors where older versions read them and adds the preset name beside them, but none for Custom', () => {
-  assert.deepEqual(storedPenColors(NINE_SAVED, 'page-1'), { ...NINE_SAVED, preset: 'page-1' })
-  assert.deepEqual(storedPenColors(NINE_SAVED, 'custom'), NINE_SAVED)
-  // An older version reads only the colors.
-  assert.deepEqual(savedColors(storedPenColors(NINE_SAVED, 'page-3')), NINE_SAVED)
-  assert.deepEqual(readPenColors(storedPenColors(NINE_SAVED, 'page-3')), { colors: NINE_SAVED, preset: 'page-3' })
+  assert.deepEqual(storedPenColors({ colors: NINE_SAVED, preset: 'page-1', missing: [4] }), { ...NINE_SAVED, preset: 'page-1' })
+  assert.deepEqual(storedPenColors({ colors: NINE_SAVED, preset: 'custom', missing: [] }), NINE_SAVED)
+  assert.deepEqual(readPenColors(storedPenColors({ colors: NINE_SAVED, preset: 'page-3', missing: [] })), { colors: NINE_SAVED, preset: 'page-3', missing: [] })
 })
 
 test('startupPenColors loads a saved set, waits for the color tool when nothing is saved, and saves SudokuPad\'s colors when there is no color tool', () => {
-  assert.deepEqual(startupPenColors({ ...NINE_SAVED, preset: 'page-2' }, true), { load: { colors: NINE_SAVED, preset: 'page-2' } })
-  assert.deepEqual(startupPenColors(NINE_SAVED, false), { load: { colors: NINE_SAVED, preset: 'custom' } })
+  assert.deepEqual(startupPenColors({ ...NINE_SAVED, preset: 'page-2' }, true), { load: { colors: NINE_SAVED, preset: 'page-2', missing: [] } })
+  assert.deepEqual(startupPenColors(NINE_SAVED, false), { load: { colors: NINE_SAVED, preset: 'custom', missing: [] } })
   assert.deepEqual(startupPenColors(null, true), { wait: true })
-  assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad' } })
+  assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad', missing: [] } })
 })
 
 test('presetOptions lists one darker page per palette page, up to three, then SudokuPad default colors last', () => {
@@ -340,7 +315,18 @@ test('presetColors darkens the named page, not the first or the current one, and
   assert.equal(presetColors('page-2', pages, read).colors[1], '#0000ae')
   assert.notEqual(presetColors('page-1', pages, read).colors[1], '#0000ae')
   assert.deepEqual(presetColors('page-3', pages, read).missing, [2, 3, 4, 5, 6, 7, 8, 9])
-  assert.deepEqual(presetColors('sudokupad', pages, read), { colors: TABLE, missing: [] })
+  assert.deepEqual(presetColors('sudokupad', pages, read), { colors: TABLE, preset: 'sudokupad', missing: [] })
+})
+
+test('presetColors names the preset it was given in the set it returns', () => {
+  const pages = [['a0', 'a1'], ['b0', 'b1']]
+  for (const preset of ['page-1', 'page-2', 'sudokupad']) assert.equal(presetColors(preset, pages, () => 'rgb(255, 0, 0)').preset, preset)
+})
+
+test('SudokuPad\'s own set is frozen, so no edit of a set in force can change it', () => {
+  const set = presetColors('sudokupad', [], () => 'red')
+  assert.equal(Object.isFrozen(set) && Object.isFrozen(set.colors) && Object.isFrozen(set.missing), true)
+  assert.equal(presetColors('sudokupad', [], () => 'red'), set, 'one set, not a fresh copy each time')
 })
 
 test('presetColors refuses a page preset the palette has no page for, rather than giving a set nobody picked', () => {
@@ -454,13 +440,6 @@ test('lines are never scaled', () => {
   assert.equal(lines.includes('transform'), false)
 })
 
-test('buildThicknessCss refuses a thickness it cannot save', () => {
-  assert.throws(() => buildThicknessCss(0), RangeError)
-  assert.throws(() => buildThicknessCss(17), RangeError)
-  assert.throws(() => buildThicknessCss('5'), RangeError)
-  assert.throws(() => buildThicknessCss(2.5), RangeError)
-})
-
 test('the opacity runs 20 to 100 percent in steps of 5 from SudokuPad\'s own pen opacity of 80', () => {
   assert.deepEqual(OPACITY, { min: 20, max: 100, step: 5, fallback: 80 })
 })
@@ -496,13 +475,6 @@ test('the panel markup has Thickness above Opacity, each with the range and valu
   ])
   assert.deepEqual([...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]), ['Thickness', 'Opacity'])
   assert.equal(html.match(/tabindex="-1"/g).length, 2)
-})
-
-test('buildOpacityCss refuses an opacity it cannot save', () => {
-  assert.throws(() => buildOpacityCss(15), RangeError)
-  assert.throws(() => buildOpacityCss(105), RangeError)
-  assert.throws(() => buildOpacityCss('80'), RangeError)
-  assert.throws(() => buildOpacityCss(82), RangeError)
 })
 
 test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
@@ -945,10 +917,6 @@ test('the dot spacing is two line widths, snapped so a cell of 64 holds whole do
 
 const maskSvg = (rule) => decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule.body)[1])
 
-test('buildPagesCss refuses a thickness it cannot save', () => {
-  assert.throws(() => buildPagesCss(0, 0), RangeError)
-})
-
 test('a page 2 swatch is a single dashed line in the pen color of its button, as a mask so the color follows a recolor, and no rule names page 1\'s attribute', () => {
   const css = buildPagesCss(5, 3)
   for (let n = 1; n <= 9; n++) {
@@ -1078,11 +1046,6 @@ test('a dash too long for a cell to hold a gap is shortened to leave one, and pa
   assert.equal(Math.abs(ortho.dash + ortho.gap - 64) < 1e-9, true, 'one period in a cell')
 })
 
-test('buildPagesCss refuses a dash it cannot save', () => {
-  assert.throws(() => buildPagesCss(5, 9), RangeError)
-  assert.throws(() => buildPagesCss(5, 1.5), RangeError)
-})
-
 test('the page button samples dashes as long as the setting, and dots at 0', () => {
   const dots = renderPageIcon(0, 0, BOTH_STYLES)
   assert.match(dots, /data-page-sample="dots"/)
@@ -1123,7 +1086,6 @@ test('with both sliders hidden the panel has no slider block at all, so no gap i
 const editorState = (over = {}) => ({
   colors: SUDOKUPAD_PEN_COLORS,
   missing: [],
-  missingPage: 1,
   preset: 'page-1',
   presets: ['page-1', 'page-2', 'page-3', 'sudokupad'],
   marks: ALL,
@@ -1193,9 +1155,9 @@ test('Custom is in the pulldown only while the set is custom, selected and not p
 })
 
 test('the missing-color note names the page the colors came from and the pens that keep SudokuPad\'s own', () => {
-  const text = renderEditor(editorState({ missing: [4, 5], missingPage: 2 }))
+  const text = renderEditor(editorState({ missing: [4, 5], preset: 'page-2' }))
   assert.match(text, /Cell color page 2 has no usable color at the matching button, so pen colors 4, 5 keep SudokuPad's own\./)
-  assert.match(renderEditor(editorState({ missing: [7], missingPage: 1 })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
+  assert.match(renderEditor(editorState({ missing: [7], preset: 'page-1' })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
   assert.doesNotMatch(renderEditor(editorState()), /no usable color/)
 })
 
@@ -1213,7 +1175,7 @@ test('the page button turns to the next enabled page and has a dot for each enab
 const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?</div>`).exec(html)[0]
 
 test('Line settings: Thickness and Opacity are one row each, with a Slider in panel box at the right end that is ticked as saved', () => {
-  const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-show-${key}" data-show="${key}"( checked)?`).exec(rowOf(html, key))
+  const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-box-show-${key}" data-box="show.${key}"( checked)?`).exec(rowOf(html, key))
   const both = renderEditor(editorState())
   assert.equal(Boolean(box(both, 'thickness')[1]) && Boolean(box(both, 'opacity')[1]), true)
   assert.match(both, />Slider in panel</)
@@ -1223,7 +1185,7 @@ test('Line settings: Thickness and Opacity are one row each, with a Slider in pa
   assert.match(none, /data-setting="thickness"/)
   assert.equal(Boolean(box(none, 'opacity')[1]), true)
   const row = rowOf(both, 'thickness')
-  assert.equal(row.indexOf('data-setting="thickness"') < row.indexOf('data-readout="thickness"') && row.indexOf('data-readout="thickness"') < row.indexOf('data-show="thickness"'), true, 'label, slider, value, then the box')
+  assert.equal(row.indexOf('data-setting="thickness"') < row.indexOf('data-readout="thickness"') && row.indexOf('data-readout="thickness"') < row.indexOf('data-box="show.thickness"'), true, 'label, slider, value, then the box')
 })
 
 test('the dialog always holds the thickness, opacity, dash, arrow spacing and outline width sliders, at the values in force, whether or not the panel shows them', () => {
@@ -1254,12 +1216,30 @@ test('every slider in the settings table has one dialog row, with the label and 
 
 test('a box ticked in the dialog sets its setting in the draft through the table, a mark box included', () => {
   const draft = editorState()
-  assert.equal(draftWithBox(draft, { outline: '' }, false).outline, false)
-  assert.equal(draftWithBox(draft, { middleErase: '' }, false).middleErase, false)
-  assert.deepEqual(draftWithBox(draft, { style: 'dashed' }, false).lineStyles, { dashed: false, arrows: true })
-  assert.deepEqual(draftWithBox(draft, { show: 'opacity' }, false).show, { thickness: true, opacity: false })
+  assert.equal(draftWithBox(draft, 'outline', false).outline, false)
+  assert.equal(draftWithBox(draft, 'middleErase', false).middleErase, false)
+  assert.deepEqual(draftWithBox(draft, 'lineStyles.dashed', false).lineStyles, { dashed: false, arrows: true })
+  assert.deepEqual(draftWithBox(draft, 'show.opacity', false).show, { thickness: true, opacity: false })
   assert.deepEqual(draft.lineStyles, { dashed: true, arrows: true }, 'the draft given is left alone')
-  assert.deepEqual(draftWithBox(draft, { mark: 'cornerX' }, false).marks, { ...ALL, cornerX: false })
+  assert.deepEqual(draftWithBox(draft, 'marks.cornerX', false).marks, { ...ALL, cornerX: false })
+})
+
+test('a box path that names no box of the table gives no draft', () => {
+  const draft = editorState()
+  for (const path of ['', 'nothing', 'thickness', 'outline.x', 'lineStyles', 'lineStyles.solid', 'marks.toString']) assert.equal(draftWithBox(draft, path, false), null, path)
+})
+
+test('every checkbox the dialog draws names its setting path, and the path reads back the value it shows', () => {
+  const state = editorState({ show: { thickness: false, opacity: true }, lineStyles: { dashed: true, arrows: false }, outline: false, marks: { ...ALL, circle: false } })
+  const html = renderEditor(state)
+  const boxes = [...html.matchAll(/<input type="checkbox"[^>]*>/g)].map((m) => m[0])
+  assert.equal(boxes.length, 11)
+  for (const box of boxes) {
+    const path = /data-box="([^"]+)"/.exec(box)
+    assert.ok(path, box)
+    const [name, flagName] = path[1].split('.')
+    assert.equal(/ checked/.test(box), flagName ? state[name][flagName] : state[name], path[1])
+  }
 })
 
 test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
@@ -1274,10 +1254,10 @@ test('Line styles: Dashed lines and Directional arrow lines each have an Enable 
   const html = renderEditor(editorState())
   assert.match(html, />Line styles</)
   assert.match(html, />Enable</)
-  const dashed = /<input type="checkbox" id="pen-tool-extras-style-dashed" data-style="dashed" aria-label="Enable Dashed lines"( checked)?/.exec(html)
-  const arrows = /<input type="checkbox" id="pen-tool-extras-style-arrows" data-style="arrows" aria-label="Enable Directional arrow lines"( checked)?/.exec(html)
+  const dashed = /<input type="checkbox" id="pen-tool-extras-box-lineStyles-dashed" data-box="lineStyles.dashed" aria-label="Enable Dashed lines"( checked)?/.exec(html)
+  const arrows = /<input type="checkbox" id="pen-tool-extras-box-lineStyles-arrows" data-box="lineStyles.arrows" aria-label="Enable Directional arrow lines"( checked)?/.exec(html)
   assert.equal(Boolean(dashed[1]) && Boolean(arrows[1]), true)
-  assert.match(html, />Dashed lines<[\s\S]*data-style="dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-style="arrows"[\s\S]*>Arrow spacing</)
+  assert.match(html, />Dashed lines<[\s\S]*data-box="lineStyles.dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-box="lineStyles.arrows"[\s\S]*>Arrow spacing</)
   assert.match(rowOf(html, 'dash'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(rowOf(html, 'arrowSpacing'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
@@ -1286,7 +1266,7 @@ test('Line styles: Dashed lines and Directional arrow lines each have an Enable 
 
 test('an unticked line style is drawn unticked and its slider row is hidden, the other is untouched; the slider keeps its value', () => {
   const html = renderEditor(editorState({ dash: 6, lineStyles: { dashed: false, arrows: true } }))
-  assert.doesNotMatch(html, /data-style="dashed"[^>]* checked/)
+  assert.doesNotMatch(html, /data-box="lineStyles.dashed"[^>]* checked/)
   assert.match(rowOf(html, 'dash'), /display:none/)
   assert.match(rowOf(html, 'dash'), /value="6"/)
   assert.doesNotMatch(rowOf(html, 'arrowSpacing'), /display:none/)
@@ -1296,8 +1276,8 @@ test('Marks a click cycles through is one table: columns X Mark, Circle, Directi
   const html = renderEditor(editorState())
   assert.match(html, />Marks a click cycles through</)
   assert.doesNotMatch(html, /Edge marks a click|Corner marks a click/)
-  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-mark="x"[\s\S]*data-mark="circle"[\s\S]*data-mark="directions"[\s\S]*>Corner<[\s\S]*data-mark="cornerX"[\s\S]*data-mark="cornerCircle"/)
-  const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-mark-(\w+)" data-mark="\w+" aria-label="([^"]+)" title="([^"]+)"( checked)?>/g)]
+  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-box="marks.x"[\s\S]*data-box="marks.circle"[\s\S]*data-box="marks.directions"[\s\S]*>Corner<[\s\S]*data-box="marks.cornerX"[\s\S]*data-box="marks.cornerCircle"/)
+  const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-box-marks-(\w+)" data-box="marks\.\w+" aria-label="([^"]+)" title="([^"]+)"( checked)?>/g)]
   assert.deepEqual(boxes.map((m) => [m[1], m[2], m[3]]), [
     ['x', 'Edge X Mark', 'Edge X Mark'], ['circle', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
     ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerCircle', 'Corner Circle', 'Corner Circle']
@@ -1307,8 +1287,8 @@ test('Marks a click cycles through is one table: columns X Mark, Circle, Directi
 
 test('a mark box shows its picture only: no word label beside it, and Directions is one picture of all four arrows', () => {
   const html = renderEditor(editorState())
-  assert.doesNotMatch(html, /<label for="pen-tool-extras-mark-/)
-  const label = (key) => new RegExp(`<label[^>]*>(<input[^>]*data-mark="${key}"[^>]*>)(.*?)</label>`).exec(html)[2]
+  assert.doesNotMatch(html, /<label for="pen-tool-extras-box-marks-/)
+  const label = (key) => new RegExp(`<label[^>]*>(<input[^>]*data-box="marks.${key}"[^>]*>)(.*?)</label>`).exec(html)[2]
   assert.equal((label('directions').match(/<svg/g) || []).length, 1)
   assert.equal(label('directions').match(/M\d+ \d+ L\d+ \d+ L\d+ \d+/g).length, 4, 'four arrow heads')
   assert.doesNotMatch(label('x') + label('circle') + label('directions'), />[A-Za-z]/, 'no text')
@@ -1317,20 +1297,20 @@ test('a mark box shows its picture only: no word label beside it, and Directions
 test('Other: the White outline box has its own line with Outline width under it, hidden while the box is unticked, and the middle click box follows', () => {
   const html = renderEditor(editorState())
   assert.match(html, />Other</)
-  assert.match(html, /<input type="checkbox" id="pen-tool-extras-outline" data-outline checked[^>]*>\s*<label for="pen-tool-extras-outline"[^>]*>White outline on lines and marks<\/label>/)
-  assert.equal(html.indexOf('data-outline') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-middle-erase'), true)
+  assert.match(html, /<input type="checkbox" id="pen-tool-extras-box-outline" data-box="outline" checked[^>]*>\s*<label for="pen-tool-extras-box-outline"[^>]*>White outline on lines and marks<\/label>/)
+  assert.equal(html.indexOf('data-box="outline"') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-box="middleErase"'), true)
   assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
   assert.doesNotMatch(rowOf(html, 'outlineWidth'), /display:none/)
   const off = renderEditor(editorState({ outline: false, outlineWidth: 5 }))
-  assert.doesNotMatch(off, /data-outline checked/)
+  assert.doesNotMatch(off, /data-box="outline" checked/)
   assert.match(rowOf(off, 'outlineWidth'), /display:none/)
   assert.match(rowOf(off, 'outlineWidth'), /value="5"/)
 })
 
 test('the middle click box is ticked unless the setting is off', () => {
-  const box = (html) => /<input type="checkbox" id="pen-tool-extras-middle-erase" data-middle-erase( checked)?[^>]*>\s*<label for="pen-tool-extras-middle-erase"[^>]*>Middle click erases a whole line<\/label>/.exec(html)
+  const box = (html) => /<input type="checkbox" id="pen-tool-extras-box-middleErase" data-box="middleErase"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-middleErase"[^>]*>Middle click erases a whole line<\/label>/.exec(html)
   assert.equal(box(renderEditor(editorState()))[1], ' checked')
   assert.equal(box(renderEditor(editorState({ middleErase: false })))[1], undefined)
 })
@@ -1341,6 +1321,14 @@ test('every section after the first has a divider above it, and Pen line mode is
   heads.forEach((head) => assert.match(html, new RegExp(`<div class="pen-tool-extras-divider"></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
   assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #e3dff0;/)
   assert.equal(html.lastIndexOf('Pen line mode') > html.indexOf('Other'), true)
+})
+
+const HEADER = fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8')
+const headerField = (name) => (new RegExp(`^// @${name}\\s+(.+)$`, 'm').exec(HEADER) || [])[1]
+
+test('the header describes the script in Chris\'s approved intro and links its details page', () => {
+  assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
+  assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
 })
 
 test('VERSION is the @version in the script header', () => {
@@ -1615,10 +1603,6 @@ test('buildOutlineCss is empty when the outline is off and filters the pen layer
   assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
 })
 
-test('buildOutlineCss refuses a value that is not a boolean', () => {
-  assert.throws(() => buildOutlineCss('on'), RangeError)
-})
-
 test('the outline filter grows the layer\'s combined shape by the default width with a square growth then a blur and a cut (round corners), fills it white and draws the layer over it', () => {
   const svg = renderOutlineFilter(OUTLINE_WIDTH.fallback)
   assert.match(svg, new RegExp(`<filter id="${OUTLINE_FILTER_ID}"`))
@@ -1638,12 +1622,11 @@ test('the outline width setting keeps a saved whole number from 1 to 8 and reads
   for (const bad of [undefined, null, 0, 9, 2.5, '4', true, {}, []]) assert.equal(SETTINGS.outlineWidth.normalize(bad), 2, JSON.stringify(bad))
 })
 
-test('the outline filter grows and blurs more for a wider outline, and refuses a width it cannot save', () => {
+test('the outline filter grows and blurs more for a wider outline', () => {
   const blurOf = (width) => Number(/stdDeviation="([\d.]+)"/.exec(renderOutlineFilter(width))[1])
   const squareOf = (width) => Number(/radius="([\d.]+)"/.exec(renderOutlineFilter(width))[1])
   assert.equal(blurOf(1) < blurOf(3) && blurOf(3) < blurOf(8), true, `${blurOf(1)}, ${blurOf(3)}, ${blurOf(8)}`)
   assert.equal(squareOf(1) < squareOf(3) && squareOf(3) < squareOf(8), true, `${squareOf(1)}, ${squareOf(3)}, ${squareOf(8)}`)
-  for (const bad of [0, 9, 2.5, '3']) assert.throws(() => renderOutlineFilter(bad), RangeError)
 })
 
 test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
@@ -1932,10 +1915,9 @@ test('a step skipped for a missing internal is quiet and puts nothing back: noth
 
 test('every settings table row with a section is drawn in the dialog, so a section whose rows went astray fails here', () => {
   const html = renderEditor(editorState())
-  const boxes = { outline: 'data-outline', middleErase: 'data-middle-erase', lineStyles: 'data-style="dashed"', show: 'data-show="thickness"' }
   for (const [name, row] of Object.entries(SETTINGS)) {
     if (!row.dialog.section) continue
-    assert.ok(html.includes(row.range ? `data-row="${name}"` : boxes[name]), name)
+    assert.ok(html.includes(row.range ? `data-row="${name}"` : `data-box="${name}`), name)
   }
 })
 

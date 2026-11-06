@@ -59,13 +59,13 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     const sliders = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => editor().locator(`input[data-setting="${key}"]`))
     const lefts = await Promise.all(sliders.map(left))
     assert.equal(new Set(lefts).size, 1, `slider columns ${lefts}`)
-    const boxes = [editor().locator('input[data-show="thickness"]'), editor().locator('input[data-show="opacity"]'), editor().locator('input[data-style="dashed"]'), editor().locator('input[data-style="arrows"]')]
+    const boxes = [editor().locator('input[data-box="show.thickness"]'), editor().locator('input[data-box="show.opacity"]'), editor().locator('input[data-box="lineStyles.dashed"]'), editor().locator('input[data-box="lineStyles.arrows"]')]
     const centres = await Promise.all(boxes.map(centreX))
     assert.equal(new Set(centres).size, 1, `box columns ${centres}`)
     const heading = (text) => editor().locator('span', { hasText: new RegExp('^' + text + '$') }).first()
     assert.equal(Math.abs((await centreX(heading('Slider in panel'))) - centres[0]) <= 2, true, 'Slider in panel is over its boxes')
     assert.equal(Math.abs((await centreX(heading('Enable'))) - centres[0]) <= 2, true, 'Enable is over its boxes')
-    assert.equal(await left(editor().locator('input[data-outline]')) < lefts[0], true, 'the outline box is at the left, not in the slider column')
+    assert.equal(await left(editor().locator('input[data-box="outline"]')) < lefts[0], true, 'the outline box is at the left, not in the slider column')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
@@ -82,9 +82,9 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
     assert.equal(await left(name('Dashed lines')) <= await left(label('dash')), true)
     for (const [style, row] of [['dashed', 'dash'], ['arrows', 'arrowSpacing']]) {
-      await editor().locator(`input[data-style="${style}"]`).uncheck()
+      await editor().locator(`input[data-box="lineStyles.${style}"]`).uncheck()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), false, `${row} hidden`)
-      await editor().locator(`input[data-style="${style}"]`).check()
+      await editor().locator(`input[data-box="lineStyles.${style}"]`).check()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), true, `${row} back`)
     }
     await closeExtrasEditorWith(p, 'Cancel')

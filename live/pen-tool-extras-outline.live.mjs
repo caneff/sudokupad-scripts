@@ -36,7 +36,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = (key) => read((k) => Framework.getData(k), key)
   const editor = () => p.locator('#pen-tool-extras-editor')
-  const outlineBox = () => editor().locator('input[data-outline]')
+  const outlineBox = () => editor().locator('input[data-box="outline"]')
   const layerFilter = () => read(() => window.getComputedStyle(document.querySelector('#cell-pen')).filter)
   const FILTER_ON = 'url("#pen-tool-extras-outline-filter")'
 

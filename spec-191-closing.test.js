@@ -45,7 +45,7 @@ test('spec 191 cuts the scripts without losing a feature or a saved setting', ()
   // The dialog's slider rows come from the table: each slider's own label is drawn in its row, and a label changed in the table is
   // the label drawn.
   const { SETTINGS, renderEditor } = extras
-  const state = { colors: extras.SUDOKUPAD_PEN_COLORS, preset: 'sudokupad', presets: ['sudokupad'], missing: [], missingPage: 1, lineMode: 'both', ...extras.settingDefaults(), off: [] }
+  const state = { colors: extras.SUDOKUPAD_PEN_COLORS, preset: 'sudokupad', presets: ['sudokupad'], missing: [], lineMode: 'both', ...extras.settingDefaults(), off: [] }
   const html = renderEditor(state)
   const sliders = Object.keys(SETTINGS).filter((name) => SETTINGS[name].range)
   assert.deepEqual(sliders, ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'])
