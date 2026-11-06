@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, editedColors,
-  readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS,
+  readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
@@ -282,7 +282,7 @@ test('readPenColors reads colors saved with no preset name, as older versions sa
 test('readPenColors keeps a saved preset name, and reads one it does not know as Custom', () => {
   assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'page-2' }), { colors: NINE_SAVED, preset: 'page-2', missing: [] })
   assert.deepEqual(readPenColors({ ...NINE_SAVED, preset: 'sudokupad' }), { colors: NINE_SAVED, preset: 'sudokupad', missing: [] })
-  for (const odd of ['page-4', 'custom', 'unsaved', 'Darker cell color page 1', 7, null]) {
+  for (const odd of ['page-4', 'custom', 'unsaved', 'Darker page 1', 7, null]) {
     assert.equal(readPenColors({ ...NINE_SAVED, preset: odd }).preset, 'custom', JSON.stringify(odd))
   }
 })
@@ -306,7 +306,7 @@ test('presetOptions lists one darker page per palette page, up to three, then Su
   assert.deepEqual(presetOptions(1), ['page-1', 'sudokupad'])
   assert.deepEqual(presetOptions(0), ['sudokupad'])
   assert.deepEqual(['page-1', 'page-2', 'page-3', 'sudokupad', 'custom'].map((id) => PRESET_LABELS[id]),
-    ['Darker cell color page 1', 'Darker cell color page 2', 'Darker cell color page 3', 'SudokuPad default colors', 'Custom'])
+    ['Darker page 1', 'Darker page 2', 'Darker page 3', 'SudokuPad colors', 'Custom'])
 })
 
 test('presetColors darkens the named page, not the first or the current one, and gives SudokuPad\'s own for its preset', () => {
@@ -1096,13 +1096,14 @@ const editorState = (over = {}) => ({
   ...over
 })
 
-test('the dialog\'s pen colors are a 3 by 3 grid in the order of the pen tool\'s buttons, each keeping its number', () => {
+test('the dialog\'s pen colors are a 3 by 3 grid of square color inputs in the order of the pen tool\'s buttons, with no numbers, 4px apart', () => {
   const html = renderEditor(editorState())
-  assert.match(html, /<div class="pen-tool-extras-pen-grid">/)
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-pen-grid \{[^}]*grid-template-columns: repeat\(3, /)
-  const cells = [...html.matchAll(/<b[^>]*>(\d)<\/b><input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})">/g)].map((m) => m.slice(1))
-  assert.deepEqual(cells.map(([label, pen]) => [label, pen]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [String(n), String(n)]))
-  assert.deepEqual(cells.map((c) => c[2]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
+  const grid = /<div class="pen-tool-extras-pen-grid">([\s\S]*?)<\/div>/.exec(html)[1]
+  assert.deepEqual([...grid.matchAll(/<input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})"[^>]*>/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+  assert.deepEqual([...grid.matchAll(/value="(#[0-9a-f]{6})"/g)].map((m) => m[1]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
+  assert.doesNotMatch(grid, /<b[ >]/, 'no numbers')
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-pen-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*gap: 4px;/)
+  assert.match(DIALOG_CSS, /input\[type=color\] \{[^}]*aspect-ratio: 1;/)
 })
 
 const presetMenu = (html) => {
@@ -1114,14 +1115,14 @@ const presetMenu = (html) => {
 test('the Pen colors section has a preset pulldown above the grid, its options in order, the preset in force selected, and no SudokuPad colors button', () => {
   const html = renderEditor(editorState({ preset: 'page-2' }))
   assert.deepEqual(presetMenu(html).map(({ value, label, selected }) => [value, label, selected]), [
-    ['page-1', 'Darker cell color page 1', false],
-    ['page-2', 'Darker cell color page 2', true],
-    ['page-3', 'Darker cell color page 3', false],
-    ['sudokupad', 'SudokuPad default colors', false]
+    ['page-1', 'Darker page 1', false],
+    ['page-2', 'Darker page 2', true],
+    ['page-3', 'Darker page 3', false],
+    ['sudokupad', 'SudokuPad colors', false]
   ])
   const section = html.indexOf('Pen colors')
   assert.equal(section < html.indexOf('data-pen-preset') && html.indexOf('data-pen-preset') < html.indexOf('data-pen="1"'), true, 'heading, pulldown, then the grid')
-  assert.doesNotMatch(html, /SudokuPad colors<|data-sudokupad-colors/)
+  assert.doesNotMatch(html, /<button|data-sudokupad-colors/)
 })
 
 test('the pulldown lists only the pages the palette has', () => {
@@ -1131,14 +1132,14 @@ test('the pulldown lists only the pages the palette has', () => {
 test('a set in force that is no pickable preset is listed first, selected and not pickable, so every preset stays pickable', () => {
   // A page-3 set with a one-page palette, a page-1 set with the colors step off, and SudokuPad's colors before the install save.
   assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'page-3', presets: ['page-1', 'sudokupad'] }))), [
-    { value: 'page-3', label: 'Darker cell color page 3', selected: true, disabled: true },
-    { value: 'page-1', label: 'Darker cell color page 1', selected: false, disabled: false },
-    { value: 'sudokupad', label: 'SudokuPad default colors', selected: false, disabled: false }
+    { value: 'page-3', label: 'Darker page 3', selected: true, disabled: true },
+    { value: 'page-1', label: 'Darker page 1', selected: false, disabled: false },
+    { value: 'sudokupad', label: 'SudokuPad colors', selected: false, disabled: false }
   ])
   assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'page-1', presets: ['sudokupad'] }))).map((o) => [o.value, o.selected, o.disabled]), [['page-1', true, true], ['sudokupad', false, false]])
   assert.deepEqual(presetMenu(renderEditor(editorState({ preset: 'unsaved', presets: ['sudokupad'] }))), [
-    { value: 'unsaved', label: 'SudokuPad colors, not saved yet', selected: true, disabled: true },
-    { value: 'sudokupad', label: 'SudokuPad default colors', selected: false, disabled: false }
+    { value: 'unsaved', label: 'SudokuPad (unsaved)', selected: true, disabled: true },
+    { value: 'sudokupad', label: 'SudokuPad colors', selected: false, disabled: false }
   ])
 })
 
@@ -1175,18 +1176,21 @@ test('every pen button swatch is the page\'s pageSwatch at angle 0, on every pag
 
 const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?</div>`).exec(html)[0]
 
-test('Line settings: Thickness and Opacity are one row each, with a Slider in panel box at the right end that is ticked as saved', () => {
-  const box = (html, key) => new RegExp(`<input type="checkbox" id="pen-tool-extras-box-show-${key}" data-box="show.${key}"( checked)?`).exec(rowOf(html, key))
+const subLineOf = (html, key) => new RegExp(`<div class="pen-tool-extras-sub">(<input type="checkbox" id="pen-tool-extras-box-show-${key}" data-box="show.${key}"( checked)?[^>]*>)<label for="pen-tool-extras-box-show-${key}"[^>]*>Slider in panel</label></div>`).exec(html)
+
+test('Line settings: Thickness and Opacity each have a sub-line under them, a box then "Slider in panel", ticked as saved; no caption column', () => {
   const both = renderEditor(editorState())
-  assert.equal(Boolean(box(both, 'thickness')[1]) && Boolean(box(both, 'opacity')[1]), true)
-  assert.match(both, />Slider in panel</)
-  assert.doesNotMatch(both, /Show thickness slider|Show opacity slider/)
+  assert.equal(Boolean(subLineOf(both, 'thickness')[2]) && Boolean(subLineOf(both, 'opacity')[2]), true)
+  assert.match(both, /data-row="thickness"[\s\S]*?<\/div><div class="pen-tool-extras-sub">[\s\S]*data-row="opacity"[\s\S]*?<\/div><div class="pen-tool-extras-sub">/, 'each sub-line follows its row')
+  assert.doesNotMatch(both, /pen-tool-extras-column-heading|>In panel</)
+  assert.equal((both.match(/>Slider in panel</g) || []).length, 2)
   const none = renderEditor(editorState({ show: { thickness: false, opacity: true } }))
-  assert.equal(box(none, 'thickness')[1], undefined, 'unticked, and the slider is still in the dialog')
+  assert.equal(subLineOf(none, 'thickness')[2], undefined, 'unticked, and the slider is still in the dialog')
   assert.match(none, /data-setting="thickness"/)
-  assert.equal(Boolean(box(none, 'opacity')[1]), true)
+  assert.equal(Boolean(subLineOf(none, 'opacity')[2]), true)
   const row = rowOf(both, 'thickness')
-  assert.equal(row.indexOf('data-setting="thickness"') < row.indexOf('data-readout="thickness"') && row.indexOf('data-readout="thickness"') < row.indexOf('data-box="show.thickness"'), true, 'label, slider, value, then the box')
+  assert.equal(row.indexOf('<label') < row.indexOf('data-setting="thickness"') && row.indexOf('data-setting="thickness"') < row.indexOf('data-readout="thickness"'), true, 'label, slider, then the value')
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-sub \{[^}]*padding-left: 1\.2em;[^}]*color: #444;/)
 })
 
 test('the dialog always holds the thickness, opacity, dash, arrow spacing and outline width sliders, at the values in force, whether or not the panel shows them', () => {
@@ -1245,24 +1249,24 @@ test('every checkbox the dialog draws names its setting path, and the path reads
   }
 })
 
-test('every slider row has the same four columns, so the sliders of Line settings, Line styles and the outline line up', () => {
+test('every slider row has the same three columns, a 96px slider after one shared label column, so the five sliders line up', () => {
   const html = renderEditor(editorState())
   const classes = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => /^<div data-row="[^"]+" class="([^"]+)"/.exec(rowOf(html, key))[1])
   assert.equal(new Set(classes).size, 1, classes.join(' | '))
   const columns = new RegExp(`\\.${classes[0]} \\{[^}]*grid-template-columns: ([^;]+);`).exec(DIALOG_CSS)[1]
-  assert.equal(columns.trim().split(/ (?![^(]*\))/).length, 4)
+  assert.match(columns.trim(), /^[\d.]+em 96px [\d.]+em$/)
 })
 
-test('Line styles: Dashed lines and Directional arrow lines each have an Enable box, with Dash length and Arrow spacing indented under them', () => {
+test('Line styles: each style\'s box sits before its label, with no Enable caption, and Dash length and Arrow spacing indented under them', () => {
   const html = renderEditor(editorState())
   assert.match(html, />Line styles</)
-  assert.match(html, />Enable</)
-  const dashed = /<input type="checkbox" id="pen-tool-extras-box-lineStyles-dashed" data-box="lineStyles.dashed" aria-label="Enable Dashed lines"( checked)?/.exec(html)
-  const arrows = /<input type="checkbox" id="pen-tool-extras-box-lineStyles-arrows" data-box="lineStyles.arrows" aria-label="Enable Directional arrow lines"( checked)?/.exec(html)
+  assert.doesNotMatch(html, />Enable</)
+  const dashed = /<input type="checkbox" id="pen-tool-extras-box-lineStyles-dashed" data-box="lineStyles.dashed"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-lineStyles-dashed"[^>]*>Dashed lines<\/label>/.exec(html)
+  const arrows = /<input type="checkbox" id="pen-tool-extras-box-lineStyles-arrows" data-box="lineStyles.arrows"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-lineStyles-arrows"[^>]*>Directional arrow lines<\/label>/.exec(html)
   assert.equal(Boolean(dashed[1]) && Boolean(arrows[1]), true)
-  assert.match(html, />Dashed lines<[\s\S]*data-box="lineStyles.dashed"[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*data-box="lineStyles.arrows"[\s\S]*>Arrow spacing</)
-  assert.match(rowOf(html, 'dash'), /class="pen-tool-extras-label pen-tool-extras-under"/)
-  assert.match(rowOf(html, 'arrowSpacing'), /class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(html, />Dashed lines<[\s\S]*>Dash length<[\s\S]*>Directional arrow lines<[\s\S]*>Arrow spacing</)
+  assert.match(rowOf(html, 'dash'), /<label [^>]*class="pen-tool-extras-label pen-tool-extras-under"/)
+  assert.match(rowOf(html, 'arrowSpacing'), /<label [^>]*class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.doesNotMatch(rowOf(html, 'dash'), /display:none/)
 })
@@ -1275,32 +1279,39 @@ test('an unticked line style is drawn unticked and its slider row is hidden, the
   assert.doesNotMatch(rowOf(html, 'arrowSpacing'), /display:none/)
 })
 
-test('Marks a click cycles through is one table: columns X Mark, Circle, Directions; rows Edge (three boxes) and Corner (X Mark and Circle)', () => {
+test('Marks to cycle is one 2 by 3 table: headings X, circle, an up arrow head and a down arrow head; rows Edge (three boxes) and Corner (X and circle)', () => {
   const html = renderEditor(editorState())
-  assert.match(html, />Marks a click cycles through</)
-  assert.doesNotMatch(html, /Edge marks a click|Corner marks a click/)
-  assert.match(html, />X Mark<[\s\S]*>Circle<[\s\S]*>Directions<[\s\S]*>Edge<[\s\S]*data-box="marks.x"[\s\S]*data-box="marks.circle"[\s\S]*data-box="marks.directions"[\s\S]*>Corner<[\s\S]*data-box="marks.cornerX"[\s\S]*data-box="marks.cornerCircle"/)
+  assert.match(html, />Marks to cycle</)
+  assert.doesNotMatch(html, /Marks a click cycles through|X Mark<|>Circle<|>Directions</)
+  assert.match(html, /<div class="pen-tool-extras-mark-head">[\s\S]*<div class="pen-tool-extras-mark-head">[\s\S]*<div class="pen-tool-extras-mark-head">[\s\S]*>Edge<[\s\S]*data-box="marks.x"[\s\S]*data-box="marks.circle"[\s\S]*data-box="marks.directions"[\s\S]*>Corner<[\s\S]*data-box="marks.cornerX"[\s\S]*data-box="marks.cornerCircle"/)
   const boxes = [...html.matchAll(/<input type="checkbox" id="pen-tool-extras-box-marks-(\w+)" data-box="marks\.\w+" aria-label="([^"]+)" title="([^"]+)"( checked)?>/g)]
   assert.deepEqual(boxes.map((m) => [m[1], m[2], m[3]]), [
     ['x', 'Edge X Mark', 'Edge X Mark'], ['circle', 'Edge Circle', 'Edge Circle'], ['directions', 'Edge Directions', 'Edge Directions'],
     ['cornerX', 'Corner X Mark', 'Corner X Mark'], ['cornerCircle', 'Corner Circle', 'Corner Circle']
   ])
   assert.equal(boxes.every((m) => m[4] === ' checked'), true)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table \{[^}]*grid-template-columns: max-content repeat\(3, 28px\);/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :not\(:nth-child\(4n\+1\)\) \{ border-left: 1px solid #eee;/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-marks-table > :nth-child\(n\+5\) \{ border-top: 1px solid #eee;/)
 })
 
-test('a mark box shows its picture only: no word label beside it, and Directions is one picture of all four arrows', () => {
+test('the marks table shows pictures only in its headings, in #444 at stroke 2.6: Directions is an up arrow head and a down arrow head, just ^ and v, and the cells hold plain boxes', () => {
   const html = renderEditor(editorState())
   assert.doesNotMatch(html, /<label for="pen-tool-extras-box-marks-/)
-  const label = (key) => new RegExp(`<label[^>]*>(<input[^>]*data-box="marks.${key}"[^>]*>)(.*?)</label>`).exec(html)[2]
-  assert.equal((label('directions').match(/<svg/g) || []).length, 1)
-  assert.equal(label('directions').match(/M\d+ \d+ L\d+ \d+ L\d+ \d+/g).length, 4, 'four arrow heads')
-  assert.doesNotMatch(label('x') + label('circle') + label('directions'), />[A-Za-z]/, 'no text')
+  const heads = [...html.matchAll(/<div class="pen-tool-extras-mark-head">(.*?)<\/div>/g)].map((m) => m[1])
+  assert.equal(heads.length, 3)
+  assert.equal(heads.every((head) => (head.match(/<svg/g) || []).length === 1 && !/>[A-Za-z]/.test(head)), true, 'one picture, no text')
+  assert.match(heads[2], /<path d="M\d+ \d+ L\d+ \d+ L\d+ \d+ M\d+ \d+ L\d+ \d+ L\d+ \d+"\/>/, 'two arrow heads')
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-mark-head \{[^}]*color: #444;/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-mark-head svg \{[^}]*stroke-width: 2\.6;/)
+  const cell = (key) => new RegExp(`<label[^>]*class="pen-tool-extras-mark"[^>]*>(<input[^>]*data-box="marks.${key}"[^>]*>)</label>`).exec(html)
+  assert.ok(cell('directions') && cell('cornerCircle'), 'a box is alone in its label')
 })
 
-test('Other: the White outline box has its own line with Outline width under it, hidden while the box is unticked, and the middle click box follows', () => {
+test('Other: the White outlines box has its own line with Outline width under it, hidden while the box is unticked, and the middle click box follows', () => {
   const html = renderEditor(editorState())
   assert.match(html, />Other</)
-  assert.match(html, /<input type="checkbox" id="pen-tool-extras-box-outline" data-box="outline" checked[^>]*>\s*<label for="pen-tool-extras-box-outline"[^>]*>White outline on lines and marks<\/label>/)
+  assert.match(html, /<input type="checkbox" id="pen-tool-extras-box-outline" data-box="outline" checked[^>]*>\s*<label for="pen-tool-extras-box-outline"[^>]*>White outlines<\/label>/)
   assert.equal(html.indexOf('data-box="outline"') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-box="middleErase"'), true)
   assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
@@ -1313,16 +1324,33 @@ test('Other: the White outline box has its own line with Outline width under it,
 })
 
 test('the middle click box is ticked unless the setting is off', () => {
-  const box = (html) => /<input type="checkbox" id="pen-tool-extras-box-middleErase" data-box="middleErase"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-middleErase"[^>]*>Middle click erases a whole line<\/label>/.exec(html)
+  const box = (html) => /<input type="checkbox" id="pen-tool-extras-box-middleErase" data-box="middleErase"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-middleErase"[^>]*>Middle click erase<\/label>/.exec(html)
   assert.equal(box(renderEditor(editorState()))[1], ' checked')
   assert.equal(box(renderEditor(editorState({ middleErase: false })))[1], undefined)
 })
 
-test('every section after the first has a divider above it', () => {
+test('the editor is a two by two grid: Pen colors | Line settings and Line styles above Marks to cycle | Other, with one divider between Line settings and Line styles', () => {
   const html = renderEditor(editorState())
-  const heads = ['Line settings', 'Line styles', 'Marks a click cycles through', 'Other']
-  heads.forEach((head) => assert.match(html, new RegExp(`<div class="pen-tool-extras-divider"></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
+  const cells = html.split('<div class="pen-tool-extras-cell">').slice(1)
+  assert.equal(cells.length, 4)
+  const titles = cells.map((cell) => [...cell.matchAll(/<div class="pen-tool-extras-section-title">([^<]*)<\/div>/g)].map((m) => m[1]))
+  assert.deepEqual(titles, [['Pen colors'], ['Line settings', 'Line styles'], ['Marks to cycle'], ['Other']])
+  assert.equal((html.match(/<div class="pen-tool-extras-divider"><\/div>/g) || []).length, 1)
+  assert.match(cells[1], /Opacity[\s\S]*pen-tool-extras-divider[\s\S]*>Line styles</)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #e3dff0;/)
+  assert.match(DIALOG_CSS, /@media \(max-width: \d+px\) \{[^@]*grid-template-columns: minmax\(0, 1fr\)/, 'one column on a narrow screen')
+})
+
+test('the title row holds the name and version, then the status message, a Copy settings icon button and a Paste settings icon button, each with a hover title and label', () => {
+  const html = renderTitle('1.2.3')
+  assert.match(html, /^<div class="pen-tool-extras-title-row"><span><b>Pen Tool Extras<\/b> <small class="pen-tool-extras-version">v1\.2\.3<\/small><\/span>/)
+  assert.match(html, /<span data-role="settings-status"><\/span><button type="button" data-act="copy-settings" title="Copy settings" aria-label="Copy settings"><svg[^>]*>[\s\S]*<\/svg><\/button><button type="button" data-act="paste-settings" title="Paste settings" aria-label="Paste settings"><svg/)
+  assert.doesNotMatch(html.replace(/<svg[\s\S]*?<\/svg>/g, ''), />(Copy|Paste) settings</, 'icons, not words')
+})
+
+test('the dialog is sized to its content and centred in the window, not over the board', () => {
+  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{[^}]*width: fit-content !important;/)
+  assert.match(DIALOG_CSS, /\.dialog p:has\(> #pen-tool-extras-editor\) \{ margin-bottom: 0 !important; \}/)
 })
 
 test('the settings dialog has no line mode pulldown: the panel button is the one control', () => {

@@ -1,17 +1,18 @@
-// Live check of pen-tool-extras.user.js's settings dialog layout on sudokupad.app in headless Chromium: the sections in their
-// order, the slider columns of Line settings, Line styles and the outline lining up, the Enable boxes under their heading,
-// the button row (Restore defaults, Cancel, Save), and a phone-width dialog that stays inside its screen.
-// A touch screen stays untested. Every click is real input.
+// Live check of pen-tool-extras.user.js's settings dialog layout on sudokupad.app in headless Chromium, at 1200x1000: the two by two grid whose vertical
+// line meets the title line and the footer line, the Line settings / Line styles divider starting at the vertical line, the pen colors filling their
+// column, the five sliders one column and 96px long, the marks table's headings over their boxes, the title row's icon buttons and status, the dialog
+// centred in the window, one column on a narrow screen, and the button row (Restore defaults, Cancel, Save). A touch screen stays untested. Every click is real input.
 /* global Framework */
-import { after, before, describe, it } from 'node:test'
+import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor as openEditor } from './settings.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const SECTIONS = ['Pen colors', 'Line settings', 'Line styles', 'Marks a click cycles through', 'Other']
+const SLIDERS = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth']
+const HALF_PIXEL = 0.5
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -21,7 +22,6 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   let context, p, errors
 
   const editor = () => p.locator('#pen-tool-extras-editor')
-  const centreX = (locator) => locator.evaluate((el) => { const box = el.getBoundingClientRect(); return Math.round(box.x + box.width / 2) })
   const left = (locator) => locator.evaluate((el) => Math.round(el.getBoundingClientRect().x))
 
   before(async () => {
@@ -33,36 +33,144 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('the sections run Pen colors, Line settings, Line styles, Marks, Other, each after the first under a divider line', async () => {
+  // SudokuPad slides the dialog in, so a position is read once the dialog has held still for STILL_FRAMES frames in a row.
+  const STILL_FRAMES = 20
+  const openExtrasEditor = async (page) => {
+    await openEditor(page)
+    await page.waitForFunction((still) => new Promise((resolve) => {
+      const at = () => JSON.stringify(document.querySelector('.dialog').getBoundingClientRect())
+      let last = at()
+      let held = 0
+      const frame = () => {
+        const now = at()
+        held = now === last ? held + 1 : 0
+        last = now
+        if (held >= still) resolve(true)
+        else window.requestAnimationFrame(frame)
+      }
+      window.requestAnimationFrame(frame)
+    }), STILL_FRAMES)
+  }
+  // A failed check leaves its dialog open, which would fail every check after it for a reason that is not theirs.
+  afterEach(async () => { if (await editor().count()) await closeExtrasEditorWith(p, 'Cancel') })
+  const rect = (selector) => p.locator(selector).first().evaluate((el) => { const { left, right, top, bottom, width, height } = el.getBoundingClientRect(); return { left, right, top, bottom, width, height } })
+  const near = (actual, expected, message) => assert.equal(Math.abs(actual - expected) <= HALF_PIXEL, true, `${message}: ${actual} vs ${expected}`)
+  const cells = () => p.locator('#pen-tool-extras-editor .pen-tool-extras-cell').evaluateAll((els) => els.map((el) => { const { left, right, top, bottom } = el.getBoundingClientRect(); return { left, right, top, bottom, text: el.querySelector('.pen-tool-extras-section-title').textContent } }))
+
+  it('the sections are a two by two grid: Pen colors | Line settings above Line styles, then Marks to cycle | Other', async () => {
     await openExtrasEditor(p)
-    const order = await editor().evaluate((el, names) => names.map((name) => el.textContent.indexOf(name)), SECTIONS)
-    assert.deepEqual(order, [...order].sort((a, b) => a - b), 'in order')
-    assert.equal(order.every((at) => at >= 0), true, `all present: ${order}`)
-    const dividers = await editor().evaluate((el) => [...el.children].filter((child) => child.children.length === 0 && window.getComputedStyle(child).borderTopWidth === '1px').length)
-    assert.equal(dividers, SECTIONS.length - 1)
+    const [colors, lines, marks, other] = await cells()
+    assert.deepEqual([colors.text, lines.text, marks.text, other.text], ['Pen colors', 'Line settings', 'Marks to cycle', 'Other'])
+    assert.equal(colors.right <= lines.left && marks.right <= other.left, true, 'two columns')
+    assert.equal(colors.top, lines.top)
+    assert.equal(marks.top, other.top)
+    assert.equal(lines.bottom <= marks.top, true, 'two rows')
+    const styles = await editor().locator('.pen-tool-extras-section-title', { hasText: 'Line styles' }).evaluate((el) => el.getBoundingClientRect().top)
+    assert.equal(lines.top < styles && styles < lines.bottom, true, 'Line styles is under Line settings, in the same cell')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('the pen color preset pulldown sits under the Pen colors heading, above the pickers, and there is no SudokuPad colors button', async () => {
+  it('the vertical line runs from the title line to the footer line, and the Line settings / Line styles divider starts at it', async () => {
     await openExtrasEditor(p)
-    const [heading, pulldown, firstPicker] = await editor().evaluate((el) => [[...el.querySelectorAll('div')].find((d) => d.textContent === 'Pen colors'), el.querySelector('select[data-pen-preset]'), el.querySelector('input[data-pen="1"]')].map((e) => Math.round(e.getBoundingClientRect().y)))
-    assert.equal(heading < pulldown && pulldown < firstPicker, true, `heading ${heading}, pulldown ${pulldown}, pickers ${firstPicker}`)
-    assert.equal(await editor().locator('button').count(), 0)
+    const layout = await rect('#pen-tool-extras-editor .pen-tool-extras-layout')
+    const [, lines, , other] = await cells()
+    const footer = await rect('.dialog-options')
+    near(lines.top, layout.top, 'the vertical line starts at the title line')
+    near(other.bottom, footer.top, 'the vertical line ends at the footer line')
+    const divider = await rect('#pen-tool-extras-editor .pen-tool-extras-divider')
+    near(divider.left, lines.left, 'the inner divider starts at the vertical line')
+    const middle = (await cells())[2]
+    near(middle.top, (await cells())[0].bottom, 'the line between the rows crosses both columns')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('the sliders of Line settings, Line styles and the outline are in one column, and the Slider in panel, Enable and outline boxes are in another', async () => {
+  it('the pen colors are nine square inputs, 4px apart, with no numbers, and the pulldown and the pad share their left and right edges', async () => {
     await openExtrasEditor(p)
-    const sliders = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth'].map((key) => editor().locator(`input[data-setting="${key}"]`))
-    const lefts = await Promise.all(sliders.map(left))
-    assert.equal(new Set(lefts).size, 1, `slider columns ${lefts}`)
-    const boxes = [editor().locator('input[data-box="show.thickness"]'), editor().locator('input[data-box="show.opacity"]'), editor().locator('input[data-box="lineStyles.dashed"]'), editor().locator('input[data-box="lineStyles.arrows"]')]
-    const centres = await Promise.all(boxes.map(centreX))
-    assert.equal(new Set(centres).size, 1, `box columns ${centres}`)
-    const heading = (text) => editor().locator('span', { hasText: new RegExp('^' + text + '$') }).first()
-    assert.equal(Math.abs((await centreX(heading('Slider in panel'))) - centres[0]) <= 2, true, 'Slider in panel is over its boxes')
-    assert.equal(Math.abs((await centreX(heading('Enable'))) - centres[0]) <= 2, true, 'Enable is over its boxes')
-    assert.equal(await left(editor().locator('input[data-box="outline"]')) < lefts[0], true, 'the outline box is at the left, not in the slider column')
+    const boxes = await editor().locator('input[data-pen]').evaluateAll((els) => els.map((el) => { const { left, right, top, width, height } = el.getBoundingClientRect(); return { left, right, top, width, height } }))
+    assert.equal(boxes.length, 9)
+    for (const box of boxes) near(box.width, box.height, 'square')
+    near(boxes[1].left - boxes[0].right, 4, 'across gap')
+    near(boxes[3].top - (boxes[0].top + boxes[0].height), 4, 'down gap')
+    const pad = await rect('#pen-tool-extras-editor .pen-tool-extras-pen-grid')
+    const pulldown = await rect('#pen-tool-extras-editor select[data-pen-preset]')
+    near(pulldown.left, pad.left, 'left edges')
+    near(pulldown.right, pad.right, 'right edges')
+    near(boxes[0].left, pad.left, 'the squares fill the pad: left')
+    near(boxes[2].right, pad.right, 'the squares fill the pad: right')
+    assert.equal(await editor().locator('.pen-tool-extras-pen-grid b').count(), 0)
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('all five sliders start at one x and are 96px long; Slider in panel sub-lines sit under Thickness and Opacity in grey #444', async () => {
+    await openExtrasEditor(p)
+    const sliders = await Promise.all(SLIDERS.map((key) => rect(`#pen-tool-extras-editor input[data-setting="${key}"]`)))
+    sliders.forEach((slider, i) => near(slider.left, sliders[0].left, `${SLIDERS[i]} left`))
+    sliders.forEach((slider, i) => near(slider.width, 96, `${SLIDERS[i]} width`))
+    for (const [key, next] of [['thickness', 'opacity'], ['opacity', 'dash']]) {
+      const sub = editor().locator(`.pen-tool-extras-sub:has(input[data-box="show.${key}"])`)
+      assert.equal((await sub.textContent()).trim(), 'Slider in panel')
+      assert.equal(await sub.evaluate((el) => window.getComputedStyle(el).color), 'rgb(68, 68, 68)')
+      const subTop = (await sub.boundingBox()).y
+      const rowTop = (await editor().locator(`[data-row="${key}"]`).boundingBox()).y
+      const nextTop = (await editor().locator(`[data-row="${next}"]`).boundingBox()).y
+      assert.equal(rowTop < subTop && subTop < nextTop, true, `${key}'s sub-line is between its row and the next`)
+    }
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('each line style\'s box is before its label, and Other reads White outlines and Middle click erase', async () => {
+    await openExtrasEditor(p)
+    for (const [path, text] of [['lineStyles.dashed', 'Dashed lines'], ['lineStyles.arrows', 'Directional arrow lines'], ['outline', 'White outlines'], ['middleErase', 'Middle click erase']]) {
+      const box = editor().locator(`input[data-box="${path}"]`)
+      const label = editor().locator(`label[for="${await box.getAttribute('id')}"]`)
+      assert.equal((await label.textContent()).trim(), text)
+      assert.equal((await box.boundingBox()).x < (await label.boundingBox()).x, true, `${text}: box first`)
+    }
+    assert.equal(await editor().getByText('Enable', { exact: true }).count(), 0)
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('the marks table has the headings X, circle and the up-and-down arrow heads, each centred over its column of boxes 28px apart', async () => {
+    await openExtrasEditor(p)
+    const heads = await editor().locator('.pen-tool-extras-mark-head svg').evaluateAll((els) => els.map((el) => { const { left, right } = el.getBoundingClientRect(); return { centre: (left + right) / 2, stroke: window.getComputedStyle(el).strokeWidth, colour: window.getComputedStyle(el).color } }))
+    assert.equal(heads.length, 3)
+    const centres = async (keys) => Promise.all(keys.map((key) => editor().locator(`input[data-box="marks.${key}"]`).evaluate((el) => { const { left, right } = el.getBoundingClientRect(); return (left + right) / 2 })))
+    const edge = await centres(['x', 'circle', 'directions'])
+    const corner = await centres(['cornerX', 'cornerCircle'])
+    heads.forEach((head, i) => near(head.centre, edge[i], `heading ${i} over its Edge box`))
+    near(corner[0], edge[0], 'Corner X under X')
+    near(corner[1], edge[1], 'Corner circle under circle')
+    near(edge[1] - edge[0], 28, 'boxes 28px apart')
+    near(edge[2] - edge[1], 28, 'boxes 28px apart')
+    heads.forEach((head) => { assert.equal(head.stroke, '2.6px'); assert.equal(head.colour, 'rgb(68, 68, 68)') })
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('the title row holds Copy settings and Paste settings icon buttons at its right end, level with the title, and the status message to their left', async () => {
+    await openExtrasEditor(p)
+    const copy = p.getByRole('button', { name: 'Copy settings' })
+    const paste = p.getByRole('button', { name: 'Paste settings' })
+    assert.equal(await copy.getAttribute('title'), 'Copy settings')
+    assert.equal(await paste.getAttribute('title'), 'Paste settings')
+    assert.equal((await copy.textContent()).trim(), '')
+    const title = await rect('.dialog .pen-tool-extras-title-row b')
+    const buttons = [await copy.boundingBox(), await paste.boundingBox()]
+    for (const button of buttons) near(button.y + button.height / 2, title.top + title.height / 2, 'level with the title')
+    assert.equal(buttons[0].x < buttons[1].x, true)
+    await p.evaluate(() => { document.querySelector('.dialog [data-role="settings-status"]').textContent = 'Settings copied.' })
+    const status = await rect('.dialog [data-role="settings-status"]')
+    assert.equal(status.right <= buttons[0].x + 1, true, 'the status is left of the icons')
+    assert.equal(await p.locator('.dialog .pen-tool-extras-title-row').evaluate((row) => row.contains(document.querySelector('.dialog [data-role="settings-status"]'))), true)
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('the dialog is sized to its content and centred in the window, not over the board', async () => {
+    await openExtrasEditor(p)
+    const dialog = await rect('.dialog')
+    const layout = await rect('#pen-tool-extras-editor .pen-tool-extras-layout')
+    assert.equal(dialog.width < layout.width + 100, true, `dialog ${dialog.width}px wide for ${layout.width}px of content`)
+    assert.equal(Math.abs((dialog.left + dialog.right) / 2 - 600) <= 4, true, `centred at ${(dialog.left + dialog.right) / 2}`)
+    assert.equal(dialog.left >= 0, true)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
@@ -72,12 +180,11 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its Enable box is unticked', async () => {
+  it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its own box is unticked', async () => {
     await openExtrasEditor(p)
     const label = (key) => editor().locator(`[data-row="${key}"] label`)
-    const name = (text) => editor().locator('span', { hasText: new RegExp('^' + text + '$') }).first()
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
-    assert.equal(await left(name('Dashed lines')) <= await left(label('dash')), true)
+    assert.equal(await left(editor().locator('input[data-box="lineStyles.dashed"]')) <= await left(label('dash')), true)
     for (const [style, row] of [['dashed', 'dash'], ['arrows', 'arrowSpacing']]) {
       await editor().locator(`input[data-box="lineStyles.${style}"]`).uncheck()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), false, `${row} hidden`)
@@ -95,6 +202,20 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     const dialog = await p.locator('.dialog').boundingBox()
     assert.equal(save.x + save.width <= dialog.x + dialog.width, true)
     await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('on a screen too narrow for two columns the cells stack in one column, in order, with no vertical line', async () => {
+    await p.setViewportSize({ width: 500, height: 1000 })
+    try {
+      await openExtrasEditor(p)
+      const stacked = await cells()
+      assert.deepEqual(stacked.map((cell) => cell.text), ['Pen colors', 'Line settings', 'Marks to cycle', 'Other'])
+      stacked.slice(1).forEach((cell, i) => assert.equal(cell.top >= stacked[i].bottom - HALF_PIXEL, true, `${cell.text} is under ${stacked[i].text}`))
+      assert.equal(await editor().locator('.pen-tool-extras-cell').nth(1).evaluate((el) => window.getComputedStyle(el).borderLeftWidth), '0px')
+      await closeExtrasEditorWith(p, 'Cancel')
+    } finally {
+      await p.setViewportSize({ width: 1200, height: 1000 })
+    }
   })
 
   it('at a phone width the dialog does not run off the screen sideways', async () => {

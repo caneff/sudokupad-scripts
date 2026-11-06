@@ -72,8 +72,8 @@
 - **pen panel sliders** — Thickness and Opacity, drawn in the pen tool's panel in the last row, the row SudokuPad gives its
   line mode pulldown (`.penlinemode`), which the script hides and replaces with the **line mode button** (**line mode**). The row's
   right end holds the **page button**, and the line mode button sits left of it. They exist only while the pen tool is on, and have no Save or Cancel. The settings
-  dialog also holds both sliders (drafts, applied on Save), each in a row of Line settings with a **slider box** at the right under the
-  small heading "Slider in panel", saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
+  dialog also holds both sliders (drafts, applied on Save), each in a row of Line settings with a **slider box** on a sub-line under it,
+  labelled "Slider in panel", saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
   its row stays as an empty row of the same height, and with both hidden the block is not drawn. Its Restore defaults
   sets both dialog sliders back to their defaults for Save, like the colors.
 - **marks layer** — the group (`#pen-tool-extras-marks`) that is the last child of the pen layer and holds every edge mark, grid-corner mark and the cell circle and cross, so a mark is drawn over every pen line whichever cell holds it. SudokuPad adds a cell's strokes to its pen layer in cell order, so without it a line in a later cell covers a mark in an earlier one. It is inside the pen layer, so the pen layer's opacity fades it with the lines as one picture.
@@ -81,14 +81,14 @@
   crosses, edge marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under
   `PenColor_opacity`. SudokuPad's own is 80, set on each stroke (`.cell-pen { opacity: 0.8 }`); the script sets it on the
   whole pen layer (`#cell-pen`) instead, so overlapping strokes do not darken. 80 is the default; 100 is solid.
-- **white outline** — the dialog's White outline on lines and marks box (on by default; saved under `PenColor_outline` only as `false`, since on is the default) and the
+- **white outline** — the dialog's White outlines box (on by default; saved under `PenColor_outline` only as `false`, since on is the default) and the
   Outline width line under it (a slider, 1 to 8 units, default 2, saved under `PenColor_outlinewidth`, hidden in the dialog while the box is unticked). On, a filter on the pen layer (`#cell-pen`) draws a white band of that width round the layer's combined shape, so lines and marks
   already drawn get it, it fades with the opacity, and the drag highlight, which sits in its own group beside the layer, is left out. Nothing is stored in the puzzle.
 - **pen page** — one of the lists of nine pens in `PEN_PAGES`. Page 1 is SudokuPad's own pens 1 to 9; page 2 is the same
   nine colors drawn as dashed lines (dots at a **dash length** of 0); page 3 is the same nine as **arrow lines**. The pen on color button N has the same color on every page, so recoloring it changes
   it on all of them. A page 2 or 3 whose **line style** is not enabled is out of the rotation.
 - **line style** — one of the two kinds of line the extra pen pages draw: dashed lines (page 2) and directional arrow lines (page 3). Each has an
-  **Enable** box in the dialog's Line styles section, both ticked by default, saved together under `PenColor_linestyles`. An unticked style's page is out of the
+  box in the dialog's Line styles section, before its label, both ticked by default, saved together under `PenColor_linestyles`. An unticked style's page is out of the
   rotation: the page button, Tab and the wheel skip it, saving with its pen selected moves the selection to the same number on page 1, and with both unticked the
   page button is hidden and the script takes neither Tab nor the wheel. Lines already drawn in its pens still draw. Its slider row (Dash length, Arrow spacing) is hidden
   in the dialog while the box is unticked.
@@ -98,12 +98,11 @@
   page's lines is. 3 is the default and 0 is dots; a dash scales with the thickness and changes lines already drawn. A dash too long for a cell's line to hold a gap
   (at least one line width wide where it shows) is shortened to leave one, so a page 2 line is never solid; each cell's segment starts and ends with half a dash, so a line is
   inked at its ends, its turns and every join between cells, and two segments meet in one whole dash.
-- **pen color preset** — a named set the settings dialog's pulldown, at the top of Pen colors, fills the nine pickers with as a draft: "Darker cell color
-  page 1" to "page 3" (the derived colors of that page, one per page the palette has, up to 3) or "SudokuPad default colors" (`SUDOKUPAD_PEN_COLORS`).
+- **pen color preset** — a named set the settings dialog's pulldown, at the top of Pen colors, fills the nine pickers with as a draft: "Darker page 1" to "Darker page 3" (the derived colors of that page, one per page the palette has, up to 3) or "SudokuPad colors" (`SUDOKUPAD_PEN_COLORS`).
   Save stores the colors with the preset's id (`page-1` to `page-3`, `sudokupad`) under `preset`; Cancel drops it. An edit, in the dialog or by hold, makes
   the set **Custom**, saved with no `preset`, and so are colors an older version saved. A set in force that the pulldown does not offer (Custom, a page the palette
-  no longer has, or "SudokuPad colors, not saved yet" before the install save) shows first and cannot be picked. Restore defaults picks Darker cell color
-  page 1, or SudokuPad default colors with no page 1 to read.
+  no longer has, or "SudokuPad (unsaved)" before the install save) shows first and cannot be picked. Restore defaults picks Darker page 1, or
+  SudokuPad colors with no page 1 to read.
 - **arrow line** — a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of filled triangles (its arrows, in the pen's color) along it, pointing the way the line was
   dragged. Only lines are arrow lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Not a **direction arrow**, the `>` `<` `^` `v` mark a click on a cell edge cycles through. Its arrows' size and
   spacing scale with the thickness from the default up (the heads shrink a little slower than the line below 5 and grow slower above it, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole arrows, half a space in from

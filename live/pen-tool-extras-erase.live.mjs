@@ -115,7 +115,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await openExtrasEditor(p)
     const box = editor().locator('input[data-box="middleErase"]')
     assert.equal(await box.isChecked(), true, 'ticked on a fresh install')
-    assert.equal(await p.getByLabel('Middle click erases a whole line').isChecked(), true)
+    assert.equal(await p.getByLabel('Middle click erase').isChecked(), true)
     await box.uncheck()
     await closeExtrasEditorWith(p, 'Cancel')
     assert.equal(await read((k) => Framework.getData(k), MIDDLE_ERASE_KEY), null, 'Cancel saves nothing')

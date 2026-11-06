@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.20.0
+// @version      1.21.0
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.20.0'
+  const VERSION = '1.21.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -87,8 +87,8 @@
     dash: slider('PenColor_dash', DASH, syncPenPanel, { label: 'Dash length', under: 'lineStyles.dashed' }),
     arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, adoptArrowSpacing, { label: 'Arrow spacing', under: 'lineStyles.arrows' }),
     outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline, { label: 'Outline width', under: 'outline' }),
-    outline: flag('PenColor_outline', adoptOutline, { label: 'White outline on lines and marks', section: 'Other' }),
-    middleErase: flag('PenColor_middleerase', doNothing, { label: 'Middle click erases a whole line', section: 'Other' }),
+    outline: flag('PenColor_outline', adoptOutline, { label: 'White outlines', section: 'Other' }),
+    middleErase: flag('PenColor_middleerase', doNothing, { label: 'Middle click erase', section: 'Other' }),
     lineStyles: flags('PenColor_linestyles', ['dashed', 'arrows'], adoptLineStyles,
       { section: 'Line styles', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
     show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
@@ -383,12 +383,12 @@
   const CUSTOM = 'custom'
   const UNSAVED = 'unsaved'
   const PRESET_LABELS = {
-    'page-1': 'Darker cell color page 1',
-    'page-2': 'Darker cell color page 2',
-    'page-3': 'Darker cell color page 3',
-    [SUDOKUPAD_PRESET]: 'SudokuPad default colors',
+    'page-1': 'Darker page 1',
+    'page-2': 'Darker page 2',
+    'page-3': 'Darker page 3',
+    [SUDOKUPAD_PRESET]: 'SudokuPad colors',
     [CUSTOM]: 'Custom',
-    [UNSAVED]: 'SudokuPad colors, not saved yet'
+    [UNSAVED]: 'SudokuPad (unsaved)'
   }
   // The share of its OKLCH lightness a cell color keeps as a pen color: low enough to read against cell colors drawn at 60% opacity, high enough that the
   // lightest still show as 5px lines on white and the nine stay apart.
@@ -459,11 +459,6 @@
     if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
-
-  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
-    '<button type="button" data-act="copy-settings">Copy settings</button>' +
-    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
-    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
 
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
@@ -1833,7 +1828,7 @@
   const EDITOR_ID = 'pen-tool-extras-editor'
   const GEAR_BUTTON = '#control-pen'
   const GEAR_CLASS = 'pen-tool-extras-gear'
-  const GEAR_LABEL = 'Pen tool extras settings'
+  const GEAR_LABEL = 'Pen Tool Extras settings'
   const GEAR_SIZE_PX = 13
   const GEAR_INSET_PX = 2
   const GEAR_ICON_PX = 9
@@ -1848,20 +1843,43 @@
 
   const MARK_PICTURES = {
     x: ['16', '<path d="M3 3 L13 13 M13 3 L3 13"/>'],
-    directions: ['64', '<path d="M3 3 L9 8 L3 13 M25 3 L19 8 L25 13 M36 11 L41 5 L46 11 M54 5 L59 11 L64 5"/>'],
+    directions: ['30', '<path d="M3 11 L8 5 L13 11 M17 5 L22 11 L27 5"/>'],
     circle: ['16', '<circle cx="8" cy="8" r="5.2"/>']
   }
   const markPicture = (key) => {
     const [width, shapes] = MARK_PICTURES[key]
-    return `<svg width="${width}" height="16" viewBox="0 0 ${width} 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
+    return `<svg width="${width}" height="16" viewBox="0 0 ${width} 16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
+  }
+
+  const ICON_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const iconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The status message sits to the left of the two icon buttons, on the title row.
+  function renderTitle (version) {
+    return '<div class="pen-tool-extras-title-row">' +
+      `<span><b>Pen Tool Extras</b> <small class="pen-tool-extras-version">v${version}</small></span>` +
+      '<span class="pen-tool-extras-tools"><span data-role="settings-status"></span>' +
+      iconButton('copy-settings', 'Copy settings', ICON_PICTURES.copy) + iconButton('paste-settings', 'Paste settings', ICON_PICTURES.paste) +
+      '</span></div>'
   }
 
   // The class names more than one template writes, named once here; a class only one template writes is spelled in that template and in its rule in `DIALOG_CSS`.
   const NOTE = 'pen-tool-extras-note'
   const SECTION_TITLE = 'pen-tool-extras-section-title'
   const DIVIDER = '<div class="pen-tool-extras-divider"></div>'
+  const LINE_COLOR = '#e3dff0'
+  const MARKS_LINE_COLOR = '#eee'
+  // The gap between the two columns, either side of the vertical line, and the slider's length, shared by all five sliders.
+  const COLUMN_GAP_PX = 24
+  const SLIDER_PX = 96
+  const MARK_CELL_PX = 28
+  const ONE_COLUMN_BELOW_PX = 600
   const SLIDER_COLUMNS = 'pen-tool-extras-columns'
-  const COLUMN_HEADING = 'pen-tool-extras-column-heading'
+  const CELL = 'pen-tool-extras-cell'
 
   function offNote (off) {
     if (!off.length) return ''
@@ -1884,42 +1902,71 @@
     return `<select data-pen-preset aria-label="Pen color preset">${inForce}${presets.map((id) => option(id, false)).join('')}</select>`
   }
 
-  const sectionHeading = (text) => `${DIVIDER}<div class="${SECTION_TITLE}">${text}</div>`
+  const sectionTitle = (text) => `<div class="${SECTION_TITLE}">${text}</div>`
 
   const DIALOG_CLASS = 'pen-tool-extras-dialog'
 
-  // Scoped by DIALOG_CLASS, so SudokuPad's other dialogs are left alone.
+  const EDITOR = `#${EDITOR_ID}`
+  const TOOL_BUTTON_RESET = 'background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: #777 !important; cursor: pointer; border-radius: 6px !important;'
+
+  // Scoped by DIALOG_CLASS and the editor's id, so SudokuPad's other dialogs are left alone.
   const DIALOG_CSS = [
-    `.dialog-options.${DIALOG_CLASS} { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; justify-content: flex-end; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+    // Sized to its content and centred in the window; the paragraph around the editor loses SudokuPad's bottom margin so the vertical line meets the footer's line.
+    `.dialog:has(${EDITOR}) { width: fit-content !important; max-width: 96vw !important; }`,
+    `.dialog p:has(> ${EDITOR}) { margin-bottom: 0 !important; }`,
+    `.dialog-options.${DIALOG_CLASS} { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; justify-content: flex-end; border-top: 1px solid ${LINE_COLOR}; padding: 14px 4px 2px; margin-top: 0; box-sizing: border-box; width: 100%; }`,
     `.dialog-options.${DIALOG_CLASS} button { width: auto !important; min-width: 0 !important; margin: 0 !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; border-radius: 8px !important; font-size: 1rem !important; flex: none; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: #777 !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
     '.pen-tool-extras-version { opacity: .6; }',
-    `#${EDITOR_ID} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
-    `#${EDITOR_ID} .${SECTION_TITLE} { font-weight: 600; margin-top: 10px; }`,
-    `#${EDITOR_ID} .pen-tool-extras-pen-title { font-weight: 600; }`,
-    `#${EDITOR_ID} .pen-tool-extras-divider { border-top: 1px solid #e3dff0; margin: 12px 0 0; }`,
-    // The slider rows share four columns, so the sliders of Line settings, Line styles and the outline line up. The first two shrink on a narrow dialog.
-    `#${EDITOR_ID} .${SLIDER_COLUMNS} { display: grid; grid-template-columns: minmax(6em, 12.5em) minmax(5em, 11em) 2em 6.2em; column-gap: 8px; align-items: center; margin: 4px 0; }`,
-    `#${EDITOR_ID} .${SLIDER_COLUMNS}.pen-tool-extras-style-block { margin-bottom: 0; }`,
-    `#${EDITOR_ID} .${SLIDER_COLUMNS}.pen-tool-extras-heading-row { margin: 10px 0 4px; }`,
-    `#${EDITOR_ID} .pen-tool-extras-span { grid-column: 1 / 4; }`,
-    `#${EDITOR_ID} .pen-tool-extras-heading-row .pen-tool-extras-span { font-weight: 600; }`,
-    `#${EDITOR_ID} .${COLUMN_HEADING} { font-size: .8rem; color: #666; font-weight: 400; justify-self: center; white-space: nowrap; }`,
-    `#${EDITOR_ID} .pen-tool-extras-label { width: auto; text-align: left; margin: 0; }`,
-    `#${EDITOR_ID} .pen-tool-extras-label.pen-tool-extras-under { padding-left: 1.2em; color: #444; box-sizing: border-box; }`,
-    `#${EDITOR_ID} .pen-tool-extras-range { width: 100%; min-width: 0; margin: 0; }`,
-    `#${EDITOR_ID} .pen-tool-extras-box { margin: 0; justify-self: center; }`,
-    `#${EDITOR_ID} .pen-tool-extras-check { margin: 0; }`,
-    `#${EDITOR_ID} .pen-tool-extras-check-row { margin: 4px 0; display: flex; justify-content: flex-start; align-items: center; gap: 6px; }`,
-    `#${EDITOR_ID} .pen-tool-extras-pen { display: flex; align-items: center; gap: 8px; }`,
-    `#${EDITOR_ID} .pen-tool-extras-pen b { width: 1.2em; text-align: right; }`,
-    `#${EDITOR_ID} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, max-content); gap: 6px 18px; margin: 4px 0; }`,
-    `#${EDITOR_ID} .pen-tool-extras-mark { display: flex; align-items: center; gap: 6px; margin: 0; width: auto; }`,
-    `#${EDITOR_ID} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(3, max-content); column-gap: 28px; row-gap: 6px; align-items: center; margin: 4px 0; }`,
-    `#${EDITOR_ID} .pen-tool-extras-mark-head { font-size: .85rem; color: #666; }`,
-    `#${EDITOR_ID} select[data-pen-preset] { margin: 4px 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`
+    '.pen-tool-extras-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }',
+    '.pen-tool-extras-tools { position: relative; display: flex; align-items: center; gap: 4px; }',
+    `.pen-tool-extras-tools button { ${TOOL_BUTTON_RESET} }`,
+    '.pen-tool-extras-tools button:hover { background: #f0edf5 !important; }',
+    '.pen-tool-extras-tools svg { width: 20px; height: 20px; }',
+    '.pen-tool-extras-tools svg * { fill: none !important; }',
+    // Out of the flow, so a long message never widens the dialog.
+    '.pen-tool-extras-tools [data-role="settings-status"] { position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 6px; width: max-content; max-width: 16em; text-align: right; font-size: .8rem; color: #777; }',
+    `${EDITOR} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
+    // The first column is as wide as the marks table; the pen colors fill it and never set it.
+    `${EDITOR} .pen-tool-extras-layout { display: grid; grid-template-columns: max-content 1fr; margin-top: 8px; }`,
+    // Every cell has its own top line, so the vertical line starts at the line under the title.
+    `${EDITOR} .${CELL} { min-width: 0; padding: 10px ${COLUMN_GAP_PX}px 10px 0; border-top: 1px solid ${LINE_COLOR}; }`,
+    `${EDITOR} .${CELL}:nth-child(2n) { border-left: 1px solid ${LINE_COLOR}; padding: 10px 0 10px ${COLUMN_GAP_PX}px; }`,
+    `${EDITOR} .${SECTION_TITLE} { font-weight: 600; margin: 0 0 4px; }`,
+    // It starts at the vertical line: the column gap and the line's own width back.
+    `${EDITOR} .pen-tool-extras-divider { border-top: 1px solid ${LINE_COLOR}; margin: 10px 0 10px calc(-1 * (${COLUMN_GAP_PX}px + 1px)); }`,
+    // Every slider row has one label column, so the five sliders start at the same x.
+    `${EDITOR} .${SLIDER_COLUMNS} { display: grid; grid-template-columns: 7.6em ${SLIDER_PX}px 2em; column-gap: 8px; align-items: center; margin: 4px 0; }`,
+    `${EDITOR} .pen-tool-extras-label { width: auto; text-align: left; margin: 0; }`,
+    `${EDITOR} .pen-tool-extras-label.pen-tool-extras-under { padding-left: 1.2em; color: #444; box-sizing: border-box; }`,
+    `${EDITOR} .pen-tool-extras-range { width: 100%; min-width: 0; margin: 0; }`,
+    `${EDITOR} .pen-tool-extras-sub { display: flex; align-items: center; gap: 6px; padding-left: 1.2em; color: #444; margin: 0 0 4px; }`,
+    `${EDITOR} .pen-tool-extras-box { margin: 0; }`,
+    `${EDITOR} .pen-tool-extras-check { margin: 0; }`,
+    `${EDITOR} .pen-tool-extras-check-row { margin: 4px 0; display: flex; justify-content: flex-start; align-items: center; gap: 6px; }`,
+    `${EDITOR} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; width: 0; min-width: 100%; margin: 6px 0; }`,
+    `${EDITOR} .pen-tool-extras-pen-grid input[type=color] { -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 100%; height: auto; aspect-ratio: 1; padding: 0; margin: 0; border: 1px solid rgb(0 0 0 / .25); border-radius: 6px; background: none; cursor: pointer; }`,
+    `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }`,
+    `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-webkit-color-swatch { border: none; border-radius: 5px; }`,
+    `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-moz-color-swatch { border: none; border-radius: 5px; }`,
+    `${EDITOR} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(3, ${MARK_CELL_PX}px); margin: 6px 0 0; }`,
+    `${EDITOR} .pen-tool-extras-marks-table > * { display: flex; align-items: center; justify-content: center; height: ${MARK_CELL_PX}px; box-sizing: border-box; margin: 0; }`,
+    `${EDITOR} .pen-tool-extras-marks-table > :nth-child(4n+1) { justify-content: flex-start; padding-right: 10px; }`,
+    `${EDITOR} .pen-tool-extras-marks-table > :not(:nth-child(4n+1)) { border-left: 1px solid ${MARKS_LINE_COLOR}; }`,
+    `${EDITOR} .pen-tool-extras-marks-table > :nth-child(n+5) { border-top: 1px solid ${MARKS_LINE_COLOR}; }`,
+    `${EDITOR} .pen-tool-extras-mark input { margin: 0; }`,
+    `${EDITOR} .pen-tool-extras-mark-head { color: #444; }`,
+    `${EDITOR} .pen-tool-extras-mark-head svg { stroke-width: 2.6; overflow: visible; }`,
+    `${EDITOR} select[data-pen-preset] { box-sizing: border-box; width: 0; min-width: 100%; margin: 6px 0 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`,
+    // On a screen too narrow for two columns the cells stack in today's order.
+    `@media (max-width: ${ONE_COLUMN_BELOW_PX}px) {
+${EDITOR} .pen-tool-extras-layout { grid-template-columns: minmax(0, 1fr); }
+${EDITOR} .${CELL}:nth-child(n) { border-left: none; padding: 10px 0; }
+${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
+${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-width: 14rem; }
+}`
   ].join('\n')
 
   const boxId = (path) => `pen-tool-extras-box-${path.replace('.', '-')}`
@@ -1927,58 +1974,48 @@
 
   // Its values are drafts that take effect on Save, so the panel's sliders and these agree when the dialog opens.
   function renderEditor (state) {
-    const cells = PEN_COLOR_NUMBERS.map((n) =>
-      '<div class="pen-tool-extras-pen">' +
-      `<b>${n}</b>` +
-      `<input type="color" data-pen="${n}" value="${state.colors[n]}"></div>`
-    ).join('')
-    const grid = `<div class="pen-tool-extras-pen-grid">${cells}</div>`
+    const grid = '<div class="pen-tool-extras-pen-grid">' +
+      PEN_COLOR_NUMBERS.map((n) => `<input type="color" data-pen="${n}" value="${state.colors[n]}" aria-label="Pen color ${n}">`).join('') + '</div>'
     // A box with no word label carries its name as its accessible name and hover title.
-    const markBox = (key, name, picture) =>
+    const markBox = (key, name) =>
       `<label title="${name}" class="pen-tool-extras-mark">` +
-      `<input type="checkbox" ${boxAttributes(`marks.${key}`)} aria-label="${name}" title="${name}"${state.marks[key] ? ' checked' : ''}>` +
-      `${markPicture(picture)}</label>`
+      `<input type="checkbox" ${boxAttributes(`marks.${key}`)} aria-label="${name}" title="${name}"${state.marks[key] ? ' checked' : ''}></label>`
     const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} class="pen-tool-extras-box">`
-    const flagBox = (name, flagName, extra = '') =>
-      box(`${boxAttributes(`${name}.${flagName}`)}${extra}`, state[name][flagName], SETTINGS[name].dialog.title)
+    const flagBox = (name, flagName) => box(boxAttributes(`${name}.${flagName}`), state[name][flagName], SETTINGS[name].dialog.title)
     const sliderRow = (key) => {
-      const { range, dialog: { label, under, box } } = SETTINGS[key]
+      const { range, dialog: { label, under } } = SETTINGS[key]
       const value = state[key]
       return `<div data-row="${key}" class="${SLIDER_COLUMNS}"${!under || boxValue(state, under) ? '' : ' style="display:none"'}>` +
         `<label for="pen-tool-extras-setting-${key}" class="pen-tool-extras-label${under ? ' pen-tool-extras-under' : ''}">${label}</label>` +
         `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" class="pen-tool-extras-range">` +
-        `<output data-readout="${key}">${value}</output>${box ? flagBox(box, key) : '<span></span>'}</div>`
+        `<output data-readout="${key}">${value}</output></div>`
     }
+    // The sub-line under a slider: whether the pen panel carries it.
+    const panelLine = (key) => `<div class="pen-tool-extras-sub">${flagBox('show', key)}<label for="${boxId(`show.${key}`)}" class="pen-tool-extras-label">Slider in panel</label></div>`
     const rowsUnder = (path) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under === path).map(sliderRow).join('')
-    const labelled = (name) => '<div class="pen-tool-extras-check-row">' +
-      `<input type="checkbox" ${boxAttributes(name)}${state[name] ? ' checked' : ''} class="pen-tool-extras-check">` +
-      `<label for="${boxId(name)}" class="pen-tool-extras-label">${SETTINGS[name].dialog.label}</label></div>`
-    const styleBlock = (name, flagName, text) =>
-      `<div class="${SLIDER_COLUMNS} pen-tool-extras-style-block"><span class="pen-tool-extras-span">${text}</span>` +
-      `${flagBox(name, flagName, ` aria-label="Enable ${text}"`)}</div>`
+    const labelled = (path, checked, text) => '<div class="pen-tool-extras-check-row">' +
+      `<input type="checkbox" ${boxAttributes(path)}${checked ? ' checked' : ''} class="pen-tool-extras-check">` +
+      `<label for="${boxId(path)}" class="pen-tool-extras-label">${text}</label></div>`
     const settingRows = (name) => {
-      const { range, dialog: { labels } } = SETTINGS[name]
-      if (range) return sliderRow(name)
-      if (labels) return Object.entries(labels).map(([flagName, text]) => styleBlock(name, flagName, text) + rowsUnder(`${name}.${flagName}`)).join('')
-      return labelled(name) + rowsUnder(name)
+      const { range, dialog: { labels, box } } = SETTINGS[name]
+      if (range) return sliderRow(name) + (box ? panelLine(name) : '')
+      if (labels) return Object.entries(labels).map(([flagName, text]) => labelled(`${name}.${flagName}`, state[name][flagName], text) + rowsUnder(`${name}.${flagName}`)).join('')
+      return labelled(name, state[name], SETTINGS[name].dialog.label) + rowsUnder(name)
     }
-    const sectionRows = (section) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.section === section).map(settingRows).join('')
-    const heading = (text, caption) =>
-      DIVIDER + `<div class="${SLIDER_COLUMNS} pen-tool-extras-heading-row"><span class="pen-tool-extras-span">${text}</span>` +
-      `<span class="${COLUMN_HEADING}">${caption || ''}</span></div>`
+    const section = (title) => sectionTitle(title) + SETTING_NAMES.filter((name) => SETTINGS[name].dialog.section === title).map(settingRows).join('')
     const markRow = (label, cellsMarkup) => `<div>${label}</div>${cellsMarkup}`
-    const columnHead = (text) => `<div class="pen-tool-extras-mark-head">${text}</div>`
+    const columnHead = (picture) => `<div class="pen-tool-extras-mark-head">${markPicture(picture)}</div>`
     const marksTable = '<div class="pen-tool-extras-marks-table">' +
-      '<div></div>' + columnHead('X Mark') + columnHead('Circle') + columnHead('Directions') +
-      markRow('Edge', markBox('x', 'Edge X Mark', 'x') + markBox('circle', 'Edge Circle', 'circle') + markBox('directions', 'Edge Directions', 'directions')) +
-      markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerCircle', 'Corner Circle', 'circle') + '<div></div>') +
+      '<div></div>' + columnHead('x') + columnHead('circle') + columnHead('directions') +
+      markRow('Edge', markBox('x', 'Edge X Mark') + markBox('circle', 'Edge Circle') + markBox('directions', 'Edge Directions')) +
+      markRow('Corner', markBox('cornerX', 'Corner X Mark') + markBox('cornerCircle', 'Corner Circle') + '<div></div>') +
       '</div>'
-    return offNote(state.off) + '<div class="pen-tool-extras-pen-title">Pen colors</div>' + presetChoice(state.preset, state.presets) + grid +
-      missingNote(state.missing, state.pickedPreset) +
-      heading('Line settings', 'Slider in panel') + sectionRows('Line settings') +
-      heading('Line styles', 'Enable') + sectionRows('Line styles') +
-      sectionHeading('Marks a click cycles through') + marksTable +
-      sectionHeading('Other') + sectionRows('Other')
+    const cell = (markup) => `<div class="${CELL}">${markup}</div>`
+    return offNote(state.off) + '<div class="pen-tool-extras-layout">' +
+      cell(sectionTitle('Pen colors') + presetChoice(state.preset, state.presets) + grid + missingNote(state.missing, state.pickedPreset)) +
+      cell(section('Line settings') + DIVIDER + section('Line styles')) +
+      cell(sectionTitle('Marks to cycle') + marksTable) +
+      cell(section('Other')) + '</div>'
   }
 
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
@@ -2058,11 +2095,9 @@
       if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
     }
     Framework.showDialog({
-      centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Pen tool extras</b> <small class="pen-tool-extras-version">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: renderTitle(VERSION) },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
-        { tag: 'text', innerHTML: COPY_PASTE_HTML },
         {
           tag: 'options',
           options: [
@@ -2170,7 +2205,7 @@
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
@@ -2203,7 +2238,7 @@
       tag: 'button',
       name: 'pentoolextras',
       group: SETTINGS_GROUP,
-      content: 'Pen tool extras',
+      content: 'Pen Tool Extras',
       handler: () => {
         closeDialogKeepingGrid()
         setTimeout(openDialog, 0)

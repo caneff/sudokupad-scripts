@@ -5,10 +5,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { dialogButton, openScriptDialog } from './settings.mjs'
+import { openScriptDialog } from './settings.mjs'
 
 const code = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 const STATUS = '.dialog [data-role="settings-status"]'
+// Pen Tool Extras' two buttons are icons, so every script's pair is found by its act, not its words.
+const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
 const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
 
 // Every digit set, since Digit Color saves its table whole.
@@ -21,13 +23,13 @@ const SCRIPTS = [
   { file: 'digit-color.user.js', owns: /^DigitColor_/, entry: 'Digit color', editor: '#digit-color-editor', key: 'DigitColor_colors', saved: DIGIT_COLORS, badKey: 'DigitColor_colors', bad: ['#ffffff'] },
   { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Rules resizer', editor: '#auto-rules-resizer-max-width', key: 'AutoRulesResizer_maxWidth', saved: 640, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
   { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, badKey: 'ColorByDigit_auto', bad: 'yes' },
-  { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen tool extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }
+  { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }
 ]
 
 // Puts `text` on the clipboard, clears the last status, presses Paste settings and returns the status it shows.
 async function paste (p, text) {
   await p.evaluate((t) => { document.querySelector('.dialog [data-role="settings-status"]').textContent = ''; return navigator.clipboard.writeText(t) }, text)
-  await dialogButton(p, 'Paste settings').click()
+  await actButton(p, 'paste-settings').click()
   const status = p.locator(STATUS).filter({ hasText: /\S/ })
   await status.waitFor()
   return status.textContent()
@@ -49,7 +51,7 @@ for (const script of SCRIPTS) {
 
     it('copies the saved key to the clipboard', async () => {
       await p.evaluate(([key, value]) => Framework.setData(key, value), [script.key, script.saved])
-      await dialogButton(p, 'Copy settings').click()
+      await actButton(p, 'copy-settings').click()
       await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
       const copied = JSON.parse(await p.evaluate(() => navigator.clipboard.readText()))
       assert.deepEqual(copied[script.key], script.saved)

@@ -38,7 +38,7 @@ export async function closeDialogWith (p, text, editorSel) {
 }
 
 const EXTRAS_EDITOR = '#pen-tool-extras-editor'
-export const openExtrasEditor = (p) => openScriptDialog(p, 'Pen tool extras', EXTRAS_EDITOR)
+export const openExtrasEditor = (p) => openScriptDialog(p, 'Pen Tool Extras', EXTRAS_EDITOR)
 export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRAS_EDITOR)
 
 // The opacity each element matching `selector` shows at, in document order: its own times every ancestor's, since

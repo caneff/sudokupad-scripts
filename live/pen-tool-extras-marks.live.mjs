@@ -115,7 +115,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
   }
 
-  const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen tool extras' }).first()
+  const settingsEntry = () => p.locator('.dialog button, .dialog [role=button]').filter({ hasText: 'Pen Tool Extras' }).first()
   const box = (mark) => editor().locator(`input[data-box="marks.${mark}"]`)
 
   const boot = async () => {
@@ -534,13 +534,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
   })
 
-  it('the dialog shows one table of marks: a picture and no word beside each box, the mark\'s name as the box\'s name and hover title', async () => {
+  it('the dialog shows one table of marks: plain boxes in its cells, the pictures in its headings, the mark\'s name as each box\'s name and hover title', async () => {
     await openExtrasEditor(p)
     const labels = editor().locator('label:has(> input[data-box^="marks."])')
     assert.equal(await labels.count(), 5)
+    assert.equal(await editor().locator('.pen-tool-extras-mark-head svg').count(), 3, 'a picture over each column')
     const names = { x: 'Edge X Mark', circle: 'Edge Circle', directions: 'Edge Directions', cornerX: 'Corner X Mark', cornerCircle: 'Corner Circle' }
     for (const mark of MARK_BOXES) {
-      assert.equal(await editor().locator(`label:has(> input[data-box="marks.${mark}"]) > svg`).count(), 1, mark)
+      assert.equal(await editor().locator(`label:has(> input[data-box="marks.${mark}"]) > svg`).count(), 0, mark)
       assert.equal(await box(mark).getAttribute('title'), names[mark], mark)
       assert.equal((await editor().locator(`label:has(> input[data-box="marks.${mark}"])`).textContent()).trim(), '', `${mark} has no word`)
       assert.equal((await p.getByRole('checkbox', { name: names[mark] }).count()), 1, `${mark} is found by its name`)
@@ -927,9 +928,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       return [x, y]
     }
 
+    // The dialog is centred in the window, which at this size leaves its buttons off the board; a narrow window or a zoomed page puts them over it,
+    // so the dialog is moved to put the button on the board's centre.
+    const openOverBoard = async (text) => {
+      await openExtrasEditor(p)
+      const [x, y] = await centreOf(dialogButton(p, text))
+      const board = await p.locator('.boardsvg').boundingBox()
+      await p.locator('.dialog').evaluate((el, [dx, dy]) => { el.style.marginLeft = `${dx}px`; el.style.marginTop = `${dy}px` }, [board.x + board.width / 2 - x, board.y + board.height / 2 - y])
+    }
+
     for (const text of ['Save', 'Cancel']) {
       it(`${text} leaves no pen mark under the button`, async () => {
-        const [x, y] = await probedPoint(() => openExtrasEditor(p), () => dialogButton(p, text))
+        const [x, y] = await probedPoint(() => openOverBoard(text), () => dialogButton(p, text))
         await p.mouse.click(x, y)
         await editor().waitFor({ state: 'detached' })
         assert.equal(await anyMark(), false)
