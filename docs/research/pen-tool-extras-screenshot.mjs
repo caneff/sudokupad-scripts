@@ -76,7 +76,7 @@ const openDialog = async () => {
   const group = page.locator('.dialog .setting-group').filter({ has: page.locator('label', { hasText: 'Experimental' }) })
   await group.waitFor({ state: 'visible' })
   if (await page.locator('.dialog .setting-group:not(.closed)').filter({ has: page.locator('label', { hasText: 'Experimental' }) }).count() === 0) await group.locator('label').first().click()
-  await page.locator('.dialog button').filter({ hasText: 'Pen tool extras' }).first().click()
+  await page.locator('.dialog button').filter({ hasText: 'Pen Tool Extras' }).first().click()
   await page.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
 }
 const slide = (value) => page.locator('#pen-tool-extras-thickness')

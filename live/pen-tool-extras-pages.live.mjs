@@ -245,7 +245,7 @@ function group (title, extra = []) {
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
     })
 
-    it('picking SudokuPad default colors in the pulldown sets the nine pickers to SudokuPad\'s own pen colors: Cancel leaves the colors, Save stores them for all three pages, and the pick marks no cell', async () => {
+    it('picking SudokuPad colors in the pulldown sets the nine pickers to SudokuPad\'s own pen colors: Cancel leaves the colors, Save stores them for all three pages, and the pick marks no cell', async () => {
       const colorOf3 = () => read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
       const pickers = () => editor().locator('input[type="color"]').evaluateAll((els) => els.map((el) => el.value))
       const pickSudokuPad = () => editor().locator('select[data-pen-preset]').selectOption('sudokupad')

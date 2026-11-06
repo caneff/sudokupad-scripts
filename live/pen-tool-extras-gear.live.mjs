@@ -10,7 +10,7 @@ import { gotoPuzzle, openPage, startPuzzle } from './page.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const BUTTON = '#control-pen'
-const GEAR = '#control-pen [aria-label="Pen tool extras settings"]'
+const GEAR = '#control-pen [aria-label="Pen Tool Extras settings"]'
 const EDITOR = '#pen-tool-extras-editor'
 const CLEAR_OF_GEAR_PX = 6
 
@@ -28,6 +28,8 @@ describe('the settings gear on the pen tool button', { concurrency: false }, () 
   }
   const selectedId = () => p.evaluate(() => (document.querySelector('.controls-tool .selected, .controls-tool [aria-pressed=true], .controls-tool .active') || {}).id || null)
   const closeDialog = async () => {
+    // SudokuPad ignores a key until the zero-delay timer of showDialog has fired; a timer set after it fires after it.
+    await p.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)))
     await p.keyboard.press('Escape')
     await p.locator(EDITOR).waitFor({ state: 'detached' })
   }

@@ -17,21 +17,20 @@ A small white box with a purple gear sits in the upper right corner of the pen t
 
 ## The settings dialog
 
-Pen tool extras in SudokuPad's settings, or the small gear in the upper right corner of the pen tool button, opens one dialog, top to bottom, each section under a thin divider:
+Pen Tool Extras in SudokuPad's settings, or the small gear in the upper right corner of the pen tool button, opens one dialog. It is sized to its content and centred in the window. Under the title row a line runs across, and the sections sit in a two by two grid with a vertical line between the columns:
 
-1. **Pen colors**, with the preset pulldown.
-2. **Line settings**: Thickness and Opacity, each with a Slider in panel box.
-3. **Line styles**: Dashed lines and Directional arrow lines, each with an Enable box and a slider under it.
-4. **Marks a click cycles through**: one table, edge and corner.
-5. **Other**: White outline (with Outline width under it) and Middle click erases a whole line.
+1. **Pen colors** (left), with the preset pulldown above a 3 by 3 grid of square color inputs.
+2. **Line settings** (right, top): Thickness and Opacity, each with a "Slider in panel" box on a line under it. Under a divider, **Line styles**: a box before each of Dashed lines and Directional arrow lines, with a slider under it.
+3. **Marks to cycle** (left, below): one table, rows Edge and Corner, columns X, circle and up and down arrow heads (Directions).
+4. **Other** (right, below): White outlines (with Outline width under it) and Middle click erase.
 
-Under all of it, one row of buttons: Restore defaults as small underlined text at the left, Cancel and Save at the right. Every slider and box in it is a draft that takes effect on Save, and Cancel leaves what was in force. The slider rows share their columns, so the sliders of Line settings, Line styles and the outline line up. On a narrow screen the rows shrink and wrap.
+The title row ends with two icon buttons, Copy settings (two overlapping squares) and Paste settings (a clipboard); their status message shows to their left. Under the grid, one row of buttons: Restore defaults as small underlined text at the left, Cancel and Save at the right. Every slider and box in it is a draft that takes effect on Save, and Cancel leaves what was in force. All five sliders start at the same x and are 96px long. On a screen too narrow for two columns, the sections stack in one column in the same order.
 
 ## Colors
 
 The pen colors never change on their own. Only picking a preset and saving, or editing a color, changes them, with one exception: the install save.
 
-- **Install save:** on the first load with no pen colors saved, the script saves cell color page 1, darkened, as the "Darker cell color page 1" preset. This happens once. It also happens on the first load after updating from a version that saved nothing, even when another cell color page is current. The script waits for the color tool for as long as it takes; until then the pens show SudokuPad's own colors. With no color tool at all, it saves "SudokuPad default colors" instead. A save made in the dialog before the install save wins.
+- **Install save:** on the first load with no pen colors saved, the script saves cell color page 1, darkened, as the "Darker page 1" preset. This happens once. It also happens on the first load after updating from a version that saved nothing, even when another cell color page is current. The script waits for the color tool for as long as it takes; until then the pens show SudokuPad's own colors. With no color tool at all, it saves "SudokuPad colors" instead. A save made in the dialog before the install save wins.
 - **Darker page:** each pen takes the cell color on the same button number, darkened, and button 0 is not used. The darkest grey becomes black. A cell color that is transparent or unreadable leaves SudokuPad's own pen color on that button, and the dialog says which.
 - The saved colors are a snapshot. A later change to the cell colors or the current page doesn't touch them.
 - Strokes already drawn and the color buttons change with the colors. Recoloring a pen changes it on every page.
@@ -39,8 +38,8 @@ The pen colors never change on their own. Only picking a preset and saving, or e
 
 Three ways to change them:
 
-- **Preset pulldown**, at the top of the dialog's Pen colors section: "Darker cell color page 1", "Darker cell color page 2" and "Darker cell color page 3" (one per page the current puzzle's palette has, up to 3), then "SudokuPad default colors". Picking one fills the nine pickers, worked out at that moment from the palette in force. Save keeps the colors and the preset's name, and Cancel drops them. The pulldown then shows the last preset picked. When the colors in force are no preset it offers, it shows them first, greyed out so they can't be picked: "Custom" while the colors are your own, a darker page the current palette doesn't have, or "SudokuPad colors, not saved yet" before the install save.
-- **Settings dialog pickers:** a 3 by 3 grid in the arrangement of the pen buttons. An edit turns the pulldown to Custom. Save keeps your colors.
+- **Preset pulldown**, at the top of the dialog's Pen colors section: "Darker page 1", "Darker page 2" and "Darker page 3" (one per page the current puzzle's palette has, up to 3), then "SudokuPad colors". Picking one fills the nine pickers, worked out at that moment from the palette in force. Save keeps the colors and the preset's name, and Cancel drops them. The pulldown then shows the last preset picked. When the colors in force are no preset it offers, it shows them first, greyed out so they can't be picked: "Custom" while the colors are your own, a darker page the current palette doesn't have, or "SudokuPad (unsaved)" before the install save.
+- **Settings dialog pickers:** a 3 by 3 grid of square color inputs, 4px apart and without numbers, in the arrangement of the pen buttons. An edit turns the pulldown to Custom. Save keeps your colors.
 - **Hold a pen color button for a second**, with either mouse button: a picker appears over each button, as in the cell color tool. Click one to open it. The pen changes live and the set is saved, as Custom. Hold again, or leave the pen tool, to close them.
 
 The colors are saved under `PenColor_colors` as `{"1": "#rrggbb", …, "9": "#rrggbb", "preset": "page-1"}`. Older versions read the nine colors and ignore `preset`. The preset is `page-1`, `page-2`, `page-3` or `sudokupad`; a set with no `preset`, or one the script doesn't know, is Custom.
@@ -62,14 +61,14 @@ Both sliders sit in the pen tool's panel, so you can change them during play. Th
 
 **Slider options** are in the dialog's Line settings section:
 
-- A Slider in panel box at the right end of the Thickness row and of the Opacity row, both ticked by default and saved under `PenColor_sliders`.
+- A "Slider in panel" box on a line under the Thickness row and under the Opacity row, both ticked by default and saved under `PenColor_sliders`.
 - The Thickness and Opacity sliders themselves, which are always in the dialog. A slider whose box is unticked is left out of the panel, but its value still applies and can be changed in the dialog.
 - A dialog slider takes effect on Save, and Cancel leaves it. It opens at the value in force, so it matches the panel.
 - With one slider hidden, the other keeps its place. With both hidden, the panel's last row holds only the line mode button and the page button.
 
 ## White outline
 
-The dialog's Other section has a White outline on lines and marks box, on by default and saved under `PenColor_outline`, and an Outline width line under it, indented, with a slider saved under `PenColor_outlinewidth`. Unticking the box hides the Outline width line in the dialog at once, and ticking it brings it back; the slider keeps its value. With the outline on as the default, the key stores an explicit `false` when it is off and is removed when it is on; the width key is removed when the width is the default.
+The dialog's Other section has a White outlines box, on by default and saved under `PenColor_outline`, and an Outline width line under it, indented, with a slider saved under `PenColor_outlinewidth`. Unticking the box hides the Outline width line in the dialog at once, and ticking it brings it back; the slider keeps its value. With the outline on as the default, the key stores an explicit `false` when it is off and is removed when it is on; the width key is removed when the width is the default.
 
 | Setting | Range | Default | Changes | Saved under |
 | --- | --- | --- | --- | --- |
@@ -109,13 +108,13 @@ The same pen number stays selected across pages. The selected pen is saved under
 
 ## Line styles
 
-The dialog's Line styles section has an Enable box for each of page 2 (Dashed lines) and page 3 (Directional arrow lines), both ticked by default and saved together under `PenColor_linestyles`, which is removed when both are ticked.
+The dialog's Line styles section has a box before each of page 2 (Dashed lines) and page 3 (Directional arrow lines), both ticked by default and saved together under `PenColor_linestyles`, which is removed when both are ticked.
 
 - An unticked style's page is skipped by the page button, Tab and the wheel, and has no dot on the page button.
 - Saving with the page you are on unticked moves the selected pen to the same number on page 1. A saved pen on an unticked page does the same when the pen tool opens.
 - With both unticked, the page button is hidden, and the script takes neither Tab nor the wheel.
 - Lines already drawn in an unticked page's pens still draw, dashes and arrows as before. Only the choice of those pens goes.
-- Unticking a style's Enable hides its slider row in the dialog at once, and ticking it brings it back; the slider keeps its value.
+- Unticking a style's box hides its slider row in the dialog at once, and ticking it brings it back; the slider keeps its value.
 
 ### Dash length (page 2)
 
@@ -138,7 +137,7 @@ A dialog slider from 0 to 8 line widths, under Dashed lines, saved under `PenCol
 
 ## Edge marks
 
-Clicking a cell edge cycles through the marks ticked in the dialog's Marks table (the Edge row), in this order, then empty:
+Clicking a cell edge cycles through the marks ticked in the dialog's Marks to cycle table (the Edge row), in this order, then empty:
 
 - SudokuPad's own X.
 - A circle, a small open ring. A dot saved by an earlier version draws as the circle.
@@ -161,7 +160,7 @@ A right click on an edge or a grid corner steps the same cycle backwards, from e
 
 ## Middle click
 
-The dialog's Middle click erases a whole line box is on by default and saved under `PenColor_middleerase` (removed when on, `false` when off). Off, a middle click is left wholly to SudokuPad and the browser: no erase, no default prevented, and the autoscroll as stock.
+The dialog's Middle click erase box is on by default and saved under `PenColor_middleerase` (removed when on, `false` when off). Off, a middle click is left wholly to SudokuPad and the browser: no erase, no default prevented, and the autoscroll as stock.
 
 With the box on and the pen tool on, a middle click on a line erases the whole line as one undo step: every piece joined to it where two pieces meet at a cell middle or a cell corner, and drawn with the same pen, so a branch or a crossing of that pen at such a point is included (two diagonals of one pen that cross mid-cell meet at no point and stay separate), but not a piece of another pen (on page 3, both direction characters of a pen count as one pen) and no mark; a middle click where there is no line does nothing and makes no mark. A middle click leaves the browser's autoscroll off over the grid in the pen tool, and outside the pen tool it is left alone.
 
@@ -171,7 +170,7 @@ The pen panel's last row holds a line mode button, between the sliders and the p
 
 ## Restore defaults
 
-The dialog's Restore defaults picks the Darker cell color page 1 preset, or SudokuPad default colors when the color tool has no page 1 to read. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and Enable boxes, the White outline box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults picks the Darker page 1 preset, or SudokuPad colors when the color tool has no page 1 to read. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and line style boxes, the White outlines box (on), the Outline width slider (2) and the Middle click box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 
@@ -181,7 +180,7 @@ The settings dialog names the skipped steps in one line at its top, for example 
 
 | Step | Not installed when SudokuPad has no | What you see with it skipped |
 | --- | --- | --- |
-| colors | the cell color tool (`tools.colour`); also skipped when reading its page or opening the pickers fails | No darker page preset is offered or saved, and a hold on a pen color button opens no pickers. The dialog's pickers, SudokuPad default colors and saved colors still work. With no color tool at all, the install save stores SudokuPad default colors. A color tool that is merely slow or empty is waited for, with SudokuPad's own pen colors until it is ready |
+| colors | the cell color tool (`tools.colour`); also skipped when reading its page or opening the pickers fails | No darker page preset is offered or saved, and a hold on a pen color button opens no pickers. The dialog's pickers, SudokuPad colors and saved colors still work. With no color tool at all, the install save stores SudokuPad colors. A color tool that is merely slow or empty is waited for, with SudokuPad's own pen colors until it is ready |
 | pen pages | the pen tool's `setSelectedColor`, `handleToolEnter` or `handleToolExit` | Only SudokuPad's nine pens. Tab, the mouse wheel and the page button do nothing, and a pen on page 2 or 3 that was selected is replaced by the same color on page 1. Lines already stored with a page 2 or page 3 pen keep their color |
 | arrow lines | the renderer's `renderPen` or `renderPart`, the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, or the app's `puzzle.cells` | Page 3 lines draw as plain lines of the pen's color, and a line dragged with a page 3 pen is stored in the pen's own character, with no direction |
 | drag highlight | the pen tool's `drawLineHint` | The highlight of a line being dragged fades with the opacity setting and takes the white outline |

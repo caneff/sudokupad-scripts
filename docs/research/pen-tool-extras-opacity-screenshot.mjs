@@ -85,7 +85,7 @@ const setOpacity = async (value) => {
   const group = page.locator('.dialog .setting-group').filter({ has: page.locator('label', { hasText: 'Experimental' }) })
   await group.waitFor({ state: 'visible' })
   if (await page.locator('.dialog .setting-group:not(.closed)').filter({ has: page.locator('label', { hasText: 'Experimental' }) }).count() === 0) await group.locator('label').first().click()
-  await page.locator('.dialog button').filter({ hasText: 'Pen tool extras' }).first().click()
+  await page.locator('.dialog button').filter({ hasText: 'Pen Tool Extras' }).first().click()
   await page.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
   await page.locator('#pen-tool-extras-opacity').evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 }

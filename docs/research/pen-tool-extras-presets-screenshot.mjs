@@ -1,6 +1,6 @@
 // Takes the Pen Tool Extras pen color preset picture in docs/research/:
 //   pen-tool-extras-presets.png  the settings dialog's Pen colors section, from its heading to the last row of pickers, with the
-//                                preset pulldown showing "Darker cell color page 1", the set a fresh install saves
+//                                preset pulldown showing "Darker page 1", the set a fresh install saves
 // Run from the repo root: node docs/research/pen-tool-extras-presets-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
@@ -23,11 +23,11 @@ await page.evaluate(() => Framework.setSetting('toolpen', true))
 await page.waitForFunction(() => (Framework.getData('PenColor_colors') || {}).preset === 'page-1')
 await page.click('#control-settings')
 await page.locator('.dialog .setting-group label', { hasText: 'Experimental' }).first().click()
-await page.locator('.dialog button', { hasText: 'Pen tool extras' }).first().click()
+await page.locator('.dialog button', { hasText: 'Pen Tool Extras' }).first().click()
 const editor = page.locator('#pen-tool-extras-editor')
 await editor.waitFor({ state: 'visible' })
 const shown = await editor.locator('select[data-pen-preset]').evaluate((el) => el.selectedOptions[0].textContent)
-if (shown !== 'Darker cell color page 1') throw new Error(`the pulldown shows ${shown}`)
+if (shown !== 'Darker page 1') throw new Error(`the pulldown shows ${shown}`)
 // The dialog grows into place, so its box is read once it has stopped moving.
 const measure = () => editor.evaluate((el) => {
   const heading = [...el.querySelectorAll('div')].find((d) => d.textContent === 'Pen colors').getBoundingClientRect()

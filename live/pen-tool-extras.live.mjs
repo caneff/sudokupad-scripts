@@ -27,9 +27,9 @@ const PAGE_PENS = [
 // SudokuPad's own pen colors (tool-pen.css), read off the page with no script installed.
 const OWN_PEN_HEX = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
 const toObject = (list) => Object.fromEntries(list.map((hex, i) => [String(i + 1), hex]))
-// What the install save stores: darker cell color page 1, with its preset name.
+// What the install save stores: Darker page 1, with its preset name.
 const INSTALLED = { ...toObject(PAGE_PENS[0]), preset: 'page-1' }
-const PRESET_OPTIONS = [['page-1', 'Darker cell color page 1'], ['page-2', 'Darker cell color page 2'], ['page-3', 'Darker cell color page 3'], ['sudokupad', 'SudokuPad default colors']]
+const PRESET_OPTIONS = [['page-1', 'Darker page 1'], ['page-2', 'Darker page 2'], ['page-3', 'Darker page 3'], ['sudokupad', 'SudokuPad colors']]
 const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 // SudokuPad's default cell colors for keys 0-9 (tool-color.js), as the page computes them.
 const CELL_VARS = ['transparent', 'rgb(214, 214, 214)', 'rgb(124, 124, 124)', 'rgb(-36, -36, -36)', 'rgb(179, 229, 106)', 'rgb(232, 124, 241)', 'rgb(228, 150, 50)', 'rgb(245, 58, 55)', 'rgb(252, 235, 63)', 'rgb(61, 153, 245)']
@@ -127,7 +127,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a fresh install saves darker cell color page 1 once, with its preset name, and swatches and strokes show it', async () => {
+  it('a fresh install saves Darker page 1 once, with its preset name, and swatches and strokes show it', async () => {
     assert.deepEqual(await settle(saved, INSTALLED), INSTALLED)
     await swatchesAre(PAGE_PENS[0])
     await drawInFirstColumn(4, 1)
@@ -138,14 +138,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await cellVars(), CELL_VARS)
   })
 
-  it('the dialog has a Pen tool extras entry in settings with a picker for each of the nine pen colors, set to the installed colors, and the pulldown shows their preset', async () => {
+  it('the dialog has a Pen Tool Extras entry in settings with a picker for each of the nine pen colors, set to the installed colors, and the pulldown shows their preset', async () => {
     await openExtrasEditor(p)
     assert.deepEqual(await pickerValues(), PAGE_PENS[0])
     assert.equal(await presetShown(), 'page-1')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('the pulldown lists one darker page per palette page, then SudokuPad default colors, and no Custom while the set is a preset', async () => {
+  it('the pulldown lists one darker page per palette page, then SudokuPad colors, and no Custom while the set is a preset', async () => {
     await openExtrasEditor(p)
     assert.deepEqual(await presetListed(), PRESET_OPTIONS)
     await closeExtrasEditorWith(p, 'Cancel')
@@ -184,14 +184,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setCellColor(['4', CELL_VARS[4]])
   })
 
-  it('the dialog lays the nine pen colors out as a 3 by 3 grid like the pen tool\'s buttons, each keeping its number', async () => {
+  it('the dialog lays the nine pen colors out as a 3 by 3 grid like the pen tool\'s buttons, in the order of their numbers', async () => {
     await openExtrasEditor(p)
     const cells = await editor().locator('input[type=color][data-pen]').evaluateAll((els) => els.map((el) => {
       const r = el.getBoundingClientRect()
-      return { pen: el.dataset.pen, x: r.x, y: r.y, label: el.previousElementSibling.textContent }
+      return { pen: el.dataset.pen, x: r.x, y: r.y }
     }))
     assert.deepEqual(cells.map((c) => c.pen), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-    assert.deepEqual(cells.map((c) => c.label), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
     const rows = [cells.slice(0, 3), cells.slice(3, 6), cells.slice(6)]
     for (const row of rows) {
       assert.equal(row.every((c) => Math.abs(c.y - row[0].y) < 2), true, `one row: ${JSON.stringify(row)}`)
@@ -274,7 +273,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setCellColor(['1', CELL_VARS[1]])
   })
 
-  it('Restore defaults then Save picks darker cell color page 1 from the palette in force, whichever page is current', async () => {
+  it('Restore defaults then Save picks Darker page 1 from the palette in force, whichever page is current', async () => {
     await setCellColor(['4', CUSTOM_CELL.css])
     const want = PAGE_PENS[0].map((hex, i) => (i === 3 ? CUSTOM_CELL.pen : hex))
     for (const page of [0, 1, 2]) {
@@ -766,11 +765,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
     const group = await openSettings(p)
-    const entry = group.locator('button').filter({ hasText: 'Pen tool extras' })
-    assert.equal((await entry.textContent()).trim(), 'Pen tool extras')
+    const entry = group.locator('button').filter({ hasText: 'Pen Tool Extras' })
+    assert.equal((await entry.textContent()).trim(), 'Pen Tool Extras')
     await entry.click()
     await editor().waitFor({ state: 'visible' })
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen tool extras')
+    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Pen Tool Extras')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
     await closeExtrasEditorWith(p, 'Cancel')
   })
@@ -781,7 +780,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 })
 
 describe('the color tool is not ready yet', { concurrency: false }, () => {
-  it('the pens show SudokuPad\'s own colors and nothing is saved while it waits, with no time limit; the dialog offers only SudokuPad default colors; once page 1 is readable it saves darker page 1', async () => {
+  it('the pens show SudokuPad\'s own colors and nothing is saved while it waits, with no time limit; the dialog offers only SudokuPad colors; once page 1 is readable it saves darker page 1', async () => {
     const { context, p, errors } = await openPage(browser)
     const warned = []
     p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
@@ -799,10 +798,10 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await openExtrasEditor(p)
       const editor = p.locator('#pen-tool-extras-editor')
       assert.deepEqual(await editor.locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value)), OWN_PEN_HEX)
-      // The unsaved colors are shown first and cannot be picked, so SudokuPad default colors stays pickable.
+      // The unsaved colors are shown first and cannot be picked, so SudokuPad colors stays pickable.
       assert.deepEqual(await editor.locator('select[data-pen-preset] option').evaluateAll((os) => os.map((o) => [o.value, o.disabled])), [['unsaved', true], ['sudokupad', false]])
       assert.equal(await editor.locator('select[data-pen-preset]').evaluate((el) => el.value), 'unsaved')
-      // With no page 1 to read, Restore defaults gives SudokuPad default colors.
+      // With no page 1 to read, Restore defaults gives SudokuPad colors.
       await dialogButton(p, 'Restore defaults').click()
       assert.equal(await editor.locator('select[data-pen-preset]').evaluate((el) => el.value), 'sudokupad')
       await closeExtrasEditorWith(p, 'Cancel')
@@ -815,7 +814,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
     }
   })
 
-  it('picking SudokuPad default colors and saving while the script waits outranks the install save', async () => {
+  it('picking SudokuPad colors and saving while the script waits outranks the install save', async () => {
     const { context, p } = await openPage(browser)
     try {
       await startPuzzle(p)
