@@ -99,12 +99,11 @@
   // A dialog box and a row `under` one name a setting by its path: `<setting>` for a flag, `<setting>.<flag>` for one of a set of flags.
   const boxValue = (state, path) => path.split('.').reduce((value, name) => value[name], state)
 
-  // null when the path names no box of the table.
   function draftWithBox (draft, path, checked) {
     const [name, flagName, ...rest] = path.split('.')
     const fallback = Object.hasOwn(SETTINGS, name) ? SETTINGS[name].fallback : undefined
     const known = rest.length === 0 && (flagName === undefined ? typeof fallback === 'boolean' : isPlainObject(fallback) && Object.hasOwn(fallback, flagName))
-    if (!known) return null
+    if (!known) throw new Error(`pen-tool-extras: the dialog box path "${path}" names no box of the settings table`)
     return { ...draft, [name]: flagName === undefined ? checked : { ...draft[name], [flagName]: checked } }
   }
 
@@ -508,7 +507,7 @@
 
   // Pen color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the pen buttons line up with the cell buttons.
   // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest pen is black as in SudokuPad's own set.
-  function derivedPenColors (keys, readColor, preset) {
+  function derivedPenColors (keys, readColor) {
     const colors = {}
     const missing = []
     const derived = []
@@ -532,7 +531,7 @@
       }
     }
     if (darkest) colors[darkest] = '#000000'
-    return { colors, preset, missing }
+    return { colors, missing }
   }
 
   function presetOptions (pageCount) {
@@ -544,7 +543,7 @@
     if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
     const page = presetOptions(pages.length).indexOf(preset)
     if (page === -1) throw new RangeError(`pen-tool-extras: ${preset} is not a preset of this palette`)
-    return derivedPenColors(pages[page], readColor, preset)
+    return { ...derivedPenColors(pages[page], readColor), preset }
   }
 
   // Strokes (`.pencolor-N`) and the tool's button swatches both read these variables; the eraser has its own fixed color and no variable.
@@ -567,6 +566,8 @@
 
   // The set in force. Until the install save it is SudokuPad's own, which is what the page shows with no override.
   let active = { ...SUDOKUPAD_SET, preset: UNSAVED }
+  // The page preset the set in force came from: a hand edit in the dialog makes the set Custom and keeps its missing pens, whose page the note still names.
+  let activePickedPreset = active.preset
 
   // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
   // values for them exist earlier and say nothing about a custom palette).
@@ -615,15 +616,16 @@
     }
   }
 
-  function adoptColors (set) {
+  function adoptColors (set, pickedPreset = set.preset) {
     active = set
+    activePickedPreset = pickedPreset
     applyStyle()
     document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = set.colors[el.dataset.pen] })
   }
 
-  function saveColors (set) {
+  function saveColors (set, pickedPreset) {
     Framework.setData(COLORS_KEY, storedPenColors(set))
-    adoptColors(set)
+    adoptColors(set, pickedPreset)
   }
 
   function savePenColor (pen, value) {
@@ -1738,7 +1740,7 @@
     return `<div class="${NOTE}">Off because SudokuPad changed: ${off.join(', ')}</div>`
   }
 
-  // `pickedPreset` is the page preset the colors came from, which a hand edit after it leaves in place.
+  // `pickedPreset` is the page preset the missing pens came from.
   function missingNote (missing, pickedPreset) {
     if (!missing.length) return ''
     const page = PAGE_PRESETS.indexOf(pickedPreset) + 1
@@ -1903,7 +1905,7 @@
 
   function openDialog () {
     let set = active
-    let pickedPreset = active.preset
+    let pickedPreset = activePickedPreset
     // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
     let colorsChosen = false
     let lineMode = currentLineMode()
@@ -1941,7 +1943,7 @@
               tag: 'button',
               content: 'Save',
               handler: () => {
-                if (colorsChosen) saveColors(set)
+                if (colorsChosen) saveColors(set, pickedPreset)
                 saveSettings(draft)
                 if (lineMode !== undefined && lineMode !== currentLineMode()) steps.penPanel.run(() => applyLineMode(lineMode))
                 closeDialogKeepingGrid()
@@ -1982,9 +1984,7 @@
       }
       const ticked = event.target.closest('input[type="checkbox"]')
       if (ticked) {
-        const next = draftWithBox(draft, ticked.dataset.box || '', ticked.checked)
-        if (!next) throw new Error(`pen-tool-extras: the dialog box ${ticked.id} is in no table row`)
-        draft = next
+        draft = draftWithBox(draft, ticked.dataset.box || '', ticked.checked)
         showRows()
         return
       }

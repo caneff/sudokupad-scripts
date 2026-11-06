@@ -363,8 +363,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     // Picking a pen color by hand takes it off the list; the others stay on it.
     await pick('4', FOUR.hex)
     assert.match(await editor().innerText(), /pen colors 5, 6, 7, 8, 9 keep SudokuPad's own/)
+    // Saved as Custom and opened again, the note still names the page the colors came from.
+    await closeExtrasEditorWith(p, 'Save')
+    await openExtrasEditor(p)
+    assert.equal(await presetShown(), 'custom')
+    assert.match(await editor().innerText(), /Cell color page 1 has no usable color at the matching button, so pen colors 5, 6, 7, 8, 9 keep SudokuPad's own/)
     await closeExtrasEditorWith(p, 'Cancel')
     await restorePalette()
+    await openExtrasEditor(p)
+    await restoreDefaults()
+    await closeExtrasEditorWith(p, 'Save')
+    assert.deepEqual(await saved(), INSTALLED)
   })
 
   it('a custom page of shorthand hex, named, rgba() and hsl() colors gives pen N the color at index N, a transparent entry keeping SudokuPad\'s own pen color', async () => {

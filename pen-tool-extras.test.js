@@ -56,7 +56,8 @@ test('the colors read have exactly nine keys, whatever was saved', () => {
 test('the colors read are a copy, never the saved object or the defaults', () => {
   const saved = { 1: '#ff0000' }
   assert.notEqual(colorsRead(saved), saved)
-  assert.notEqual(colorsRead(saved), SUDOKUPAD_PEN_COLORS)
+  // Every saved color is SudokuPad's own, so only a copy tells the result from the defaults.
+  assert.notEqual(colorsRead({ ...SUDOKUPAD_PEN_COLORS }), SUDOKUPAD_PEN_COLORS)
 })
 
 test('buildCss writes the nine variables under :root:root, not plain :root', () => {
@@ -325,7 +326,9 @@ test('presetColors names the preset it was given in the set it returns', () => {
 
 test('SudokuPad\'s own set is frozen, so no edit of a set in force can change it', () => {
   const set = presetColors('sudokupad', [], () => 'red')
-  assert.equal(Object.isFrozen(set) && Object.isFrozen(set.colors) && Object.isFrozen(set.missing), true)
+  assert.equal(Object.isFrozen(set), true, 'the set')
+  assert.equal(Object.isFrozen(set.colors), true, 'its colors')
+  assert.equal(Object.isFrozen(set.missing), true, 'its missing list')
   assert.equal(presetColors('sudokupad', [], () => 'red'), set, 'one set, not a fresh copy each time')
 })
 
@@ -1224,9 +1227,11 @@ test('a box ticked in the dialog sets its setting in the draft through the table
   assert.deepEqual(draftWithBox(draft, 'marks.cornerX', false).marks, { ...ALL, cornerX: false })
 })
 
-test('a box path that names no box of the table gives no draft', () => {
+test('a box path that names no box of the table is refused, not drafted', () => {
   const draft = editorState()
-  for (const path of ['', 'nothing', 'thickness', 'outline.x', 'lineStyles', 'lineStyles.solid', 'marks.toString']) assert.equal(draftWithBox(draft, path, false), null, path)
+  for (const path of ['', 'nothing', 'thickness', 'outline.x', 'lineStyles', 'lineStyles.solid', 'marks.toString', 'marks.x.y']) {
+    assert.throws(() => draftWithBox(draft, path, false), /names no box of the settings table/, path)
+  }
 })
 
 test('every checkbox the dialog draws names its setting path, and the path reads back the value it shows', () => {
