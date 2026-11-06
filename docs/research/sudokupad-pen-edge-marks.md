@@ -62,7 +62,8 @@ edge marks. Only the result text was read.
 - Pen values are lowercased on undo and replay: `propSet` and `propUnset` do `val.toLowerCase()`, and
   `Replay.actC2A` lowercases the whole action. So an added value has to be a lowercase letter or digit;
   uppercase would come back as another value. SudokuPad's own stop at `g`, the edge marks use `h` to `s`,
-  and `0` clears, which leaves `t` to `z`: seven values.
+  and `0` clears, which leaves `t` to `z`: seven values. (Too narrow: any character that lowercases to
+  itself works, not only ASCII letters and digits. See "Pen values past `z`" below.)
 - A mark on one of the grid's 100 corners (9 x 9) is stored on one cell. Four kinds of cell position would
   need eight values, so three kinds are used, two characters each (X, circle): `u`/`x` the bottom right
   of a cell (every corner with a cell up and left of it, so inner corners and the right and bottom outer
@@ -80,6 +81,41 @@ edge marks. Only the result text was read.
   (checked on all four outer corners at the default thickness).
 - Pictures: `pen-tool-extras-corners-grid.png`, `pen-tool-extras-corners-dialog.png`
   (`pen-tool-extras-corners-screenshot.mjs`).
+
+## Pen values past `z`, 2026-11-06 (v0.611.0, `script.js`; run on the page with `sudokupad-pen-alphabet-probe.mjs`)
+
+Question: with `h` to `y` taken by Pen Tool Extras and `z` the last ASCII value left, can more marks be stored?
+
+From the source:
+
+- A pen entry is exactly two characters, a value and a color. `Cell.togglePen` does `let [val, color] = valCol.split('')`
+  and pushes `val + color`, so a third character is dropped. `split('')` splits UTF-16 code units, so a character
+  outside the Basic Multilingual Plane (an emoji) would be cut in half.
+- `togglePen` removes every entry with the same value, whatever its color, so a cell holds one entry per value. A new
+  value is one new mark slot per cell.
+- The delimiters the value or color must not be: `,` (`Cell.toJSON` joins `pe` with it, `fromJSON` and `replayC2A`
+  split on it), `/` (`Replay.reActA`'s argument is `[^/,]+`), `_` (`Replay.reActC`'s argument is `[^_]+`).
+  `parseAction` drops an argument of exactly `-`, so a bare `-` erase action would be lost.
+- Whitespace would split the stroke's class (`cell-pen pen-${val} pencolor-${color}`).
+- The replay is compressed with an LZ-string-style codec (`base64Codec` in `puzpatcher.bundle.js`). Not read further.
+
+Run on the page, stock SudokuPad, no userscript (the probe sets each value with `app.act` in its own group):
+
+- Values `é`, `ß`, `α`, `ж`, `ā`, `!`, `~`, `#`, `.` and `;` (color `1`), and colors `é`, `α` and `!` (value `5`), all
+  stored, drew a stroke with that class (`cell-pen pen-é pencolor-1`), came off with one undo each, came back
+  identical through `getReplay` and `loadReplay`, and came back identical after a page reload. No page errors.
+- `5ab` stored as `5a`. `É1` stored as `é1`.
+- Not run: the delimiters above, a replay saved to a file and loaded, a real Tampermonkey install,
+  `crackingthecryptic.com`.
+
+So the alphabet is any single BMP character that lowercases to itself, except `,` `/` `_`, whitespace, and `0` as a
+value (it clears). Lowercase non-ASCII letters (`ß`, `à` to `ö`, `ø` to `ÿ`: 32 in Latin-1 alone) need no escaping in a
+CSS class selector; symbols such as `!` `#` `.` do (`CSS.escape`). As with `h` to `y`, stock SudokuPad and anyone
+without the script draw these values as nothing, and SudokuPad could later reject or claim them.
+
+A second route needs no new characters: for a new value, the color character's pen page (`1` to `9`, `a` to `i`,
+the page 3 forward set, the page 3 reverse set) can name the kind of mark, giving four kinds in nine colors per
+value. Existing values `h` to `y` cannot take it, since marks already saved with a page 2 or 3 pen draw solid.
 
 ## A dialog button over the grid leaves a pen mark, 2026-11-03 (v0.611.0, #63; run on the page in `live/pen-tool-extras-marks.live.mjs`)
 
