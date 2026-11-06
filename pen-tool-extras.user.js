@@ -54,7 +54,7 @@
     return (((index + delta) % count) + count) % count
   }
 
-  // Counted in steps from the minimum, so a half step does not meet a floating-point remainder.
+  // Any multiple of the step from the minimum; counted in steps rather than by a remainder, which a fractional step would leave inexact.
   function inRange (value, range) {
     return typeof value === 'number' && value >= range.min && value <= range.max && Number.isInteger((value - range.min) / range.step)
   }

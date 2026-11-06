@@ -56,7 +56,7 @@ Both sliders sit in the pen tool's panel, across its full width under the three 
 
 | Slider | Range | Default | Changes | Saved under |
 | --- | --- | --- | --- | --- |
-| Thickness | 1 to 16 | 5 | Lines, cell circles and crosses, and edge and corner marks, by the same factor | `PenColor_thickness` |
+| Thickness | 1 to 16, in steps of 0.5 | 5 | Lines, cell circles and crosses, and edge and corner marks, by the same factor | `PenColor_thickness` |
 | Opacity | 20 to 100%, in steps of 5 | 80 | How see-through every pen mark is | `PenColor_opacity` |
 
 **Mark growth:** above thickness 5, edge and corner marks also get longer, evenly to 1.6 times at 16, staying centred with the same stroke width, so the whole of an edge X clears a line of the same thickness. Lines don't. It's a CSS scale, so marks already drawn grow too. Dark Page keeps the largest of them inside its rectangle.

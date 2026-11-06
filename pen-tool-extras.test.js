@@ -355,11 +355,17 @@ test('the thickness runs 1 to 16 in half steps from SudokuPad\'s own pen width o
   assert.deepEqual(THICKNESS, { min: 1, max: 16, step: 0.5, fallback: 5 })
 })
 
-test('the thickness setting keeps a saved whole or half number from 1 to 16 and reads it back whole', () => {
+test('the thickness setting keeps a saved whole or half number from 1 to 16 unchanged', () => {
   for (const ok of [1, 1.5, 2.5, 5, 8, 12.5, 15.5, 16]) {
     assert.equal(SETTINGS.thickness.normalize(ok), ok)
     assert.equal(SETTINGS.thickness.accepts(ok), true, String(ok))
   }
+})
+
+test('a half-step thickness is saved as it is, not rounded', () => {
+  const calls = []
+  saveSetting({ setData: (key, value) => calls.push([key, value]), removeData: () => {} }, SETTINGS.thickness, 1.5)
+  assert.deepEqual(calls, [['PenColor_thickness', 1.5]])
 })
 
 test('inRange takes any multiple of the step from the minimum, and a whole-number range stays whole', () => {
