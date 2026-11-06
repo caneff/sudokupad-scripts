@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION } = require('./digit-color.user.js')
+const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport } = require('./digit-color.user.js')
 
 // Chris's table from issue #7, typed out here as the independent source for the constant.
 const TABLE = {
@@ -172,4 +172,29 @@ test('a Framework without getApp makes the script warn and change nothing', () =
 
 test('no Framework at all is left alone without a warning', () => {
   assert.deepEqual(startupWarnings(), [])
+})
+
+test('copiedSettings: the saved colors under their key, nothing when none are saved', () => {
+  assert.equal(copiedSettings({ getData: () => null }), '{}')
+  const saved = { 1: '#112233', 2: null }
+  assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => ({ [DATA_KEY]: saved, Other_key: 1 }[key]) })), { [DATA_KEY]: saved })
+})
+
+test('pastedSettings: colors are normalized, a value that is no color table is skipped and counted, other keys are ignored', () => {
+  const pasted = pastedSettings(JSON.stringify({ [DATA_KEY]: { 1: '#ABCDEF', 2: null, 3: 'nope' }, DarkPage_color: '#ffffff' }))
+  assert.deepEqual(pasted.values, { [DATA_KEY]: normalizeColors({ 1: '#abcdef', 2: null }) })
+  assert.equal(pasted.skipped, 0)
+  assert.deepEqual(pastedSettings(JSON.stringify({ [DATA_KEY]: ['#ffffff'] })), { values: {}, skipped: 1 })
+})
+
+test('pastedSettings: throws on text that is not a JSON object', () => {
+  assert.throws(() => pastedSettings('nope'), /not JSON/)
+  assert.throws(() => pastedSettings('3'), /not a settings object/)
+})
+
+test('pasteReport: says how many were pasted and how many skipped, and when the text held nothing', () => {
+  assert.equal(pasteReport(2, 0), 'Pasted 2 settings.')
+  assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
+  assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
+  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
 })

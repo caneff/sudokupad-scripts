@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Digit Color
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.5
+// @version      0.4.0
 // @description  Colors the digits themselves, one color per digit, starting from default colors and changed in a settings dialog. Entered digits, corner marks and centre marks change; givens keep their color, and a conflicting mark gets a small red circle behind it, keeping its digit color.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.5'
+  const VERSION = '0.4.0'
   const SETTINGS_GROUP = 'experimental'
   const DATA_KEY = 'DigitColor_colors'
   const STYLE_ID = 'digit-color-style'
@@ -119,8 +119,73 @@
     return rows + '<button type="button" data-act="defaults" style="margin-top:6px">Restore defaults</button>'
   }
 
+  const READERS = { [DATA_KEY]: (data) => (data && typeof data === 'object' && !Array.isArray(data) ? normalizeColors(data) : undefined) }
+
+  // Each reader returns the value to save, or undefined for one that is no good.
+  function copiedSettings (store) {
+    const saved = {}
+    for (const key of Object.keys(READERS)) {
+      const value = store.getData(key)
+      if (value !== null && value !== undefined) saved[key] = value
+    }
+    return JSON.stringify(saved)
+  }
+
+  // Keys of other scripts are ignored, not counted: only a value of this script's own that fails its reader is skipped.
+  function pastedSettings (text) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(READERS)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+    '<button type="button" data-act="copy-settings">Copy settings</button>' +
+    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
+    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+
+  // Wires the two buttons inside `root`; `apply` takes the pasted values.
+  function wireCopyPaste (root, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copiedSettings(Framework))
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
+          apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
+    module.exports = { VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport, COPY_PASTE_HTML, normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -230,6 +295,7 @@
       parts: [
         { tag: 'text', innerHTML: `<b>Digit color</b> <small style="opacity:.6">v${VERSION}</small>` },
         { tag: 'text', innerHTML: '<div id="digit-color-editor"></div>' },
+        { tag: 'text', innerHTML: COPY_PASTE_HTML },
         {
           tag: 'options',
           options: [
@@ -251,6 +317,13 @@
     if (!box) throw new Error('digit-color: the dialog has no editor element')
     const draw = () => { box.innerHTML = renderEditor(colors) }
     draw()
+    wireCopyPaste(box.closest('.dialog'), (values) => {
+      if (!(DATA_KEY in values)) return
+      colors = values[DATA_KEY]
+      Framework.setData(DATA_KEY, colors)
+      applyColors(colors)
+      draw()
+    })
     box.addEventListener('click', (event) => {
       const el = event.target.closest('button[data-act]')
       if (!el) return

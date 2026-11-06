@@ -25,6 +25,8 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 
 Each script except No Tab Letters adds an entry to SudokuPad's settings, under the Experimental group, which stays collapsed until you open it. A script's dialog shows its version beside the heading.
 
+Settings live in the browser's own storage, so another browser profile or device starts with none. Each of those dialogs has a **Copy settings** and a **Paste settings** button: Copy puts that script's saved settings on the clipboard as one line of JSON, and Paste, in the other browser, saves what the clipboard holds and applies it at once. Paste keeps only that script's own settings, skips any value the script would not accept and says how many, and tells you when the text is not settings. It needs the browser's clipboard permission, which the browser asks for on first use.
+
 ## Script notes
 
 ### Color by Digit
