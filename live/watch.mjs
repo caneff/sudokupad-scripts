@@ -93,7 +93,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const outcome = await watch({
     liveVersion,
     lastVersion: () => readLastVersion(file),
-    runSuite: () => run('npm', ['run', 'test:live', '--', '--test-reporter=tap'], { env: { ...process.env, LIVE_REFRESH: '1' } }),
+    runSuite: () => run('npm', ['run', 'test:live'], { env: { ...process.env, LIVE_REFRESH: '1', NODE_OPTIONS: '--test-reporter=tap' } }),
     fileIssue,
     remember: (v) => writeLastVersion(file, v)
   })
