@@ -66,7 +66,7 @@ const VERSION = /\?v=(\d+(?:\.\d+)+)/
 // The version a SudokuPad puzzle page names, or null when it names none.
 export const pageVersion = (html) => VERSION.exec(html)?.[1] ?? null
 
-const fetchPuzzlePage = async () => {
+export const fetchPuzzlePage = async () => {
   const response = await fetch(puzzleUrl(), { signal: AbortSignal.timeout(15000) })
   if (!response.ok) throw new Error(`${puzzleUrl()} answered ${response.status}`)
   return response.text()
