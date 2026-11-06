@@ -1,10 +1,10 @@
 // Takes a picture of Pen Tool Extras' page button on each pen page, with dashes (dash 3) and with dots (dash 0):
-// docs/research/<label>-page-button.png, and the pen buttons on page 3: <label>-page-3-pen-buttons.png, for #228. Run from the repo root:
+// docs/research/<label>-page-button.png, the pen buttons on page 3: <label>-page-3-pen-buttons.png, and an arrow line on the grid at the default thickness: <label>-grid-arrow-line.png, for #228. Run from the repo root:
 // node docs/research/pen-tool-extras-page-button-screenshot.mjs <label> [script path]
 /* global Framework */
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../../live/page.mjs'
-import { openPenTool, padValues } from '../../live/pen.mjs'
+import { drag, gridPoint, openPenTool, padValues } from '../../live/pen.mjs'
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const [label, scriptPath = 'pen-tool-extras.user.js'] = process.argv.slice(2)
@@ -45,4 +45,8 @@ await page.reload({ waitUntil: 'load' })
 await boot()
 for (let i = 0; i < 2; i++) { await page.locator(BUTTON).click(); await page.waitForTimeout(400) }
 writeFileSync(out.replace('-page-button.png', '-page-3-pen-buttons.png'), await page.locator('.tool-pen').first().screenshot())
+await page.locator('.tool-pen button[data-key="3"]').click()
+await drag(page, [[2.5, 1.5], [2.5, 5.5]])
+const [[x0, y0], [x1, y1]] = await Promise.all([gridPoint(page, [1.5, 1]), gridPoint(page, [3.5, 6.5])])
+writeFileSync(out.replace('-page-button.png', '-grid-arrow-line.png'), await page.screenshot({ clip: { x: x0, y: y0, width: x1 - x0, height: y1 - y0 } }))
 await browser.close()
