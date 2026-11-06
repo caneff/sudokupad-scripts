@@ -92,8 +92,8 @@
   rotation: the page button, Tab and the wheel skip it, saving with its pen selected moves the selection to the same number on page 1, and with both unticked the
   page button is hidden and the script takes neither Tab nor the wheel. Lines already drawn in its pens still draw. Its slider row (Dash length, Arrow spacing) is hidden
   in the dialog while the box is unticked.
-- **arrow spacing** — the dialog's slider under Directional arrow lines, 3 to 12 line widths from one arrow's middle to the next's, saved under `PenColor_arrowspacing`,
-  default 5. A draft until Save; it redraws the arrow lines already drawn. Each cell's segment fits whole arrows to it.
+- **arrow spacing** — the dialog's slider under Directional arrow lines, 3 to 12, scaling the distance from one arrow's middle to the next's (`spacing * 8 * (thickness / 5) ** 0.2` cell units), saved under
+  `PenColor_arrowspacing`, default 5. A draft until Save; it redraws the arrow lines already drawn. Each cell's segment fits whole arrows to it.
 - **dash length** — the dialog's slider, 0 to 8 line widths, saved under `PenColor_dash`, giving how long each dash of a dashed
   page's lines is. 3 is the default and 0 is dots; a dash scales with the thickness and changes lines already drawn. A dash too long for a cell's line to hold a gap
   (at least one line width wide where it shows) is shortened to leave one, so a page 2 line is never solid; each cell's segment starts and ends with half a dash, so a line is
