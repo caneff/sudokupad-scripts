@@ -1,5 +1,5 @@
 // Takes docs/research/site-auto-rules-resizer.png, the homepage's picture of Auto Rules Resizer: the rules pane of
-// one puzzle in a 1920x1080 window, as SudokuPad lays it out (Before) and once the script has fitted it (After),
+// one puzzle in a 1920x1080 window, as SudokuPad lays it out (Before) and once the script has fitted it (After), long enough that it scrolls as SudokuPad lays it out and the pane widens,
 // stacked in one picture. The recorded puzzle has no rules, so they are shown through SudokuPad's own
 // showMetaInfoUI, as in live/auto-rules-resizer.live.mjs. Run from the repo root:
 // node docs/research/site-auto-rules-resizer-screenshot.mjs
@@ -11,7 +11,12 @@ const script = readFileSync(new URL('../../auto-rules-resizer.user.js', import.m
 const out = new URL('./site-auto-rules-resizer.png', import.meta.url).pathname
 
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle; digits may repeat on an arrow. ' +
-  'Cells separated by a white dot contain consecutive digits. Not all possible white dots are given.'
+  'Cells separated by a white dot contain consecutive digits. Not all possible white dots are given. ' +
+  'Cells separated by a black dot contain digits where one is double the other. Not all possible black dots are given. ' +
+  'Digits may not repeat along a thermometer, and they increase from the bulb. ' +
+  'Digits in a killer cage may not repeat, and they sum to the small number in the cage corner. ' +
+  'Digits in a grey-shaded region form a palindrome, reading the same from either end. ' +
+  'Two cells joined by a line between their centers differ by at least five.'
 const MARGIN = 12
 
 const browser = await chromium.launch()
