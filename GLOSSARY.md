@@ -67,8 +67,8 @@
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
   is always half of it, so every width scales by one factor. Above 5 an edge or grid-corner mark also grows in length (the **mark growth**: a CSS scale about its own middle, 1 at 5 and 1.6 at 16, its stroke width divided by the scale so it stays as thick); lines never grow.
 - **pen panel sliders** — Thickness and Opacity, drawn in the pen tool's panel in the last row, the row SudokuPad gives its
-  line mode pulldown (`.penlinemode`), which the script hides and moves to the settings dialog (**line mode**). The row's
-  right end holds the **page button**. They exist only while the pen tool is on, and have no Save or Cancel. The settings
+  line mode pulldown (`.penlinemode`), which the script hides and replaces with the **line mode button** (**line mode**). The row's
+  right end holds the **page button**, and the line mode button sits left of it. They exist only while the pen tool is on, and have no Save or Cancel. The settings
   dialog also holds both sliders (drafts, applied on Save), each in a row of Line settings with a **slider box** at the right under the
   small heading "Slider in panel", saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
   its row stays as an empty row of the same height, and with both hidden the block is not drawn. Its Restore defaults
@@ -113,6 +113,7 @@
 - **color character** — the one character a stroke stores for its pen color, and the replay holds as `pc:<character>`: `1`
   to `9` on page 1, `a` to `i` on page 2, `j` to `z` and `0` on page 3 (two to a pen, see **direction character**). The **pen color** number (1 to 9) is the button the character is on, and the
   only part SudokuPad's own `ToolPen_color` ever holds; the selected character is saved under `PenColor_pen`.
+- **line mode button** — the 4rem square button in the pen panel's last row, left of the **page button** (at the row's right end when there is no page button). A click or a touch tap steps **line mode** Center & Edge, Center only, Edge only and round, through SudokuPad's own setting. Its icon is a faint 2x2 cell grid with the center line, the edge line, or both; its hover label (`title`) names the current mode with SudokuPad's labels.
 - **page button** — the square button at the right end of the pen panel's last row. It shows the line the next enabled page draws,
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
@@ -123,7 +124,7 @@
 - **settings gear** — the small white box with a purple gear in the upper right corner of SudokuPad's pen tool button. A click or tap opens
   Pen Tool Extras' settings dialog and leaves the selected tool alone. It shows whenever SudokuPad shows the pen tool button.
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
-  saved by SudokuPad under `ToolPen_linemode`; the script's settings dialog holds the choice.
+  saved by SudokuPad under `ToolPen_linemode`. The pen panel's **line mode button** steps it: a click goes Center & Edge, Center only, Edge only, and round.
 - **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
   another in the Dark page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
   with the color.
