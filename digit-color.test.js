@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION } = require('./digit-color.user.js')
+const { normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR, VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport } = require('./digit-color.user.js')
 
 // Chris's table from issue #7, typed out here as the independent source for the constant.
 const TABLE = {
@@ -172,4 +172,36 @@ test('a Framework without getApp makes the script warn and change nothing', () =
 
 test('no Framework at all is left alone without a warning', () => {
   assert.deepEqual(startupWarnings(), [])
+})
+
+test('copiedSettings: the table in force, defaults included for a digit or a whole table not saved', () => {
+  assert.deepEqual(JSON.parse(copiedSettings({ getData: () => null })), { [DATA_KEY]: DEFAULT_COLORS })
+  const saved = { 1: '#112233', 2: null }
+  assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => ({ [DATA_KEY]: saved, Other_key: 1 }[key]) })), { [DATA_KEY]: normalizeColors(saved) })
+})
+
+test('pastedSettings: a table of colors and nulls is kept, one with a bad entry or no digit is skipped and counted, other keys are ignored', () => {
+  const pasted = pastedSettings(JSON.stringify({ [DATA_KEY]: { 1: '#ABCDEF', 2: null }, DarkPage_color: '#ffffff' }))
+  assert.deepEqual(pasted, { values: { [DATA_KEY]: normalizeColors({ 1: '#abcdef', 2: null }) }, skipped: 0 })
+  for (const bad of [{ 1: 'nope' }, { 1: '#abcdef', 2: 'nope' }, {}, ['#ffffff'], { x: '#ffffff' }]) {
+    assert.deepEqual(pastedSettings(JSON.stringify({ [DATA_KEY]: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
+  }
+})
+
+test('pastedSettings: throws on text that is not a JSON object', () => {
+  assert.throws(() => pastedSettings('nope'), /not JSON/)
+  assert.throws(() => pastedSettings('3'), /not a settings object/)
+})
+
+test('pasteReport: says how many were pasted and how many skipped, and when the text held nothing', () => {
+  assert.equal(pasteReport(2, 0), 'Pasted 2 settings.')
+  assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
+  assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
+  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+})
+
+test('pastedSettings: text with none of this script\'s keys pastes and skips nothing; an array is no settings object', () => {
+  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
+  assert.throws(() => pastedSettings('[1]'), /not a settings object/)
 })

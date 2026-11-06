@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.2.1
+// @version      0.3.0
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.2.1'
+  const VERSION = '0.3.0'
   const SETTINGS_GROUP = 'experimental'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
@@ -64,6 +64,68 @@
       if (px === null) store.removeData(key)
       else store.setData(key, px)
     }
+  }
+
+  // A saved limit is a whole number of pixels, or null for none; a string or boolean that `normalizeLimit` would coerce is not one.
+  const readPastedLimit = (data) => (data === null || (Number.isInteger(data) && data > 0) ? data : undefined)
+  const READERS = { [MAX_WIDTH_KEY]: readPastedLimit, [MAX_HEIGHT_KEY]: readPastedLimit }
+
+  // null is no limit, so a paste can clear one.
+  function copiedSettings (store) {
+    const { maxWidth, maxHeight } = readLimits(store)
+    return JSON.stringify({ [MAX_WIDTH_KEY]: maxWidth, [MAX_HEIGHT_KEY]: maxHeight })
+  }
+
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
+  function pastedSettings (text) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(READERS)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+    '<button type="button" data-act="copy-settings">Copy settings</button>' +
+    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
+    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+
+  function wireCopyPaste (root, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copiedSettings(Framework))
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
   }
 
   function rulesRoom ({ rulesTop, containerBottom, viewportBottom, paddingBottom }) {
@@ -293,6 +355,9 @@
     module.exports = {
       VERSION,
       MAX_WIDTH_KEY,
+      copiedSettings,
+      pastedSettings,
+      pasteReport,
       MAX_HEIGHT_KEY,
       normalizeLimit,
       limitFromBox,
@@ -480,7 +545,8 @@
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
             row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
-            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
+            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>' +
+            COPY_PASTE_HTML
         },
         {
           tag: 'options',
@@ -503,7 +569,16 @@
         }
       ]
     })
-    if (!document.getElementById(MAX_WIDTH_INPUT_ID) || !document.getElementById(MAX_HEIGHT_INPUT_ID)) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
+    const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
+    const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
+    if (!widthInput || !heightInput) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
+    wireCopyPaste(widthInput.closest('.dialog'), (values) => {
+      limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
+      saveLimits(Framework, limits)
+      if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''
+      if (MAX_HEIGHT_KEY in values) heightInput.value = limits.maxHeight ?? ''
+      fitPage()
+    })
   }
 
   function dragRules (corner, dx, dy) {

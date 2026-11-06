@@ -8,7 +8,7 @@ const {
   buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, editedColors,
   readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS,
   HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
+  copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -2346,4 +2346,68 @@ test('a Framework with no getApp is reported once, naming the script', () => {
 
 test('a page with no Framework is left alone without a word', () => {
   assert.deepEqual(loadWithFramework(undefined), [])
+})
+
+test('copiedSettings: every setting at the value in force, the pen colors once saved, and no key it does not own', () => {
+  const saved = {
+    PenColor_thickness: 9,
+    PenColor_outline: false,
+    PenColor_linestyles: { dashed: false, arrows: true },
+    EdgeMarks_marks: { x: false },
+    PenColor_colors: { 1: '#112233', preset: 'page-2' },
+    PenColor_pen: '3',
+    ToolPen_linemode: 'edgeonly',
+    ColorByDigit_auto: true
+  }
+  const copied = JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null }))
+  assert.deepEqual(Object.keys(copied).sort(), [...Object.values(SETTINGS).map((row) => row.key), 'PenColor_colors'].sort())
+  assert.equal(copied.PenColor_thickness, 9)
+  assert.equal(copied.PenColor_opacity, SETTINGS.opacity.fallback)
+  assert.equal(copied.PenColor_outline, false)
+  assert.deepEqual(copied.EdgeMarks_marks, normalizeMarkSettings({ x: false }))
+  assert.deepEqual(copied.PenColor_colors, storedPenColors(readPenColors(saved.PenColor_colors)))
+  assert.equal('PenColor_colors' in JSON.parse(copiedSettings({ getData: () => null })), false)
+})
+
+test('pastedSettings: a setting that reads back is kept, one its reader would replace with a default is skipped and counted', () => {
+  const pasted = pastedSettings(JSON.stringify({
+    PenColor_thickness: 9,
+    PenColor_opacity: 7,
+    PenColor_dash: 'long',
+    PenColor_outline: false,
+    PenColor_middleerase: 'yes',
+    PenColor_linestyles: { dashed: false },
+    PenColor_sliders: { thickness: 1 },
+    EdgeMarks_marks: { x: false, circle: true },
+    PenColor_outlinewidth: 2.5,
+    PenColor_arrowspacing: { foo: true }
+  }))
+  assert.deepEqual(pasted.values, {
+    PenColor_thickness: 9, PenColor_outline: false, PenColor_linestyles: { dashed: false, arrows: true }, EdgeMarks_marks: normalizeMarkSettings({ x: false, circle: true })
+  })
+  assert.equal(pasted.skipped, 6)
+  for (const bad of [{ foo: true }, {}]) assert.deepEqual(pastedSettings(JSON.stringify({ PenColor_linestyles: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
+})
+
+test('pastedSettings: pen colors are kept in the saved form, a table with a bad or no color is skipped, other scripts\' keys and the selected pen are ignored', () => {
+  assert.deepEqual(pastedSettings(JSON.stringify({ PenColor_colors: { 1: '#ABCDEF', preset: 'page-2' }, PenColor_pen: '3', ToolPen_linemode: 'edgeonly', DarkPage_color: '#ffffff' })),
+    { values: { PenColor_colors: storedPenColors(readPenColors({ 1: '#abcdef', preset: 'page-2' })) }, skipped: 0 })
+  for (const bad of [{ 1: 'nope' }, { 1: '#abcdef', 2: 'nope' }]) assert.deepEqual(pastedSettings(JSON.stringify({ PenColor_colors: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
+})
+
+test('pastedSettings: throws on text that is not a JSON object', () => {
+  assert.throws(() => pastedSettings('x'), /not JSON/)
+  assert.throws(() => pastedSettings('1'), /not a settings object/)
+})
+
+test('pasteReport: says how many were pasted and how many skipped, and when the text held nothing', () => {
+  assert.equal(pasteReport(2, 0), 'Pasted 2 settings.')
+  assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
+  assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
+  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+})
+
+test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
+  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })

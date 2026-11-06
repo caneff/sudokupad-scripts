@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.8
+// @version      0.4.0
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.8'
+  const VERSION = '0.4.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
   const RECT_ID = 'dark-page-rect'
@@ -59,6 +59,63 @@
       console.error('dark-page: could not read the saved color, using the default', error)
       return null
     }
+  }
+
+  const READERS = { [DATA_KEY]: (data) => savedColor(data) ?? undefined }
+
+  // The color in force, the default included, so a paste can put a page back to the default.
+  const copiedSettings = (store) => JSON.stringify({ [DATA_KEY]: readSavedColor(store) ?? DEFAULT_COLOR })
+
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
+  function pastedSettings (text) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(READERS)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+    '<button type="button" data-act="copy-settings">Copy settings</button>' +
+    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
+    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+
+  function wireCopyPaste (root, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copiedSettings(Framework))
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
   }
 
   function wcagLuminance (color) {
@@ -156,7 +213,7 @@
   })
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, DATA_KEY, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
+    module.exports = { VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
   if (typeof document === 'undefined') return
 
@@ -244,6 +301,14 @@
   // Text boxes change size when the page's fonts arrive.
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleUpdate)
 
+  function saveColor (color) {
+    // The default is kept as nothing saved, so it follows any later change of the default.
+    if (color === DEFAULT_COLOR) Framework.removeData(DATA_KEY)
+    else Framework.setData(DATA_KEY, color)
+    pageColor = color
+    style.textContent = buildCss(pageColor)
+  }
+
   function openDialog () {
     let picked = pageColor
     Framework.showDialog({
@@ -254,7 +319,7 @@
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
             `<input type="color" id="dark-page-input" value="${picked}">` +
-            '<button type="button" id="dark-page-reset">Black</button></div>'
+            '<button type="button" id="dark-page-reset">Black</button></div>' + COPY_PASTE_HTML
         },
         {
           tag: 'options',
@@ -263,11 +328,7 @@
               tag: 'button',
               content: 'Save',
               handler: () => {
-                // The default is kept as nothing saved, so it follows any later change of the default.
-                if (picked === DEFAULT_COLOR) Framework.removeData(DATA_KEY)
-                else Framework.setData(DATA_KEY, picked)
-                pageColor = picked
-                style.textContent = buildCss(pageColor)
+                saveColor(picked)
                 Framework.closeDialog()
               }
             },
@@ -281,6 +342,12 @@
     if (!input || !reset) throw new Error('dark-page: the dialog has no color input')
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase() })
+    wireCopyPaste(input.closest('.dialog'), (values) => {
+      if (!(DATA_KEY in values)) return
+      picked = values[DATA_KEY]
+      input.value = picked
+      saveColor(picked)
+    })
     reset.addEventListener('click', (event) => {
       event.preventDefault()
       event.stopPropagation()

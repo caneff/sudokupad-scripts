@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.6.0
+// @version      0.7.0
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.6.0'
+  const VERSION = '0.7.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -191,6 +191,72 @@
     if (kept.length === 0) return null
     const active = kept.findIndex((entry) => entry.index === data.active)
     return { profiles: kept.map((entry) => entry.profile), active: Math.max(active, 0) }
+  }
+
+  const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
+  // `normalizeState` drops a malformed profile, so a state passes only when it kept every profile it held.
+  const readPastedProfiles = (data) => {
+    const state = normalizeState(data)
+    return state && state.profiles.length === data.profiles.length ? state : undefined
+  }
+  const READERS = { [PROFILES_KEY]: readPastedProfiles, [AUTO_KEY]: readPastedFlag, [ADDED_PRELOADS_KEY]: readPastedFlag }
+  // The profiles in force, which carry groups saved before profiles existed, and the auto mode in force, so a paste can switch either off.
+  function copiedSettings (store) {
+    const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [AUTO_KEY]: store.getData(AUTO_KEY) === true }
+    if (store.getData(ADDED_PRELOADS_KEY) === true) copied[ADDED_PRELOADS_KEY] = true
+    return JSON.stringify(copied)
+  }
+
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
+  function pastedSettings (text) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(READERS)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+    '<button type="button" data-act="copy-settings">Copy settings</button>' +
+    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
+    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+
+  function wireCopyPaste (root, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copiedSettings(Framework))
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
   }
 
   const sameGroups = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -542,7 +608,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -837,7 +903,7 @@
   function openDialog (app) {
     const pages = readPages()
     const colors = layoutColors(pages)
-    const savedState = loadState()
+    let savedState = loadState()
     let draft = savedState
     let auto = autoMode
     let newName = ''
@@ -847,6 +913,7 @@
       parts: [
         { tag: 'text', innerHTML: `<b>Color by digit</b> <small class="cbd-version">v${VERSION}</small>` },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
+        { tag: 'text', innerHTML: COPY_PASTE_HTML },
         {
           tag: 'options',
           options: [
@@ -879,6 +946,14 @@
       if (!added && newName.trim() === '') box.querySelector('[data-role="new-name"]').focus()
     }
     draw()
+    wireCopyPaste(box.closest('.dialog'), (values) => {
+      if (ADDED_PRELOADS_KEY in values) Framework.setData(ADDED_PRELOADS_KEY, values[ADDED_PRELOADS_KEY])
+      saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[AUTO_KEY] ?? autoMode)
+      savedState = loadState()
+      reshow(savedState)
+      auto = autoMode
+      draw()
+    })
     box.addEventListener('input', (event) => {
       if (event.target.matches('[data-role="new-name"]')) newName = event.target.value
     })
