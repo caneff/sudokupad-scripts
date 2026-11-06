@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.16.1
+// @version      1.16.2
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.16.1'
+  const VERSION = '1.16.2'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -84,7 +84,7 @@
     thickness: slider('PenColor_thickness', THICKNESS, adoptThickness, { label: 'Thickness', section: 'Line settings', box: 'show' }),
     opacity: slider('PenColor_opacity', OPACITY, adoptOpacity, { label: 'Opacity (%)', section: 'Line settings', box: 'show' }),
     dash: slider('PenColor_dash', DASH, syncPenPanel, { label: 'Dash length', under: 'lineStyles.dashed' }),
-    arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, redrawArrowLines, { label: 'Arrow spacing', under: 'lineStyles.arrows' }),
+    arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, adoptArrowSpacing, { label: 'Arrow spacing', under: 'lineStyles.arrows' }),
     outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline, { label: 'Outline width', under: 'outline' }),
     outline: flag('PenColor_outline', adoptOutline, { label: 'White outline on lines and marks', section: 'Other' }),
     middleErase: flag('PenColor_middleerase', doNothing, { label: 'Middle click erases a whole line', section: 'Other' }),
@@ -322,7 +322,7 @@
       buildThicknessCss(inForce.thickness),
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
-      buildPagesCss(inForce.thickness, inForce.dash),
+      buildPagesCss(inForce.thickness, inForce.dash, inForce.arrowSpacing),
       EDIT_CSS,
       DIALOG_CSS,
       GEAR_CSS,
@@ -766,8 +766,8 @@
   // The look of the pages after the first, which SudokuPad's own CSS knows nothing about, and the pen buttons' line swatches of every page: each pen character strokes in the color of its partner on the first page. A dash of 0
   // is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider. `:root:root` outranks SudokuPad's own rules whichever
   // stylesheet loads last.
-  function buildPagesCss (thickness, dash) {
-    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_NUMBERS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
+  function buildPagesCss (thickness, dash, spacing) {
+    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_NUMBERS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, spacing, 0))))
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
@@ -785,13 +785,13 @@
 
   // The slant is atan(28 / 40), the rise over the run of the line the button first showed. Under the line is a dot for each enabled page with the current one filled, as SudokuPad's color tool's page button has.
   const PAGE_BUTTON_ANGLE = 35
-  function renderPageIcon (current, dash, styles) {
+  function renderPageIcon (current, dash, spacing, styles) {
     const next = stepEnabledPage(current, 1, styles)
     const pages = enabledPages(styles)
     const dots = pages.map((page, i) =>
       `<circle cx="${20 - 3 * (pages.length - i - 1)}" cy="3" r="1.1" data-page-dot="${page === current ? 'filled' : 'outline'}"${page === current ? '' : ' fill="none"'}/>`)
     return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" fill="currentColor" stroke-width="0.5">' +
-      `<g data-page-sample="${next + 1}">${pageSwatch(PEN_PAGES[next], dash, PAGE_BUTTON_ANGLE)}</g><g>${dots.join('')}</g></svg>`
+      `<g data-page-sample="${next + 1}">${pageSwatch(PEN_PAGES[next], dash, spacing, PAGE_BUTTON_ANGLE)}</g><g>${dots.join('')}</g></svg>`
   }
 
   // Lines already drawn in a page that is not enabled still draw: its rules stay in the style.
@@ -843,9 +843,9 @@
         mode.insertAdjacentHTML('afterend', `<button class="${PAGE_BUTTON}" data-control="penpage" title="Next pen page"></button>`)
         button = document.querySelector(`.${PAGE_BUTTON}`)
       }
-      const shown = `${currentPage()}:${inForce.dash}:${enabledPages(inForce.lineStyles)}`
+      const shown = `${currentPage()}:${inForce.dash}:${inForce.arrowSpacing}:${enabledPages(inForce.lineStyles)}`
       if (button.dataset.shown === shown) return
-      button.innerHTML = renderPageIcon(currentPage(), inForce.dash, inForce.lineStyles)
+      button.innerHTML = renderPageIcon(currentPage(), inForce.dash, inForce.arrowSpacing, inForce.lineStyles)
       button.dataset.shown = shown
     }, removePageButtons)
   }
@@ -947,12 +947,11 @@
   }
   // `currentColor`, so one picture works both as a CSS mask and inline. The round cap is what makes a zero-length dash a dot.
   const SWATCH_LINE = { width: 2, from: 2, to: 22, middle: 12 }
-  const ARROW_SWATCH = "<path d='M5.4 9.8L8.6 12L5.4 14.2ZM10.4 9.8L13.6 12L10.4 14.2ZM15.4 9.8L18.6 12L15.4 14.2Z' fill='currentColor' stroke='none'/>"
-  function pageSwatch (page, dash, angle) {
+  function pageSwatch (page, dash, spacing, angle) {
     const { on, gap, offset } = dashPattern(SWATCH_LINE.width, dash, SWATCH_LINE.to - SWATCH_LINE.from)
     const round = (x) => Math.round(x * 1000) / 1000
     const dashes = page.dashed ? ` stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'` : ''
-    const line = `<path d='M${SWATCH_LINE.from} ${SWATCH_LINE.middle}H${SWATCH_LINE.to}' stroke-width='${SWATCH_LINE.width}'${dashes}/>${page.arrowLines ? ARROW_SWATCH : ''}`
+    const line = `<path d='M${SWATCH_LINE.from} ${SWATCH_LINE.middle}H${SWATCH_LINE.to}' stroke-width='${SWATCH_LINE.width}'${dashes}/>${page.arrowLines ? `<path d='${arrowRun([SWATCH_LINE.from, SWATCH_LINE.middle], [SWATCH_LINE.to, SWATCH_LINE.middle], SWATCH_LINE.width, spacing)}' fill='currentColor' stroke='none'/>` : ''}`
     return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-linecap='round'><g transform='rotate(${-angle} ${SWATCH_LINE.middle} ${SWATCH_LINE.middle})'>${line}</g></svg>`
   }
 
@@ -1020,14 +1019,11 @@
 
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
-  // Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join.
-  function arrowLine (value, forward, row, col, thickness, spacing) {
-    const points = linePoints(value, row, col)
-    const [from, to] = (forward ? points : points.reverse()).map(([r, c]) => [c * CELL_UNITS, r * CELL_UNITS])
+  // Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join. `size` is the line width the arrows are
+  // sized and spaced by.
+  function arrowRun (from, to, size, spacing) {
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
-    // Arrows keep the size they have at the default thickness below it; only the line gets thinner.
-    const size = Math.max(thickness, THICKNESS.fallback)
     const [half, wide] = [ARROW_LINE.halfLength * size, ARROW_LINE.halfWidth * size]
     // Every segment holds at least one arrow, however wide the spacing and thick the pen (a cell side rounds to none at the top of both), so a line never loses its direction.
     const count = Math.max(1, Math.round(length / (spacing * size)))
@@ -1037,9 +1033,16 @@
       const [wing, tip, other] = arrowCorners(from[0] + ux * along, from[1] + uy * along, ux, uy, half, wide)
       arrows += `M${pointText(wing)}L${pointText(tip)}L${pointText(other)}Z`
     }
+    return arrows
+  }
+
+  function arrowLine (value, forward, row, col, thickness, spacing) {
+    const points = linePoints(value, row, col)
+    const [from, to] = (forward ? points : points.reverse()).map(([r, c]) => [c * CELL_UNITS, r * CELL_UNITS])
+    // Arrows keep the size they have at the default thickness below it; only the line gets thinner.
     return {
       line: `M${pointText(from)}L${pointText(to)}`,
-      arrows,
+      arrows: arrowRun(from, to, Math.max(thickness, THICKNESS.fallback), spacing),
       lineWidth: ARROW_LINE.line * thickness
     }
   }
@@ -1508,6 +1511,11 @@
       '<feFlood flood-color="#ffffff" result="white"/>' +
       '<feComposite in="white" in2="grown" operator="in" result="halo"/>' +
       '<feMerge><feMergeNode in="halo"/><feMergeNode in="SourceGraphic"/></feMerge></filter></svg>'
+  }
+
+  function adoptArrowSpacing () {
+    redrawArrowLines()
+    syncPenPanel()
   }
 
   function adoptThickness () {
