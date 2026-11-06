@@ -98,7 +98,7 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
-// The details page text is pinned word for word: each feature says what you can do, not which control the script adds.
+// The details page text is pinned word for word: "What it adds" says what you can do, and "The pen panel" names each control.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
 const section = (page, heading) => {
   const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
@@ -115,7 +115,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-test(`${DETAILS} lists what the script adds to drawing, with no button named`, () => {
+test(`${DETAILS} lists what the script adds to drawing, one item per feature`, () => {
   assert.deepEqual(section(read(DETAILS), 'What it adds'), [
     'Pen colors from your cell colors. Darker versions of one cell color page, kept until you pick another in the settings.',
     'Dashed lines and arrow lines. Two more pages of pens.',
@@ -136,7 +136,7 @@ test(`${DETAILS} lists every pen panel button and slider in The pen panel`, () =
   ])
 })
 
-test(`${DETAILS} opens each feature with its bold lead-in`, () => {
+test(`${DETAILS} opens each item with its bold lead-in`, () => {
   assert.deepEqual(leadIns(read(DETAILS)), [
     'Pen colors from your cell colors.',
     'Dashed lines and arrow lines.',
@@ -152,8 +152,8 @@ test(`${DETAILS} opens each feature with its bold lead-in`, () => {
   ])
 })
 
-// Each feature a still picture can show has one picture inside its item; the erase item has none, since a
-// middle click does not show in a still picture. The page has no figure.
+// The items listed here have one picture inside them; every other item has none (a middle click, for one, does not
+// show in a still picture). The page has no figure.
 const PICTURES = {
   'Pen colors from your cell colors.': 'colors',
   'Dashed lines and arrow lines.': 'lines',
@@ -165,7 +165,7 @@ const PICTURES = {
 const NO_PICTURE = 'Erase a whole line.'
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
 
-test(`${DETAILS} puts one picture with alt text on each feature a picture can show`, () => {
+test(`${DETAILS} puts one picture with alt text on each item in PICTURES`, () => {
   const byLeadIn = new Map(items(read(DETAILS)).map(li => [leadIn(li), li]))
   for (const [leadIn, name] of Object.entries(PICTURES)) {
     const found = imgs(byLeadIn.get(leadIn) || '')
