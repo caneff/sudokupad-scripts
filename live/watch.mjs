@@ -4,15 +4,15 @@
 //
 // The version is read the way live/cache.mjs reads it (docs/research/sudokupad-version-signal.md). A new version
 // records SudokuPad again (LIVE_REFRESH=1) and runs the full suite. The last version checked is remembered in
-// `last-version`, beside the recording. It is remembered after a green run and after the bug is filed, never
-// before, so a run that dies midway or cannot file is repeated rather than lost.
+// `last-version`, beside the recording, after a green run and after the bug is filed, never before: a run that
+// dies midway or cannot file is repeated rather than lost.
 
 import { spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { fetchPuzzlePage, harPath, pageVersion } from './cache.mjs'
+import { harPath, liveVersion } from './cache.mjs'
 
 const REPO = 'caneff/sudokupad-scripts'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -31,28 +31,40 @@ export function writeLastVersion (file, version) {
   writeFileSync(file, `${version}\n`)
 }
 
-// The failing checks in `node --test --test-reporter=tap` output: each failing leaf, since a suite and a file
-// fail only because something inside them did. TAP prints a parent after its children, so a failure right after a
-// deeper one is that one's parent.
+// What failed in `node --test --test-reporter=tap` output. `checks` are tests that ran and failed. `unrun` are
+// what never got to run: a file that failed to load (a failure at the top level) and a test cancelled by a
+// failing `before` hook, which is how a missing Chromium or a failed recording shows. A parent suite fails only
+// because something inside it did, so it is neither. A failing `# TODO` test does not fail the run.
 export function failedChecks (tap) {
-  const failures = [...tap.matchAll(/^( *)not ok \d+ - (.*)$/gm)].map((m) => ({ depth: m[1].length, name: m[2] }))
-  return failures.filter((f, i) => !(failures[i - 1]?.depth > f.depth)).map((f) => f.name)
+  const lines = tap.split('\n')
+  const checks = []
+  const unrun = []
+  lines.forEach((line, i) => {
+    const m = /^( *)not ok \d+ - (.*)$/.exec(line)
+    if (!m || / # TODO\b/.test(m[2])) return
+    const next = lines.slice(i + 1).findIndex((l) => /^ *(not )?ok \d+ /.test(l))
+    const block = lines.slice(i + 1, next === -1 ? undefined : i + 1 + next).join('\n')
+    const type = /failureType: '(\w+)'/.exec(block)?.[1]
+    const name = m[2].replace(/\\([#\\])/g, '$1')
+    if (type === 'hookFailed' || (type === 'testCodeFailure' && m[1] === '')) unrun.push(name)
+    else if (type === 'testCodeFailure') checks.push(name)
+  })
+  return { checks, unrun }
 }
 
-export const issueFor = (version, checks) => ({
+export const issueFor = (version, { checks, unrun }) => ({
   title: `Live tests fail on SudokuPad ${version}`,
   body: [
     `\`npm run test:live\` is red against SudokuPad ${version}, recorded again for the run. Failing checks:`,
     '',
     ...checks.map((c) => `- ${c}`),
+    ...(unrun.length ? ['', 'Did not run (a file that failed to load, or a failed `before` hook):', '', ...unrun.map((c) => `- ${c}`)] : []),
     '',
     'Filed by `npm run watch:live` (`live/watch.mjs`).'
   ].join('\n')
 })
 
-// 'unchanged' (this version was checked before), 'green' or 'red'. Throws, and remembers nothing, when the live
-// version cannot be read, when the suite fails with no failing check to name (it did not run: a bug filed for it
-// would blame SudokuPad), or when the bug cannot be filed.
+// A suite that fails with no failing check did not run, and a bug for it would blame SudokuPad: that throws.
 export async function watch ({ liveVersion, lastVersion, runSuite, fileIssue, remember }) {
   const version = await liveVersion()
   if (lastVersion() === version) return 'unchanged'
@@ -61,9 +73,9 @@ export async function watch ({ liveVersion, lastVersion, runSuite, fileIssue, re
     remember(version)
     return 'green'
   }
-  const checks = failedChecks(output)
-  if (checks.length === 0) throw new Error(`the live suite failed on SudokuPad ${version} with no failing check in its output; it did not run`)
-  await fileIssue(issueFor(version, checks))
+  const failed = failedChecks(output)
+  if (failed.checks.length === 0) throw new Error(`the live suite failed on SudokuPad ${version} with no failing check; it did not run (${failed.unrun.length} unrun)`)
+  await fileIssue(issueFor(version, failed))
   remember(version)
   return 'red'
 }
@@ -77,14 +89,8 @@ const run = (command, args, { env = process.env, input } = {}) => new Promise((r
   if (input !== undefined) child.stdin.end(input)
 })
 
-const liveVersion = async () => {
-  const version = pageVersion(await fetchPuzzlePage())
-  if (version === null) throw new Error('the live puzzle page names no version')
-  return version
-}
-
-const fileIssue = async ({ title, body }) => {
-  const { ok } = await run('gh', ['issue', 'create', '--repo', REPO, '--label', 'bug', '--title', title, '--body-file', '-'], { input: body })
+export async function fileIssue ({ title, body }, runGh = run) {
+  const { ok } = await runGh('gh', ['issue', 'create', '--repo', REPO, '--label', 'bug', '--title', title, '--body-file', '-'], { input: body })
   if (!ok) throw new Error('gh issue create failed')
 }
 

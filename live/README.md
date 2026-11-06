@@ -34,13 +34,6 @@ owns it; its header comment is the full rule.
 ## The daily watch
 
 `npm run watch:live` (`live/watch.mjs`) is for a daily schedule, so a SudokuPad update that breaks a script shows
-up as a bug and not when someone installs it.
-
-- It reads SudokuPad's version with one plain request, as the recording check does.
-- On a version it has not checked, it runs `npm run test:live` with `LIVE_REFRESH=1`, which records again first.
-- Green remembers the version. Red files one bug (`gh issue create`, label `bug`) naming the version and the
-  failing checks, then remembers the version.
-- A version already checked is a no-op. The last version checked lives in `last-version`, beside the
-  recording.
-- A suite that fails with no failing check named (Chromium missing, say) files nothing and remembers nothing, so
-  the next run tries again; the run's own output says why.
+up as a bug and not when someone installs it. Its header comment is the full rule: a new version runs the suite
+with `LIVE_REFRESH=1`, red files one `bug` issue, and a version already checked is a no-op. The last version
+checked lives in `last-version`, beside the recording.
