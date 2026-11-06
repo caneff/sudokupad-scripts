@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.7
+// @version      0.6.0
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,16 +17,19 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.7'
+  const VERSION = '0.6.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index }.
   const PROFILES_KEY = 'ColorByDigit_profiles'
-  const MAX_PROFILES = 4
+  const MAX_PROFILES = 6
   const MAX_NAME_LENGTH = 24
   const CUSTOM_NAME = 'Custom'
   const AUTO_KEY = 'ColorByDigit_auto'
+  // Set once Entropic and Modular have been offered to an install that already had profiles, so deleting one keeps it deleted.
+  const ADDED_PRELOADS_KEY = 'ColorByDigit_addedPreloads'
+  const ADDED_PRELOAD_NAMES = ['Entropic', 'Modular']
   // SudokuPad's numpad order: 1 to 9 in rows of three, then 0 alone in the middle column.
   const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
   const NUMPAD_KEY = '2.4em'
@@ -41,6 +44,16 @@
     'Odd/Even': [
       { key: '1', digits: ['1', '3', '5', '7', '9'] },
       { key: '2', digits: ['0', '2', '4', '6', '8'] }
+    ],
+    Entropic: [
+      { key: '7', digits: ['0', '1', '2', '3'] },
+      { key: '4', digits: ['4', '5', '6'] },
+      { key: '9', digits: ['7', '8', '9'] }
+    ],
+    Modular: [
+      { key: '6', digits: ['1', '4', '7'] },
+      { key: '5', digits: ['2', '5', '8'] },
+      { key: '8', digits: ['0', '3', '6', '9'] }
     ]
   }
 
@@ -196,6 +209,15 @@
     const equal = preloads.findIndex((profile) => sameGroups(profile.groups, legacy))
     if (equal >= 0) return { profiles: preloads, active: equal }
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
+  }
+
+  function withAddedPreloads (state) {
+    const profiles = state.profiles.map(cloneProfile)
+    for (const name of ADDED_PRELOAD_NAMES) {
+      const groups = PRELOADS[name]
+      if (profiles.length < MAX_PROFILES && !profiles.some((p) => sameGroups(p.groups, groups))) profiles.push({ name, groups: cloneGroups(groups) })
+    }
+    return { profiles, active: state.active }
   }
 
   const activeGroups = (state) => state.profiles[state.active].groups
@@ -520,7 +542,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -536,8 +558,15 @@
     return layoutPages(palette.pages, tool.currentPage, readColor)
   }
 
-  const loadState = () => stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
   const saveState = (state) => Framework.setData(PROFILES_KEY, state)
+  function loadState () {
+    const state = stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
+    if (Framework.getData(ADDED_PRELOADS_KEY) === true) return state
+    const added = withAddedPreloads(state)
+    if (added.profiles.length !== state.profiles.length) saveState(added)
+    Framework.setData(ADDED_PRELOADS_KEY, true)
+    return added
+  }
   const loadGroups = () => activeGroups(loadState())
 
   // The raw `--cell-color-<key>` value can be any CSS color, so it is resolved on a probe.

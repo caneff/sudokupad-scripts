@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -111,13 +111,24 @@ test('Odd/Even maps odd to key 1, even and 0 to key 2', () => {
   assert.equal(byDigit(PRELOADS['Odd/Even']), '2121212121')
 })
 
+test('Entropic maps 0-3 to key 7, 4-6 to key 4, 7-9 to key 9', () => {
+  assert.equal(byDigit(PRELOADS.Entropic), '7777444999')
+})
+
+test('Modular maps 1, 4, 7 to key 6, 2, 5, 8 to key 5, 0, 3, 6, 9 to key 8', () => {
+  assert.equal(byDigit(PRELOADS.Modular), '8658658658')
+})
+
 const LOW = PRELOADS['Low/5/High']
 const ODD = PRELOADS['Odd/Even']
+const ENTROPIC = PRELOADS.Entropic
+const MODULAR = PRELOADS.Modular
+const ALL_PRELOAD_NAMES = ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular']
 const names = (state) => state.profiles.map((p) => p.name)
 
-test('a fresh install has Low/5/High then Odd/Even, with Low/5/High active', () => {
+test('a fresh install has the four preloads, with Low/5/High active', () => {
   const state = stateFromStored(null, null)
-  assert.deepEqual(names(state), ['Low/5/High', 'Odd/Even'])
+  assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
   assert.equal(state.active, 0)
   assert.deepEqual(activeGroups(state), LOW)
 })
@@ -129,17 +140,17 @@ test('a fresh install returns copies, so editing one never edits the preloads', 
   assert.deepEqual(stateFromStored(null, null).profiles[0].groups, LOW)
 })
 
-test('saved groups equal to a preload make that preload the active profile, beside the other preload', () => {
+test('saved groups equal to a preload make that preload the active profile, beside the other preloads', () => {
   const state = stateFromStored(null, cloneOf(ODD))
-  assert.deepEqual(names(state), ['Low/5/High', 'Odd/Even'])
+  assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
   assert.equal(state.active, 1)
   assert.deepEqual(activeGroups(stateFromStored(undefined, cloneOf(LOW))), LOW)
   assert.equal(stateFromStored(undefined, cloneOf(LOW)).active, 0)
 })
 
-test('saved groups that equal no preload become the active profile named Custom, first, beside both preloads, even when empty', () => {
+test('saved groups that equal no preload become the active profile named Custom, first, beside the four preloads, even when empty', () => {
   const mine = [{ key: '3', digits: ['1', '2'] }]
-  assert.deepEqual(stateFromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }, { name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 0 })
+  assert.deepEqual(stateFromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }, { name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }, { name: 'Entropic', groups: ENTROPIC }, { name: 'Modular', groups: MODULAR }], active: 0 })
   assert.deepEqual(stateFromStored(null, []).profiles[0], { name: 'Custom', groups: [] })
 })
 
@@ -158,13 +169,13 @@ test('saved profiles win over saved groups, keeping their order and active one',
   assert.deepEqual(stateFromStored(saved, cloneOf(ODD)), saved)
 })
 
-test('saved profiles are untrusted: with none usable they fall back, and an extra past four drops', () => {
+test('saved profiles are untrusted: with none usable they fall back, and an extra past six drops', () => {
   const fresh = stateFromStored(null, null)
   for (const bad of [{}, { profiles: [] }, { profiles: 'x', active: 0 }, { profiles: [{ name: 3, groups: [] }], active: 0 }, { profiles: [{ name: 'A', groups: 'x' }], active: 0 }, { profiles: [{ name: '  ', groups: [] }], active: 0 }]) {
     assert.deepEqual(stateFromStored(bad, null), fresh)
   }
-  const five = ['a', 'b', 'c', 'd', 'e'].map((name) => ({ name, groups: [] }))
-  assert.deepEqual(names(stateFromStored({ profiles: five, active: 3 }, null)), ['a', 'b', 'c', 'd'])
+  const seven = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((name) => ({ name, groups: [] }))
+  assert.deepEqual(names(stateFromStored({ profiles: seven, active: 3 }, null)), ['a', 'b', 'c', 'd', 'e', 'f'])
 })
 
 test('one unusable saved profile drops out and the others are kept, the active one staying the same profile', () => {
@@ -181,6 +192,33 @@ test('an active index that is no profile becomes the first: out of range, negati
   assert.equal(stateFromStored({ profiles: two, active: 1 }, null).active, 1)
 })
 
+test('withAddedPreloads appends Entropic and Modular after the saved profiles and leaves the active profile alone', () => {
+  const saved = { profiles: [{ name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 1 }
+  const next = withAddedPreloads(saved)
+  assert.deepEqual(names(next), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular'])
+  assert.deepEqual(next.profiles[2].groups, ENTROPIC)
+  assert.deepEqual(next.profiles[3].groups, MODULAR)
+  assert.equal(next.active, 1)
+})
+
+test('withAddedPreloads skips a preload whose groups a profile already has, whatever its name', () => {
+  const saved = { profiles: [{ name: 'Mine', groups: cloneOf(MODULAR) }, { name: 'Custom', groups: [] }, { name: 'Odd/Even', groups: ODD }, { name: 'Z', groups: [] }], active: 3 }
+  const next = withAddedPreloads(saved)
+  assert.deepEqual(names(next), ['Mine', 'Custom', 'Odd/Even', 'Z', 'Entropic'])
+  assert.equal(next.active, 3)
+  assert.deepEqual(withAddedPreloads(next), next)
+})
+
+test('withAddedPreloads stops at the profile limit and never changes the state it is given', () => {
+  const full = { profiles: ['a', 'b', 'c', 'd', 'e'].map((name) => ({ name, groups: [] })), active: 0 }
+  const before = cloneOf(full)
+  assert.deepEqual(names(withAddedPreloads(full)), ['a', 'b', 'c', 'd', 'e', 'Entropic'])
+  assert.deepEqual(full, before)
+  const next = withAddedPreloads(full)
+  next.profiles[5].groups[0].digits.push('x')
+  assert.deepEqual(PRELOADS.Entropic[0].digits, ['0', '1', '2', '3'])
+})
+
 function cloneOf (value) { return JSON.parse(JSON.stringify(value)) }
 
 const three = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD }, { name: 'C', groups: [] }], active: 1 }
@@ -194,10 +232,11 @@ test('addProfile appends a copy of the active profile under the trimmed name, an
   assert.deepEqual(next.profiles[1].groups, ODD)
 })
 
-test('addProfile does nothing at four profiles or with a blank name', () => {
-  const four = addProfile(three, 'D')
-  assert.equal(MAX_PROFILES, 4)
-  assert.deepEqual(addProfile(four, 'E'), four)
+test('addProfile does nothing at six profiles or with a blank name', () => {
+  const six = addProfile(addProfile(addProfile(three, 'D'), 'E'), 'F')
+  assert.equal(MAX_PROFILES, 6)
+  assert.equal(six.profiles.length, 6)
+  assert.deepEqual(addProfile(six, 'G'), six)
   assert.deepEqual(addProfile(three, '   '), three)
 })
 
@@ -519,7 +558,7 @@ test('renderProfiles lists each profile as a radio row with its handle, colors w
   assert.match(html, /data-index="1"[^>]*tabindex="0"/)
   assert.match(html, /data-index="0"[^>]*tabindex="-1"/)
   assert.equal(count(html, /data-act="delete"/g), 2)
-  assert.match(html, />2 of 4</)
+  assert.match(html, />2 of 6</)
   assert.match(html, /Low &lt;b&gt;/)
   assert.doesNotMatch(html, /Low <b>/)
   assert.equal(count(html, /data-role="chip"/g), 5)
@@ -532,14 +571,14 @@ test('renderProfiles marks the active row by aria-checked alone, and the stylesh
   assert.match(STYLE_CSS, /\[aria-checked="true"\] \.cbd-name \{[^}]*font-weight: 600/)
 })
 
-test('renderProfiles disables delete on the last profile and Add at four', () => {
+test('renderProfiles disables delete on the last profile and Add at six', () => {
   const one = { profiles: [profileState.profiles[0]], active: 0 }
   assert.equal(count(renderProfiles(one, colorFor, ''), /data-act="delete"[^>]*disabled/g), 1)
   assert.equal(count(renderProfiles(profileState, colorFor, ''), /data-act="delete"[^>]*disabled/g), 0)
   assert.equal(count(renderProfiles(profileState, colorFor, ''), /data-act="add"[^>]*disabled/g), 0)
-  const four = { profiles: [...profileState.profiles, ...profileState.profiles], active: 0 }
-  assert.match(renderProfiles(four, colorFor, ''), /data-act="add"[^>]*disabled/)
-  assert.match(renderProfiles(four, colorFor, ''), />4 of 4</)
+  const six = { profiles: [...profileState.profiles, ...profileState.profiles, ...profileState.profiles], active: 0 }
+  assert.match(renderProfiles(six, colorFor, ''), /data-act="add"[^>]*disabled/)
+  assert.match(renderProfiles(six, colorFor, ''), />6 of 6</)
 })
 
 test('renderProfiles keeps the typed name in the name field, escaped', () => {

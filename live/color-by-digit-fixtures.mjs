@@ -23,6 +23,9 @@ const storedAt = (key) => `svencodes_${key}`
 export const PROFILES_KEY = 'ColorByDigit_profiles'
 export const PROFILES_STORAGE_KEY = storedAt(PROFILES_KEY)
 export const LEGACY_STORAGE_KEY = storedAt('ColorByDigit_groups')
+export const ADDED_PRELOADS_STORAGE_KEY = storedAt('ColorByDigit_addedPreloads')
+// Saved profiles with the one-time Entropic and Modular add already done, so a test sees exactly the profiles it seeded.
+export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true })
 export const AUTO_KEY = 'ColorByDigit_auto'
 export const AUTO_STORAGE_KEY = storedAt(AUTO_KEY)
 
@@ -57,7 +60,7 @@ export async function startInjected (p, script, mode = 'after-start') {
 // A page with `script` injected at `mode`. `saved` maps a localStorage key to a JSON value, written before the page's own
 // scripts run and only while the key is absent, so a reload keeps what was saved. `force` is written every load.
 // With neither, the page starts with SEED saved as the profiles.
-export async function openSession (browser, script, { saved = { [PROFILES_STORAGE_KEY]: SEED }, force = {}, contextOptions = {}, mode = 'after-start' } = {}) {
+export async function openSession (browser, script, { saved = savedProfiles(SEED), force = {}, contextOptions = {}, mode = 'after-start' } = {}) {
   const entries = (object) => Object.entries(object).map(([key, value]) => [key, JSON.stringify(value)])
   const opened = await openPage(browser, {
     contextOptions,
