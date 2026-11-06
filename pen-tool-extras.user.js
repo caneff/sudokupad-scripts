@@ -1739,8 +1739,8 @@
   }
 
   function missingNote (missing, preset) {
+    if (!missing.length) return ''
     const page = PAGE_PRESETS.indexOf(preset) + 1
-    if (!missing.length || !page) return ''
     const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
     return `<div class="${NOTE}">Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
