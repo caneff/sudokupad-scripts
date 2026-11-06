@@ -17,7 +17,7 @@ With the pen tool on, its panel is the same size as SudokuPad's, laid out in thr
 
 - **The colors**: the nine pen color buttons, three to a row, 2.5rem tall instead of 4rem.
 - **The controls**: under the colors, one row of three full-size buttons on the same columns, in this order: the line mode button, the line type button (the page button) and the settings button. The settings button, an outline gear, opens the settings dialog.
-- **The sliders**: Thickness and Opacity in a button-style box across the full width, in the row under the controls.
+- **The sliders**: Thickness and Opacity across the full width, in the row under the controls, on the same tray.
 
 Keypad Flipped still swaps the first and third rows of colors. The controls and the sliders sit on a light purple tray with round corners. SudokuPad's own key 0 and Delete buttons stay hidden. Each of the three control icons is drawn at the same size and centred on its drawing. The settings icon is Lucide's `settings` (ISC licence).
 

@@ -478,7 +478,7 @@ test('the panel markup has Thickness above Opacity, each with the range and valu
   ])
   assert.deepEqual([...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]), ['Thickness', 'Opacity'])
   assert.equal(html.match(/<input [^>]*tabindex="-1"/g).length, 2)
-  assert.match(html, /<button [^>]*tabindex="-1" aria-hidden="true"><\/button>/)
+  assert.doesNotMatch(html, /<button/)
 })
 
 test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
@@ -1070,7 +1070,7 @@ test('a hidden slider has no input, and the other keeps its place beside an empt
   assert.deepEqual(only('thickness'), ['pen-tool-extras-thickness'])
   assert.deepEqual(only('opacity'), ['pen-tool-extras-opacity'])
   const html = renderPanelSliders(9, 35, { thickness: false, opacity: true })
-  assert.match(html, /^<div class="pen-tool-extras-sliders"><button [^>]*><\/button><div class="pen-tool-extras-slider" data-empty><\/div><div class="pen-tool-extras-slider"/)
+  assert.match(html, /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider" data-empty><\/div><div class="pen-tool-extras-slider"/)
   const low = renderPanelSliders(9, 35, { thickness: true, opacity: false })
   assert.match(low, /<div class="pen-tool-extras-slider" data-empty><\/div><\/div>$/)
 })
@@ -1436,18 +1436,16 @@ test('the tray is #efeaf4 with 14px corners, reaches 0.25rem past the color bloc
   assert.equal(PANEL_CSS.includes('.tool-pen .controls-input:not(:has(.pen-tool-extras-sliders)) .pen-tool-extras-tray { grid-row: 4 / 5; margin-bottom: -0.25rem; }'), true, 'with no sliders the tray ends under the controls, with an end line since a box placed by its start alone runs to the panel\'s edge')
 })
 
-test('the sliders block spans the three columns of the fifth grid row, with the buttons\' margin and 0.4rem below, over a real button for its box', () => {
+test('the sliders block spans the three columns of the fifth grid row, with the buttons\' margin and 0.4rem below, and draws no box of its own', () => {
   const rule = ruleOf('.pen-tool-extras-sliders')
   assert.match(rule, /grid-row: 5; grid-column: 1 \/ 4;/)
   assert.match(rule, /box-sizing: border-box;/)
   assert.match(rule, /margin: 0\.15rem 0\.15rem 0\.4rem;/)
   assert.doesNotMatch(rule, /border:|background/)
-  assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><button class="pen-tool-extras-sliders-box" tabindex="-1" aria-hidden="true"><\/button>/)
-  const box = ruleOf('.tool-pen .controls-input button.pen-tool-extras-sliders-box')
-  assert.match(box, /position: absolute; z-index: -1; inset: 0;/)
   assert.match(rule, /z-index: 1;/)
-  assert.match(box, /background-color: var\(--body-bg\);/)
-  assert.match(box, /pointer-events: none;/)
+  assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider"/)
+  assert.doesNotMatch(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /<button/)
+  assert.equal(PANEL_CSS.includes('sliders-box'), false)
 })
 
 test('the settings button is a button named Pen Tool Extras settings, drawing an outline gear in the panel color and no fill', () => {
