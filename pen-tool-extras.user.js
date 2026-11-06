@@ -1738,9 +1738,10 @@
     return `<div class="${NOTE}">Off because SudokuPad changed: ${off.join(', ')}</div>`
   }
 
-  function missingNote (missing, preset) {
+  // `pickedPreset` is the page preset the colors came from, which a hand edit after it leaves in place.
+  function missingNote (missing, pickedPreset) {
     if (!missing.length) return ''
-    const page = PAGE_PRESETS.indexOf(preset) + 1
+    const page = PAGE_PRESETS.indexOf(pickedPreset) + 1
     const list = (missing.length === 1 ? 'pen color ' : 'pen colors ') + missing.join(', ')
     return `<div class="${NOTE}">Cell color page ${page} has no usable color at the matching button, so ${list} keep${missing.length === 1 ? 's' : ''} SudokuPad's own.</div>`
   }
@@ -1843,7 +1844,7 @@
       markRow('Corner', markBox('cornerX', 'Corner X Mark', 'x') + markBox('cornerCircle', 'Corner Circle', 'circle') + '<div></div>') +
       '</div>'
     return offNote(state.off) + '<div class="pen-tool-extras-pen-title">Pen colors</div>' + presetChoice(state.preset, state.presets) + grid +
-      missingNote(state.missing, state.preset) +
+      missingNote(state.missing, state.pickedPreset) +
       heading('Line settings', 'Slider in panel') + sectionRows('Line settings') +
       heading('Line styles', 'Enable') + sectionRows('Line styles') +
       sectionHeading('Marks a click cycles through') + marksTable +
@@ -1902,19 +1903,21 @@
 
   function openDialog () {
     let set = active
+    let pickedPreset = active.preset
     // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
     let colorsChosen = false
     let lineMode = currentLineMode()
     let draft = { ...inForce }
     let box = null
     const draw = () => {
-      box.innerHTML = renderEditor({ ...set, presets: availablePresets(), lineMode, ...draft, off: skipped })
+      box.innerHTML = renderEditor({ ...set, pickedPreset, presets: availablePresets(), lineMode, ...draft, off: skipped })
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
       const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_SET : steps.colors.run(() => presetFromTool(readyColorTool(), id), () => null)
       if (picked) {
         set = picked
+        pickedPreset = id
         colorsChosen = true
       }
       draw()
@@ -1987,8 +1990,9 @@
       }
       const el = event.target.closest('input[type="color"]')
       if (!el) return
-      // A Custom set came from no page, so it has no missing-color note.
-      set = { colors: editedColors(set.colors, el.dataset.pen, el.value), preset: CUSTOM, missing: [] }
+      // A pen picked by hand leaves the missing-color note; the others stay on it.
+      const pen = el.dataset.pen
+      set = { colors: editedColors(set.colors, pen, el.value), preset: CUSTOM, missing: set.missing.filter((n) => String(n) !== pen) }
       colorsChosen = true
       draw()
     })

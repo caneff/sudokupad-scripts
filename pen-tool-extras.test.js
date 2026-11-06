@@ -1155,9 +1155,9 @@ test('Custom is in the pulldown only while the set is custom, selected and not p
 })
 
 test('the missing-color note names the page the colors came from and the pens that keep SudokuPad\'s own', () => {
-  const text = renderEditor(editorState({ missing: [4, 5], preset: 'page-2' }))
+  const text = renderEditor(editorState({ missing: [4, 5], preset: 'custom', pickedPreset: 'page-2' }))
   assert.match(text, /Cell color page 2 has no usable color at the matching button, so pen colors 4, 5 keep SudokuPad's own\./)
-  assert.match(renderEditor(editorState({ missing: [7], preset: 'page-1' })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
+  assert.match(renderEditor(editorState({ missing: [7], pickedPreset: 'page-1' })), /Cell color page 1 has no usable color at the matching button, so pen color 7 keeps SudokuPad's own\./)
   assert.doesNotMatch(renderEditor(editorState()), /no usable color/)
 })
 
