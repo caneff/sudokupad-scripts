@@ -269,7 +269,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(big, ARROW_LINE.line * 16)
     const wide = await sample()
     assert.equal(wide.count < base.count, true, `${wide.count} arrows at 16 against ${base.count} at 5`)
-    // At 1 the line is as wide as a page 1 line, 1, while the arrows keep the size they have at 5, so the direction stays visible.
+    // At 1 the line is as wide as a page 1 line, 1, and its smaller heads sit as far apart as at 5, two to a cell.
     await slider(1)
     assert.equal(await settle(async () => (await sample()).lineWidth, 1), 1)
     const small = await sample()
@@ -284,12 +284,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const arrows = async () => (await arrowLineGroups()).reduce((sum, g) => sum + headings(g.arrows).length, 0)
     const base = await arrows()
     assert.equal(base > 0, true)
-    // The arrows in the page 3 pen button's swatch, which the spacing also sets: the swatch line holds 2 at 5, 1 at 12 and 3 at 3.
+    // The arrows in the page 3 pen button's swatch, which the spacing also sets: the swatch line holds 1 at 5, 1 at 12 and 2 at 3.
     const swatchArrows = () => read(() => {
       const rule = document.getElementById('pen-tool-extras-style').textContent.split('\n').find((l) => l.startsWith('.tool-pen button[data-key="1"][data-pen-page="3"]:after'))
       return (decodeURIComponent(/data:image\/svg\+xml,([^"]*)"/.exec(rule)[1]).match(/Z/g) || []).length
     })
-    assert.equal(await swatchArrows(), 2)
+    assert.equal(await swatchArrows(), 1)
     const editor = () => p.locator('#pen-tool-extras-editor')
     const slider = () => editor().locator('input[data-setting="arrowSpacing"]')
     const setSpacing = (value) => slider().evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
@@ -315,14 +315,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setSpacing(3)
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await settle(async () => (await arrows()) > base, true), true, 'denser at spacing 3')
-    assert.equal(await settle(swatchArrows, 3), 3)
+    assert.equal(await settle(swatchArrows, 2), 2)
     await openExtrasEditor(p)
     await p.locator('.dialog button').filter({ hasText: /^\s*Restore defaults\s*$/ }).first().click()
     assert.equal(await slider().inputValue(), '5')
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await saved(ARROW_SPACING_KEY), null, 'the default spacing is not kept')
     assert.equal(await settle(arrows, base), base)
-    assert.equal(await settle(swatchArrows, 2), 2)
+    assert.equal(await settle(swatchArrows, 1), 1)
     assert.equal(sparse < base, true)
     await undo()
   })

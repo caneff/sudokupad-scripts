@@ -1469,30 +1469,30 @@ test('a page 3 swatch is an arrow in the pen color of its button, as a mask so t
   const svg = decodeURIComponent(/url\("data:image\/svg\+xml,([^"]+)"\)/.exec(mask)[1])
   const triangles = /<path d='([^']+)' fill='currentColor' stroke='none'\/>/.exec(svg)
   assert.ok(triangles, `the arrows are filled paths with no stroke: ${svg}`)
-  assert.equal(triangles[1].split('Z').length - 1, 2, 'two closed arrows at the default spacing')
+  assert.equal(triangles[1].split('Z').length - 1, 1, 'one closed arrow at the default spacing')
 })
 
-// The swatch line is 2 wide in a 24 box, from x 2 to 22.
+// The swatch line is 2 wide in a 24 box, from x 2 to 22; its arrows are those of a line of thickness 5, drawn at 2/5 of their size.
 const swatchArrows = (spacing) => {
   const svg = pageSwatch(PEN_PAGES[2], 3, spacing, 0)
   const d = /<path d='([^']+)' fill='currentColor' stroke='none'\/>/.exec(svg)[1]
   return d.split('Z').filter(Boolean).map((arrow) => arrow.match(/-?[\d.]+/g).map(Number)).map(([wx, wy, tx, ty, ox, oy]) => ({ length: tx - wx, width: oy - wy, tipAt: tx, middle: ty }))
 }
 
-test('the page 3 swatch arrows are ARROW_LINE\'s proportions of the swatch line, 5.75 long and 8.5 wide on a line 2 wide', () => {
-  const lineWidth = 2
+test('the page 3 swatch arrows are ARROW_LINE\'s proportions at the default thickness (head 0.8 * 5 line widths), drawn at 2/5 of their size: 4.6 long and 6.8 wide', () => {
+  const lineWidth = 2 * 0.8
   for (const arrow of swatchArrows(ARROW_SPACING.fallback)) {
     // the path text rounds to 2 places
     assert.equal(Math.abs(arrow.length - 2 * ARROW_LINE.halfLength * lineWidth) < 0.011, true, `length ${arrow.length}`)
     assert.equal(Math.abs(-arrow.width - 2 * ARROW_LINE.halfWidth * lineWidth) < 0.011, true, `width ${-arrow.width}`)
     assert.equal(arrow.middle, 12)
   }
-  assert.deepEqual([5.75, 8.5], [2 * ARROW_LINE.halfLength * lineWidth, 2 * ARROW_LINE.halfWidth * lineWidth])
+  assert.deepEqual([4.6, 6.8], [2 * ARROW_LINE.halfLength * lineWidth, 2 * ARROW_LINE.halfWidth * lineWidth].map((x) => Math.round(x * 100) / 100))
 })
 
 test('the page 3 swatch holds as many whole arrows as the arrow spacing fits on its line, at least one, and the spacing reaches the pen buttons and the page button', () => {
-  // [spacing, arrows]: 20 / (spacing * 2) rounded
-  for (const [spacing, count] of [[3, 3], [5, 2], [10, 1], [12, 1]]) assert.equal(swatchArrows(spacing).length, count, `spacing ${spacing}`)
+  // [spacing, arrows]: 20 / (spacing * 8 * 2 / 5) rounded
+  for (const [spacing, count] of [[3, 2], [4, 2], [5, 1], [12, 1]]) assert.equal(swatchArrows(spacing).length, count, `spacing ${spacing}`)
   const maskOf = (css) => rulesOf(css).find((r) => r.selector === '.tool-pen button[data-key="1"][data-pen-page="3"]:after').body
   assert.notEqual(maskOf(buildPagesCss(5, 3, 3)), maskOf(buildPagesCss(5, 3, 12)))
   assert.notEqual(renderPageIcon(1, 3, 3, BOTH_STYLES), renderPageIcon(1, 3, 12, BOTH_STYLES))
@@ -1621,12 +1621,12 @@ test('the arrows and the line scale with the thickness: larger arrows, a wider l
   assert.equal(span(thick) > span(thin), true, `spans ${span(thin)} at 2, ${span(thick)} at 12`)
 })
 
-test('below the default thickness the arrows keep their size at the default and only the line gets thinner, so the direction shows at 1', () => {
-  const one = arrowLineAt('1', true, 0, 0, 1)
-  const five = arrowLineAt('1', true, 0, 0, THICKNESS.fallback)
-  assert.equal(one.arrows, five.arrows)
-  assert.equal(one.lineWidth, 1, 'the line is as thick as a page 1 line, 1')
-  assert.equal(one.lineWidth < five.lineWidth, true, `the line is ${one.lineWidth} at 1 and ${five.lineWidth} at 5`)
+test('below the default thickness the heads shrink with the line, a little slower than it: 0.8 * 5 * (t / 5) ** 0.8 line widths at thickness t', () => {
+  // the head's width across, 2 * halfWidth * scale: worked from the ruling, scale 4 at 5 and 1.1048 at 1
+  const across = (t) => { const ys = pointsOf(arrowLineAt('a', true, 0, 0, t).arrows).map(([, y]) => y); return Math.max(...ys) - Math.min(...ys) }
+  assert.equal(Math.abs(across(5) - 2 * 2.125 * 4) < 0.02, true, `at 5: ${across(5)}`)
+  assert.equal(Math.abs(across(1) - 2 * 2.125 * 1.1048) < 0.02, true, `at 1: ${across(1)}`)
+  assert.equal(arrowLineAt('1', true, 0, 0, 1).lineWidth, 1, 'the line is as thick as a page 1 line, 1')
 })
 
 test('the line under the arrows is as thick as a page 1 line at every slider value, and the arrows clearly stick out past it', () => {
@@ -1635,26 +1635,26 @@ test('the line under the arrows is as thick as a page 1 line at every slider val
     assert.equal(shape.lineWidth, t, `the line at thickness ${t}`)
     // 'a' is the top edge line, so a point's distance from y 0 is its distance from the line's middle.
     const reach = Math.max(...pointsOf(shape.arrows).map(([, y]) => Math.abs(y)))
-    assert.equal(reach - t / 2 >= Math.max(t / 2, 2), true, `at thickness ${t} the arrows stick out ${reach - t / 2} past a line ${t} wide`)
+    assert.equal(reach - t / 2 >= t / 2, true, `at thickness ${t} the arrows stick out ${reach - t / 2} past a line ${t} wide`)
   }
 })
 
-test('the arrow sizes are the ruled ones: base 2.125 line widths out to each side, 2.875 long, one spacing of 5', () => {
+test('the arrow sizes are the ruled ones: halfWidth 2.125 and halfLength 1.4375 of the head scale, one spacing of 5', () => {
   assert.deepEqual([ARROW_LINE.halfWidth, 2 * ARROW_LINE.halfLength, ARROW_LINE.line, ARROW_SPACING.fallback], [2.125, 2.875, 1, 5])
 })
 
-test('from thickness 5 up an arrow\'s base reaches ARROW_LINE.halfWidth (2.125) times the thickness to each side, it is twice ARROW_LINE.halfLength (1.4375) times the thickness long, and the spacing scales with it', () => {
-  for (const t of [5, 8, 10, 13, 16]) {
-    const shape = arrowLineAt('a', true, 0, 0, t)
-    const points = pointsOf(shape.arrows)
+test('an arrow\'s base reaches ARROW_LINE.halfWidth (2.125) times the head scale to each side and it is twice ARROW_LINE.halfLength (1.4375) times the scale long, the scale being 0.8 * 5 * (t / 5) ** 0.8', () => {
+  // [thickness, head scale], worked from the ruling
+  for (const [t, scale] of [[1, 1.1048], [5, 4], [8, 5.8261], [10, 6.9644], [16, 10.1387]]) {
+    const points = pointsOf(arrowLineAt('a', true, 0, 0, t).arrows)
     const [first, tip] = points
-    assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - ARROW_LINE.halfWidth * t) < 0.01, true, `reach at ${t}`)
-    assert.equal(Math.abs(Math.abs(tip[0] - first[0]) - 2 * ARROW_LINE.halfLength * t) < 0.01, true, `length at ${t}`)
+    assert.equal(Math.abs(Math.max(...points.map(([, y]) => Math.abs(y))) - ARROW_LINE.halfWidth * scale) < 0.02, true, `reach at ${t}`)
+    assert.equal(Math.abs(Math.abs(tip[0] - first[0]) - 2 * ARROW_LINE.halfLength * scale) < 0.02, true, `length at ${t}`)
   }
 })
 
-test('the arrow count at the default spacing of 5 is the worked one for each thickness: 3 at 5, 2 at 8, then 1', () => {
-  const worked = { 5: 3, 8: 2, 10: 1, 13: 1, 16: 1 }
+test('the arrow count on a cell side at the default spacing of 5 is the worked one: the distance between middles is 5 * 8 * (t / 5) ** 0.2, so 2 at 1 and 5 (29 and 40 apart), then 1', () => {
+  const worked = { 1: 2, 5: 2, 8: 1, 10: 1, 13: 1, 16: 1 }
   for (const [t, count] of Object.entries(worked)) assert.equal(pointsOf(arrowLineAt('a', true, 0, 0, Number(t)).arrows).length / 3, count, `count at ${t}`)
 })
 
@@ -1683,7 +1683,7 @@ test('at the largest thickness an arrow on a grid\'s outer edge reaches no furth
   // a top edge line, 'a', on row 0: the arrow's base corners are the furthest from the edge itself
   const shape = arrowLineAt('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.arrows).map(([, y]) => Math.abs(y)))
-  assert.equal(Math.abs(reach - ARROW_LINE.halfWidth * THICKNESS.max) < 0.01, true, `the drawn reach ${reach} is the ARROW_LINE size at the largest thickness`)
+  assert.equal(Math.abs(reach - ARROW_LINE.halfWidth * 10.1387) < 0.02, true, `the drawn reach ${reach} is the ARROW_LINE size at head scale 10.1387, the largest thickness's`)
   assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
 })
 
@@ -1734,7 +1734,7 @@ test('the outline filter grows and blurs more for a wider outline', () => {
   assert.equal(squareOf(1) < squareOf(3) && squareOf(3) < squareOf(8), true, `${squareOf(1)}, ${squareOf(3)}, ${squareOf(8)}`)
 })
 
-test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
+test('arrow spacing runs 3 to 12 in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
   assert.deepEqual(ARROW_SPACING, { min: 3, max: 12, step: 1, fallback: 5 })
   for (const ok of [3, 5, 12]) assert.equal(SETTINGS.arrowSpacing.normalize(ok), ok)
   for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.normalize(bad), 5, JSON.stringify(bad))
@@ -1755,7 +1755,7 @@ test('both line styles are enabled unless saved as the boolean false, each on it
 
 test('a wider arrow spacing gives fewer arrows on the same segment and the spacing sets their distance', () => {
   const count = (spacing) => pointsOf(arrowLineAt('1', true, 0, 0, 5, spacing).arrows).length / 3
-  assert.deepEqual([count(3), count(5), count(12)], [4, 3, 1])
+  assert.deepEqual([count(3), count(5), count(12)], [3, 2, 1])
   assert.equal(count(3) > count(5) && count(5) > count(12), true, `${count(3)}, ${count(5)}, ${count(12)}`)
 })
 

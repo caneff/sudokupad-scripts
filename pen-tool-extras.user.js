@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.17.0
+// @version      1.18.0
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.17.0'
+  const VERSION = '1.18.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -34,7 +34,7 @@
   const THICKNESS = { min: 1, max: 16, step: 1, fallback: 5 }
   // A page 2 dash's length in line widths; 0 draws dots.
   const DASH = { min: 0, max: 8, step: 1, fallback: 3 }
-  // The distance between two page 3 arrows' middles, in line widths; 5 gives a run of arrows rather than a solid row.
+  // Scales the distance between two page 3 arrows' middles (see `arrowGapOf`); 5 gives a run of arrows rather than a solid row.
   const ARROW_SPACING = { min: 3, max: 12, step: 1, fallback: 5 }
   // SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }` (tool-pen.css), so 80 leaves the marks as they are; 20 is the floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
@@ -951,14 +951,13 @@
     const { on, gap, offset } = dashPattern(SWATCH_LINE.width, dash, SWATCH_LINE.to - SWATCH_LINE.from)
     const round = (x) => Math.round(x * 1000) / 1000
     const dashes = page.dashed ? ` stroke-dasharray='${round(on)} ${round(gap)}' stroke-dashoffset='${round(offset)}'` : ''
-    const line = `<path d='M${SWATCH_LINE.from} ${SWATCH_LINE.middle}H${SWATCH_LINE.to}' stroke-width='${SWATCH_LINE.width}'${dashes}/>${page.arrowLines ? `<path d='${arrowRun([SWATCH_LINE.from, SWATCH_LINE.middle], [SWATCH_LINE.to, SWATCH_LINE.middle], SWATCH_LINE.width, spacing)}' fill='currentColor' stroke='none'/>` : ''}`
+    const line = `<path d='M${SWATCH_LINE.from} ${SWATCH_LINE.middle}H${SWATCH_LINE.to}' stroke-width='${SWATCH_LINE.width}'${dashes}/>${page.arrowLines ? `<path d='${arrowRun([SWATCH_LINE.from, SWATCH_LINE.middle], [SWATCH_LINE.to, SWATCH_LINE.middle], THICKNESS.fallback, spacing, SWATCH_LINE.width / THICKNESS.fallback)}' fill='currentColor' stroke='none'/>` : ''}`
     return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-linecap='round'><g transform='rotate(${-angle} ${SWATCH_LINE.middle} ${SWATCH_LINE.middle})'>${line}</g></svg>`
   }
 
   // 5. Arrow lines
-  // An arrow is a filled triangle on the line: its base `halfWidth` out to each side of the line's middle and `halfLength` back from it, its tip `halfLength` forward. An arrow
-  // never shrinks below its size at the default thickness, so its direction stays visible at 1. The furthest an arrow reaches off its line stays inside what Dark Page keeps
-  // past a cell (its `SOLVER_REACH`; a unit test holds the two together).
+  // An arrow is a filled triangle on the line: its base `halfWidth` out to each side of the line's middle and `halfLength` back from it, its tip `halfLength` forward, all times
+  // `arrowHeadScaleOf`. The furthest an arrow reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
   const ARROW_LINE = { halfLength: 1.4375, halfWidth: 2.125, line: 1 }
 
   function arrowLineWayOf (char) {
@@ -1019,14 +1018,19 @@
 
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
-  // Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join. `size` is the line width the arrows are
-  // sized and spaced by.
-  function arrowRun (from, to, size, spacing) {
+  // The heads shrink with the line, a little slower than it (0.8 times the thickness at the default thickness); the gap between arrows grows with it more slowly still.
+  const arrowHeadScaleOf = (thickness) => 0.8 * THICKNESS.fallback * (thickness / THICKNESS.fallback) ** 0.8
+  const arrowGapOf = (thickness, spacing) => spacing * 8 * (thickness / THICKNESS.fallback) ** 0.2
+
+  // Whole arrows are fitted to the segment, each in the middle of its share of it, so two segments in a row space them alike across their join. `shrink` draws a line of
+  // `thickness` at that fraction of its size (the swatch).
+  function arrowRun (from, to, thickness, spacing, shrink = 1) {
     const length = Math.hypot(to[0] - from[0], to[1] - from[1])
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
-    const [half, wide] = [ARROW_LINE.halfLength * size, ARROW_LINE.halfWidth * size]
-    // Every segment holds at least one arrow, however wide the spacing and thick the pen (a cell side rounds to none at the top of both), so a line never loses its direction.
-    const count = Math.max(1, Math.round(length / (spacing * size)))
+    const headScale = arrowHeadScaleOf(thickness) * shrink
+    const [half, wide] = [ARROW_LINE.halfLength * headScale, ARROW_LINE.halfWidth * headScale]
+    // Every segment holds at least one arrow, so a line never loses its direction.
+    const count = Math.max(1, Math.round(length / (arrowGapOf(thickness, spacing) * shrink)))
     let arrows = ''
     for (let i = 0; i < count; i++) {
       const along = (i + 0.5) * length / count
@@ -1039,10 +1043,9 @@
   function arrowLine (value, forward, row, col, thickness, spacing) {
     const points = linePoints(value, row, col)
     const [from, to] = (forward ? points : points.reverse()).map(([r, c]) => [c * CELL_UNITS, r * CELL_UNITS])
-    // Arrows keep the size they have at the default thickness below it; only the line gets thinner.
     return {
       line: `M${pointText(from)}L${pointText(to)}`,
-      arrows: arrowRun(from, to, Math.max(thickness, THICKNESS.fallback), spacing),
+      arrows: arrowRun(from, to, thickness, spacing),
       lineWidth: ARROW_LINE.line * thickness
     }
   }
