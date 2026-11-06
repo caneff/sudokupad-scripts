@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
-import { closeExtrasEditorWith, openExtrasEditor as openEditor } from './settings.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from './settings.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const SLIDERS = ['thickness', 'opacity', 'dash', 'arrowSpacing', 'outlineWidth']
@@ -35,8 +35,8 @@ describe('the settings dialog layout', { concurrency: false }, () => {
 
   // SudokuPad slides the dialog in, so a position is read once the dialog has held still for STILL_FRAMES frames in a row.
   const STILL_FRAMES = 20
-  const openExtrasEditor = async (page) => {
-    await openEditor(page)
+  const openSettledEditor = async (page) => {
+    await openExtrasEditor(page)
     await page.waitForFunction((still) => new Promise((resolve) => {
       const at = () => JSON.stringify(document.querySelector('.dialog').getBoundingClientRect())
       let last = at()
@@ -58,7 +58,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   const cells = () => p.locator('#pen-tool-extras-editor .pen-tool-extras-cell').evaluateAll((els) => els.map((el) => { const { left, right, top, bottom } = el.getBoundingClientRect(); return { left, right, top, bottom, text: el.querySelector('.pen-tool-extras-section-title').textContent } }))
 
   it('the sections are a two by two grid: Pen colors | Line settings above Line styles, then Marks to cycle | Other', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const [colors, lines, marks, other] = await cells()
     assert.deepEqual([colors.text, lines.text, marks.text, other.text], ['Pen colors', 'Line settings', 'Marks to cycle', 'Other'])
     assert.equal(colors.right <= lines.left && marks.right <= other.left, true, 'two columns')
@@ -71,7 +71,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the vertical line runs from the title line to the footer line, and the Line settings / Line styles divider starts at it', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const layout = await rect('#pen-tool-extras-editor .pen-tool-extras-layout')
     const [, lines, , other] = await cells()
     const footer = await rect('.dialog-options')
@@ -79,13 +79,18 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     near(other.bottom, footer.top, 'the vertical line ends at the footer line')
     const divider = await rect('#pen-tool-extras-editor .pen-tool-extras-divider')
     near(divider.left, lines.left, 'the inner divider starts at the vertical line')
-    const middle = (await cells())[2]
-    near(middle.top, (await cells())[0].bottom, 'the line between the rows crosses both columns')
+    // The lines themselves: a top line on every cell (the title line and the line between the rows) and a left line on the right-hand cells.
+    const borders = await editor().locator('.pen-tool-extras-cell').evaluateAll((els) => els.map((el) => { const style = window.getComputedStyle(el); return { top: style.borderTopWidth, left: style.borderLeftWidth, colour: style.borderTopColor } }))
+    assert.deepEqual(borders.map((b) => b.top), ['1px', '1px', '1px', '1px'], 'a top line on every cell')
+    assert.deepEqual(borders.map((b) => b.left), ['0px', '1px', '0px', '1px'], 'the vertical line is the right-hand cells\' left line')
+    assert.equal(borders.every((b) => b.colour === 'rgb(221, 221, 221)'), true, 'the mockup\'s #ddd')
+    const footerLine = await p.locator('.dialog-options').evaluate((el) => window.getComputedStyle(el).borderTopWidth)
+    assert.equal(footerLine, '1px', 'the footer has its top line')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('the pen colors are nine square inputs, 4px apart, with no numbers, and the pulldown and the pad share their left and right edges', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const boxes = await editor().locator('input[data-pen]').evaluateAll((els) => els.map((el) => { const { left, right, top, width, height } = el.getBoundingClientRect(); return { left, right, top, width, height } }))
     assert.equal(boxes.length, 9)
     for (const box of boxes) near(box.width, box.height, 'square')
@@ -109,7 +114,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('all five sliders start at one x and are 96px long; Slider in panel sub-lines sit under Thickness and Opacity in grey #444', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const sliders = await Promise.all(SLIDERS.map((key) => rect(`#pen-tool-extras-editor input[data-setting="${key}"]`)))
     sliders.forEach((slider, i) => near(slider.left, sliders[0].left, `${SLIDERS[i]} left`))
     sliders.forEach((slider, i) => near(slider.width, 96, `${SLIDERS[i]} width`))
@@ -126,7 +131,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('each line style\'s box is before its label, and Other reads White outlines and Middle click erase', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     for (const [path, text] of [['lineStyles.dashed', 'Dashed lines'], ['lineStyles.arrows', 'Directional arrow lines'], ['outline', 'White outlines'], ['middleErase', 'Middle click erase']]) {
       const box = editor().locator(`input[data-box="${path}"]`)
       const label = editor().locator(`label[for="${await box.getAttribute('id')}"]`)
@@ -138,7 +143,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the marks table has the headings X, circle and the up-and-down arrow heads, each centred over its column of boxes 28px apart', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const heads = await editor().locator('.pen-tool-extras-mark-head svg').evaluateAll((els) => els.map((el) => { const { left, right } = el.getBoundingClientRect(); return { centre: (left + right) / 2, stroke: window.getComputedStyle(el).strokeWidth, colour: window.getComputedStyle(el).color } }))
     assert.equal(heads.length, 3)
     const centres = async (keys) => Promise.all(keys.map((key) => editor().locator(`input[data-box="marks.${key}"]`).evaluate((el) => { const { left, right } = el.getBoundingClientRect(); return (left + right) / 2 })))
@@ -154,7 +159,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the title row holds Copy settings and Paste settings icon buttons at its right end, level with the title, and the status message to their left', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const copy = p.getByRole('button', { name: 'Copy settings' })
     const paste = p.getByRole('button', { name: 'Paste settings' })
     assert.equal(await copy.getAttribute('title'), 'Copy settings')
@@ -172,23 +177,49 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the dialog is sized to its content and centred in the window, not over the board', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const dialog = await rect('.dialog')
     const layout = await rect('#pen-tool-extras-editor .pen-tool-extras-layout')
     assert.equal(dialog.width < layout.width + 100, true, `dialog ${dialog.width}px wide for ${layout.width}px of content`)
-    assert.equal(Math.abs((dialog.left + dialog.right) / 2 - 600) <= 4, true, `centred at ${(dialog.left + dialog.right) / 2}`)
+    assert.equal(Math.abs((dialog.left + dialog.right) / 2 - p.viewportSize().width / 2) <= 4, true, `centred at ${(dialog.left + dialog.right) / 2}`)
     assert.equal(dialog.left >= 0, true)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
+  it('a long missing-color note in the first column wraps within it and leaves the column and the dialog as they were', async () => {
+    await openSettledEditor(p)
+    const before = { column: (await cells())[0].right, dialog: (await rect('.dialog')).width }
+    await editor().locator('.pen-tool-extras-cell').first().evaluate((cell) => cell.insertAdjacentHTML('beforeend', '<div class="pen-tool-extras-note">Cell color page 2 has no usable color at the matching button, so pen colors 4, 5 and 6 keep SudokuPad\'s own and so does a very long run of further words.</div>'))
+    near((await cells())[0].right, before.column, 'the first column is as wide as before')
+    near((await rect('.dialog')).width, before.dialog, 'the dialog is as wide as before')
+    await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('at a phone width a long status message wraps beside the icons and stays clear of the title', async () => {
+    await p.setViewportSize({ width: 390, height: 800 })
+    try {
+      await openSettledEditor(p)
+      await p.evaluate(() => { document.querySelector('.dialog [data-role="settings-status"]').textContent = 'Pasted 3 settings; skipped 2 that did not check out.' })
+      const title = await rect('.dialog .pen-tool-extras-title-row b')
+      const status = await rect('.dialog [data-role="settings-status"]')
+      const copy = await p.getByRole('button', { name: 'Copy settings' }).boundingBox()
+      assert.equal(status.left >= title.right - HALF_PIXEL, true, `the status (from ${status.left}) starts after the title (to ${title.right})`)
+      assert.equal(status.right <= copy.x + HALF_PIXEL, true, 'and ends before the icons')
+      assert.equal((await rect('.dialog')).right <= 390 + 1, true, 'the dialog stays on the screen')
+      await closeExtrasEditorWith(p, 'Cancel')
+    } finally {
+      await p.setViewportSize({ width: 1200, height: 1000 })
+    }
+  })
+
   it('the dialog title\'s version is faded to 0.6', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     assert.equal(await p.locator('.dialog small.pen-tool-extras-version').evaluate((el) => window.getComputedStyle(el).opacity), '0.6')
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
   it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its own box is unticked', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const label = (key) => editor().locator(`[data-row="${key}"] label`)
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
     assert.equal(await left(editor().locator('input[data-box="lineStyles.dashed"]')) <= await left(label('dash')), true)
@@ -202,7 +233,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   })
 
   it('the buttons are one row at the bottom: Restore defaults at the left, Cancel and Save at the right', async () => {
-    await openExtrasEditor(p)
+    await openSettledEditor(p)
     const [restore, cancel, save] = await p.evaluate(() => ['restore', 'cancel', 'save'].map((role) => { const { x, y, width, height } = document.querySelector(`.dialog-options button[data-role="${role}"]`).getBoundingClientRect(); return { x, y, width, height } }))
     assert.equal(restore.x < cancel.x && cancel.x < save.x, true)
     assert.equal(Math.abs(restore.y + restore.height / 2 - (save.y + save.height / 2)) <= 3, true, 'one row')
@@ -214,7 +245,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   it('on a screen too narrow for two columns the cells stack in one column, in order, with no vertical line', async () => {
     await p.setViewportSize({ width: 500, height: 1000 })
     try {
-      await openExtrasEditor(p)
+      await openSettledEditor(p)
       const stacked = await cells()
       assert.deepEqual(stacked.map((cell) => cell.text), ['Pen colors', 'Line settings', 'Marks to cycle', 'Other'])
       stacked.slice(1).forEach((cell, i) => assert.equal(cell.top >= stacked[i].bottom - HALF_PIXEL, true, `${cell.text} is under ${stacked[i].text}`))
@@ -228,7 +259,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
   it('at a phone width the dialog does not run off the screen sideways', async () => {
     await p.setViewportSize({ width: 390, height: 800 })
     try {
-      await openExtrasEditor(p)
+      await openSettledEditor(p)
       const fits = await p.evaluate(() => {
         const dialog = document.querySelector('.dialog').getBoundingClientRect()
         const editor = document.getElementById('pen-tool-extras-editor')

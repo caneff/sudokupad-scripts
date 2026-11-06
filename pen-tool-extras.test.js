@@ -300,7 +300,7 @@ test('startupPenColors loads a saved set, waits for the color tool when nothing 
   assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad', missing: [] } })
 })
 
-test('presetOptions lists one darker page per palette page, up to three, then SudokuPad default colors last', () => {
+test('presetOptions lists one darker page per palette page, up to three, then SudokuPad colors last', () => {
   assert.deepEqual(presetOptions(3), ['page-1', 'page-2', 'page-3', 'sudokupad'])
   assert.deepEqual(presetOptions(5), ['page-1', 'page-2', 'page-3', 'sudokupad'])
   assert.deepEqual(presetOptions(1), ['page-1', 'sudokupad'])
@@ -1176,18 +1176,18 @@ test('every pen button swatch is the page\'s pageSwatch at angle 0, on every pag
 
 const rowOf = (html, key) => new RegExp(`<div data-row="${key}"[^>]*>[\\s\\S]*?</div>`).exec(html)[0]
 
-const subLineOf = (html, key) => new RegExp(`<div class="pen-tool-extras-sub">(<input type="checkbox" id="pen-tool-extras-box-show-${key}" data-box="show.${key}"( checked)?[^>]*>)<label for="pen-tool-extras-box-show-${key}"[^>]*>Slider in panel</label></div>`).exec(html)
+const subLineOf = (html, key) => new RegExp(`<div class="pen-tool-extras-check-row pen-tool-extras-sub"><input type="checkbox" id="pen-tool-extras-box-show-${key}" data-box="show.${key}"( checked)? title="[^"]+" class="pen-tool-extras-check"><label for="pen-tool-extras-box-show-${key}" class="pen-tool-extras-label">Slider in panel</label></div>`).exec(html)
 
 test('Line settings: Thickness and Opacity each have a sub-line under them, a box then "Slider in panel", ticked as saved; no caption column', () => {
   const both = renderEditor(editorState())
-  assert.equal(Boolean(subLineOf(both, 'thickness')[2]) && Boolean(subLineOf(both, 'opacity')[2]), true)
-  assert.match(both, /data-row="thickness"[\s\S]*?<\/div><div class="pen-tool-extras-sub">[\s\S]*data-row="opacity"[\s\S]*?<\/div><div class="pen-tool-extras-sub">/, 'each sub-line follows its row')
+  assert.equal(Boolean(subLineOf(both, 'thickness')[1]) && Boolean(subLineOf(both, 'opacity')[1]), true)
+  assert.match(both, /data-row="thickness"[\s\S]*?<\/div><div class="pen-tool-extras-check-row pen-tool-extras-sub">[\s\S]*data-row="opacity"[\s\S]*?<\/div><div class="pen-tool-extras-check-row pen-tool-extras-sub">/, 'each sub-line follows its row')
   assert.doesNotMatch(both, /pen-tool-extras-column-heading|>In panel</)
   assert.equal((both.match(/>Slider in panel</g) || []).length, 2)
   const none = renderEditor(editorState({ show: { thickness: false, opacity: true } }))
-  assert.equal(subLineOf(none, 'thickness')[2], undefined, 'unticked, and the slider is still in the dialog')
+  assert.equal(subLineOf(none, 'thickness')[1], undefined, 'unticked, and the slider is still in the dialog')
   assert.match(none, /data-setting="thickness"/)
-  assert.equal(Boolean(subLineOf(none, 'opacity')[2]), true)
+  assert.equal(Boolean(subLineOf(none, 'opacity')[1]), true)
   const row = rowOf(both, 'thickness')
   assert.equal(row.indexOf('<label') < row.indexOf('data-setting="thickness"') && row.indexOf('data-setting="thickness"') < row.indexOf('data-readout="thickness"'), true, 'label, slider, then the value')
   assert.match(DIALOG_CSS, /\.pen-tool-extras-sub \{[^}]*padding-left: 1\.2em;[^}]*color: #444;/)
@@ -1337,20 +1337,31 @@ test('the editor is a two by two grid: Pen colors | Line settings and Line style
   assert.deepEqual(titles, [['Pen colors'], ['Line settings', 'Line styles'], ['Marks to cycle'], ['Other']])
   assert.equal((html.match(/<div class="pen-tool-extras-divider"><\/div>/g) || []).length, 1)
   assert.match(cells[1], /Opacity[\s\S]*pen-tool-extras-divider[\s\S]*>Line styles</)
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #e3dff0;/)
   assert.match(DIALOG_CSS, /@media \(max-width: \d+px\) \{[^@]*grid-template-columns: minmax\(0, 1fr\)/, 'one column on a narrow screen')
 })
 
-test('the title row holds the name and version, then the status message, a Copy settings icon button and a Paste settings icon button, each with a hover title and label', () => {
+test('the title row holds the name and version, the status message, then a Copy settings icon button and a Paste settings icon button, each with a hover title and label', () => {
   const html = renderTitle('1.2.3')
-  assert.match(html, /^<div class="pen-tool-extras-title-row"><span><b>Pen Tool Extras<\/b> <small class="pen-tool-extras-version">v1\.2\.3<\/small><\/span>/)
-  assert.match(html, /<span data-role="settings-status"><\/span><button type="button" data-act="copy-settings" title="Copy settings" aria-label="Copy settings"><svg[^>]*>[\s\S]*<\/svg><\/button><button type="button" data-act="paste-settings" title="Paste settings" aria-label="Paste settings"><svg/)
+  assert.match(html, /^<div class="pen-tool-extras-title-row"><span><b>Pen Tool Extras<\/b> <small class="pen-tool-extras-version">v1\.2\.3<\/small><\/span><span data-role="settings-status"><\/span><span class="pen-tool-extras-tools"><button type="button" data-act="copy-settings" title="Copy settings" aria-label="Copy settings"><svg[^>]*>[\s\S]*<\/svg><\/button><button type="button" data-act="paste-settings" title="Paste settings" aria-label="Paste settings"><svg/)
   assert.doesNotMatch(html.replace(/<svg[\s\S]*?<\/svg>/g, ''), />(Copy|Paste) settings</, 'icons, not words')
+  assert.match(DIALOG_CSS, /\[data-role="settings-status"\] \{[^}]*flex: 1 1 0;[^}]*min-width: 0;[^}]*contain: inline-size;/, 'the status wraps in the room the title leaves and sets no width')
 })
 
-test('the dialog is sized to its content and centred in the window, not over the board', () => {
+test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin, and the dialog is not centred over the board', () => {
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{[^}]*width: fit-content !important;/)
   assert.match(DIALOG_CSS, /\.dialog p:has\(> #pen-tool-extras-editor\) \{ margin-bottom: 0 !important; \}/)
+  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8'), /centerOverBoard/)
+})
+
+test('a missing-color note in the first column wraps within it and never sets its width', () => {
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-cell \.pen-tool-extras-note \{[^}]*width: 0;[^}]*min-width: 100%;/)
+  assert.match(renderEditor(editorState({ missing: [4], pickedPreset: 'page-1' })), /<div class="pen-tool-extras-cell"><div class="pen-tool-extras-section-title">Pen colors<\/div>[\s\S]*no usable color[\s\S]*<\/div><div class="pen-tool-extras-cell">/, 'the note is in the Pen colors cell')
+})
+
+test('the grid\'s lines are the mockup\'s #ddd: each cell has a top line and each right-hand cell a left line, and the divider a top line', () => {
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-cell \{[^}]*border-top: 1px solid #ddd;/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-cell:nth-child\(2n\) \{ border-left: 1px solid #ddd;/)
+  assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #ddd;/)
 })
 
 test('the settings dialog has no line mode pulldown: the panel button is the one control', () => {

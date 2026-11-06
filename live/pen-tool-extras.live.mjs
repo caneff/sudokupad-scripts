@@ -27,7 +27,7 @@ const PAGE_PENS = [
 // SudokuPad's own pen colors (tool-pen.css), read off the page with no script installed.
 const OWN_PEN_HEX = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
 const toObject = (list) => Object.fromEntries(list.map((hex, i) => [String(i + 1), hex]))
-// What the install save stores: darker cell color page 1, with its preset name.
+// What the install save stores: Darker page 1, with its preset name.
 const INSTALLED = { ...toObject(PAGE_PENS[0]), preset: 'page-1' }
 const PRESET_OPTIONS = [['page-1', 'Darker page 1'], ['page-2', 'Darker page 2'], ['page-3', 'Darker page 3'], ['sudokupad', 'SudokuPad colors']]
 const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
@@ -127,7 +127,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a fresh install saves darker cell color page 1 once, with its preset name, and swatches and strokes show it', async () => {
+  it('a fresh install saves Darker page 1 once, with its preset name, and swatches and strokes show it', async () => {
     assert.deepEqual(await settle(saved, INSTALLED), INSTALLED)
     await swatchesAre(PAGE_PENS[0])
     await drawInFirstColumn(4, 1)
@@ -273,7 +273,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await setCellColor(['1', CELL_VARS[1]])
   })
 
-  it('Restore defaults then Save picks darker cell color page 1 from the palette in force, whichever page is current', async () => {
+  it('Restore defaults then Save picks Darker page 1 from the palette in force, whichever page is current', async () => {
     await setCellColor(['4', CUSTOM_CELL.css])
     const want = PAGE_PENS[0].map((hex, i) => (i === 3 ? CUSTOM_CELL.pen : hex))
     for (const page of [0, 1, 2]) {

@@ -1858,13 +1858,11 @@
   const iconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The status message sits to the left of the two icon buttons, on the title row.
   function renderTitle (version) {
     return '<div class="pen-tool-extras-title-row">' +
       `<span><b>Pen Tool Extras</b> <small class="pen-tool-extras-version">v${version}</small></span>` +
-      '<span class="pen-tool-extras-tools"><span data-role="settings-status"></span>' +
-      iconButton('copy-settings', 'Copy settings', ICON_PICTURES.copy) + iconButton('paste-settings', 'Paste settings', ICON_PICTURES.paste) +
-      '</span></div>'
+      '<span data-role="settings-status"></span>' +
+      '<span class="pen-tool-extras-tools">' + iconButton('copy-settings', 'Copy settings', ICON_PICTURES.copy) + iconButton('paste-settings', 'Paste settings', ICON_PICTURES.paste) + '</span></div>'
   }
 
   // The class names more than one template writes, named once here; a class only one template writes is spelled in that template and in its rule in `DIALOG_CSS`.
@@ -1872,7 +1870,12 @@
   const SECTION_TITLE = 'pen-tool-extras-section-title'
   const DIVIDER = '<div class="pen-tool-extras-divider"></div>'
   const LINE_COLOR = '#e3dff0'
+  // The ruled mockup's colors for the grid's lines and for the marks table's.
+  const GRID_LINE_COLOR = '#ddd'
   const MARKS_LINE_COLOR = '#eee'
+  const INDENTED_COLOR = '#444'
+  const MUTED_COLOR = '#777'
+  const INDENT_EM = 1.2
   // The gap between the two columns, either side of the vertical line, and the slider's length, shared by all five sliders.
   const COLUMN_GAP_PX = 24
   const SLIDER_PX = 96
@@ -1907,7 +1910,6 @@
   const DIALOG_CLASS = 'pen-tool-extras-dialog'
 
   const EDITOR = `#${EDITOR_ID}`
-  const TOOL_BUTTON_RESET = 'background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: #777 !important; cursor: pointer; border-radius: 6px !important;'
 
   // Scoped by DIALOG_CLASS and the editor's id, so SudokuPad's other dialogs are left alone.
   const DIALOG_CSS = [
@@ -1918,32 +1920,33 @@
     `.dialog-options.${DIALOG_CLASS} button { width: auto !important; min-width: 0 !important; margin: 0 !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; border-radius: 8px !important; font-size: 1rem !important; flex: none; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
-    `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: #777 !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
+    `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: ${MUTED_COLOR} !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
     '.pen-tool-extras-version { opacity: .6; }',
-    '.pen-tool-extras-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }',
-    '.pen-tool-extras-tools { position: relative; display: flex; align-items: center; gap: 4px; }',
-    `.pen-tool-extras-tools button { ${TOOL_BUTTON_RESET} }`,
+    '.pen-tool-extras-title-row { display: flex; align-items: center; gap: 12px; }',
+    '.pen-tool-extras-tools { display: flex; align-items: center; gap: 4px; }',
+    `.pen-tool-extras-tools button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${MUTED_COLOR} !important; cursor: pointer; border-radius: 6px !important; }`,
     '.pen-tool-extras-tools button:hover { background: #f0edf5 !important; }',
     '.pen-tool-extras-tools svg { width: 20px; height: 20px; }',
     '.pen-tool-extras-tools svg * { fill: none !important; }',
-    // Out of the flow, so a long message never widens the dialog.
-    '.pen-tool-extras-tools [data-role="settings-status"] { position: absolute; right: 100%; top: 50%; transform: translateY(-50%); margin-right: 6px; width: max-content; max-width: 16em; text-align: right; font-size: .8rem; color: #777; }',
+    // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+    `.pen-tool-extras-title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${MUTED_COLOR}; }`,
     `${EDITOR} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
+    // In the first column the note wraps to the column set by the marks table; it never sets it.
+    `${EDITOR} .${CELL} .${NOTE} { width: 0; min-width: 100%; max-width: none; }`,
     // The first column is as wide as the marks table; the pen colors fill it and never set it.
     `${EDITOR} .pen-tool-extras-layout { display: grid; grid-template-columns: max-content 1fr; margin-top: 8px; }`,
     // Every cell has its own top line, so the vertical line starts at the line under the title.
-    `${EDITOR} .${CELL} { min-width: 0; padding: 10px ${COLUMN_GAP_PX}px 10px 0; border-top: 1px solid ${LINE_COLOR}; }`,
-    `${EDITOR} .${CELL}:nth-child(2n) { border-left: 1px solid ${LINE_COLOR}; padding: 10px 0 10px ${COLUMN_GAP_PX}px; }`,
+    `${EDITOR} .${CELL} { min-width: 0; padding: 10px ${COLUMN_GAP_PX}px 10px 0; border-top: 1px solid ${GRID_LINE_COLOR}; }`,
+    `${EDITOR} .${CELL}:nth-child(2n) { border-left: 1px solid ${GRID_LINE_COLOR}; padding: 10px 0 10px ${COLUMN_GAP_PX}px; }`,
     `${EDITOR} .${SECTION_TITLE} { font-weight: 600; margin: 0 0 4px; }`,
     // It starts at the vertical line: the column gap and the line's own width back.
-    `${EDITOR} .pen-tool-extras-divider { border-top: 1px solid ${LINE_COLOR}; margin: 10px 0 10px calc(-1 * (${COLUMN_GAP_PX}px + 1px)); }`,
+    `${EDITOR} .pen-tool-extras-divider { border-top: 1px solid ${GRID_LINE_COLOR}; margin: 10px 0 10px calc(-1 * (${COLUMN_GAP_PX}px + 1px)); }`,
     // Every slider row has one label column, so the five sliders start at the same x.
     `${EDITOR} .${SLIDER_COLUMNS} { display: grid; grid-template-columns: 7.6em ${SLIDER_PX}px 2em; column-gap: 8px; align-items: center; margin: 4px 0; }`,
     `${EDITOR} .pen-tool-extras-label { width: auto; text-align: left; margin: 0; }`,
-    `${EDITOR} .pen-tool-extras-label.pen-tool-extras-under { padding-left: 1.2em; color: #444; box-sizing: border-box; }`,
+    `${EDITOR} .pen-tool-extras-label.pen-tool-extras-under { padding-left: ${INDENT_EM}em; color: ${INDENTED_COLOR}; box-sizing: border-box; }`,
     `${EDITOR} .pen-tool-extras-range { width: 100%; min-width: 0; margin: 0; }`,
-    `${EDITOR} .pen-tool-extras-sub { display: flex; align-items: center; gap: 6px; padding-left: 1.2em; color: #444; margin: 0 0 4px; }`,
-    `${EDITOR} .pen-tool-extras-box { margin: 0; }`,
+    `${EDITOR} .pen-tool-extras-check-row.pen-tool-extras-sub { padding-left: ${INDENT_EM}em; color: ${INDENTED_COLOR}; margin: 0 0 4px; }`,
     `${EDITOR} .pen-tool-extras-check { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-check-row { margin: 4px 0; display: flex; justify-content: flex-start; align-items: center; gap: 6px; }`,
     `${EDITOR} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 6px 0; }`,
@@ -1957,10 +1960,10 @@
     `${EDITOR} .pen-tool-extras-marks-table > :not(:nth-child(4n+1)) { border-left: 1px solid ${MARKS_LINE_COLOR}; }`,
     `${EDITOR} .pen-tool-extras-marks-table > :nth-child(n+5) { border-top: 1px solid ${MARKS_LINE_COLOR}; }`,
     `${EDITOR} .pen-tool-extras-mark input { margin: 0; }`,
-    `${EDITOR} .pen-tool-extras-mark-head { color: #444; }`,
+    `${EDITOR} .pen-tool-extras-mark-head { color: ${INDENTED_COLOR}; }`,
     `${EDITOR} .pen-tool-extras-mark-head svg { stroke-width: 2.6; overflow: visible; }`,
     `${EDITOR} select[data-pen-preset] { box-sizing: border-box; width: 0; min-width: 100%; margin: 6px 0 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`,
-    // On a screen too narrow for two columns the cells stack in today's order.
+    // Below ONE_COLUMN_BELOW_PX the cells stack in one column, in their order in the markup.
     `@media (max-width: ${ONE_COLUMN_BELOW_PX}px) {
 ${EDITOR} .pen-tool-extras-layout { grid-template-columns: minmax(0, 1fr); }
 ${EDITOR} .${CELL}:nth-child(n) { border-left: none; padding: 10px 0; }
@@ -1980,8 +1983,6 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     const markBox = (key, name) =>
       `<label title="${name}" class="pen-tool-extras-mark">` +
       `<input type="checkbox" ${boxAttributes(`marks.${key}`)} aria-label="${name}" title="${name}"${state.marks[key] ? ' checked' : ''}></label>`
-    const box = (attributes, checked, title) => `<input type="checkbox" ${attributes}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} class="pen-tool-extras-box">`
-    const flagBox = (name, flagName) => box(boxAttributes(`${name}.${flagName}`), state[name][flagName], SETTINGS[name].dialog.title)
     const sliderRow = (key) => {
       const { range, dialog: { label, under } } = SETTINGS[key]
       const value = state[key]
@@ -1990,15 +1991,13 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
         `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" class="pen-tool-extras-range">` +
         `<output data-readout="${key}">${value}</output></div>`
     }
-    // The sub-line under a slider: whether the pen panel carries it.
-    const panelLine = (key) => `<div class="pen-tool-extras-sub">${flagBox('show', key)}<label for="${boxId(`show.${key}`)}" class="pen-tool-extras-label">Slider in panel</label></div>`
     const rowsUnder = (path) => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under === path).map(sliderRow).join('')
-    const labelled = (path, checked, text) => '<div class="pen-tool-extras-check-row">' +
-      `<input type="checkbox" ${boxAttributes(path)}${checked ? ' checked' : ''} class="pen-tool-extras-check">` +
+    const labelled = (path, checked, text, { rowClass = '', title = '' } = {}) => `<div class="pen-tool-extras-check-row${rowClass}">` +
+      `<input type="checkbox" ${boxAttributes(path)}${checked ? ' checked' : ''}${title ? ` title="${title}"` : ''} class="pen-tool-extras-check">` +
       `<label for="${boxId(path)}" class="pen-tool-extras-label">${text}</label></div>`
     const settingRows = (name) => {
       const { range, dialog: { labels, box } } = SETTINGS[name]
-      if (range) return sliderRow(name) + (box ? panelLine(name) : '')
+      if (range) return sliderRow(name) + (box ? labelled(`${box}.${name}`, state[box][name], 'Slider in panel', { rowClass: ' pen-tool-extras-sub', title: SETTINGS[box].dialog.title }) : '')
       if (labels) return Object.entries(labels).map(([flagName, text]) => labelled(`${name}.${flagName}`, state[name][flagName], text) + rowsUnder(`${name}.${flagName}`)).join('')
       return labelled(name, state[name], SETTINGS[name].dialog.label) + rowsUnder(name)
     }
