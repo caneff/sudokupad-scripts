@@ -430,14 +430,15 @@ test('watchCornerDrag: follows move and release on the window, so a fast drag pa
   assert.deepEqual(active, [true, false])
 })
 
-test('copiedSettings: one JSON object of the saved keys, none for a limit not saved', () => {
-  assert.equal(copiedSettings(fakeStore()), '{}')
+test('copiedSettings: both limits in force, null for no limit', () => {
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore())), { [MAX_WIDTH_KEY]: null, [MAX_HEIGHT_KEY]: null })
   assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: 500, Other_key: 1 }))), { [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: 500 })
-  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [MAX_HEIGHT_KEY]: 500 }))), { [MAX_HEIGHT_KEY]: 500 })
+  assert.deepEqual(JSON.parse(copiedSettings(fakeStore({ [MAX_HEIGHT_KEY]: 500 }))), { [MAX_WIDTH_KEY]: null, [MAX_HEIGHT_KEY]: 500 })
 })
 
-test('pastedSettings: keeps this script\'s keys, skips and counts a value its reader refuses, ignores other keys', () => {
-  assert.deepEqual(pastedSettings(JSON.stringify({ [MAX_WIDTH_KEY]: 700.4, [MAX_HEIGHT_KEY]: 'tall', DarkPage_color: '#ffffff' })), { values: { [MAX_WIDTH_KEY]: 700 }, skipped: 1 })
+test('pastedSettings: a whole number of pixels or null is kept, anything else is skipped and counted, other keys are ignored', () => {
+  assert.deepEqual(pastedSettings(JSON.stringify({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null, DarkPage_color: '#ffffff' })), { values: { [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null }, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ [MAX_WIDTH_KEY]: 700.4, [MAX_HEIGHT_KEY]: 'tall' })), { values: {}, skipped: 2 })
   assert.deepEqual(pastedSettings(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: {}, skipped: 2 })
 })
 
@@ -452,4 +453,9 @@ test('pasteReport: says how many were pasted and how many skipped, and when the 
   assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
   assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
   assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+})
+
+test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
+  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })

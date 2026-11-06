@@ -1068,19 +1068,26 @@ test('rowAfterKey: Enter and Space stay, the arrows step and wrap at both ends, 
   assert.equal(rowAfterKey('Tab', 1, 3), null)
 })
 
-test('copiedSettings: the saved profiles, auto mode and preload flag, and no other key', () => {
-  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_auto: true, ColorByDigit_addedPreloads: true, ColorByDigit_groups: groups, Other_key: 1 }
+test('copiedSettings: the profiles and auto mode in force, groups saved before profiles included', () => {
+  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_auto: true, ColorByDigit_addedPreloads: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], Other_key: 1 }
   const { ColorByDigit_groups: _legacy, Other_key: _other, ...ours } = saved
-  assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null })), ours)
-  assert.equal(copiedSettings({ getData: () => null }), '{}')
+  assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null })), JSON.parse(JSON.stringify(ours)))
+  const legacyOnly = { ColorByDigit_groups: [{ key: '3', digits: ['1', '2'] }] }
+  const copied = JSON.parse(copiedSettings({ getData: (key) => legacyOnly[key] ?? null }))
+  assert.deepEqual(copied.ColorByDigit_profiles, JSON.parse(JSON.stringify(stateFromStored(null, legacyOnly.ColorByDigit_groups))))
+  assert.equal(copied.ColorByDigit_profiles.profiles[copied.ColorByDigit_profiles.active].groups[0].key, '3')
+  assert.equal(copied.ColorByDigit_auto, false)
+  assert.equal('ColorByDigit_addedPreloads' in copied, false)
 })
 
-test('pastedSettings: profiles are normalized, a value its reader refuses is skipped and counted, other keys are ignored', () => {
-  const profiles = { profiles: [{ name: ' Odd/Even ', groups }, { name: 'bad' }], active: 1 }
+test('pastedSettings: a state that keeps every profile is kept, one that loses a profile is skipped and counted, other keys are ignored', () => {
+  const profiles = { profiles: [{ name: ' Odd/Even ', groups }], active: 0 }
   const pasted = pastedSettings(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_auto: 'yes', ColorByDigit_addedPreloads: true, DarkPage_color: '#ffffff' }))
   assert.deepEqual(pasted.values, { ColorByDigit_profiles: stateFromStored(profiles), ColorByDigit_addedPreloads: true })
   assert.equal(pasted.skipped, 1)
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: { profiles: [] }, ColorByDigit_auto: false })), { values: { ColorByDigit_auto: false }, skipped: 1 })
+  const oneBad = { profiles: [{ name: 'Odd/Even', groups }, { name: 'bad' }], active: 0 }
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_auto: false })), { values: { ColorByDigit_auto: false }, skipped: 1 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: { profiles: [] } })), { values: {}, skipped: 1 })
 })
 
 test('pastedSettings: throws on text that is not a JSON object', () => {
@@ -1093,4 +1100,9 @@ test('pasteReport: says how many were pasted and how many skipped, and when the 
   assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
   assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
   assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+})
+
+test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
+  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })

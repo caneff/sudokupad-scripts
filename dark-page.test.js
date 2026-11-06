@@ -264,8 +264,8 @@ test('a page with no Framework at all darkens without a warning', () => {
   assertDarkens(page)
 })
 
-test('copiedSettings: the saved color under its key, nothing when none is saved', () => {
-  assert.equal(copiedSettings({ getData: () => null }), '{}')
+test('copiedSettings: the color in force, the default when none is saved', () => {
+  assert.deepEqual(JSON.parse(copiedSettings({ getData: () => null })), { [DATA_KEY]: DEFAULT_COLOR })
   assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => ({ [DATA_KEY]: '#123456', Other_key: 1 }[key]) })), { [DATA_KEY]: '#123456' })
 })
 
@@ -284,4 +284,10 @@ test('pasteReport: says how many were pasted and how many skipped, and when the 
   assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
   assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
   assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+})
+
+test('pastedSettings: text with none of this script\'s keys pastes and skips nothing; an array is no settings object', () => {
+  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: true })), { values: {}, skipped: 0 })
+  assert.throws(() => pastedSettings('[{"DarkPage_color":"#ffffff"}]'), /not a settings object/)
 })

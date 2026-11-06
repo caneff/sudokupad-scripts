@@ -194,19 +194,20 @@
   }
 
   const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
-  // The legacy groups key is not copied: it is never written, and it only matters when no profiles are saved.
-  const READERS = { [PROFILES_KEY]: (data) => normalizeState(data) ?? undefined, [AUTO_KEY]: readPastedFlag, [ADDED_PRELOADS_KEY]: readPastedFlag }
-  // Each reader returns the value to save, or undefined for one that is no good.
+  // `normalizeState` drops a malformed profile, so a state passes only when it kept every profile it held.
+  const readPastedProfiles = (data) => {
+    const state = normalizeState(data)
+    return state && state.profiles.length === data.profiles.length ? state : undefined
+  }
+  const READERS = { [PROFILES_KEY]: readPastedProfiles, [AUTO_KEY]: readPastedFlag, [ADDED_PRELOADS_KEY]: readPastedFlag }
+  // The profiles in force, which carry groups saved before profiles existed, and the auto mode in force, so a paste can switch either off.
   function copiedSettings (store) {
-    const saved = {}
-    for (const key of Object.keys(READERS)) {
-      const value = store.getData(key)
-      if (value !== null && value !== undefined) saved[key] = value
-    }
-    return JSON.stringify(saved)
+    const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [AUTO_KEY]: store.getData(AUTO_KEY) === true }
+    if (store.getData(ADDED_PRELOADS_KEY) === true) copied[ADDED_PRELOADS_KEY] = true
+    return JSON.stringify(copied)
   }
 
-  // Keys of other scripts are ignored, not counted: only a value of this script's own that fails its reader is skipped.
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
   function pastedSettings (text) {
     let data
     try {
@@ -236,7 +237,6 @@
     '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
     '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
 
-  // Wires the two buttons inside `root`; `apply` takes the pasted values.
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
     root.addEventListener('click', async (event) => {
@@ -250,7 +250,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          apply(values)
+          if (Object.keys(values).length > 0) apply(values)
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -608,7 +608,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, COPY_PASTE_HTML, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return

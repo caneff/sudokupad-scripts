@@ -119,19 +119,17 @@
     return rows + '<button type="button" data-act="defaults" style="margin-top:6px">Restore defaults</button>'
   }
 
-  const READERS = { [DATA_KEY]: (data) => (data && typeof data === 'object' && !Array.isArray(data) ? normalizeColors(data) : undefined) }
-
-  // Each reader returns the value to save, or undefined for one that is no good.
-  function copiedSettings (store) {
-    const saved = {}
-    for (const key of Object.keys(READERS)) {
-      const value = store.getData(key)
-      if (value !== null && value !== undefined) saved[key] = value
-    }
-    return JSON.stringify(saved)
+  // A table passes when it holds a digit and every digit it holds is a color or null: `normalizeColors` would turn a bad entry into the default.
+  const readPastedColors = (data) => {
+    const digits = data && typeof data === 'object' && !Array.isArray(data) ? DIGITS.filter((d) => Object.hasOwn(data, d)) : []
+    return digits.length > 0 && digits.every((d) => data[d] === null || (typeof data[d] === 'string' && HEX_COLOR.test(data[d]))) ? normalizeColors(data) : undefined
   }
+  const READERS = { [DATA_KEY]: readPastedColors }
 
-  // Keys of other scripts are ignored, not counted: only a value of this script's own that fails its reader is skipped.
+  // The table in force, defaults included, so a paste carries a color that is the default here and not there.
+  const copiedSettings = (store) => JSON.stringify({ [DATA_KEY]: normalizeColors(store.getData(DATA_KEY)) })
+
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
   function pastedSettings (text) {
     let data
     try {
@@ -161,7 +159,6 @@
     '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
     '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
 
-  // Wires the two buttons inside `root`; `apply` takes the pasted values.
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
     root.addEventListener('click', async (event) => {
@@ -175,7 +172,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          apply(values)
+          if (Object.keys(values).length > 0) apply(values)
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -185,7 +182,7 @@
   }
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport, COPY_PASTE_HTML, normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
+    module.exports = { VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport, normalizeColors, setDigitColor, buildCss, digitOfText, circleFor, inkMiddle, esc, renderEditor, CIRCLE_CSS, DEFAULT_COLORS, DIGIT_ATTR }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return

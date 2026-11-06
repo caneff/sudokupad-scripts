@@ -15,8 +15,8 @@ const BEFORE = {
   'color-by-digit.user.js': [1036, '0.5.6'],
   'pen-tool-extras.user.js': [2406, '1.14.10']
 }
-// #246 added Copy and Paste settings buttons to these, which raised their line counts and versions past spec 191's.
-const GREW_FOR_246 = ['digit-color.user.js', 'dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js']
+// The scripts that gained features after spec 191 closed: their line counts passed its ceiling and their versions changed.
+const GREW_AFTER_SPEC = ['digit-color.user.js', 'dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js']
 const lineCount = (text) => text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
 const versionOf = (text) => /^\/\/ @version\s+(\S+)$/m.exec(text)[1]
 
@@ -28,12 +28,15 @@ test('spec 191 cuts the scripts without losing a feature or a saved setting', ()
   // One comment rule, in the repo's own standards.
   assert.match(read('CODING_STANDARDS.md'), /^6\. \*\*A comment states only what the code cannot show: a fact about SudokuPad's\s+internals, or the reason for a choice\./m)
 
-  // Every script is shorter, except the four that grew for #246 (above); only Pen Tool Extras, Dark Page (its margin grew with the larger arrows, #228) and Color by Digit (auto mode turned on colors every cell, #234), whose behavior changed, raised their versions.
+  // The scripts that did not grow since keep spec 191's line ceiling and version; the others only had to change their version.
   for (const [file, [lines, version]] of Object.entries(BEFORE)) {
     const text = read(file)
-    if (!GREW_FOR_246.includes(file)) assert.ok(lineCount(text) < lines, `${file} has ${lineCount(text)} lines, ${lines} before`)
-    if (GREW_FOR_246.includes(file)) assert.notEqual(versionOf(text), version, file)
-    else assert.equal(versionOf(text), version, file)
+    if (GREW_AFTER_SPEC.includes(file)) {
+      assert.notEqual(versionOf(text), version, file)
+    } else {
+      assert.ok(lineCount(text) < lines, `${file} has ${lineCount(text)} lines, ${lines} before`)
+      assert.equal(versionOf(text), version, file)
+    }
     // The test exports are one statement on one line.
     assert.match(text, /^ {4}module\.exports = \{[^\n]*\}$/m, file)
   }

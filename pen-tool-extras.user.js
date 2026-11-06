@@ -68,15 +68,16 @@
 
   // `effect` runs once `inForce` holds the new value; the style is written after the effects, so an effect need not.
   function slider (key, range, effect, dialog) {
-    return { key, fallback: range.fallback, normalize: (data) => inRange(data, range) ? data : range.fallback, effect, range, dialog }
+    return { key, fallback: range.fallback, normalize: (data) => inRange(data, range) ? data : range.fallback, accepts: (data) => inRange(data, range), effect, range, dialog }
   }
 
   function flag (key, effect = doNothing, dialog) {
-    return { key, fallback: true, normalize: (data) => data !== false, effect, dialog }
+    return { key, fallback: true, normalize: (data) => data !== false, accepts: (data) => typeof data === 'boolean', effect, dialog }
   }
 
   function flags (key, names, effect, dialog, normalize = (data) => decodeFlags(names, data)) {
-    return { key, fallback: decodeFlags(names), normalize, effect, dialog }
+    const accepts = (data) => isPlainObject(data) && Object.keys(data).length > 0 && Object.entries(data).every(([name, value]) => names.includes(name) && typeof value === 'boolean')
+    return { key, fallback: decodeFlags(names), normalize, accepts, effect, dialog }
   }
 
   // The line mode is saved its own way. A row `under` a box is hidden while that box is unticked.
@@ -415,34 +416,26 @@
     return preset === CUSTOM ? { ...colors } : { ...colors, preset }
   }
 
-  // The settings and the pen colors; the selected pen (`PenColor_pen`) and SudokuPad's own line mode are not settings.
-  // A setting's `normalize` swaps a bad value for its default, so a pasted value must already read back as itself.
-  function settingAccepts (setting, data) {
-    if (typeof setting.fallback === 'boolean') return typeof data === 'boolean'
-    if (setting.range) return inRange(data, setting.range)
-    return isPlainObject(data) && Object.values(data).every((flagValue) => typeof flagValue === 'boolean')
-  }
-
+  // A table passes when it holds a usable color and every pen color it holds is one: `readPenColors` would keep SudokuPad's own color for a bad entry.
   const readPastedColors = (data) => {
     const set = readPenColors(data)
-    return set ? storedPenColors(set) : undefined
+    return set && PEN_COLOR_NUMBERS.every((n) => !(n in data) || isHexColor(data[n])) ? storedPenColors(set) : undefined
   }
 
   const READERS = {
-    ...Object.fromEntries(SETTING_NAMES.map((name) => [SETTINGS[name].key, (data) => (settingAccepts(SETTINGS[name], data) ? SETTINGS[name].normalize(data) : undefined)])),
+    ...Object.fromEntries(SETTING_NAMES.map((name) => [SETTINGS[name].key, (data) => (SETTINGS[name].accepts(data) ? SETTINGS[name].normalize(data) : undefined)])),
     [COLORS_KEY]: readPastedColors
   }
-  // Each reader returns the value to save, or undefined for one that is no good.
+  // Every setting at the value in force, defaults included, so a paste can put one back to its default; the pen colors only once they are saved.
   function copiedSettings (store) {
-    const saved = {}
-    for (const key of Object.keys(READERS)) {
-      const value = store.getData(key)
-      if (value !== null && value !== undefined) saved[key] = value
-    }
-    return JSON.stringify(saved)
+    const settings = readSettings(store)
+    const copied = Object.fromEntries(SETTING_NAMES.map((name) => [SETTINGS[name].key, settings[name]]))
+    const colors = readPenColors(store.getData(COLORS_KEY))
+    if (colors) copied[COLORS_KEY] = storedPenColors(colors)
+    return JSON.stringify(copied)
   }
 
-  // Keys of other scripts are ignored, not counted: only a value of this script's own that fails its reader is skipped.
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
   function pastedSettings (text) {
     let data
     try {
@@ -472,7 +465,6 @@
     '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
     '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
 
-  // Wires the two buttons inside `root`; `apply` takes the pasted values.
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
     root.addEventListener('click', async (event) => {
@@ -486,7 +478,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          apply(values)
+          if (Object.keys(values).length > 0) apply(values)
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -2174,7 +2166,7 @@
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, COPY_PASTE_HTML, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return

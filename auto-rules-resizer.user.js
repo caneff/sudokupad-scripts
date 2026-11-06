@@ -66,21 +66,17 @@
     }
   }
 
-  // A saved limit is a number of pixels; a string or boolean that `normalizeLimit` would coerce is not one.
-  const readPastedLimit = (data) => (typeof data === 'number' ? normalizeLimit(data) ?? undefined : undefined)
+  // A saved limit is a whole number of pixels, or null for none; a string or boolean that `normalizeLimit` would coerce is not one.
+  const readPastedLimit = (data) => (data === null || (Number.isInteger(data) && data > 0) ? data : undefined)
   const READERS = { [MAX_WIDTH_KEY]: readPastedLimit, [MAX_HEIGHT_KEY]: readPastedLimit }
 
-  // Each reader returns the value to save, or undefined for one that is no good.
+  // null is no limit, so a paste can clear one.
   function copiedSettings (store) {
-    const saved = {}
-    for (const key of Object.keys(READERS)) {
-      const value = store.getData(key)
-      if (value !== null && value !== undefined) saved[key] = value
-    }
-    return JSON.stringify(saved)
+    const { maxWidth, maxHeight } = readLimits(store)
+    return JSON.stringify({ [MAX_WIDTH_KEY]: maxWidth, [MAX_HEIGHT_KEY]: maxHeight })
   }
 
-  // Keys of other scripts are ignored, not counted: only a value of this script's own that fails its reader is skipped.
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
   function pastedSettings (text) {
     let data
     try {
@@ -110,7 +106,6 @@
     '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
     '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
 
-  // Wires the two buttons inside `root`; `apply` takes the pasted values.
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
     root.addEventListener('click', async (event) => {
@@ -124,7 +119,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          apply(values)
+          if (Object.keys(values).length > 0) apply(values)
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -363,7 +358,6 @@
       copiedSettings,
       pastedSettings,
       pasteReport,
-      COPY_PASTE_HTML,
       MAX_HEIGHT_KEY,
       normalizeLimit,
       limitFromBox,
@@ -579,10 +573,10 @@
     const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
     if (!widthInput || !heightInput) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
     wireCopyPaste(widthInput.closest('.dialog'), (values) => {
-      limits = { maxWidth: values[MAX_WIDTH_KEY] ?? limits.maxWidth, maxHeight: values[MAX_HEIGHT_KEY] ?? limits.maxHeight }
+      limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
       saveLimits(Framework, limits)
-      widthInput.value = limits.maxWidth ?? ''
-      heightInput.value = limits.maxHeight ?? ''
+      if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''
+      if (MAX_HEIGHT_KEY in values) heightInput.value = limits.maxHeight ?? ''
       fitPage()
     })
   }

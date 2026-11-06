@@ -63,17 +63,10 @@
 
   const READERS = { [DATA_KEY]: (data) => savedColor(data) ?? undefined }
 
-  // Each reader returns the value to save, or undefined for one that is no good.
-  function copiedSettings (store) {
-    const saved = {}
-    for (const key of Object.keys(READERS)) {
-      const value = store.getData(key)
-      if (value !== null && value !== undefined) saved[key] = value
-    }
-    return JSON.stringify(saved)
-  }
+  // The color in force, the default included, so a paste can put a page back to the default.
+  const copiedSettings = (store) => JSON.stringify({ [DATA_KEY]: readSavedColor(store) ?? DEFAULT_COLOR })
 
-  // Keys of other scripts are ignored, not counted: only a value of this script's own that fails its reader is skipped.
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
   function pastedSettings (text) {
     let data
     try {
@@ -103,7 +96,6 @@
     '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
     '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
 
-  // Wires the two buttons inside `root`; `apply` takes the pasted values.
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
     root.addEventListener('click', async (event) => {
@@ -117,7 +109,7 @@
           say('Settings copied.')
         } else {
           const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          apply(values)
+          if (Object.keys(values).length > 0) apply(values)
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
@@ -221,7 +213,7 @@
   })
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport, COPY_PASTE_HTML, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
+    module.exports = { VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
   if (typeof document === 'undefined') return
 
