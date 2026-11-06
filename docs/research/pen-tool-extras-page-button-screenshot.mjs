@@ -1,5 +1,5 @@
 // Takes a picture of Pen Tool Extras' page button on each pen page, with dashes (dash 3) and with dots (dash 0):
-// docs/research/<label>-page-button.png, for #228. Run from the repo root:
+// docs/research/<label>-page-button.png, and the pen buttons on page 3: <label>-page-3-pen-buttons.png, for #228. Run from the repo root:
 // node docs/research/pen-tool-extras-page-button-screenshot.mjs <label> [script path]
 /* global Framework */
 import { chromium } from 'playwright'
@@ -41,4 +41,8 @@ const cells = shots.map((s) => `<div style="text-align:center"><img src="data:im
 const compose = await (await browser.newContext({ viewport: { width: 560, height: 360 } })).newPage()
 await compose.setContent(`<body style="margin:12px;font:13px sans-serif;background:#fff"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">${cells}</div></body>`)
 writeFileSync(out, await compose.screenshot({ fullPage: true }))
+await page.reload({ waitUntil: 'load' })
+await boot()
+for (let i = 0; i < 2; i++) { await page.locator(BUTTON).click(); await page.waitForTimeout(400) }
+writeFileSync(out.replace('-page-button.png', '-page-3-pen-buttons.png'), await page.locator('.tool-pen').first().screenshot())
 await browser.close()

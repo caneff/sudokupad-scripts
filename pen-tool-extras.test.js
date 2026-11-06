@@ -1399,7 +1399,7 @@ test('a page 3 swatch is an arrow in the pen color of its button, as a mask so t
   const svg = decodeURIComponent(/url\("data:image\/svg\+xml,([^"]+)"\)/.exec(mask)[1])
   const triangles = /<path d='([^']+)' fill='currentColor' stroke='none'\/>/.exec(svg)
   assert.ok(triangles, `the arrows are filled paths with no stroke: ${svg}`)
-  assert.equal(triangles[1].split('Z').length - 1, 2, 'two closed arrows')
+  assert.equal(triangles[1].split('Z').length - 1, 3, 'three closed arrows')
 })
 
 // The segments a drag is made of, as SudokuPad's own pen tool stores them: the value, the cell that holds it,

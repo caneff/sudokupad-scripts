@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.16.0
+// @version      1.16.1
 // @description  Pen tool extras: sets the pen's nine colors once, at install, to cell color page 1 darkened, and after that changes them only when you pick a preset (a darker cell color page or SudokuPad's own colors) in a settings dialog or edit a color there or by holding a pen color button, adds a second page of nine pens that draw the same colors as dashed lines and a third page of nine that draw a line as wide as a page 1 line with a run of arrows (filled triangles) pointing the way the line was dragged (a page button, Tab or the mouse wheel over the page button changes page; either line style can be switched off in the dialog, which takes its page out of the rotation; lines in those pens are invisible without this script), puts two sliders in the pen tool's panel (each can be hidden in the settings dialog, which also holds both) for how thick pen lines, circles, crosses, edge marks and corner marks are and how see-through the pen layer is, lets the dialog set how long the page 2 dashes are and how far apart the page 3 arrows are, moves the pen's line mode pulldown into the settings dialog, puts a white outline around every pen mark (on by default, optional), and adds direction arrows and a circle to the marks a click on a cell edge cycles through (X, circle, then the two directions), plus an X and a circle for a click near a grid corner, and erases a whole line (every piece joined to it, drawn with the same pen) with a middle click (optional). A small gear in the corner of the pen tool button opens the settings dialog. Relies on SudokuPad internals, so an update can break a part of it: that part is skipped, the browser console and the settings dialog say which, and SudokuPad's own pen tool keeps working.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -20,7 +20,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.16.0'
+  const VERSION = '1.16.1'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -953,7 +953,7 @@
   }
   // `currentColor`, so one picture works both as a CSS mask and inline. The round cap is what makes a zero-length dash a dot.
   const SWATCH_LINE = { width: 2, from: 2, to: 22, middle: 12 }
-  const ARROW_SWATCH = "<path d='M5 6.5L12 12L5 17.5ZM13 6.5L20 12L13 17.5Z' fill='currentColor' stroke='none'/>"
+  const ARROW_SWATCH = "<path d='M5.4 9.8L8.6 12L5.4 14.2ZM10.4 9.8L13.6 12L10.4 14.2ZM15.4 9.8L18.6 12L15.4 14.2Z' fill='currentColor' stroke='none'/>"
   function pageSwatch (page, dash, angle) {
     const { on, gap, offset } = dashPattern(SWATCH_LINE.width, dash, SWATCH_LINE.to - SWATCH_LINE.from)
     const round = (x) => Math.round(x * 1000) / 1000
