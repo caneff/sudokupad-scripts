@@ -9,7 +9,7 @@
   auto mode use its groups. There are one to six of them; a fresh install has the four preloads, Low/5/High
   active. Groups saved before profiles existed become the active profile: the preload they equal, else a
   profile named Custom added first, with the four preloads beside it. An install with saved profiles gets
-  Entropic and Modular appended once on load, each skipped when a profile with equal groups exists.
+  Entropic and Modular added once (see **preload**).
 - **shown digit** — the one digit that stands for a group on its colored cell in the Color by Digit icon,
   the profile menu and the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
   are below 5, the highest if all are above 5, else the middle (the lower of the two middle ones on an even
@@ -32,8 +32,8 @@
   after the dialog's "Restore defaults".
 - **preload** — one of the four ready-made profiles a fresh install starts with: Low/5/High, Odd/Even,
   Entropic ({0,1,2,3}, {4,5,6}, {7,8,9}) and Modular ({1,4,7}, {2,5,8}, {0,3,6,9}). Entropic and Modular
-  are added once to an install that already has profiles, recorded with a saved flag, so a deleted one stays
-  deleted. A migrated profile is named after the preload its groups equal.
+  are appended once, on load, to an install that already has profiles, each skipped when a profile with equal
+  groups exists; a saved flag records it, so a deleted one stays deleted. A migrated profile is named after the preload its groups equal.
 - **pen color** — one of the pen tool's nine colors, numbered 1 to 9. It is a
   `#rrggbb` value kept in SudokuPad's `--puzzle-pencolor-N` variable, which
   strokes and the tool's color buttons both read. The eraser has no pen color. With

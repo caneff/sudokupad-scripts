@@ -559,13 +559,14 @@
   }
 
   const saveState = (state) => Framework.setData(PROFILES_KEY, state)
-  function loadState () {
-    const state = stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
-    if (Framework.getData(ADDED_PRELOADS_KEY) === true) return state
+  const loadState = () => stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
+
+  function addPreloadsOnce () {
+    if (Framework.getData(ADDED_PRELOADS_KEY) === true) return
+    const state = loadState()
     const added = withAddedPreloads(state)
     if (added.profiles.length !== state.profiles.length) saveState(added)
     Framework.setData(ADDED_PRELOADS_KEY, true)
-    return added
   }
   const loadGroups = () => activeGroups(loadState())
 
@@ -971,6 +972,7 @@
       content: 'Color by digit',
       handler: openEditor
     })
+    addPreloadsOnce()
     autoMode = Framework.getData(AUTO_KEY) === true
     installButton(Framework, app, () => colorCells(app), autoMode, loadGroups(), readColor)
     installAutoMode(app)

@@ -176,9 +176,7 @@ describe('the one-time add of Entropic and Modular to an install with saved prof
   })
 
   it('a profile deleted afterwards stays deleted across a reload', async () => {
-    const { context, p, errors } = await openProfiles({ [PROFILES_STORAGE_KEY]: OLD_TWO })
-    try {
-      const t = tools(p)
+    await open({ [PROFILES_STORAGE_KEY]: OLD_TWO }, async (p, t) => {
       assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular']), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular'])
       await t.openEditor()
       await p.click(`${ROWS}:nth-child(3) button[data-act=delete]`)
@@ -187,10 +185,7 @@ describe('the one-time add of Entropic and Modular to an install with saved prof
       await p.reload({ waitUntil: 'load' })
       await startInjected(p, script)
       assert.deepEqual(await t.names(), ['Low/5/High', 'Odd/Even', 'Modular'])
-      assert.deepEqual(errors, [])
-    } finally {
-      await context.close()
-    }
+    })
   })
 })
 
