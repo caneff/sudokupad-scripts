@@ -85,13 +85,18 @@ const recordedVersion = (file) => {
   }
 }
 
-// 'same' or 'changed': the version of the puzzle page `fetchHtml` returns against the version in the
-// recording's copy of it. A recording that names none or cannot be read counts as changed. Throws only when the
-// live page cannot be fetched or names no version, so the caller sees a failed check and not a guess.
+// The version of the live puzzle page `fetchHtml` returns. Throws when the page cannot be fetched or names no
+// version, so the caller sees a failed read and not a guess.
+export async function liveVersion (fetchHtml = fetchPuzzlePage) {
+  const version = pageVersion(await fetchHtml())
+  if (version === null) throw new Error('the live puzzle page names no version')
+  return version
+}
+
+// 'same' or 'changed': the live version against the version in the recording's copy of the puzzle page. A
+// recording that names none or cannot be read counts as changed.
 export async function checkVersion (file, fetchHtml = fetchPuzzlePage) {
-  const live = pageVersion(await fetchHtml())
-  if (live === null) throw new Error('the live puzzle page names no version')
-  return recordedVersion(file) === live ? 'same' : 'changed'
+  return recordedVersion(file) === await liveVersion(fetchHtml) ? 'same' : 'changed'
 }
 
 // A fresh recording without what a replay must not hold: a request the recorder aborted (status -1), and a

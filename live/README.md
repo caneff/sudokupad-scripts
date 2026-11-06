@@ -30,3 +30,10 @@ owns it; its header comment is the full rule.
   recording.
 - A replayed request the recording lacks is aborted, and the process then exits 1 naming each such
   URL, with or without `LIVE_OFFLINE=1`. `LIVE_REFRESH=1` records again.
+
+## The daily watch
+
+`npm run watch:live` (`live/watch.mjs`) is for a daily schedule, so a SudokuPad update that breaks a script shows
+up as a bug and not when someone installs it. Its header comment is the full rule: a new version runs the suite
+with `LIVE_REFRESH=1`, red files one `bug` issue, and a version already checked is a no-op. The last version
+checked lives in `last-version`, beside the recording.
