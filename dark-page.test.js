@@ -149,8 +149,8 @@ test('growBox grows every side by the amount', () => {
   assert.deepEqual(growBox({ left: 10, top: 20, right: 30, bottom: 40 }, 3), { left: 7, top: 17, right: 33, bottom: 43 })
 })
 
-test('the margin kept around the cells is 32px, the value Chris ruled for the White outline', () => {
-  assert.equal(SOLVER_REACH, 32, `reach ${SOLVER_REACH}: each unit adds white around every puzzle, so it is not raised past the ruled 32`)
+test('the margin kept around the cells is 36px, the value Chris ruled: the largest arrow\'s reach of 34 and the White outline\'s 2', () => {
+  assert.equal(SOLVER_REACH, 36, `reach ${SOLVER_REACH}: each unit adds white around every puzzle, so it is not raised past the ruled 36`)
 })
 
 test('markerReach is the farthest side of the marker from its reference point, times the stroke width unless it is in user units, times the scale', () => {
