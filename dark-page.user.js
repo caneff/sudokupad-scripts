@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.7
+// @version      0.3.8
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Not SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.7'
+  const VERSION = '0.3.8'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'dark-page-style'
   const RECT_ID = 'dark-page-rect'
@@ -36,10 +36,11 @@
   const PAD = 1
   // How far a solver's pen mark reaches past its cell, at Pen Tool Extras' largest thickness (16).
   // Measured on sudokupad.app v0.611.0: the edge X on an outer edge reaches 18.53px in a 1200x900
-  // window, and an arrow on a page 3 line along an outer edge 24 cell units (a cell is 64), 21.4px at
-  // a cell 57px wide. 28 covers both up to cells about 73px wide; 32 leaves room for Pen Tool Extras'
-  // White outline. Only cells wider than 128px put the puzzle's own edge farther out than this.
-  const SOLVER_REACH = 32
+  // window. An arrow on a page 3 line along an outer edge reaches 2.125 x 16 = 34 cell units (a cell is
+  // 64), 30.3px at a cell 57px wide. 34 plus 2 for Pen Tool Extras' White outline is 36, which covers the
+  // arrow up to cells about 64px wide and the X well past that. Only cells wider than 128px put the
+  // puzzle's own edge farther out than this.
+  const SOLVER_REACH = 36
   // Elements in `defs`, `marker` and the like have no box.
   const DRAWN = 'path, rect, circle, ellipse, line, polyline, polygon, text, image'
   const MARKER_PROPERTIES = ['marker-start', 'marker-mid', 'marker-end']

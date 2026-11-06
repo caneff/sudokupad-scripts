@@ -179,7 +179,9 @@ function group (title, extra = []) {
     })
 
     const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')).strokeDasharray))
+    // The page the button shows the line of, and the first dash of that line (0 for dots).
     const sample = () => p.locator(`${PAGE_BUTTON} [data-page-sample]`).getAttribute('data-page-sample')
+    const sampleDash = () => p.locator(`${PAGE_BUTTON} [data-page-sample] path[stroke-dasharray]`).getAttribute('stroke-dasharray').then((v) => parseFloat(v))
     const range = () => editor().locator('input[data-setting="dash"]')
 
     it('the dialog\'s dash length starts at 3, which draws dashes; 0 draws dots, and a saved 0 stays; Cancel leaves it, Restore defaults and Save bring the dashes back, and each segment starts half a dash in', async () => {
@@ -205,7 +207,8 @@ function group (title, extra = []) {
       assert.equal(await settle(dashOn, 0), 0, 'a saved 0 stays after a reload')
       await openToolAndPageButton()
       await goToPage(PAGE_ONE)
-      assert.equal(await settle(sample, 'dots'), 'dots', 'the page button shows dots at 0')
+      assert.equal(await settle(sample, '2'), '2')
+      assert.equal(await settle(sampleDash, 0), 0, 'the page button shows dots at 0')
       await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
       await openExtrasEditor(p)
@@ -224,11 +227,12 @@ function group (title, extra = []) {
       await openToolAndPageButton()
       // The button shows the line of the page it turns to: from page 2 the arrows of page 3, from page 3 page 1's solid line,
       // from page 1 the dashes.
-      assert.equal(await settle(sample, 'arrowLines'), 'arrowLines')
+      assert.equal(await settle(sample, '3'), '3')
       await goToPage(PAGE_THREE)
-      assert.equal(await settle(sample, 'solid'), 'solid')
+      assert.equal(await settle(sample, '1'), '1')
       await goToPage(PAGE_ONE)
-      assert.equal(await settle(sample, 'dashed'), 'dashed', 'the page button shows dashes')
+      assert.equal(await settle(sample, '2'), '2')
+      assert.equal(await settle(sampleDash, 6), 6, 'the page button shows dashes')
       await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
     })

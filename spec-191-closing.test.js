@@ -26,11 +26,11 @@ test('spec 191 cuts the scripts without losing a feature or a saved setting', ()
   // One comment rule, in the repo's own standards.
   assert.match(read('CODING_STANDARDS.md'), /^6\. \*\*A comment states only what the code cannot show: a fact about SudokuPad's\s+internals, or the reason for a choice\./m)
 
-  // Every script is shorter, and only Pen Tool Extras, whose behavior changed, raised its version.
+  // Every script is shorter, and only Pen Tool Extras and Dark Page (its margin grew with the larger arrows, #228), whose behavior changed, raised their versions.
   for (const [file, [lines, version]] of Object.entries(BEFORE)) {
     const text = read(file)
     assert.ok(lineCount(text) < lines, `${file} has ${lineCount(text)} lines, ${lines} before`)
-    if (file === 'pen-tool-extras.user.js') assert.notEqual(versionOf(text), version, file)
+    if (file === 'pen-tool-extras.user.js' || file === 'dark-page.user.js') assert.notEqual(versionOf(text), version, file)
     else assert.equal(versionOf(text), version, file)
     // The test exports are one statement on one line.
     assert.match(text, /^ {4}module\.exports = \{[^\n]*\}$/m, file)
