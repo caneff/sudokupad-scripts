@@ -1351,7 +1351,7 @@ test('the line mode icon draws the faint 2x2 grid, with the center line, the edg
   assert.deepEqual(lines('both'), ['center', 'edge'])
   assert.deepEqual(lines('centeronly'), ['center'])
   assert.deepEqual(lines('edgeonly'), ['edge'])
-  assert.match(renderLineModeButton('both'), /<path data-grid [^>]*stroke-opacity="0\.3"/)
+  assert.match(renderLineModeButton('both'), /<path data-grid [^>]*stroke-opacity="0\.55"/)
   // The lines are solid: only the grid carries a stroke opacity.
   assert.equal(renderLineModeButton('both').match(/stroke-opacity/g).length, 1)
   // SudokuPad's CSS fills every `svg path`, so each path has to turn the fill off to draw as a line.
@@ -1365,14 +1365,24 @@ test('the line mode button is the page button\'s size and style, between the sli
   assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode, .tool-pen .controls-input button.pen-tool-extras-page'), BUTTON_SIZE)
   // No other rule gives either button a size of its own.
   assert.equal(PANEL_CSS.split('\n').filter((rule) => /button\.pen-tool-extras-(mode|page)/.test(rule) && /width|height/.test(rule)).length, 1)
-  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode'), /right: 4\.5rem;/)
+  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode'), /right: 4\.3rem;/)
   assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-page'), /right: 0;/)
-  assert.match(ruleOf('.pen-tool-extras-sliders'), /right: 8\.75rem;/)
+  assert.match(ruleOf('.pen-tool-extras-sliders'), /right: 8\.6rem;/)
 })
 
 test('with no page button the line mode button takes the row\'s right end and the sliders reach it', () => {
   assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ button.pen-tool-extras-mode'), /right: 0;/)
-  assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ .pen-tool-extras-sliders'), /right: 4\.25rem;/)
+  assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ .pen-tool-extras-sliders'), /right: 4\.3rem;/)
+})
+
+test('the sliders block is a box styled like SudokuPad\'s buttons, from its own variable and rules, with the buttons\' margin so it spans the left column', () => {
+  const rule = ruleOf('.pen-tool-extras-sliders')
+  assert.match(rule, /box-sizing: border-box;/)
+  assert.match(rule, /margin: 0\.15rem;/)
+  assert.match(rule, /background-color: var\(--body-bg\);/)
+  assert.match(rule, /border: 1px solid #ccc;/)
+  assert.match(rule, /border-radius: 0\.5rem;/)
+  assert.match(rule, /height: 4rem;/)
 })
 
 test('the thickness track is a wedge wider at the right than at the left, and the opacity track fades from faint to solid', () => {

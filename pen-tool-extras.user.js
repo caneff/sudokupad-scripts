@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.19.0
+// @version      1.20.0
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.19.0'
+  const VERSION = '1.20.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -1642,13 +1642,14 @@
   const PANEL_ROW_HEIGHT_REM = 4
   // The line mode button and the page button are both 4rem squares.
   const PANEL_BUTTON_REM = PANEL_ROW_HEIGHT_REM
-  const PAGE_GAP_REM = 0.5
+  // The pad's buttons carry a 0.15rem margin each side, so its columns are 0.3rem apart; the two buttons and the sliders box keep that gap and margin to line up with the pad.
+  const PANEL_BUTTON_MARGIN_REM = 0.15
+  const PAGE_GAP_REM = 2 * PANEL_BUTTON_MARGIN_REM
   const MODE_BUTTON = 'pen-tool-extras-mode'
   const MODE_BUTTON_RIGHT_REM = PANEL_BUTTON_REM + PAGE_GAP_REM
-  // The sliders sit a little closer to the button on their right than the buttons do to each other, so they keep about two-thirds of the length they had beside the page button
-  // alone. With no page button (no page to turn to) the line mode button takes the row's right end and the sliders reach it.
-  const SLIDER_GAP_REM = 0.25
-  const SLIDERS_RIGHT_REM = MODE_BUTTON_RIGHT_REM + PANEL_BUTTON_REM + SLIDER_GAP_REM
+  // With no page button (no page to turn to) the line mode button takes the row's right end and the sliders box reaches it.
+  const SLIDER_GAP_REM = PAGE_GAP_REM
+  const SLIDERS_RIGHT_REM = Math.round((MODE_BUTTON_RIGHT_REM + PANEL_BUTTON_REM + SLIDER_GAP_REM) * 100) / 100
   const NO_PAGE_ATTRIBUTE = 'data-no-page'
   const SLIDER_TRACK_REM = 0.8
   const SLIDER_THUMB_REM = 1.1
@@ -1662,9 +1663,10 @@
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
   // A hidden slider's empty row has the same height, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
+  // The sliders box copies SudokuPad's `button` rule (its border and radius are literals there, its background `var(--body-bg)` as on the pad's pen buttons).
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
-    `.${SLIDERS} { position: absolute; left: 0; right: ${SLIDERS_RIGHT_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
+    `.${SLIDERS} { position: absolute; left: 0; right: ${SLIDERS_RIGHT_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0 0.6rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; background-color: var(--body-bg); border: 1px solid #ccc; border-radius: 0.5rem; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
     `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
     `.${SLIDER_ROW} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
@@ -1702,7 +1704,7 @@
     const mode = normalizeLineMode(lineMode)
     const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
     return `<button class="${MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.3" stroke-width="1"/>' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>' +
       `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MODE_ICON_SHOWS[mode].map((name) => MODE_ICON_LINES[name]).join('')}</g></svg></button>`
   }
 
