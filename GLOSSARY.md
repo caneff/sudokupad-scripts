@@ -113,6 +113,7 @@
 - **color character** — the one character a stroke stores for its pen color, and the replay holds as `pc:<character>`: `1`
   to `9` on page 1, `a` to `i` on page 2, `j` to `z` and `0` on page 3 (two to a pen, see **direction character**). The **pen color** number (1 to 9) is the button the character is on, and the
   only part SudokuPad's own `ToolPen_color` ever holds; the selected character is saved under `PenColor_pen`.
+- **line mode button** — the 4rem square button in the pen panel's last row, left of the **page button** (at the row's right end when there is no page button). A click or a touch tap steps **line mode** Center & Edge, Center only, Edge only and round, through SudokuPad's own setting. Its icon is a faint 2x2 cell grid with the center line, the edge line, or both; its hover label (`title`) names the current mode with SudokuPad's labels.
 - **page button** — the square button at the right end of the pen panel's last row. It shows the line the next enabled page draws,
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).

@@ -2,14 +2,14 @@
 // line mode button that steps SudokuPad's hidden line mode pulldown, and of the opacity of the pen layer, on
 // sudokupad.app in headless Chromium. A touch screen stays untested.
 // Every slider move is a real mouse drag.
-/* global Framework, ToolPen, Image */
+/* global Framework, ToolPen, Image, TouchEvent */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { dialogButton, effectiveOpacities, openExtrasEditor } from './settings.mjs'
-import { draw, gridPoint as gridPointOf, openPenTool, penEntries, penValuesNoColor, setSlider } from './pen.mjs'
+import { draw, drag, openPenTool, penEntries, penValuesNoColor, setSlider } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -104,11 +104,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // The kinds of line a real drag adds: one drag of each shape, over cell middles and over cell corners.
   const dragKinds = async (points) => {
     const before = await penEntries(p)
-    await p.mouse.move(...await gridPointOf(p, points[0]))
-    await p.mouse.down()
-    for (const point of points.slice(1)) await p.mouse.move(...await gridPointOf(p, point), { steps: 8 })
-    await p.mouse.up()
-    await settle(async () => (await penEntries(p)).length, -1)
+    await drag(p, points)
     const added = (await penEntries(p)).filter((entry) => !before.includes(entry)).map((entry) => entry.split(':')[1][0])
     return [...new Set(added.map((value) => CENTER_LINES.includes(value) ? 'center' : EDGE_LINES.includes(value) ? 'edge' : value))]
   }
@@ -146,6 +142,41 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(LINE_MODE_KEY), 'both')
   })
 
+  it('a touch tap steps the mode once, even though SudokuPad cancels the touch events on its buttons and a click may follow', async () => {
+    assert.equal(await modeButton().getAttribute('title'), 'Center & Edge')
+    // SudokuPad's own handlers on its buttons call preventDefault on a touch, which keeps the browser from sending the click.
+    await modeButton().evaluate((el) => {
+      el.addEventListener('touchend', (event) => event.preventDefault())
+      el.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true }))
+      el.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true }))
+    })
+    assert.equal(await modeButton().getAttribute('title'), 'Center only')
+    assert.equal(await saved(LINE_MODE_KEY), 'centeronly')
+    // A browser that does send the click after a tap must not step the mode a second time.
+    await pressMode()
+    assert.equal(await modeButton().getAttribute('title'), 'Center only')
+    await read((k) => Framework.removeData(k), LINE_MODE_KEY)
+    await reload()
+  })
+
+  it('with no page to turn to the page button is gone, and the line mode button takes the row\'s right end with the sliders reaching it', async () => {
+    const setStyles = async (on) => {
+      await openExtrasEditor(p)
+      for (const key of ['dashed', 'arrows']) await editor().locator(`input[data-box="lineStyles.${key}"]`).setChecked(on)
+      await dialogButton(p, 'Save').click()
+    }
+    const pageBox = await p.locator('.pen-tool-extras-page').boundingBox()
+    await setStyles(false)
+    assert.equal(await p.locator('.pen-tool-extras-page').count(), 0)
+    const [mode, sliders] = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-sliders'].map((s) => p.locator(s).boundingBox()))
+    assert.equal(Math.abs(mode.x + mode.width - (pageBox.x + pageBox.width)) <= 1, true, JSON.stringify({ mode, pageBox }))
+    assert.equal(sliders.x + sliders.width <= mode.x, true, JSON.stringify({ sliders, mode }))
+    await setStyles(true)
+    assert.equal(await p.locator('.pen-tool-extras-page').count(), 1)
+    const [page, modeAgain] = await Promise.all(['.pen-tool-extras-page', '.pen-tool-extras-mode'].map((s) => p.locator(s).boundingBox()))
+    assert.equal(modeAgain.x + modeAgain.width <= page.x, true)
+  })
+
   it('the line mode survives a reload, and the button shows it', async () => {
     await pressMode()
     assert.equal(await saved(LINE_MODE_KEY), 'centeronly')
@@ -164,7 +195,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the sliders have no line pictures, keep their hover labels, and the tracks draw: a wedge for thickness, a fade for opacity', async () => {
     assert.equal(await p.locator('.pen-tool-extras-slider svg').count(), 0)
-    // Without their pictures the sliders keep about two-thirds of their former 105 px.
+    // The sliders keep about two-thirds of the 105 px they had beside the page button alone.
     const length = (await p.locator(THICKNESS).boundingBox()).width
     assert.equal(length >= 60 && length <= 80, true, `slider length ${length}`)
     assert.deepEqual(await p.locator('.pen-tool-extras-slider').evaluateAll((els) => els.map((e) => e.title)), ['Thickness', 'Opacity'])

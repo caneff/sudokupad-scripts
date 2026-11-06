@@ -1082,7 +1082,6 @@ const editorState = (over = {}) => ({
   preset: 'page-1',
   presets: ['page-1', 'page-2', 'page-3', 'sudokupad'],
   marks: ALL,
-  lineMode: 'both',
   thickness: 5,
   opacity: 80,
   show: { thickness: true, opacity: true },
@@ -1318,15 +1317,15 @@ test('the middle click box is ticked unless the setting is off', () => {
   assert.equal(box(renderEditor(editorState({ middleErase: false })))[1], undefined)
 })
 
-test('every section after the first has a divider above it, and Pen line mode is the last', () => {
-  const html = renderEditor(editorState({ lineMode: 'both' }))
+test('every section after the first has a divider above it', () => {
+  const html = renderEditor(editorState())
   const heads = ['Line settings', 'Line styles', 'Marks a click cycles through', 'Other']
   heads.forEach((head) => assert.match(html, new RegExp(`<div class="pen-tool-extras-divider"></div><div[^>]*>(<span[^>]*>)?${head}<`), head))
   assert.match(DIALOG_CSS, /\.pen-tool-extras-divider \{ border-top: 1px solid #e3dff0;/)
 })
 
 test('the settings dialog has no line mode pulldown: the panel button is the one control', () => {
-  const html = renderEditor(editorState({ lineMode: 'both' }))
+  const html = renderEditor(editorState())
   assert.equal(html.includes('Pen line mode'), false)
   assert.equal(html.includes('data-line-mode'), false)
 })
@@ -1352,18 +1351,38 @@ test('the line mode icon draws the faint 2x2 grid, with the center line, the edg
   assert.deepEqual(lines('both'), ['center', 'edge'])
   assert.deepEqual(lines('centeronly'), ['center'])
   assert.deepEqual(lines('edgeonly'), ['edge'])
-  assert.match(renderLineModeButton('both'), /<path data-grid /)
+  assert.match(renderLineModeButton('both'), /<path data-grid [^>]*stroke-opacity="0\.3"/)
+  // The lines are solid: only the grid carries a stroke opacity.
+  assert.equal(renderLineModeButton('both').match(/stroke-opacity/g).length, 1)
   // SudokuPad's CSS fills every `svg path`, so each path has to turn the fill off to draw as a line.
   assert.match(PANEL_CSS, /\.pen-tool-extras-mode path \{ fill: none !important;/)
 })
 
+const ruleOf = (selector) => (new RegExp(`^${selector.replace(/[.[\]~]/g, '\\$&')} \\{([^}]*)\\}`, 'm').exec(PANEL_CSS) || [])[1]
+const BUTTON_SIZE = /width: 4rem; height: 4rem;/
+
 test('the line mode button is the page button\'s size and style, between the sliders and the page button', () => {
-  const rule = (selector) => (new RegExp(`^${selector.replace(/[.]/g, '\\.')} \\{([^}]*)\\}`, 'm').exec(PANEL_CSS) || [])[1]
-  const shared = rule('.tool-pen .controls-input button.pen-tool-extras-mode, .tool-pen .controls-input button.pen-tool-extras-page')
-  assert.match(shared, /width: 4rem; height: 4rem;/)
-  assert.match(rule('.tool-pen .controls-input button.pen-tool-extras-mode'), /right: 4\.5rem;/)
-  assert.match(rule('.tool-pen .controls-input button.pen-tool-extras-page'), /right: 0;/)
-  assert.match(rule('.pen-tool-extras-sliders'), /right: 8\.75rem;/)
+  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode, .tool-pen .controls-input button.pen-tool-extras-page'), BUTTON_SIZE)
+  // No other rule gives either button a size of its own.
+  assert.equal(PANEL_CSS.split('\n').filter((rule) => /button\.pen-tool-extras-(mode|page)/.test(rule) && /width|height/.test(rule)).length, 1)
+  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-mode'), /right: 4\.5rem;/)
+  assert.match(ruleOf('.tool-pen .controls-input button.pen-tool-extras-page'), /right: 0;/)
+  assert.match(ruleOf('.pen-tool-extras-sliders'), /right: 8\.75rem;/)
+})
+
+test('with no page button the line mode button takes the row\'s right end and the sliders reach it', () => {
+  assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ button.pen-tool-extras-mode'), /right: 0;/)
+  assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ .pen-tool-extras-sliders'), /right: 4\.25rem;/)
+})
+
+test('the thickness track is a wedge wider at the right than at the left, and the opacity track fades from faint to solid', () => {
+  const wedge = decodeURIComponent((/url\("data:image\/svg\+xml,([^"]+)"\)/.exec(ruleOf('#pen-tool-extras-thickness::-webkit-slider-runnable-track')) || [])[1])
+  const [topLeft, topRight, bottomRight, bottomLeft] = /points='([^']+)'/.exec(wedge)[1].split(' ').map((point) => point.split(',').map(Number))
+  const heightAt = (top, bottom) => bottom[1] - top[1]
+  assert.equal(heightAt(topLeft, bottomLeft) > 0, true)
+  assert.equal(heightAt(topRight, bottomRight) > 2 * heightAt(topLeft, bottomLeft), true, 'the wedge widens to the right')
+  assert.match(wedge, /fill='#6a1b9a'/)
+  assert.match(ruleOf('#pen-tool-extras-opacity::-webkit-slider-runnable-track'), /linear-gradient\(to right, color-mix\(in srgb, #6a1b9a 8%, transparent\), #6a1b9a\)/)
 })
 
 test('the sliders carry no line pictures, and keep their hover labels', () => {

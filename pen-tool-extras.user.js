@@ -1565,20 +1565,24 @@
   // the two sliders, the line mode button and the page button instead, so the pad is no taller.
   const PANEL_ROW_TOP_REM = 13
   const PANEL_ROW_HEIGHT_REM = 4
-  const PAGE_BUTTON_WIDTH_REM = PANEL_ROW_HEIGHT_REM
+  // The line mode button and the page button are both 4rem squares.
+  const PANEL_BUTTON_REM = PANEL_ROW_HEIGHT_REM
   const PAGE_GAP_REM = 0.5
   const MODE_BUTTON = 'pen-tool-extras-mode'
-  const MODE_BUTTON_RIGHT_REM = PAGE_BUTTON_WIDTH_REM + PAGE_GAP_REM
-  // The sliders sit a little closer to the line mode button than the buttons do to each other: without their pictures they keep about two-thirds of their former length.
-  const SLIDERS_RIGHT_REM = MODE_BUTTON_RIGHT_REM + PAGE_BUTTON_WIDTH_REM + 0.25
+  const MODE_BUTTON_RIGHT_REM = PANEL_BUTTON_REM + PAGE_GAP_REM
+  // The sliders sit a little closer to the button on their right than the buttons do to each other, so they keep about two-thirds of the length they had beside the page button
+  // alone. With no page button (no page to turn to) the line mode button takes the row's right end and the sliders reach it.
+  const SLIDER_GAP_REM = 0.25
+  const SLIDERS_RIGHT_REM = MODE_BUTTON_RIGHT_REM + PANEL_BUTTON_REM + SLIDER_GAP_REM
+  const NO_PAGE_ATTRIBUTE = 'data-no-page'
   const SLIDER_TRACK_REM = 0.8
   const SLIDER_THUMB_REM = 1.1
   const SLIDER_THUMB_RING_REM = 0.2
   // The tracks say what the sliders do: thickness is a wedge widening to the right, opacity fades from faint to solid. The wedge is a data-URI picture, since a CSS gradient
   // cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
-  const WEDGE_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='#6a1b9a'/></svg>"
+  const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
   const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
-  const FADE_PICTURE = 'linear-gradient(to right, rgb(106 27 154 / 0.08), rgb(106 27 154 / 1))'
+  const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
   // A hidden slider's empty row has the same height, so the other keeps its place.
@@ -1596,9 +1600,11 @@
     `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
     `.${SLIDER_ROW} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
     `.${SLIDER_ROW} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
-    `.tool-pen .controls-input button.${MODE_BUTTON}, .tool-pen .controls-input button.${PAGE_BUTTON} { position: absolute; top: ${PANEL_ROW_TOP_REM}rem; width: ${PAGE_BUTTON_WIDTH_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    `.tool-pen .controls-input button.${MODE_BUTTON}, .tool-pen .controls-input button.${PAGE_BUTTON} { position: absolute; top: ${PANEL_ROW_TOP_REM}rem; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     `.tool-pen .controls-input button.${MODE_BUTTON} { right: ${MODE_BUTTON_RIGHT_REM}rem; }`,
     `.tool-pen .controls-input button.${PAGE_BUTTON} { right: 0; }`,
+    `${LINE_MODE_BOX}[${NO_PAGE_ATTRIBUTE}] ~ button.${MODE_BUTTON} { right: 0; }`,
+    `${LINE_MODE_BOX}[${NO_PAGE_ATTRIBUTE}] ~ .${SLIDERS} { right: ${PANEL_BUTTON_REM + SLIDER_GAP_REM}rem; }`,
     `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${MODE_BUTTON} path { fill: none !important; }`
@@ -1606,8 +1612,8 @@
 
   // A 2x2 cell grid, faint, with the center line (through the cell centers) and the edge line (along the cell edges) drawn over it.
   const MODE_ICON_LINES = {
-    center: '<path data-line="center" d="M7.5 7.5H16.5V16.5" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>',
-    edge: '<path data-line="edge" d="M3 12H12V21" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>'
+    center: '<path data-line="center" d="M7.5 7.5H16.5V16.5"/>',
+    edge: '<path data-line="edge" d="M3 12H12V21"/>'
   }
   const MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }
 
@@ -1622,7 +1628,7 @@
     const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
     return `<button class="${MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.3" stroke-width="1"/>' +
-      `${MODE_ICON_SHOWS[mode].map((name) => MODE_ICON_LINES[name]).join('')}</svg></button>`
+      `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MODE_ICON_SHOWS[mode].map((name) => MODE_ICON_LINES[name]).join('')}</g></svg></button>`
   }
 
   // A hidden slider keeps an empty row so the other keeps its place. Neither slider takes keyboard focus by tabbing (`tabindex="-1"`): a drag ends with the focus handed back to the page.
@@ -1676,9 +1682,11 @@
   const PEN_PANEL = '.tool-pen .controls-input'
   // The panel may be up for a moment without a line mode pulldown, since SudokuPad builds it in steps.
   const PANEL_CHECK_MS = 1000
+  // A click this soon after a tap on the line mode button is that tap's own.
+  const TAP_CLICK_MS = 1000
   let panelCheck = null
 
-  // A panel with no pulldown, whose row the sliders and page button take, means SudokuPad renamed the element, so the row is not ours.
+  // A panel with no pulldown, whose row the sliders and the two buttons take, means SudokuPad renamed the element, so the row is not ours.
   function checkPanelRow () {
     if (panelCheck !== null || !document.querySelector(PEN_PANEL)) return
     panelCheck = setTimeout(() => {
@@ -1687,7 +1695,7 @@
     }, PANEL_CHECK_MS)
   }
 
-  // SudokuPad builds `.penlinemode` each time the pen tool is turned on and removes it when another tool is. The sliders and the page button are added beside it (it is hidden,
+  // SudokuPad builds `.penlinemode` each time the pen tool is turned on and removes it when another tool is. The sliders, the line mode button and the page button are added beside it (it is hidden,
   // not removed, so SudokuPad's own handlers keep their element) and taken away with it. Safe to run any number of times.
   function syncPenPanel () {
     steps.penPanel.run(() => {
@@ -1702,6 +1710,7 @@
       if (markup && !sliders) mode.insertAdjacentHTML('afterend', markup)
       syncModeButton(mode)
       syncPageButton(mode)
+      mode.toggleAttribute(NO_PAGE_ATTRIBUTE, !document.querySelector(`.${PAGE_BUTTON}`))
     }, removePanelParts)
   }
 
@@ -1716,9 +1725,19 @@
     document.addEventListener('input', (event) => {
       if (event.target.matches(`.${SLIDERS} input`)) saveSlider(event.target)
     })
-    document.addEventListener('click', (event) => steps.penPanel.run(() => {
-      if (event.target.closest(`.${MODE_BUTTON}`)) applyLineMode(nextLineMode(currentLineMode()))
-    }))
+    // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap steps the mode at `touchstart`. The click a
+    // browser may still send after that tap must not step it a second time.
+    let tappedAt = -Infinity
+    const stepMode = () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))
+    window.addEventListener('touchstart', (event) => {
+      if (!event.target.closest(`.${MODE_BUTTON}`)) return
+      event.stopPropagation()
+      tappedAt = Date.now()
+      stepMode()
+    }, true)
+    document.addEventListener('click', (event) => {
+      if (event.target.closest(`.${MODE_BUTTON}`) && Date.now() - tappedAt > TAP_CLICK_MS) stepMode()
+    })
     // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops
     // the browser dragging a slider's thumb. A mouse move over a slider is kept from SudokuPad's
     // handlers, so the thumb drags and the drag reaches nothing else on the page.

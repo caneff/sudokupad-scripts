@@ -79,7 +79,7 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   for (const gone of ['important', 'BUTTON_LOOK', 'SAVE_BUTTON_LOOK', 'CANCEL_BUTTON_LOOK', 'DIALOG_BUTTON_LOOK', 'SMALL_BUTTON_LOOK', 'REMOVE_LOOK', 'PULLDOWN_LOOK']) {
     assert.ok(!new RegExp(`\\bconst ${gone} =`).test(digit), gone)
   }
-  const state = { colors: extras.SUDOKUPAD_PEN_COLORS, preset: 'sudokupad', presets: ['sudokupad'], missing: [], lineMode: 'both', ...extras.settingDefaults(), off: [] }
+  const state = { colors: extras.SUDOKUPAD_PEN_COLORS, preset: 'sudokupad', presets: ['sudokupad'], missing: [], ...extras.settingDefaults(), off: [] }
   assert.deepEqual(inlineStyles(extras.renderEditor(state)), [])
   assert.ok(!/<small style=/.test(pen), 'the title version has no inline style')
   const colorOf = (key) => ['#ff0000', '#00ff00', '#0000ff'][Number(key)]
