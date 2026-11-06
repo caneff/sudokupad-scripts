@@ -402,7 +402,7 @@ describe('beside twitch-rules-scroller\'s sync script', { concurrency: false }, 
   let context, p, errors
 
   before(async () => {
-    // The sync script's font bar, as it adds it on its first fit.
+    // The sync script's font bar, as it used to add it: the Resizer fits the pane whether or not it is there.
     ;({ context, p, errors } = await rulesPage(LANDSCAPE, (page) => page.evaluate(() => {
       const bar = document.createElement('div')
       bar.id = 'sudokupad-sync-nudge'
@@ -412,12 +412,10 @@ describe('beside twitch-rules-scroller\'s sync script', { concurrency: false }, 
   })
   after(async () => { await context.close() })
 
-  // The script's first fit runs as its style goes in, and SudokuPad's resize calls the next one synchronously.
-  it('leaves the rules pane to it, on the first fit and after a resize', async () => {
-    assert.equal((await pane(p)).inlineFont, '', 'first fit')
-    await p.evaluate(() => Framework.app.resize())
-    assert.equal((await pane(p)).inlineFont, '', 'after a resize')
-    assert.equal(await p.locator(FONT_BAR).isVisible(), false)
+  it('still fits the rules pane and shows its font buttons', async () => {
+    assert.equal(await settle(async () => (await fontPx(p)) > SUDOKUPAD_FONT_PX, true), true, 'fitted')
+    await hoverPane(p)
+    assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), true, 'font buttons')
   })
 
   it('the page raised no error', () => {
