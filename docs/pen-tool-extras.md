@@ -11,13 +11,19 @@ Lines drawn with a page 2 or page 3 pen are invisible to anyone without this scr
 
 A replay played with SudokuPad's own pen tool setting off draws page 1 and page 2 marks in pen color 1, with or without the script: a page 2 dashed line comes out solid, and edge and corner marks lose their colors. Page 3 lines keep their colors and arrows. Turn the pen tool on before playing a replay. See `docs/research/sudokupad-replay-files.md`.
 
-## The settings gear
+## The pen panel
 
-A small white box with a purple gear sits in the upper right corner of the pen tool button, whichever tool is selected. Click or tap it to open the settings dialog; the selected tool stays as it was. A click anywhere else on the button selects the pen tool as before.
+With the pen tool on, its panel is the same size as SudokuPad's, laid out in three parts:
+
+- **The colors**: the nine pen color buttons, three to a row, 2.5rem tall instead of 4rem.
+- **The controls**: under the colors, one row of three full-size buttons on the same columns, in this order: the line mode button, the line type button (the page button) and the settings button. The settings button, an outline gear, opens the settings dialog.
+- **The sliders**: Thickness and Opacity in a button-style box across the full width, in the row under the controls.
+
+The controls and the sliders sit on a light purple tray with round corners. SudokuPad's own key 0 and Delete buttons stay hidden. Each of the three control icons is drawn at the same size and centred on its drawing. The settings icon is Lucide's `settings` (ISC licence).
 
 ## The settings dialog
 
-Pen Tool Extras in SudokuPad's settings, or the small gear in the upper right corner of the pen tool button, opens one dialog. It is sized to its content and centred in the window. Under the title row a line runs across, and the sections sit in a two by two grid with a vertical line between the columns:
+Pen Tool Extras in SudokuPad's settings, or the settings button in the pen panel, opens one dialog. It is sized to its content and centred in the window. Under the title row a line runs across, and the sections sit in a two by two grid with a vertical line between the columns:
 
 1. **Pen colors** (left), with the preset pulldown above a 3 by 3 grid of square color inputs.
 2. **Line settings** (right, top): Thickness and Opacity, each with a "Slider in panel" box on a line under it. Under a divider, **Line styles**: a box before each of Dashed lines and Directional arrow lines, with a slider under it.
@@ -46,7 +52,7 @@ The colors are saved under `PenColor_colors` as `{"1": "#rrggbb", …, "9": "#rr
 
 ## Sliders
 
-Both sliders sit in the pen tool's panel, so you can change them during play. The track says what a slider does: Thickness is a wedge widening to the right, Opacity fades from faint to solid purple, and the thumb is a white circle with a purple ring. Hover a slider for its name. A move changes the marks live and saves at once. It adds nothing to undo or the replay, and gives the keyboard back to the puzzle.
+Both sliders sit in the pen tool's panel, across its full width under the three control buttons, so you can change them during play. The track says what a slider does: Thickness is a wedge widening to the right, Opacity fades from faint to solid purple, and the thumb is a white circle with a purple ring. Hover a slider for its name. A move changes the marks live and saves at once. It adds nothing to undo or the replay, and gives the keyboard back to the puzzle.
 
 | Slider | Range | Default | Changes | Saved under |
 | --- | --- | --- | --- | --- |
@@ -64,7 +70,7 @@ Both sliders sit in the pen tool's panel, so you can change them during play. Th
 - A "Slider in panel" box on a line under the Thickness row and under the Opacity row, both ticked by default and saved under `PenColor_sliders`.
 - The Thickness and Opacity sliders themselves, which are always in the dialog. A slider whose box is unticked is left out of the panel, but its value still applies and can be changed in the dialog.
 - A dialog slider takes effect on Save, and Cancel leaves it. It opens at the value in force, so it matches the panel.
-- With one slider hidden, the other keeps its place. With both hidden, the panel's last row holds only the line mode button and the page button.
+- With one slider hidden, the other keeps its place. With both hidden, the tray holds only the three control buttons.
 
 ## White outline
 
@@ -92,13 +98,13 @@ There are three pages of nine pens, for 27, using the same nine colors.
 | 2 | Dashed lines, or dots with a Dash length of 0 |
 | 3 | A line with a run of arrows (filled triangles), pointing the way you dragged |
 
-Each pen color button shows a picture of its line in the pen's color: a solid line on page 1, dashes on page 2, arrows on page 3. The color tool's buttons keep SudokuPad's own swatches.
+Each pen color button shows a picture of its line in the pen's color: a solid line on page 1, dashes on page 2, two arrows on page 3. The lines are 3 wide on a 24 unit grid; the dashes keep a width 2 layout, each dash 1 shorter and each gap 1 longer, and the two arrows sit a quarter and three quarters along whatever the Arrow spacing. The color tool's buttons keep SudokuPad's own swatches.
 
 Only lines change with the page. A cell circle, a cross and the edge and corner marks stay solid.
 
 **Changing page**, the way the cell color tool does:
 
-- Click the page button at the right end of the panel's last row. It shows the line the next page draws, with a dot for each page and the current one filled.
+- Click the line type button (the page button), the middle one of the three controls. It shows the line the next page draws, with a dot for each page and the current one filled.
 - Press Tab. Tab does nothing else in the pen tool with this script on, with or without No Tab Letters. Shift+Tab is left to SudokuPad.
 - Turn the mouse wheel over the page button, as SudokuPad's color tool does over its own page button: down for the next page, up for the previous. Over the rest of the pen panel the wheel is left to SudokuPad.
 
@@ -166,7 +172,7 @@ With the box on and the pen tool on, a middle click on a line erases the whole l
 
 ## Line mode
 
-The pen panel's last row holds a line mode button, between the sliders and the page button and the same size as the page button. A click steps SudokuPad's own setting through Center & Edge, Center only and Edge only, and back to Center & Edge, saved where SudokuPad's pulldown saved it, so it survives a reload. The icon is a faint 2x2 grid with the center line, the edge line, or both; hover it for the current mode's name. SudokuPad's own pulldown is hidden, and the settings dialog has no line mode choice.
+The pen panel's controls row holds a line mode button, the first of the three, the same size as the other two. A click steps SudokuPad's own setting through Center & Edge, Center only and Edge only, and back to Center & Edge, saved where SudokuPad's pulldown saved it, so it survives a reload. The icon is a faint 2x2 grid with the center line, the edge line, or both; hover it for the current mode's name. SudokuPad's own pulldown is hidden, and the settings dialog has no line mode choice.
 
 ## Restore defaults
 
@@ -185,6 +191,5 @@ The settings dialog names the skipped steps in one line at its top, for example 
 | arrow lines | the renderer's `renderPen` or `renderPart`, the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, or the app's `puzzle.cells` | Page 3 lines draw as plain lines of the pen's color, and a line dragged with a page 3 pen is stored in the pen's own character, with no direction |
 | drag highlight | the pen tool's `drawLineHint` | The highlight of a line being dragged fades with the opacity setting and takes the white outline |
 | marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X), and a right click no longer steps backwards or keeps the browser's menu shut. The arrows, circles and corner marks you drew stay stored in the puzzle and its replay, and draw as nothing |
-| pen panel | the pen tool (`ToolPen.tool`), or the `.penlinemode` element in its panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders, the line mode button and the page button, which would take its row, are left out. Tab still turns pages |
+| pen panel | the pen tool (`ToolPen.tool`), or the `.penlinemode` element in its panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders, the tray and the three control buttons (line mode, line type and settings), which would take its rows, are left out. Tab still turns pages |
 | line erase | the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell` | A middle click is SudokuPad's own click |
-| settings gear | nothing; skipped when adding the gear to the pen tool button (`#control-pen`) fails | No gear on the button; the entry in SudokuPad's settings still opens the dialog. A page with no pen tool button just shows no gear |

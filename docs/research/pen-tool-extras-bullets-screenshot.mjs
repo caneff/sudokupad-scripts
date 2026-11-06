@@ -6,7 +6,7 @@
 //   pen-tool-extras-bullet-edges.png    cells with an edge X, an edge circle and the two direction arrows
 //   pen-tool-extras-bullet-corners.png  two grid corners, one with an X and one with a circle
 //   pen-tool-extras-bullet-sliders.png  the Thickness and Opacity sliders, and a thick outlined line over a colored cell
-//   pen-tool-extras-bullet-gear.png     the pen tool button with its settings gear
+//   pen-tool-extras-bullet-settings.png the pen panel's tray: the line mode, line type and settings buttons over the sliders
 // The erase bullet has none: a middle click does not show in a still picture. Every line is a real mouse drag
 // and every mark a real click. The script fails when a line or mark does not land (it checks the grid gained a pen
 // value, not which mark), and writes the six files only once all are taken, so a failure leaves the old ones. The mascot is hidden.
@@ -168,17 +168,14 @@ await openPanel('#control-pen', '.tool-pen')
 await pick(9); await drag([[8.5, 5.5], [8.5, 7.5]])
 await quiet()
 const lineOverColor = await png(gridClip(8, 5, 1, 3))
-const controls = await page.locator('.controls-buttons').boundingBox()
-const opacity = await page.locator('#pen-tool-extras-opacity').boundingBox()
-const rows = around([slider, opacity], 4)
-const sliderClip = { ...rows, x: controls.x, width: opacity.x + opacity.width - controls.x + 3 }
+// The sliders block is the full width of the panel, under the controls row.
+const sliderClip = around([await page.locator('.pen-tool-extras-sliders').boundingBox()], 4)
 await compose('sliders', [await png(sliderClip), lineOverColor], true)
 
-// Gear: the pen tool button, with the gear in its corner. The color tool is open, so the pen button is not selected and shows its gear.
-await openPanel('#control-colour', '.tool-colour')
+// Settings button: the whole tray, the controls row over the sliders, with the pen tool on.
+await openPanel('#control-pen', '.tool-pen')
 await quiet()
-await page.locator('.pen-tool-extras-gear').waitFor()
-save('gear', await page.screenshot({ clip: around([await page.locator('#control-pen').boundingBox()], 1) }))
+save('settings', await page.screenshot({ clip: around([await page.locator('.pen-tool-extras-tray').boundingBox()], 2) }))
 
 for (const [name, buffer] of taken) writeFileSync(out(name), buffer)
 await browser.close()
