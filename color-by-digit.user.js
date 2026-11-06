@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.6
+// @version      0.5.7
 // @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.6'
+  const VERSION = '0.5.7'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -77,8 +77,6 @@
   const everyIndex = (cells) => cells.map((_, i) => i)
 
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
-
-  const givenIndices = (cells) => cells.flatMap((cell, index) => (String(cell.given || '') === '' ? [] : [index]))
 
   // SudokuPad's action names: `value` (digit), `candidates` (centre mark), `pencilmarks` (corner mark).
   function isEntryAction (action) {
@@ -519,7 +517,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, givenIndices, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -605,7 +603,7 @@
 
   const colorCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), everyIndex(plans), []))
 
-  const colorGivens = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), givenIndices(plans)))
+  const colorAutoCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), everyIndex(plans)))
 
   let autoMode = false
 
@@ -628,7 +626,7 @@
     autoMode = on
     Framework.setData(AUTO_KEY, on)
     showButton()
-    if (turnedOn) colorGivens(app)
+    if (turnedOn) colorAutoCells(app)
   }
 
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
@@ -659,7 +657,7 @@
       }
       return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
     }
-    app.on('restarted', () => { if (autoMode) colorGivens(app) })
+    app.on('restarted', () => { if (autoMode) colorAutoCells(app) })
   }
 
   let menu = null
@@ -947,6 +945,6 @@
     listenForButton(app, openEditor)
     // The puzzle's own palette is in the page's colors once it has loaded: the icon shows those.
     whenProgressLoaded(app, showButton)
-    if (autoMode) whenProgressLoaded(app, () => colorGivens(app))
+    if (autoMode) whenProgressLoaded(app, () => colorAutoCells(app))
   })
 })()

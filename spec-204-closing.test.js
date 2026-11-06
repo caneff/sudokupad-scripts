@@ -88,8 +88,8 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   assert.ok(styles.some((style) => style.startsWith(' style="background:')), 'the swatches are drawn')
   for (const style of styles) assert.match(style, /^ style="(background:#[0-9a-f]{6}|font-weight:(bold|normal);opacity:(1|0\.4))"$/, 'a swatch color or a digit in or out of its group')
 
-  // Versions: Pen Tool Extras raised its version for the marks change; Color by Digit, whose dialog renders the same, did not.
+  // Versions: Pen Tool Extras raised its version for the marks change; Color by Digit raised its own later, for auto mode (#234).
   assert.notEqual(versionOf(pen), VERSIONS_BEFORE['pen-tool-extras.user.js'])
   assert.equal(extras.VERSION, versionOf(pen))
-  assert.equal(versionOf(digit), VERSIONS_BEFORE['color-by-digit.user.js'])
+  assert.notEqual(versionOf(digit), VERSIONS_BEFORE['color-by-digit.user.js'])
 })

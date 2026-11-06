@@ -81,27 +81,35 @@ describe('auto mode, injected after Start Puzzle', { concurrency: false }, () =>
     assert.equal(await settle(coloredCount, 0), 0)
   })
 
-  it('a click on the box turns auto mode on, saves it, colors the givens only, and is not a click on the button', async () => {
+  it('a click on the box turns auto mode on, saves it, colors the givens and the entered digits and centre marks, and is not a click on the button', async () => {
+    const marks = (r, c) => read(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join(''), [r, c])
+    await select(8, 5); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3'); await p.click('#control-normal')
+    assert.equal(await settle(() => marks(8, 5), '13'), '13')
+    assert.equal(await coloredCount(), 0)
     await p.click(BOX)
     assert.equal(await settle(boxChecked, 'true'), 'true')
     assert.equal(await settle(getAuto, true), true)
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
-    // The entered digits are not givens: a button press would have colored them.
-    assert.deepEqual(await watch(coloredCount), [GIVEN_COUNT])
-    assert.deepEqual(await colorsAt(0, 2), [])
+    assert.deepEqual(await settle(() => colorsAt(0, 2), ['2']), ['2'])
+    assert.deepEqual(await settle(() => colorsAt(0, 3), ['1']), ['1'])
+    assert.deepEqual(await settle(() => colorsAt(8, 5), ['1']), ['1'])
+    assert.deepEqual(await watch(coloredCount), [GIVEN_COUNT + 3])
   })
 
   it('undo and redo do not trigger auto mode: an entered digit recorded without a color comes back without one', async () => {
-    await undo() // the givens
+    await undo() // the colors
     assert.equal(await settle(coloredCount, 0), 0)
+    await undo() // the centre mark 3 at r9c1
+    await undo() // the centre mark 1
     await undo() // the 7 at r1c4
     assert.equal(await settle(() => valueAt(0, 3), ''), '')
+    await redo() // the centre mark 1
+    await redo() // the centre mark 3
     await redo() // the 7 comes back first
     assert.equal(await settle(() => valueAt(0, 3), '7'), '7')
     assert.deepEqual(await watch(coloredCount), [0])
-    await redo() // then the givens' colors
-    assert.equal(await settle(coloredCount, GIVEN_COUNT), GIVEN_COUNT)
-    assert.deepEqual(await colorsAt(0, 3), [])
+    await redo() // then the colors
+    assert.equal(await settle(coloredCount, GIVEN_COUNT + 3), GIVEN_COUNT + 3)
   })
 
   it('the keyboard stays with the puzzle right after a box click: a digit typed next lands and takes its color', async () => {
@@ -353,9 +361,10 @@ for (const mode of MODES) {
     })
     after(async () => { await context.close() })
 
-    it('the saved digit is back and the givens are colored, since loading progress resets the board', async () => {
+    it('the saved digit is back and colored with the givens, since loading progress resets the board', async () => {
       assert.equal(await p.evaluate(() => String(Framework.app.grid.getCell(0, 2).value)), '4')
       assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
+      assert.deepEqual(await settle(() => p.evaluate(() => [...Framework.app.grid.getCell(0, 2).colours]), ['2']), ['2'])
     })
 
     it('no uncaught page errors', () => {
