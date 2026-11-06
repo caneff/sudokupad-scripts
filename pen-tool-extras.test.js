@@ -477,7 +477,8 @@ test('the panel markup has Thickness above Opacity, each with the range and valu
     ['pen-tool-extras-opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35']
   ])
   assert.deepEqual([...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]), ['Thickness', 'Opacity'])
-  assert.equal(html.match(/tabindex="-1"/g).length, 2)
+  assert.equal(html.match(/<input [^>]*tabindex="-1"/g).length, 2)
+  assert.match(html, /<button [^>]*tabindex="-1" aria-hidden="true"><\/button>/)
 })
 
 test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
@@ -1067,7 +1068,7 @@ test('a hidden slider has no input, and the other keeps its place beside an empt
   assert.deepEqual(only('thickness'), ['pen-tool-extras-thickness'])
   assert.deepEqual(only('opacity'), ['pen-tool-extras-opacity'])
   const html = renderPanelSliders(9, 35, { thickness: false, opacity: true })
-  assert.match(html, /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider" data-empty><\/div><div class="pen-tool-extras-slider"/)
+  assert.match(html, /^<div class="pen-tool-extras-sliders"><button [^>]*><\/button><div class="pen-tool-extras-slider" data-empty><\/div><div class="pen-tool-extras-slider"/)
   const low = renderPanelSliders(9, 35, { thickness: true, opacity: false })
   assert.match(low, /<div class="pen-tool-extras-slider" data-empty><\/div><\/div>$/)
 })
@@ -1375,14 +1376,18 @@ test('with no page button the line mode button takes the row\'s right end and th
   assert.match(ruleOf('.tool-pen .penlinemode[data-no-page] ~ .pen-tool-extras-sliders'), /right: 4\.3rem;/)
 })
 
-test('the sliders block is a box styled like SudokuPad\'s buttons, from its own variable and rules, with the buttons\' margin so it spans the left column', () => {
+test('the sliders block takes a real button behind it for its box, filling the block, with the buttons\' margin on the block so it spans the left column', () => {
   const rule = ruleOf('.pen-tool-extras-sliders')
   assert.match(rule, /box-sizing: border-box;/)
   assert.match(rule, /margin: 0\.15rem;/)
-  assert.match(rule, /background-color: var\(--body-bg\);/)
-  assert.match(rule, /border: 1px solid #ccc;/)
-  assert.match(rule, /border-radius: 0\.5rem;/)
   assert.match(rule, /height: 4rem;/)
+  assert.doesNotMatch(rule, /border:|background/)
+  assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><button class="pen-tool-extras-sliders-box" tabindex="-1" aria-hidden="true"><\/button>/)
+  const box = ruleOf('.tool-pen .controls-input button.pen-tool-extras-sliders-box')
+  assert.match(box, /position: absolute; z-index: -1; inset: 0;/)
+  assert.match(rule, /z-index: 0;/)
+  assert.match(box, /background-color: var\(--body-bg\);/)
+  assert.match(box, /pointer-events: none;/)
 })
 
 test('the thickness track is a wedge wider at the right than at the left, and the opacity track fades from faint to solid', () => {

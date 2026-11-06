@@ -1626,6 +1626,7 @@
   const OPACITY_SLIDER = 'pen-tool-extras-opacity'
   const SLIDERS = 'pen-tool-extras-sliders'
   const SLIDER_ROW = 'pen-tool-extras-slider'
+  const SLIDERS_BOX = 'pen-tool-extras-sliders-box'
   // SudokuPad's line mode pulldown (hidden here, stepped by the panel's line mode button), the key it saves the mode under, and its three values with SudokuPad's labels.
   const LINE_MODE_BOX = '.tool-pen .penlinemode'
   const LINE_MODE_KEY = 'ToolPen_linemode'
@@ -1642,14 +1643,14 @@
   const PANEL_ROW_HEIGHT_REM = 4
   // The line mode button and the page button are both 4rem squares.
   const PANEL_BUTTON_REM = PANEL_ROW_HEIGHT_REM
-  // The pad's buttons carry a 0.15rem margin each side, so its columns are 0.3rem apart; the two buttons and the sliders box keep that gap and margin to line up with the pad.
+  // The pad's buttons carry a 0.15rem margin each side, so its columns are 0.3rem apart; the two buttons and the sliders block keep that gap and margin to line up with the pad.
   const PANEL_BUTTON_MARGIN_REM = 0.15
-  const PAGE_GAP_REM = 2 * PANEL_BUTTON_MARGIN_REM
+  const rem = (value) => Math.round(value * 100) / 100
+  const PANEL_COLUMN_GAP_REM = rem(2 * PANEL_BUTTON_MARGIN_REM)
   const MODE_BUTTON = 'pen-tool-extras-mode'
-  const MODE_BUTTON_RIGHT_REM = PANEL_BUTTON_REM + PAGE_GAP_REM
-  // With no page button (no page to turn to) the line mode button takes the row's right end and the sliders box reaches it.
-  const SLIDER_GAP_REM = PAGE_GAP_REM
-  const SLIDERS_RIGHT_REM = Math.round((MODE_BUTTON_RIGHT_REM + PANEL_BUTTON_REM + SLIDER_GAP_REM) * 100) / 100
+  const MODE_BUTTON_RIGHT_REM = rem(PANEL_BUTTON_REM + PANEL_COLUMN_GAP_REM)
+  // With no page button (no page to turn to) the line mode button takes the row's right end and the sliders block reaches it.
+  const SLIDERS_RIGHT_REM = rem(MODE_BUTTON_RIGHT_REM + PANEL_BUTTON_REM + PANEL_COLUMN_GAP_REM)
   const NO_PAGE_ATTRIBUTE = 'data-no-page'
   const SLIDER_TRACK_REM = 0.8
   const SLIDER_THUMB_REM = 1.1
@@ -1663,10 +1664,11 @@
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
   // A hidden slider's empty row has the same height, so the other keeps its place.
   const SLIDER_ROW_HEIGHT_REM = 1.4
-  // The sliders box copies SudokuPad's `button` rule (its border and radius are literals there, its background `var(--body-bg)` as on the pad's pen buttons).
+  // The sliders block's box is a real `button` behind the sliders, so SudokuPad's button styling (and Dark Page's) reaches it wherever it changes; its background is `var(--body-bg)` as on the pad's pen buttons.
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
-    `.${SLIDERS} { position: absolute; left: 0; right: ${SLIDERS_RIGHT_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0 0.6rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; background-color: var(--body-bg); border: 1px solid #ccc; border-radius: 0.5rem; }`,
+    `.${SLIDERS} { position: absolute; left: 0; right: ${SLIDERS_RIGHT_REM}rem; top: ${PANEL_ROW_TOP_REM}rem; height: ${PANEL_ROW_HEIGHT_REM}rem; z-index: 0; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0 0.6rem; display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; color: ${PANEL_COLOR}; }`,
+    `.tool-pen .controls-input button.${SLIDERS_BOX} { position: absolute; z-index: -1; inset: 0; width: auto; height: auto; margin: 0; padding: 0; background-color: var(--body-bg); pointer-events: none; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
     `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
     `.${SLIDER_ROW} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
@@ -1681,7 +1683,7 @@
     `.tool-pen .controls-input button.${MODE_BUTTON} { right: ${MODE_BUTTON_RIGHT_REM}rem; }`,
     `.tool-pen .controls-input button.${PAGE_BUTTON} { right: 0; }`,
     `${LINE_MODE_BOX}[${NO_PAGE_ATTRIBUTE}] ~ button.${MODE_BUTTON} { right: 0; }`,
-    `${LINE_MODE_BOX}[${NO_PAGE_ATTRIBUTE}] ~ .${SLIDERS} { right: ${PANEL_BUTTON_REM + SLIDER_GAP_REM}rem; }`,
+    `${LINE_MODE_BOX}[${NO_PAGE_ATTRIBUTE}] ~ .${SLIDERS} { right: ${rem(PANEL_BUTTON_REM + PANEL_COLUMN_GAP_REM)}rem; }`,
     `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${MODE_BUTTON} path { fill: none !important; }`
@@ -1715,7 +1717,7 @@
       ? `<div class="${SLIDER_ROW}" title="${label}">` +
         `<input type="range" id="${id}" aria-label="${label}" tabindex="-1" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}"></div>`
       : `<div class="${SLIDER_ROW}" data-empty></div>`
-    return `<div class="${SLIDERS}">` +
+    return `<div class="${SLIDERS}"><button class="${SLIDERS_BOX}" tabindex="-1" aria-hidden="true"></button>` +
       row(show.thickness, THICKNESS_SLIDER, 'Thickness', THICKNESS, thickness) +
       row(show.opacity, OPACITY_SLIDER, 'Opacity', OPACITY, opacity) +
       '</div>'
