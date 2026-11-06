@@ -2,7 +2,7 @@
 // line mode button that steps SudokuPad's hidden line mode pulldown, and of the opacity of the pen layer, on
 // sudokupad.app in headless Chromium. A touch screen stays untested.
 // Every slider move is a real mouse drag.
-/* global Framework, ToolPen, Image, TouchEvent */
+/* global Framework, ToolPen, Image, TouchEvent, getComputedStyle */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -119,6 +119,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(Math.abs(mode.width - page.width) < 1 && Math.abs(mode.height - page.height) < 1, true, JSON.stringify({ mode, page }))
   })
 
+  it('the line mode button sits under key 8 and the sliders block ends at key 7, and its box is styled like a pen button, within half a pixel', async () => {
+    const key = (n) => p.locator(`.tool-pen button[data-key="${n}"]`).boundingBox()
+    const [key7, key8, key9, mode, page, box] = await Promise.all([key(7), key(8), key(9), modeButton().boundingBox(), p.locator('.pen-tool-extras-page').boundingBox(), p.locator('.pen-tool-extras-sliders').boundingBox()])
+    const near = (a, b, what) => assert.equal(Math.abs(a - b) <= 0.5, true, `${what}: ${a} vs ${b}`)
+    near(mode.x, key8.x, 'mode left'); near(mode.x + mode.width, key8.x + key8.width, 'mode right')
+    near(page.x, key9.x, 'page left'); near(page.x + page.width, key9.x + key9.width, 'page right')
+    near(box.x + box.width, key7.x + key7.width, 'box right')
+    near(box.x, key7.x, 'box left')
+    const style = (selector) => p.locator(selector).evaluate((el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopWidth, s.borderTopStyle, s.borderTopColor, s.borderTopLeftRadius, s.boxShadow] })
+    assert.deepEqual(await style('.pen-tool-extras-sliders-box'), await style('.tool-pen button[data-key="9"]'))
+  })
+
   it('the line mode button names the mode, steps it through SudokuPad, and the lines drawn after each click follow it', async () => {
     await read((k) => Framework.removeData(k), LINE_MODE_KEY)
     await reload()
@@ -195,9 +207,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the sliders have no line pictures, keep their hover labels, and the tracks draw: a wedge for thickness, a fade for opacity', async () => {
     assert.equal(await p.locator('.pen-tool-extras-slider svg').count(), 0)
-    // The sliders keep about two-thirds of the 105 px they had beside the page button alone.
+    // The sliders fill the box over the pad's left column, less its padding.
     const length = (await p.locator(THICKNESS).boundingBox()).width
-    assert.equal(length >= 60 && length <= 80, true, `slider length ${length}`)
+    assert.equal(length >= 35 && length <= 55, true, `slider length ${length}`)
     assert.deepEqual(await p.locator('.pen-tool-extras-slider').evaluateAll((els) => els.map((e) => e.title)), ['Thickness', 'Opacity'])
     // The tracks are shadow parts getComputedStyle cannot read, so the rendered pixels are: how dark the track is near each end.
     const ink = async (selector) => {
@@ -448,5 +460,28 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('no uncaught page errors', () => {
     assert.deepEqual(errors, [])
+  })
+})
+
+describe('with Dark Page on', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await openPage(browser))
+    await startPuzzle(p)
+    await p.addScriptTag({ content: readFileSync(new URL('../dark-page.user.js', import.meta.url), 'utf8') })
+    await p.addScriptTag({ content: script })
+    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
+    await p.evaluate(() => Framework.setSetting('toolpen', true))
+    await p.locator('#control-pen').waitFor({ state: 'visible' })
+    await openPenTool(p)
+  })
+  after(async () => { await context.close() })
+
+  it('the sliders block\'s box takes the pen buttons\' dark background and border', async () => {
+    const style = (selector) => p.locator(selector).evaluate((el) => { const s = getComputedStyle(el); return [s.backgroundColor, s.borderTopColor, s.borderTopLeftRadius] })
+    const key = await style('.tool-pen button[data-key="9"]')
+    assert.notEqual(key[1], 'rgb(204, 204, 204)', 'Dark Page restyles the buttons')
+    assert.deepEqual(await style('.pen-tool-extras-sliders-box'), key)
   })
 })
