@@ -274,7 +274,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('the slider boxes are ticked by default, and a slider hidden in the dialog still applies: Save takes it out of the panel, Cancel leaves the panel, the other slider keeps its place, and both hidden leave no gap', async () => {
     await read((k) => Framework.removeData(k), SLIDERS_KEY)
     await openExtrasEditor(p)
-    const show = (key) => editor().locator(`input[data-show="${key}"]`)
+    const show = (key) => editor().locator(`input[data-box="show.${key}"]`)
     assert.equal(await show('thickness').isChecked(), true)
     assert.equal(await show('opacity').isChecked(), true)
     const slidersBox = () => p.locator('.pen-tool-extras-sliders').boundingBox()

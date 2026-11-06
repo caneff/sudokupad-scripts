@@ -320,7 +320,7 @@ function group (title, extra = []) {
 
     const setStyles = async ({ dashed, arrows }) => {
       await openExtrasEditor(p)
-      for (const [key, on] of [['dashed', dashed], ['arrows', arrows]]) await editor().locator(`input[data-style="${key}"]`).setChecked(on)
+      for (const [key, on] of [['dashed', dashed], ['arrows', arrows]]) await editor().locator(`input[data-box="lineStyles.${key}"]`).setChecked(on)
       await closeExtrasEditorWith(p, 'Save')
     }
     // The page the pad shows and the pen selected: the page 1 / 2 / 3 values of the buttons.
@@ -348,7 +348,7 @@ function group (title, extra = []) {
       await openExtrasEditor(p)
       const dashRow = editor().locator('[data-row="dash"]')
       assert.equal(await dashRow.isVisible(), true)
-      await editor().locator('input[data-style="dashed"]').uncheck()
+      await editor().locator('input[data-box="lineStyles.dashed"]').uncheck()
       assert.equal(await dashRow.isVisible(), false, 'the Dash length row is hidden at once')
       await closeExtrasEditorWith(p, 'Cancel')
       assert.equal(await saved(LINE_STYLES_KEY), null, 'Cancel saves nothing')
