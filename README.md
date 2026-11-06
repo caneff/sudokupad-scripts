@@ -60,10 +60,6 @@ SudokuPad binds both `/` and Tab to the letter toggle and saves the mode, so a s
 - It works whenever you turn the letter tool on in settings, and it has no settings entry.
 - If a SudokuPad update changes the letter tool or its Tab binding, it logs a console warning and changes nothing.
 
-## License
-
-[MIT](LICENSE)
-
 ### Auto Rules Resizer
 
 Ported from the rules-pane fit of twitch-rules-scroller's stream script, which grew from Nell Gwynn's resizing scripts.
@@ -71,6 +67,10 @@ Ported from the rules-pane fit of twitch-rules-scroller's stream script, which g
 - In landscape, the rules pane widens to the window's right edge, less 8 px, and takes the largest font at which all the rules fit in the room SudokuPad gives the pane. The font never goes below SudokuPad's own, so long rules still scroll. It refits on a window resize and on each SudokuPad layout.
 - In portrait it leaves SudokuPad as it is.
 - f+ and f-, on the pane's top-right corner, move the font a pixel at a time from the fitted size; f- may go below SudokuPad's own.
-- Two corners show while the pointer is over the pane. The top right grows the pane right and up, moving the controls up; the bottom left grows it left and down. The pane never grows onto the board or off the window, and a drag never shrinks it under 15 × 7 rem.
+- Two corners show while the pointer is over the pane. The top right grows the pane right and up, moving the controls up; the bottom left grows it left and down. The pane never grows onto the board, the controls never go off the window, even after the window gets smaller, and a drag never shrinks the pane under 15 × 7 rem.
 - Nothing is saved: the font change and the drag last until a reload, and a new puzzle resets the drag.
 - On a page where twitch-rules-scroller's stream script runs, it does nothing, so the two never set the pane's font against each other.
+
+## License
+
+[MIT](LICENSE)

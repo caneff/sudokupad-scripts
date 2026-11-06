@@ -13,8 +13,6 @@
 // @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js
 // ==/UserScript==
 
-// Ported from the rules-pane fit of twitch-rules-scroller's sudokupad-sync.user.js, after Nell Gwynn's
-// original resizing scripts.
 (function () {
   'use strict'
 
@@ -39,9 +37,7 @@
     return lo
   }
 
-  // The room the pane has to grow into: from its top to its container's bottom, never past the window, less
-  // the container's bottom padding.
-  function rulesRoom ({ rulesTop, containerBottom, viewportBottom = Infinity, paddingBottom = 0 }) {
+  function rulesRoom ({ rulesTop, containerBottom, viewportBottom, paddingBottom }) {
     return Math.max(0, Math.min(containerBottom, viewportBottom) - paddingBottom - rulesTop)
   }
 
@@ -81,18 +77,17 @@
     rules.style.fontSize = `${nudgedFontPx(autoFontPx(fits, ownPx), nudgePx)}px`
   }
 
-  // A drag's box is {w, h, x, y} in visual px: extra width, extra height, and how far the controls column
-  // moved. The top-right corner ("ur") grows the pane right and up, moving the controls up; the bottom-left
-  // ("dl") grows it left and down, moving them left. `size` is the pane's visual size, `min` its floor and
-  // `free` the visual px it may still grow into each way. The controls move by what the pane grew, not by the
-  // pointer, so a clamped corner stays under it.
+  // A drag is {w, h, x, y} in visual px: extra width, extra height, and how far the controls column moved. The
+  // top-right corner ("ur") grows the pane right and up, moving the controls up; the bottom-left ("dl") grows
+  // it left and down, moving them left. The controls move by what the pane grew, not by the pointer, so a
+  // stopped corner stays under it. Where the window and the board stop a drag is `clampDrag`'s, at each fit.
   const noRulesDrag = () => ({ w: 0, h: 0, x: 0, y: 0 })
-  function dragRulesBox (box, corner, dx, dy, size, min, free) {
+  function dragRulesBox (box, corner, dx, dy, paneSize, minSize) {
     if (!CORNERS.includes(corner)) throw new Error(`the rules pane has no corner "${corner}"`)
     const ur = corner === 'ur'
     // The floor stops a shrink; it never grows a pane that SudokuPad laid out smaller.
-    const growW = Math.max(Math.min(ur ? dx : -dx, Math.max(0, ur ? free.right : free.left)), Math.min(0, min.width - size.width))
-    const growH = Math.max(Math.min(ur ? -dy : dy, Math.max(0, ur ? free.up : free.down)), Math.min(0, min.height - size.height))
+    const growW = Math.max(ur ? dx : -dx, Math.min(0, minSize.width - paneSize.width))
+    const growH = Math.max(ur ? -dy : dy, Math.min(0, minSize.height - paneSize.height))
     return {
       w: box.w + growW,
       h: box.h + growH,
@@ -101,20 +96,29 @@
     }
   }
 
+  // The drag as far as the layout allows now, which can be less than when it was made (a smaller window, a
+  // board that moved): the controls column stays inside the window and the pane clear of the board. `pane` is
+  // the undragged pane's visual left and right at its fitted width, `column` the undragged controls column's
+  // visual top and bottom.
+  function clampDrag (box, { pane, column, boardRight, viewport }) {
+    // A move right or down comes only with a shrink of the same size, which keeps the column where it was.
+    const x = Math.max(box.x, boardRight - pane.left)
+    const y = Math.max(box.y, -column.top)
+    return {
+      w: Math.min(box.w, Math.max(0, viewport.width - EDGE_PX - pane.right) - x),
+      h: Math.min(box.h, Math.max(0, viewport.height - column.bottom - y)),
+      x,
+      y
+    }
+  }
+
   // The dragged pane's width and room in css px: the drag's deltas on the fit's own answers, never under the
-  // floor (or the undragged size, when that is smaller) and never past the window (`left`/`top` are the pane's undragged visual corner).
-  function draggedPane ({ width, room, box, scale, left, top, viewport }) {
-    if (!(scale > 0)) return { width, room }
-    const out = { width, room }
-    if (box.w) {
-      const most = Math.floor((viewport.width - EDGE_PX - left - box.x) / scale)
-      out.width = Math.max(Math.min(RULES_MIN.width, width), Math.min(width + box.w / scale, most))
+  // floor, or the undragged size when that is smaller.
+  function draggedPane ({ width, room, box, scale }) {
+    return {
+      width: box.w ? Math.max(Math.min(RULES_MIN.width, width), width + box.w / scale) : width,
+      room: box.h ? Math.max(Math.min(RULES_MIN.height, room), room + box.h / scale) : room
     }
-    if (box.h) {
-      const most = Math.floor((viewport.height - top - box.y) / scale)
-      out.room = Math.max(Math.min(RULES_MIN.height, room), Math.min(room + box.h / scale, most))
-    }
-    return out
   }
 
   // The drag for the puzzle it was made on; a new puzzle starts undragged.
@@ -131,26 +135,29 @@
   // pane to it.
   const streamScriptActive = (doc) => Boolean(doc.getElementById('sudokupad-sync-nudge') || doc.querySelector('[id^="sudokupad-sync-drag-"]'))
 
-  // The style properties the fit writes on the pane.
-  const FIT_STYLES = ['width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight']
+  // Every style property the fit writes on the pane; it also moves the controls column by its `translate`.
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight']
 
-  // Widens the pane into the free space at its right, then takes the largest font that fits. Returns false,
-  // putting the last fit back, when the pane is not shown or has no room yet.
-  function fitRulesPane ({ rules, container, getStyle, viewport, nudgePx, box = noRulesDrag(), controls = null }) {
-    rules.style.overflowWrap = 'anywhere' // measure a long unbroken word honestly
+  function clearFit (rules, controls) {
+    for (const k of FIT_STYLES) rules.style[k] = ''
+    controls.style.translate = ''
+  }
+
+  // Widens the pane into the free space at its right, then takes the largest font that fits, and returns the
+  // drag it applied. Returns null when the pane is not shown, with the fit taken off, or has no room yet, with
+  // the last fit put back.
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box }) {
     const before = FIT_STYLES.map((k) => rules.style[k])
-    const movedBefore = controls?.style.translate
-    const putBack = () => {
-      FIT_STYLES.forEach((k, n) => { rules.style[k] = before[n] })
-      if (controls) controls.style.translate = movedBefore ?? ''
-      return false
-    }
+    const movedBefore = controls.style.translate
     // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
     // fit's larger font or wider box is that fit's own height, and every fit would grow the pane again.
-    for (const k of FIT_STYLES) rules.style[k] = ''
-    if (controls) controls.style.translate = ''
+    clearFit(rules, controls)
+    rules.style.overflowWrap = 'anywhere' // measure a long unbroken word honestly
     const natural = rules.offsetWidth
-    if (!(natural > 0)) return putBack() // SudokuPad hides the pane of a puzzle with no rules
+    if (!(natural > 0)) { // SudokuPad hides the pane of a puzzle with no rules
+      clearFit(rules, controls)
+      return null
+    }
     const home = rules.getBoundingClientRect()
     const scale = home.width / natural
     const ownPx = parseFloat(getStyle(rules).fontSize)
@@ -160,26 +167,27 @@
       viewportBottom: viewport.height,
       paddingBottom: parseFloat(getStyle(container).paddingBottom) || 0
     })
-    if (!(visualRoom > 0)) return putBack()
-    const fitted = draggedPane({
-      width: rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width }),
-      room: visualRoom / scale,
-      box,
-      scale,
-      left: home.left,
-      top: home.top,
+    if (!(visualRoom > 0)) { // before layout, or a collapsed container: keep the last fit until the next one
+      FIT_STYLES.forEach((k, n) => { rules.style[k] = before[n] })
+      controls.style.translate = movedBefore
+      return null
+    }
+    const width = rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width })
+    const column = controls.getBoundingClientRect()
+    const applied = clampDrag(box, {
+      pane: { left: home.left, right: home.left + width * scale },
+      column,
+      boardRight,
       viewport
     })
-    if (box.h) rules.style.maxHeight = `${fitted.room}px`
-    if (controls && (box.x || box.y)) controls.style.translate = `${box.x}px ${box.y}px`
-    if (fitted.width > natural || box.w) Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${fitted.width}px` })
+    // A drag that changes the height starts from the pane's own height, not the room under it, so the pane
+    // grows by what the corner moved.
+    const fitted = draggedPane({ width, room: (applied.h ? home.height : visualRoom) / scale, box: applied, scale })
+    if (applied.h) rules.style.maxHeight = `${fitted.room}px`
+    if (applied.x || applied.y) controls.style.translate = `${applied.x}px ${applied.y}px`
+    if (fitted.width > natural || applied.w) Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${fitted.width}px` })
     fitRulesFont(rules, fitted.room, ownPx, nudgePx)
-    return true
-  }
-
-  function clearFit (rules, controls) {
-    for (const k of [...FIT_STYLES, 'overflowWrap']) rules.style[k] = ''
-    if (controls) controls.style.translate = ''
+    return applied
   }
 
   function makeTrailing (fn, ms, schedule = setTimeout, cancel = clearTimeout) {
@@ -193,8 +201,7 @@
     }
   }
 
-  // Calls onMove(dx, dy) with each pointer step of a drag that began on `corner`, and onActive(true|false) as
-  // it starts and ends. Move and release are heard on the window, so a fast drag that outruns the corner holds.
+  // Move and release are heard on the window, so a fast drag that outruns the corner holds.
   function watchCornerDrag (corner, win, onMove, onActive) {
     corner.addEventListener('pointerdown', (e) => {
       e.preventDefault()
@@ -231,6 +238,7 @@
       fitRulesPane,
       clearFit,
       dragRulesBox,
+      clampDrag,
       draggedPane,
       draggedBox,
       noRulesDrag,
@@ -257,6 +265,7 @@
   const CORNER_PX = 28
   const BAR_GAP_PX = 2
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
+  const cornerId = (corner) => `${ID}-drag-${corner}`
 
   const STYLE = `
     #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; gap: 4px; font: 14px monospace; }
@@ -278,7 +287,6 @@
   const controlsColumn = () => document.getElementById('controls')
   // A puzzle with no id of its own (a replay or a pack) is told apart by its URL.
   const dragKey = () => String(Framework.app?.puzzle?.puzzleId || window.location.href)
-  const viewport = () => ({ width: window.innerWidth, height: window.innerHeight })
 
   const showHover = () => document.body.classList.toggle(HOVER_CLASS, hovering || dragging)
 
@@ -308,7 +316,7 @@
 
   function addCorner (corner) {
     const el = document.createElement('div')
-    el.id = `${ID}-drag-${corner}`
+    el.id = cornerId(corner)
     el.className = CORNER_CLASS
     el.style.cursor = CORNER_CURSOR[corner]
     watchCornerDrag(el, window, (dx, dy) => dragRules(corner, dx, dy), (on) => {
@@ -331,23 +339,21 @@
     })
   }
 
-  const clampTo = (value, most) => `${Math.max(0, Math.min(value, most))}px`
-  function place (el, left, top) {
-    el.style.left = clampTo(left, window.innerWidth - el.offsetWidth)
-    el.style.top = clampTo(top, window.innerHeight - el.offsetHeight)
+  // Sizes are passed in: a corner hidden until hover measures 0 x 0.
+  function place (el, left, top, width, height) {
+    el.style.left = `${Math.max(0, Math.min(left, window.innerWidth - width))}px`
+    el.style.top = `${Math.max(0, Math.min(top, window.innerHeight - height))}px`
   }
 
-  // The font bar sits on the pane's top-right corner, just above the pane, so it covers none of the rules.
+  // The font bar sits on the pane's top-right corner, just above the pane so it covers none of the rules, or
+  // just below it when the pane reaches the window's top.
   function placeControls (rules) {
     const r = rules.getBoundingClientRect()
     const bar = document.getElementById(FONT_BAR_ID)
-    place(bar, r.right - bar.offsetWidth, r.top - bar.offsetHeight - BAR_GAP_PX)
-    const at = { ur: [r.right - CORNER_PX, r.top], dl: [r.left, r.bottom - CORNER_PX] }
-    for (const corner of CORNERS) {
-      const el = document.getElementById(`${ID}-drag-${corner}`)
-      el.style.left = clampTo(at[corner][0], window.innerWidth - CORNER_PX)
-      el.style.top = clampTo(at[corner][1], window.innerHeight - CORNER_PX)
-    }
+    const above = r.top - bar.offsetHeight - BAR_GAP_PX
+    place(bar, r.right - bar.offsetWidth, above >= 0 ? above : r.bottom + BAR_GAP_PX, bar.offsetWidth, bar.offsetHeight)
+    place(document.getElementById(cornerId('ur')), r.right - CORNER_PX, r.top, CORNER_PX, CORNER_PX)
+    place(document.getElementById(cornerId('dl')), r.left, r.bottom - CORNER_PX, CORNER_PX, CORNER_PX)
   }
 
   function showControls (on) {
@@ -357,10 +363,10 @@
   function fitPage () {
     try {
       const rules = rulesPane()
-      if (!rules) return
       const controls = controlsColumn()
+      if (!rules || !controls) return
       if (streamScriptActive(document)) {
-        // The stream script's own fit clears and rewrites the same styles, so they are left to it.
+        // The stream script's own fit clears and rewrites the same styles each time, so they are left to it.
         showControls(false)
         return
       }
@@ -371,18 +377,22 @@
         showControls(false)
         return
       }
-      const done = fitRulesPane({
+      const board = document.getElementById('board')
+      const box = draggedBox(dragKey())
+      const applied = fitRulesPane({
         rules,
         container: rulesContainer(rules, getStyle),
+        controls,
         getStyle,
-        viewport: viewport(),
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        boardRight: board ? board.getBoundingClientRect().right : 0,
         nudgePx,
-        box: draggedBox(dragKey()),
-        controls
+        box
       })
-      fitted = fitted || done
-      showControls(done)
-      if (done) placeControls(rules)
+      if (applied) Object.assign(box, applied) // a later drag starts from where this one stopped
+      fitted = fitted || Boolean(applied)
+      showControls(Boolean(applied))
+      if (applied) placeControls(rules)
     } catch (err) {
       console.error('auto-rules-resizer: the rules fit failed', err)
     }
@@ -391,21 +401,12 @@
   function dragRules (corner, dx, dy) {
     const rules = rulesPane()
     if (!rules) return
-    const size = rules.getBoundingClientRect()
+    const paneSize = rules.getBoundingClientRect()
     const natural = rules.offsetWidth
-    const scale = natural > 0 ? size.width / natural : 1
-    // The board's right edge is where the pane stops growing left.
-    const board = document.getElementById('board')
-    const boardRight = board ? board.getBoundingClientRect().right : 0
-    const free = {
-      right: window.innerWidth - EDGE_PX - size.right,
-      up: size.top,
-      left: size.left - boardRight,
-      down: window.innerHeight - size.bottom
-    }
-    const min = { width: RULES_MIN.width * scale, height: RULES_MIN.height * scale }
+    const scale = natural > 0 ? paneSize.width / natural : 1
+    const minSize = { width: RULES_MIN.width * scale, height: RULES_MIN.height * scale }
     const box = draggedBox(dragKey())
-    Object.assign(box, dragRulesBox(box, corner, dx, dy, size, min, free))
+    Object.assign(box, dragRulesBox(box, corner, dx, dy, paneSize, minSize))
     fitPage()
   }
 

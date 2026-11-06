@@ -3,7 +3,7 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
-  dragRulesBox, draggedPane, draggedBox, noRulesDrag, isLandscape, streamScriptActive, makeTrailing, watchCornerDrag
+  dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, streamScriptActive, makeTrailing, watchCornerDrag
 } = require('./auto-rules-resizer.user.js')
 
 test('largestSize: the biggest integer in [min, max] the predicate accepts, min when none does', () => {
@@ -13,18 +13,18 @@ test('largestSize: the biggest integer in [min, max] the predicate accepts, min 
 })
 
 test('rulesRoom: from the rules\' top to the container\'s bottom, less its bottom padding', () => {
-  assert.equal(rulesRoom({ rulesTop: 100, containerBottom: 700 }), 600)
-  assert.equal(rulesRoom({ rulesTop: 100, containerBottom: 700, paddingBottom: 20 }), 580)
+  assert.equal(rulesRoom({ rulesTop: 100, containerBottom: 700, viewportBottom: 900, paddingBottom: 0 }), 600)
+  assert.equal(rulesRoom({ rulesTop: 100, containerBottom: 700, viewportBottom: 900, paddingBottom: 20 }), 580)
 })
 
 test('rulesRoom: never past the window', () => {
-  assert.equal(rulesRoom({ rulesTop: 100, containerBottom: 2000, viewportBottom: 900 }), 800)
+  assert.equal(rulesRoom({ rulesTop: 100, containerBottom: 2000, viewportBottom: 900, paddingBottom: 0 }), 800)
 })
 
 test('rulesRoom: zero for a container that ends above the rules\' top', () => {
-  assert.equal(rulesRoom({ rulesTop: 500, containerBottom: 300 }), 0)
-  assert.equal(rulesRoom({ rulesTop: 300, containerBottom: 300 }), 0)
-  assert.equal(rulesRoom({ rulesTop: 300, containerBottom: 310, paddingBottom: 40 }), 0)
+  assert.equal(rulesRoom({ rulesTop: 500, containerBottom: 300, viewportBottom: 900, paddingBottom: 0 }), 0)
+  assert.equal(rulesRoom({ rulesTop: 300, containerBottom: 300, viewportBottom: 900, paddingBottom: 0 }), 0)
+  assert.equal(rulesRoom({ rulesTop: 300, containerBottom: 310, viewportBottom: 900, paddingBottom: 40 }), 0)
 })
 
 test('rulesContainer: the nearest ancestor that clips or scrolls, else the parent', () => {
@@ -66,6 +66,7 @@ test('nudgedFontPx: one px per press from the automatic size, below SudokuPad\'s
 // A stand-in for SudokuPad's rules pane and its container, modelled on what was measured live: the pane's
 // height follows its text at the current font and width, capped at 224 css px; the container wraps the pane;
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
+const VIEWPORT = { width: 2048, height: 1064 }
 function fakePane (chars, scale = 1) {
   const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '' }
   const font = () => parseFloat(style.fontSize) || 17.6
@@ -81,15 +82,18 @@ function fakePane (chars, scale = 1) {
   }
   const container = { getBoundingClientRect: () => ({ bottom: 300 + height() * scale + 8 }) }
   const getStyle = (el) => (el === rules ? { fontSize: `${font()}px` } : { paddingBottom: '0' })
-  const controls = { style: { translate: '' } }
-  const fit = (opts = {}) => fitRulesPane({ rules, container, getStyle, viewport: { width: 2048, height: 1064 }, nudgePx: 0, controls, ...opts })
+  // The controls column holds the pane, from 60 px above it to 400 px below its top.
+  const controls = { style: { translate: '' }, getBoundingClientRect: () => ({ top: 240, bottom: 700 }) }
+  const fit = (opts = {}) => fitRulesPane({
+    rules, container, controls, getStyle, viewport: VIEWPORT, boardRight: 900, nudgePx: 0, box: noRulesDrag(), ...opts
+  })
   return { rules, container, controls, fit, height }
 }
 
 test('fitRulesPane: widens the pane and grows the font of rules that fit, and a second fit changes nothing', () => {
   for (const chars of [26, 140, 420]) {
     const { rules, fit } = fakePane(chars)
-    assert.equal(fit(), true)
+    assert.deepEqual(fit(), noRulesDrag())
     const first = { ...rules.style }
     assert.ok(parseFloat(first.width) > 480, `${chars} chars: widened to ${first.width}`)
     assert.ok(parseFloat(first.fontSize) > 17.6, `${chars} chars: font grew to ${first.fontSize}`)
@@ -123,33 +127,45 @@ test('fitRulesPane: the nudge moves the font from the automatic size', () => {
   assert.equal(parseFloat(rules.style.fontSize), auto - 1)
 })
 
-test('fitRulesPane: with no room it puts the last fit back, and says so', () => {
-  const { rules, container, fit } = fakePane(140)
-  fit()
+test('fitRulesPane: with no room it puts the last fit back, the controls\' move too, and says so', () => {
+  const { rules, container, controls, fit } = fakePane(140)
+  const box = { w: 0, h: 30, x: 0, y: -30 }
+  fit({ box })
   const fitted = { ...rules.style }
   container.getBoundingClientRect = () => ({ bottom: 0 })
-  assert.equal(fit(), false)
+  assert.equal(fit({ box }), null)
   assert.deepEqual(rules.style, fitted)
+  assert.equal(controls.style.translate, '0px -30px')
 })
 
-test('fitRulesPane: a pane SudokuPad does not show (a puzzle with no rules) is left as it is', () => {
-  const { rules, fit } = fakePane(140)
+test('fitRulesPane: a pane SudokuPad does not show (a puzzle with no rules) gets the fit and the drag taken off', () => {
+  const { rules, controls, fit } = fakePane(140)
+  fit({ box: { w: 0, h: 30, x: 0, y: -30 } })
   Object.defineProperty(rules, 'offsetWidth', { get: () => 0 })
-  assert.equal(fit(), false)
-  assert.equal(rules.style.fontSize, '')
-  assert.equal(rules.style.width, '')
+  assert.equal(fit(), null)
+  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '' })
+  assert.equal(controls.style.translate, '')
 })
 
 test('fitRulesPane: a drag moves the controls and caps the pane\'s height', () => {
   const { rules, controls, fit } = fakePane(140)
-  fit({ box: { w: 0, h: 30, x: 0, y: -30 } })
+  const before = rules.getBoundingClientRect().height
+  assert.deepEqual(fit({ box: { w: 0, h: 30, x: 0, y: -30 } }), { w: 0, h: 30, x: 0, y: -30 })
   assert.equal(controls.style.translate, '0px -30px')
-  assert.notEqual(rules.style.maxHeight, '')
+  assert.equal(rules.style.maxHeight, `${before + 30}px`, 'the pane\'s own height plus the drag, not the room under it')
+})
+
+test('fitRulesPane: a drag made in a larger window is cut back to the window it is applied in', () => {
+  const { controls, fit } = fakePane(140)
+  // The column's top is 240: a drag 300 up from a larger window is cut to 240.
+  assert.deepEqual(fit({ box: { w: 0, h: 300, x: 0, y: -300 } }), { w: 0, h: 300, x: 0, y: -240 })
+  assert.equal(controls.style.translate, '0px -240px')
 })
 
 test('clearFit: takes the fit\'s output off the pane and the controls', () => {
   const { rules, controls, fit } = fakePane(140)
   fit({ box: { w: -20, h: 30, x: 20, y: -30 } })
+  assert.notEqual(controls.style.translate, '')
   clearFit(rules, controls)
   assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '' })
   assert.equal(controls.style.translate, '')
@@ -158,50 +174,58 @@ test('clearFit: takes the fit\'s output off the pane and the controls', () => {
 const NO_BOX = { w: 0, h: 0, x: 0, y: 0 }
 const PANE = { width: 480, height: 200 }
 const MIN_PANE = { width: 240, height: 112 } // 15 x 7 rem at 16 px
-const ROOMY = { right: 500, up: 500, left: 500, down: 500 }
 
 test('dragRulesBox: the top-right corner grows the pane right and up, moving the controls up', () => {
-  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', 40, -30, PANE, MIN_PANE, ROOMY), { w: 40, h: 30, x: 0, y: -30 })
+  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', 40, -30, PANE, MIN_PANE), { w: 40, h: 30, x: 0, y: -30 })
 })
 
 test('dragRulesBox: the bottom-left corner grows the pane left and down, moving the controls left', () => {
-  assert.deepEqual(dragRulesBox(NO_BOX, 'dl', -50, 20, PANE, MIN_PANE, ROOMY), { w: 50, h: 20, x: -50, y: 0 })
+  assert.deepEqual(dragRulesBox(NO_BOX, 'dl', -50, 20, PANE, MIN_PANE), { w: 50, h: 20, x: -50, y: 0 })
 })
 
 test('dragRulesBox: drags add up, and never shrink the pane under 15 x 7 rem', () => {
-  const once = dragRulesBox(NO_BOX, 'ur', 40, -30, PANE, MIN_PANE, ROOMY)
-  assert.deepEqual(dragRulesBox(once, 'ur', 10, -5, { width: 520, height: 230 }, MIN_PANE, ROOMY), { w: 50, h: 35, x: 0, y: -35 })
+  const once = dragRulesBox(NO_BOX, 'ur', 40, -30, PANE, MIN_PANE)
+  assert.deepEqual(dragRulesBox(once, 'ur', 10, -5, { width: 520, height: 230 }, MIN_PANE), { w: 50, h: 35, x: 0, y: -35 })
   // A drag far past the floor stops at it: 480 - 240 = 240 of width, 200 - 112 = 88 of height.
-  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', -900, 900, PANE, MIN_PANE, ROOMY), { w: -240, h: -88, x: 0, y: 88 })
-  assert.deepEqual(dragRulesBox(NO_BOX, 'dl', 900, -900, PANE, MIN_PANE, ROOMY), { w: -240, h: -88, x: 240, y: 0 })
+  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', -900, 900, PANE, MIN_PANE), { w: -240, h: -88, x: 0, y: 88 })
+  assert.deepEqual(dragRulesBox(NO_BOX, 'dl', 900, -900, PANE, MIN_PANE), { w: -240, h: -88, x: 240, y: 0 })
 })
 
 test('dragRulesBox: a pane already under the floor grows by the drag, not to the floor, and does not shrink', () => {
   const short = { width: 200, height: 80 }
-  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', 5, -10, short, MIN_PANE, ROOMY), { w: 5, h: 10, x: 0, y: -10 })
-  assert.deepEqual(dragRulesBox(NO_BOX, 'dl', 5, -10, short, MIN_PANE, ROOMY), NO_BOX)
+  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', 5, -10, short, MIN_PANE), { w: 5, h: 10, x: 0, y: -10 })
+  assert.deepEqual(dragRulesBox(NO_BOX, 'dl', 5, -10, short, MIN_PANE), NO_BOX)
 })
 
-test('dragRulesBox: a corner stops where the pane would leave the free space, the board\'s edge included', () => {
-  const free = { right: 8, up: 60, left: 100, down: 30 }
-  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', 900, -900, PANE, MIN_PANE, free), { w: 8, h: 60, x: 0, y: -60 })
-  assert.deepEqual(dragRulesBox(NO_BOX, 'dl', -3000, 900, PANE, MIN_PANE, free), { w: 100, h: 30, x: -100, y: 0 })
-  // Already past the window (a resize): only shrinking is left.
-  assert.deepEqual(dragRulesBox(NO_BOX, 'ur', 50, 0, PANE, MIN_PANE, { ...free, right: -40 }), NO_BOX)
+// The pane fitted from 1000 to 8 px from the right edge, its column from 300 to 900, the board ending at 900, in a
+// 1600 x 1000 window.
+const LAYOUT = { pane: { left: 1000, right: 1592 }, column: { top: 300, bottom: 900 }, boardRight: 900, viewport: { width: 1600, height: 1000 } }
+
+test('clampDrag: a drag inside the window and clear of the board is applied as it is', () => {
+  for (const box of [NO_BOX, { w: 50, h: 40, x: -50, y: 0 }, { w: 0, h: 100, x: 0, y: -100 }]) assert.deepEqual(clampDrag(box, LAYOUT), box)
+})
+
+test('clampDrag: the pane stops at the board, and the controls column at the window\'s top and bottom', () => {
+  assert.deepEqual(clampDrag({ w: 400, h: 0, x: -400, y: 0 }, LAYOUT), { w: 100, h: 0, x: -100, y: 0 }, 'left to the board')
+  assert.deepEqual(clampDrag({ w: 0, h: 500, x: 0, y: -500 }, LAYOUT), { w: 0, h: 400, x: 0, y: -300 }, 'up to the window\'s top')
+  assert.deepEqual(clampDrag({ w: 0, h: 600, x: 0, y: 0 }, LAYOUT), { w: 0, h: 100, x: 0, y: 0 }, 'down to the window\'s bottom')
+  const short = { ...LAYOUT, pane: { left: 1000, right: 1500 } }
+  assert.deepEqual(clampDrag({ w: 200, h: 0, x: 0, y: 0 }, short), { w: 92, h: 0, x: 0, y: 0 }, 'right to 8 px from the window\'s edge')
+})
+
+test('clampDrag: a shrink, which moves the controls right or down by as much, is applied as it is', () => {
+  for (const box of [{ w: -60, h: 0, x: 60, y: 0 }, { w: 0, h: -40, x: 0, y: 40 }]) assert.deepEqual(clampDrag(box, LAYOUT), box)
 })
 
 test('dragRulesBox: a corner the pane does not have is refused', () => {
-  assert.throws(() => dragRulesBox(NO_BOX, 'ul', 1, 1, PANE, MIN_PANE, ROOMY), /no corner "ul"/)
+  assert.throws(() => dragRulesBox(NO_BOX, 'ul', 1, 1, PANE, MIN_PANE), /no corner "ul"/)
 })
 
-test('draggedPane: the drag\'s deltas on the fit\'s answers, in css px, never under the floor nor past the window', () => {
-  const base = { width: 600, room: 200, scale: 1.25, left: 1000, top: 300, viewport: { width: 2048, height: 1064 } }
+test('draggedPane: the drag\'s deltas on the fit\'s answers, in css px, never under the floor', () => {
+  const base = { width: 600, room: 200, scale: 1.25 }
   assert.deepEqual(draggedPane({ ...base, box: NO_BOX }), { width: 600, room: 200 })
   assert.deepEqual(draggedPane({ ...base, box: { w: -125, h: 50, x: 0, y: -50 } }), { width: 500, room: 240 }, 'visual px over scale')
   assert.deepEqual(draggedPane({ ...base, box: { w: -9999, h: -9999, x: 0, y: 0 } }), { width: 240, room: 112 }, '15 x 7 rem')
-  // Right edge: (2048 - 8 - 1000 - 0) / 1.25 = 832 css px at most; bottom: (1064 - 300 + 50) / 1.25 = 651.
-  assert.deepEqual(draggedPane({ ...base, box: { w: 9999, h: 9999, x: 0, y: -50 } }), { width: 832, room: 651 })
-  assert.deepEqual(draggedPane({ ...base, scale: 0, box: { w: 50, h: 50, x: 0, y: 0 } }), { width: 600, room: 200 }, 'no usable scale, no drag')
   // A pane under the floor before the drag: the floor stops it shrinking further, and does not grow it.
   assert.deepEqual(draggedPane({ ...base, width: 200, room: 60, box: { w: 10, h: 10, x: 0, y: -10 } }), { width: 208, room: 68 })
   assert.deepEqual(draggedPane({ ...base, width: 200, room: 60, box: { w: -10, h: -10, x: 0, y: 10 } }), { width: 200, room: 60 })

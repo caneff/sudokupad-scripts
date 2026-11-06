@@ -15,13 +15,20 @@ const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit
 const MARGIN = 12
 
 const browser = await chromium.launch()
-const { p } = await openPage(browser, { contextOptions: { viewport: { width: 1920, height: 1080 } } })
-await startPuzzle(p)
-await p.addStyleTag({ content: '#svenpeek { display: none !important }' })
-await p.evaluate((rules) => {
-  Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
-  Framework.app.resize()
-}, RULES)
+
+// A 1920 x 1080 page past Start Puzzle, mascot hidden, showing RULES.
+async function rulesPage () {
+  const { p } = await openPage(browser, { contextOptions: { viewport: { width: 1920, height: 1080 } } })
+  await startPuzzle(p)
+  await p.addStyleTag({ content: '#svenpeek { display: none !important }' })
+  await p.evaluate((rules) => {
+    Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
+    Framework.app.resize()
+  }, RULES)
+  return p
+}
+
+const p = await rulesPage()
 
 // The header and the rules pane, from the pane's left edge to the window's right edge.
 const area = () => p.evaluate(() => {
@@ -43,14 +50,7 @@ const clip = {
 const afterPng = await p.screenshot({ clip })
 
 // The Before picture comes from a second page with no script, in the same layout, rather than undoing the fit by hand.
-const second = await openPage(browser, { contextOptions: { viewport: { width: 1920, height: 1080 } } })
-await startPuzzle(second.p)
-await second.p.addStyleTag({ content: '#svenpeek { display: none !important }' })
-await second.p.evaluate((rules) => {
-  Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
-  Framework.app.resize()
-}, RULES)
-const beforePng = await second.p.screenshot({ clip })
+const beforePng = await (await rulesPage()).screenshot({ clip })
 
 const sheet = await (await browser.newContext({ viewport: { width: clip.width + 2 * MARGIN, height: 100 } })).newPage()
 const img = (png) => `data:image/png;base64,${png.toString('base64')}`
