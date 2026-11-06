@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
-  VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, readLimits, saveLimits, noLimits, autoPaneFit,
+  VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
   dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, streamScriptActive, makeTrailing, watchCornerDrag
 } = require('./auto-rules-resizer.user.js')
@@ -78,7 +78,7 @@ test('nudgedFontPx: one px per press from the automatic size, below SudokuPad\'s
 // height follows its text at the current font and width, capped at 224 css px; the container wraps the pane;
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
 const VIEWPORT = { width: 2048, height: 1064 }
-function fakePane (chars, scale = 1) {
+function fakePane (chars, scale = 1, spareRoom = 0) {
   const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '' }
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
@@ -91,7 +91,7 @@ function fakePane (chars, scale = 1) {
     get clientHeight () { return height() },
     getBoundingClientRect: () => ({ left: 1000, top: 300, width: width() * scale, height: height() * scale })
   }
-  const container = { getBoundingClientRect: () => ({ bottom: 300 + height() * scale + 8 }) }
+  const container = { getBoundingClientRect: () => ({ bottom: 300 + height() * scale + 8 + spareRoom }) }
   const getStyle = (el) => (el === rules ? { fontSize: `${font()}px`, maxHeight: '224px' } : { paddingBottom: '0' })
   // The controls column holds the pane, from 60 px above it to 400 px below its top.
   const controls = { style: { translate: '' }, getBoundingClientRect: () => ({ top: 240, bottom: 700 }) }
@@ -141,6 +141,31 @@ test('fitRulesPane: the max auto height caps the room the font is fitted to', ()
   // One line is 1.2 x font + 32: 23 px fits a room of 60, 24 does not.
   assert.equal(rules.style.fontSize, '23px')
   assert.equal(rules.scrollHeight <= 60, true)
+})
+
+test('fitRulesPane: a max auto height holds the pane to it, widening only as far as the rules need to fit', () => {
+  const { rules, fit } = fakePane(300)
+  fit({ limits: { maxWidth: null, maxHeight: 100 } })
+  assert.equal(rules.style.maxHeight, '100px')
+  assert.equal(rules.scrollHeight <= 100, true, `scroll height ${rules.scrollHeight}`)
+  const width = parseFloat(rules.style.width)
+  assert.ok(width > 480 && width < 1040, `widened to ${width}, short of the right edge`)
+  rules.style.width = `${width - 1}px`
+  assert.equal(rules.scrollHeight > 100, true, 'one px narrower overflows the cap')
+})
+
+test('fitRulesPane: a max auto height no rules can fit in still holds the pane to it, at SudokuPad\'s font', () => {
+  const { rules, fit } = fakePane(26)
+  fit({ limits: { maxWidth: null, maxHeight: 40 } })
+  assert.equal(rules.style.maxHeight, '40px')
+  assert.equal(rules.style.fontSize, '17.6px')
+})
+
+test('fitRulesPane: with room below the pane\'s own max-height the pane takes it, and the font fills it', () => {
+  const { rules, fit } = fakePane(26, 1, 300)
+  fit()
+  assert.equal(rules.scrollHeight > 224, true, `scroll height ${rules.scrollHeight}, past SudokuPad's 14rem`)
+  assert.equal(rules.scrollHeight <= rules.clientHeight, true, 'shown whole')
 })
 
 test('fitRulesPane: f+ widens the pane when the bigger font would scroll, up to the max auto width, then only the font grows', () => {
@@ -208,6 +233,14 @@ test('saveLimits: saves a limit and removes the key of an empty one, so a fresh 
   assert.deepEqual(store.data, { [MAX_WIDTH_KEY]: 700 })
   saveLimits(store, noLimits())
   assert.deepEqual(store.data, {})
+})
+
+test('limitFromBox: blank is no limit, a usable number is the limit, anything else keeps the limit as it was', () => {
+  assert.equal(limitFromBox('', 600), null)
+  assert.equal(limitFromBox('  ', 600), null)
+  assert.equal(limitFromBox('700', 600), 700)
+  for (const slip of ['0', '-5', '0.2', 'abc']) assert.equal(limitFromBox(slip, 600), 600, slip)
+  assert.equal(limitFromBox('abc', null), null)
 })
 
 test('VERSION is the @version in the script header', () => {

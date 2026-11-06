@@ -63,6 +63,7 @@ const pane = (p) => p.evaluate(() => {
     bottom: Math.round(r.bottom),
     width: Math.round(r.width),
     cssWidth: rules.offsetWidth,
+    cssHeight: rules.offsetHeight,
     scrolls: rules.scrollHeight > rules.clientHeight
   }
 })
@@ -125,6 +126,7 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
     const wider = await pane(p)
     assert.equal(wider.width > own.width, true, `width ${own.width} -> ${wider.width}`)
     assert.equal(wider.scrolls, false)
+    assert.equal(await p.locator(FONT_BAR).isVisible(), true, 'the bar stays under the pointer while the pane widens')
     await clickFont(p, 'f-')
     await clickFont(p, 'f-')
     assert.equal(await settle(() => fontPx(p), auto - 1), auto - 1, 'f- twice')
@@ -152,10 +154,10 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
     assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), true, 'pointer on the pane')
     const bar = await p.locator(FONT_BAR).boundingBox()
     const seen = []
-    // From the pane up onto the bar in steps, and on to its second button.
-    await p.mouse.move(bar.x + bar.width - 4, bar.y + bar.height / 2, { steps: 12 })
+    // From the pane up onto the bar in steps, and on within it.
+    await p.mouse.move(bar.x + 4, bar.y + bar.height / 2, { steps: 12 })
     seen.push(await p.locator(FONT_BAR).isVisible())
-    await p.mouse.move(bar.x + bar.width - 4, bar.y + 2)
+    await p.mouse.move(bar.x + 4, bar.y + 2)
     seen.push(await p.locator(FONT_BAR).isVisible())
     assert.deepEqual(seen, [true, true], 'pointer moved onto the bar')
     await p.mouse.move(200, 500)
@@ -288,10 +290,11 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
     after(async () => { await context.close() })
 
-    it('leaves the font at SudokuPad\'s own, never under it', async () => {
+    it('leaves the font at SudokuPad\'s own, never under it, and holds the pane to the max', async () => {
       assert.equal(await settle(() => p.locator(FONT_BAR).count(), 1), 1)
       const now = await stable(() => pane(p))
       assert.equal(now.font, SUDOKUPAD_FONT_PX)
+      assert.equal(now.cssHeight <= 50, true, `pane ${now.cssHeight} css px tall under a max of 50`)
     })
 
     it('the page raised no error', () => {
@@ -329,6 +332,14 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await data(MAX_WIDTH_KEY), 600)
       assert.equal(await data(MAX_HEIGHT_KEY), 50)
       assert.equal(await settle(async () => (await pane(p)).cssWidth, 600), 600)
+    })
+
+    it('a box holding no usable number keeps the saved limit', async () => {
+      await openScriptDialog(p, 'Rules resizer', MAX_WIDTH_INPUT)
+      await p.locator(MAX_WIDTH_INPUT).evaluate((el) => { el.value = '0' })
+      await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
+      assert.equal(await data(MAX_WIDTH_KEY), 600)
+      assert.equal(await data(MAX_HEIGHT_KEY), 50)
     })
 
     it('shows the saved values on reopening, and clearing both and saving removes the keys and lifts the cap', async () => {

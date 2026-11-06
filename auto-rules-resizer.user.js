@@ -44,10 +44,14 @@
 
   const noLimits = () => ({ maxWidth: null, maxHeight: null })
 
-  // A positive whole number of css px, else null: no limit.
   function normalizeLimit (raw) {
     const px = Math.round(Number(raw))
     return Number.isFinite(px) && px > 0 ? px : null
+  }
+
+  // A blank box is no limit; text that is no usable number keeps the limit as it was, so a slip never wipes a saved one.
+  function limitFromBox (text, current) {
+    return text.trim() === '' ? null : (normalizeLimit(text) ?? current)
   }
 
   function readLimits (store) {
@@ -93,24 +97,25 @@
     return Math.max(MIN_FONT_PX, autoPx + nudgePx)
   }
 
-  // A size fits when the rules take no more than the room and do not overflow the pane: the room can reach
-  // below the pane's own max-height, into its container's margin.
+  const nudgedAutoFontPx = (fits, ownPx, nudgePx) => nudgedFontPx(autoFontPx(fits, ownPx), nudgePx)
+
+  // The pane's max-height is the room or a drag's, so a size fits when the rules take no more than the room.
+  const fitsRoom = (rules, room) => rules.scrollHeight <= Math.min(room, rules.clientHeight)
+
   function fitRulesFont (rules, room, ownPx, nudgePx) {
     const fits = (n) => {
       rules.style.fontSize = `${n}px`
-      return rules.scrollHeight <= Math.min(room, rules.clientHeight)
+      return fitsRoom(rules, room)
     }
-    rules.style.fontSize = `${nudgedFontPx(autoFontPx(fits, ownPx), nudgePx)}px`
+    rules.style.fontSize = `${nudgedAutoFontPx(fits, ownPx, nudgePx)}px`
   }
 
-  // The pane's width and font: SudokuPad's width unless the rules would still scroll at SudokuPad's font size,
-  // then the least width, up to `widthLimit`, at which they stop. With f+ pressed, the same for the bigger font,
-  // which is the nudge on the automatic size at the width before it. `fits(width, font)` is true from some width up.
-  function autoPaneFit ({ natural, widthLimit, ownPx, nudgePx, fits }) {
-    const limit = Math.max(natural, widthLimit)
+  // `fits(width, font)` is true from some width up. f+ widens for the bigger font, which is the nudge on the
+  // automatic size at the width before it.
+  function autoPaneFit ({ natural, widthLimit: limit, ownPx, nudgePx, fits }) {
     const narrowest = (from, fitsAt) => limit - largestSize((slack) => fitsAt(limit - slack), 0, limit - from)
     let width = fits(natural, ownPx) ? natural : narrowest(natural, (w) => fits(w, ownPx))
-    const fontPx = nudgedFontPx(autoFontPx((n) => fits(width, n), ownPx), nudgePx)
+    const fontPx = nudgedAutoFontPx((n) => fits(width, n), ownPx, nudgePx)
     if (nudgePx > 0 && !fits(width, fontPx)) width = narrowest(width, (w) => fits(w, fontPx))
     return { width, fontPx }
   }
@@ -215,13 +220,16 @@
       controls.style.translate = movedBefore
       return null
     }
-    const autoRoom = limits.maxHeight === null ? visualRoom / scale : Math.min(visualRoom / scale, limits.maxHeight)
-    // SudokuPad caps the pane at 14rem; the fit may use the whole room, and never less than SudokuPad gives.
-    rules.style.maxHeight = `${Math.max(autoRoom, parseFloat(getStyle(rules).maxHeight) || 0)}px`
+    const room = visualRoom / scale
+    const autoRoom = limits.maxHeight === null ? room : Math.min(room, limits.maxHeight)
+    // SudokuPad caps the pane at 14rem: the fit may use the whole room, never less than SudokuPad gives, and a
+    // max auto height holds the pane itself.
+    const paneMax = Math.max(room, parseFloat(getStyle(rules).maxHeight) || 0)
+    rules.style.maxHeight = `${limits.maxHeight === null ? paneMax : Math.min(paneMax, limits.maxHeight)}px`
     const fitsAt = (width, font) => {
       setPaneWidth(rules, width, natural)
       rules.style.fontSize = `${font}px`
-      return rules.scrollHeight <= Math.min(autoRoom, rules.clientHeight)
+      return fitsRoom(rules, autoRoom)
     }
     const { width, fontPx } = autoPaneFit({
       natural,
@@ -291,6 +299,7 @@
       MAX_WIDTH_KEY,
       MAX_HEIGHT_KEY,
       normalizeLimit,
+      limitFromBox,
       readLimits,
       saveLimits,
       noLimits,
@@ -415,13 +424,13 @@
     el.style.top = `${Math.max(0, Math.min(top, window.innerHeight - height))}px`
   }
 
-  // The font bar sits on the pane's top-right corner, directly above the pane so it covers none of the rules, or
-  // directly below it when the pane reaches the window's top.
+  // The font bar sits on the pane's top-left corner, which a widening pane leaves where it is, directly above the
+  // pane so it covers none of the rules, or directly below it when the pane reaches the window's top.
   function placeControls (rules) {
     const r = rules.getBoundingClientRect()
     const bar = document.getElementById(FONT_BAR_ID)
     const above = r.top - bar.offsetHeight
-    place(bar, r.right - bar.offsetWidth, above >= 0 ? above : r.bottom, bar.offsetWidth, bar.offsetHeight)
+    place(bar, r.left, above >= 0 ? above : r.bottom, bar.offsetWidth, bar.offsetHeight)
     place(document.getElementById(cornerId('ur')), r.right - CORNER_PX, r.top, CORNER_PX, CORNER_PX)
     place(document.getElementById(cornerId('dl')), r.left, r.bottom - CORNER_PX, CORNER_PX, CORNER_PX)
   }
@@ -491,8 +500,8 @@
               content: 'Save',
               handler: () => {
                 limits = {
-                  maxWidth: normalizeLimit(document.getElementById(MAX_WIDTH_INPUT_ID).value),
-                  maxHeight: normalizeLimit(document.getElementById(MAX_HEIGHT_INPUT_ID).value)
+                  maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
+                  maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
                 }
                 saveLimits(Framework, limits)
                 Framework.closeDialog()
