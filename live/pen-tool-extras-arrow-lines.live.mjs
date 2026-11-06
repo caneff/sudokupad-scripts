@@ -257,7 +257,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await penOf(['2,2', '2,3']), ['2,2:1o', '2,3:1o'])
   })
 
-  it('the Thickness slider scales the arrow lines already drawn: a wider line and no more arrows; 5 gives them back', async () => {
+  it('the Thickness slider scales the arrow lines already drawn: a wider line and fewer arrows; 5 gives them back', async () => {
     const slider = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
     const sample = async () => { const [g] = (await arrowLineGroups()).filter((x) => x.cls === 'cell-pen pen-1 pencolor-o'); return { lineWidth: g.lineWidth, count: headings(g.arrows).length } }
     await slider(5)
@@ -268,12 +268,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const big = await settle(async () => (await sample()).lineWidth, ARROW_LINE.line * 16)
     assert.equal(big, ARROW_LINE.line * 16)
     const wide = await sample()
-    assert.equal(wide.count <= base.count, true, `${wide.count} arrows at 16 against ${base.count} at 5`)
-    // At 1 the line is as wide as a page 1 line, 1, and its smaller heads sit no further apart than at 5.
+    assert.equal(wide.count < base.count, true, `${wide.count} arrows at 16 against ${base.count} at 5`)
+    // At 1 the line is as wide as a page 1 line, 1, and its smaller heads sit as far apart as at 5, two to a cell.
     await slider(1)
     assert.equal(await settle(async () => (await sample()).lineWidth, 1), 1)
     const small = await sample()
-    assert.equal(small.count >= base.count, true, `${small.count} arrows at 1 against ${base.count} at 5`)
+    assert.equal(small.count, base.count)
     await slider(5)
     assert.deepEqual(await settle(sample, base), base)
   })

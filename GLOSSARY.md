@@ -92,7 +92,7 @@
   rotation: the page button, Tab and the wheel skip it, saving with its pen selected moves the selection to the same number on page 1, and with both unticked the
   page button is hidden and the script takes neither Tab nor the wheel. Lines already drawn in its pens still draw. Its slider row (Dash length, Arrow spacing) is hidden
   in the dialog while the box is unticked.
-- **arrow spacing** — the dialog's slider under Directional arrow lines, 3 to 12, scaling the distance from one arrow's middle to the next's (`spacing * 8 * (thickness / 5) ** 0.2` cell units), saved under
+- **arrow spacing** — the dialog's slider under Directional arrow lines, 3 to 12, scaling the distance from one arrow's middle to the next's (which also grows slowly with the thickness), saved under
   `PenColor_arrowspacing`, default 5. A draft until Save; it redraws the arrow lines already drawn. Each cell's segment fits whole arrows to it.
 - **dash length** — the dialog's slider, 0 to 8 line widths, saved under `PenColor_dash`, giving how long each dash of a dashed
   page's lines is. 3 is the default and 0 is dots; a dash scales with the thickness and changes lines already drawn. A dash too long for a cell's line to hold a gap
@@ -106,7 +106,7 @@
   page 1, or SudokuPad default colors with no page 1 to read.
 - **arrow line** — a line drawn with a page 3 pen: a line, as wide as a page 1 line, with a run of filled triangles (its arrows, in the pen's color) along it, pointing the way the line was
   dragged. Only lines are arrow lines; a cell circle, cross, edge mark or corner mark in a page 3 pen is solid. Not a **direction arrow**, the `>` `<` `^` `v` mark a click on a cell edge cycles through. Its arrows' size and
-  spacing scale with the thickness from the default up (an arrow is never smaller than at 5, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole arrows, half a space in from
+  spacing scale with the thickness from the default up (the heads shrink a little slower than the line below 5 and grow slower above it, while the line under them is always the thickness itself), and it follows the opacity. Each cell's segment fits whole arrows, half a space in from
   each end, so a run reads as one across a cell boundary.
 - **direction character** — a page 3 pen is two color characters, since a pen value has no direction: the one on its button
   (`j`, `l`, `n`, `p`, `r`, `t`, `v`, `x`, `z`) for a line dragged the way SudokuPad draws the value (right, down, up and right for `d`,
@@ -134,7 +134,7 @@
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
   rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is the chosen page color (black by default) outside it.
-- **swatch** — also, in Pen Tool Extras, the picture on a pen color button: page 1 a solid line, page 2 a dashed line, page 3 a line and two arrows, cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
+- **swatch** — also, in Pen Tool Extras, the picture on a pen color button: page 1 a solid line, page 2 a dashed line, page 3 a line and its arrows, cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
 - **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per

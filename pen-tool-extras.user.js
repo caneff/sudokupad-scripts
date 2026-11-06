@@ -34,7 +34,7 @@
   const THICKNESS = { min: 1, max: 16, step: 1, fallback: 5 }
   // A page 2 dash's length in line widths; 0 draws dots.
   const DASH = { min: 0, max: 8, step: 1, fallback: 3 }
-  // Scales the distance between two page 3 arrows' middles, which is `spacing * 8 * (thickness / 5) ** 0.2` cell units (see `arrowGapOf`); 5 gives a run of arrows rather than a solid row.
+  // Scales the distance between two page 3 arrows' middles (see `arrowGapOf`); 5 gives a run of arrows rather than a solid row.
   const ARROW_SPACING = { min: 3, max: 12, step: 1, fallback: 5 }
   // SudokuPad draws every pen mark with `.cell-pen { opacity: 0.8 }` (tool-pen.css), so 80 leaves the marks as they are; 20 is the floor where a mark still shows.
   const OPACITY = { min: 20, max: 100, step: 5, fallback: 80 }
@@ -1018,7 +1018,7 @@
 
   const pointText = ([x, y]) => `${Math.round(x * 100) / 100} ${Math.round(y * 100) / 100}`
 
-  // The heads shrink with the line, a little slower than it (80 % of the old size at the default thickness); the gap between arrows grows with it more slowly still.
+  // The heads shrink with the line, a little slower than it (0.8 times the thickness at the default thickness); the gap between arrows grows with it more slowly still.
   const arrowHeadScaleOf = (thickness) => 0.8 * THICKNESS.fallback * (thickness / THICKNESS.fallback) ** 0.8
   const arrowGapOf = (thickness, spacing) => spacing * 8 * (thickness / THICKNESS.fallback) ** 0.2
 
@@ -1029,7 +1029,7 @@
     const [ux, uy] = [(to[0] - from[0]) / length, (to[1] - from[1]) / length]
     const headScale = arrowHeadScaleOf(thickness) * shrink
     const [half, wide] = [ARROW_LINE.halfLength * headScale, ARROW_LINE.halfWidth * headScale]
-    // Every segment holds at least one arrow, however wide the spacing and thick the pen (a cell side rounds to none at the top of both), so a line never loses its direction.
+    // Every segment holds at least one arrow, so a line never loses its direction.
     const count = Math.max(1, Math.round(length / (arrowGapOf(thickness, spacing) * shrink)))
     let arrows = ''
     for (let i = 0; i < count; i++) {

@@ -1639,7 +1639,7 @@ test('the line under the arrows is as thick as a page 1 line at every slider val
   }
 })
 
-test('the arrow sizes are the ruled ones: base 2.125 line widths out to each side, 2.875 long, one spacing of 5', () => {
+test('the arrow sizes are the ruled ones: halfWidth 2.125 and halfLength 1.4375 of the head scale, one spacing of 5', () => {
   assert.deepEqual([ARROW_LINE.halfWidth, 2 * ARROW_LINE.halfLength, ARROW_LINE.line, ARROW_SPACING.fallback], [2.125, 2.875, 1, 5])
 })
 
@@ -1734,7 +1734,7 @@ test('the outline filter grows and blurs more for a wider outline', () => {
   assert.equal(squareOf(1) < squareOf(3) && squareOf(3) < squareOf(8), true, `${squareOf(1)}, ${squareOf(3)}, ${squareOf(8)}`)
 })
 
-test('arrow spacing runs 3 to 12 line widths in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
+test('arrow spacing runs 3 to 12 in whole steps and starts at 5, and the arrow spacing setting keeps a saved whole number in range', () => {
   assert.deepEqual(ARROW_SPACING, { min: 3, max: 12, step: 1, fallback: 5 })
   for (const ok of [3, 5, 12]) assert.equal(SETTINGS.arrowSpacing.normalize(ok), ok)
   for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.normalize(bad), 5, JSON.stringify(bad))

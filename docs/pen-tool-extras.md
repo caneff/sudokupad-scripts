@@ -128,9 +128,9 @@ A dialog slider from 0 to 8 line widths, under Dashed lines, saved under `PenCol
 
 ### Arrow lines (page 3)
 
-- **Arrow spacing**, a dialog slider under Directional arrow lines, from 3 to 12 line widths from the middle of one arrow to the middle of the next, saved under `PenColor_arrowspacing`. The default is 5. Like Dash length it is a draft until Save, then redraws the lines already drawn.
-- Each cell's piece of a line is drawn with whole arrows, about three to a cell at thickness 5 and the default spacing, so a run reads as one across a cell boundary.
-- Each arrow is a triangle filled in the pen's color, sitting on the line and pointing the way you dragged: 2.125 line widths out to each side of the line's middle and 2.875 line widths long. The line under the arrows is as thick as a page 1 line at every Thickness. Arrows scale with Thickness from 5 up, so they stick out past the line at every value. Below 5 they keep their size at 5, so direction stays visible.
+- **Arrow spacing**, a dialog slider under Directional arrow lines, from 3 to 12, scaling the distance from the middle of one arrow to the middle of the next (which also grows slowly with Thickness), saved under `PenColor_arrowspacing`. The default is 5. Like Dash length it is a draft until Save, then redraws the lines already drawn.
+- Each cell's piece of a line is drawn with whole arrows, about two to a cell at thickness 5 and the default spacing, so a run reads as one across a cell boundary.
+- Each arrow is a triangle filled in the pen's color, sitting on the line and pointing the way you dragged: out to each side of the line's middle and about 0.7 times as long as wide. The line under the arrows is as thick as a page 1 line at every Thickness. Arrows scale with Thickness, a little slower than the line, so they stick out past it at every value.
 - They follow Opacity, and lines already drawn follow Thickness. They stay inside the rectangle Dark Page keeps at 16.
 - A drag that turns stores the right direction per segment and is one undo step. The replay and a reload keep it.
 - Dragging over a line erases it, whichever way either was drawn.
