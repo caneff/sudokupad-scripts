@@ -31,8 +31,8 @@ Read from the live tests' recording of sudokupad.app (`~/.cache/sudokupad-script
 - Features: Mark Solved Digits (On, Gradual, Count), Show Seen Cells, Compact Pencilmarks, Cell Copy/Paste, Copy
   Cells Button, Show Row/Col Labels, UI Theme, Layout (controls left, right, top or bottom), Background Image,
   Screenshot, Replay GIF, Create Short URL, Streaming Tools, Constraint Alert.
-- **Test Markup (Press: "M")**, an Experimental toggle (`feature-markup.js`, missed by the label grep above because its
-  setting is added in `handleInit`): holding M draws freehand on a fabric.js canvas over the whole page, one red brush 3
+- **Test Markup (Press: "M")**, an Experimental toggle (`feature-markup.js`, left out of the lists above when first written;
+  its setting is added in `handleInit`): holding M draws freehand on a fabric.js canvas over the whole page, one red brush 3
   wide (`C.BrushStyle`); C while drawing clears every stroke. No eraser, no per-stroke undo, nothing saved (not in the
   puzzle, the replay or the browser), and the canvas is in page pixels, not the board's. Read, not run. #268 wants a
   better one.
