@@ -10,6 +10,8 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
   `main` by design: Chris kept Netlify on 2026-11-05.
 - **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
 - **`GLOSSARY.md`**: the vocabulary.
+- **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
+  2026-11-06). A dark page means Dark Page.
 
 ## Agent skills
 
