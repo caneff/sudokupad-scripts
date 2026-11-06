@@ -98,7 +98,7 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
-// The details page text is pinned word for word: each feature says what you can do, not which control the script adds.
+// The details page text is pinned word for word: "What it adds" says what you can do, and "The pen panel" names each control.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
 const section = (page, heading) => {
   const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
@@ -115,46 +115,57 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-test(`${DETAILS} lists what the script adds, one item per feature`, () => {
+test(`${DETAILS} lists what the script adds to drawing, one item per feature`, () => {
   assert.deepEqual(section(read(DETAILS), 'What it adds'), [
-    'Pen colors from your cell colors. Darker versions of one cell color page, kept until you pick another in the settings. Hold a pen color button to change one.',
-    'Dashed lines and arrow lines. Two more pages of pens. Switch with the line type button.',
-    'A line mode button. Steps SudokuPad\'s line mode: Center &amp; Edge, Center only, Edge only.',
+    'Pen colors from your cell colors. Darker versions of one cell color page, kept until you pick another in the settings.',
+    'Dashed lines and arrow lines. Two more pages of pens.',
     'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
     'Erase a whole line. Middle-click a line to remove all of it.',
-    'Thicker, fainter or outlined lines. Two full-width sliders in the pen panel. A white outline keeps lines readable over colored cells.',
-    'A settings button. In the pen panel, beside the line mode and line type buttons.'
+    'White outlines. An outline keeps lines readable over colored cells.'
   ])
 })
 
-test(`${DETAILS} opens each feature with its bold lead-in`, () => {
-  assert.deepEqual(leadIns(read(DETAILS)).slice(0, 8), [
+test(`${DETAILS} lists every pen panel button and slider in The pen panel`, () => {
+  assert.deepEqual(section(read(DETAILS), 'The pen panel'), [
+    'Pen color buttons. Hold one to change its color.',
+    'Line type button. Switches between the solid, dashed and arrow pens.',
+    'Line mode button. Steps SudokuPad\'s line mode: Center &amp; Edge, Center only, Edge only.',
+    'Settings button. Opens the Pen Tool Extras settings.',
+    'Thickness and Opacity sliders. Across the bottom of the panel, for thicker or fainter lines.'
+  ])
+})
+
+test(`${DETAILS} opens each item with its bold lead-in`, () => {
+  assert.deepEqual(leadIns(read(DETAILS)), [
     'Pen colors from your cell colors.',
     'Dashed lines and arrow lines.',
-    'A line mode button.',
     'Marks on cell edges.',
     'Marks on grid corners.',
     'Erase a whole line.',
-    'Thicker, fainter or outlined lines.',
-    'A settings button.'
+    'White outlines.',
+    'Pen color buttons.',
+    'Line type button.',
+    'Line mode button.',
+    'Settings button.',
+    'Thickness and Opacity sliders.'
   ])
 })
 
-// Each feature a still picture can show has one picture inside its item; the erase item has none, since a
-// middle click does not show in a still picture. The page has no figure.
+// The items listed here have one picture inside them; every other item has none (a middle click, for one, does not
+// show in a still picture). The page has no figure.
 const PICTURES = {
   'Pen colors from your cell colors.': 'colors',
   'Dashed lines and arrow lines.': 'lines',
   'Marks on cell edges.': 'edges',
   'Marks on grid corners.': 'corners',
-  'Thicker, fainter or outlined lines.': 'sliders',
-  'A settings button.': 'settings'
+  'Settings button.': 'settings',
+  'Thickness and Opacity sliders.': 'sliders'
 }
 const NO_PICTURE = 'Erase a whole line.'
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
 
-test(`${DETAILS} puts one picture with alt text on each feature a picture can show`, () => {
+test(`${DETAILS} puts one picture with alt text on each item in PICTURES`, () => {
   const byLeadIn = new Map(items(read(DETAILS)).map(li => [leadIn(li), li]))
   for (const [leadIn, name] of Object.entries(PICTURES)) {
     const found = imgs(byLeadIn.get(leadIn) || '')
