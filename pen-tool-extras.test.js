@@ -11,7 +11,7 @@ const {
   SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
@@ -996,7 +996,7 @@ const dashArrayOf = (svg) => /stroke-dasharray='([\d. ]+)'/.exec(svg)[1].split('
 test('the page button shows the picture of the page it turns to, slanted 35 degrees, and a dot for each page with the current one filled', () => {
   for (const [current, next] of [[0, 1], [1, 2], [2, 0]]) {
     const icon = renderPageIcon(current, 3, BOTH_STYLES)
-    assert.ok(icon.includes(pageSwatch(PEN_PAGES[next], 3, 35)), `from page ${current + 1}`)
+    assert.ok(icon.includes(pageSwatch(PEN_PAGES[next], 3, PAGE_BUTTON_ANGLE)), `from page ${current + 1}: ${icon}`)
     assert.match(icon, new RegExp(`data-page-sample="${next + 1}"`))
     assert.equal((icon.match(/<circle/g) || []).length, 3)
     assert.equal((icon.match(/data-page-dot="filled"/g) || []).length, 1)
@@ -1004,13 +1004,15 @@ test('the page button shows the picture of the page it turns to, slanted 35 degr
   }
   assert.match(renderPageIcon(0, 3, BOTH_STYLES), /<circle[^>]*data-page-dot="filled"[^>]*\/>[^]*<circle[^>]*data-page-dot="outline"/)
   assert.match(renderPageIcon(2, 3, BOTH_STYLES), /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
-  assert.match(pageSwatch(PEN_PAGES[1], 3, 35), /rotate\(-35 12 12\)/)
+  assert.equal(PAGE_BUTTON_ANGLE, 35)
+  assert.match(pageSwatch(PEN_PAGES[1], 3, PAGE_BUTTON_ANGLE), /rotate\(-35 12 12\)/)
   assert.match(pageSwatch(PEN_PAGES[1], 3, 0), /rotate\(0 12 12\)/)
 })
 
 test('the page button shows dots at dash 0 and dashes as long as the setting from there', () => {
   const sampleOf = (dash) => renderPageIcon(0, dash, BOTH_STYLES)
   assert.equal(dashArrayOf(sampleOf(0))[0], 0)
+  assert.match(sampleOf(0), /stroke-linecap='round'/, 'a zero-length dash is a dot only with a round cap')
   const [short, long] = [dashArrayOf(sampleOf(1))[0], dashArrayOf(sampleOf(4))[0]]
   assert.equal(short > 0 && long > short, true, `dashes ${short} and ${long}`)
 })
@@ -1188,11 +1190,11 @@ test('the missing-color note names the page the colors came from and the pens th
 
 test('the page button turns to the next enabled page and has a dot for each enabled page only', () => {
   const noDash = renderPageIcon(0, 3, { dashed: false, arrows: true })
-  assert.ok(noDash.includes(pageSwatch(PEN_PAGES[2], 3, 35)))
+  assert.ok(noDash.includes(pageSwatch(PEN_PAGES[2], 3, PAGE_BUTTON_ANGLE)), noDash)
   assert.equal((noDash.match(/<circle/g) || []).length, 2)
   assert.equal((noDash.match(/data-page-dot="filled"/g) || []).length, 1)
   const noArrows = renderPageIcon(1, 3, { dashed: true, arrows: false })
-  assert.ok(noArrows.includes(pageSwatch(PEN_PAGES[0], 3, 35)))
+  assert.ok(noArrows.includes(pageSwatch(PEN_PAGES[0], 3, PAGE_BUTTON_ANGLE)), noArrows)
   assert.equal((noArrows.match(/<circle/g) || []).length, 2)
   assert.match(noArrows, /<circle[^>]*data-page-dot="outline"[^>]*\/>[^]*<circle[^>]*data-page-dot="filled"/)
 })
