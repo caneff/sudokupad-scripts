@@ -11,16 +11,16 @@
     :root { --rule: #555; }
   }
   .entries { display: grid; grid-template-columns: 1fr; gap: 1px; margin: 1.5rem 0; background: var(--rule); border-block: 1px solid var(--rule); }
-  section { display: flex; gap: 1.25rem; align-items: flex-start; padding: 1.25rem 1rem 1rem 0; background: Canvas; }
-  section img { flex: none; max-width: 50%; height: auto; }
+  section { display: flow-root; padding: 1.25rem 1rem 1rem 0; background: Canvas; }
+  section img { float: left; max-width: 50%; height: auto; margin: 0 1.25rem .5rem 0; }
   @media (min-width: 52rem) {
     .entries { grid-template-columns: 1fr 1fr; }
     section { padding-left: 1rem; }
     section:last-child:nth-child(odd) { grid-column: 1 / -1; }
   }
   @media (max-width: 36rem) {
-    section { flex-direction: column; gap: .75rem; padding-left: 0; }
-    section img { max-width: 100%; }
+    section { padding-left: 0; }
+    section img { float: none; display: block; max-width: 100%; margin: 0 0 .75rem; }
   }
 </style>
 </head>
@@ -63,10 +63,10 @@
     </div>
   </section>
   <section>
-    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/site-auto-rules-resizer.png" alt="A puzzle's long rules before and after: before, they scroll; after, the pane is wider and shows them all" width="445" height="401">
+    <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/site-auto-rules-resizer.png" alt="A puzzle's long rules in a wider pane that shows them all, with the f+ and f- buttons above it and a drag corner at each end" width="669" height="343">
     <div>
       <h2>Auto Rules Resizer</h2>
-      <p>Fits the rules to your screen in landscape: the rules pane keeps SudokuPad's width and its text grows as large as fits, never smaller than SudokuPad's own. Only rules too long to fit at SudokuPad's size widen the pane, and only as far as they need. Rules too long still scroll. The f+ and f- buttons and the corners show when the pointer is over the pane: f+ and f- change the text size, and the corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height, and keeps those two numbers. The font size and a drag are not saved, so a reload starts fresh.</p>
+      <p>Fits the rules to your screen in landscape: the text grows as large as fits, and the pane widens only as far as long rules need. The f+ and f- buttons and the drag corners show when the pointer is over the pane.</p>
       <p>Thanks to Nell Gwynn, whose resizing scripts this grew from.</p>
       <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js">Install Auto Rules Resizer</a></p>
     </div>
