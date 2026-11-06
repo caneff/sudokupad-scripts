@@ -1,5 +1,5 @@
 // Takes docs/research/settings-group-names.png (the Experimental group with all five scripts
-// installed, each entry a plain name) and docs/research/settings-dialog-version.png (Digit color's
+// installed, each entry a plain name) and docs/research/settings-dialog-version.png (Digit Color's
 // dialog, its version as small text beside the heading). Run from the repo root:
 // node docs/research/settings-dialog-version-screenshot.mjs
 import { chromium } from 'playwright'

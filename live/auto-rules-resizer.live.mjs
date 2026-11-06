@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { settle, stable } from './settle.mjs'
-import { closeDialogWith, headerVersion, openScriptDialog } from './settings.mjs'
+import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
 
 const script = readFileSync(new URL('../auto-rules-resizer.user.js', import.meta.url), 'utf8')
 
@@ -315,7 +315,11 @@ describe('the max auto width and height', { concurrency: false }, () => {
 
     it('opens from the settings entry with both boxes empty, and typing in a box enters no digit on the board', async () => {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
-      await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
+      const entry = (await openSettings(p)).locator('button').filter({ hasText: 'Rules Resizer' })
+      assert.equal((await entry.textContent()).trim(), 'Rules Resizer')
+      await entry.click()
+      await p.locator(MAX_WIDTH_INPUT).waitFor({ state: 'visible' })
+      assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Rules Resizer')
       assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
