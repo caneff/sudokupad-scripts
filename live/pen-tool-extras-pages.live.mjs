@@ -96,7 +96,7 @@ function group (title, extra = []) {
       await context.close()
     })
 
-    it('the pen tool starts on page 1: SudokuPad\'s own 1 to 9, pen 1 selected, a page button at the right end of the last row', async () => {
+    it('the pen tool starts on page 1: SudokuPad\'s own 1 to 9, pen 1 selected, a page button in the controls row', async () => {
       assert.equal(await padValues(p), PAGE_ONE)
       assert.equal(await selected(), '1')
       assert.equal(await currentButtonKey(), '1')

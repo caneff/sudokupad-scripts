@@ -986,7 +986,7 @@ test('the page button shows the picture of the page it turns to, slanted 35 degr
 test('the page button shows dots at dash 0 and dashes as long as the setting from there', () => {
   const sampleOf = (dash) => renderPageIcon(0, dash, BOTH_STYLES)
   assert.equal(dashArrayOf(sampleOf(0))[0], 0)
-  assert.match(sampleOf(0), /stroke-linecap="round"/, 'a zero-length dash is a dot only with a round cap')
+  assert.match(sampleOf(0), /stroke-linecap='round'/, 'a zero-length dash is a dot only with a round cap')
   const [short, long] = [dashArrayOf(sampleOf(1))[0], dashArrayOf(sampleOf(4))[0]]
   assert.equal(short > 0 && long > short, true, `dashes ${short} and ${long}`)
 })
@@ -1433,7 +1433,7 @@ test('the tray is #efeaf4 with 14px corners, reaches 0.25rem past the color bloc
   assert.match(tray, /margin: 0\.5rem -0\.25rem 0;/)
   assert.match(tray, /grid-row: 4 \/ 6; grid-column: 1 \/ 4;/)
   assert.match(tray, /position: absolute; inset: 0;/)
-  assert.equal(PANEL_CSS.includes('.tool-pen .controls-input:not(:has(.pen-tool-extras-sliders)) .pen-tool-extras-tray { grid-row: 4; }'), true, 'with no sliders the tray ends under the controls')
+  assert.equal(PANEL_CSS.includes('.tool-pen .controls-input:not(:has(.pen-tool-extras-sliders)) .pen-tool-extras-tray { grid-row: 4 / 5; margin-bottom: -0.25rem; }'), true, 'with no sliders the tray ends under the controls, with an end line since a box placed by its start alone runs to the panel\'s edge')
 })
 
 test('the sliders block spans the three columns of the fifth grid row, with the buttons\' margin and 0.4rem below, over a real button for its box', () => {
@@ -1458,12 +1458,24 @@ test('the settings button is a button named Pen Tool Extras settings, drawing an
   assert.match(PANEL_CSS, /\.pen-tool-extras-settings path, \.pen-tool-extras-settings circle \{ fill: none !important; \}/)
 })
 
-test('each control icon is drawn from a viewBox that is square, so the icon keeps its shape in its square box', () => {
-  const boxes = [renderLineModeButton('both'), renderSettingsButton(), ...[0, 1, 2].map((page) => renderPageIcon(page, 3, BOTH_STYLES))]
-    .map((html) => /viewBox="([^"]+)"/.exec(html)[1].split(' ').map(Number))
-  boxes.forEach(([x, y, w, h]) => assert.equal(w, h, `${x} ${y} ${w} ${h}`))
-  // Each icon's correction differs from the plain 24 box by a few units, whatever the page it shows.
-  assert.equal(new Set(boxes.map((box) => box.join(' '))).size, boxes.length)
+test('each control icon is drawn from a square viewBox that is not the plain 24 box, for every picture an icon shows', () => {
+  const icons = [...LINE_MODES.map(([mode]) => renderLineModeButton(mode)), renderSettingsButton(), ...PEN_PAGES.map((_, page) => renderPageIcon(page, 3, BOTH_STYLES))]
+  assert.equal(icons.length, 7)
+  icons.forEach((html) => {
+    const box = /viewBox="([^"]+)"/.exec(html)[1]
+    const [, , w, h] = box.split(' ').map(Number)
+    assert.equal(w, h, box)
+    assert.notEqual(box, '0 0 24 24', 'the icon carries its measured correction')
+  })
+})
+
+test('every page has a measured icon viewBox, so the line type button never shows viewBox="undefined"', () => {
+  PEN_PAGES.forEach((_, page) => assert.doesNotMatch(renderPageIcon(page, 3, BOTH_STYLES), /viewBox="undefined"/, `page ${page + 1}`))
+})
+
+test('Keypad Flipped swaps the rows of colors by grid row, since its transform on each button row has no box here', () => {
+  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input button\\[data-key="${key}"\\] \\{ grid-row: (\\d); \\}`).exec(PANEL_CSS)[1]
+  assert.deepEqual([1, 2, 3, 7, 8, 9].map(rule), ['3', '3', '3', '1', '1', '1'])
 })
 
 test('the thickness track is a wedge wider at the right than at the left, and the opacity track fades from faint to solid', () => {

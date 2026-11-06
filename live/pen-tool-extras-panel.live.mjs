@@ -110,8 +110,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await p.locator('.penlinemode').isVisible(), false)
     const [mode, page, settings] = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-page', '.pen-tool-extras-settings'].map((s) => p.locator(s).boundingBox()))
     assert.equal(mode.x + mode.width <= page.x && page.x + page.width <= settings.x, true, JSON.stringify({ mode, page, settings }))
-    assert.equal(mode.y === page.y && page.y === settings.y, true)
-    assert.equal(Math.abs(mode.width - page.width) < 1 && Math.abs(mode.height - page.height) < 1 && Math.abs(mode.width - settings.width) < 1, true, JSON.stringify({ mode, page, settings }))
+    assert.deepEqual([mode.y, settings.y], [page.y, page.y], 'one row')
+    assert.deepEqual([mode.width, settings.width, mode.height, settings.height].map((v) => Math.round(v)), [page.width, page.width, page.height, page.height].map((v) => Math.round(v)), 'one size')
   })
 
   it('the sliders block\'s box is styled like a pen button', async () => {

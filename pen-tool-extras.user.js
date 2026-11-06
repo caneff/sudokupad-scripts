@@ -857,7 +857,7 @@
     const dots = pages.map((page, i) =>
       `<circle cx="${20 - 3 * (pages.length - i - 1)}" cy="3" r="1.1" data-page-dot="${page === current ? 'filled' : 'outline'}"${page === current ? '' : ' fill="none"'}/>`)
     return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="${PAGE_ICON_VIEWBOX[next]}">` +
-      `<g data-page-sample="${next + 1}" ${SWATCH_PAINT.replace(/'/g, '"')}>${swatchPicture(PEN_PAGES[next], dash, PAGE_BUTTON_ANGLE)}</g>` +
+      `<g data-page-sample="${next + 1}" ${SWATCH_PAINT}>${swatchPicture(PEN_PAGES[next], dash, PAGE_BUTTON_ANGLE)}</g>` +
       `<g stroke="currentColor" fill="currentColor" stroke-width="0.5">${dots.join('')}</g></svg>`
   }
 
@@ -1017,7 +1017,7 @@
   // The dash layout was worked out at width 2. The width 3 round caps add 0.5 to each end of a dash, so each dash is 1 shorter and each gap 1 longer to show the same gaps, and
   // the offset moves by half of that to keep each dash centred. A dot (a dash of 0) cannot be shorter.
   const SWATCH_PATTERN_WIDTH = 2
-  // Two heads a quarter and three quarters along the line, at the scale that sticks out 2.4 past the width 3 line (the one head stuck out 2.4 past width 2), whatever the arrow spacing.
+  // Two heads a quarter and three quarters along the line, at the scale that sticks out 2.4 past the width 3 line, whatever the arrow spacing.
   const SWATCH_ARROW_SCALE = 0.4588
   function swatchDashes (dash) {
     const { on, gap } = dashPattern(SWATCH_PATTERN_WIDTH, dash, SWATCH_LINE.to - SWATCH_LINE.from)
@@ -1664,6 +1664,9 @@
   const COLOR_CELL_REM = rem(COLOR_BUTTON_REM + 2 * PANEL_BUTTON_MARGIN_REM)
   const PANEL_HEIGHT_REM = 4 * PANEL_CELL_REM
   const PANEL_COLUMNS = 3
+  const COLOR_ROWS = 3
+  const CONTROLS_ROW = COLOR_ROWS + 1
+  const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
   const TRAY_COLOR = '#efeaf4'
   const TRAY_RADIUS_PX = 14
@@ -1693,15 +1696,18 @@
   const controlButtons = CONTROL_BUTTONS.map((name) => `.tool-pen .controls-input button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
-    `.tool-pen .controls-input { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(3, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; }`,
+    `.tool-pen .controls-input { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; }`,
     '.tool-pen .controls-input > .button-row { display: contents !important; }',
     '.tool-pen .controls-input button[data-key="0"], .tool-pen .controls-input button[data-control="delete"] { display: none !important; }',
     `.tool-pen .controls-input button[data-key] { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
-    `${controlButtons} { grid-row: 4; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     ...CONTROL_BUTTONS.map((name, i) => `.tool-pen .controls-input button.${name} { order: ${i + 1}; }`),
-    `.${TRAY} { grid-row: 4 / 6; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
-    `.tool-pen .controls-input:not(:has(.${SLIDERS})) .${TRAY} { grid-row: 4; }`,
-    `.${SLIDERS} { grid-row: 5; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
+    `.${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
+    // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
+    `.tool-pen .controls-input:not(:has(.${SLIDERS})) .${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
+    // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
+    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad .tool-pen .controls-input button[data-key="${key}"] { grid-row: ${row}; }`)),
+    `.${SLIDERS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
     `.tool-pen .controls-input button.${SLIDERS_BOX} { position: absolute; z-index: -1; inset: 0; width: auto; height: auto; margin: 0; padding: 0; background-color: var(--body-bg); pointer-events: none; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
     `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
@@ -1724,8 +1730,8 @@
     edge: '<path data-line="edge" d="M3 12H12V21"/>'
   }
   // Each icon is drawn at one size, 34 px on the longest side of its visible ink, centred on its ink, at 1200x900 (docs/research/pen-tool-extras-panel-redesign-mockup.png). The
-  // corrections were measured from rendered pixels and live in the viewBox of each icon (see live/pen-tool-extras-panel-layout.live.mjs).
-  const MODE_ICON_VIEWBOX = '-0.62 -0.8 25.059 25.059'
+  // corrections were measured from rendered pixels, one for each picture an icon can show, and live in its viewBox (live/pen-tool-extras-panel-layout.live.mjs measures them again).
+  const MODE_ICON_VIEWBOX = { both: '-0.62 -0.8 25.059 25.059', centeronly: '0.25 -0.57 24 24', edgeonly: '-0.54 -0.7 24.882 24.882' }
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }
 
@@ -1739,7 +1745,7 @@
     const mode = normalizeLineMode(lineMode)
     const label = LINE_MODES.find(([value]) => value === mode)[1].replace('&', '&amp;')
     return `<button class="${MODE_BUTTON}" data-control="penlinemode-step" data-mode="${mode}" title="${label}" aria-label="${label}">` +
-      `<svg viewBox="${MODE_ICON_VIEWBOX}" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>` +
+      `<svg viewBox="${MODE_ICON_VIEWBOX[mode]}" fill="none" stroke="currentColor" aria-hidden="true"><path data-grid d="M3 3h18v18H3zM12 3v18M3 12h18" stroke-opacity="0.55" stroke-width="1"/>` +
       `<g stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${MODE_ICON_SHOWS[mode].map((name) => MODE_ICON_LINES[name]).join('')}</g></svg></button>`
   }
 
@@ -1833,7 +1839,7 @@
       const markup = renderPanelSliders(inForce.thickness, inForce.opacity, inForce.show)
       const sliders = document.querySelector(`.${SLIDERS}`)
       if (!markup && sliders) sliders.remove()
-      if (markup && !sliders) mode.insertAdjacentHTML('afterend', markup)
+      if (markup) syncPart(mode, `.${SLIDERS}`, markup)
       syncPart(mode, `.${TRAY}`, `<div class="${TRAY}"></div>`)
       syncPart(mode, `.${SETTINGS_BUTTON}`, renderSettingsButton())
       syncModeButton(mode)

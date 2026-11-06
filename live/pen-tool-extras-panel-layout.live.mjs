@@ -8,17 +8,17 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { openPenTool } from './pen.mjs'
+import { dialogButton, openExtrasEditor } from './settings.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
-// The panel before #254, measured on this recording at 1200x900: x, y, width, height of `.controls-input`.
-const TODAY = { x: 724, y: 412.9, width: 212.76, height: 283.65 }
+// The panel's outer rectangle that SudokuPad gives it, measured on this recording at 1200x900: x, y, width, height of `.controls-input`.
+const OUTER = { x: 724, y: 412.9, width: 212.76, height: 283.65 }
 const KEY_PX = 65.98
 const NEAR_PX = 0.5
 const ICON_INK_PX = 34
 // The ink of an icon is read at this device scale, so a screenshot pixel is a quarter of a layout pixel.
 const SHOT_SCALE = 4
-const DEVICE_PIXEL_RATIO = SHOT_SCALE
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -32,7 +32,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
   const near = (actual, wanted, what) => assert.equal(Math.abs(actual - wanted) <= NEAR_PX, true, `${what}: ${actual} vs ${wanted}`)
 
   before(async () => {
-    ;({ context, p } = await openPage(browser, { contextOptions: { deviceScaleFactor: DEVICE_PIXEL_RATIO } }))
+    ;({ context, p } = await openPage(browser, { contextOptions: { deviceScaleFactor: SHOT_SCALE } }))
     await startPuzzle(p, { beforeStart: () => p.evaluate(() => Framework.setSetting('toolpen', true)) })
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
@@ -43,7 +43,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
 
   it('the panel keeps its outer rectangle, 3 columns at the keys\' width, 284 px tall, within half a pixel', async () => {
     const panel = await rect('.tool-pen .controls-input')
-    for (const side of ['x', 'y', 'width', 'height']) near(panel[side], TODAY[side], side)
+    for (const side of ['x', 'y', 'width', 'height']) near(panel[side], OUTER[side], side)
   })
 
   it('the nine color buttons are 2.5rem tall, 4rem wide, three to a row, with 2.4 px margins and position relative', async () => {
@@ -56,8 +56,9 @@ describe('the pen panel layout', { concurrency: false }, () => {
       near(r.height, KEY_PX * 2.5 / 4, `key ${n} height`)
     }
     const [k1, k2, k3, k4, k7] = await Promise.all([1, 2, 3, 4, 7].map(key))
-    assert.equal(k1.y === k2.y && k2.y === k3.y, true, 'keys 1 to 3 share a row')
-    assert.equal(k1.x === k4.x && k4.y > k1.y, true, 'key 4 starts the next row')
+    assert.deepEqual([k1.y, k3.y], [k2.y, k2.y], 'keys 1 to 3 share a row')
+    assert.equal(k4.x, k1.x, 'key 4 starts under key 1')
+    assert.equal(k4.y > k1.y, true, 'key 4 is in the next row')
     near(k7.y - k4.y, k4.y - k1.y, 'rows are evenly spaced')
   })
 
@@ -141,10 +142,12 @@ describe('the pen panel layout', { concurrency: false }, () => {
     near(i.top + (i.y0 + i.y1) / 2, button.y + button.height / 2, `${what}: ink centre down`)
   }
 
-  // Center only draws less ink than the other two (its line is thinner than the edge line, which reaches past the faint grid), so only the default mode is held to 34 px.
-  it('the line mode icon is 34 px on its longest side and centred on its ink, in the default mode, Center & Edge', async () => {
+  it('the line mode icon is 34 px on its longest side and centred on its ink, in each of the three modes', async () => {
     assert.equal(await p.locator('.pen-tool-extras-mode').getAttribute('title'), 'Center & Edge')
-    await checkInk('.pen-tool-extras-mode', 'mode Center & Edge')
+    for (let n = 0; n < 3; n++) {
+      await checkInk('.pen-tool-extras-mode', `mode ${await p.locator('.pen-tool-extras-mode').getAttribute('title')}`)
+      await p.locator('.pen-tool-extras-mode').click()
+    }
   })
 
   it('the settings icon is 34 px on its longest side and centred on its ink', async () => {
@@ -159,5 +162,38 @@ describe('the pen panel layout', { concurrency: false }, () => {
       await p.locator('.pen-tool-extras-page').click()
     }
     assert.deepEqual([...shown].sort(), ['1', '2', '3'])
+  })
+
+  const setSliderBoxes = async (shown) => {
+    await openExtrasEditor(p)
+    for (const key of ['thickness', 'opacity']) await p.locator(`#pen-tool-extras-editor input[data-box="show.${key}"]`).setChecked(shown)
+    await dialogButton(p, 'Save').click()
+    await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
+  }
+
+  it('with both sliders hidden, the tray ends under the controls with the same 6.6 px of padding on every side', async () => {
+    await setSliderBoxes(false)
+    try {
+      await p.locator('.pen-tool-extras-sliders').waitFor({ state: 'detached' })
+      const [tray, mode, settings] = await Promise.all([rect('.pen-tool-extras-tray'), rect('.pen-tool-extras-mode'), rect('.pen-tool-extras-settings')])
+      const padding = { top: mode.y - tray.y, left: mode.x - tray.x, right: tray.right - settings.right, bottom: tray.bottom - mode.bottom }
+      for (const [side, value] of Object.entries(padding)) near(value, 6.6, `padding ${side}`)
+    } finally {
+      await setSliderBoxes(true)
+    }
+  })
+
+  // SudokuPad's Keypad Flipped setting swaps the first and third rows of colors.
+  it('with Keypad Flipped on, keys 7 to 9 are the top row and keys 1 to 3 the third, and the controls and the sliders stay where they were', async () => {
+    const before = await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-sliders'].map(rect))
+    await p.evaluate(() => Framework.setSetting('flipkeypad', true))
+    try {
+      await p.locator('body.setting-flipkeypad').waitFor()
+      const [k1, k4, k7] = await Promise.all([1, 4, 7].map(key))
+      assert.equal(k7.y < k4.y && k4.y < k1.y, true, JSON.stringify({ k7: k7.y, k4: k4.y, k1: k1.y }))
+      assert.deepEqual(await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-sliders'].map(rect)), before)
+    } finally {
+      await p.evaluate(() => Framework.setSetting('flipkeypad', false))
+    }
   })
 })
