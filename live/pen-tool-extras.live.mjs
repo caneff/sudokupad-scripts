@@ -482,7 +482,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await widths(1)(), [5])
       assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
       await openPenTool(p)
-      assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '1', '5'])
+      assert.deepEqual(await slider().evaluate((el) => [el.min, el.max, el.step, el.value]), ['1', '16', '0.5', '5'])
     })
 
     it('moving the slider scales lines, circles, crosses and edge marks by one factor, live, and saves it with no Save', async () => {
@@ -569,7 +569,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('corrupt saved thickness falls back to 5, the settings entry still opens the dialog, and nothing throws', async () => {
       const errorsBefore = errors.length
-      for (const bad of ['{not json', '"9"', '99', '0', '2.5', '[7]', 'null']) {
+      for (const bad of ['{not json', '"9"', '99', '0', '2.25', '[7]', 'null']) {
         await plantUnchecked(p, THICKNESS_KEY, bad)
         await reload()
         assert.deepEqual(await settle(allWidths, { full: [5], half: [2.5] }), { full: [5], half: [2.5] }, bad)

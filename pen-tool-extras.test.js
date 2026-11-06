@@ -351,16 +351,33 @@ test('editedColors refuses a pen color or a value it cannot save, rather than sa
   assert.throws(() => editedColors(TABLE, '4', '#abc'), RangeError)
 })
 
-test('the thickness runs 1 to 16 in whole steps from SudokuPad\'s own pen width of 5', () => {
-  assert.deepEqual(THICKNESS, { min: 1, max: 16, step: 1, fallback: 5 })
+test('the thickness runs 1 to 16 in half steps from SudokuPad\'s own pen width of 5', () => {
+  assert.deepEqual(THICKNESS, { min: 1, max: 16, step: 0.5, fallback: 5 })
 })
 
-test('the thickness setting keeps a saved whole number from 1 to 16', () => {
-  for (const ok of [1, 5, 8, 12, 16]) assert.equal(SETTINGS.thickness.normalize(ok), ok)
+test('the thickness setting keeps a saved whole or half number from 1 to 16 unchanged', () => {
+  for (const ok of [1, 1.5, 2.5, 5, 8, 12.5, 15.5, 16]) {
+    assert.equal(SETTINGS.thickness.normalize(ok), ok)
+    assert.equal(SETTINGS.thickness.accepts(ok), true, String(ok))
+  }
+})
+
+test('a half-step thickness is saved as it is, not rounded', () => {
+  const calls = []
+  saveSetting({ setData: (key, value) => calls.push([key, value]), removeData: () => {} }, SETTINGS.thickness, 1.5)
+  assert.deepEqual(calls, [['PenColor_thickness', 1.5]])
+})
+
+test('inRange takes any multiple of the step from the minimum, and a whole-number range stays whole', () => {
+  assert.equal(inRange(2.5, THICKNESS), true)
+  assert.equal(inRange(2.25, THICKNESS), false)
+  assert.equal(inRange(2.5, DASH), false)
+  assert.equal(inRange(2.5, OPACITY), false)
+  assert.equal(inRange(22, OPACITY), false)
 })
 
 test('the thickness setting falls back to 5 for nothing saved and for anything untrusted', () => {
-  for (const bad of [null, undefined, 0, 17, -3, 2.5, NaN, Infinity, '7', [7], { a: 7 }, true]) {
+  for (const bad of [null, undefined, 0, 0.5, 16.5, 17, -3, 2.25, 1.75, 2.4, NaN, Infinity, '7', [7], { a: 7 }, true]) {
     assert.equal(SETTINGS.thickness.normalize(bad), 5, String(bad))
   }
 })
@@ -1197,7 +1214,7 @@ test('Line settings: Thickness and Opacity each have a sub-line under them, a bo
 
 test('the dialog always holds the thickness, opacity, dash, arrow spacing and outline width sliders, at the values in force, whether or not the panel shows them', () => {
   const html = renderEditor(editorState({ thickness: 9, opacity: 35, show: { thickness: false, opacity: false } }))
-  const ranges = [...html.matchAll(/<input type="range" data-setting="(\w+)" min="(\d+)" max="(\d+)" step="(\d+)" value="(\d+)"/g)].map((m) => m.slice(1))
+  const ranges = [...html.matchAll(/<input type="range" data-setting="(\w+)" min="(\d+)" max="(\d+)" step="([\d.]+)" value="([\d.]+)"/g)].map((m) => m.slice(1))
   assert.deepEqual(ranges, [
     ['thickness', String(THICKNESS.min), String(THICKNESS.max), String(THICKNESS.step), '9'],
     ['opacity', String(OPACITY.min), String(OPACITY.max), String(OPACITY.step), '35'],
@@ -1205,6 +1222,12 @@ test('the dialog always holds the thickness, opacity, dash, arrow spacing and ou
     ['arrowSpacing', String(ARROW_SPACING.min), String(ARROW_SPACING.max), String(ARROW_SPACING.step), '7'],
     ['outlineWidth', String(OUTLINE_WIDTH.min), String(OUTLINE_WIDTH.max), String(OUTLINE_WIDTH.step), '2']
   ])
+})
+
+test('the dialog slider and its readout show a half step as 2.5', () => {
+  const row = rowOf(renderEditor(editorState({ thickness: 2.5 })), 'thickness')
+  assert.match(row, /step="0.5" value="2.5"/)
+  assert.match(row, /<output data-readout="thickness">2.5<\/output>/)
 })
 
 test('every slider in the settings table has one dialog row, with the label and range of its table entry', () => {

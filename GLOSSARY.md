@@ -66,7 +66,7 @@
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type. A right click steps it backwards.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle and
-  cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16, saved at once, on every move, under `PenColor_thickness`.
+  cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
   is always half of it, so every width scales by one factor. Above 5 an edge or grid-corner mark also grows in length (the **mark growth**: a CSS scale about its own middle, 1 at 5 and 1.6 at 16, its stroke width divided by the scale so it stays as thick); lines never grow.
 - **pen panel sliders** — Thickness and Opacity, drawn in the pen tool's panel across its full width in the row under the **controls row**. SudokuPad gives its
