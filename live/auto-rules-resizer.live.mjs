@@ -402,7 +402,7 @@ describe('beside twitch-rules-scroller\'s sync script', { concurrency: false }, 
   let context, p, errors
 
   before(async () => {
-    // The sync script's font bar, as it used to add it: the Resizer fits the pane whether or not it is there.
+    // A page that still carries the sync script's font bar id must not stop the fit.
     ;({ context, p, errors } = await rulesPage(LANDSCAPE, (page) => page.evaluate(() => {
       const bar = document.createElement('div')
       bar.id = 'sudokupad-sync-nudge'
@@ -412,7 +412,7 @@ describe('beside twitch-rules-scroller\'s sync script', { concurrency: false }, 
   })
   after(async () => { await context.close() })
 
-  it('still fits the rules pane and shows its font buttons', async () => {
+  it('fits the rules pane and shows its font buttons with the sync script\'s bar id on the page', async () => {
     assert.equal(await settle(async () => (await fontPx(p)) > SUDOKUPAD_FONT_PX, true), true, 'fitted')
     await hoverPane(p)
     assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), true, 'font buttons')
