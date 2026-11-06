@@ -1,0 +1,436 @@
+// ==UserScript==
+// @name         SudokuPad Auto Rules Resizer
+// @namespace    https://github.com/caneff/sudokupad-scripts
+// @version      0.1.0
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane widens to the window's right edge and takes the largest font at which all the rules fit, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. Nothing is saved.
+// @match        https://sudokupad.app/*
+// @match        https://*.sudokupad.app/*
+// @match        https://crackingthecryptic.com/*
+// @match        https://*.crackingthecryptic.com/*
+// @grant        none
+// @run-at       document-idle
+// @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js
+// @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js
+// ==/UserScript==
+
+(function () {
+  'use strict'
+
+  const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
+  const MIN_FONT_PX = 8 // the smallest font f- goes to
+  const MAX_FONT_PX = 200
+  const REM_PX = 16
+  const RULES_MIN = { width: 15 * REM_PX, height: 7 * REM_PX } // the pane's floor under a drag, css px
+  const RESIZE_MS = 100
+  const CORNERS = ['ur', 'dl']
+
+  // Largest integer in [min, max] that `fits` accepts, min when none does; `fits` is true up to some size and
+  // false past it.
+  function largestSize (fits, min, max) {
+    let lo = min
+    let hi = max
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2)
+      if (fits(mid)) lo = mid
+      else hi = mid - 1
+    }
+    return lo
+  }
+
+  function rulesRoom ({ rulesTop, containerBottom, viewportBottom, paddingBottom }) {
+    return Math.max(0, Math.min(containerBottom, viewportBottom) - paddingBottom - rulesTop)
+  }
+
+  // The nearest ancestor that clips or scrolls its overflow, else the direct parent, so no selector chain of
+  // SudokuPad's is hard-coded.
+  function rulesContainer (rules, getStyle) {
+    for (let el = rules.parentElement; el && el.tagName !== 'BODY'; el = el.parentElement) {
+      if (/auto|scroll|hidden|clip/.test(getStyle(el).overflowY)) return el
+    }
+    return rules.parentElement
+  }
+
+  // `scale` is visual px per css px: SudokuPad scales the whole controls column. Nothing sits right of the
+  // pane, so the space up to the window's edge is the pane's to take.
+  function rulesWidth ({ natural, rulesLeft, scale, viewportWidth }) {
+    if (!(scale > 0)) return natural
+    return Math.max(natural, Math.floor((viewportWidth - rulesLeft - EDGE_PX) / scale))
+  }
+
+  // Never under SudokuPad's own size, so rules too long to fit still scroll at the size SudokuPad gives them.
+  function autoFontPx (fits, ownPx) {
+    const px = largestSize(fits, Math.ceil(ownPx), MAX_FONT_PX)
+    return px > ownPx && fits(px) ? px : ownPx
+  }
+
+  function nudgedFontPx (autoPx, nudgePx) {
+    return Math.max(MIN_FONT_PX, autoPx + nudgePx)
+  }
+
+  // A size fits when the rules take no more than the room and do not overflow the pane: the room can reach
+  // below the pane's own max-height, into its container's margin.
+  function fitRulesFont (rules, room, ownPx, nudgePx) {
+    const fits = (n) => {
+      rules.style.fontSize = `${n}px`
+      return rules.scrollHeight <= Math.min(room, rules.clientHeight)
+    }
+    rules.style.fontSize = `${nudgedFontPx(autoFontPx(fits, ownPx), nudgePx)}px`
+  }
+
+  // A drag is {w, h, x, y} in visual px: extra width, extra height, and how far the controls column moved. The
+  // top-right corner ("ur") grows the pane right and up, moving the controls up; the bottom-left ("dl") grows
+  // it left and down, moving them left. The controls move by what the pane grew, not by the pointer, so a
+  // stopped corner stays under it. Where the window and the board stop a drag is `clampDrag`'s, at each fit.
+  const noRulesDrag = () => ({ w: 0, h: 0, x: 0, y: 0 })
+  function dragRulesBox (box, corner, dx, dy, paneSize, minSize) {
+    if (!CORNERS.includes(corner)) throw new Error(`the rules pane has no corner "${corner}"`)
+    const ur = corner === 'ur'
+    // The floor stops a shrink; it never grows a pane that SudokuPad laid out smaller.
+    const growW = Math.max(ur ? dx : -dx, Math.min(0, minSize.width - paneSize.width))
+    const growH = Math.max(ur ? -dy : dy, Math.min(0, minSize.height - paneSize.height))
+    return {
+      w: box.w + growW,
+      h: box.h + growH,
+      x: ur ? box.x : box.x - growW,
+      y: ur ? box.y - growH : box.y
+    }
+  }
+
+  // The drag as far as the layout allows now, which can be less than when it was made (a smaller window, a
+  // board that moved): the controls column stays inside the window and the pane clear of the board. `pane` is
+  // the undragged pane's visual left and right at its fitted width, `column` the undragged controls column's
+  // visual top and bottom.
+  function clampDrag (box, { pane, column, boardRight, viewport }) {
+    // A move right or down comes only with a shrink of the same size, which keeps the column where it was.
+    const x = Math.max(box.x, boardRight - pane.left)
+    const y = Math.max(box.y, -column.top)
+    return {
+      w: Math.min(box.w, Math.max(0, viewport.width - EDGE_PX - pane.right) - x),
+      h: Math.min(box.h, Math.max(0, viewport.height - column.bottom - y)),
+      x,
+      y
+    }
+  }
+
+  // The dragged pane's width and room in css px: the drag's deltas on the fit's own answers, never under the
+  // floor, or the undragged size when that is smaller.
+  function draggedPane ({ width, room, box, scale }) {
+    return {
+      width: box.w ? Math.max(Math.min(RULES_MIN.width, width), width + box.w / scale) : width,
+      room: box.h ? Math.max(Math.min(RULES_MIN.height, room), room + box.h / scale) : room
+    }
+  }
+
+  // The drag for the puzzle it was made on; a new puzzle starts undragged.
+  const dragged = { key: null, box: noRulesDrag() }
+  function draggedBox (key) {
+    if (dragged.key !== key) Object.assign(dragged, { key, box: noRulesDrag() })
+    return dragged.box
+  }
+
+  // SudokuPad's own rule in App.resize.
+  const isLandscape = (gameRect) => gameRect.width > gameRect.height
+
+  // twitch-rules-scroller's sync script sizes the same pane: on a page where it runs, this script leaves the
+  // pane to it.
+  const streamScriptActive = (doc) => Boolean(doc.getElementById('sudokupad-sync-nudge') || doc.querySelector('[id^="sudokupad-sync-drag-"]'))
+
+  // Every style property the fit writes on the pane; it also moves the controls column by its `translate`.
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight']
+
+  function clearFit (rules, controls) {
+    for (const k of FIT_STYLES) rules.style[k] = ''
+    controls.style.translate = ''
+  }
+
+  // Widens the pane into the free space at its right, then takes the largest font that fits, and returns the
+  // drag it applied. Returns null when the pane is not shown, with the fit taken off, or has no room yet, with
+  // the last fit put back.
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box }) {
+    const before = FIT_STYLES.map((k) => rules.style[k])
+    const movedBefore = controls.style.translate
+    // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
+    // fit's larger font or wider box is that fit's own height, and every fit would grow the pane again.
+    clearFit(rules, controls)
+    rules.style.overflowWrap = 'anywhere' // measure a long unbroken word honestly
+    const natural = rules.offsetWidth
+    if (!(natural > 0)) { // SudokuPad hides the pane of a puzzle with no rules
+      clearFit(rules, controls)
+      return null
+    }
+    const home = rules.getBoundingClientRect()
+    const scale = home.width / natural
+    const ownPx = parseFloat(getStyle(rules).fontSize)
+    const visualRoom = rulesRoom({
+      rulesTop: home.top,
+      containerBottom: container.getBoundingClientRect().bottom,
+      viewportBottom: viewport.height,
+      paddingBottom: parseFloat(getStyle(container).paddingBottom) || 0
+    })
+    if (!(visualRoom > 0)) { // before layout, or a collapsed container: keep the last fit until the next one
+      FIT_STYLES.forEach((k, n) => { rules.style[k] = before[n] })
+      controls.style.translate = movedBefore
+      return null
+    }
+    const width = rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width })
+    const column = controls.getBoundingClientRect()
+    const applied = clampDrag(box, {
+      pane: { left: home.left, right: home.left + width * scale },
+      column,
+      boardRight,
+      viewport
+    })
+    // A drag that changes the height starts from the pane's own height, not the room under it, so the pane
+    // grows by what the corner moved.
+    const fitted = draggedPane({ width, room: (applied.h ? home.height : visualRoom) / scale, box: applied, scale })
+    if (applied.h) rules.style.maxHeight = `${fitted.room}px`
+    if (applied.x || applied.y) controls.style.translate = `${applied.x}px ${applied.y}px`
+    if (fitted.width > natural || applied.w) Object.assign(rules.style, { boxSizing: 'border-box', maxWidth: 'none', width: `${fitted.width}px` })
+    fitRulesFont(rules, fitted.room, ownPx, nudgePx)
+    return applied
+  }
+
+  function makeTrailing (fn, ms, schedule = setTimeout, cancel = clearTimeout) {
+    let timer = null
+    return () => {
+      cancel(timer)
+      timer = schedule(() => {
+        timer = null
+        fn()
+      }, ms)
+    }
+  }
+
+  // Move and release are heard on the window, so a fast drag that outruns the corner holds.
+  function watchCornerDrag (corner, win, onMove, onActive) {
+    corner.addEventListener('pointerdown', (e) => {
+      e.preventDefault()
+      let x = e.clientX
+      let y = e.clientY
+      const move = (m) => {
+        const dx = m.clientX - x
+        const dy = m.clientY - y
+        x = m.clientX
+        y = m.clientY
+        if (dx || dy) onMove(dx, dy)
+      }
+      const stop = () => {
+        win.removeEventListener('pointermove', move)
+        win.removeEventListener('pointerup', stop)
+        win.removeEventListener('pointercancel', stop)
+        onActive(false)
+      }
+      win.addEventListener('pointermove', move)
+      win.addEventListener('pointerup', stop)
+      win.addEventListener('pointercancel', stop)
+      onActive(true)
+    })
+  }
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+      largestSize,
+      rulesRoom,
+      rulesContainer,
+      rulesWidth,
+      autoFontPx,
+      nudgedFontPx,
+      fitRulesPane,
+      clearFit,
+      dragRulesBox,
+      clampDrag,
+      draggedPane,
+      draggedBox,
+      noRulesDrag,
+      isLandscape,
+      streamScriptActive,
+      makeTrailing,
+      watchCornerDrag
+    }
+  }
+  if (typeof document === 'undefined') return
+
+  // The match also covers other crackingthecryptic.com pages, which have no Framework.
+  if (typeof Framework === 'undefined') return
+  if (!Framework.getApp) {
+    console.warn('auto-rules-resizer: SudokuPad\'s Framework has no getApp, so nothing was changed')
+    return
+  }
+
+  const ID = 'auto-rules-resizer'
+  const FONT_BAR_ID = `${ID}-font`
+  const CORNER_CLASS = `${ID}-corner`
+  const SHOWN_CLASS = `${ID}-shown` // on the body while the pane is fitted: the font bar shows
+  const HOVER_CLASS = `${ID}-hover` // on the body while the pointer is over the pane or a corner: the corners show
+  const CORNER_PX = 28
+  const BAR_GAP_PX = 2
+  const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
+  const cornerId = (corner) => `${ID}-drag-${corner}`
+
+  const STYLE = `
+    #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; gap: 4px; font: 14px monospace; }
+    #${FONT_BAR_ID} button { all: revert; padding: 0 6px; border-radius: 8px; opacity: .7; cursor: pointer; font: inherit; }
+    .${CORNER_CLASS} { position: fixed; z-index: 99999; display: none; width: ${CORNER_PX}px; height: ${CORNER_PX}px;
+      box-sizing: border-box; border-radius: 8px; background: rgba(85, 255, 255, .4); border: 1px dotted rgba(85, 255, 255, .8);
+      touch-action: none; }
+    body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
+    body.${SHOWN_CLASS}.${HOVER_CLASS} .${CORNER_CLASS} { display: block; }
+  `
+
+  let nudgePx = 0
+  let fitted = false // whether the fit's output may be on the pane
+  let hovering = false
+  let dragging = false
+
+  const getStyle = (el) => window.getComputedStyle(el)
+  const rulesPane = () => document.querySelector('.puzzle-rules')
+  const controlsColumn = () => document.getElementById('controls')
+  // A puzzle with no id of its own (a replay or a pack) is told apart by its URL.
+  const dragKey = () => String(Framework.app?.puzzle?.puzzleId || window.location.href)
+
+  const showHover = () => document.body.classList.toggle(HOVER_CLASS, hovering || dragging)
+
+  function addStyle () {
+    const style = document.createElement('style')
+    style.id = `${ID}-style`
+    style.textContent = STYLE
+    document.head.appendChild(style)
+  }
+
+  function addFontBar () {
+    const bar = document.createElement('div')
+    bar.id = FONT_BAR_ID
+    for (const [label, step] of [['f+', 1], ['f-', -1]]) {
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.textContent = label
+      button.title = step > 0 ? 'Larger rules font' : 'Smaller rules font'
+      button.addEventListener('click', () => {
+        nudgePx += step
+        fitPage()
+      })
+      bar.appendChild(button)
+    }
+    document.body.appendChild(bar)
+  }
+
+  function addCorner (corner) {
+    const el = document.createElement('div')
+    el.id = cornerId(corner)
+    el.className = CORNER_CLASS
+    el.style.cursor = CORNER_CURSOR[corner]
+    watchCornerDrag(el, window, (dx, dy) => dragRules(corner, dx, dy), (on) => {
+      dragging = on
+      showHover()
+    })
+    document.body.appendChild(el)
+  }
+
+  // The corners show only while the pointer is over the pane or a corner, or a drag is under way.
+  function watchHover () {
+    document.addEventListener('pointerover', (e) => {
+      hovering = Boolean(e.target.closest?.(`.puzzle-rules, .${CORNER_CLASS}`))
+      showHover()
+    })
+    document.addEventListener('pointerout', (e) => {
+      if (e.relatedTarget) return // pointerover on the next element answers
+      hovering = false
+      showHover()
+    })
+  }
+
+  // Sizes are passed in: a corner hidden until hover measures 0 x 0.
+  function place (el, left, top, width, height) {
+    el.style.left = `${Math.max(0, Math.min(left, window.innerWidth - width))}px`
+    el.style.top = `${Math.max(0, Math.min(top, window.innerHeight - height))}px`
+  }
+
+  // The font bar sits on the pane's top-right corner, just above the pane so it covers none of the rules, or
+  // just below it when the pane reaches the window's top.
+  function placeControls (rules) {
+    const r = rules.getBoundingClientRect()
+    const bar = document.getElementById(FONT_BAR_ID)
+    const above = r.top - bar.offsetHeight - BAR_GAP_PX
+    place(bar, r.right - bar.offsetWidth, above >= 0 ? above : r.bottom + BAR_GAP_PX, bar.offsetWidth, bar.offsetHeight)
+    place(document.getElementById(cornerId('ur')), r.right - CORNER_PX, r.top, CORNER_PX, CORNER_PX)
+    place(document.getElementById(cornerId('dl')), r.left, r.bottom - CORNER_PX, CORNER_PX, CORNER_PX)
+  }
+
+  function showControls (on) {
+    document.body.classList.toggle(SHOWN_CLASS, on)
+  }
+
+  function fitPage () {
+    try {
+      const rules = rulesPane()
+      const controls = controlsColumn()
+      if (!rules || !controls) return
+      if (streamScriptActive(document)) {
+        // The stream script's own fit clears and rewrites the same styles each time, so they are left to it.
+        showControls(false)
+        return
+      }
+      const game = document.querySelector('.game')
+      if (!game || !isLandscape(game.getBoundingClientRect())) {
+        if (fitted) clearFit(rules, controls)
+        fitted = false
+        showControls(false)
+        return
+      }
+      const board = document.getElementById('board')
+      const box = draggedBox(dragKey())
+      const applied = fitRulesPane({
+        rules,
+        container: rulesContainer(rules, getStyle),
+        controls,
+        getStyle,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        boardRight: board ? board.getBoundingClientRect().right : 0,
+        nudgePx,
+        box
+      })
+      if (applied) Object.assign(box, applied) // a later drag starts from where this one stopped
+      fitted = fitted || Boolean(applied)
+      showControls(Boolean(applied))
+      if (applied) placeControls(rules)
+    } catch (err) {
+      console.error('auto-rules-resizer: the rules fit failed', err)
+    }
+  }
+
+  function dragRules (corner, dx, dy) {
+    const rules = rulesPane()
+    if (!rules) return
+    const paneSize = rules.getBoundingClientRect()
+    const natural = rules.offsetWidth
+    const scale = natural > 0 ? paneSize.width / natural : 1
+    const minSize = { width: RULES_MIN.width * scale, height: RULES_MIN.height * scale }
+    const box = draggedBox(dragKey())
+    Object.assign(box, dragRulesBox(box, corner, dx, dy, paneSize, minSize))
+    fitPage()
+  }
+
+  // SudokuPad calls resizeBoard on every layout: a new puzzle, a resize, a turn of the device.
+  function refitAfterResizeBoard (app) {
+    if (typeof app.resizeBoard !== 'function') {
+      console.warn('auto-rules-resizer: SudokuPad\'s app has no resizeBoard, so the rules refit only on a window resize')
+      return
+    }
+    const original = app.resizeBoard
+    app.resizeBoard = function (...args) {
+      const out = original.apply(this, args)
+      fitPage()
+      return out
+    }
+  }
+
+  Framework.getApp().then((app) => {
+    addStyle()
+    addFontBar()
+    for (const corner of CORNERS) addCorner(corner)
+    watchHover()
+    refitAfterResizeBoard(app)
+    window.addEventListener('resize', makeTrailing(fitPage, RESIZE_MS))
+    fitPage()
+  })
+})()

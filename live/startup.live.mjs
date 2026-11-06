@@ -94,6 +94,24 @@ const SCRIPTS = [
     }
   },
   {
+    name: 'Auto Rules Resizer',
+    file: 'auto-rules-resizer.user.js',
+    // The recorded puzzle has no rules: SudokuPad is given some, and its own layout calls the script's fit.
+    ready: async (p) => {
+      await p.locator('#auto-rules-resizer-style').waitFor({ state: 'attached' })
+      await p.evaluate(() => {
+        Framework.app.showMetaInfoUI({ title: 'Rules', author: 'Tester', rules: 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle.' })
+        Framework.app.resize()
+      })
+    },
+    control: (p) => p.locator('#auto-rules-resizer-font').waitFor({ state: 'visible' }),
+    // The rules pane widens to 8 px from the window's right edge.
+    act: async (p) => {
+      const gap = () => p.evaluate(() => Math.round(window.innerWidth - document.querySelector('.puzzle-rules').getBoundingClientRect().right))
+      assert.equal(await settle(gap, 8), 8)
+    }
+  },
+  {
     name: 'Pen Tool Extras',
     file: 'pen-tool-extras.user.js',
     ready: async (p) => {
