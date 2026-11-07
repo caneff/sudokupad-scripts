@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.11.0
-// @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
+// @version      0.11.1
+// @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.11.0'
+  const VERSION = '0.11.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'

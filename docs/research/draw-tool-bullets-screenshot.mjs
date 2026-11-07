@@ -1,9 +1,7 @@
-// Takes the two pictures on site/draw-tool.html's "What it adds" list, from the real draw-tool.user.js on the recorded
+// Takes the picture on site/draw-tool.html's "What it adds" list (its Text, Shapes and Erasing animations are draw-tool-details-screenshot.mjs's), from the real draw-tool.user.js on the recorded
 // puzzle, each a crop of the grid on a fresh page:
 //   draw-tool-bullet-lines.png: a thin blue Shift+drag straight line, a green freehand loop and a thick red curved arrow
-//   draw-tool-bullet-text.png:  an orange cage sum, 17, typed in a cell's corner at the large text size
-// Every stroke is a real mouse drag and the sum real clicks and keys. It fails, writing nothing, when a stroke or the sum
-// does not land.
+// Every stroke is a real mouse drag. It fails, writing nothing, when a stroke does not land.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool-bullets-screenshot.mjs
 // Not part of any test.
@@ -65,16 +63,6 @@ await lines.drag([[8.6, 4.9], [8.1, 5.4], [7.3, 5.5], [6.65, 5.2]])
 await lines.drag([[6.95, 4.85], [6.62, 5.18], [6.9, 5.55]])
 const linesPng = await lines.shoot([3.5, 4], [9, 9])
 
-const text = await drawPage()
-await text.pick(3, 1)
-await text.p.locator('#draw-tool-size').fill(String(OLD_WIDTHS[2]))
-await text.p.mouse.click(...text.at([7.25, 6.3]))
-await text.p.keyboard.type('17')
-await text.p.keyboard.press('Enter')
-if ((await text.p.locator('#draw-tool-layer text.draw-tool-text').allTextContents()).join() !== '17') throw new Error('the typed sum did not land')
-const textPng = await text.shoot([6.5, 5.5], [8.5, 7.5])
-
 writeFileSync(new URL('./draw-tool-bullet-lines.png', import.meta.url).pathname, linesPng)
-writeFileSync(new URL('./draw-tool-bullet-text.png', import.meta.url).pathname, textPng)
-console.log('wrote draw-tool-bullet-lines.png and draw-tool-bullet-text.png')
+console.log('wrote draw-tool-bullet-lines.png')
 await browser.close()
