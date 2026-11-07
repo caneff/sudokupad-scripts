@@ -3,10 +3,11 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { readFileSync, existsSync, readdirSync } = require('node:fs')
 const { join } = require('node:path')
+const ROOT = join(__dirname, '..', '..')
 const vm = require('node:vm')
 const { pictureTags, tagOf } = require('../../tag-pictures.js')
 
-const SITE = join(__dirname, '..', '..', 'site')
+const SITE = join(ROOT, 'site')
 const read = (file) => readFileSync(join(SITE, file), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
 const rowsOf = (html) => html.split('<section class="row">').slice(1)
 const showOf = (html) => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
@@ -54,7 +55,7 @@ test('spec 359: the homepage is rows of slideshows, the details pages carry the 
   const home = read('index.html')
   const rows = rowsOf(home)
   assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Color by Digit', 'Pen Tool Extras', 'Draw Tool', 'Dark Page', 'Auto Rules Resizer'])
-  assert.equal(existsSync(join(__dirname, '..', '..', 'no-tab-letters.user.js')), true)
+  assert.equal(existsSync(join(ROOT, 'no-tab-letters.user.js')), true)
   for (const name of readdirSync(SITE).filter((f) => f.endsWith('.html'))) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, name)
   assert.match(home, /\.row \{[^}]*grid-template-columns: 30rem 1fr/)
 
@@ -75,7 +76,7 @@ test('spec 359: the homepage is rows of slideshows, the details pages carry the 
     assert.deepEqual(pictures.map((p) => /class="slide current"/.test(p)), pictures.map((_, n) => n === 0))
     for (const c of captions) assert.match(c.text, /\S/)
     for (const { file, tag } of pictureTags(show)) {
-      assert.equal(existsSync(join(__dirname, '..', '..', file)), true, `${file} is not in the repo`)
+      assert.equal(existsSync(join(ROOT, file)), true, `${file} is not in the repo`)
       assert.equal(tag, tagOf(file), `${file} has a stale ?v= tag`)
     }
     assert.match(row, new RegExp(`class="install" href="[^"]*\\.user\\.js"[\\s\\S]*href="${details[heading]}"`))

@@ -45,6 +45,7 @@ test('the live files share one harness, and the recording is replaced only when 
   }
 
   for (const file of COLOR_BY_DIGIT) {
+    assert.ok(liveNames.includes(file), `the live files listed include ${file}`)
     const text = source(file)
     assert.match(text, /from '\.\/color-by-digit-fixtures\.mjs'/, file)
     for (const name of FIXTURE_NAMES) assert.equal(declares(text, name), false, `${file} declares ${name}`)

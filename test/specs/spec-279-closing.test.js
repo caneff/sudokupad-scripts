@@ -3,8 +3,9 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { existsSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
+const ROOT = join(__dirname, '..', '..')
 
-const read = (file) => readFileSync(join(__dirname, '..', '..', file), 'utf8')
+const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const byDigit = require('../../color-by-digit.user.js')
 
 const storeOf = (saved) => ({ getData: (key) => saved[key] ?? null })
@@ -88,6 +89,6 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
   assert.doesNotMatch(byDigit.renderMenu(off, colorOf), />Digit<|data-target="digits"/)
 
   // Digit Color is gone: no script, and the homepage names it nowhere.
-  assert.equal(existsSync(join(__dirname, '..', '..', 'digit-color.user.js')), false)
+  assert.equal(existsSync(join(ROOT, 'digit-color.user.js')), false)
   assert.doesNotMatch(read('site/index.html'), /Digit Color|digit-color/)
 })

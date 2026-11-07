@@ -37,7 +37,7 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
 })
 
 // #342: docs/research/ has one folder per script, and site/ for pictures of a whole page.
-const RESEARCH_FOLDERS = ['color-by-digit', 'pen-tool-extras', 'draw-tool', 'dark-page', 'auto-rules-resizer', 'no-tab-letters', 'site']
+const RESEARCH_FOLDERS = [...rootScripts().map(f => f.slice(0, -SCRIPT_SUFFIX.length)), 'site']
 
 test('every picture the site loads is in a script folder of docs/research/ or in docs/research/site/, and one named for a script is in its folder', () => {
   for (const name of PAGES) {

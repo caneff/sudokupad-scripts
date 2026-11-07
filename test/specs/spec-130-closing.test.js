@@ -3,11 +3,12 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { readdirSync, readFileSync } = require('node:fs')
 const { join } = require('node:path')
+const ROOT = join(__dirname, '..', '..')
 
 const SCRIPT = 'pen-tool-extras.user.js'
-const read = (file) => readFileSync(join(__dirname, '..', '..', file), 'utf8')
+const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const source = read(SCRIPT)
-const extras = require(join(__dirname, '..', '..', SCRIPT))
+const extras = require(join(ROOT, SCRIPT))
 
 // A store with SudokuPad's three calls that holds `saved`, a map of key to value.
 const storeOf = (saved) => ({
@@ -17,8 +18,8 @@ const storeOf = (saved) => ({
 })
 
 // The files the renames reach: the repo's root, `test/`, `live/` and `site/`, so never `docs/research/`, nor the records in dotfiles.
-const filesIn = (dir) => readdirSync(join(__dirname, '..', '..', dir), { withFileTypes: true }).filter((entry) => entry.isFile() && !entry.name.startsWith('.')).map((entry) => join(dir, entry.name))
-const liveFolders = readdirSync(join(__dirname, '..', '..', 'live'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join('live', entry.name))
+const filesIn = (dir) => readdirSync(join(ROOT, dir), { withFileTypes: true }).filter((entry) => entry.isFile() && !entry.name.startsWith('.')).map((entry) => join(dir, entry.name))
+const liveFolders = readdirSync(join(ROOT, 'live'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => join('live', entry.name))
 const swept = ['.', 'test', 'test/specs', 'live', ...liveFolders, 'site'].flatMap(filesIn)
 const ownFiles = swept.filter((file) => /pen-tool-extras/.test(file))
 
@@ -68,6 +69,7 @@ test('Pen Tool Extras holds spec 130 together', () => {
 
   // The glossary's words: the renames this spec lists are gone. Each old name is spelled in pieces, so this file does not
   // hold what it looks for. The circle's old names stay in the reader, which still takes them.
+  assert.ok(swept.includes(join('live', 'pen-tool-extras', 'pen-tool-extras.live.mjs')), 'the sweep reaches the live script folders')
   for (const file of swept) assert.equal(new RegExp(['chev', 'ron'].join(''), 'i').test(read(file)), false, file)
   for (const pieces of [['PEN', '_COLORS'], ['DEFAULT', '_COLORS'], ['penColors', 'FromPage'], ['off', 'Labels'], ['step', 'Page']]) {
     const old = new RegExp(`\\b${pieces.join('')}\\b`)

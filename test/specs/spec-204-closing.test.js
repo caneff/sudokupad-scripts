@@ -3,8 +3,9 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
+const ROOT = join(__dirname, '..', '..')
 
-const read = (file) => readFileSync(join(__dirname, '..', '..', file), 'utf8')
+const read = (file) => readFileSync(join(ROOT, file), 'utf8')
 const extras = require('../../pen-tool-extras.user.js')
 const byDigit = require('../../color-by-digit.user.js')
 
