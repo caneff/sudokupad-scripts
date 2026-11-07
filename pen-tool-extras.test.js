@@ -1494,8 +1494,8 @@ test('every page has a measured icon viewBox, so the line type button never show
   PEN_PAGES.forEach((_, page) => assert.doesNotMatch(renderPageIcon(page, 3, BOTH_STYLES), /viewBox="undefined"/, `page ${page + 1}`))
 })
 
-test('Keypad Flipped swaps the rows of colors by grid row, since its transform on each button row has no box here', () => {
-  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input button\\[data-key="${key}"\\] \\{ grid-row: (\\d); \\}`).exec(PANEL_CSS)[1]
+test('Keypad Flipped swaps the rows of colors by grid row, for the buttons and the edit mode pickers over them, since its transform on each button row has no box here', () => {
+  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input :is\\(button\\[data-key="${key}"\\], \\.pen-tool-extras-picker\\[data-pen="${key}"\\]\\) \\{ grid-row: (\\d) / span 1; \\}`).exec(PANEL_CSS)[1]
   assert.deepEqual([1, 2, 3, 7, 8, 9].map(rule), ['3', '3', '3', '1', '1', '1'])
 })
 
@@ -1530,7 +1530,7 @@ const HEADER = fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 
 const headerField = (name) => (new RegExp(`^// @${name}\\s+(.+)$`, 'm').exec(HEADER) || [])[1]
 
 test('the header describes the script in Chris\'s approved intro and links its details page', () => {
-  assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
+  assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
   assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
 })
 
