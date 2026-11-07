@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.10.0
-// @description  Colors by digit from groups of palette colors in the active profile: cells holding a digit, or center marks that all belong to one group, take the group's color, and entered digits, corner marks and center marks take a darker shade of it. A press on the button steps the mode Cell, Digit, Both, Off; a menu on it switches profile, for cells and digits apart when they are not synced, and a settings dialog edits the profiles and can turn digit colors off.
+// @version      0.10.1
+// @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.10.0'
+  const VERSION = '0.10.1'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
