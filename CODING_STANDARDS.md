@@ -1,7 +1,7 @@
 # Coding standards
 
 The rules a reviewer or agent reads off the diff, because no test or tool catches
-them. `AGENTS.md` holds the rest: one file per script, no build step, and the
+them. `AGENTS.md` holds the rest: one file per script, no build step for users, and the
 seam. These come from `twitch-rules-scroller` and
 `sudokumaker-custom-constraints`, kept where they apply to a userscript.
 
@@ -50,7 +50,7 @@ seam. These come from `twitch-rules-scroller` and
 ## Style
 
 9. **Reuse the existing helper; never write a second copy.** Two copies drift when
-   a fix lands in one. This holds inside one script; scripts share no code.
+   a fix lands in one. This holds across scripts too: a helper two scripts need goes in `lib/` and `node sync-lib.js` copies it in. Never edit a copy inside a `// <lib:name>` block.
 10. **Name a magic number or key once.** A bare value copied to a second place
     diverges when the first changes.
 11. **No parameter, flag or function that nothing calls.** An unused option is a
