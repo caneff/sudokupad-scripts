@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.13.1
+// @version      0.14.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.13.1'
+  const VERSION = '0.14.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -734,9 +734,9 @@
   const hasTwoTags = (state) => usesDigitColors(state) && !isSynced(state)
 
   function renderTags (state, i) {
-    const tag = (act, label, on) => `<button type="button" class="cbd-button cbd-tag" data-act="${act}" data-index="${i}" aria-pressed="${on}">${label}</button>`
-    if (!hasTwoTags(state)) return tag('tag-cells', 'Active', i === state.active)
-    return tag('tag-cells', 'Cells', i === state.active) + tag('tag-digits', 'Digits', i === state.digitActive)
+    const tag = (act, label, on, pick) => `<button type="button" class="cbd-button cbd-tag" data-act="${act}" data-index="${i}" aria-pressed="${on}" title="Use for ${pick}">${on ? label : 'Use'}</button>`
+    if (!hasTwoTags(state)) return tag('tag-cells', 'Active', i === state.active, 'cells')
+    return tag('tag-cells', 'Cells', i === state.active, 'cells') + tag('tag-digits', 'Digits', i === state.digitActive, 'digits')
   }
 
   function renderProfiles (state, colorOf, selected) {
@@ -885,6 +885,7 @@
     [`${EDITOR} .cbd-two-tags`, 'flex-wrap: wrap'],
     [`${EDITOR} .cbd-two-tags .cbd-tags`, 'order: 1; flex-basis: 100%; padding-left: 28px'],
     [`${EDITOR} .cbd-tag`, 'padding: 0 6px; height: 24px; line-height: 22px; font-size: .75rem'],
+    [`${EDITOR} .cbd-tag[aria-pressed="false"]`, `color: ${MUTED}; font-weight: 400`],
     [`${EDITOR} .cbd-tag[aria-pressed="true"]`, PRESSED_LOOK],
     [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
