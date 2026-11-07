@@ -5,6 +5,8 @@
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../live/page.mjs'
 
+// The pixel density every picture is taken at.
+export const DEVICE_SCALE = 2
 export const BUTTON = '#control-colorbydigit'
 export const MODES = ['CELL', 'DIGIT', 'BOTH', 'OFF']
 const MODE_LABEL = `${BUTTON} [data-role="mode"]`
@@ -22,9 +24,10 @@ const CONFLICTS = 3
 const ROWS = 3
 const COLS = 6
 
-// Opens the live page, at twice the pixel density, on the example puzzle with Color by Digit installed in Cell mode, the entries in, the mascot hidden.
-export async function openExample (browser) {
-  const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
+// Opens the live page, at `DEVICE_SCALE`, on the example puzzle with Color by Digit installed in Cell mode, the entries in, the mascot hidden.
+// `leave` is a list of [row, column] cells whose entries are left out, for a picture that fills them in itself.
+export async function openExample (browser, { leave = [] } = {}) {
+  const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: DEVICE_SCALE } })
   await startPuzzle(p)
   await p.evaluate(() => Framework.app.loadCompactClassicSudoku('5' + '0'.repeat(80)))
   await p.waitForFunction(() => Framework.app.grid.getCell(0, 0).given)
@@ -32,11 +35,7 @@ export async function openExample (browser) {
   await p.addScriptTag({ content: script })
   await p.locator(BUTTON).waitFor({ state: 'visible' })
   const enter = async (tool, list) => {
-    await p.click(tool)
-    for (const [row, col, digits] of list) {
-      await p.evaluate(([row, col]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)) }, [row, col])
-      for (const d of digits) await p.keyboard.press(d)
-    }
+    for (const [row, col, digits] of list.filter(([row, col]) => !leave.some(([r, c]) => r === row && c === col))) await typeInto(p, tool, row, col, digits)
   }
   await enter('#control-normal', DIGITS)
   await enter('#control-corner', CORNER)
@@ -46,8 +45,18 @@ export async function openExample (browser) {
   return p
 }
 
-// Presses the button until its label reads `want`, then waits for the colors to settle. The script gives no signal that its
-// styles are applied, so the wait is a fixed 500 ms.
+// Selects the cell at [row, col] in the tool `tool` (a control's selector), types `keys` into it and deselects.
+export async function typeInto (p, tool, row, col, keys) {
+  await p.click(tool)
+  await p.evaluate(([row, col]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)) }, [row, col])
+  for (const key of keys) await p.keyboard.press(key)
+  await p.evaluate(() => Framework.app.deselect())
+}
+
+// Color by Digit gives no signal that its styles are applied, so a change gets this long to show.
+export const SETTLE_MS = 500
+
+// Presses the button until its label reads `want`, then waits for the colors to settle.
 export async function pressTo (p, want) {
   const button = p.locator(BUTTON)
   const label = () => p.evaluate((selector) => document.querySelector(selector).textContent, MODE_LABEL)
@@ -56,7 +65,7 @@ export async function pressTo (p, want) {
     await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
   }
   await p.waitForFunction(([selector, want]) => document.querySelector(selector).textContent === want, [MODE_LABEL, want])
-  await p.waitForTimeout(500)
+  await p.waitForTimeout(SETTLE_MS)
 }
 
 // Throws when the conflict circles are not drawn within the timeout.

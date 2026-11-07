@@ -86,8 +86,11 @@ export async function draw (page, row, { col = 4, dx = 110, dy = 10, steps = 6 }
 // Sets the slider matching `selector` in the pen tool's panel to `value`, with the same `input` event a drag fires.
 export async function setSlider (page, selector, value) {
   await openPenTool(page)
-  await page.locator(selector).evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
+  await setInputValue(page.locator(selector), value)
 }
+
+// Sets the input `locator` finds to `value`, with the same `input` event a user's change fires.
+export const setInputValue = (locator, value) => locator.evaluate((el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })) }, value)
 
 // Stores `raw` (a string, possibly corrupt) as the saved value of the script's data key `key`, for a reload to read.
 // Throws, naming the key, when nothing is saved there yet: a renamed storage key would otherwise take the planted value

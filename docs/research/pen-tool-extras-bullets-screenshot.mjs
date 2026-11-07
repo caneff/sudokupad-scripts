@@ -1,11 +1,11 @@
 // Takes the four small pictures on site/pen-tool-extras.html, one per "What it adds" bullet a still picture can
 // show, from the current pen-tool-extras.user.js on sudokupad.app. Each is cropped close and taken at 3x so it
 // reads at about 14rem wide:
-//   pen-tool-extras-bullet-colors.png   the settings dialog's Pen colors section: the preset pulldown over the nine color pickers
+//   pen-tool-extras-bullet-colors.png   five short pen lines side by side, each in a color SudokuPad's own pen cannot draw (PICTURE_PEN_COLORS in pen-tool-extras-recolor.mjs)
 //   pen-tool-extras-bullet-lines.png    a dashed line and an arrow line on the grid, and the page button
 //   pen-tool-extras-bullet-edges.png    cells with an edge X, an edge circle and the two direction arrows
 //   pen-tool-extras-bullet-corners.png  two grid corners, one with an X and one with a circle
-// The erase bullet has none: a middle click does not show in a still picture. The pen panel's picture is taken by
+// The erase bullet has none: a middle click does not show in a still picture (the tour animation shows it). The pen panel's picture is taken by
 // pen-tool-extras-panel-annotated-screenshot.mjs. Every line is a real mouse drag and every mark a real click. The
 // script fails when a line or mark does not land (it checks the grid gained a pen value, not which mark), and writes
 // the four files only once all are taken, so a failure leaves the old ones. The mascot is hidden.
@@ -13,7 +13,7 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { openExtrasEditor } from '../../live/settings.mjs'
+import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 // Taken pictures wait here until every one is taken.
 const taken = new Map()
 
@@ -130,14 +130,19 @@ await landing('the corner circle', () => clickTimes(...at(1, 7), 2))
 await quiet()
 save('corners', await page.screenshot({ clip: gridClip(0.6, 6, 0.8, 1) }))
 
-// Colors: the settings dialog's Pen colors section, the preset pulldown over the nine color pickers. Edit mode is not used.
-await openExtrasEditor(page)
-await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)))
-await page.mouse.move(5, 5)
-const penColors = page.locator('#pen-tool-extras-editor .pen-tool-extras-cell').first()
-const titleBox = await penColors.locator('.pen-tool-extras-section-title').boundingBox()
-const lastPicker = await penColors.locator('input[type=color]').last().boundingBox()
-save('colors', await page.screenshot({ clip: { x: titleBox.x, y: titleBox.y - 4, width: lastPicker.x + lastPicker.width - titleBox.x + 4, height: lastPicker.y + lastPicker.height - titleBox.y + 8 } }))
+// Colors: on a blank grid, so no given digit sits under a line, pens 1 to 5 recolored in edit mode, then a short line each, side by side.
+await page.evaluate(() => Framework.app.loadCompactClassicSudoku('0'.repeat(81)))
+await page.waitForFunction(() => Framework.app.puzzle.cells.every((c) => !c.given))
+await openPanel('#control-pen', '.tool-pen')
+await holdPenButton(page, 1)
+for (const [i, color] of PICTURE_PEN_COLORS.entries()) await pickPenColor(page, i + 1, color)
+await holdPenButton(page, 1)
+for (const [i] of PICTURE_PEN_COLORS.entries()) {
+  await pick(i + 1)
+  await drag([[1.5, 1.5 + i], [3.5, 1.5 + i]])
+}
+await quiet()
+save('colors', await page.screenshot({ clip: gridClip(1, 1, 3, PICTURE_PEN_COLORS.length) }))
 
 for (const [name, buffer] of taken) writeFileSync(out(name), buffer)
 await browser.close()
