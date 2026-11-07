@@ -23,10 +23,25 @@ import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extr
 
 const target = new URL('./pen-tool-extras-tour.gif', import.meta.url).pathname
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-// Three columns and six rows of cells at their full size, so the picture is about 460 px wide on the page.
+// A 900 x 700 window draws cells 53 px wide and a pen panel 159 px wide and 212 px tall. The board is three columns and four rows of them,
+// as tall as the panel, so the picture is about 340 px wide on the page and no taller than the panel and its caption.
+const VIEWPORT = { width: 900, height: 700 }
 const COLS = 3
-const ROWS = 6
-const MARGIN = 10
+const ROWS = 4
+// Room around the board for a line's round ends, and the top and bottom margin, small so the board is no taller than the panel.
+const MARGIN = 8
+const MARGIN_Y = 2
+// The most the board's height may differ from the panel's, in page pixels, before the retake fails.
+const HEIGHT_SLACK_PX = 8
+// The board and panel gap and the caption's size, in pixels of the file, which is drawn at twice the page size.
+const GAP_PX = 16
+const CAPTION_PX = 28
+// The rows of the lines drawn in turn (in cells from the grid's top, a cell's middle at .5): along a cell's middle and its edges, half a cell apart. A line on an edge runs the full width, from corner to corner.
+const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
+const DARK_ROW = 3
+const OUTLINE_ROW = DARK_ROW + 0.5
+// The cell whose right edge takes the edge mark, and the grid corner (row, column) that takes the corner mark.
+const [EDGE_MARK_ROW, EDGE_MARK_COL, CORNER_MARK] = [2, 0, [3, 2]]
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -35,6 +50,7 @@ const SETTLE_TIMEOUT_MS = 5000
 
 const browser = await chromium.launch()
 const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
+await p.setViewportSize(VIEWPORT)
 await startPuzzle(p)
 await p.evaluate(() => Framework.app.loadCompactClassicSudoku('0'.repeat(81)))
 await p.waitForFunction(() => Framework.app.puzzle.cells.every((c) => !c.given))
@@ -45,7 +61,7 @@ await p.evaluate(() => Framework.setSetting('toolpen', true))
 await p.locator('#control-pen').waitFor({ state: 'visible' })
 await openPenTool(p)
 await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
-await p.evaluate(() => { ToolPen.tool.lineMode = 'centeronly' })
+await p.evaluate(() => { ToolPen.tool.lineMode = 'both' })
 
 const penCount = () => p.evaluate(() => Framework.app.puzzle.cells.reduce((n, c) => n + c.pen.length, 0))
 // Throws when `act` leaves the grid with no more pen values than before it, so a line or mark that missed fails the run.
@@ -64,8 +80,10 @@ const frames = mkdtempSync(join(tmpdir(), 'pte-tour-'))
 const list = []
 const [, , cell] = await cellCentre(p, 0, 0)
 const [x0, y0] = await gridPoint(p, [0, 0])
-const patch = { x: x0 - MARGIN, y: y0 - MARGIN, width: COLS * cell + 2 * MARGIN, height: ROWS * cell + 2 * MARGIN }
+const patch = { x: x0 - MARGIN, y: y0 - MARGIN_Y, width: COLS * cell + 2 * MARGIN, height: ROWS * cell + 2 * MARGIN_Y }
 const panel = p.locator('.tool-pen .controls-input')
+const panelHeight = (await panel.boundingBox()).height
+if (Math.abs(panelHeight - patch.height) > HEIGHT_SLACK_PX) throw new Error(`the board is ${patch.height} px tall and the panel ${panelHeight}: change ROWS or VIEWPORT`)
 const frame = async (caption, ms) => {
   await p.waitForTimeout(SETTLE_MS)
   const i = list.length
@@ -80,7 +98,7 @@ const ring = (x, y) => p.evaluate(([x, y, id]) => {
   if (!el) {
     el = document.createElement('div')
     el.id = id
-    el.style.cssText = 'position:fixed;width:34px;height:34px;border:4px solid #e53935;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:99999'
+    el.style.cssText = 'position:fixed;width:26px;height:26px;border:3px solid #e53935;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:99999'
     document.body.appendChild(el)
   }
   el.style.left = x + 'px'
@@ -113,7 +131,7 @@ const OPACITY = '#pen-tool-extras-opacity'
 
 // 1. Recolor pen 1 in edit mode.
 await frame('The pen tool', 1000)
-await line(NEW_PEN_COLOR_KEY, [[0.5, 0.5], [0.5, 2.5]])
+await line(NEW_PEN_COLOR_KEY, [[TEAL_ROW, 0.5], [TEAL_ROW, 2.5]])
 await frame('Draw a line', 1200)
 await holdWithRing(NEW_PEN_COLOR_KEY)
 await frame('Hold a color button', 1500)
@@ -125,26 +143,26 @@ await unring()
 await frame('Hold again to finish', 1200)
 
 // 2. A solid line, then dashed and arrow lines on the next pages.
-await line(SOLID_PEN, [[1.5, 0.5], [1.5, 2.5]])
+await line(SOLID_PEN, [[SOLID_ROW, 0], [SOLID_ROW, 3]])
 await frame('A solid line', 1200)
 await turnPage()
-await line(SOLID_PEN, [[2.5, 0.5], [2.5, 2.5]])
+await line(SOLID_PEN, [[DASHED_ROW, 0], [DASHED_ROW, 3]])
 await frame('A dashed line', 1200)
 await turnPage()
-await line(SOLID_PEN, [[3.5, 0.5], [3.5, 2.5]])
+await line(SOLID_PEN, [[ARROW_ROW, 0], [ARROW_ROW, 3]])
 await frame('An arrow line', 1300)
 await turnPage()
 
 // 3. One edge clicked over and over, then one grid corner.
 await pick(EDGE_PEN)
-const [ex, ey, ew] = await cellCentre(p, 4, 1)
+const [ex, ey, ew] = await cellCentre(p, EDGE_MARK_ROW, EDGE_MARK_COL)
 const edge = [ex + ew / 2 - EDGE_INSET_PX, ey]
 for (const caption of ['An edge mark: X', 'Click again: circle', 'Again: arrow', 'Again: the other arrow']) {
   await changing(caption, async () => { await p.mouse.click(...edge); await park() })
   await frame(caption, 1200)
 }
 await pick(CORNER_PEN)
-const corner = await gridPoint(p, [5, 1])
+const corner = await gridPoint(p, CORNER_MARK)
 for (const caption of ['A corner mark: X', 'Click again: circle']) {
   await changing(caption, async () => { await p.mouse.click(...corner); await park() })
   await frame(caption, 1200)
@@ -157,8 +175,8 @@ for (const [selector, value, caption] of [[THICKNESS, 12, 'Thickness up'], [THIC
 }
 
 // 5. A line across dark cells, White outlines off and then on.
-for (const col of [0, 1, 2]) await colorCell(5, col, DARK_CELL_KEY)
-await line(OUTLINE_PEN, [[5.5, 0.5], [5.5, 2.5]])
+for (const col of [0, 1, 2]) await colorCell(DARK_ROW, col, DARK_CELL_KEY)
+await line(OUTLINE_PEN, [[OUTLINE_ROW, 0.5], [OUTLINE_ROW, 2.5]])
 await setOutline(false)
 await frame('White outlines off', 1500)
 await setOutline(true)
@@ -166,7 +184,7 @@ await frame('White outlines on', 1500)
 
 // 6. One middle click erases the whole first line.
 const before = await penCount()
-const [lx, ly] = await gridPoint(p, [0.5, 2])
+const [lx, ly] = await gridPoint(p, [TEAL_ROW, 1.5])
 await ring(lx, ly)
 await frame('Middle-click a line', 1200)
 await p.mouse.click(lx, ly, { button: 'middle' })
@@ -175,6 +193,6 @@ await park()
 await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })
 await frame('The whole line is gone', 2600)
 
-joinGif(list, target, { colors: 256, dither: true })
+joinGif(list, target, { colors: 256, dither: true, gap: GAP_PX, captionPx: CAPTION_PX })
 rmSync(frames, { recursive: true })
 await browser.close()
