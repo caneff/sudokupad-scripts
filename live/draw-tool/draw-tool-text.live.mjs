@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
-// SudokuPad, Enter starts a new line, a click elsewhere and Escape end it, a double-click on text edits it, and the Size slider. Real
+// SudokuPad, Enter starts a new line, a click elsewhere and Escape end it, a click on a keypad color does not, a double-click on text edits it, and the Size slider. Real
 // mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -151,15 +151,15 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ'])
   })
 
-  it('with a box open, a click on a keypad color finishes it, and a key typed after reaches no drawing', async () => {
+  it('with a box open, a click on a keypad color keeps it open, and the keys typed after go into it', async () => {
     await clickAt(FOURTH_AT)
     await p.keyboard.type('8')
     await p.click('.controls-input button[data-key="5"]')
-    assert.equal(await boxOpen(), false)
-    assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
+    assert.equal(await boxOpen(), true)
     await p.keyboard.type('4')
-    assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
-    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'xy CZ', '8'])
+    await p.keyboard.press('Escape')
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '84'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'xy CZ', '84'])
   })
 
   it('with a box open, opening SudokuPad\'s settings finishes it, and a key typed in the dialog reaches no drawing', async () => {
@@ -168,15 +168,15 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.click('#control-settings')
     await p.locator(DIALOG).waitFor({ state: 'visible' })
     assert.equal(await boxOpen(), false)
-    assert.deepEqual(await texts(), ['23', 'xy CZ', '8', '5'])
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '84', '5'])
     await p.keyboard.type('9')
-    assert.deepEqual(await texts(), ['23', 'xy CZ', '8', '5'])
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '84', '5'])
     await p.keyboard.press('Escape')
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     await doubleClickAt(EMPTY_AT)
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Escape')
-    assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '84'])
   })
 
   it('the Size slider sets the next text\'s size to 2 x the size value + 8; the earlier text is unchanged, and every note is solid', async () => {

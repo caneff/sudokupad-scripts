@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.21.1
+// @version      0.21.2
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.21.1'
+  const VERSION = '0.21.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -1174,13 +1174,29 @@
 
   const unmarkColor = () => { for (const button of keypad().querySelectorAll('button.digit.current')) button.classList.remove('current') }
 
+  // The open note's own look changes. A brand-new note's color or size also becomes the next note's (`alsoNext`); an existing note's changes only itself.
+  function changeOpen (change, alsoNext) {
+    editing.item = change(editing.item)
+    if (editing.index === -1) alsoNext()
+    showEditing(boardMap())
+    showPanelValues()
+  }
+
+  function setColor (next) {
+    color = next
+    Framework.setData(COLOR_KEY, color)
+  }
+
   function pickColor (next) {
+    if (editing) {
+      changeOpen((item) => ({ ...item, color: next }), () => setColor(next))
+      return
+    }
     if (selected.length) {
       changeSelected((item) => ({ ...item, color: next }))
       return
     }
-    color = next
-    Framework.setData(COLOR_KEY, color)
+    setColor(next)
     showPanelValues()
   }
 
@@ -1364,15 +1380,16 @@
     const backgroundButton = document.createElement('button')
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
-    // A press on the button keeps the focus in an open text box, so the box stays open for the click.
-    backgroundButton.addEventListener('mousedown', (event) => event.preventDefault())
     backgroundButton.addEventListener('click', pressBackground)
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
     sliders.append(sizeRow())
+    // Arrow keys on the slider end in a change.
+    sliders.addEventListener('change', returnFocusToNote)
     sliders.addEventListener('input', (event) => {
       const value = readWidth(Number(event.target.value))
-      if (selected.length) changeSelected((item) => ({ ...item, size: textSizeFor(value) }))
+      if (editing) changeOpen((item) => ({ ...item, size: textSizeFor(value) }), () => setSize(value))
+      else if (selected.length) changeSelected((item) => ({ ...item, size: textSizeFor(value) }))
       else setSize(value)
     })
     panelParts = [tray, clear, backgroundButton, settings, sliders]
@@ -1382,7 +1399,7 @@
 
   function showPanelValues () {
     if (panelParts.length === 0) return
-    const looks = selected.length ? panelLooks(selectedNotes()) : { color, width }
+    const looks = editing ? panelLooks([editing.item]) : selected.length ? panelLooks(selectedNotes()) : { color, width }
     unmarkColor()
     if (looks.color !== null) keypad().querySelector(`button[data-key="${looks.color}"]`).classList.add('current')
     document.getElementById(SIZE_SLIDER).value = looks.width
@@ -1667,7 +1684,11 @@
     element.spellcheck = false
     // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
-    element.addEventListener('blur', () => { if (editing && editing.element === element) finishText() })
+    element.addEventListener('blur', (event) => {
+      if (!editing || editing.element !== element) return
+      if (isPanelControl(event.relatedTarget)) editing.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
+      else finishText()
+    })
     // Typing grows the box, which carries the handle and may start the text scrolling.
     element.addEventListener('input', () => { if (editing && editing.element === element) showEditing(boardMap()) })
     const handle = document.createElement('div')
@@ -1681,6 +1702,21 @@
     window.getSelection().selectAllChildren(element)
     window.getSelection().collapseToEnd()
   }
+
+  // The focus went to the slider (`caret` was saved then, null with no caret); the note takes it back, once.
+  function returnFocusToNote () {
+    if (!editing || !('caret' in editing)) return
+    const { element, caret } = editing
+    delete editing.caret
+    element.focus()
+    if (!caret) return
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(caret)
+  }
+
+  // The controls that work on the open note: a press on one leaves the note open.
+  const isPanelControl = (target) => Boolean(target?.closest?.(`${PANEL} button.digit[data-key], ${PANEL} .${SLIDERS_CLASS}, ${PANEL} .${BACKGROUND_CLASS}`))
 
   // Blank lines before and after the text are dropped; line breaks inside it stay.
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
@@ -1700,14 +1736,14 @@
     const { index, item, element } = closeEditing()
     const before = index === -1 ? '' : drawing[index].text
     const text = typedText(element)
-    const changed = text !== before || (index !== -1 && (Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
+    const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
       else drawing[index] = { ...item, text }
     }
     renderDrawing()
-    showBackground()
+    showPanelValues()
     if (changed) save()
   }
 
@@ -1725,11 +1761,17 @@
   }
 
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
-  // capture phase, before any of them.
+  // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || event.target === editing.handle || event.target.closest(`.${BACKGROUND_CLASS}`)) return
+    if (!editing || editing.element.contains(event.target) || event.target === editing.handle || isPanelControl(event.target)) return
     pressFinishedText = true
     finishText()
+  }
+
+  // A press on a panel button keeps the focus in the open note, so its caret stays. The slider takes the focus, and the note gets it back when the
+  // pointer is released, even when the slider did not move.
+  function keepNoteFocus (event) {
+    if (editing && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS}`)) event.preventDefault()
   }
 
   // A drag ends its move or its selection rectangle on its release; a press that never moved does nothing more, unless `click` is given to run it.
@@ -2000,6 +2042,9 @@
     window.addEventListener('blur', endGesture)
     installSliderGuards(`.${SLIDERS_CLASS}`)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
+    window.addEventListener('mousedown', keepNoteFocus, { capture: true })
+    // After the slider guards' own release handler, which takes the focus off the slider.
+    window.addEventListener('pointerup', returnFocusToNote, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
     window.addEventListener('wheel', scrollNote, { capture: true, passive: false })
     window.addEventListener('mousemove', trackPointer, { capture: true, passive: true })
