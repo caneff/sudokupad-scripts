@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, bottomRowFor, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -853,30 +853,66 @@ test('renderMenu has no heading: one dense row per profile in order with the act
   assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
 })
 
-test('installButton: adds an aux-row icon button titled "Color by digit", then refreshControls so the click handler binds', () => {
+test('installButton: adds an icon button titled "Color by digit" in the row it is given, then refreshControls so the click handler binds', () => {
   const calls = []
   const framework = {
-    addAuxButton: (spec) => calls.push(['add', spec]),
+    addControlButton: (spec) => calls.push(['add', spec]),
     addAppButton: () => calls.push(['wrong row'])
   }
   const app = { refreshControls: () => calls.push(['refresh']) }
-  installButton(framework, app, 'off', ODD, colorFor)
+  installButton(framework, app, 'off', ODD, colorFor, '.controls-aux-extensions')
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
+  assert.equal(spec.parent, '.controls-aux-extensions')
   assert.equal(spec.title, 'Color by digit: Off')
   assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="menu"[\s\S]*<\/span><\/div>$/)
   assert.equal(typeof spec.onClick, 'function')
 })
 
+// A page with the rows `rows` names, each a count of buttons, in page order; made rows are recorded in `made`.
+function pageWithRows (...rows) {
+  const made = []
+  const rowEl = (count, className) => ({ className, after (el) { made.push(el); el.placedAfter = this }, querySelectorAll: (sel) => (sel === 'button' ? new Array(count).fill({}) : []) })
+  const els = rows.map((count, i) => rowEl(count, i === 0 ? 'controls-aux' : 'controls-aux controls-aux-extensions'))
+  return {
+    made,
+    first: els[0],
+    createElement: (tag) => ({ tag, className: '', querySelectorAll: () => [] }),
+    querySelector: (sel) => (sel === '.controls-aux' ? els[0] : sel === '.controls-aux-extensions' ? els[1] || null : null)
+  }
+}
+
+test('bottomRowFor: the first row while it holds fewer than FULL_ROW buttons, and no second row is made', () => {
+  assert.equal(FULL_ROW, 5)
+  const page = pageWithRows(4)
+  assert.equal(bottomRowFor(page), '.controls-aux')
+  assert.deepEqual(page.made, [])
+})
+
+test('bottomRowFor: a full first row sends the button to a new .controls-aux-extensions made right after it', () => {
+  const page = pageWithRows(5)
+  assert.equal(bottomRowFor(page), '.controls-aux-extensions')
+  assert.equal(page.made.length, 1)
+  assert.equal(page.made[0].tag, 'div')
+  assert.equal(page.made[0].className, 'controls-aux controls-aux-extensions')
+  assert.equal(page.made[0].placedAfter, page.first)
+})
+
+test('bottomRowFor: a .controls-aux-extensions another script made is reused, with no second copy', () => {
+  const page = pageWithRows(6, 1)
+  assert.equal(bottomRowFor(page), '.controls-aux-extensions')
+  assert.deepEqual(page.made, [])
+})
+
 // The parts of a page the script reads to draw the button: the palette variables and a probe element
-// that resolves a color. Every palette key is the color #3e63dd.
+// that resolves a color. Every palette key is the color #3e63dd. The bottom row holds SudokuPad's four buttons.
 // Its listeners are kept by event type, so a test can fire the button's own press.
 const pageDocument = (extra = {}) => ({
   listeners: {},
   addEventListener (type, fn) { (this.listeners[type] ||= []).push(fn) },
   removeEventListener (type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn) },
-  querySelector: () => null,
+  querySelector: (selector) => (selector === '.controls-aux' ? { querySelectorAll: () => [{}, {}, {}, {}] } : null),
   querySelectorAll: () => [],
   getElementById: () => null,
   documentElement: {},
@@ -917,7 +953,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     getApp: () => Promise.resolve(app),
     getData: () => null,
     setData: (key, value) => calls.push(['save', key, value]),
-    addAuxButton: () => calls.push(['button']),
+    addControlButton: () => calls.push(['button']),
     addSetting: () => calls.push(['setting'])
   }
   try {
@@ -1029,7 +1065,7 @@ async function withScript (app, fn, stored = {}) {
     getApp: () => Promise.resolve(app),
     getData: (key) => app.stored[key] ?? null,
     setData: (key, value) => { app.stored[key] = value },
-    addAuxButton: (spec) => { app.buttonTitle = spec.title },
+    addControlButton: (spec) => { app.buttonTitle = spec.title },
     addSetting: () => {}
   }
   try {
@@ -1691,7 +1727,7 @@ test('iconHtml draws the run of cells in the mode\'s look, with no word strip, a
 test('the button is titled and labelled with its mode in words', () => {
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
   let spec
-  installButton({ addAuxButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor)
+  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor, '.controls-aux')
   assert.equal(spec.title, 'Color by digit: Both')
 })
 
