@@ -49,3 +49,22 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
 `App.restartPuzzle` acts `{type: 'clear', arg: <tool>}` for every key of `app.tools`, Draw included. For `draw`,
 `Cell.clear` logs `Cell.clear > Invalid tool: draw` once per filled cell, and `actionToString` writes `cl:-1` into the
 replay (`Puzzle.Tools.indexOf('draw')`). Read, not run.
+
+## Saving the drawing (#270)
+
+Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run in `live/draw-tool-saved.live.mjs`
+(2026-11-06).
+
+- **Restart**: `App.restartPuzzle` ends with `this.trigger('restarted')`, after `Puzzle.restartPuzzle`, whichever of the
+  confirm dialog's Restart and Keep Time was picked, and whether or not anything was entered. Draw Tool listens with
+  `app.on('restarted', …)` (the app mixes in `PortableEvents`). The confirm dialog runs first, so the script asks
+  nothing itself. Checked live through the dialog's Restart button.
+- **Loading a puzzle**: `Puzzle.createPuzzle` calls `svgRenderer.clearAllLayers()`, which removes every child of the
+  board SVG that is not one of SudokuPad's layers, Draw Tool's layer included. `Puzzle.loadPuzzle` then triggers
+  `loaded` on the puzzle, before the saved progress loads. Draw Tool redraws from storage on `puzzle.on('loaded', …)`,
+  and at its own startup when `app.puzzle.currentPuzzle` is already set. Restart triggers `start` but not `loaded`.
+- **The key**: `app.puzzle.puzzleId` is undefined for the live suite's `scl…` URL puzzle. `convertPuzzle` sets it only
+  from a puzzle's `id`, and `loadRemoteCTCPuzzle` from the id it fetched by, so such a puzzle is keyed by the page URL.
+- **`Framework.getData`** runs `JSON.parse` and on a parse error hands back the raw text, so a broken entry reads as a
+  string, never as an error. Draw Tool reads anything but a list of strokes as unreadable.
+- **The replay**: drawing acts nothing, so `getReplay()` is the same before and after a stroke. Checked live.
