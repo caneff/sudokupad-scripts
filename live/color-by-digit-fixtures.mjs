@@ -2,7 +2,6 @@
 // script's selectors, and the helpers that open a session on that board. Not a check itself, so `live/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
-import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { openPage, startPuzzle } from './page.mjs'
 import { POLL_MS } from './settle.mjs'
@@ -83,17 +82,12 @@ export async function openSession (browser, script, { saved = SEEDED_OFF, force 
   return opened
 }
 
-// The shade's math is the unit tests' (color-by-digit.test.js); the live checks are about which digit takes which shade.
-const { darkenColor, parseColor } = createRequire(import.meta.url)('../color-by-digit.user.js')
-
 // SudokuPad's own color for an entered digit or a mark, read off the page with no script installed.
 export const DEFAULT_FILL = 'rgb(29, 106, 229)'
 
 const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
-// The shade a digit of a group on `color` shows.
-export const shadeOf = (color) => rgbOf(darkenColor(parseColor(color)))
 
-// The page's own resolved color for palette key `key`, and the shade a digit of that key's group shows.
+// The page's own resolved color for palette key `key`.
 export const paletteColorOn = (p, key) => p.evaluate((key) => {
   const probe = document.createElement('span')
   probe.style.color = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
@@ -102,7 +96,13 @@ export const paletteColorOn = (p, key) => p.evaluate((key) => {
   probe.remove()
   return color
 }, key)
-export const shadeOn = async (p, key) => shadeOf(await paletteColorOn(p, key))
+// The shade a digit of a group on a color shows (`shadeOf`), and on palette key `key` (`shadeOn`). The shade's math is the
+// unit tests'; the caller passes the script's own `darkenColor` and `parseColor`, since these fixtures import nothing
+// from the script (ADR 0001).
+export function shadeReaders ({ darkenColor, parseColor }) {
+  const shadeOf = (color) => rgbOf(darkenColor(parseColor(color)))
+  return { shadeOf, shadeOn: async (p, key) => shadeOf(await paletteColorOn(p, key)) }
+}
 
 // One computed style property of the elements that show `digit`, per place on the board.
 // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.

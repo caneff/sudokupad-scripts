@@ -3,12 +3,14 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, savedProfiles, shadeOn, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
+const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../color-by-digit.user.js'))
 
 const LABEL = `${BUTTON} [data-role="mode"]`
 const ARROW = `${BUTTON} [data-role="menu"]`

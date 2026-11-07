@@ -2,12 +2,14 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, BUTTON, DEFAULT_FILL, GIVENS, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, savedProfiles, shadeOf, shadeOn, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, BUTTON, DEFAULT_FILL, GIVENS, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, PUZZLE_URL } from './page.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
+const { shadeOf, shadeOn } = shadeReaders(createRequire(import.meta.url)('../color-by-digit.user.js'))
 
 // SudokuPad's own color for a given, read off the page with no script installed.
 const GIVEN_FILL = 'rgb(0, 0, 0)'
