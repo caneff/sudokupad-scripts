@@ -14,6 +14,7 @@ const DESKTOP = { width: 1200, height: 900 }
 const PHONE = { width: 390, height: 800 }
 const DESKTOP_DIALOG_PX = 640
 const NEAR_PX = 1
+const MAX_ONE_LINE_PX = 30
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -33,10 +34,11 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
       const boxes = await p.locator(`${EDITOR} .cbd-check`).evaluateAll((labels) => labels.map((l) => {
         const input = l.querySelector('input').getBoundingClientRect()
         const text = l.getBoundingClientRect()
-        return { inputRight: input.right, labelRight: text.right, inputMid: input.y + input.height / 2, labelMid: text.y + text.height / 2, labelWidth: text.width }
+        return { height: text.height, inputRight: input.right, labelRight: text.right, inputMid: input.y + input.height / 2, labelMid: text.y + text.height / 2, labelWidth: text.width }
       }))
       assert.equal(boxes.length, 2)
       for (const b of boxes) {
+        assert.equal(b.height < MAX_ONE_LINE_PX, true, `label text stays on one line: ${JSON.stringify(b)}`)
         assert.equal(Math.abs(b.inputMid - b.labelMid) <= 2, true, `checkbox and label share a line: ${JSON.stringify(b)}`)
         assert.equal(b.labelWidth > b.inputRight - (b.labelRight - b.labelWidth) + 40, true, `label text sits beside the box: ${JSON.stringify(b)}`)
       }
