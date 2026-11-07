@@ -161,11 +161,14 @@
 - **drawing** — everything Draw Tool has put on one puzzle: its strokes and texts, oldest first. Saved per puzzle (keyed by
   the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles drawn on last; it is not in the replay, Undo
   does not touch it, and Restart and Clear all empty it.
-- **stroke** — one freehand line of a drawing, or a straight one drawn with Shift, in a pen color and one of three
-  widths. The homepage, the script's description and its buttons call it a line, for the solver; code and tests say
+- **stroke** — one freehand line of a drawing, or a straight one drawn with Shift, in a pen color, with its own width
+  (1 to 16) and opacity. The homepage, the script's description and its buttons call it a line, for the solver; code and tests say
   stroke. Not a pen tool line, which SudokuPad stores in the cells.
-- **text** — a short string typed into a drawing, solid, in a pen color and one of three text sizes, centred on the
+- **text** — a short string typed into a drawing, in a pen color, with its own size (2 x the width + 8) and opacity, centred on the
   point clicked. It is typed in the **text box**, an input over the board that a click on the board opens, and a click on
   a text reopens.
+- **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
+  (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.
+  Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
 - **erase** — Draw's right-drag: every stroke and text the drag passes near is removed whole. Clear all erases the whole
   drawing, after asking.
