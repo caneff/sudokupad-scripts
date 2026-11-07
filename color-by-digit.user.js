@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.0
+// @version      0.22.2
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,8 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.0'
-  const SETTINGS_GROUP = 'experimental'
+  const VERSION = '0.22.2'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -246,73 +245,13 @@
   }
   const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
   const READERS = { [PROFILES_KEY]: readPastedProfiles, [MODE_KEY]: readPastedMode, ...Object.fromEntries(ADDED_PRELOADS.map(({ key }) => [key, readPastedFlag])) }
+  // Settings copied before the mode existed carry auto mode's on/off in its place.
+  const withModeFromAuto = (data) => (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY) ? { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) } : data)
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
   function copiedSettings (store) {
     const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
     ADDED_PRELOADS.forEach(({ key }) => { if (store.getData(key) === true) copied[key] = true })
     return JSON.stringify(copied)
-  }
-
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
-  function pastedSettings (text) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    // Settings copied before the mode existed carry auto mode's on/off in its place.
-    if (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY)) data = { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) }
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(READERS)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  // The icons are Pen Tool Extras' copy and paste pictures; the scripts share no code.
-  const ICON_PICTURES = {
-    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
-    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
-  }
-  const iconButton = (act, label, picture) =>
-    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
-
-  const renderTitle = (version) => '<div class="cbd-title-row">' +
-    `<span><b>Color by Digit</b> <small class="cbd-version">v${version}</small></span>` +
-    '<span data-role="settings-status"></span>' +
-    `<span class="cbd-tools">${iconButton('copy-settings', 'Copy settings', ICON_PICTURES.copy)}${iconButton('paste-settings', 'Paste settings', ICON_PICTURES.paste)}</span></div>`
-
-  function wireCopyPaste (root, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copiedSettings(Framework))
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          if (Object.keys(values).length > 0) apply(values)
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
-      }
-    })
   }
 
   const sameGroups = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -471,24 +410,61 @@
     return (best && !sameGroups(cellGroups, digitGroups) ? best : strip).map(chipOf)
   }
 
+  // <lib:color-math>
+  // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
 
-  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
-  function parseColor (color) {
-    const v = String(color ?? '').trim().toLowerCase()
-    if (!isVisibleColor(v)) return null
-    const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(v)
-    if (hex) {
-      const h = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
-      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
-    }
-    const fn = /^rgba?\(([^)]*)\)$/.exec(v)
-    const channels = fn ? fn[1].split(/[,/\s]+/).filter(Boolean).slice(0, 3).map(Number) : []
-    return channels.length === 3 && !channels.some(Number.isNaN) ? channels.map((x) => Math.round(clamp255(x))) : null
+  // The share of its OKLCH lightness a cell color keeps when darkened: low enough to read against cell colors drawn at 60% opacity, high enough that the lightest still show as 5px lines on white and the nine stay apart.
+  const LIGHTNESS_FACTOR = 0.75
+  const GAMUT_EDGE = 1e-6
+  const LIGHT_TEXT = '#dddddd'
+  const DARK_TEXT = '#222222'
+
+  const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
+  const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+  const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
+  const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
+
+  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
+  function colorFunction (value) {
+    const fn = COLOR_FUNCTION.exec(value)
+    if (!fn) return null
+    const parts = fn[2].split(/[,/\s]+/).filter(Boolean)
+    return { kind: fn[1], args: parts.slice(0, 3), alpha: parts.length > 3 ? alphaOf(parts[3]) : undefined }
   }
 
-  // The digit shade is Pen Tool Extras' pen color from a cell color, copied since the scripts share no code: the share of its OKLCH lightness a cell color keeps.
-  const LIGHTNESS_FACTOR = 0.75
+  // A page lists `transparent`, or a color with alpha 0, to leave a slot empty (key 0 of each default page).
+  function isTransparent (text) {
+    if (typeof text !== 'string') return false
+    const value = text.trim().toLowerCase()
+    if (value === 'transparent') return true
+    const hex = HEX_ALPHA.exec(value)
+    if (hex) return parseInt(hex[1] ?? hex[2], 16) === 0
+    const fn = colorFunction(value)
+    return Boolean(fn && fn.alpha <= 0)
+  }
+
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
+  function parseColor (text) {
+    if (typeof text !== 'string' || isTransparent(text)) return null
+    const value = text.trim().toLowerCase()
+    const hex = HEX_DIGITS.exec(value)
+    if (hex) {
+      const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
+      return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
+    }
+    const fn = colorFunction(value)
+    if (!fn || fn.kind !== 'rgb' || fn.args.length < 3) return null
+    const channels = fn.args.map(Number)
+    return channels.some(Number.isNaN) ? null : channels.map((x) => Math.round(clamp255(x)))
+  }
+
+  const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
+
   const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
   const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
 
@@ -516,16 +492,16 @@
     ]
   }
 
-  const EDGE = 1e-6
-  const inGamut = (linear) => linear.every((x) => x >= -EDGE && x <= 1 + EDGE)
+  const inGamut = (linear) => linear.every((x) => x >= -GAMUT_EDGE && x <= 1 + GAMUT_EDGE)
 
   // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
   function darkenColor (rgb) {
     const [L, a, b] = toOklab(rgb.map(clamp255))
     const target = L * LIGHTNESS_FACTOR
-    let low = inGamut(fromOklabLinear([target, a, b])) ? 1 : 0
-    let high = 1
-    if (low === 0) {
+    let low = 1
+    if (!inGamut(fromOklabLinear([target, a, b]))) {
+      low = 0
+      let high = 1
       for (let i = 0; i < 30; i++) {
         const mid = (low + high) / 2
         if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
@@ -533,9 +509,298 @@
       }
     }
     const out = fromOklabLinear([target, a * low, b * low])
-    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
-      .toString(16).padStart(2, '0')).join('')
+    return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
+
+  // WCAG relative luminance of [r, g, b] channels.
+  function wcagLuminance (rgb) {
+    const [r, g, b] = rgb.map((c) => {
+      const x = c / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+
+  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background) {
+    const rgb = parseColor(background)
+    if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
+    const page = wcagLuminance(rgb) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-math>
+  // <lib:palette>
+  // Generated from lib/palette.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads parseColor, darkenColor and toOklab from color-math.
+  /* global parseColor, darkenColor, toOklab */
+  // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
+  const SUDOKUPAD_PEN_COLORS = Object.freeze({
+    1: '#1f8020',
+    2: '#e87cf1',
+    3: '#e49632',
+    4: '#f53a37',
+    5: '#d2be32',
+    6: '#3d99f5',
+    7: '#d6d6d6',
+    8: '#7c7c7c',
+    9: '#000000'
+  })
+  const PEN_COLOR_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
+  // least saturated darkened default colors are above 0.08.
+  const GREY_CHROMA = 0.04
+  // One page preset per cell color page, up to three, then SudokuPad's own colors.
+  const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
+  const SUDOKUPAD_PRESET = 'sudokupad'
+  const PALETTE_PRESET_LABELS = {
+    'page-1': 'Darker page 1',
+    'page-2': 'Darker page 2',
+    'page-3': 'Darker page 3',
+    [SUDOKUPAD_PRESET]: 'SudokuPad colors'
+  }
+  const COLOR_TOOL_POLL_MS = 100
+
+  // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
+  const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
+
+  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so color N lines up with cell color button N.
+  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
+  function darkerPageColors (keys, readCell) {
+    const colors = {}
+    const missing = []
+    const derived = []
+    PEN_COLOR_NUMBERS.forEach((n) => {
+      const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
+      if (rgb) {
+        colors[n] = darkenColor(rgb)
+        derived.push(n)
+      } else {
+        colors[n] = SUDOKUPAD_PEN_COLORS[n]
+        missing.push(n)
+      }
+    })
+    let darkest = null
+    let darkestLightness = Infinity
+    for (const n of derived) {
+      const [lightness, a, b] = toOklab(parseColor(colors[n]))
+      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
+        darkest = n
+        darkestLightness = lightness
+      }
+    }
+    if (darkest) colors[darkest] = '#000000'
+    return { colors, missing }
+  }
+
+  function paletteOptions (pageCount) {
+    return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+  }
+
+  // `pages` is the palette's pages of color keys, and `readCell` reads a key's color as CSS text.
+  function paletteColors (preset, pages, readCell) {
+    if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
+    const page = paletteOptions(pages.length).indexOf(preset)
+    if (page === -1) throw new RangeError(`palette: ${preset} is not a preset of this palette`)
+    return { ...darkerPageColors(pages[page], readCell), preset }
+  }
+
+  const colorTool = () => Framework.app?.tools?.colour
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  function readyColorTool () {
+    const tool = colorTool()
+    const pages = tool?.palette?.pages
+    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
+  }
+
+  // No time limit: until the color tool is ready the caller shows SudokuPad's own colors.
+  function waitForColorTool () {
+    return new Promise((resolve) => {
+      const check = () => {
+        const tool = readyColorTool()
+        if (tool) resolve(tool)
+        else setTimeout(check, COLOR_TOOL_POLL_MS)
+      }
+      check()
+    })
+  }
+
+  // The pages of cell color keys of the palette in force, or none until the color tool has one.
+  function palettePages () {
+    const palette = colorTool()?.palette
+    if (!palette) return []
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    return palette.pages
+  }
+
+  // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
+  // '' for a value it rejects or a variable with none.
+  function readRootColor (name) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    const probe = document.createElement('span')
+    probe.style.color = value
+    if (!probe.style.color) return ''
+    document.body.appendChild(probe)
+    try {
+      return window.getComputedStyle(probe).color
+    } finally {
+      probe.remove()
+    }
+  }
+
+  const readPenColor = (n) => readRootColor(`--puzzle-pencolor-${n}`)
+  // The raw `--cell-color-<key>` value, not the 60% opacity it shows with on the grid. SudokuPad sets the variable of every key in the palette, so any page reads.
+  const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
+  /* eslint-enable no-unused-vars */
+  // </lib:palette>
+  // <lib:color-picker>
+  // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads PEN_COLOR_NUMBERS from palette.
+  /* global PEN_COLOR_NUMBERS */
+  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
+  const HOLD_TO_EDIT_MS = 1000
+  // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
+  const SWATCH_PX = 34
+  const SWATCH_GAP_PX = 4
+  // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
+  const PICKER_INPUT_REM = 2.4
+  const PICKER_COLUMNS = 3
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
+
+  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // The dialog's color block: a pulldown above a grid of swatches, three to a row.
+  // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
+  // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
+  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '' }) {
+    const palette = picked !== undefined
+    const option = ({ value, label, selected, disabled }) =>
+      `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(label)}</option>`
+    const named = (swatch) => `aria-label="${escapeHtml(swatch.label)}" title="${escapeHtml(swatch.label)}"`
+    const swatch = (s) => {
+      const head = `class="${prefix}swatch" data-role="swatch"`
+      if (!s) return `<span ${head} data-empty="slot"></span>`
+      if (!palette) return `<input type="color" ${head} data-key="${escapeHtml(s.key)}" value="${escapeHtml(s.value)}" ${named(s)}>`
+      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${escapeHtml(s.value)}"></button>`
+    }
+    return `<div class="${prefix}color-block">` +
+      `<select class="${prefix}color-choice" data-role="color-choice" aria-label="${escapeHtml(label)}">${options.map(option).join('')}</select>` +
+      `<div class="${prefix}color-row"><div class="${prefix}swatches">${swatches.map(swatch).join('')}</div>${beside}</div></div>`
+  }
+
+  // `scope` is the dialog's own element (`#id`), so SudokuPad's rules for its dialogs' selects and buttons are outranked without !important.
+  function colorBlockCss (prefix, scope) {
+    const at = (selector) => `${scope} .${prefix}${selector}`
+    return [
+      `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
+      // As wide as the block, whatever its longest option: a select is otherwise as wide as that, and would widen the dialog's column.
+      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
+      `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
+      `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
+      `${at('swatch')} { box-sizing: border-box; display: block; width: ${SWATCH_PX}px; height: ${SWATCH_PX}px; margin: 0; padding: 0; border: 1px solid rgb(0 0 0 / .25); border-radius: 6px; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }`,
+      `${at('swatch')}[data-empty] { border: none; cursor: default; }`,
+      `${at('swatch')}[aria-pressed="true"] { border: 2px solid #fff; outline: 3px solid #000; }`,
+      `${at('swatch')}::-webkit-color-swatch-wrapper { padding: 0; }`,
+      `${at('swatch')}::-webkit-color-swatch { border: none; border-radius: 5px; }`,
+      `${at('swatch')}::-moz-color-swatch { border: none; border-radius: 5px; }`
+    ].join('\n')
+  }
+
+  // Edit mode's looks, for SudokuPad's tool `tool` (its panel carries `tool-<tool>`): each picker fills the grid cell of its button, whose own picture is hidden under it.
+  // A picker is out of the flow, so it takes no cell from the buttons the panel places itself.
+  function pickerCss (prefix, tool) {
+    const panel = `.tool-${tool} .controls-input`
+    const picker = (n) => `${panel} .${prefix}picker[data-key="${n}"]`
+    const rows = PEN_COLOR_NUMBERS.length / PICKER_COLUMNS
+    return [
+      `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
+      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
+      `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
+      ...PEN_COLOR_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
+      // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
+      ...[[[1, 2, 3], rows], [[7, 8, 9], 1]].flatMap(([keys, row]) => keys.map((n) => `.setting-flipkeypad ${picker(n)} { grid-row: ${row} / span 1; }`))
+    ].join('\n')
+  }
+
+  // Every open picker shows the color `colorOf(n)` gives now.
+  function refreshPickers (prefix, colorOf) {
+    document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
+  }
+
+  // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
+  // A second hold, or the panel leaving the tool, ends edit mode. `guard` runs each toggle, so a caller can report a failure its own way.
+  function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
+    const toolClass = `tool-${tool}`
+    const editing = `${prefix}editing`
+    const pickerClass = `${prefix}picker`
+    // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
+    const targets = `.${toolClass} .controls-input button[data-key], .${toolClass} .${pickerClass} input`
+    // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
+    let leaveWatch = null
+
+    function exit (panel) {
+      if (leaveWatch) leaveWatch.disconnect()
+      leaveWatch = null
+      panel.classList.remove(editing)
+      panel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
+    }
+
+    function enter (panel) {
+      // Every button is found before anything changes, so a missing one leaves no half edit mode.
+      const buttons = PEN_COLOR_NUMBERS.map((n) => {
+        const button = panel.querySelector(`.controls-input button[data-key="${n}"]`)
+        if (!button) throw new Error(`${prefix}color-picker: the ${tool} tool has no button for color ${n}`)
+        return button
+      })
+      panel.classList.add(editing)
+      buttons.forEach((button, i) => {
+        const n = PEN_COLOR_NUMBERS[i]
+        button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
+      })
+      leaveWatch = new window.MutationObserver(() => {
+        if (!panel.classList.contains(toolClass)) exit(panel)
+      })
+      leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
+    }
+
+    let timer
+    let holdDone = false
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    // Pointer events carry a mouse button of either kind.
+    document.addEventListener('pointerdown', (event) => {
+      cancel()
+      holdDone = false
+      const target = event.target.closest(targets)
+      if (!target) return
+      const panel = target.closest(`.${toolClass}`)
+      timer = setTimeout(() => {
+        timer = undefined
+        holdDone = true
+        if (!panel.classList.contains(toolClass)) return
+        guard(() => panel.classList.contains(editing) ? exit(panel) : enter(panel))
+      }, HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // The browser's menu would open over the picker during a right-click hold: when the press is still going (Linux opens it on press),
+    // or after the hold has run its course (Windows opens it on release, over the picker that appeared under the pointer).
+    // A quick right-click on a button, released before the delay, keeps its menu on Windows.
+    document.addEventListener('contextmenu', (event) => {
+      if ((timer !== undefined || holdDone) && event.target.closest(targets)) event.preventDefault()
+    }, true)
+    document.addEventListener('input', (event) => {
+      const input = event.target
+      if (input.matches(`.${pickerClass} input`)) save(input.dataset.key, input.value)
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-picker>
 
   // An entered digit's text element carries no digit attribute, so the script adds this one.
   const DIGIT_ATTR = 'data-color-by-digit'
@@ -597,16 +862,8 @@
   }
 
   function isVisibleColor (value) {
-    const v = String(value).trim().toLowerCase()
-    if (v === '' || v === 'transparent') return false
-    if (/^#[0-9a-f]{4}$/.test(v)) return v[3] !== '0'
-    if (/^#[0-9a-f]{8}$/.test(v)) return v.slice(7) !== '00'
-    const fn = /^(?:rgba|hsla)\(([^)]*)\)$/.exec(v)
-    if (fn) {
-      const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
-      if (parts.length === 4 && Number(parts[3]) === 0) return false
-    }
-    return true
+    const text = String(value)
+    return text.trim() !== '' && !isTransparent(text)
   }
 
   const PURPLE = '#6a1b9a'
@@ -675,18 +932,11 @@
     return pages.flatMap(pageSlots).filter(Boolean)
   }
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-
-  const KEY_SIZE = '34px'
+  // A digit key is a swatch's size, so each row of the pad lines up with a row of swatches.
+  const KEY_SIZE = `${SWATCH_PX}px`
+  const CLASS_PREFIX = 'cbd-'
   // SudokuPad's own color for an entered digit, which a painted digit key shows on its group's color.
   const ENTERED_DIGIT_BLUE = 'rgb(29, 106, 229)'
-
-  // The brush is ringed twice (white inside, black outside) so it shows on any swatch color.
-  function renderSwatch (slot, brush) {
-    if (!slot) return '<span data-empty="slot"></span>'
-    return `<button type="button" data-act="color" data-key="${esc(slot.key)}" ` +
-      `title="${esc(slot.key)}" aria-pressed="${slot.key === brush}" style="background:${esc(slot.value)}"></button>`
-  }
 
   const pageLabel = (page) => `Page ${page.page + 1}${page.current ? ' (current)' : ''}`
 
@@ -704,31 +954,36 @@
     return first ? first.key : null
   }
 
-  function renderPageSelect (pages, page) {
-    const options = pages.map((p) => `<option value="${p.page}"${p === page ? ' selected' : ''}>${pageLabel(p)}</option>`).join('')
-    return `<select data-act="page" aria-label="Cell color page">${options}</select>`
-  }
-
   // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
-    const look = !key ? '' : color ? ` style="background:${esc(color.value)}"` : ' class="cbd-unset"'
-    return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${esc(key || '')}"${look}>${digit}</button>`
+    const look = !key ? '' : color ? ` style="background:${escapeHtml(color.value)}"` : ' class="cbd-unset"'
+    return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${escapeHtml(key || '')}"${look}>${digit}</button>`
   }
 
-  const emptyPage = { rows: [[null, null, null], [null, null, null], [null, null, null]], zero: null }
-
-  // One grid: each row has three swatches, a gap, and three digit keys, so a swatch row lines up with a pad row. A fourth row holds
-  // the 0 swatch, if the page has one, and the 0 key under 7, where SudokuPad's own pad puts 0.
-  function renderPaint (groups, shown, brush, colors) {
+  // The digit keys in rows of three beside the swatch grid, and a fourth row with the 0 key under 7, where SudokuPad's own pad puts 0.
+  function renderPad (groups, colors) {
     const keyOfDigit = keyOfDigitMap(groups)
     const digitKey = (d) => renderDigitKey(d, keyOfDigit[d], colors)
-    const gap = '<span data-empty="gap"></span>'
     const pad = '<span data-empty="pad"></span>'
+    const rows = Math.floor(NUMPAD_DIGITS.length / PAGE_COLUMNS)
     const zero = NUMPAD_DIGITS[NUMPAD_DIGITS.length - 1]
-    const rows = shown.rows.map((row, r) => row.map((slot) => renderSwatch(slot, brush)).join('') + gap + NUMPAD_DIGITS.slice(r * 3, r * 3 + 3).map(digitKey).join(''))
-    rows.push(renderSwatch(shown.zero, brush) + renderSwatch(null).repeat(2) + gap + digitKey(zero) + pad.repeat(2))
-    return `<div data-role="paint">${rows.join('')}</div>`
+    const lines = Array.from({ length: rows }, (_, r) => NUMPAD_DIGITS.slice(r * PAGE_COLUMNS, (r + 1) * PAGE_COLUMNS).map(digitKey).join(''))
+    lines.push(digitKey(zero) + pad.repeat(PAGE_COLUMNS - 1))
+    return `<div data-role="paint">${lines.join('')}</div>`
+  }
+
+  // The shown page's swatches in the shared color block, its index 0 color after 1 to 9, so it sits on a fourth row
+  // beside the 0 key, which the pad puts under 7.
+  function renderPaint (groups, pages, shown, brush, colors) {
+    return renderColorBlock({
+      prefix: CLASS_PREFIX,
+      label: 'Cell color page',
+      options: pages.map((p) => ({ value: String(p.page), label: pageLabel(p), selected: p === shown })),
+      swatches: [...shown.rows.flat(), ...(shown.zero ? [shown.zero] : [])].map((slot) => slot && { ...slot, label: slot.key }),
+      picked: brush,
+      beside: renderPad(groups, colors)
+    })
   }
 
   // Each mode draws a cell the way it colors the board: the cell's fill and its digit's ink from the group color, and the run's line.
@@ -756,8 +1011,8 @@
       // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
       const ink = look.ink
-      return `<g data-role="chip" data-key="${esc(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${esc(fill)}"/>` +
-        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${esc(ink)}">${esc(digit)}</text></g>`
+      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"/>` +
+        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
     const dividers = shown.slice(1).map((_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" stroke="${line}" ${STROKE}/>`).join('')
     const place = x === undefined ? '' : ` x="${x}" y="${y}"`
@@ -792,11 +1047,11 @@
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const chosen = i === selected
-      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${esc(profile.name)}">` +
+      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
         `<span class="cbd-chips">${renderChips(profile.groups, colorOf, { size: CHIP_PX })}</span>` +
-        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${esc(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${esc(profile.name)}</span>`) +
-        `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
+        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
+        `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
     return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
@@ -811,13 +1066,13 @@
   const chipColumn = (groups, colorOf) =>
     `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(groups, colorOf, { size: CHIP_PX })}</span>`
   // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
-  const menuName = (name) => `<span data-role="name" title="${esc(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span>`
+  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
   const dotColumn = (role, html, align) => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}">${html}</span>`
   const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
 
   function menuDot (target, index, picked, name) {
     const on = index === picked
-    return dotColumn('dot-column', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${esc(name)}" ` +
+    return dotColumn('dot-column', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${escapeHtml(name)}" ` +
       `style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;cursor:pointer;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`, 'display:flex;justify-content:center')
   }
 
@@ -843,7 +1098,7 @@
   }
 
   const optionHtml = (value, label, selected, index) =>
-    `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${esc(label)}</option>`
+    `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`
 
   function renderPulldowns (state, mode) {
     const shownMode = allowedMode(mode, usesDigitColors(state))
@@ -857,16 +1112,19 @@
       '</div>'
   }
 
+  // Matched as text, not by a selector, since a custom palette's key may hold a quote.
+  const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
+
   function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '' }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    const head = colors.length === 0
-      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>'
-      : `<div class="cbd-palette-head">${renderPageSelect(pages, shown)}</div>`
+    const paint = colors.length === 0
+      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
+      : renderPaint(groups, pages, shown, brush, colors)
     return `${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
-      `<div class="cbd-column">${heading('Digits', clear)}${head}${renderPaint(groups, shown || emptyPage, brush, colors)}</div></div>`
+      `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
   }
 
   // One stylesheet, every rule scoped to the editor, the dialog itself (its width), or the dialog's options row.
@@ -874,19 +1132,7 @@
   const EDITOR = `#${EDITOR_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
   const OPTIONS = `${DIALOG} .dialog-options`
-  const TITLE = `${DIALOG} .cbd-title-row`
-  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
-  const PULLDOWN_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
   const STYLE_CSS = [
-    ['.cbd-version', 'opacity: .6'],
-    [TITLE, 'display: flex; align-items: center; gap: 12px'],
-    [`${TITLE} .cbd-tools`, 'display: flex; align-items: center; gap: 4px'],
-    [`${TITLE} .cbd-tools button`, `background: none; border: none; box-shadow: none; padding: 4px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 0; color: ${MUTED}; cursor: pointer; border-radius: 6px`],
-    [`${TITLE} .cbd-tools button:hover`, 'background: #f0edf5'],
-    [`${TITLE} .cbd-tools svg`, 'width: 20px; height: 20px'],
-    [`${TITLE} .cbd-tools svg *`, 'fill: none'],
-    // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-    [`${TITLE} [data-role="settings-status"]`, `flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${MUTED}`],
     [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
     [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
@@ -897,14 +1143,12 @@
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
     [`${EDITOR} .cbd-column`, 'min-width: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
-    [`${EDITOR} .cbd-palette-head`, 'margin-bottom: 6px'],
-    [`${EDITOR} select[data-act="page"], ${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
+    [`${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
-    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: 4px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}) 12px repeat(3, ${KEY_SIZE}); touch-action: none; margin-top: 8px`],
+    // The pad's columns: three digit keys; the 0 key sits under 7.
+    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}); touch-action: none`],
     [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
     [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
-    [`${EDITOR} [data-act="color"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888`],
-    [`${EDITOR} [data-act="color"][aria-pressed="true"]`, 'border: 2px solid #fff; outline: 3px solid #000'],
     [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
     [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 2px'],
     [`${EDITOR} .cbd-profile`, 'cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px; border-radius: 6px'],
@@ -930,10 +1174,136 @@
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
     [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
     [`${OPTIONS} button[data-role="save"]`, 'background: #6b3fa0; color: #fff; border: 1px solid #5a3489; font-weight: 600']
-  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
+  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
 
+  // <lib:settings-dialog>
+  // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
+  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
+  const SETTINGS_GROUP = 'experimental'
+  const TITLE_MUTED = '#777'
+
+  // The next press ends the swallowing even when no release came (a close from the keyboard).
+  function swallowRelease (win = window) {
+    const swallow = (event) => event.stopImmediatePropagation()
+    const stop = () => {
+      RELEASE_EVENTS.forEach((type) => win.removeEventListener(type, swallow, true))
+      win.removeEventListener('pointerdown', stop, true)
+    }
+    RELEASE_EVENTS.forEach((type) => win.addEventListener(type, swallow, true))
+    win.addEventListener('pointerdown', stop, true)
+  }
+
+  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
+  function closeDialogKeepingGrid (framework, win = window) {
+    framework.closeDialog()
+    swallowRelease(win)
+  }
+
+  // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
+  function addSettingsEntry (framework, { name, content, open }) {
+    framework.addSetting({
+      tag: 'button',
+      name,
+      group: SETTINGS_GROUP,
+      content,
+      handler: () => {
+        closeDialogKeepingGrid(framework)
+        setTimeout(open, 0)
+      }
+    })
+  }
+
+  const COPY_PASTE_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const titleIconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
+  }
+
+  function dialogTitleCss (prefix) {
+    const tools = `.${prefix}tools`
+    return [
+      `.${prefix}version { opacity: .6; }`,
+      `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
+      `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
+      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} svg { width: 20px; height: 20px; }`,
+      `${tools} svg * { fill: none !important; }`,
+      // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+    ].join('\n')
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-dialog>
+  // <lib:settings-transfer>
+  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -943,10 +1313,8 @@
   }
 
   function readPages () {
-    const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
-    const palette = tool && tool.palette
-    if (!palette || !Array.isArray(palette.pages)) return []
-    return layoutPages(palette.pages, tool.currentPage, readColor)
+    const tool = readyColorTool()
+    return tool ? layoutPages(tool.palette.pages, tool.currentPage, readColor) : []
   }
 
   const saveState = (state) => Framework.setData(PROFILES_KEY, state)
@@ -963,17 +1331,10 @@
   }
   const loadGroups = () => activeGroups(loadState())
 
-  // The raw `--cell-color-<key>` value can be any CSS color, so it is resolved on a probe.
+  // A key with no visible color reads as ''.
   function readColor (key) {
-    const raw = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
-    if (!isVisibleColor(raw)) return ''
-    const probe = document.createElement('span')
-    probe.style.color = raw
-    if (probe.style.color === '') return ''
-    document.body.appendChild(probe)
-    const resolved = window.getComputedStyle(probe).color
-    probe.remove()
-    return resolved
+    const resolved = readCellColor(key)
+    return isVisibleColor(resolved) ? resolved : ''
   }
 
   const allCells = (app) => [].concat(app.puzzle.cells).flat(Infinity)
@@ -1334,7 +1695,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: renderTitle(VERSION) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Color by Digit', version: VERSION }) },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',
@@ -1375,7 +1736,7 @@
       nameBox.select()
     }
     draw()
-    wireCopyPaste(box.closest('.dialog'), (values) => {
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS, upgrade: withModeFromAuto }, (values) => {
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
@@ -1401,13 +1762,15 @@
     })
     box.addEventListener('change', (event) => {
       if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
+      const pageChoice = event.target.closest('select[data-role="color-choice"]')
+      if (pageChoice) {
+        page = Number(pageChoice.value)
+        draw()
+        box.querySelector('select[data-role="color-choice"]').focus()
+        return
+      }
       const pulldown = event.target.closest('select[data-role]')
-      if (pulldown) { choose(pulldown.dataset.role, pulldown.value); return }
-      const el = event.target.closest('select[data-act="page"]')
-      if (!el) return
-      page = Number(el.value)
-      draw()
-      box.querySelector('select[data-act="page"]').focus()
+      if (pulldown) choose(pulldown.dataset.role, pulldown.value)
     })
     const setGroups = (groups) => {
       if (sameGroups(groups, groupsShown())) return
@@ -1422,7 +1785,7 @@
       event.preventDefault()
       if (target.hasPointerCapture && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId)
       const pressed = target.closest('[data-act="digit"]')
-      if (!pressed && target.closest('[data-act]')) return
+      if (!pressed && target.closest('[data-act], [data-role="swatch"]')) return
       let paintKey
       const paint = (key) => {
         if (brush === null) return
@@ -1502,6 +1865,16 @@
         selectRow(Number(row.dataset.index), false)
         return
       }
+      const swatch = event.target.closest('button[data-role="swatch"]')
+      if (swatch) {
+        event.preventDefault()
+        event.stopPropagation()
+        brush = swatch.dataset.key
+        draw()
+        // The redraw replaced the swatch; a keyboard user keeps the focus on its successor.
+        if (event.detail === 0) swatchWithKey(box, brush)?.focus()
+        return
+      }
       const el = event.target.closest('button[data-act]')
       if (!el) return
       event.preventDefault()
@@ -1513,8 +1886,6 @@
         const next = deleteProfile(draft, index)
         if (next === draft) return
         reshow(next, indexAfterDelete(selected, index, draft.profiles.length))
-      } else if (act === 'color') {
-        brush = el.dataset.key
       } else if (act === 'clear') {
         setGroups([])
       } else if (act === 'digit' && event.detail === 0 && brush !== null) {
@@ -1523,9 +1894,8 @@
       }
       draw()
       // The redraw replaced the button; a keyboard user keeps the focus on its successor.
-      const identity = { digit: 'digit', color: 'key' }[act]
-      if (event.detail === 0 && identity) {
-        const next = box.querySelector(`[data-act="${act}"][data-${identity}="${el.dataset[identity]}"]`)
+      if (event.detail === 0 && act === 'digit') {
+        const next = box.querySelector(`[data-act="digit"][data-digit="${el.dataset.digit}"]`)
         if (next) next.focus()
       }
     })
@@ -1537,13 +1907,7 @@
       setTimeout(() => openDialog(app), 0)
     }
     // The settings entry goes first: a failure installing the button must not cost the editor.
-    Framework.addSetting({
-      tag: 'button',
-      name: 'colorbydigit',
-      group: SETTINGS_GROUP,
-      content: 'Color by Digit',
-      handler: openEditor
-    })
+    addSettingsEntry(Framework, { name: 'colorbydigit', content: 'Color by Digit', open: () => openDialog(app) })
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))

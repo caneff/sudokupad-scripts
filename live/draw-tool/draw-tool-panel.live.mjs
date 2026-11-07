@@ -225,21 +225,21 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     assert.equal(await p.locator(PICKER).count(), 0)
     await hold('.controls-input button[data-key="4"]', 'left', 'visible')
     const colors = await savedColors()
-    assert.deepEqual(await p.locator(PICKER).evaluateAll((inputs) => inputs.map((i) => [Number(i.dataset.color), i.value])), NINE.map((n) => [n, colors[n]]))
+    assert.deepEqual(await p.locator(PICKER).evaluateAll((inputs) => inputs.map((i) => [Number(i.dataset.key), i.value])), NINE.map((n) => [n, colors[n]]))
   })
 
   it('a picked color applies at once to the button and to every note already made in that color, and is saved', async () => {
     const before = await noteColors()
     const old4 = rgb((await savedColors())[4])
     assert.equal(before.includes(old4), true, 'a note in color 4 is on the board')
-    await p.locator(`${PICKER}[data-color="4"]`).fill('#123456')
+    await p.locator(`${PICKER}[data-key="4"]`).fill('#123456')
     assert.deepEqual(await settle(noteColors, before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c)), before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c))
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')
     assert.equal((await savedColors())[4], '#123456')
   })
 
   it('a right-button hold on a picker takes the pickers away', async () => {
-    await hold(`${PICKER}[data-color="1"]`, 'right', 'detached')
+    await hold(`${PICKER}[data-key="1"]`, 'right', 'detached')
     assert.equal(await p.locator(PICKER).count(), 0)
   })
 

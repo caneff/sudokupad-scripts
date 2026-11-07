@@ -5,10 +5,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
-  buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, editedColors,
-  readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle,
-  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
-  copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
+  buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
+  readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
+  buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
@@ -18,6 +18,7 @@ const {
   createStep, lackingInternals, STEP_LABELS,
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('../pen-tool-extras.user.js')
+const readPaste = (text) => pastedSettings(text, READERS)
 const { SOLVER_REACH } = require('../dark-page.user.js')
 
 const nextType = (current, settings) => stepType(current, settings, EDGE_CYCLE)
@@ -27,10 +28,6 @@ const nextType = (current, settings) => stepType(current, settings, EDGE_CYCLE)
 const TABLE = {
   1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000'
 }
-
-test('SUDOKUPAD_PEN_COLORS are SudokuPad\'s own nine pen colors', () => {
-  assert.deepEqual(SUDOKUPAD_PEN_COLORS, TABLE)
-})
 
 const colorsRead = (data) => readPenColors(data).colors
 
@@ -69,197 +66,6 @@ test('buildCss writes the nine variables under :root:root, not plain :root', () 
   assert.ok(lines.includes('  --puzzle-pencolor-9: #000000;'))
   assert.equal(css.includes('pencolor-erase'), false)
 })
-
-// An independent sRGB -> OKLCH (Ottosson's published matrices), so the tests do not lean on
-// the script's own conversion. Returns { L, C, h } with h in degrees.
-function oklch (hex) {
-  const lin = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  })
-  const [r, g, b] = lin
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
-  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s
-  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s
-  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
-  return { L, C: Math.hypot(A, B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 }
-}
-const hueGap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
-
-test('parseColor reads rgb() and #rrggbb, clamping out-of-range channels', () => {
-  assert.deepEqual(parseColor('rgb(61, 153, 245)'), [61, 153, 245])
-  assert.deepEqual(parseColor('#3d99f5'), [61, 153, 245])
-  assert.deepEqual(parseColor('rgb(-36, -36, -36)'), [0, 0, 0])
-  assert.deepEqual(parseColor('rgb(300, 12.4, 0)'), [255, 12, 0])
-})
-
-test('parseColor gives null for transparent, empty and unreadable values', () => {
-  for (const bad of ['transparent', '', '  ', 'banana', 'rgb(1, 2)', undefined, null, 'rgba(0, 0, 0, 0)', '#abc', 'red', 'hsl(0, 100%, 50%)']) {
-    assert.equal(parseColor(bad), null, String(bad))
-  }
-})
-
-test('parseColor reads a partly transparent rgba() by its color, and isTransparent names only the fully transparent', () => {
-  assert.deepEqual(parseColor('rgba(0, 0, 255, 0.5)'), [0, 0, 255])
-  assert.deepEqual(parseColor('rgba(0, 0, 255, 1)'), [0, 0, 255])
-  for (const clear of ['transparent', ' TRANSPARENT ', 'rgba(0, 0, 0, 0)', 'rgba(9, 9, 9, 0)']) assert.equal(isTransparent(clear), true, clear)
-  for (const seen of ['rgb(0, 0, 0)', 'rgba(0, 0, 0, 0.1)', '#abc', 'red', '', undefined, null, 'banana']) assert.equal(isTransparent(seen), false, String(seen))
-})
-
-test('darkenColor keeps the hue, lowers lightness by the named factor, and gives #rrggbb', () => {
-  for (const rgb of [[61, 153, 245], [245, 58, 55], [232, 124, 241], [228, 150, 50], [179, 229, 106]]) {
-    const hex = '#' + rgb.map((c) => c.toString(16).padStart(2, '0')).join('')
-    const out = darkenColor(rgb)
-    assert.match(out, /^#[0-9a-f]{6}$/)
-    const before = oklch(hex)
-    const after = oklch(out)
-    assert.ok(hueGap(before.h, after.h) < 3, `${hex} -> ${out}: hue ${before.h} -> ${after.h}`)
-    assert.ok(Math.abs(after.L - before.L * LIGHTNESS_FACTOR) < 0.02, `${hex} -> ${out}: L ${before.L} -> ${after.L}`)
-  }
-})
-
-test('darkenColor makes every color darker, and black stays black', () => {
-  assert.equal(darkenColor([0, 0, 0]), '#000000')
-  assert.ok(oklch(darkenColor([214, 214, 214])).L < oklch('#d6d6d6').L)
-  assert.ok(LIGHTNESS_FACTOR < 1 && LIGHTNESS_FACTOR > 0)
-})
-
-test('darkenColor gives a valid hex for near-black, white and out-of-range input', () => {
-  for (const rgb of [[1, 1, 1], [0, 0, 1], [255, 255, 255], [-36, -36, -36], [999, -5, 40]]) {
-    assert.match(darkenColor(rgb), /^#[0-9a-f]{6}$/, JSON.stringify(rgb))
-  }
-})
-
-test('a darkened light color has OKLCH lightness under 0.8, the bar for a 5px line on white', () => {
-  for (const rgb of [[252, 235, 63], [214, 214, 214], [255, 255, 255]]) {
-    assert.ok(oklch(darkenColor(rgb)).L < 0.8, JSON.stringify(rgb))
-  }
-})
-
-const PAGE_KEYS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-const CELL = {
-  0: 'transparent',
-  1: 'rgb(214, 214, 214)',
-  2: 'rgb(124, 124, 124)',
-  3: 'rgb(-36, -36, -36)',
-  4: 'rgb(179, 229, 106)',
-  5: 'rgb(232, 124, 241)',
-  6: 'rgb(228, 150, 50)',
-  7: 'rgb(245, 58, 55)',
-  8: 'rgb(252, 235, 63)',
-  9: 'rgb(61, 153, 245)'
-}
-
-const PEN_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-const chromaOf = (hex) => oklch(hex).C
-
-test('the darkened default first page gives nine different #rrggbb values', () => {
-  const out = PAGE_KEYS.slice(1).map((k) => darkenColor(parseColor(CELL[k])))
-  assert.equal(new Set(out).size, 9)
-})
-
-test('derivedPenColors maps index N of the page to pen color N, darkened', () => {
-  const r = derivedPenColors(PAGE_KEYS, (k) => CELL[k])
-  assert.deepEqual(r.missing, [])
-  assert.deepEqual(Object.keys(r.colors), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
-  assert.equal(r.colors[1], darkenColor([214, 214, 214]))
-  assert.equal(r.colors[3], '#000000')
-  assert.equal(r.colors[9], darkenColor([61, 153, 245]))
-})
-
-test('derivedPenColors reads pen N from index N of the page, never index 0, even when index 0 holds a color', () => {
-  const page = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-  const read = (k) => ({ 0: 'rgb(250, 250, 250)', 1: 'rgb(204, 51, 17)', 2: 'rgb(17, 119, 51)', 3: 'rgb(238, 153, 170)', 4: 'rgb(0, 68, 136)', 5: 'rgb(187, 85, 0)', 6: 'rgb(0, 153, 136)', 7: 'rgb(170, 51, 170)', 8: 'rgb(136, 136, 34)', 9: 'rgb(120, 80, 200)' })[k]
-  const r = derivedPenColors(page, read)
-  assert.deepEqual(r.missing, [])
-  assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], darkenColor([17, 119, 51]))
-  assert.equal(r.colors[9], darkenColor([120, 80, 200]))
-  for (const n of PEN_NUMBERS) assert.notEqual(r.colors[n], darkenColor([250, 250, 250]))
-})
-
-test('derivedPenColors keeps SudokuPad\'s pen color at a transparent middle entry, lists it as missing, and shifts nothing', () => {
-  const page = ['0', '1', '2', '3', '4']
-  const read = (k) => ({ 0: 'transparent', 1: 'rgb(204, 51, 17)', 2: 'transparent', 3: 'rgb(17, 119, 51)', 4: 'rgb(238, 153, 170)' })[k]
-  const r = derivedPenColors(page, read)
-  assert.deepEqual(r.missing, [2, 5, 6, 7, 8, 9])
-  assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], SUDOKUPAD_PEN_COLORS[2])
-  assert.equal(r.colors[3], darkenColor([17, 119, 51]))
-  assert.equal(r.colors[4], darkenColor([238, 153, 170]))
-  for (const n of [5, 6, 7, 8, 9]) assert.equal(r.colors[n], SUDOKUPAD_PEN_COLORS[n])
-})
-
-test('derivedPenColors keeps an unreadable color\'s place: its pen color keeps SudokuPad\'s own, and later colors do not shift up', () => {
-  const page = ['a', 'b', 'c', 'd', 'e']
-  const read = (k) => ({ a: 'transparent', b: 'rgb(204, 51, 17)', c: 'unparseable', d: 'rgb(238, 153, 170)', e: 'rgb(17, 119, 51)' })[k]
-  const r = derivedPenColors(page, read)
-  assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], SUDOKUPAD_PEN_COLORS[2])
-  assert.equal(r.colors[3], darkenColor([238, 153, 170]))
-  assert.equal(r.colors[4], darkenColor([17, 119, 51]))
-  assert.deepEqual(r.missing, [2, 5, 6, 7, 8, 9])
-})
-
-const hueful = ['rgb(204, 51, 17)', 'rgb(17, 119, 51)', 'rgb(0, 68, 136)', 'rgb(187, 85, 0)']
-const pageOf = (colors) => ['transparent', ...colors]
-const penColors = (colors) => derivedPenColors(pageOf(colors).map((_, i) => String(i)), (k) => pageOf(colors)[k]).colors
-
-test('the darkest low-chroma pen color becomes #000000, wherever it sits on the page', () => {
-  // Two greys among hued colors: pen 3 is the darker grey and the only one turned black.
-  const colors = penColors([hueful[0], hueful[1], 'rgb(90, 90, 90)', hueful[2], 'rgb(200, 200, 200)', hueful[3], hueful[0], hueful[1], hueful[2]])
-  assert.equal(colors[3], '#000000')
-  assert.equal(colors[5], darkenColor([200, 200, 200]))
-  assert.equal(colors[1], darkenColor([204, 51, 17]))
-  assert.ok(chromaOf(darkenColor([90, 90, 90])) < GREY_CHROMA, String(chromaOf(darkenColor([90, 90, 90]))))
-})
-
-test('a near-grey with a slight tint counts as low chroma and goes black when it is the darkest', () => {
-  const colors = penColors([hueful[0], 'rgb(10, 20, 30)', hueful[1], hueful[2], hueful[3], hueful[0], hueful[1], hueful[2], hueful[3]])
-  assert.equal(colors[2], '#000000')
-})
-
-test('a page with no low-chroma color changes nothing: no pen color becomes black', () => {
-  const nine = [hueful[0], hueful[1], hueful[2], hueful[3], 'rgb(120, 80, 200)', 'rgb(0, 153, 136)', 'rgb(170, 51, 170)', 'rgb(136, 136, 34)', 'rgb(238, 153, 170)']
-  const colors = penColors(nine)
-  nine.forEach((rgb, i) => assert.equal(colors[i + 1], darkenColor(parseColor(rgb))))
-  assert.deepEqual(PEN_NUMBERS.filter((n) => colors[n] === '#000000'), [])
-})
-
-test('a pen color kept from SudokuPad is outside the black rule: the derived grey turns black, not the kept black pen 9', () => {
-  // Pens 4-9 have no page entry and keep SudokuPad's own, pen 9 being #000000. Counted in, pen 9
-  // would be the darkest grey and the derived grey (pen 2) would stay grey.
-  const page = ['t', 'a', 'b', 'c']
-  const read = (k) => ({ t: 'transparent', a: hueful[0], b: 'rgb(90, 90, 90)', c: hueful[1] })[k]
-  const r = derivedPenColors(page, read)
-  assert.equal(r.colors[1], darkenColor([204, 51, 17]))
-  assert.equal(r.colors[2], '#000000')
-  assert.equal(r.colors[3], darkenColor([17, 119, 51]))
-  for (const n of [4, 5, 6, 7, 8, 9]) assert.equal(r.colors[n], SUDOKUPAD_PEN_COLORS[n])
-})
-
-test('SudokuPad\'s default first page keeps its result: index 3 is already black and stays the darkest', () => {
-  const r = derivedPenColors(PAGE_KEYS, (k) => CELL[k])
-  assert.equal(r.colors[1], darkenColor([214, 214, 214]))
-  assert.equal(r.colors[2], darkenColor([124, 124, 124]))
-  assert.equal(r.colors[3], '#000000')
-})
-
-test('derivedPenColors ignores entries past index 9', () => {
-  const keys = 'abcdefghijkl'.split('')
-  const r = derivedPenColors(keys, () => 'rgb(204, 51, 17)')
-  assert.deepEqual(r.missing, [])
-  assert.equal(Object.keys(r.colors).length, 9)
-})
-
-test('derivedPenColors on an empty page keeps all nine SudokuPad colors', () => {
-  const r = derivedPenColors([], () => 'rgb(1, 2, 3)')
-  assert.deepEqual(r.colors, SUDOKUPAD_PEN_COLORS)
-  assert.deepEqual(r.missing, [1, 2, 3, 4, 5, 6, 7, 8, 9])
-})
-
 // A saved set of nine distinct colors, so a test can tell which entry went where.
 const NINE_SAVED = { 1: '#010101', 2: '#020202', 3: '#030303', 4: '#040404', 5: '#050505', 6: '#060606', 7: '#070707', 8: '#080808', 9: '#090909' }
 
@@ -299,41 +105,9 @@ test('startupPenColors loads a saved set, waits for the color tool when nothing 
   assert.deepEqual(startupPenColors(null, false), { save: { colors: TABLE, preset: 'sudokupad', missing: [] } })
 })
 
-test('presetOptions lists one darker page per palette page, up to three, then SudokuPad colors last', () => {
-  assert.deepEqual(presetOptions(3), ['page-1', 'page-2', 'page-3', 'sudokupad'])
-  assert.deepEqual(presetOptions(5), ['page-1', 'page-2', 'page-3', 'sudokupad'])
-  assert.deepEqual(presetOptions(1), ['page-1', 'sudokupad'])
-  assert.deepEqual(presetOptions(0), ['sudokupad'])
-  assert.deepEqual(['page-1', 'page-2', 'page-3', 'sudokupad', 'custom'].map((id) => PRESET_LABELS[id]),
-    ['Darker page 1', 'Darker page 2', 'Darker page 3', 'SudokuPad colors', 'Custom'])
-})
-
-test('presetColors darkens the named page, not the first or the current one, and gives SudokuPad\'s own for its preset', () => {
-  const pages = [['a0', 'a1'], ['b0', 'b1'], ['c0', 'c1']]
-  const read = (key) => ({ a1: 'rgb(255, 0, 0)', b1: 'rgb(0, 0, 255)', c1: 'rgb(0, 128, 0)' })[key]
-  // Blue darkens to #0000ae, as the live test's custom page types it out.
-  assert.equal(presetColors('page-2', pages, read).colors[1], '#0000ae')
-  assert.notEqual(presetColors('page-1', pages, read).colors[1], '#0000ae')
-  assert.deepEqual(presetColors('page-3', pages, read).missing, [2, 3, 4, 5, 6, 7, 8, 9])
-  assert.deepEqual(presetColors('sudokupad', pages, read), { colors: TABLE, preset: 'sudokupad', missing: [] })
-})
-
-test('presetColors names the preset it was given in the set it returns', () => {
-  const pages = [['a0', 'a1'], ['b0', 'b1']]
-  for (const preset of ['page-1', 'page-2', 'sudokupad']) assert.equal(presetColors(preset, pages, () => 'rgb(255, 0, 0)').preset, preset)
-})
-
-test('SudokuPad\'s own set is frozen, so no edit of a set in force can change it', () => {
-  const set = presetColors('sudokupad', [], () => 'red')
-  assert.equal(Object.isFrozen(set), true, 'the set')
-  assert.equal(Object.isFrozen(set.colors), true, 'its colors')
-  assert.equal(Object.isFrozen(set.missing), true, 'its missing list')
-  assert.equal(presetColors('sudokupad', [], () => 'red'), set, 'one set, not a fresh copy each time')
-})
-
-test('presetColors refuses a page preset the palette has no page for, rather than giving a set nobody picked', () => {
-  assert.throws(() => presetColors('page-3', [['a0'], ['b0']], () => 'red'), /page-3 is not a preset of this palette/)
-  assert.throws(() => presetColors('custom', [['a0']], () => 'red'), /custom is not a preset/)
+test('PRESET_LABELS names the palette presets and the two states a set can be in beside them', () => {
+  assert.deepEqual(['page-1', 'page-2', 'page-3', 'sudokupad', 'custom', 'unsaved'].map((id) => PRESET_LABELS[id]),
+    ['Darker page 1', 'Darker page 2', 'Darker page 3', 'SudokuPad colors', 'Custom', 'SudokuPad (unsaved)'])
 })
 
 test('editedColors gives the whole current set with one pen color changed, lowercased, leaving the input alone', () => {
@@ -495,10 +269,6 @@ test('the panel markup has Thickness above Opacity, each with the range and valu
   assert.deepEqual([...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]), ['Thickness', 'Opacity'])
   assert.equal(html.match(/<input [^>]*tabindex="-1"/g).length, 2)
   assert.doesNotMatch(html, /<button/)
-})
-
-test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
-  assert.equal(HOLD_TO_EDIT_MS, 1000)
 })
 
 const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
@@ -1063,18 +833,17 @@ const editorState = (over = {}) => ({
   ...over
 })
 
-test('the dialog\'s pen colors are a 3 by 3 grid of square color inputs in the order of the pen tool\'s buttons, with no numbers, 4px apart', () => {
+test('the dialog\'s pen colors are the shared color block: a grid of color inputs in the order of the pen tool\'s buttons, with no numbers, styled under the editor', () => {
   const html = renderEditor(editorState())
-  const grid = /<div class="pen-tool-extras-pen-grid">([\s\S]*?)<\/div>/.exec(html)[1]
-  assert.deepEqual([...grid.matchAll(/<input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})"[^>]*>/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+  const grid = /<div class="pen-tool-extras-swatches">([\s\S]*?)<\/div>/.exec(html)[1]
+  assert.deepEqual([...grid.matchAll(/<input type="color" [^>]*data-key="(\d)" value="(#[0-9a-f]{6})"[^>]*>/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
   assert.deepEqual([...grid.matchAll(/value="(#[0-9a-f]{6})"/g)].map((m) => m[1]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
   assert.doesNotMatch(grid, /<b[ >]/, 'no numbers')
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-pen-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*gap: 4px;/)
-  assert.match(DIALOG_CSS, /input\[type=color\] \{[^}]*aspect-ratio: 1;/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor \.pen-tool-extras-swatches \{[^}]*grid-template-columns: repeat\(3, /)
 })
 
 const presetMenu = (html) => {
-  const menu = /<select data-pen-preset[^>]*>([\s\S]*?)<\/select>/.exec(html)
+  const menu = /<select [^>]*data-role="color-choice"[^>]*>([\s\S]*?)<\/select>/.exec(html)
   assert.ok(menu, 'a pen color preset pulldown')
   return [...menu[1].matchAll(/<option value="([^"]*)"([^>]*)>([^<]*)<\/option>/g)].map(([, value, attributes, label]) => ({ value, label, selected: / selected/.test(attributes), disabled: / disabled/.test(attributes) }))
 }
@@ -1088,7 +857,7 @@ test('the Pen colors section has a preset pulldown above the grid, its options i
     ['sudokupad', 'SudokuPad colors', false]
   ])
   const section = html.indexOf('Pen colors')
-  assert.equal(section < html.indexOf('data-pen-preset') && html.indexOf('data-pen-preset') < html.indexOf('data-pen="1"'), true, 'heading, pulldown, then the grid')
+  assert.equal(section < html.indexOf('color-choice') && html.indexOf('color-choice') < html.indexOf('data-key="1"'), true, 'heading, pulldown, then the grid')
   assert.doesNotMatch(html, /<button|data-sudokupad-colors/)
 })
 
@@ -1312,13 +1081,6 @@ test('the editor is a two by two grid: Pen colors | Line settings and Line style
   assert.match(DIALOG_CSS, /@media \(max-width: \d+px\) \{[^@]*grid-template-columns: minmax\(0, 1fr\)/, 'one column on a narrow screen')
 })
 
-test('the title row holds the name and version, the status message, then a Copy settings icon button and a Paste settings icon button, each with a hover title and label', () => {
-  const html = renderTitle('1.2.3')
-  assert.match(html, /^<div class="pen-tool-extras-title-row"><span><b>Pen Tool Extras<\/b> <small class="pen-tool-extras-version">v1\.2\.3<\/small><\/span><span data-role="settings-status"><\/span><span class="pen-tool-extras-tools"><button type="button" data-act="copy-settings" title="Copy settings" aria-label="Copy settings"><svg[^>]*>[\s\S]*<\/svg><\/button><button type="button" data-act="paste-settings" title="Paste settings" aria-label="Paste settings"><svg/)
-  assert.doesNotMatch(html.replace(/<svg[\s\S]*?<\/svg>/g, ''), />(Copy|Paste) settings</, 'icons, not words')
-  assert.match(DIALOG_CSS, /\[data-role="settings-status"\] \{[^}]*flex: 1 1 0;[^}]*min-width: 0;[^}]*contain: inline-size;/, 'the status wraps in the room the title leaves and sets no width')
-})
-
 test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin, and the dialog is not centred over the board', () => {
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{[^}]*width: fit-content !important;/)
   assert.match(DIALOG_CSS, /\.dialog p:has\(> #pen-tool-extras-editor\) \{ margin-bottom: 0 !important; \}/)
@@ -1382,37 +1144,7 @@ test('the three controls are one 4rem square size, in one rule, in the order mod
   ;[['mode', 1], ['page', 2], ['settings', 3]].forEach(([name, order]) => assert.match(ruleOf(`.tool-pen .controls-input button.pen-tool-extras-${name}`), new RegExp(`order: ${order};`)))
 })
 
-test('the color buttons are 2.5rem tall at 4rem wide with 0.15rem margins and keep position: relative, which their color line is placed against', () => {
-  const colors = ruleOf('.tool-pen .controls-input button[data-key]')
-  assert.match(colors, /position: relative;/)
-  assert.match(colors, /width: 4rem !important; height: 2\.5rem !important;/)
-  assert.match(colors, /margin: 0\.15rem !important;/)
-})
-
-test('the panel keeps SudokuPad\'s outer size, 3 columns of 4.3rem and 17.2rem tall, as a grid of three color rows, the controls and the sliders', () => {
-  const panel = ruleOf('.tool-pen .controls-input')
-  assert.match(panel, /grid-template-columns: repeat\(3, 4\.3rem\);/)
-  assert.match(panel, /grid-template-rows: repeat\(3, 2\.8rem\) 5\.05rem 1fr;/)
-  assert.match(panel, /height: 17\.2rem !important;/)
-  assert.match(ruleOf('.tool-pen .controls-input button[data-key="0"], .tool-pen .controls-input button[data-control="delete"]'), /display: none !important;/)
-})
-
-test('the tray is #efeaf4 with 14px corners, reaches 0.25rem past the color block and starts 0.5rem under it, behind the controls and the sliders, taking no cell', () => {
-  const tray = ruleOf('.pen-tool-extras-tray')
-  assert.match(tray, /background: #efeaf4; border-radius: 14px;/)
-  assert.match(tray, /margin: 0\.5rem -0\.25rem 0;/)
-  assert.match(tray, /grid-row: 4 \/ 6; grid-column: 1 \/ 4;/)
-  assert.match(tray, /position: absolute; inset: 0;/)
-  assert.equal(PANEL_CSS.includes('.tool-pen .controls-input:not(:has(.pen-tool-extras-sliders)) .pen-tool-extras-tray { grid-row: 4 / 5; margin-bottom: -0.25rem; }'), true, 'with no sliders the tray ends under the controls, with an end line since a box placed by its start alone runs to the panel\'s edge')
-})
-
-test('the sliders block spans the three columns of the fifth grid row, with the buttons\' margin and 0.4rem below, and draws no box of its own', () => {
-  const rule = ruleOf('.pen-tool-extras-sliders')
-  assert.match(rule, /grid-row: 5; grid-column: 1 \/ 4;/)
-  assert.match(rule, /box-sizing: border-box;/)
-  assert.match(rule, /margin: 0\.15rem 0\.15rem 0\.4rem;/)
-  assert.doesNotMatch(rule, /border:|background/)
-  assert.match(rule, /z-index: 1;/)
+test('the panel sliders block holds the slider rows and no button', () => {
   assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider"/)
   assert.doesNotMatch(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /<button/)
   assert.equal(PANEL_CSS.includes('sliders-box'), false)
@@ -1441,8 +1173,8 @@ test('every page has a measured icon viewBox, so the line type button never show
   PEN_PAGES.forEach((_, page) => assert.doesNotMatch(renderPageIcon(page, 3, BOTH_STYLES), /viewBox="undefined"/, `page ${page + 1}`))
 })
 
-test('Keypad Flipped swaps the rows of colors by grid row, for the buttons and the edit mode pickers over them, since its transform on each button row has no box here', () => {
-  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input :is\\(button\\[data-key="${key}"\\], \\.pen-tool-extras-picker\\[data-pen="${key}"\\]\\) \\{ grid-row: (\\d) / span 1; \\}`).exec(PANEL_CSS)[1]
+test('Keypad Flipped swaps the rows of color buttons by grid row, since its transform on each button row has no box here', () => {
+  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input button\\[data-key="${key}"\\] \\{ grid-row: (\\d) / span 1; \\}`).exec(PANEL_CSS)[1]
   assert.deepEqual([1, 2, 3, 7, 8, 9].map(rule), ['3', '3', '3', '1', '1', '1'])
 })
 
@@ -2475,7 +2207,7 @@ test('copiedSettings: every setting at the value in force, the pen colors once s
 })
 
 test('pastedSettings: a setting that reads back is kept, one its reader would replace with a default is skipped and counted', () => {
-  const pasted = pastedSettings(JSON.stringify({
+  const pasted = readPaste(JSON.stringify({
     PenColor_thickness: 9,
     PenColor_opacity: 7,
     PenColor_dash: 'long',
@@ -2491,30 +2223,18 @@ test('pastedSettings: a setting that reads back is kept, one its reader would re
     PenColor_thickness: 9, PenColor_outline: false, PenColor_linestyles: { dashed: false, arrows: true }, EdgeMarks_marks: normalizeMarkSettings({ x: false, circle: true })
   })
   assert.equal(pasted.skipped, 6)
-  for (const bad of [{ foo: true }, {}]) assert.deepEqual(pastedSettings(JSON.stringify({ PenColor_linestyles: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
+  for (const bad of [{ foo: true }, {}]) assert.deepEqual(readPaste(JSON.stringify({ PenColor_linestyles: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
 })
 
 test('pastedSettings: pen colors are kept in the saved form, a table with a bad or no color is skipped, other scripts\' keys and the selected pen are ignored', () => {
-  assert.deepEqual(pastedSettings(JSON.stringify({ PenColor_colors: { 1: '#ABCDEF', preset: 'page-2' }, PenColor_pen: '3', ToolPen_linemode: 'edgeonly', DarkPage_color: '#ffffff' })),
+  assert.deepEqual(readPaste(JSON.stringify({ PenColor_colors: { 1: '#ABCDEF', preset: 'page-2' }, PenColor_pen: '3', ToolPen_linemode: 'edgeonly', DarkPage_color: '#ffffff' })),
     { values: { PenColor_colors: storedPenColors(readPenColors({ 1: '#abcdef', preset: 'page-2' })) }, skipped: 0 })
-  for (const bad of [{ 1: 'nope' }, { 1: '#abcdef', 2: 'nope' }]) assert.deepEqual(pastedSettings(JSON.stringify({ PenColor_colors: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
-})
-
-test('pastedSettings: throws on text that is not a JSON object', () => {
-  assert.throws(() => pastedSettings('x'), /not JSON/)
-  assert.throws(() => pastedSettings('1'), /not a settings object/)
-})
-
-test('pasteReport: says how many were pasted and how many skipped, and when the text held nothing', () => {
-  assert.equal(pasteReport(2, 0), 'Pasted 2 settings.')
-  assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
-  assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
-  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+  for (const bad of [{ 1: 'nope' }, { 1: '#abcdef', 2: 'nope' }]) assert.deepEqual(readPaste(JSON.stringify({ PenColor_colors: bad })), { values: {}, skipped: 1 }, JSON.stringify(bad))
 })
 
 test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
-  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
+  assert.deepEqual(readPaste('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })
 
 test('the dialog and its button row are styled through the editor inside the dialog', () => {

@@ -92,7 +92,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   const restoreDefaults = () => dialogButton(p, 'Restore defaults').click()
   const pickerValues = () => editor().locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value))
-  const presetMenu = () => editor().locator('select[data-pen-preset]')
+  const presetMenu = () => editor().locator('select[data-role="color-choice"]')
   const presetShown = () => presetMenu().evaluate((el) => el.value)
   const presetListed = () => presetMenu().locator('option').evaluateAll((os) => os.map((o) => [o.value, o.textContent]))
   const pickPreset = (id) => presetMenu().selectOption(id)
@@ -119,7 +119,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator('#control-pen').waitFor({ state: 'visible' })
   }
   const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const pick = (n, hex) => editor().locator(`input[data-pen="${n}"]`).fill(hex)
+  const pick = (n, hex) => editor().locator(`input[data-key="${n}"]`).fill(hex)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -186,9 +186,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the dialog lays the nine pen colors out as a 3 by 3 grid like the pen tool\'s buttons, in the order of their numbers', async () => {
     await openExtrasEditor(p)
-    const cells = await editor().locator('input[type=color][data-pen]').evaluateAll((els) => els.map((el) => {
+    const cells = await editor().locator('input[data-role="swatch"]').evaluateAll((els) => els.map((el) => {
       const r = el.getBoundingClientRect()
-      return { pen: el.dataset.pen, x: r.x, y: r.y }
+      return { pen: el.dataset.key, x: r.x, y: r.y }
     }))
     assert.deepEqual(cells.map((c) => c.pen), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
     const rows = [cells.slice(0, 3), cells.slice(3, 6), cells.slice(6)]
@@ -630,7 +630,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.equal(await pickerCount(), 0)
         assert.equal(await settle(pickerCount, 9, HOLD_WAIT_MS, HOLD_QUIET_MS), 9)
         await p.mouse.up({ button: which })
-        assert.deepEqual(await pickers().evaluateAll((es) => es.map((e) => e.dataset.pen)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+        assert.deepEqual(await pickers().evaluateAll((es) => es.map((e) => e.dataset.key)), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
         assert.deepEqual(await penPickerValues(), PAGE_PENS[0])
         assert.equal(await undoDepth(), depth)
         assert.equal(await strokeCount(), drawn)
@@ -697,7 +697,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const depth = await undoDepth()
       // Only an `input` event, no `change`: the color must apply while the picker is still open.
       await read((hex) => {
-        const el = document.querySelector('.tool-pen .pen-tool-extras-picker input[data-pen="4"]')
+        const el = document.querySelector('.tool-pen .pen-tool-extras-picker input[data-key="4"]')
         el.value = hex
         el.dispatchEvent(new window.Event('input', { bubbles: true }))
       }, FOUR.hex)
@@ -799,11 +799,11 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       const editor = p.locator('#pen-tool-extras-editor')
       assert.deepEqual(await editor.locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value)), OWN_PEN_HEX)
       // The unsaved colors are shown first and cannot be picked, so SudokuPad colors stays pickable.
-      assert.deepEqual(await editor.locator('select[data-pen-preset] option').evaluateAll((os) => os.map((o) => [o.value, o.disabled])), [['unsaved', true], ['sudokupad', false]])
-      assert.equal(await editor.locator('select[data-pen-preset]').evaluate((el) => el.value), 'unsaved')
+      assert.deepEqual(await editor.locator('select[data-role="color-choice"] option').evaluateAll((os) => os.map((o) => [o.value, o.disabled])), [['unsaved', true], ['sudokupad', false]])
+      assert.equal(await editor.locator('select[data-role="color-choice"]').evaluate((el) => el.value), 'unsaved')
       // With no page 1 to read, Restore defaults gives SudokuPad colors.
       await dialogButton(p, 'Restore defaults').click()
-      assert.equal(await editor.locator('select[data-pen-preset]').evaluate((el) => el.value), 'sudokupad')
+      assert.equal(await editor.locator('select[data-role="color-choice"]').evaluate((el) => el.value), 'sudokupad')
       await closeExtrasEditorWith(p, 'Cancel')
       await putBackRemovedPalette(p)
       assert.deepEqual(await settle(() => p.evaluate((k) => Framework.getData(k), DATA_KEY), INSTALLED), INSTALLED)
@@ -821,7 +821,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await openExtrasEditor(p)
-      await p.locator('#pen-tool-extras-editor select[data-pen-preset]').selectOption('sudokupad')
+      await p.locator('#pen-tool-extras-editor select[data-role="color-choice"]').selectOption('sudokupad')
       await closeExtrasEditorWith(p, 'Save')
       const own = { ...toObject(OWN_PEN_HEX), preset: 'sudokupad' }
       assert.deepEqual(await p.evaluate((k) => Framework.getData(k), DATA_KEY), own)
@@ -860,7 +860,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await removePalette(p)
       await p.addScriptTag({ content: script })
       await openExtrasEditor(p)
-      await p.locator('#pen-tool-extras-editor input[data-pen="4"]').fill(FOUR.hex)
+      await p.locator('#pen-tool-extras-editor input[data-key="4"]').fill(FOUR.hex)
       await closeExtrasEditorWith(p, 'Save')
       await putBackRemovedPalette(p)
       // The script polls every 100ms, so by 1.5s it has seen the tool and decided; the check is

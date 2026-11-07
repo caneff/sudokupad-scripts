@@ -62,7 +62,7 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
 
   // Digits: one page pulldown, the brush marked, and ten digit keys, each filled with its group's color (#347).
   const paint = renderEditor({ groups: LOW_HIGH, pages: PAGES, page: 0, brush: 'a3' })
-  assert.equal(count(paint, /<select data-act="page"/g), 1)
+  assert.equal(count(paint, /<select [^>]*data-role="color-choice"/g), 1)
   assert.equal(count(paint, /data-act="digit"/g), 10)
   assert.equal(count(paint, /aria-pressed="true"/g), 1)
   assert.match(paint, /data-digit="1" data-key="a3" style="background:#a3"/)

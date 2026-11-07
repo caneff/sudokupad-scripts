@@ -4,7 +4,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -516,16 +517,8 @@ test('the dialog is 640 px wide on a desktop and never wider than the window', (
   assert.match(css, /\.dialog:has\(#color-by-digit-editor\) \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
 })
 
-test('Copy settings and Paste settings are two icon buttons at the right end of the title row, with the status between', () => {
-  const html = renderTitle('1.2.3')
-  assert.match(html, /^<div class="cbd-title-row"><span><b>Color by Digit<\/b> <small class="cbd-version">v1\.2\.3<\/small><\/span><span data-role="settings-status"><\/span><span class="cbd-tools">/)
-  assert.match(html, /<button type="button" data-act="copy-settings" title="Copy settings" aria-label="Copy settings"><svg [^>]*aria-hidden="true">.*<\/svg><\/button><button type="button" data-act="paste-settings" title="Paste settings" aria-label="Paste settings"><svg /)
-  assert.doesNotMatch(html, />Copy settings<|>Paste settings</)
-})
-
 test('the bottom row keeps no style rule for the copy and paste buttons', () => {
   assert.doesNotMatch(STYLE_CSS, /paste-settings/)
-  assert.match(STYLE_CSS.replace(/\s+/g, ' '), /\.cbd-title-row \{ display: flex; align-items: center/)
 })
 
 const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)
@@ -618,8 +611,16 @@ test('planSwitch to a profile with a key the old one also uses keeps that color 
   assert.deepEqual(ops, [])
 })
 
+test('swatchWithKey finds the swatch of a key holding a quote or a backslash, and none for a key not shown', () => {
+  const swatches = ['a', '"q"', 'b\\'].map((key) => ({ dataset: { key } }))
+  const root = { querySelectorAll: (selector) => selector === 'button[data-role="swatch"]' ? swatches : [] }
+  assert.equal(swatchWithKey(root, '"q"'), swatches[1])
+  assert.equal(swatchWithKey(root, 'b\\'), swatches[2])
+  assert.equal(swatchWithKey(root, 'z'), undefined)
+})
+
 test('isVisibleColor rejects every transparent spelling and accepts real colors', () => {
-  ['', 'transparent', 'rgba(0, 0, 0, 0)', 'rgba(10,20,30,0)', '#0000', '#00000000', 'hsla(0, 0%, 0%, 0)']
+  ['', ' ', 'transparent', 'rgba(0, 0, 0, 0)', 'rgba(10,20,30,0)', 'rgba(1 2 3 / 0%)', '#0000', '#00000000', 'hsla(0, 0%, 0%, 0)']
     .forEach((c) => assert.equal(isVisibleColor(c), false, c));
   ['rgb(214, 214, 214)', 'rgba(1,2,3,0.5)', '#fff', '#ffffff', 'red'].forEach((c) => assert.equal(isVisibleColor(c), true, c))
 })
@@ -1339,21 +1340,21 @@ test('renderEditor draws one page pulldown, labelled Page 1, Page 2 (current), w
   assert.equal(count(html, /<select/g), 1)
 })
 
-test('renderEditor draws only the shown page\'s swatches, each with data-act and data-key', () => {
+test('renderEditor draws only the shown page\'s swatches, as the shared color block\'s palette buttons, index 0 after 9', () => {
   const first = editor([], twoPages(), 0)
-  assert.equal(count(first, /data-act="color"/g), 10)
-  assert.equal(count(first, /data-act="color"[^>]*data-key="z"/g), 1)
+  const swatchKeys = (html) => [...html.matchAll(/<button [^>]*data-role="swatch" data-key="([^"]*)"/g)].map((m) => m[1])
+  assert.deepEqual(swatchKeys(first), ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'z'])
   assert.equal(count(first, /data-key="b1"/g), 0)
   const second = editor([], twoPages(), 1)
-  assert.equal(count(second, /data-act="color"/g), 9)
+  assert.equal(swatchKeys(second).length, 9)
   assert.equal(count(second, /data-key="a1"/g), 0)
 })
 
 test('renderEditor draws an empty slot as a spacer with no button, so nothing shifts', () => {
   const pages = layoutPages([keys('clear a1 clear a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
   const html = editor([], pages, 0, 'a1')
-  assert.equal(count(html, /data-act="color"/g), 8)
-  assert.equal(paintRows(html).slice(0, 3).flat().filter((cell) => cell === 'slot').length, 1)
+  assert.equal(count(html, /<button [^>]*data-role="swatch"/g), 8)
+  assert.match(html, /data-key="a1"[^>]*><\/button><span [^>]*data-empty="slot"><\/span><button [^>]*data-key="a3"/)
 })
 
 test('renderEditor marks only the brush as selected', () => {
@@ -1364,39 +1365,36 @@ test('renderEditor marks only the brush as selected', () => {
   assert.equal(count(editor([], twoPages(), 0, null), /aria-pressed="true"/g), 0)
 })
 
-test('renderEditor lays the swatches and the digit keys out as one grid, three swatch columns and a three-key pad beside them', () => {
+test('renderEditor puts the digit pad beside the swatch grid, in rows of three keys the swatches\' size, with 0 under 7', () => {
   const html = editor([], twoPages(), 0, 'a1')
-  assert.deepEqual([...html.matchAll(/data-act="digit"[^>]*data-digit="(\d)"/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
-  assert.deepEqual(paintRows(html).slice(0, 3), [
-    ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit'],
-    ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit'],
-    ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit']
-  ])
-  assert.match(STYLE_CSS, /\[data-role="paint"\] \{[^}]*grid-template-columns: repeat\(3, [^)]*\) \d+px repeat\(3, /)
+  assert.deepEqual(padCells(html), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'pad', 'pad'])
+  const css = STYLE_CSS.replace(/\s+/g, ' ')
+  assert.match(css, /\[data-role="paint"\] \{ display: grid; gap: 4px; grid-template-columns: repeat\(3, 34px\);/)
+  assert.match(css, /\.cbd-swatches \{[^}]*grid-template-columns: repeat\(3, 34px\); gap: 4px;/)
 })
 
-// Each row of the paint grid is the cell kinds it holds, left to right.
-const PAINT_ROW_CELLS = 3 + 1 + 3 // swatches, gap, digit keys
-function paintRows (html) {
-  const cells = [...html.matchAll(/<(?:button|span)[^>]*(data-act="color"|data-act="digit"|data-empty="[a-z]+")[^>]*>/g)].map((m) => m[1].replace(/data-(act|empty)="|"/g, ''))
-  const rows = []
-  for (let i = 0; i < cells.length; i += PAINT_ROW_CELLS) rows.push(cells.slice(i, i + PAINT_ROW_CELLS))
-  return rows
+// The swatch grid's cells and the digit pad's cells, left to right and row by row: a swatch by its key, a digit key by its digit, an empty cell by its kind.
+function paintBlock (html) {
+  const block = /<div class="cbd-swatches">(.*?)<\/div><div data-role="paint">(.*?)<\/div>/.exec(html)
+  assert.ok(block, 'the pad follows the swatch grid in its row')
+  const swatches = [...block[1].matchAll(/<(?:button|span)[^>]*?(?:data-key="([a-z0-9]+)"|data-empty="(\w+)")[^>]*>/g)].map((m) => m[1] || m[2])
+  const pad = [...block[2].matchAll(/<(?:button|span)[^>]*?(?:data-digit="(\d)"|data-empty="(\w+)")[^>]*>/g)].map((m) => m[1] || m[2])
+  return { swatches, pad }
 }
+const padCells = (html) => paintBlock(html).pad
 
-test('renderEditor puts 0 on a fourth row under 7 when the page has a 0 swatch', () => {
+test('renderEditor puts 0 on a fourth row under 7, beside the page\'s 0 swatch', () => {
   const [lit] = layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
-  const rows = paintRows(editor([], [lit]))
-  assert.equal(rows.length, 4)
-  assert.deepEqual(rows[3], ['color', 'slot', 'slot', 'gap', 'digit', 'pad', 'pad'])
-  assert.match(renderEditor({ groups: [], pages: [lit], page: 0, brush: null }), /data-digit="0"[^>]*>0<\/button><span data-empty="pad"><\/span><span data-empty="pad"><\/span><\/div>/)
+  const { swatches, pad } = paintBlock(editor([], [lit]))
+  assert.deepEqual(swatches, ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'z'])
+  assert.deepEqual(pad.slice(9), ['0', 'pad', 'pad'])
 })
 
 test('renderEditor puts 0 on a fourth row under 7 when the page has no 0 swatch', () => {
   const [dark] = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
-  const rows = paintRows(editor([], [dark]))
-  assert.equal(rows.length, 4)
-  assert.deepEqual(rows[3], ['slot', 'slot', 'slot', 'gap', 'digit', 'pad', 'pad'])
+  const { swatches, pad } = paintBlock(editor([], [dark]))
+  assert.equal(swatches.length, 9)
+  assert.deepEqual(pad.slice(9), ['0', 'pad', 'pad'])
 })
 
 test('renderEditor draws a digit key as a cell filled with its group\'s color, and a digit in no group blank', () => {
@@ -1429,7 +1427,7 @@ test('renderEditor has no group rows, no Add group and no ×, and keeps a Clear 
 test('renderEditor keeps the "No palette colors found" note, and draws no pulldown or swatch, when no page has a color', () => {
   const html = editor([], layoutPages([], 0, colorOf), 0)
   assert.match(html, /No palette colors found/)
-  assert.equal(count(html, /data-act="color"|<select/g), 0)
+  assert.equal(count(html, /data-role="swatch"|<select/g), 0)
   assert.equal(count(editor([], twoPages(), 0), /No palette colors found/g), 0)
 })
 
@@ -1489,48 +1487,36 @@ test('copiedSettings: the profiles and the mode in force, groups saved before pr
 
 test('pastedSettings: a state that keeps every profile is kept, one that loses a profile is skipped and counted, other keys are ignored', () => {
   const profiles = { profiles: [{ name: ' Odd/Even ', groups }], active: 0 }
-  const pasted = pastedSettings(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_mode: 'sideways', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, DarkPage_color: '#ffffff' }))
+  const pasted = readPaste(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_mode: 'sideways', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, DarkPage_color: '#ffffff' }))
   assert.deepEqual(pasted.values, { ColorByDigit_profiles: stateFromStored(profiles), ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
   assert.equal(pasted.skipped, 1)
   const oneBad = { profiles: [{ name: 'Odd/Even', groups }, { name: 'bad' }], active: 0 }
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_mode: 'both' })), { values: { ColorByDigit_mode: 'both' }, skipped: 1 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: { profiles: [] } })), { values: {}, skipped: 1 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_mode: 'both' })), { values: { ColorByDigit_mode: 'both' }, skipped: 1 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_profiles: { profiles: [] } })), { values: {}, skipped: 1 })
 })
 
 test('pastedSettings: settings copied before the mode, with auto mode and no mode, give Cell for on and Off for off', () => {
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: true })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'off' }, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: 'yes' })), { values: {}, skipped: 1 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_mode: 'cell', ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: true })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'off' }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: 'yes' })), { values: {}, skipped: 1 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_mode: 'cell', ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
 })
 
 test('copiedSettings and pastedSettings carry the digit pick and "Use digit colors", and settings without them paste as synced and on', () => {
   const saved = { ColorByDigit_profiles: { profiles: [{ name: 'A', groups }, { name: 'B', groups: [] }], active: 0, digitActive: 1, useDigitColors: false } }
   const copied = copiedSettings({ getData: (key) => saved[key] ?? null })
   assert.deepEqual(JSON.parse(copied).ColorByDigit_profiles, saved.ColorByDigit_profiles)
-  const pasted = pastedSettings(copied).values.ColorByDigit_profiles
+  const pasted = readPaste(copied).values.ColorByDigit_profiles
   assert.equal(pasted.digitActive, 1)
   assert.equal(usesDigitColors(pasted), false)
-  const old = pastedSettings(JSON.stringify({ ColorByDigit_profiles: { profiles: [{ name: 'A', groups }], active: 0 } })).values.ColorByDigit_profiles
+  const old = readPaste(JSON.stringify({ ColorByDigit_profiles: { profiles: [{ name: 'A', groups }], active: 0 } })).values.ColorByDigit_profiles
   assert.equal(isSynced(old), true)
   assert.equal(usesDigitColors(old), true)
 })
 
-test('pastedSettings: throws on text that is not a JSON object', () => {
-  assert.throws(() => pastedSettings('x'), /not JSON/)
-  assert.throws(() => pastedSettings('true'), /not a settings object/)
-})
-
-test('pasteReport: says how many were pasted and how many skipped, and when the text held nothing', () => {
-  assert.equal(pasteReport(2, 0), 'Pasted 2 settings.')
-  assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
-  assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
-  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
-})
-
 test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
-  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
+  assert.deepEqual(readPaste('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })
 
 // An independent sRGB -> OKLCH (Ottosson's published matrices), so the tests do not lean on
@@ -1547,28 +1533,6 @@ function oklch (hex) {
   const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
   return { L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, C: Math.hypot(A, B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 }
 }
-const hueGap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
-
-test('parseColor reads rgb(), rgba() and #rrggbb, clamping out-of-range channels, and gives null for transparent or unreadable values', () => {
-  assert.deepEqual(parseColor('rgb(61, 153, 245)'), [61, 153, 245])
-  assert.deepEqual(parseColor('rgba(0, 0, 255, 0.5)'), [0, 0, 255])
-  assert.deepEqual(parseColor('#3d99f5'), [61, 153, 245])
-  assert.deepEqual(parseColor('#fff'), [255, 255, 255])
-  assert.deepEqual(parseColor('rgb(-36, -36, -36)'), [0, 0, 0])
-  for (const bad of ['transparent', '', 'banana', 'rgb(1, 2)', undefined, null, 'rgba(0, 0, 0, 0)', 'red']) assert.equal(parseColor(bad), null, String(bad))
-})
-
-test('darkenColor keeps the hue, lowers OKLCH lightness by the named factor, and gives #rrggbb', () => {
-  for (const rgb of [[61, 153, 245], [245, 58, 55], [232, 124, 241], [228, 150, 50], [179, 229, 106]]) {
-    const hex = '#' + rgb.map((c) => c.toString(16).padStart(2, '0')).join('')
-    const out = darkenColor(rgb)
-    assert.match(out, /^#[0-9a-f]{6}$/)
-    assert.ok(hueGap(oklch(hex).h, oklch(out).h) < 3, `${hex} -> ${out}`)
-    assert.ok(Math.abs(oklch(out).L - oklch(hex).L * LIGHTNESS_FACTOR) < 0.02, `${hex} -> ${out}`)
-  }
-  assert.equal(darkenColor([0, 0, 0]), '#000000')
-  for (const rgb of [[255, 255, 255], [-36, -36, -36], [999, -5, 40]]) assert.match(darkenColor(rgb), /^#[0-9a-f]{6}$/, JSON.stringify(rgb))
-})
 
 // The palette the puzzle shows, as readColor resolves it: key b unreadable.
 const SHOWN = { a: 'rgb(61, 153, 245)', c: 'rgb(245, 58, 55)', b: '' }

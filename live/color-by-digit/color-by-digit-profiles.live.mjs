@@ -544,7 +544,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Cancel', 'Save'])
     assert.deepEqual(await p.$$eval('.cbd-title-row button', (bs) => bs.map((b) => b.getAttribute('aria-label'))), ['Copy settings', 'Paste settings'])
     assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
-    assert.match(await p.$eval(`${EDITOR} select[data-act=page]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
+    assert.match(await p.$eval(`${EDITOR} select[data-role=color-choice]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
   })
 
   it('a click on a handle or on × does not select that row', async () => {

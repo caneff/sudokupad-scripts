@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.27.0
+// @version      1.27.3
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,14 +21,12 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.27.0'
-  const SETTINGS_GROUP = 'experimental'
+  const VERSION = '1.27.3'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
   const RIGHT_BUTTON = 2
-  const PEN_COLOR_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad draws free lines, the cell circle and the cross 5 wide (in cell units, a cell being 64) and the edge X 2.5 wide. The slider's value is the first width
   // and everything else scales with it.
   const THICKNESS = { min: 1, max: 16, step: 0.5, fallback: 5 }
@@ -48,7 +46,13 @@
   const ORTHOGONAL_LINES = FULL_WIDTH_VALUES.filter((v) => v !== '5' && v !== '6' && !DIAGONAL_LINES.includes(v))
   const CELL_UNITS = 64
 
-  const isPlainObject = (data) => Boolean(data) && typeof data === 'object' && !Array.isArray(data)
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+  /* eslint-enable no-unused-vars */
+  // </lib:plain>
 
   function wrapIndex (index, delta, count) {
     return (((index + delta) % count) + count) % count
@@ -164,9 +168,6 @@
   function linePoints (value, row, col) {
     return LINE_PATHS[value].map(([r, c]) => [row + r, col + c])
   }
-
-  // SudokuPad's purple, as its own icons draw it.
-  const PANEL_COLOR = '#6a1b9a'
 
   const STEP_LABELS = {
     colors: 'colors',
@@ -322,7 +323,7 @@
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
       buildPagesCss(inForce.thickness, inForce.dash),
-      EDIT_CSS,
+      pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
     ].join('\n')
@@ -359,6 +360,11 @@
   // 2. Pen colors: the saved set, derived colors and edit mode
   // Keys saved by the scripts this one replaced, kept so their saved data still reads.
   const COLORS_KEY = 'PenColor_colors'
+  // <lib:palette>
+  // Generated from lib/palette.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads parseColor, darkenColor and toOklab from color-math.
+  /* global parseColor, darkenColor, toOklab */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -371,40 +377,133 @@
     8: '#7c7c7c',
     9: '#000000'
   })
-  const HEX_COLOR = /^#[0-9a-f]{6}$/i
-  // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. One page preset per cell color page, up
-  // to three, then SudokuPad's own colors. UNSAVED is SudokuPad's own colors before the install save, never saved.
+  const PEN_COLOR_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
+  // least saturated darkened default colors are above 0.08.
+  const GREY_CHROMA = 0.04
+  // One page preset per cell color page, up to three, then SudokuPad's own colors.
   const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
   const SUDOKUPAD_PRESET = 'sudokupad'
+  const PALETTE_PRESET_LABELS = {
+    'page-1': 'Darker page 1',
+    'page-2': 'Darker page 2',
+    'page-3': 'Darker page 3',
+    [SUDOKUPAD_PRESET]: 'SudokuPad colors'
+  }
+  const COLOR_TOOL_POLL_MS = 100
+
+  // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
+  const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
+
+  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so color N lines up with cell color button N.
+  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
+  function darkerPageColors (keys, readCell) {
+    const colors = {}
+    const missing = []
+    const derived = []
+    PEN_COLOR_NUMBERS.forEach((n) => {
+      const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
+      if (rgb) {
+        colors[n] = darkenColor(rgb)
+        derived.push(n)
+      } else {
+        colors[n] = SUDOKUPAD_PEN_COLORS[n]
+        missing.push(n)
+      }
+    })
+    let darkest = null
+    let darkestLightness = Infinity
+    for (const n of derived) {
+      const [lightness, a, b] = toOklab(parseColor(colors[n]))
+      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
+        darkest = n
+        darkestLightness = lightness
+      }
+    }
+    if (darkest) colors[darkest] = '#000000'
+    return { colors, missing }
+  }
+
+  function paletteOptions (pageCount) {
+    return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+  }
+
+  // `pages` is the palette's pages of color keys, and `readCell` reads a key's color as CSS text.
+  function paletteColors (preset, pages, readCell) {
+    if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
+    const page = paletteOptions(pages.length).indexOf(preset)
+    if (page === -1) throw new RangeError(`palette: ${preset} is not a preset of this palette`)
+    return { ...darkerPageColors(pages[page], readCell), preset }
+  }
+
+  const colorTool = () => Framework.app?.tools?.colour
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  function readyColorTool () {
+    const tool = colorTool()
+    const pages = tool?.palette?.pages
+    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
+  }
+
+  // No time limit: until the color tool is ready the caller shows SudokuPad's own colors.
+  function waitForColorTool () {
+    return new Promise((resolve) => {
+      const check = () => {
+        const tool = readyColorTool()
+        if (tool) resolve(tool)
+        else setTimeout(check, COLOR_TOOL_POLL_MS)
+      }
+      check()
+    })
+  }
+
+  // The pages of cell color keys of the palette in force, or none until the color tool has one.
+  function palettePages () {
+    const palette = colorTool()?.palette
+    if (!palette) return []
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    return palette.pages
+  }
+
+  // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
+  // '' for a value it rejects or a variable with none.
+  function readRootColor (name) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    const probe = document.createElement('span')
+    probe.style.color = value
+    if (!probe.style.color) return ''
+    document.body.appendChild(probe)
+    try {
+      return window.getComputedStyle(probe).color
+    } finally {
+      probe.remove()
+    }
+  }
+
+  const readPenColor = (n) => readRootColor(`--puzzle-pencolor-${n}`)
+  // The raw `--cell-color-<key>` value, not the 60% opacity it shows with on the grid. SudokuPad sets the variable of every key in the palette, so any page reads.
+  const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
+  /* eslint-enable no-unused-vars */
+  // </lib:palette>
+  // The pen color numbers as their buttons' data-key text.
+  const PEN_COLOR_KEYS = PEN_COLOR_NUMBERS.map(String)
+  const HEX_COLOR = /^#[0-9a-f]{6}$/i
+  // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. UNSAVED is SudokuPad's own colors before the install save, never saved.
   const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
   const CUSTOM = 'custom'
   const UNSAVED = 'unsaved'
   const PRESET_LABELS = {
-    'page-1': 'Darker page 1',
-    'page-2': 'Darker page 2',
-    'page-3': 'Darker page 3',
-    [SUDOKUPAD_PRESET]: 'SudokuPad colors',
+    ...PALETTE_PRESET_LABELS,
     [CUSTOM]: 'Custom',
     [UNSAVED]: 'SudokuPad (unsaved)'
   }
-  // The share of its OKLCH lightness a cell color keeps as a pen color: low enough to read against cell colors drawn at 60% opacity, high enough that the
-  // lightest still show as 5px lines on white and the nine stay apart.
-  const LIGHTNESS_FACTOR = 0.75
-  // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
-  // least saturated darkened default colors are above 0.08.
-  const GREY_CHROMA = 0.04
-  const COLOR_TOOL_POLL_MS = 100
-  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
-  const HOLD_TO_EDIT_MS = 1000
   const isHexColor = (value) => typeof value === 'string' && HEX_COLOR.test(value)
-
-  // A pen color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
-  const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
 
   // null when nothing usable is saved, which means the install save is still owed. A bad entry beside a usable one keeps SudokuPad's own color.
   function readPenColors (data) {
-    if (!isPlainObject(data) || !PEN_COLOR_NUMBERS.some((n) => isHexColor(data[n]))) return null
-    const colors = Object.fromEntries(PEN_COLOR_NUMBERS.map((n) => [n, isHexColor(data[n]) ? data[n].toLowerCase() : SUDOKUPAD_PEN_COLORS[n]]))
+    if (!isPlainObject(data) || !PEN_COLOR_KEYS.some((n) => isHexColor(data[n]))) return null
+    const colors = Object.fromEntries(PEN_COLOR_KEYS.map((n) => [n, isHexColor(data[n]) ? data[n].toLowerCase() : SUDOKUPAD_PEN_COLORS[n]]))
     return { colors, preset: SAVED_PRESETS.includes(data.preset) ? data.preset : CUSTOM, missing: [] }
   }
 
@@ -416,7 +515,7 @@
   // A table passes when it holds a usable color and every pen color it holds is one: `readPenColors` would keep SudokuPad's own color for a bad entry.
   const readPastedColors = (data) => {
     const set = readPenColors(data)
-    return set && PEN_COLOR_NUMBERS.every((n) => !(n in data) || isHexColor(data[n])) ? storedPenColors(set) : undefined
+    return set && PEN_COLOR_KEYS.every((n) => !(n in data) || isHexColor(data[n])) ? storedPenColors(set) : undefined
   }
 
   const READERS = {
@@ -432,53 +531,6 @@
     return JSON.stringify(copied)
   }
 
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
-  function pastedSettings (text) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(READERS)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  function wireCopyPaste (root, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copiedSettings(Framework))
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          if (Object.keys(values).length > 0) apply(values)
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
-      }
-    })
-  }
-
   // Only the install save (`wait`, then page 1 darkened, or `save` with no color tool at all) changes the colors without the user.
   function startupPenColors (data, hasColorTool) {
     const saved = readPenColors(data)
@@ -488,31 +540,65 @@
 
   // The set is what gets saved, so an invalid pen or value throws rather than saving a wrong entry.
   function editedColors (colors, pen, value) {
-    if (!PEN_COLOR_NUMBERS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
+    if (!PEN_COLOR_KEYS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
     if (!isHexColor(value)) throw new RangeError(`pen-tool-extras: ${value} is not a #rrggbb color`)
     return { ...colors, [pen]: value.toLowerCase() }
   }
 
+  // <lib:color-math>
+  // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
-  const RGB_TEXT = /^rgba?\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+)\s*)?\)$/
 
-  // A page lists `transparent` or an `rgba()` with alpha 0 to leave a slot empty (key 0 of each default page).
+  // The share of its OKLCH lightness a cell color keeps when darkened: low enough to read against cell colors drawn at 60% opacity, high enough that the lightest still show as 5px lines on white and the nine stay apart.
+  const LIGHTNESS_FACTOR = 0.75
+  const GAMUT_EDGE = 1e-6
+  const LIGHT_TEXT = '#dddddd'
+  const DARK_TEXT = '#222222'
+
+  const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
+  const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+  const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
+  const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
+
+  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
+  function colorFunction (value) {
+    const fn = COLOR_FUNCTION.exec(value)
+    if (!fn) return null
+    const parts = fn[2].split(/[,/\s]+/).filter(Boolean)
+    return { kind: fn[1], args: parts.slice(0, 3), alpha: parts.length > 3 ? alphaOf(parts[3]) : undefined }
+  }
+
+  // A page lists `transparent`, or a color with alpha 0, to leave a slot empty (key 0 of each default page).
   function isTransparent (text) {
     if (typeof text !== 'string') return false
     const value = text.trim().toLowerCase()
-    const rgba = RGB_TEXT.exec(value)
-    return value === 'transparent' || Boolean(rgba && rgba[4] !== undefined && Number(rgba[4]) <= 0)
+    if (value === 'transparent') return true
+    const hex = HEX_ALPHA.exec(value)
+    if (hex) return parseInt(hex[1] ?? hex[2], 16) === 0
+    const fn = colorFunction(value)
+    return Boolean(fn && fn.alpha <= 0)
   }
 
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
     const value = text.trim().toLowerCase()
-    const hex = /^#([0-9a-f]{6})$/.exec(value)
-    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
-    const rgb = RGB_TEXT.exec(value)
-    return rgb ? rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x)))) : null
+    const hex = HEX_DIGITS.exec(value)
+    if (hex) {
+      const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
+      return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
+    }
+    const fn = colorFunction(value)
+    if (!fn || fn.kind !== 'rgb' || fn.args.length < 3) return null
+    const channels = fn.args.map(Number)
+    return channels.some(Number.isNaN) ? null : channels.map((x) => Math.round(clamp255(x)))
   }
+
+  const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
 
   const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
   const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
@@ -541,146 +627,215 @@
     ]
   }
 
-  const EDGE = 1e-6
-  const inGamut = (linear) => linear.every((x) => x >= -EDGE && x <= 1 + EDGE)
+  const inGamut = (linear) => linear.every((x) => x >= -GAMUT_EDGE && x <= 1 + GAMUT_EDGE)
 
   // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
   function darkenColor (rgb) {
     const [L, a, b] = toOklab(rgb.map(clamp255))
     const target = L * LIGHTNESS_FACTOR
-    let low = 0
-    let high = 1
+    let low = 1
     if (!inGamut(fromOklabLinear([target, a, b]))) {
+      low = 0
+      let high = 1
       for (let i = 0; i < 30; i++) {
         const mid = (low + high) / 2
         if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
         else high = mid
       }
-    } else {
-      low = 1
     }
     const out = fromOklabLinear([target, a * low, b * low])
-    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
-      .toString(16).padStart(2, '0')).join('')
+    return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
 
-  // Pen color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the pen buttons line up with the cell buttons.
-  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest pen is black as in SudokuPad's own set.
-  function derivedPenColors (keys, readColor) {
-    const colors = {}
-    const missing = []
-    const derived = []
-    PEN_COLOR_NUMBERS.forEach((n) => {
-      const rgb = n < keys.length ? parseColor(readColor(keys[n])) : null
-      if (rgb) {
-        colors[n] = darkenColor(rgb)
-        derived.push(n)
-      } else {
-        colors[n] = SUDOKUPAD_PEN_COLORS[n]
-        missing.push(Number(n))
-      }
+  // WCAG relative luminance of [r, g, b] channels.
+  function wcagLuminance (rgb) {
+    const [r, g, b] = rgb.map((c) => {
+      const x = c / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
     })
-    let darkest = null
-    let darkestLightness = Infinity
-    for (const n of derived) {
-      const [lightness, a, b] = toOklab(parseColor(colors[n]))
-      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
-        darkest = n
-        darkestLightness = lightness
-      }
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+
+  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background) {
+    const rgb = parseColor(background)
+    if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
+    const page = wcagLuminance(rgb) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-math>
+  // <lib:color-picker>
+  // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads PEN_COLOR_NUMBERS from palette.
+  /* global PEN_COLOR_NUMBERS */
+  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
+  const HOLD_TO_EDIT_MS = 1000
+  // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
+  const SWATCH_PX = 34
+  const SWATCH_GAP_PX = 4
+  // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
+  const PICKER_INPUT_REM = 2.4
+  const PICKER_COLUMNS = 3
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
+
+  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // The dialog's color block: a pulldown above a grid of swatches, three to a row.
+  // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
+  // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
+  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '' }) {
+    const palette = picked !== undefined
+    const option = ({ value, label, selected, disabled }) =>
+      `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(label)}</option>`
+    const named = (swatch) => `aria-label="${escapeHtml(swatch.label)}" title="${escapeHtml(swatch.label)}"`
+    const swatch = (s) => {
+      const head = `class="${prefix}swatch" data-role="swatch"`
+      if (!s) return `<span ${head} data-empty="slot"></span>`
+      if (!palette) return `<input type="color" ${head} data-key="${escapeHtml(s.key)}" value="${escapeHtml(s.value)}" ${named(s)}>`
+      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${escapeHtml(s.value)}"></button>`
     }
-    if (darkest) colors[darkest] = '#000000'
-    return { colors, missing }
+    return `<div class="${prefix}color-block">` +
+      `<select class="${prefix}color-choice" data-role="color-choice" aria-label="${escapeHtml(label)}">${options.map(option).join('')}</select>` +
+      `<div class="${prefix}color-row"><div class="${prefix}swatches">${swatches.map(swatch).join('')}</div>${beside}</div></div>`
   }
 
-  function presetOptions (pageCount) {
-    return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+  // `scope` is the dialog's own element (`#id`), so SudokuPad's rules for its dialogs' selects and buttons are outranked without !important.
+  function colorBlockCss (prefix, scope) {
+    const at = (selector) => `${scope} .${prefix}${selector}`
+    return [
+      `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
+      // As wide as the block, whatever its longest option: a select is otherwise as wide as that, and would widen the dialog's column.
+      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
+      `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
+      `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
+      `${at('swatch')} { box-sizing: border-box; display: block; width: ${SWATCH_PX}px; height: ${SWATCH_PX}px; margin: 0; padding: 0; border: 1px solid rgb(0 0 0 / .25); border-radius: 6px; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }`,
+      `${at('swatch')}[data-empty] { border: none; cursor: default; }`,
+      `${at('swatch')}[aria-pressed="true"] { border: 2px solid #fff; outline: 3px solid #000; }`,
+      `${at('swatch')}::-webkit-color-swatch-wrapper { padding: 0; }`,
+      `${at('swatch')}::-webkit-color-swatch { border: none; border-radius: 5px; }`,
+      `${at('swatch')}::-moz-color-swatch { border: none; border-radius: 5px; }`
+    ].join('\n')
   }
 
-  // `pages` is the palette's pages of color keys, and `readColor` reads a key's color as CSS text.
-  function presetColors (preset, pages, readColor) {
-    if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
-    const page = presetOptions(pages.length).indexOf(preset)
-    if (page === -1) throw new RangeError(`pen-tool-extras: ${preset} is not a preset of this palette`)
-    return { ...derivedPenColors(pages[page], readColor), preset }
+  // Edit mode's looks, for SudokuPad's tool `tool` (its panel carries `tool-<tool>`): each picker fills the grid cell of its button, whose own picture is hidden under it.
+  // A picker is out of the flow, so it takes no cell from the buttons the panel places itself.
+  function pickerCss (prefix, tool) {
+    const panel = `.tool-${tool} .controls-input`
+    const picker = (n) => `${panel} .${prefix}picker[data-key="${n}"]`
+    const rows = PEN_COLOR_NUMBERS.length / PICKER_COLUMNS
+    return [
+      `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
+      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
+      `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
+      ...PEN_COLOR_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
+      // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
+      ...[[[1, 2, 3], rows], [[7, 8, 9], 1]].flatMap(([keys, row]) => keys.map((n) => `.setting-flipkeypad ${picker(n)} { grid-row: ${row} / span 1; }`))
+    ].join('\n')
   }
+
+  // Every open picker shows the color `colorOf(n)` gives now.
+  function refreshPickers (prefix, colorOf) {
+    document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
+  }
+
+  // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
+  // A second hold, or the panel leaving the tool, ends edit mode. `guard` runs each toggle, so a caller can report a failure its own way.
+  function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
+    const toolClass = `tool-${tool}`
+    const editing = `${prefix}editing`
+    const pickerClass = `${prefix}picker`
+    // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
+    const targets = `.${toolClass} .controls-input button[data-key], .${toolClass} .${pickerClass} input`
+    // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
+    let leaveWatch = null
+
+    function exit (panel) {
+      if (leaveWatch) leaveWatch.disconnect()
+      leaveWatch = null
+      panel.classList.remove(editing)
+      panel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
+    }
+
+    function enter (panel) {
+      // Every button is found before anything changes, so a missing one leaves no half edit mode.
+      const buttons = PEN_COLOR_NUMBERS.map((n) => {
+        const button = panel.querySelector(`.controls-input button[data-key="${n}"]`)
+        if (!button) throw new Error(`${prefix}color-picker: the ${tool} tool has no button for color ${n}`)
+        return button
+      })
+      panel.classList.add(editing)
+      buttons.forEach((button, i) => {
+        const n = PEN_COLOR_NUMBERS[i]
+        button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
+      })
+      leaveWatch = new window.MutationObserver(() => {
+        if (!panel.classList.contains(toolClass)) exit(panel)
+      })
+      leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
+    }
+
+    let timer
+    let holdDone = false
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    // Pointer events carry a mouse button of either kind.
+    document.addEventListener('pointerdown', (event) => {
+      cancel()
+      holdDone = false
+      const target = event.target.closest(targets)
+      if (!target) return
+      const panel = target.closest(`.${toolClass}`)
+      timer = setTimeout(() => {
+        timer = undefined
+        holdDone = true
+        if (!panel.classList.contains(toolClass)) return
+        guard(() => panel.classList.contains(editing) ? exit(panel) : enter(panel))
+      }, HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // The browser's menu would open over the picker during a right-click hold: when the press is still going (Linux opens it on press),
+    // or after the hold has run its course (Windows opens it on release, over the picker that appeared under the pointer).
+    // A quick right-click on a button, released before the delay, keeps its menu on Windows.
+    document.addEventListener('contextmenu', (event) => {
+      if ((timer !== undefined || holdDone) && event.target.closest(targets)) event.preventDefault()
+    }, true)
+    document.addEventListener('input', (event) => {
+      const input = event.target
+      if (input.matches(`.${pickerClass} input`)) save(input.dataset.key, input.value)
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-picker>
 
   // Strokes (`.pencolor-N`) and the tool's button swatches both read these variables; the eraser has its own fixed color and no variable.
   // SudokuPad's `tool-pen.css` loads when the pen tool is enabled, so a plain `:root` rule would lose to it by coming first; `:root:root` outranks it whichever loads last.
   function buildCss (colors) {
-    const lines = PEN_COLOR_NUMBERS.map((n) => `  --puzzle-pencolor-${n}: ${colors[n]};`)
+    const lines = PEN_COLOR_KEYS.map((n) => `  --puzzle-pencolor-${n}: ${colors[n]};`)
     return [':root:root {', ...lines, '}'].join('\n')
   }
 
-  // Edit mode: each color picker sits over its button and the button's swatch is hidden under it. The sizes are those SudokuPad's color tool uses for the same job.
-  const EDITING = 'pen-tool-extras-editing'
-  const PICKER = 'pen-tool-extras-picker'
-  const EDIT_CSS = [
-    `.${EDITING} button[data-value]::after { opacity: 0; }`,
-    // The panel is a grid, so a picker in the flow would take a cell: it is absolute and fills its button's cell, which `PANEL_CSS` names.
-    `.${EDITING} .${PICKER} { position: absolute; inset: 0; z-index: 10; }`,
-    `.${EDITING} .${PICKER} input { position: absolute; inset: 0; margin: auto; width: 2.4rem; height: 2.4rem; pointer-events: all; }`
-  ].join('\n')
-  // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
-  const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
+  const CLASS_PREFIX = 'pen-tool-extras-'
 
   // The set in force. Until the install save it is SudokuPad's own, which is what the page shows with no override.
   let active = { ...SUDOKUPAD_SET, preset: UNSAVED }
   // The page preset the set in force came from: a hand edit in the dialog makes the set Custom and keeps its missing pens, whose page the note still names.
   let activePickedPreset = active.preset
 
-  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
-  // values for them exist earlier and say nothing about a custom palette).
-  function readyColorTool () {
-    const tool = Framework.app && Framework.app.tools && Framework.app.tools.colour
-    const palette = tool && tool.palette
-    const ready = palette && Array.isArray(palette.pages) && Array.isArray(palette.pages[0])
-    return ready ? tool : null
-  }
-
-  // No time limit: the install save is page 1 darkened, and until then the pens show SudokuPad's own colors.
-  function waitForColorTool () {
-    return new Promise((resolve) => {
-      const check = () => {
-        const tool = readyColorTool()
-        if (tool) resolve(tool)
-        else setTimeout(check, COLOR_TOOL_POLL_MS)
-      }
-      check()
-    })
-  }
-
   // The page presets the palette in force offers, and SudokuPad's own colors, which need no color tool.
   const availablePresets = () => {
     const tool = steps.colors.off ? null : readyColorTool()
-    return presetOptions(tool ? tool.palette.pages.length : 0)
-  }
-
-  // The raw `--cell-color-<key>` values, not the 60% opacity they show with on the grid. A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`), and the variable
-  // reads back as written, so each value goes through the browser to become `rgb()` text first. A value the browser rejects stays as written, and `derivedPenColors` treats it as unreadable.
-  // SudokuPad sets the variable of every key in the palette, so any page reads, not only the current one.
-  function presetFromTool (tool, preset) {
-    const root = document.documentElement
-    const rootStyle = window.getComputedStyle(root)
-    const probe = document.createElement('span')
-    root.appendChild(probe)
-    try {
-      return presetColors(preset, tool.palette.pages, (key) => {
-        const value = rootStyle.getPropertyValue(`--cell-color-${key}`).trim()
-        probe.style.color = ''
-        probe.style.color = value
-        return probe.style.color ? window.getComputedStyle(probe).color : value
-      })
-    } finally {
-      probe.remove()
-    }
+    return paletteOptions(tool ? tool.palette.pages.length : 0)
   }
 
   function adoptColors (set, pickedPreset = set.preset) {
     active = set
     activePickedPreset = pickedPreset
     applyStyle()
-    document.querySelectorAll(`.${PICKER} input`).forEach((el) => { el.value = set.colors[el.dataset.pen] })
+    refreshPickers(CLASS_PREFIX, (n) => set.colors[n])
   }
 
   function saveColors (set, pickedPreset) {
@@ -692,76 +847,19 @@
     saveColors({ colors: editedColors(active.colors, pen, value), preset: CUSTOM, missing: [] })
   }
 
-  // SudokuPad keeps one panel element and swaps its `tool-pen` class for the next tool's, so the pickers would stay behind on their own: a class watcher ends edit mode when the
-  // panel stops being the pen's.
-  let leaveWatch = null
-
-  function exitEditMode (panel) {
-    if (leaveWatch) leaveWatch.disconnect()
-    leaveWatch = null
-    panel.classList.remove(EDITING)
-    panel.querySelectorAll(`.${PICKER}`).forEach((el) => el.remove())
-  }
-
-  function enterEditMode (panel) {
-    // Every button is found before anything changes, so a missing one leaves no half edit mode.
-    const buttons = PEN_COLOR_NUMBERS.map((n) => {
-      const button = panel.querySelector(`button[data-key="${n}"]`)
-      if (!button) throw new Error(`pen-tool-extras: the pen tool has no button for pen color ${n}`)
-      return button
-    })
-    panel.classList.add(EDITING)
-    buttons.forEach((button, i) => {
-      button.insertAdjacentHTML('beforebegin',
-        `<div class="${PICKER}" data-pen="${PEN_COLOR_NUMBERS[i]}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active.colors[PEN_COLOR_NUMBERS[i]]}"></div>`)
-    })
-    leaveWatch = new window.MutationObserver(() => {
-      if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
-    })
-    leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
-  }
-
-  function toggleEditMode (panel) {
-    if (panel.classList.contains(EDITING)) exitEditMode(panel)
-    else enterEditMode(panel)
-  }
-
-  function installHoldToEdit () {
-    let timer
-    let holdDone = false
-    const cancel = () => { clearTimeout(timer); timer = undefined }
-    // Pointer events carry a mouse button of either kind, and touch too (touch is not tested).
-    document.addEventListener('pointerdown', (event) => {
-      cancel()
-      holdDone = false
-      const target = event.target.closest(HOLD_TARGETS)
-      if (!target) return
-      const panel = target.closest('.tool-pen')
-      timer = setTimeout(() => { holdDone = true; steps.colors.run(() => toggleEditMode(panel)) }, HOLD_TO_EDIT_MS)
-    }, true)
-    window.addEventListener('pointerup', cancel, true)
-    window.addEventListener('pointercancel', cancel, true)
-    // The browser's menu would open over the picker during a right-click hold or a long touch:
-    // when the press is still going (Linux opens it on press), or after the hold has run its
-    // course (Windows opens it on release, over the picker that appeared under the pointer).
-    // A quick right-click on a button, released before the delay, keeps its menu on Windows.
-    document.addEventListener('contextmenu', (event) => {
-      if ((timer !== undefined || holdDone) && event.target.closest(HOLD_TARGETS)) event.preventDefault()
-    }, true)
-    document.addEventListener('input', (event) => {
-      const el = event.target
-      if (el.matches(`.${PICKER} input`)) savePenColor(el.dataset.pen, el.value)
-    })
+  // A hold on a pen button toggles a color picker over each, and a picker recolors its pen at once.
+  function installPenPickers () {
+    installHoldToEdit({ prefix: CLASS_PREFIX, tool: 'pen', colorOf: (n) => active.colors[n], save: savePenColor, guard: (toggle) => steps.colors.run(toggle) })
   }
 
   // 3. Pen pages: the pages, line styles and the page button
-  // The pen pages in paging order. Page N's characters line up with PEN_COLOR_NUMBERS, so a recolor changes the pen on every page.
+  // The pen pages in paging order. Page N's characters line up with PEN_COLOR_KEYS, so a recolor changes the pen on every page.
   // A stroke stores the character after its value (`pc:a`), and any lowercase letter draws, undoes and replays (docs/research/sudokupad-pen-tool.md, "Pen colors past nine").
   // Page 1 is SudokuPad's own and stays first: stock SudokuPad can select only its characters.
   // A pen value has no direction, so an arrow page's pen is two characters: `chars` for a line dragged the way SudokuPad draws the value, `reverse` for the other way.
   // Only `chars` is ever selected.
   const PEN_PAGES = [
-    { chars: PEN_COLOR_NUMBERS, dashed: false },
+    { chars: PEN_COLOR_KEYS, dashed: false },
     { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dashed: true },
     { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dashed: false, arrowLines: true }
   ]
@@ -773,7 +871,7 @@
   // Each color character of the pen pages: its pen (the character on its button), its page, its color number, and `forward`, the way an arrow page's character was dragged
   // (null off an arrow page). An arrow page's pen also gives its `reverse` character.
   const COLOR_CHARS = new Map(PEN_PAGES.flatMap((page, index) => page.chars.flatMap((pen, i) => {
-    const entry = (forward) => ({ pen, page: index, number: PEN_COLOR_NUMBERS[i], forward, reverse: page.arrowLines ? page.reverse[i] : undefined })
+    const entry = (forward) => ({ pen, page: index, number: PEN_COLOR_KEYS[i], forward, reverse: page.arrowLines ? page.reverse[i] : undefined })
     return page.arrowLines ? [[pen, entry(true)], [page.reverse[i], entry(false)]] : [[pen, entry(null)]]
   })))
 
@@ -794,7 +892,7 @@
   }
 
   function penCharOn (page, number) {
-    return PEN_PAGES[page].chars[PEN_COLOR_NUMBERS.indexOf(number)]
+    return PEN_PAGES[page].chars[PEN_COLOR_KEYS.indexOf(number)]
   }
 
   // SudokuPad's `getData` parses what it reads, so a saved '3' comes back as the number 3.
@@ -832,13 +930,13 @@
   // is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider. `:root:root` outranks SudokuPad's own rules whichever
   // stylesheet loads last.
   function buildPagesCss (thickness, dash) {
-    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_NUMBERS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
+    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_KEYS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
-        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLOR_NUMBERS[i]}); }`)
+        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); }`)
         // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
-        if (page.arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${PEN_COLOR_NUMBERS[i]}); stroke: none; }`)
+        if (page.arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); stroke: none; }`)
       }))
       if (!page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
@@ -893,7 +991,7 @@
   // selection both read `data-value`. Button 0 is not a pen.
   function setPadPage (page) {
     document.querySelectorAll('.controls-input button[data-key]').forEach((button) => {
-      const index = PEN_COLOR_NUMBERS.indexOf(button.dataset.key)
+      const index = PEN_COLOR_KEYS.indexOf(button.dataset.key)
       if (index === -1) return
       const pen = PEN_PAGES[page].chars[index]
       button.dataset.value = pen
@@ -922,7 +1020,7 @@
 
   // A page turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
   function turnPage (delta) {
-    const number = penNumber(selectedPen()) || PEN_COLOR_NUMBERS[0]
+    const number = penNumber(selectedPen()) || PEN_COLOR_KEYS[0]
     ToolPen.tool.setSelectedColor(penCharOn(stepEnabledPage(currentPage(), delta, inForce.lineStyles), number))
   }
 
@@ -1730,10 +1828,17 @@
     return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
   }
 
-  // SudokuPad draws `.penlinemode` as a box across the panel's last row, which is hidden here. The panel keeps SudokuPad's outer size (four rows of a 4rem button between 0.15rem margins)
-  // and lays itself out as a grid: the nine color buttons shortened to 2.5rem, a gap, a row of the line mode, line type and settings buttons at the full 4rem on the color columns, and
-  // the sliders across the rest. A tray sits behind the last two rows; it is placed in their area but takes no cell, so the buttons fill the row.
-  const rem = (value) => Math.round(value * 100) / 100
+  // <lib:panel>
+  // Generated from lib/panel.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads rem from plain.
+  /* global rem */
+  // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
+  // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in
+  // their area but takes no cell, so the buttons fill the row.
+  // SudokuPad's purple, as its own icons draw it.
+  const PANEL_COLOR = '#6a1b9a'
+  const TRAY_COLOR = '#efeaf4'
   const PANEL_BUTTON_REM = 4
   const COLOR_BUTTON_REM = 2.5
   const PANEL_BUTTON_MARGIN_REM = 0.15
@@ -1745,57 +1850,78 @@
   const CONTROLS_ROW = COLOR_ROWS + 1
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
-  const TRAY_COLOR = '#efeaf4'
   const TRAY_RADIUS_PX = 14
   // The tray reaches this far past the color block on each side, and holds its buttons this far from its edge on every side, so the margin of a button and the reach make up most of it.
   const TRAY_REACH_REM = 0.25
   const TRAY_PADDING_REM = 0.4
   const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
-  const MODE_BUTTON = 'pen-tool-extras-mode'
-  const SETTINGS_BUTTON = 'pen-tool-extras-settings'
-  const SETTINGS_LABEL = 'Pen Tool Extras settings'
-  const TRAY = 'pen-tool-extras-tray'
   const SLIDER_TRACK_REM = 0.8
   const SLIDER_THUMB_REM = 1.1
   const SLIDER_THUMB_RING_REM = 0.2
-  // The tracks say what the sliders do: thickness is a wedge widening to the right, opacity fades from faint to solid. The wedge is a data-URI picture, since a CSS gradient
-  // cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
+  // A hidden slider's empty row has the same height, so the other keeps its place.
+  const SLIDER_ROW_HEIGHT_REM = 1.4
+  // The wedge is a data-URI picture, since a CSS gradient cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
   const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
   const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
   const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
-  // A hidden slider's empty row has the same height, so the other keeps its place.
-  const SLIDER_ROW_HEIGHT_REM = 1.4
-  // Each color button keeps `position: relative`, since its color line is its `::after`. The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
+
+  // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
+  // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
+  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out.
+  function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
+    const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
+    return [
+      `${panel} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
+      `${panel} > .button-row { display: contents !important; }`,
+      `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
+      // Each color button keeps `position: relative`, since its color line is its `::after`.
+      `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
+      `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+      `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
+      // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
+      `${panel}:not(:has(.${sliders})) .${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
+      // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
+      ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
+      `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
+      `.${sliderRow} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
+      `.${sliderRow} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
+      `.${sliderRow} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-track { ${TRACK_SHAPE} }`,
+      `#${wedgeSlider}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
+      `#${wedgeSlider}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
+      ...(fadeSlider ? [`#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`, `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`] : []),
+      `.${sliderRow} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${rem((SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2)}rem; ${THUMB_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-thumb { ${THUMB_SHAPE} }`
+    ]
+  }
+
+  // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops the browser dragging a slider's thumb. A move over the sliders is kept from
+  // SudokuPad's handlers, so the thumb drags and the drag reaches nothing else on the page. A drag leaves the focus on the slider, where the arrow keys would move it and not
+  // reach the puzzle, so the focus goes back to the page when the pointer is released. `sliders` is the selector of the block that holds the slider inputs.
+  function installSliderGuards (sliders, doc = document, win = window) {
+    doc.addEventListener('mousemove', (event) => {
+      if (event.target.closest(sliders)) event.stopPropagation()
+    }, true)
+    win.addEventListener('pointerup', () => {
+      const focused = doc.activeElement
+      if (focused && focused.matches(`${sliders} input`)) focused.blur()
+    }, true)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:panel>
+  const MODE_BUTTON = 'pen-tool-extras-mode'
+  const SETTINGS_BUTTON = 'pen-tool-extras-settings'
+  const SETTINGS_LABEL = 'Pen Tool Extras settings'
+  const TRAY = 'pen-tool-extras-tray'
+  // The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
   const CONTROL_BUTTONS = [MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
   const controlButtons = CONTROL_BUTTONS.map((name) => `.tool-pen .controls-input button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
-    `.tool-pen .controls-input { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; }`,
-    '.tool-pen .controls-input > .button-row { display: contents !important; }',
-    '.tool-pen .controls-input button[data-key="0"], .tool-pen .controls-input button[data-control="delete"] { display: none !important; }',
-    `.tool-pen .controls-input button[data-key] { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
-    `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    ...panelCss({ panel: '.tool-pen .controls-input', colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
     ...CONTROL_BUTTONS.map((name, i) => `.tool-pen .controls-input button.${name} { order: ${i + 1}; }`),
-    `.${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
-    // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
-    `.tool-pen .controls-input:not(:has(.${SLIDERS})) .${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
-    // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
-    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad .tool-pen .controls-input :is(button[data-key="${key}"], .${PICKER}[data-pen="${key}"]) { grid-row: ${row} / span 1; }`)),
-    // In edit mode a picker sits in its button's cell, so it follows the button when Keypad Flipped moves it.
-    ...PEN_COLOR_NUMBERS.map((n) => `.tool-pen .controls-input .${PICKER}[data-pen="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
-    `.${SLIDERS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
-    `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
-    `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
-    `.${SLIDER_ROW} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
-    `.${SLIDER_ROW} input::-moz-range-track { ${TRACK_SHAPE} }`,
-    `#${THICKNESS_SLIDER}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
-    `#${THICKNESS_SLIDER}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
-    `#${OPACITY_SLIDER}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
-    `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
-    `.${SLIDER_ROW} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
-    `.${SLIDER_ROW} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
     `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`
@@ -1929,8 +2055,6 @@
     removePageButtons()
   }
 
-  // A drag on a slider leaves the focus on it, and then the arrow and paging keys would move the slider
-  // and not reach the puzzle; the focus goes back to the page when the pointer is released.
   function installPenPanel () {
     document.addEventListener('input', (event) => {
       if (event.target.matches(`.${SLIDERS} input`)) saveSlider(event.target)
@@ -1950,16 +2074,7 @@
       const action = actions.find(([name]) => event.target.closest(`.${name}`))
       if (action && Date.now() - tappedAt > TAP_CLICK_MS) action[1]()
     })
-    // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops
-    // the browser dragging a slider's thumb. A mouse move over a slider is kept from SudokuPad's
-    // handlers, so the thumb drags and the drag reaches nothing else on the page.
-    document.addEventListener('mousemove', (event) => {
-      if (event.target.closest(`.${SLIDERS}`)) event.stopPropagation()
-    }, true)
-    window.addEventListener('pointerup', () => {
-      const focused = document.activeElement
-      if (focused && focused.matches(`.${SLIDERS} input`)) focused.blur()
-    }, true)
+    installSliderGuards(`.${SLIDERS}`)
   }
 
   // 10. Settings dialog
@@ -1973,20 +2088,6 @@
   const markPicture = (key) => {
     const [width, shapes] = MARK_PICTURES[key]
     return `<svg width="${width}" height="16" viewBox="0 0 ${width} 16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
-  }
-
-  const ICON_PICTURES = {
-    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
-    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
-  }
-  const iconButton = (act, label, picture) =>
-    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
-
-  function renderTitle (version) {
-    return '<div class="pen-tool-extras-title-row">' +
-      `<span><b>Pen Tool Extras</b> <small class="pen-tool-extras-version">v${version}</small></span>` +
-      '<span data-role="settings-status"></span>' +
-      '<span class="pen-tool-extras-tools">' + iconButton('copy-settings', 'Copy settings', ICON_PICTURES.copy) + iconButton('paste-settings', 'Paste settings', ICON_PICTURES.paste) + '</span></div>'
   }
 
   // The class names more than one template writes, named once here; a class only one template writes is spelled in that template and in its rule in `DIALOG_CSS`.
@@ -2023,10 +2124,9 @@
 
   // A set in force that is no pickable preset (Custom, a page the palette no longer has, a preset while the colors step is off, or the colors before the install save) is
   // shown first and cannot be picked, so the pulldown says what is in force and every preset stays pickable: picking the option already shown fires no `change`.
-  function presetChoice (preset, presets) {
-    const option = (id, disabled) => `<option value="${id}"${id === preset ? ' selected' : ''}${disabled ? ' disabled' : ''}>${PRESET_LABELS[id]}</option>`
-    const inForce = presets.includes(preset) ? '' : option(preset, true)
-    return `<select data-pen-preset aria-label="Pen color preset">${inForce}${presets.map((id) => option(id, false)).join('')}</select>`
+  function presetChoices (preset, presets) {
+    const option = (id, disabled) => ({ value: id, label: PRESET_LABELS[id], selected: id === preset, disabled })
+    return [...(presets.includes(preset) ? [] : [option(preset, true)]), ...presets.map((id) => option(id, false))]
   }
 
   const sectionTitle = (text) => `<div class="${SECTION_TITLE}">${text}</div>`
@@ -2047,15 +2147,6 @@
     `${OPTIONS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
     `${OPTIONS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: ${MUTED_COLOR} !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
     ...SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under).map(hiddenRowCss),
-    '.pen-tool-extras-version { opacity: .6; }',
-    '.pen-tool-extras-title-row { display: flex; align-items: center; gap: 12px; }',
-    '.pen-tool-extras-tools { display: flex; align-items: center; gap: 4px; }',
-    `.pen-tool-extras-tools button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${MUTED_COLOR} !important; cursor: pointer; border-radius: 6px !important; }`,
-    '.pen-tool-extras-tools button:hover { background: #f0edf5 !important; }',
-    '.pen-tool-extras-tools svg { width: 20px; height: 20px; }',
-    '.pen-tool-extras-tools svg * { fill: none !important; }',
-    // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-    `.pen-tool-extras-title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${MUTED_COLOR}; }`,
     `${EDITOR} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
     // In the first column the note wraps to the column set by the marks table; it never sets it.
     `${EDITOR} .${CELL} .${NOTE} { width: 0; min-width: 100%; max-width: none; }`,
@@ -2075,11 +2166,6 @@
     `${EDITOR} .pen-tool-extras-check-row.pen-tool-extras-sub { padding-left: ${INDENT_EM}em; color: ${INDENTED_COLOR}; margin: 0 0 4px; }`,
     `${EDITOR} .pen-tool-extras-check { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-check-row { margin: 4px 0; display: flex; justify-content: flex-start; align-items: center; gap: 6px; }`,
-    `${EDITOR} .pen-tool-extras-pen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin: 6px 0; }`,
-    `${EDITOR} .pen-tool-extras-pen-grid input[type=color] { -webkit-appearance: none; appearance: none; box-sizing: border-box; width: 100%; height: auto; aspect-ratio: 1; padding: 0; margin: 0; border: 1px solid rgb(0 0 0 / .25); border-radius: 6px; background: none; cursor: pointer; }`,
-    `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }`,
-    `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-webkit-color-swatch { border: none; border-radius: 5px; }`,
-    `${EDITOR} .pen-tool-extras-pen-grid input[type=color]::-moz-color-swatch { border: none; border-radius: 5px; }`,
     `${EDITOR} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(3, ${MARK_CELL_PX}px); margin: 6px 0 0; }`,
     `${EDITOR} .pen-tool-extras-marks-table > * { display: flex; align-items: center; justify-content: center; height: ${MARK_CELL_PX}px; box-sizing: border-box; margin: 0; }`,
     `${EDITOR} .pen-tool-extras-marks-table > :nth-child(4n+1) { justify-content: flex-start; padding-right: 10px; }`,
@@ -2088,14 +2174,13 @@
     `${EDITOR} .pen-tool-extras-mark input { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-mark-head { color: ${INDENTED_COLOR}; }`,
     `${EDITOR} .pen-tool-extras-mark-head svg { stroke-width: 2.6; overflow: visible; }`,
-    `${EDITOR} select[data-pen-preset] { box-sizing: border-box; width: 0; min-width: 100%; margin: 6px 0 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b4fa0'/%3E%3C/svg%3E") no-repeat right 10px center; }`,
     // Below ONE_COLUMN_BELOW_PX the cells stack in one column, in their order in the markup.
     `@media (max-width: ${ONE_COLUMN_BELOW_PX}px) {
 ${EDITOR} .pen-tool-extras-layout { grid-template-columns: minmax(0, 1fr); }
 ${EDITOR} .${CELL}:nth-child(n) { border-left: none; padding: 10px 0; }
 ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
-${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-width: 14rem; }
-}`
+}`,
+    colorBlockCss(CLASS_PREFIX, EDITOR)
   ].join('\n')
 
   const boxId = (path) => `pen-tool-extras-box-${path.replace('.', '-')}`
@@ -2103,8 +2188,12 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
 
   // Its values are drafts that take effect on Save, so the panel's sliders and these agree when the dialog opens.
   function renderEditor (state) {
-    const grid = '<div class="pen-tool-extras-pen-grid">' +
-      PEN_COLOR_NUMBERS.map((n) => `<input type="color" data-pen="${n}" value="${state.colors[n]}" aria-label="Pen color ${n}">`).join('') + '</div>'
+    const colorBlock = renderColorBlock({
+      prefix: CLASS_PREFIX,
+      label: 'Pen color preset',
+      options: presetChoices(state.preset, state.presets),
+      swatches: PEN_COLOR_KEYS.map((n) => ({ key: String(n), value: state.colors[n], label: `Pen color ${n}` }))
+    })
     // A box with no word label carries its name as its accessible name and hover title.
     const markBox = (key, name) =>
       `<label title="${name}" class="pen-tool-extras-mark">` +
@@ -2137,31 +2226,10 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
       '</div>'
     const cell = (markup) => `<div class="${CELL}">${markup}</div>`
     return offNote(state.off) + '<div class="pen-tool-extras-layout">' +
-      cell(sectionTitle('Pen colors') + presetChoice(state.preset, state.presets) + grid + missingNote(state.missing, state.pickedPreset)) +
+      cell(sectionTitle('Pen colors') + colorBlock + missingNote(state.missing, state.pickedPreset)) +
       cell(section('Line settings') + DIVIDER + section('Line styles')) +
       cell(sectionTitle('Marks to cycle') + marksTable) +
       cell(section('Other')) + '</div>'
-  }
-
-  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
-  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
-  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
-
-  // The next press ends the swallowing even when no release came (a close from the keyboard).
-  function swallowRelease () {
-    const swallow = (event) => event.stopImmediatePropagation()
-    const stop = () => {
-      RELEASE_EVENTS.forEach((type) => window.removeEventListener(type, swallow, true))
-      window.removeEventListener('pointerdown', stop, true)
-    }
-    RELEASE_EVENTS.forEach((type) => window.addEventListener(type, swallow, true))
-    window.addEventListener('pointerdown', stop, true)
-  }
-
-  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
-  function closeDialogKeepingGrid () {
-    Framework.closeDialog()
-    swallowRelease()
   }
 
   // SudokuPad also closes a dialog on a press on its overlay, which covers the page. The grid never
@@ -2203,7 +2271,7 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     }
     // Computed now, from the palette in force: the saved colors are a snapshot. False when the colors step is off or goes off reading the palette.
     const pickPreset = (id) => {
-      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_SET : steps.colors.run(() => presetFromTool(readyColorTool(), id), () => null)
+      const picked = id === SUDOKUPAD_PRESET ? SUDOKUPAD_SET : steps.colors.run(() => paletteColors(id, readyColorTool().palette.pages, readCellColor), () => null)
       if (picked) {
         set = picked
         pickedPreset = id
@@ -2220,7 +2288,7 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     }
     Framework.showDialog({
       parts: [
-        { tag: 'text', innerHTML: renderTitle(VERSION) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Pen Tool Extras', version: VERSION }) },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',
@@ -2231,10 +2299,10 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
               handler: () => {
                 if (colorsChosen) saveColors(set, pickedPreset)
                 saveSettings(draft)
-                closeDialogKeepingGrid()
+                closeDialogKeepingGrid(Framework)
               }
             },
-            { tag: 'button', content: 'Cancel', handler: closeDialogKeepingGrid },
+            { tag: 'button', content: 'Cancel', handler: () => closeDialogKeepingGrid(Framework) },
             { tag: 'button', content: 'Restore defaults', handler: restoreDefaults }
           ]
         }
@@ -2244,7 +2312,7 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
     draw()
     arrangeButtons(box)
-    wireCopyPaste(box.closest('.dialog'), (values) => {
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       const pasted = SETTING_NAMES.filter((name) => SETTINGS[name].key in values)
       const next = { ...inForce, ...Object.fromEntries(pasted.map((name) => [name, values[SETTINGS[name].key]])) }
       saveSettings(next)
@@ -2268,7 +2336,7 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
       box.querySelector(`output[data-readout="${el.dataset.setting}"]`).textContent = String(value)
     })
     box.addEventListener('change', (event) => {
-      const choice = event.target.closest('select[data-pen-preset]')
+      const choice = event.target.closest('select[data-role="color-choice"]')
       if (choice) {
         pickPreset(choice.value)
         return
@@ -2278,10 +2346,10 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
         draft = draftWithBox(draft, ticked.dataset.box || '', ticked.checked)
         return
       }
-      const el = event.target.closest('input[type="color"]')
+      const el = event.target.closest('input[data-role="swatch"]')
       if (!el) return
       // A pen picked by hand leaves the missing-color note; the others stay on it.
-      const pen = el.dataset.pen
+      const pen = el.dataset.key
       set = { colors: editedColors(set.colors, pen, el.value), preset: CUSTOM, missing: set.missing.filter((n) => String(n) !== pen) }
       colorsChosen = true
       draw()
@@ -2295,8 +2363,134 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
   }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
+  // <lib:settings-dialog>
+  // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
+  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
+  const SETTINGS_GROUP = 'experimental'
+  const TITLE_MUTED = '#777'
+
+  // The next press ends the swallowing even when no release came (a close from the keyboard).
+  function swallowRelease (win = window) {
+    const swallow = (event) => event.stopImmediatePropagation()
+    const stop = () => {
+      RELEASE_EVENTS.forEach((type) => win.removeEventListener(type, swallow, true))
+      win.removeEventListener('pointerdown', stop, true)
+    }
+    RELEASE_EVENTS.forEach((type) => win.addEventListener(type, swallow, true))
+    win.addEventListener('pointerdown', stop, true)
+  }
+
+  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
+  function closeDialogKeepingGrid (framework, win = window) {
+    framework.closeDialog()
+    swallowRelease(win)
+  }
+
+  // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
+  function addSettingsEntry (framework, { name, content, open }) {
+    framework.addSetting({
+      tag: 'button',
+      name,
+      group: SETTINGS_GROUP,
+      content,
+      handler: () => {
+        closeDialogKeepingGrid(framework)
+        setTimeout(open, 0)
+      }
+    })
+  }
+
+  const COPY_PASTE_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const titleIconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
+  }
+
+  function dialogTitleCss (prefix) {
+    const tools = `.${prefix}tools`
+    return [
+      `.${prefix}version { opacity: .6; }`,
+      `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
+      `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
+      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} svg { width: 20px; height: 20px; }`,
+      `${tools} svg * { fill: none !important; }`,
+      // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+    ].join('\n')
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-dialog>
+  // <lib:settings-transfer>
+  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
@@ -2318,22 +2512,13 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     steps.marks.run(() => installMarks(app, ToolPen.tool))
     steps.pages.run(() => installPenPages(ToolPen.tool))
     steps.dragHint.run(() => installHintLayer(ToolPen.tool))
-    steps.colors.run(installHoldToEdit)
+    steps.colors.run(installPenPickers)
     steps.penPanel.run(installPenPanel)
     watchControls()
     installOverlayPressSwallow()
     effectsOf(SETTING_NAMES).forEach((effect) => effect())
     applyStyle()
-    Framework.addSetting({
-      tag: 'button',
-      name: 'pentoolextras',
-      group: SETTINGS_GROUP,
-      content: 'Pen Tool Extras',
-      handler: () => {
-        closeDialogKeepingGrid()
-        setTimeout(openDialog, 0)
-      }
-    })
+    addSettingsEntry(Framework, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openDialog })
     const start = startupPenColors(Framework.getData(COLORS_KEY), hasColorTool)
     if (start.load) return adoptColors(start.load)
     if (start.save) return saveColors(start.save)
@@ -2344,7 +2529,7 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     // Tried even with the colors step off since startup (edit mode failing to install): only a failure to read page 1 itself leaves nothing saved, reported as the step's.
     let derived = null
     try {
-      derived = presetFromTool(tool, PAGE_PRESETS[0])
+      derived = paletteColors(PAGE_PRESETS[0], tool.palette.pages, readCellColor)
     } catch (error) {
       steps.colors.skip(error)
     }

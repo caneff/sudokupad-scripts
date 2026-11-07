@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
+import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
 import { injectAtIdle, openPage, startPuzzle } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
@@ -11,12 +11,6 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// The buttons in the order they are drawn (the bar fills a column down, then the next one), not their order in the page:
-// Draw's place comes from a CSS rule, so the page order does not change.
-const buttonIds = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-tool > button')]
-  .map((b) => ({ id: b.id, ...b.getBoundingClientRect().toJSON() }))
-  .sort((a, b) => Math.round(a.left) - Math.round(b.left) || a.top - b.top)
-  .map((b) => b.id))
 const lastButton = async (p) => (await buttonIds(p)).at(-1)
 const penOn = (p) => p.evaluate(() => Framework.setSetting('toolpen', true))
 const PEN_BUTTON = '#control-pen'

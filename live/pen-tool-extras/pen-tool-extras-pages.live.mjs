@@ -238,7 +238,7 @@ function group (title, extra = []) {
     it('picking SudokuPad colors in the pulldown sets the nine pickers to SudokuPad\'s own pen colors: Cancel leaves the colors, Save stores them for all three pages, and the pick marks no cell', async () => {
       const colorOf3 = () => read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
       const pickers = () => editor().locator('input[type="color"]').evaluateAll((els) => els.map((el) => el.value))
-      const pickSudokuPad = () => editor().locator('select[data-pen-preset]').selectOption('sudokupad')
+      const pickSudokuPad = () => editor().locator('select[data-role="color-choice"]').selectOption('sudokupad')
       // SudokuPad's own pen colors, typed out here from tool-pen.css as the independent source.
       const own = ['#1f8020', '#e87cf1', '#e49632', '#f53a37', '#d2be32', '#3d99f5', '#d6d6d6', '#7c7c7c', '#000000']
       const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
@@ -422,7 +422,7 @@ function group (title, extra = []) {
       const box = await p.locator('.tool-pen button[data-key="3"]').boundingBox()
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await p.mouse.down()
-      const picker = p.locator('.pen-tool-extras-picker input[data-pen="3"]')
+      const picker = p.locator('.pen-tool-extras-picker input[data-key="3"]')
       await picker.waitFor({ state: 'attached', timeout: 5000 })
       await p.mouse.up()
       await picker.fill('#123456')

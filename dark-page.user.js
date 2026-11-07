@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.2
+// @version      0.4.6
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,15 +17,12 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.2'
-  const SETTINGS_GROUP = 'experimental'
+  const VERSION = '0.4.6'
   const STYLE_ID = 'dark-page-style'
   const RECT_ID = 'dark-page-rect'
   const DATA_KEY = 'DarkPage_color'
   const DEFAULT_COLOR = '#000000'
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
-  const LIGHT_TEXT = '#dddddd'
-  const DARK_TEXT = '#222222'
   // SudokuPad's own buttons are light `#eee`, which glare on a dark page. An on button (`.selected`,
   // or `.selectedperm` on Select) keeps SudokuPad's fill and gets BUTTON_ACCENT as its border.
   const BUTTON_BG = '#2a2a2a'
@@ -66,71 +63,127 @@
   // The color in force, the default included, so a paste can put a page back to the default.
   const copiedSettings = (store) => JSON.stringify({ [DATA_KEY]: readSavedColor(store) ?? DEFAULT_COLOR })
 
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
-  function pastedSettings (text) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(READERS)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
+  // <lib:color-math>
+  // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  const clamp255 = (x) => Math.max(0, Math.min(255, x))
+
+  // The share of its OKLCH lightness a cell color keeps when darkened: low enough to read against cell colors drawn at 60% opacity, high enough that the lightest still show as 5px lines on white and the nine stay apart.
+  const LIGHTNESS_FACTOR = 0.75
+  const GAMUT_EDGE = 1e-6
+  const LIGHT_TEXT = '#dddddd'
+  const DARK_TEXT = '#222222'
+
+  const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
+  const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+  const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
+
+  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
+  const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
+
+  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
+  function colorFunction (value) {
+    const fn = COLOR_FUNCTION.exec(value)
+    if (!fn) return null
+    const parts = fn[2].split(/[,/\s]+/).filter(Boolean)
+    return { kind: fn[1], args: parts.slice(0, 3), alpha: parts.length > 3 ? alphaOf(parts[3]) : undefined }
   }
 
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  // A page lists `transparent`, or a color with alpha 0, to leave a slot empty (key 0 of each default page).
+  function isTransparent (text) {
+    if (typeof text !== 'string') return false
+    const value = text.trim().toLowerCase()
+    if (value === 'transparent') return true
+    const hex = HEX_ALPHA.exec(value)
+    if (hex) return parseInt(hex[1] ?? hex[2], 16) === 0
+    const fn = colorFunction(value)
+    return Boolean(fn && fn.alpha <= 0)
   }
 
-  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
-    '<button type="button" data-act="copy-settings">Copy settings</button>' +
-    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
-    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
+  function parseColor (text) {
+    if (typeof text !== 'string' || isTransparent(text)) return null
+    const value = text.trim().toLowerCase()
+    const hex = HEX_DIGITS.exec(value)
+    if (hex) {
+      const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
+      return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
+    }
+    const fn = colorFunction(value)
+    if (!fn || fn.kind !== 'rgb' || fn.args.length < 3) return null
+    const channels = fn.args.map(Number)
+    return channels.some(Number.isNaN) ? null : channels.map((x) => Math.round(clamp255(x)))
+  }
 
-  function wireCopyPaste (root, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copiedSettings(Framework))
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          if (Object.keys(values).length > 0) apply(values)
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+  const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
+
+  const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
+  const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
+
+  // Ottosson's published matrices. The way back returns the unclamped linear channels, so a caller can tell an out-of-gamut color.
+  function toOklab ([r, g, b]) {
+    const [lr, lg, lb] = [r, g, b].map(toLinear)
+    const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+    const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+    const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+    ]
+  }
+
+  function fromOklabLinear ([L, a, b]) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+    return [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+    ]
+  }
+
+  const inGamut = (linear) => linear.every((x) => x >= -GAMUT_EDGE && x <= 1 + GAMUT_EDGE)
+
+  // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
+  function darkenColor (rgb) {
+    const [L, a, b] = toOklab(rgb.map(clamp255))
+    const target = L * LIGHTNESS_FACTOR
+    let low = 1
+    if (!inGamut(fromOklabLinear([target, a, b]))) {
+      low = 0
+      let high = 1
+      for (let i = 0; i < 30; i++) {
+        const mid = (low + high) / 2
+        if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
+        else high = mid
       }
-    })
+    }
+    const out = fromOklabLinear([target, a * low, b * low])
+    return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
 
-  function wcagLuminance (color) {
-    const [r, g, b] = [1, 3, 5].map((i) => {
-      const c = parseInt(color.slice(i, i + 2), 16) / 255
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  // WCAG relative luminance of [r, g, b] channels.
+  function wcagLuminance (rgb) {
+    const [r, g, b] = rgb.map((c) => {
+      const x = c / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
     })
     return 0.2126 * r + 0.7152 * g + 0.0722 * b
   }
 
-  function textColorFor (pageColor) {
-    const page = wcagLuminance(pageColor) + 0.05
-    const contrast = (text) => { const t = wcagLuminance(text) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background) {
+    const rgb = parseColor(background)
+    if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
+    const page = wcagLuminance(rgb) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
     return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
   }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-math>
 
   // Nothing inside the board is named and no variable is declared: SudokuPad's theme variables sit on
   // `:root` and color the grid too. `!important` outranks SudokuPad's rules, `.setting-darkmode`'s
@@ -212,8 +265,134 @@
     bottom: Math.min(box.bottom, limit.bottom)
   })
 
+  // <lib:settings-dialog>
+  // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
+  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
+  const SETTINGS_GROUP = 'experimental'
+  const TITLE_MUTED = '#777'
+
+  // The next press ends the swallowing even when no release came (a close from the keyboard).
+  function swallowRelease (win = window) {
+    const swallow = (event) => event.stopImmediatePropagation()
+    const stop = () => {
+      RELEASE_EVENTS.forEach((type) => win.removeEventListener(type, swallow, true))
+      win.removeEventListener('pointerdown', stop, true)
+    }
+    RELEASE_EVENTS.forEach((type) => win.addEventListener(type, swallow, true))
+    win.addEventListener('pointerdown', stop, true)
+  }
+
+  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
+  function closeDialogKeepingGrid (framework, win = window) {
+    framework.closeDialog()
+    swallowRelease(win)
+  }
+
+  // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
+  function addSettingsEntry (framework, { name, content, open }) {
+    framework.addSetting({
+      tag: 'button',
+      name,
+      group: SETTINGS_GROUP,
+      content,
+      handler: () => {
+        closeDialogKeepingGrid(framework)
+        setTimeout(open, 0)
+      }
+    })
+  }
+
+  const COPY_PASTE_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const titleIconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
+  }
+
+  function dialogTitleCss (prefix) {
+    const tools = `.${prefix}tools`
+    return [
+      `.${prefix}version { opacity: .6; }`,
+      `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
+      `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
+      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} svg { width: 20px; height: 20px; }`,
+      `${tools} svg * { fill: none !important; }`,
+      // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+    ].join('\n')
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-dialog>
+  // <lib:settings-transfer>
+  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSavedColor, textColorFor, savedColor, buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, STYLE_ID }
   }
   if (typeof document === 'undefined') return
 
@@ -309,17 +488,19 @@
     style.textContent = buildCss(pageColor)
   }
 
+  const CLASS_PREFIX = 'dark-page-'
+
   function openDialog () {
     let picked = pageColor
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Dark Page</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Dark Page', version: VERSION }) },
         {
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
             `<input type="color" id="dark-page-input" value="${picked}">` +
-            '<button type="button" id="dark-page-reset">Black</button></div>' + COPY_PASTE_HTML
+            '<button type="button" id="dark-page-reset">Black</button></div>'
         },
         {
           tag: 'options',
@@ -342,7 +523,7 @@
     if (!input || !reset) throw new Error('dark-page: the dialog has no color input')
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase() })
-    wireCopyPaste(input.closest('.dialog'), (values) => {
+    wireCopyPaste(input.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       if (!(DATA_KEY in values)) return
       picked = values[DATA_KEY]
       input.value = picked
@@ -364,15 +545,6 @@
     return
   }
   Framework.getApp().then(() => {
-    Framework.addSetting({
-      tag: 'button',
-      name: 'darkpage',
-      group: SETTINGS_GROUP,
-      content: 'Dark Page',
-      handler: () => {
-        Framework.closeDialog()
-        setTimeout(openDialog, 0)
-      }
-    })
+    addSettingsEntry(Framework, { name: 'darkpage', content: 'Dark Page', open: openDialog })
   })
 })()

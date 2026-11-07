@@ -10,7 +10,7 @@ import { closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '
 
 const { COLORS_KEY, SETTINGS_BUTTON, SIZE_SLIDER, WIDTH_KEY, pickDraw, script } = draw
 const EDITOR = '#draw-tool-dialog'
-const PRESET = `${EDITOR} select[data-role="preset"]`
+const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const STATUS = '.dialog [data-role="settings-status"]'
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
@@ -21,7 +21,7 @@ after(async () => { await browser?.close() })
 const open = () => openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } })
 const read = (p, fn, arg) => p.evaluate(fn, arg)
 const savedColors = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
-const dialogColors = (p) => p.locator(`${EDITOR} input[type=color]`).evaluateAll((inputs) => Object.fromEntries(inputs.map((i) => [i.dataset.color, i.value])))
+const dialogColors = (p) => p.locator(`${EDITOR} input[type=color]`).evaluateAll((inputs) => Object.fromEntries(inputs.map((i) => [i.dataset.key, i.value])))
 
 describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
   let context, p, errors
@@ -85,7 +85,7 @@ describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
   it('editing one color in the dialog makes the list Custom, and Save keeps the edit', async () => {
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('sudokupad')
-    await p.locator(`${EDITOR} input[data-color="2"]`).fill('#123456')
+    await p.locator(`${EDITOR} input[data-role="swatch"][data-key="2"]`).fill('#123456')
     assert.equal(await p.locator(PRESET).inputValue(), '')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await savedColors(p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
