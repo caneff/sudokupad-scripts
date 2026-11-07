@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a note moves it (following the pointer, and kept over a
-// reload), a drag never leaves the note off the board, a click on a note still edits it, a drag that starts off every note makes nothing, and a
+// reload), a drag never leaves the note under the controls or off the window, a click on a note still edits it, a drag that starts off every note makes nothing, and a
 // moved note keeps its background. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, STROKES, TEXT_BGS, TEXT_BOX, TEXTS } = draw
+const { BACKGROUND_BUTTON, NOT_NOTES, TEXT_BGS, TEXT_BOX, TEXTS } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0); a real mouse lands on whole page pixels, so positions are checked to within a unit.
 const CELL = 64
 const NEAR_UNITS = 1.5
@@ -44,7 +44,14 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     await p.keyboard.type(content)
     await p.keyboard.press('Enter')
   }
-  const bgBoxes = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => ['x', 'y'].map((a) => Number(e.getAttribute(a)))), TEXT_BGS)
+  // The top left corner of each box, in board units.
+  const bgBoxes = () => read((selector) => {
+    const toBoard = Framework.app.svgRenderer.getElem().getScreenCTM().inverse()
+    return [...document.querySelectorAll(selector)].map((e) => {
+      const { x, y } = new window.DOMPoint(e.getBoundingClientRect().x, e.getBoundingClientRect().y).matrixTransform(toBoard)
+      return [x, y]
+    })
+  }, TEXT_BGS)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -58,7 +65,7 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     await typeText(TEXT_AT, '15')
     assert.deepEqual(await texts(), ['15'])
     await p.mouse.click(...await gridPoint(p, TEXT_AT))
-    assert.equal(await p.locator(TEXT_BOX).inputValue(), '15', 'the click reopened the text')
+    assert.equal(await p.locator(TEXT_BOX).textContent(), '15', 'the click reopened the text')
     await p.keyboard.press('Escape')
     const [before] = await textAts()
     await p.mouse.move(...await gridPoint(p, TEXT_AT))
@@ -80,7 +87,7 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     const before = await saved()
     await draw.pickDraw(p)
     await mouseDrag(p, [EMPTY, [EMPTY[0] + 1, EMPTY[1] + 0.6], [EMPTY[0] + 0.5, EMPTY[1] + 2]])
-    assert.equal(await p.locator(STROKES).count(), 0)
+    assert.equal(await p.locator(NOT_NOTES).count(), 0)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
     assert.deepEqual(await saved(), before)
   })
@@ -99,15 +106,25 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     assert.deepEqual(await settle(bgBoxes, [boxAfter]), [boxAfter])
   })
 
-  it('a drag that ends off the board leaves the note where a press can still reach it', async () => {
-    const [from] = await textAts()
-    const point = await gridPoint(p, [from[1] / CELL, from[0] / CELL])
-    await p.mouse.move(...point)
-    await p.mouse.down()
-    await p.mouse.move(point[0] + 2000, point[1], { steps: 8 })
-    await p.mouse.up()
-    const [after] = await textAts()
-    assert.equal(after[0] <= 9 * CELL, true, `the note at x ${after[0]} is still over the board`)
+  it('a drag that ends over the controls, or past the window, leaves the note where a press can still reach it', async () => {
+    // The first note's middle on the screen, and whether it is clear of the controls and inside the window.
+    const reachable = () => read((selector) => {
+      const note = document.querySelector(selector).getBoundingClientRect()
+      const [x, y] = [note.x + note.width / 2, note.y + note.height / 2]
+      const controls = document.querySelector('#controls').getBoundingClientRect()
+      const overControls = x >= controls.left && x <= controls.right && y >= controls.top && y <= controls.bottom
+      return { point: [x, y], reachable: !overControls && x >= 0 && y >= 0 && x <= window.innerWidth && y <= window.innerHeight }
+    }, TEXTS)
+    const keypad = await p.locator('.controls-input').boundingBox()
+    for (const to of [[keypad.x + keypad.width / 2, keypad.y + keypad.height / 2], [3000, 300]]) {
+      const { point } = await reachable()
+      await p.mouse.move(...point)
+      await p.mouse.down()
+      await p.mouse.move(...to, { steps: 8 })
+      await p.mouse.up()
+      const after = await reachable()
+      assert.equal(after.reachable, true, `dragged to ${to}, the note is at ${after.point}`)
+    }
   })
 
   it('the page shows no error', () => {

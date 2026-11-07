@@ -3,7 +3,7 @@
 //   draw-tool-slide-2-size.png        the Size slider moved: a small note and a large one
 //   draw-tool-slide-3-background.png  the Background button on: a note in a page-colored box over the digits, beside one made with it off
 //   draw-tool-slide-4-colors.png      a hold on a color button: a picker over each color, one recolored, and the note in it recolored too
-//   draw-tool-slide-5-move.png        a note dragged to a new place, its old place dashed, a ring on the point it is held by
+//   draw-tool-slide-5-move.png        a note dragged off the grid to beside it, its old place dashed, a ring on the point it is held by
 //   draw-tool-slide-6-erase.png       the pointer on a note with a red ring round it, where a right click erases it
 //   draw-tool-slide-7-erased.png      the same board after the right click: the note gone
 // Every note is typed with real clicks and keys. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
@@ -24,7 +24,7 @@ const GREEN = 1
 const ORANGE = 3
 const RED = 4
 const BLUE = 6
-const NOTES = '#draw-tool-layer text.draw-tool-text'
+const NOTES = '#draw-tool-layer .draw-tool-text'
 
 // A red ring round the point (x, y), where a press lands.
 const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d]) => {
@@ -117,17 +117,17 @@ async function scene () {
   if ((await s.p.locator(pickers).count()) !== 9) throw new Error('the hold did not show nine pickers')
   await s.p.locator(`.draw-tool-picker input[data-key="${ORANGE}"]`).fill('#0d8f8f')
   await s.p.mouse.move(0, 0)
-  const note = await s.p.locator(NOTES).first().evaluate((el) => getComputedStyle(el).fill)
+  const note = await s.p.locator(NOTES).first().evaluate((el) => getComputedStyle(el).color)
   if (note !== 'rgb(13, 143, 143)') throw new Error(`the note did not take the new color: ${note}`)
   await s.shoot('4-colors')
 }
 
-// 5: a note dragged by its middle; the old place is a dashed gray box and a ring marks where the pointer holds it.
+// 5: a note dragged by its middle off the grid, into the space between it and the panel; the old place is a dashed gray box and a ring marks where the pointer holds it.
 {
   const s = await scene()
-  await s.pick(ORANGE, 12)
-  const FROM = [6.5, 5.5]
-  const TO = [5.5, 6.5]
+  await s.pick(ORANGE, 6)
+  const FROM = [6.5, 7.5]
+  const TO = [5.5, 9.45]
   await s.note(FROM, '17')
   const text = s.p.locator(NOTES)
   const placed = await text.boundingBox()
@@ -137,6 +137,8 @@ async function scene () {
   await s.p.mouse.up()
   const moved = await text.boundingBox()
   if ((await text.count()) !== 1 || Math.abs(moved.x - placed.x) < 10) throw new Error('the drag did not leave one moved note')
+  const stored = await s.p.evaluate(() => Framework.getData(`DrawTool_drawing_${Framework.app.puzzle.puzzleId || window.location.href}`))
+  if (!stored[0].fixed) throw new Error(`the note was not stored off the board: ${JSON.stringify(stored)}`)
   await s.p.evaluate(({ x, y, width, height }) => {
     const old = document.createElement('div')
     old.style.cssText = `position:fixed;left:${x - 6}px;top:${y - 4}px;width:${width + 12}px;height:${height + 8}px;box-sizing:border-box;border:2px dashed #666;pointer-events:none;z-index:99998`

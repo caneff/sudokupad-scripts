@@ -109,16 +109,11 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   const currentKey = async () => (await keypad()).filter((b) => b.current).map((b) => b.key)
   const sliderValue = (selector) => read((s) => Number(document.querySelector(s).value), selector)
   const savedColors = () => read((key) => Framework.getData(key) ?? null, COLORS_KEY)
-  // The computed fill and font size of the last note on the board.
-  const lastNote = () => read((selector) => {
-    const style = window.getComputedStyle([...document.querySelectorAll(selector)].pop())
-    return { fill: style.fill, size: style.fontSize }
-  }, TEXTS)
-  const firstNote = () => read((selector) => {
-    const style = window.getComputedStyle(document.querySelector(selector))
-    return { fill: style.fill, size: style.fontSize }
-  }, TEXTS)
-  const noteFills = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => window.getComputedStyle(e).fill), TEXTS)
+  // The computed color and the size in board units of the last and the first note on the board.
+  const look = ({ color, size }) => ({ color, size })
+  const lastNote = async () => look((await draw.noteLooks(p)).pop())
+  const firstNote = async () => look((await draw.noteLooks(p))[0])
+  const noteColors = async () => (await draw.noteLooks(p)).map((note) => note.color)
   // Each note takes its own spot: a click on an earlier note would reopen it.
   const makeNote = async () => {
     const before = await p.locator(TEXTS).count()
@@ -184,7 +179,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     await p.click('.controls-input button[data-key="4"]')
     assert.deepEqual(await settle(currentKey, ['4']), ['4'])
     await makeNote()
-    assert.equal((await lastNote()).fill, rgb((await savedColors())[4]))
+    assert.equal((await lastNote()).color, rgb((await savedColors())[4]))
   })
 
   it('a digit key picks its color and enters nothing in the selected cell', async () => {
@@ -196,15 +191,15 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     assert.equal(await emptyCellValue(), null, 'no digit in r1c3')
     assert.equal(await read(() => Framework.app.getReplay()), replay)
     await makeNote()
-    assert.equal((await lastNote()).fill, rgb((await savedColors())[6]))
+    assert.equal((await lastNote()).color, rgb((await savedColors())[6]))
   })
 
   it('the slider sets the next note\'s size only: earlier notes keep theirs', async () => {
-    assert.equal((await firstNote()).size, '20px')
+    assert.equal((await firstNote()).size, 20)
     await p.locator(SIZE_SLIDER).fill('10.5')
     await makeNote()
-    assert.equal((await lastNote()).size, '29px')
-    assert.equal((await firstNote()).size, '20px', 'the earlier note did not change')
+    assert.equal((await lastNote()).size, 29)
+    assert.equal((await firstNote()).size, 20, 'the earlier note did not change')
   })
 
   it('a note made with the slider moved is saved with its size and the default opacity', async () => {
@@ -220,7 +215,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
       assert.equal((await keypad())[1].swatch, color2)
       await p.keyboard.press('2')
       await makeNote()
-      assert.equal((await lastNote()).fill, color2)
+      assert.equal((await lastNote()).color, color2)
     } finally {
       await read(() => document.documentElement.style.removeProperty('--puzzle-pencolor-2'))
     }
@@ -234,11 +229,11 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   })
 
   it('a picked color applies at once to the button and to every note already made in that color, and is saved', async () => {
-    const before = await noteFills()
+    const before = await noteColors()
     const old4 = rgb((await savedColors())[4])
     assert.equal(before.includes(old4), true, 'a note in color 4 is on the board')
     await p.locator(`${PICKER}[data-key="4"]`).fill('#123456')
-    assert.deepEqual(await settle(noteFills, before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c)), before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c))
+    assert.deepEqual(await settle(noteColors, before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c)), before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c))
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')
     assert.equal((await savedColors())[4], '#123456')
   })
@@ -249,17 +244,17 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   })
 
   it('the colors, the color picked and the size come back after a reload', async () => {
-    const fills = await noteFills()
+    const fills = await noteColors()
     await p.keyboard.press('7')
     await p.locator(SIZE_SLIDER).fill('14')
     await reload()
-    assert.deepEqual(await noteFills(), fills, 'the notes keep the recolor before Text Annotation is made current')
+    assert.deepEqual(await noteColors(), fills, 'the notes keep the recolor before Text Annotation is made current')
     await pickDraw()
     assert.deepEqual(await currentKey(), ['7'])
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')
     assert.equal(await sliderValue(SIZE_SLIDER), 14)
     await makeNote()
-    assert.deepEqual(await lastNote(), { fill: rgb((await savedColors())[7]), size: '36px' })
+    assert.deepEqual(await lastNote(), { color: rgb((await savedColors())[7]), size: 36 })
   })
 
   it('bad saved values read as color 1 and the default size', async () => {
@@ -270,7 +265,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     assert.deepEqual(await currentKey(), ['1'])
     assert.equal(await sliderValue(SIZE_SLIDER), 6)
     await makeNote()
-    assert.deepEqual(await lastNote(), { fill: rgb((await savedColors())[1]), size: '20px' })
+    assert.deepEqual(await lastNote(), { color: rgb((await savedColors())[1]), size: 20 })
   })
 
   it('another tool gets SudokuPad\'s own keypad back, and its digit keys enter digits again', async () => {

@@ -240,7 +240,7 @@ const PEN_SLIDES = [
 ]
 const DRAW_SLIDES = [
   ['1-type', 'Left click to type a note'], ['2-size', 'One size slider'], ['3-background', 'Background: a box behind the next note'],
-  ['4-colors', 'Your own colors: hold a color button'], ['5-move', 'Move: drag a note'], ['6-erase', 'Erase: right-click a note'], ['7-erased', 'The note is gone']
+  ['4-colors', 'Your own colors: hold a color button'], ['5-move', 'Move: drag a note, on or off the grid'], ['6-erase', 'Erase: right-click a note'], ['7-erased', 'The note is gone']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
@@ -443,7 +443,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 })
 
 // Text Annotation's entry and details page.
-const DRAW_SUMMARY = 'Adds a Text Annotation tool for typed notes on the board, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
+const DRAW_SUMMARY = 'Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
 const DRAW_LEAD_INS = ['Typed notes', 'Colors of its own', 'Text size', 'Background', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Text Annotation in a short summary ending in a Details link`, () => {
@@ -454,14 +454,14 @@ test(`${HOME} describes Text Annotation in a short summary ending in a Details l
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes Click the board to type, such as a cage sum. Enter or a click elsewhere finishes the note, Escape drops it, and a click on a note changes it.',
+    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter or a click elsewhere finishes the note, Escape drops it, and a click on a note changes it.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
     'Text size One slider, from small to large. A note keeps the size it was typed with.',
     'Background Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing.',
-    'Move Drag a note to move it. A click on a note still changes it.',
+    'Move Drag a note to move it, on the board or off it. A click on a note still changes it.',
     'Erasing Right-click a note to erase it. Clear all, in the panel, erases every note.',
     'Settings Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.',
-    'Stays on the cells Notes stay put, and stay visible when you switch back to entering digits.',
+    'Stays on the cells A note on the board stays on its cells when the board resizes, and one beside it stays where you put it on the screen. Both stay visible when you switch back to entering digits.',
     'Kept for each puzzle A reload keeps the notes, for the last 50 puzzles you made notes on.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
@@ -512,7 +512,7 @@ shared({
   script: 'draw-tool',
   name: 'Text Annotation',
   summary: DRAW_SUMMARY,
-  intro: 'Adds to SudokuPad a Text Annotation tool for typed notes on the board, such as cage sums, in colors of its own.',
+  intro: 'Adds to SudokuPad a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own.',
   homePicture: 'draw-tool-slide-1-type.png'
 })
 

@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, SIZE_SLIDER, TEXTS, WIDTH_KEY } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, SIZE_SLIDER, WIDTH_KEY } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -30,24 +30,19 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   const reload = () => draw.reload(p)
   const texts = () => draw.texts(p)
   const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
-  const boxText = () => p.locator(TEXT_BOX).inputValue()
+  const boxText = () => p.locator(TEXT_BOX).textContent()
   // Every cell's digit, mark and colour, so a key that reached SudokuPad shows as a change.
   const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   const saved = () => draw.saved(p)
   const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
-  // The computed fill, fill opacity and font size of the text that reads `content`.
-  const textStyle = (content) => read(([selector, want]) => {
-    const style = window.getComputedStyle([...document.querySelectorAll(selector)].find((t) => t.textContent === want))
-    return { fill: style.fill, opacity: style.fillOpacity, size: style.fontSize }
-  }, [TEXTS, content])
+  // The computed color and the size in board units of the text that reads `content`: a color with no alpha is solid.
+  const textStyle = async (content) => {
+    const { color, size } = (await draw.noteLooks(p)).find((note) => note.text === content)
+    return { color, size }
+  }
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
   const sliderValue = (selector) => read((s) => Number(document.querySelector(s).value), selector)
-  // The middle of the text that reads `content`, in cells from the grid's top left.
-  const textInCells = (content) => read(([selector, want]) => {
-    const t = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
-    const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-    return [(t.y + t.height / 2 - cell.y) / cell.height, (t.x + t.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
-  }, [TEXTS, content])
+  const textInCells = (content) => draw.noteInCells(p, content)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -87,7 +82,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   })
 
   it('the text is solid, in the current draw color, at the default size', async () => {
-    assert.deepEqual(await textStyle('15'), { fill: await penColor(1), opacity: '1', size: '20px' })
+    assert.deepEqual(await textStyle('15'), { color: await penColor(1), size: 20 })
   })
 
   it('a click elsewhere finishes the box as Enter does, and opens no second box', async () => {
@@ -204,8 +199,8 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await clickAt(THIRD_AT)
     await p.keyboard.type('6')
     await p.keyboard.press('Enter')
-    assert.deepEqual(await textStyle('6'), { fill: await penColor(4), opacity: '1', size: '28px' })
-    assert.deepEqual(await textStyle('23'), { fill: await penColor(1), opacity: '1', size: '20px' })
+    assert.deepEqual(await textStyle('6'), { color: await penColor(4), size: 28 })
+    assert.deepEqual(await textStyle('23'), { color: await penColor(1), size: 20 })
   })
 
   it('the text and the size come back after a reload', async () => {

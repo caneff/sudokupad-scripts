@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.17.1
-// @description  Adds a Text Annotation tool for typed notes on the board, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
+// @version      0.18.0
+// @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,10 +16,9 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.17.1'
+  const VERSION = '0.18.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
-  const SVG_NS = 'http://www.w3.org/2000/svg'
   const MIN_WIDTH = 1
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
@@ -175,13 +174,14 @@
   const BACKGROUND_KEY = 'DrawTool_background'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
-  // How far, in board units, the mouse may move between press and release and the press still be a click.
+  // How far, in screen pixels, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
   const SETTINGS_CLASS = 'draw-tool-settings'
   const BACKGROUND_CLASS = 'draw-tool-background'
   const BACKGROUND_FILL_CLASS = 'draw-tool-background-fill'
+  const TEXT_CLASS = 'draw-tool-text'
   const TEXT_BACKGROUND_CLASS = 'draw-tool-text-bg'
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
@@ -212,7 +212,6 @@
   const BACKGROUND_RADIUS = 0.3
 
   const roundToTenth = (value) => Math.round(value * 10) / 10
-  const coordinate = (value) => String(roundToTenth(value))
 
   const cross = ([ax, ay], [bx, by], [cx, cy]) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
   const segmentsCross = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0
@@ -251,7 +250,20 @@
     return corners.some((corner, i) => segmentsCross(from, to, corner, corners[(i + 1) % 4]))
   }
 
-  const movedItem = (item, [dx, dy]) => ({ ...item, at: [roundToTenth(item.at[0] + dx), roundToTenth(item.at[1] + dy)] })
+  const roundPoint = ([x, y]) => [roundToTenth(x), roundToTenth(y)]
+
+  // A note put down at screen point `point` is pinned to the grid in board units when the point is over the board, and is
+  // fixed on the screen, under its own `fixed` field, when it is not: an older version reads every note's `at` as board units.
+  // `board` is the board's screen box and the map from a screen point to board units.
+  function placedItem (item, point, board) {
+    const { at, fixed, ...rest } = item
+    return inBox(point, board.box) ? { ...rest, at: roundPoint(board.toBoard(point)) } : { ...rest, fixed: roundPoint(point) }
+  }
+
+  // The note in board units, wherever it is stored, so one hit test serves notes on and off the board.
+  const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(item.fixed) } : item
+
+  const screenPoint = (item, toScreen) => item.fixed ?? toScreen(item.at)
 
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
@@ -608,7 +620,8 @@
   const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
   const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
-    (item.bg === undefined || item.bg === true) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 && isPoint(item.at)
+    (item.bg === undefined || item.bg === true) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+    (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
 
@@ -785,7 +798,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -798,27 +811,35 @@
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
-  // The layer is the board SVG's last child, so it draws above the digits; SudokuPad's board scaling moves it with the cells.
+  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the control panel, the top bar, the menu drawer and an open dialog.
+  const CONTROLS = '#controls, .topbar, #appmenu, .dialog-overlay, button, a, input, select, textarea'
+  const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
+
+  // The notes' layer covers the page, above the board's digits and SudokuPad's clock and rules copy (z-index 10) and below its dialogs and menu drawer (1000).
+  const LAYER_Z = 20
+
   function drawingLayer () {
-    const svg = boardSvg()
-    let layer = svg.querySelector(`#${LAYER_ID}`)
+    let layer = document.getElementById(LAYER_ID)
     if (!layer) {
-      layer = document.createElementNS(SVG_NS, 'g')
+      layer = document.createElement('div')
       layer.id = LAYER_ID
-      layer.setAttribute('pointer-events', 'none')
+      document.body.appendChild(layer)
     }
-    if (svg.lastElementChild !== layer) svg.appendChild(layer)
     return layer
   }
 
-  const onBoard = (event) => {
-    const box = boardSvg().getBoundingClientRect()
-    return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom
-  }
+  const eventPoint = (event) => [event.clientX, event.clientY]
 
-  const toBoard = (layer, event) => {
-    const p = new window.DOMPoint(event.clientX, event.clientY).matrixTransform(layer.getScreenCTM().inverse())
-    return [p.x, p.y]
+  // The board as the notes see it now: its screen box, the maps between screen points and board units, and screen pixels per board unit.
+  function boardMap () {
+    const svg = boardSvg()
+    const ctm = svg.getScreenCTM()
+    const through = (matrix) => ([x, y]) => {
+      const p = new window.DOMPoint(x, y).matrixTransform(matrix)
+      return [p.x, p.y]
+    }
+    const { left, top, right, bottom } = svg.getBoundingClientRect()
+    return { box: { left, top, right, bottom }, toBoard: through(ctm.inverse()), toScreen: through(ctm), scale: ctm.a }
   }
 
   // The page's own color, as SudokuPad's buttons use it behind their icons.
@@ -827,31 +848,31 @@
   // Until Text Annotation is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
-  // The box behind a note with a background, in the page's color, sized to the text as the browser measures it.
-  function newTextBackground (layer, text, item) {
-    const box = text.getBBox()
-    const [padX, padY] = [item.size * BACKGROUND_PAD_X, item.size * BACKGROUND_PAD_Y]
-    const rect = document.createElementNS(SVG_NS, 'rect')
-    rect.setAttribute('class', TEXT_BACKGROUND_CLASS)
-    for (const [name, value] of Object.entries({ x: box.x - padX, y: box.y - padY, width: box.width + 2 * padX, height: box.height + 2 * padY, rx: item.size * BACKGROUND_RADIUS })) rect.setAttribute(name, coordinate(value))
-    rect.style.fill = PAGE_COLOR
-    layer.insertBefore(rect, text)
+  // The opacity is the text's alone, so a note's background box stays solid.
+  const textColor = (item) => itemOpacity(item) === 100 ? itemColor(item.color) : `color-mix(in srgb, ${itemColor(item.color)} ${itemOpacity(item)}%, transparent)`
+
+  // A note is drawn at the board's scale, on the board or off it, centred on its screen point; a background is a page-colored rounded box around the text.
+  function styleNote (element, item, map) {
+    const [x, y] = screenPoint(item, map.toScreen)
+    const px = (units) => `${roundToTenth(units * item.size * map.scale)}px`
+    Object.assign(element.style, {
+      left: `${roundToTenth(x)}px`,
+      top: `${roundToTenth(y)}px`,
+      fontSize: px(1),
+      color: textColor(item),
+      backgroundColor: item.bg ? PAGE_COLOR : 'transparent',
+      padding: item.bg ? `${px(BACKGROUND_PAD_Y)} ${px(BACKGROUND_PAD_X)}` : '0',
+      borderRadius: item.bg ? px(BACKGROUND_RADIUS) : '0'
+    })
+    element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
   }
 
-  function newText (layer, item) {
-    const text = document.createElementNS(SVG_NS, 'text')
-    text.setAttribute('class', 'draw-tool-text')
-    text.setAttribute('x', coordinate(item.at[0]))
-    text.setAttribute('y', coordinate(item.at[1]))
-    text.setAttribute('font-size', String(item.size))
-    text.setAttribute('text-anchor', 'middle')
-    text.setAttribute('dominant-baseline', 'central')
-    text.style.fill = itemColor(item.color)
-    text.setAttribute('fill-opacity', String(itemOpacity(item) / 100))
-    text.textContent = item.text
-    layer.appendChild(text)
-    if (item.bg) newTextBackground(layer, text, item)
-    return text
+  function newNote (item, map) {
+    const element = document.createElement('div')
+    element.className = TEXT_CLASS
+    element.textContent = item.text
+    styleNote(element, item, map)
+    return element
   }
 
   // <lib:panel>
@@ -961,7 +982,10 @@
     `.${SLIDER_ROW_CLASS} span { font-weight: 600; line-height: 1; }`,
     `.${SLIDER_ROW_CLASS} span:first-child { font-size: ${SIZE_LABEL_REM[0]}rem; padding-left: 0.35rem; }`,
     `.${SLIDER_ROW_CLASS} span:last-child { font-size: ${SIZE_LABEL_REM[1]}rem; padding-right: 0.35rem; }`,
-    `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`,
+    `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
+    // The font's own line height, so a note's background box is as tall as a digit and covers one under it.
+    `.${TEXT_CLASS} { position: absolute; transform: translate(-50%, -50%); line-height: normal; white-space: pre; }`,
+    `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; outline: 1px dashed currentColor; outline-offset: 1px; cursor: text; }`,
     // The tool bar is a grid and stock buttons have order 0, so Text Annotation's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
@@ -1148,7 +1172,7 @@
       const on = !editing.item.bg
       const { bg, ...rest } = editing.item
       editing.item = on ? { ...rest, bg: true } : rest
-      editing.input.style.backgroundColor = on ? PAGE_COLOR : 'transparent'
+      styleNote(editing.element, editing.item, boardMap())
       if (editing.index === -1) setBackground(on)
     }
     showBackground()
@@ -1194,13 +1218,13 @@
     installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)) })
   }
 
-  // A left press in progress: a move of the note `move` names, or null when the press began on no note.
+  // A left press in progress, its points on the screen: a move of the note `move` names, or null when the press began on no note.
   let drag = null
   // A right-drag in progress: the last point it reached and whether it has erased an item yet. The right button's `buttons` bit holds it.
   let erasing = null
-  // The open text box: the index of the text it reopened, or -1 for a new one, the item, and the input the solver types in.
+  // The note open for typing: the index of the text it reopened, or -1 for a new one, the item, and its element, which the solver types in.
   let editing = null
-  // True from a press that finished a text box until its release, so the press does nothing else on the board.
+  // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
   let drawing = []
   // False while this puzzle's saved drawing cannot be read: no save writes over it but an explicit wipe's.
@@ -1210,12 +1234,38 @@
 
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
 
+  // The board moves and scales with the window and SudokuPad's layout, which sets the styles of the board and the boxes round it, so the
+  // notes are placed again whenever those change.
+  const watchedBoards = new WeakSet()
+  let placing = false
+  function placeSoon () {
+    if (placing) return
+    placing = true
+    window.requestAnimationFrame(() => {
+      placing = false
+      renderDrawing()
+    })
+  }
+
+  function watchBoard (svg) {
+    if (watchedBoards.has(svg)) return
+    watchedBoards.add(svg)
+    const mutations = new window.MutationObserver(placeSoon)
+    for (let box = svg; box && box !== document.body; box = box.parentElement) mutations.observe(box, { attributes: true, attributeFilter: ['style', 'class', 'viewBox', 'width', 'height', 'transform'] })
+  }
+
+  const boardDrawing = (map) => drawing.map((item) => boardView(item, map.toBoard))
+
+  // The open note's element stays in the layer, so it keeps the focus.
   function renderDrawing () {
     const layer = drawingLayer()
-    layer.replaceChildren()
-    drawing.forEach((item, i) => {
-      if (item.kind === TEXT_KIND && (!editing || editing.index !== i)) newText(layer, item)
-    })
+    const svg = boardSvg()
+    watchBoard(svg)
+    const map = boardMap()
+    layer.style.fontFamily = window.getComputedStyle(svg).fontFamily
+    for (const child of [...layer.children]) if (!editing || child !== editing.element) child.remove()
+    layer.prepend(...drawing.flatMap((item, i) => item.kind === TEXT_KIND && (!editing || editing.index !== i) ? [newNote(item, map)] : []))
+    if (editing) styleNote(editing.element, editing.item, map)
   }
 
   // The solver loses work they think is kept, so each failure is shown once a page in SudokuPad's own dialog. Its
@@ -1242,50 +1292,37 @@
     }
   }
 
-  // The text box is an input over the board, at the text's point, the size the text is drawn at.
-  function placeTextBox () {
-    const { input, item } = editing
-    const toScreen = drawingLayer().getScreenCTM()
-    const scale = toScreen.a
-    const box = textBox({ ...item, text: input.value })
-    const corner = new window.DOMPoint(box.left, box.top).matrixTransform(toScreen)
-    input.style.left = `${corner.x + window.scrollX - 1}px`
-    input.style.top = `${corner.y + window.scrollY - 1}px`
-    input.style.width = `${(box.right - box.left) * scale}px`
-    input.style.height = `${item.size * scale}px`
-    input.style.fontSize = `${item.size * scale}px`
-    input.style.lineHeight = `${item.size * scale}px`
-  }
-
-  function openText (at) {
-    const index = textAt(drawing, at)
-    const item = index === -1 ? textItem(at, '', color, textSizeFor(width), background) : { ...drawing[index] }
-    const input = document.createElement('input')
-    input.className = TEXT_BOX_CLASS
-    input.type = 'text'
-    input.value = item.text
-    input.style.color = itemColor(item.color)
-    input.style.backgroundColor = item.bg ? PAGE_COLOR : 'transparent'
-    input.style.fontFamily = window.getComputedStyle(drawingLayer()).fontFamily
-    // As SudokuPad's own buttons do: a press in the box is the box's, and never reaches a tool.
-    for (const type of ['mousedown', 'touchstart']) input.addEventListener(type, (event) => event.stopPropagation())
-    input.addEventListener('input', placeTextBox)
-    input.addEventListener('blur', () => { if (editing && editing.input === input) finishText() })
-    editing = { index, item, input }
-    document.body.appendChild(input)
-    placeTextBox()
+  // The note is typed in place: a click on a note opens its own element, and a click elsewhere a new one there.
+  function openText (point) {
+    const map = boardMap()
+    const index = textAt(boardDrawing(map), map.toBoard(point))
+    const item = index === -1 ? placedItem(textItem(map.toBoard(point), '', color, textSizeFor(width), background), point, map) : { ...drawing[index] }
+    const element = newNote(item, map)
+    element.classList.add(TEXT_BOX_CLASS)
+    element.contentEditable = 'plaintext-only'
+    element.spellcheck = false
+    // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
+    for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
+    element.addEventListener('blur', () => { if (editing && editing.element === element) finishText() })
+    editing = { index, item, element }
+    drawingLayer().appendChild(element)
     renderDrawing()
     showBackground()
-    input.focus()
+    element.focus()
+    window.getSelection().selectAllChildren(element)
+    window.getSelection().collapseToEnd()
   }
+
+  // A note is one line, so a line break pasted into it reads as a space.
+  const typedText = (element) => element.textContent.replace(/^[\r\n]+|[\r\n]+$/g, '').replace(/[\r\n]+/g, ' ')
 
   // An empty box removes its text.
   function finishText () {
-    const { index, item, input } = editing
+    const { index, item, element } = editing
     editing = null
-    input.remove()
+    element.remove()
     const before = index === -1 ? '' : drawing[index].text
-    const text = input.value
+    const text = typedText(element)
     const changed = text !== before || (index !== -1 && Boolean(item.bg) !== Boolean(drawing[index].bg))
     if (changed) {
       if (text === '') drawing.splice(index, 1)
@@ -1298,18 +1335,18 @@
   }
 
   function dropText () {
-    const { input } = editing
+    const { element } = editing
     editing = null
-    input.remove()
+    element.remove()
     renderDrawing()
     showBackground()
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
   // a key typed in the box is stopped in the window's capture phase, before them all. Its default is left alone, so
-  // the input types, edits, pastes and composes as any input does, and F5 or Tab do what they do anywhere.
+  // the note types, edits, pastes and composes as any editable text does, and F5 or Tab do what they do anywhere.
   function keepBoxKeys (event) {
-    if (!editing || event.target !== editing.input) return
+    if (!editing || event.target !== editing.element) return
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
     if (event.key === 'Enter') {
@@ -1324,7 +1361,7 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them.
   function finishTextOnPress (event) {
-    if (!editing || event.target === editing.input || event.target.closest(`.${BACKGROUND_CLASS}`)) return
+    if (!editing || editing.element.contains(event.target) || event.target.closest(`.${BACKGROUND_CLASS}`)) return
     pressFinishedText = true
     finishText()
   }
@@ -1343,10 +1380,15 @@
     return [lastX - x, lastY - y]
   }
 
-  const applyMove = () => { drawing[drag.move.index] = movedItem(drag.move.item, dragOffset()) }
+  // The note keeps its offset from the pointer, and its drop point decides whether it is pinned to the grid or fixed on the screen.
+  function applyMove (map) {
+    const [x, y] = screenPoint(drag.move.item, map.toScreen)
+    const [dx, dy] = dragOffset()
+    drawing[drag.move.index] = placedItem(drag.move.item, [x + dx, y + dy], map)
+  }
 
   function endMove () {
-    applyMove()
+    applyMove(boardMap())
     drag = null
     renderDrawing()
     save()
@@ -1361,8 +1403,9 @@
   function cancelInput () {
     drag = null
     erasing = null
-    if (editing) editing.input.remove()
+    const open = editing
     editing = null
+    if (open) open.element.remove()
   }
 
   function showSavedDrawing () {
@@ -1382,14 +1425,14 @@
   function emptyDrawing () {
     drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
-    drawingLayer().replaceChildren()
+    renderDrawing()
     savable = true
     save()
   }
 
-  // Deletes, whole, every note the drag from `from` to `to` passes near.
-  function eraseAlong (from, to) {
-    const kept = drawing.filter((item) => item.kind !== TEXT_KIND || !touchesText(item, from, to))
+  // Deletes, whole, every note the drag from `from` to `to`, in board units, passes near.
+  function eraseAlong (from, to, map) {
+    const kept = drawing.filter((item) => item.kind !== TEXT_KIND || !touchesText(boardView(item, map.toBoard), from, to))
     if (kept.length === drawing.length) return
     drawing = kept
     erasing.erased = true
@@ -1397,11 +1440,10 @@
   }
 
   // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
-  // release on Windows, so it is suppressed over the board for as long as Text Annotation is current. On Windows a right-drag
-  // that ends off the board still opens the menu there.
-  const overBoardWhileDrawing = (event) => Framework.app.tool === TOOL_NAME && onBoard(event)
+  // release on Windows, so it is suppressed everywhere but over the controls for as long as Text Annotation is current.
+  // On Windows a right-drag that ends over a control still opens the menu there.
   function suppressMenu (event) {
-    if (overBoardWhileDrawing(event)) event.preventDefault()
+    if (Framework.app.tool === TOOL_NAME && !overControl(event)) event.preventDefault()
   }
 
   function confirmClear () {
@@ -1423,23 +1465,22 @@
     name: TOOL_NAME,
     isTool: true,
     // A press that starts a drag returns true, so SudokuPad starts no drag of its own and selects no cell. A press that
-    // finished a text box does nothing else on the board.
+    // finished a text box does nothing else on the page.
     handleInputdown (event) {
-      if (event.type !== 'mousedown' || drag || erasing) return false
-      if (pressFinishedText) return onBoard(event)
-      if (!onBoard(event)) return false
+      if (event.type !== 'mousedown' || drag || erasing || overControl(event)) return false
+      if (pressFinishedText) return true
+      const map = boardMap()
+      const point = eventPoint(event)
       if (event.button === SECONDARY_BUTTON) {
-        const at = toBoard(drawingLayer(), event)
+        const at = map.toBoard(point)
         erasing = { last: at, erased: false }
-        eraseAlong(at, at)
+        eraseAlong(at, at, map)
         return true
       }
       if (event.button !== PRIMARY_BUTTON) return false
-      const layer = drawingLayer()
-      const at = toBoard(layer, event)
       // A press on a note moves it once it drags; a click on it opens it.
-      const index = textAt(drawing, at)
-      drag = { layer, move: index === -1 ? null : { index, item: drawing[index] }, points: [at] }
+      const index = textAt(boardDrawing(map), map.toBoard(point))
+      drag = { move: index === -1 ? null : { index, item: drawing[index] }, points: [point] }
       return true
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
@@ -1449,17 +1490,20 @@
         return false
       }
       if (erasing) {
-        const at = toBoard(drawingLayer(), event)
-        eraseAlong(erasing.last, at)
+        const map = boardMap()
+        const at = map.toBoard(eventPoint(event))
+        eraseAlong(erasing.last, at, map)
         erasing.last = at
         return true
       }
       if (!drag) return false
-      // An item stays where a press on it can still reach it: a move ends at the last point on the board.
-      if (drag.move && !onBoard(event)) return true
-      drag.points.push(toBoard(drag.layer, event))
+      // A note stays where a press can still reach it: a move ends at the last point in the window clear of the controls.
+      // The browser goes on sending a held drag's moves past the window's edge.
+      const point = eventPoint(event)
+      if (drag.move && (overControl(event) || !inBox(point, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }))) return true
+      drag.points.push(point)
       if (drag.move && !isClick(drag.points)) {
-        applyMove()
+        applyMove(boardMap())
         renderDrawing()
       }
       return true
@@ -1470,11 +1514,11 @@
         return true
       }
       if (!drag) return false
-      // A text box opens only on the release of Text Annotation's own press, never on a release or click alone.
+      // A note opens only on the release of Text Annotation's own press, never on a release or click alone.
       if (isClick(drag.points)) {
-        const [at] = drag.points
+        const [point] = drag.points
         drag = null
-        openText(at)
+        openText(point)
         return true
       }
       if (drag.move) endMove()

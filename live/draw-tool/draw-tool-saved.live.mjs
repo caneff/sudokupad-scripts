@@ -8,7 +8,7 @@ import { gotoPuzzle, injectAtIdle, newPage, openPage, startPuzzle } from '../pag
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { DIALOG, DRAWING_PREFIX, INDEX_KEY, OLD_SHAPES, script, STROKES, TEXTS } = draw
+const { DIALOG, DRAWING_PREFIX, INDEX_KEY, NOT_NOTES, script, TEXTS } = draw
 
 // What an earlier version saved, planted as it wrote it.
 const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
@@ -114,8 +114,7 @@ describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
     await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
-    assert.equal(await p.locator(STROKES).count(), 0, 'no path: the stroke is not drawn')
-    assert.equal(await p.locator(OLD_SHAPES).count(), 0, 'no rect or ellipse: the shape is not drawn')
+    assert.equal(await p.locator(NOT_NOTES).count(), 0, 'the stroke and the shape are not drawn')
     assert.equal(await p.locator('#draw-tool-layer > *').count(), 1, 'the layer holds the note alone')
   })
 
@@ -137,7 +136,7 @@ describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
     await mouseDrag(p, [[7, 1.5], [7, 3]], { button: 'right' })
     assert.deepEqual(await texts(), ['15'], 'those drags crossed no note')
     assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after erasing across them')
-    assert.equal(await p.locator(STROKES).count() + await p.locator(OLD_SHAPES).count(), 0, 'still not drawn')
+    assert.equal(await p.locator(NOT_NOTES).count(), 0, 'still not drawn')
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
     assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after a reload')
