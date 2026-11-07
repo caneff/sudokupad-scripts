@@ -38,8 +38,7 @@ export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
 
 export const BUTTON = '#control-colorbydigit'
 export const EDITOR = '#color-by-digit-editor'
-// The mode's name on the button's top strip, the arrow box that opens the profile menu, and that menu.
-export const LABEL = `${BUTTON} [data-role="mode"]`
+// The arrow box that opens the profile menu, and that menu.
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'
 
@@ -95,9 +94,20 @@ export async function openSession (browser, script, { saved = SEEDED_OFF, force 
   return opened
 }
 
-export const labelOn = (p) => p.locator(LABEL).textContent()
+// The mode, as the button's aria-label names it: Cell, Digit, Both or Off.
+const LABEL_PREFIX = 'Color by digit: '
+export const labelOn = async (p) => {
+  const label = await p.locator(BUTTON).getAttribute('aria-label')
+  return label?.startsWith(LABEL_PREFIX) ? label.slice(LABEL_PREFIX.length) : label
+}
 
-// Where every press on the button lands: on the button proper, below the mode label and left of the arrow box.
+// The button's chips as drawn: each cell's [fill, digit color], and the outline's color.
+export const chipLookOn = (p) => p.locator(`${BUTTON} svg[data-role="chips"]`).evaluate((run) => ({
+  cells: [...run.querySelectorAll('[data-role="chip"]')].map((g) => [window.getComputedStyle(g.querySelector('rect')).fill, window.getComputedStyle(g.querySelector('text')).fill]),
+  outline: window.getComputedStyle(run.querySelector(':scope > rect[fill="none"]')).stroke
+}))
+
+// Where every press on the button lands: on the button proper, left of and above the arrow box.
 export async function buttonPoint (p) {
   const box = await p.locator(BUTTON).boundingBox()
   return { x: box.x + box.width * 0.3, y: box.y + box.height * 0.6 }

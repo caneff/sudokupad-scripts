@@ -1,12 +1,13 @@
 // Live check of the Color by Digit dialog's layout (#304, #333) at 1200x900 and 390x800 on sudokupad.app in headless Chromium: the Mode, Cell
 // and Digit pulldowns one per row with the label left of each, Copy and Paste settings as icons in the title row, two columns on a
-// desktop and one on a phone, with no sideways overflow. How it looks is judged by sight in the PR.
+// desktop and one on a phone, with no sideways overflow; the profile list's dense rows; and the profile menu's rows, synced and not (#354).
+// How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { EDITOR, group, openSession, paintedKeys, savedProfiles, SEEDED_OFF, MODE_STORAGE_KEY } from './color-by-digit-fixtures.mjs'
+import { ARROW, EDITOR, group, MENU, openSession, paintedKeys, savedProfiles, SEED, SEEDED_OFF, MODE_STORAGE_KEY } from './color-by-digit-fixtures.mjs'
 import { openScriptDialog } from './settings.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
@@ -68,6 +69,19 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
       assert.deepEqual(await p.locator('.dialog-options button').evaluateAll((es) => es.map((e) => e.textContent.trim())), ['Cancel', 'Save'])
     })
 
+    it('lists the profiles in rows about 30 px tall, the drag handle and delete shown on the selected row and on a hovered one only', async () => {
+      const rows = `${EDITOR} [data-role="profile-row"]`
+      const heights = await p.locator(rows).evaluateAll((es) => es.map((e) => Math.round(e.getBoundingClientRect().height)))
+      assert.deepEqual(heights, heights.map(() => 30))
+      const shown = (i) => p.locator(rows).nth(i).evaluate((row) => ['[data-role="handle"]', '[data-act="delete"]'].map((s) => window.getComputedStyle(row.querySelector(s)).visibility))
+      assert.deepEqual(await shown(0), ['visible', 'visible'])
+      await p.mouse.move(0, 0)
+      assert.deepEqual(await shown(1), ['hidden', 'hidden'])
+      await p.locator(rows).nth(1).hover()
+      assert.deepEqual(await shown(1), ['visible', 'visible'])
+      await p.mouse.move(0, 0)
+    })
+
     if (viewport === DESKTOP) {
       it('is about 640 px wide', async () => {
         const { width } = await rect('.dialog')
@@ -116,4 +130,42 @@ for (const viewport of [DESKTOP, PHONE]) {
       }
     })
   })
+}
+
+for (const viewport of [DESKTOP, PHONE]) {
+  for (const [sync, state] of [['synced', SEED], ['unsynced', { ...SEED, digitActive: 1 }]]) {
+    describe(`the profile menu, ${sync}, at ${viewport.width} px`, { concurrency: false }, () => {
+      let context, p
+      before(async () => {
+        ;({ context, p } = await openSession(browser, script, { saved: { ...SEEDED_OFF, ...savedProfiles(state) }, contextOptions: { viewport } }))
+        await p.click(ARROW)
+        await p.locator(MENU).waitFor({ state: 'visible' })
+      })
+      after(async () => { await context?.close() })
+
+      it('lines up the names, with rows about 26 px tall, and stays inside the window', async () => {
+        const rows = await p.locator(`${MENU} [data-role="menu-row"]`).evaluateAll((es) => es.map((e) => ({ name: Math.round(e.querySelector('[data-role="name"]').getBoundingClientRect().x), height: Math.round(e.getBoundingClientRect().height) })))
+        assert.equal(rows.length, 2)
+        assert.equal(new Set(rows.map((r) => r.name)).size, 1, JSON.stringify(rows))
+        assert.deepEqual(rows.map((r) => r.height), [26, 26])
+        const menu = await p.locator(MENU).evaluate((m) => { const r = m.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, width: window.innerWidth } })
+        assert.equal(menu.left >= 0 && menu.right <= menu.width && menu.top >= 0, true, JSON.stringify(menu))
+      })
+
+      it(sync === 'synced' ? 'has no dots and no column heads' : 'centres the words Cell and Digit over their columns of dots', async () => {
+        const heads = await p.locator(`${MENU} [data-role="column-head"]`).evaluateAll((es) => es.map((e) => { const r = e.getBoundingClientRect(); return { word: e.textContent, x: r.x + r.width / 2 } }))
+        const dots = await p.locator(`${MENU} [data-act="pick"][role="menuitemradio"]:not([data-role="menu-row"])`).evaluateAll((es) => es.map((e) => { const r = e.getBoundingClientRect(); return { target: e.dataset.target, x: r.x + r.width / 2 } }))
+        if (sync === 'synced') {
+          assert.deepEqual([heads, dots], [[], []])
+          return
+        }
+        assert.deepEqual(heads.map((h) => h.word), ['Cell', 'Digit'])
+        for (const [head, target] of [[heads[0], 'cells'], [heads[1], 'digits']]) {
+          const column = dots.filter((d) => d.target === target)
+          assert.equal(column.length, 2)
+          for (const d of column) assert.equal(Math.abs(d.x - head.x) <= NEAR_PX, true, `${head.word} over its dot: ${JSON.stringify([head, d])}`)
+        }
+      })
+    })
+  }
 }
