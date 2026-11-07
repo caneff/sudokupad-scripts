@@ -1,17 +1,12 @@
 // Live check of draw-tool.user.js on sudokupad.app, in headless Chromium, with real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
+import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { openPage } from './page.mjs'
 import { mouseDrag } from './pen.mjs'
-import { clickUntil, settle, SETTLE_MS, stable } from './settle.mjs'
+import { settle, stable } from './settle.mjs'
 
-const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
-
-const DRAW_BUTTON = '#control-draw'
-const DIGIT_BUTTON = '#control-normal'
-const STROKES = '#draw-tool-layer path'
 // SudokuPad's tool keys, App.toolHotkeys.
 const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
 
@@ -22,7 +17,7 @@ after(async () => { await browser?.close() })
 describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
 
-  const tool = () => p.evaluate(() => Framework.app.tool)
+  const tool = () => toolOf(p)
   const selected = () => p.evaluate(() => Framework.app.puzzle.selectedCells.length)
   const strokeCount = () => p.locator(STROKES).count()
   // The last stroke's box on screen, in cell units from the grid's top left corner.
@@ -33,13 +28,11 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     return [round((box.left - cell.x) / cell.width), round((box.top - cell.y) / cell.height), round(box.width / cell.width), round(box.height / cell.height)]
   }, STROKES)
   const cellWidth = () => p.evaluate(() => Math.round(Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect().width))
-  const pickDraw = () => clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS)
+  const pickDraw = () => pick(p)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+    await boot(p)
   })
   after(async () => { await context.close() })
 

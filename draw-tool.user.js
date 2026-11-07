@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.0
+// @version      0.6.0
 // @description  Adds a Draw tool to SudokuPad: with it on, a drag on the board draws a smooth freehand line that stays on the cells it was drawn on, and Shift+drag draws a straight line. The keypad's nine pen colors, or the digit keys 1 to 9, pick a line's color, and three buttons pick its width. A click on the board types text there, such as a cage sum, in the pen color and one of three text sizes, and a click on text edits it. A right-drag erases each line and text it crosses, and Clear all, after asking, erases them all. Each puzzle keeps its own drawing over a reload, and Restart clears it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.5.0'
+  const VERSION = '0.6.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -37,7 +37,8 @@
   const CHAR_WIDTH = 0.6
   // How far, in board units, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
-  const WIDTHS_CLASS = 'draw-tool-widths'
+  const PANEL_BOX_CLASS = 'draw-tool-panel-box'
+  const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
   const CLEAR_QUESTION = 'Clear the drawing?'
   const CLEAR_OK = 'OK'
@@ -195,7 +196,7 @@
   // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
   function readDrawing (saved) {
     if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((item) => isStroke(item) || isText(item))) throw new Error(`draw-tool: the saved drawing is not a list of strokes and texts: ${JSON.stringify(saved).slice(0, 200)}`)
+    if (!Array.isArray(saved) || !saved.every((item) => isStroke(item) || isText(item))) throw new Error(`the saved drawing is not a list of strokes and texts: ${JSON.stringify(saved).slice(0, 200)}`)
     return saved
   }
 
@@ -205,7 +206,7 @@
   // The index lists puzzle keys oldest change first.
   function readIndex (saved) {
     if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((key) => typeof key === 'string')) throw new Error(`draw-tool: the saved index is not a list of puzzle keys: ${JSON.stringify(saved).slice(0, 200)}`)
+    if (!Array.isArray(saved) || !saved.every((key) => typeof key === 'string')) throw new Error(`the saved index is not a list of puzzle keys: ${JSON.stringify(saved).slice(0, 200)}`)
     return saved
   }
 
@@ -267,14 +268,15 @@
 
   const onBoard = (event) => {
     const box = boardSvg().getBoundingClientRect()
-    return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom &&
-      !event.target.closest('button, .dialog, .controls-buttons')
+    return event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom
   }
 
   const toBoard = (layer, event) => {
     const p = new window.DOMPoint(event.clientX, event.clientY).matrixTransform(layer.getScreenCTM().inverse())
     return [p.x, p.y]
   }
+
+  const penColorVar = (n) => `var(--puzzle-pencolor-${n})`
 
   function newStroke (layer, color, width) {
     const path = document.createElementNS(SVG_NS, 'path')
@@ -284,7 +286,7 @@
     path.setAttribute('stroke-linecap', 'round')
     path.setAttribute('stroke-linejoin', 'round')
     path.setAttribute('stroke-opacity', String(STROKE_OPACITY))
-    path.style.stroke = `var(--puzzle-pencolor-${color})`
+    path.style.stroke = penColorVar(color)
     layer.appendChild(path)
     return path
   }
@@ -298,43 +300,28 @@
     text.setAttribute('font-size', String(item.size))
     text.setAttribute('text-anchor', 'middle')
     text.setAttribute('dominant-baseline', 'central')
-    text.style.fill = `var(--puzzle-pencolor-${item.color})`
+    text.style.fill = penColorVar(item.color)
     text.textContent = item.text
     layer.appendChild(text)
     return text
   }
 
-  // The open text box: its text, and a dashed outline the size of a hit test's box, one character wide when empty.
-  function newTextBox (layer, item) {
-    newText(layer, item)
-    const box = textBox(item)
-    const outline = document.createElementNS(SVG_NS, 'rect')
-    outline.setAttribute('class', 'draw-tool-textbox')
-    outline.setAttribute('x', coordinate(box.left))
-    outline.setAttribute('y', coordinate(box.top))
-    outline.setAttribute('width', coordinate(box.right - box.left))
-    outline.setAttribute('height', coordinate(box.bottom - box.top))
-    outline.setAttribute('fill', 'none')
-    outline.setAttribute('stroke-width', '1')
-    outline.setAttribute('stroke-dasharray', '3 2')
-    outline.style.stroke = `var(--puzzle-pencolor-${item.color})`
-    layer.appendChild(outline)
-  }
-
   // The keypad with Draw current, in the style of SudokuPad's tool-pen.css: each digit button a pen color swatch,
-  // 0 and delete covered by the width box. The swatches read the pen color variables, so a changed one shows.
+  // 0 and delete covered by the panel box. The swatches read the pen color variables, so a changed one shows.
+  const GREY = 'rgb(124, 124, 124)'
   const PANEL_CSS = `
 .tool-draw .controls-input { position: relative; }
 .tool-draw .controls-input button.digit { position: relative; text-indent: -999em; overflow: hidden; }
 .tool-draw .controls-input button.digit:not(.current) { color: transparent; background-color: var(--body-bg); }
 .tool-draw .controls-input button.digit:after { content: ""; position: absolute; width: 60%; height: 60%; left: 20%; top: 20%; }
-${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input button[data-key="${i + 1}"]:after { background-color: var(--puzzle-pencolor-${i + 1}); }`).join('\n')}
+${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input button[data-key="${i + 1}"]:after { background-color: ${penColorVar(i + 1)}; }`).join('\n')}
 .tool-draw .controls-input button[data-key="0"], .tool-draw .controls-input button[data-control="delete"] { visibility: hidden; }
-.${WIDTHS_CLASS} { position: absolute; left: 0; right: 0; top: 13rem; height: 4rem; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 0.25rem 0.4rem; }
-.tool-draw .controls-input .${WIDTHS_CLASS} button { width: auto; height: auto; min-height: 0; margin: 0; padding: 0; }
-.tool-draw .controls-input .${WIDTHS_CLASS} button:not(.current) { background-color: var(--body-bg); color: rgb(124, 124, 124); }
-.${WIDTHS_CLASS} svg { width: 100%; height: 100%; pointer-events: none; }
-.tool-draw .controls-input .${WIDTHS_CLASS} button.${CLEAR_CLASS} { grid-column: 4; grid-row: 1 / span 2; font-size: 0.85rem; line-height: 1.15; color: rgb(124, 124, 124); background-color: var(--body-bg); }
+.${PANEL_BOX_CLASS} { position: absolute; left: 0; right: 0; top: 13rem; height: 4rem; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 0.25rem 0.4rem; }
+.tool-draw .controls-input .${PANEL_BOX_CLASS} button { width: auto; height: auto; min-height: 0; margin: 0; padding: 0; }
+.tool-draw .controls-input .${PANEL_BOX_CLASS} button:not(.current) { background-color: var(--body-bg); color: ${GREY}; }
+.${PANEL_BOX_CLASS} svg { width: 100%; height: 100%; pointer-events: none; }
+.tool-draw .controls-input .${PANEL_BOX_CLASS} button.${CLEAR_CLASS} { grid-column: 4; grid-row: 1 / span 2; font-size: 0.85rem; line-height: 1.15; color: ${GREY}; background-color: var(--body-bg); }
+.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }
 `
   const widthIcon = (width) => `<svg viewBox="0 0 48 32"><line x1="10" y1="16" x2="38" y2="16" stroke="currentColor" stroke-linecap="round" stroke-width="${width}"/></svg>`
   const textSizeIcon = (size) => `<svg viewBox="0 0 48 32"><text x="24" y="16" text-anchor="middle" dominant-baseline="central" fill="currentColor" font-size="${size}">15</text></svg>`
@@ -342,7 +329,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
   let textSize = DEFAULT_TEXT_SIZE
-  let widthsBox = null
+  let panelBox = null
 
   const keypad = () => document.querySelector('.controls-input')
 
@@ -353,10 +340,10 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     keypad().querySelector(`button[data-key="${color}"]`).classList.add('current')
   }
 
-  function markWidth () {
-    if (!widthsBox) return
-    for (const button of widthsBox.querySelectorAll('button[data-width]')) button.classList.toggle('current', Number(button.dataset.width) === width)
-    for (const button of widthsBox.querySelectorAll('button[data-text-size]')) button.classList.toggle('current', Number(button.dataset.textSize) === textSize)
+  function markPanelBox () {
+    if (!panelBox) return
+    for (const button of panelBox.querySelectorAll('button[data-width]')) button.classList.toggle('current', Number(button.dataset.width) === width)
+    for (const button of panelBox.querySelectorAll('button[data-text-size]')) button.classList.toggle('current', Number(button.dataset.textSize) === textSize)
   }
 
   function pickColor (next) {
@@ -368,56 +355,56 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   function pickWidth (next) {
     width = next
     Framework.setData(WIDTH_KEY, width)
-    markWidth()
+    markPanelBox()
   }
 
   function pickTextSize (next) {
     textSize = next
     Framework.setData(TEXT_SIZE_KEY, textSize)
-    markWidth()
+    markPanelBox()
   }
 
-  function showWidths () {
-    widthsBox = document.createElement('div')
-    widthsBox.className = WIDTHS_CLASS
-    for (const w of WIDTHS) {
-      const button = document.createElement('button')
-      button.dataset.width = String(w)
-      button.title = `Line width ${WIDTHS.indexOf(w) + 1} of ${WIDTHS.length}`
-      button.innerHTML = widthIcon(w)
-      widthsBox.appendChild(button)
-    }
-    for (const size of TEXT_SIZES) {
-      const button = document.createElement('button')
-      button.dataset.textSize = String(size)
-      button.title = `Text size ${TEXT_SIZES.indexOf(size) + 1} of ${TEXT_SIZES.length}`
-      button.innerHTML = textSizeIcon(size)
-      widthsBox.appendChild(button)
+  function showPanelBox () {
+    panelBox = document.createElement('div')
+    panelBox.className = PANEL_BOX_CLASS
+    const choices = [[WIDTHS, 'width', 'Line width', widthIcon], [TEXT_SIZES, 'textSize', 'Text size', textSizeIcon]]
+    for (const [values, data, label, icon] of choices) {
+      values.forEach((value, i) => {
+        const button = document.createElement('button')
+        button.dataset[data] = String(value)
+        button.title = `${label} ${i + 1} of ${values.length}`
+        button.innerHTML = icon(value)
+        panelBox.appendChild(button)
+      })
     }
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.title = 'Clear the whole drawing'
     clear.innerHTML = 'Clear<br>all'
-    widthsBox.appendChild(clear)
-    widthsBox.addEventListener('click', (event) => {
+    panelBox.appendChild(clear)
+    panelBox.addEventListener('click', (event) => {
       const button = event.target.closest('button')
       if (!button) return
       if (button === clear) confirmClear()
       else if (button.dataset.textSize) pickTextSize(Number(button.dataset.textSize))
       else pickWidth(Number(button.dataset.width))
     })
-    keypad().querySelector('.button-row:last-child').appendChild(widthsBox)
-    markWidth()
+    keypad().querySelector('.button-row:last-child').appendChild(panelBox)
+    markPanelBox()
   }
 
   let stroke = null
-  // A right-drag in progress: the last point it reached, and whether it has erased a stroke yet.
+  // A right-drag in progress: the last point it reached, and whether it has erased an item yet.
   let erasing = null
-  // The open text box: the index of the text it reopened, or -1 for a new one, and the item as typed so far.
+  // The open text box: the index of the text it reopened, or -1 for a new one, the item, and the input the solver types in.
   let editing = null
+  // True from a press that finished a text box until its release, so the press does nothing else on the board.
+  let pressFinishedText = false
   let drawing = []
-  // False while this puzzle's saved drawing cannot be read, so the script never writes over it.
+  // False while this puzzle's saved drawing cannot be read: no save writes over it but an explicit wipe's.
   let savable = true
+  // The failures already shown in a dialog on this page.
+  const reported = new Set()
 
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
 
@@ -429,87 +416,169 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       if (item.kind === 'text') newText(layer, item)
       else newStroke(layer, item.color, item.width).setAttribute('d', strokePath(item.points))
     })
-    if (editing) newTextBox(layer, editing.item)
+  }
+
+  // The solver loses work they think is kept, so each failure is shown once a page in SudokuPad's own dialog. Its
+  // showDialog does nothing while another dialog is open, so the failure is shown at the next save instead.
+  function report (message) {
+    console.warn(`draw-tool: ${message}`)
+    if (reported.has(message) || document.querySelector('.dialog-overlay')) return
+    reported.add(message)
+    Framework.showDialog({
+      parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: CLEAR_OK }] }],
+      centerOverBoard: true
+    })
+  }
+
+  function save () {
+    if (!savable) {
+      report('This puzzle\'s saved drawing cannot be read, so Draw Tool leaves it as it is and does not save the drawing on this puzzle. Clear all or Restart replaces it.')
+      return
+    }
+    try {
+      saveDrawingTo(Framework, currentPuzzleKey(), drawing)
+    } catch (err) {
+      report(`Draw Tool could not save this puzzle's drawing: ${err.message}`)
+    }
+  }
+
+  // The text box is an input over the board, at the text's point, the size the text is drawn at.
+  function placeTextBox () {
+    const { input, item } = editing
+    const toScreen = drawingLayer().getScreenCTM()
+    const scale = toScreen.a
+    const box = textBox({ ...item, text: input.value })
+    const corner = new window.DOMPoint(box.left, box.top).matrixTransform(toScreen)
+    input.style.left = `${corner.x + window.scrollX - 1}px`
+    input.style.top = `${corner.y + window.scrollY - 1}px`
+    input.style.width = `${(box.right - box.left) * scale}px`
+    input.style.height = `${item.size * scale}px`
+    input.style.fontSize = `${item.size * scale}px`
+    input.style.lineHeight = `${item.size * scale}px`
   }
 
   function openText (at) {
     const index = textAt(drawing, at)
-    editing = { index, item: index === -1 ? textItem(at, '', color, textSize) : { ...drawing[index] } }
+    const item = index === -1 ? textItem(at, '', color, textSize) : { ...drawing[index] }
+    const input = document.createElement('input')
+    input.className = TEXT_BOX_CLASS
+    input.type = 'text'
+    input.value = item.text
+    input.style.color = penColorVar(item.color)
+    input.style.fontFamily = window.getComputedStyle(drawingLayer()).fontFamily
+    // As SudokuPad's own buttons do: a press in the box is the box's, and never reaches a tool.
+    for (const type of ['mousedown', 'touchstart']) input.addEventListener(type, (event) => event.stopPropagation())
+    input.addEventListener('input', placeTextBox)
+    input.addEventListener('blur', () => { if (editing && editing.input === input) finishText() })
+    editing = { index, item, input }
+    document.body.appendChild(input)
+    placeTextBox()
     renderDrawing()
+    input.focus()
   }
 
-  // Enter and a click elsewhere: the box's text is kept, and a box left empty takes its text away.
+  // An empty box removes its text.
   function finishText () {
-    const { index, item } = editing
+    const { index, item, input } = editing
     editing = null
+    input.remove()
     const before = index === -1 ? '' : drawing[index].text
-    if (item.text !== before) {
-      if (item.text === '') drawing.splice(index, 1)
-      else if (index === -1) drawing.push(item)
-      else drawing[index] = item
+    const text = input.value
+    if (text !== before) {
+      if (text === '') drawing.splice(index, 1)
+      else if (index === -1) drawing.push({ ...item, text })
+      else drawing[index] = { ...item, text }
     }
     renderDrawing()
-    if (item.text !== before && savable) saveDrawing()
+    if (text !== before) save()
   }
 
   function dropText () {
+    const { input } = editing
     editing = null
+    input.remove()
     renderDrawing()
   }
 
-  // While a box is open every key is the box's: it never reaches SudokuPad, whose listeners are on the document and
-  // so come after the window's capture. A key with Ctrl, Alt or Meta keeps the browser's own action.
-  function typeText (event) {
-    if (!editing) return
+  // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
+  // a key typed in the box is stopped in the window's capture phase, before them all. Its default is left alone, so
+  // the input types, edits, pastes and composes as any input does, and F5 or Tab do what they do anywhere.
+  function keepBoxKeys (event) {
+    if (!editing || event.target !== editing.input) return
     event.stopImmediatePropagation()
-    if (event.type !== 'keydown' || event.ctrlKey || event.altKey || event.metaKey) return
-    event.preventDefault()
-    const { item } = editing
-    if (event.key === 'Enter') finishText()
-    else if (event.key === 'Escape') dropText()
-    else if (event.key === 'Backspace') item.text = item.text.slice(0, -1)
-    else if (event.key.length === 1) item.text += event.key
-    else return
-    if (editing) renderDrawing()
+    if (event.type !== 'keydown' || event.isComposing) return
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      finishText()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      dropText()
+    }
+  }
+
+  // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
+  // capture phase, before any of them.
+  function finishTextOnPress (event) {
+    if (!editing || event.target === editing.input) return
+    pressFinishedText = true
+    finishText()
+  }
+
+  // A stroke or erase in progress ends as a release ends it; a press that never moved opens no text box.
+  function endGesture () {
+    if (erasing) endErase()
+    if (!stroke) return
+    if (isClick(stroke.points)) {
+      stroke.path.remove()
+      stroke = null
+    } else endStroke(stroke.straight)
+  }
+
+  function endErase () {
+    const { erased } = erasing
+    erasing = null
+    if (erased) save()
+  }
+
+  function endStroke (straight) {
+    const { path, points, color: strokeColor, width: strokeWidth } = stroke
+    stroke = null
+    const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth)
+    path.setAttribute('d', strokePath(item.points))
+    drawing.push(item)
+    save()
+  }
+
+  function cancelInput () {
+    stroke = null
+    erasing = null
+    if (editing) editing.input.remove()
+    editing = null
   }
 
   function showSavedDrawing () {
-    stroke = null
-    erasing = null
-    editing = null
+    cancelInput()
     try {
       drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
       savable = true
     } catch (err) {
-      console.warn(`${err.message}. It is left as it is, and this puzzle's drawing is not saved.`)
+      console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's drawing is not saved.`)
       drawing = []
       savable = false
     }
     renderDrawing()
   }
 
-  function saveDrawing () {
-    try {
-      saveDrawingTo(Framework, currentPuzzleKey(), drawing)
-    } catch (err) {
-      console.warn(`${err.message}. The drawing is not saved.`)
-    }
-  }
-
-  // Restart and Clear all, each confirmed first, empty the drawing, an unreadable saved one included.
+  // An unreadable saved drawing is written over too.
   function emptyDrawing () {
     drawing = []
-    stroke = null
-    erasing = null
-    editing = null
+    cancelInput()
     drawingLayer().replaceChildren()
     savable = true
-    saveDrawing()
+    save()
   }
 
-  const shownPoints = (points, event) => event.shiftKey ? straightLine(points) : points
-
-  // Deletes, whole, every stroke the drag from `from` to `to` passes near.
+  // Deletes, whole, every item the drag from `from` to `to` passes near.
   function eraseAlong (from, to) {
     const kept = drawing.filter((item) => !touchesItem(item, from, to))
     if (kept.length === drawing.length) return
@@ -519,7 +588,8 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   }
 
   // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
-  // release on Windows, so it is suppressed over the board for as long as Draw is current.
+  // release on Windows, so it is suppressed over the board for as long as Draw is current. On Windows a right-drag
+  // that ends off the board still opens the menu there.
   function suppressMenu (event) {
     if (Framework.app.tool === TOOL_NAME && onBoard(event)) event.preventDefault()
   }
@@ -535,17 +605,18 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     })
   }
 
+  // The mouse button each gesture is held by, as a bit of a MouseEvent's `buttons`.
+  const PRIMARY_HELD = 1
+  const SECONDARY_HELD = 2
+
   const tool = {
     name: TOOL_NAME,
     isTool: true,
-    // A press that starts a stroke returns true, so SudokuPad starts no drag and selects no cell. A press anywhere
-    // while a text box is open finishes the box, and on the board does nothing else.
+    // A press that starts a stroke returns true, so SudokuPad starts no drag and selects no cell. A press that
+    // finished a text box does nothing else on the board.
     handleInputdown (event) {
       if (event.type !== 'mousedown' || stroke || erasing) return false
-      if (editing) {
-        finishText()
-        return onBoard(event)
-      }
+      if (pressFinishedText) return onBoard(event)
       if (!onBoard(event)) return false
       if (event.button === SECONDARY_BUTTON) {
         const at = toBoard(drawingLayer(), event)
@@ -555,11 +626,16 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       }
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
-      stroke = { layer, path: newStroke(layer, color, width), color, width, points: [toBoard(layer, event)] }
+      stroke = { layer, path: newStroke(layer, color, width), color, width, straight: false, points: [toBoard(layer, event)] }
       stroke.path.setAttribute('d', strokePath(stroke.points))
       return true
     },
+    // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
     handleInputMove (event) {
+      if (event.type === 'mousemove' && (erasing || stroke) && !(event.buttons & (erasing ? SECONDARY_HELD : PRIMARY_HELD))) {
+        endGesture()
+        return false
+      }
       if (erasing) {
         const at = toBoard(drawingLayer(), event)
         eraseAlong(erasing.last, at)
@@ -568,39 +644,36 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       }
       if (!stroke) return false
       stroke.points.push(toBoard(stroke.layer, event))
-      stroke.path.setAttribute('d', strokePath(shownPoints(stroke.points, event)))
+      stroke.straight = event.shiftKey
+      stroke.path.setAttribute('d', strokePath(stroke.straight ? straightLine(stroke.points) : stroke.points))
       return true
     },
     handleInputup (event) {
       if (erasing) {
-        const { erased } = erasing
-        erasing = null
-        if (erased && savable) saveDrawing()
+        endErase()
         return true
       }
       if (!stroke) return false
-      const { path, points, color: strokeColor, width: strokeWidth } = stroke
-      stroke = null
       // A text box opens only on the release of Draw's own press, never on a release or click alone.
-      if (isClick(points)) {
-        path.remove()
-        openText(points[0])
+      if (isClick(stroke.points)) {
+        const [at] = stroke.points
+        stroke.path.remove()
+        stroke = null
+        openText(at)
         return true
       }
-      const item = strokeItem(event.shiftKey ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth)
-      path.setAttribute('d', strokePath(item.points))
-      drawing.push(item)
-      if (savable) saveDrawing()
+      endStroke(event.shiftKey)
       return true
     },
     handleToolEnter () {
-      showWidths()
+      showPanelBox()
       markColor()
     },
     handleToolExit () {
+      endGesture()
       if (editing) finishText()
-      widthsBox?.remove()
-      widthsBox = null
+      panelBox?.remove()
+      panelBox = null
       unmarkColor()
     },
     // A digit key or keypad button gets the button's data-value. With Draw current it picks a pen color, and no key
@@ -631,7 +704,10 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
-    for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, typeText, { capture: true })
+    window.addEventListener('blur', endGesture)
+    window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
+    window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
+    for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
     if (app.puzzle.currentPuzzle) showSavedDrawing()
   })
 })()

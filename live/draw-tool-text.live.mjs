@@ -3,26 +3,19 @@
 // mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
+import * as draw from './draw-tool-fixtures.mjs'
+import { openPage } from './page.mjs'
 import { gridPoint, plantUnchecked } from './pen.mjs'
-import { clickUntil, settle, SETTLE_MS, stable } from './settle.mjs'
+import { settle, stable } from './settle.mjs'
 
-const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
-
-const DRAW_BUTTON = '#control-draw'
-const TEXTS = '#draw-tool-layer text.draw-tool-text'
-const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
-const SIZE_BUTTONS = '.draw-tool-widths button[data-text-size]'
-const DRAWING_PREFIX = 'DrawTool_drawing_'
-const INDEX_KEY = 'DrawTool_index'
-const COLOR_KEY = 'DrawTool_color'
-const TEXT_SIZE_KEY = 'DrawTool_textsize'
-// Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and two more spots.
+const { COLOR_KEY, DIALOG, PANEL_BOX, TEXT_BOX, TEXT_SIZE_KEY, TEXTS } = draw
+const SIZE_BUTTONS = `${PANEL_BOX} button[data-text-size]`
+// Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
 const THIRD_AT = [4.5, 7.5]
+const FOURTH_AT = [7.5, 1.5]
 const EMPTY_AT = [8.5, 0.5]
 
 let browser
@@ -33,19 +26,15 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const tool = () => read(() => Framework.app.tool)
-  const pickDraw = () => clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS)
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
-  }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const texts = () => read((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
+  const tool = () => draw.tool(p)
+  const pickDraw = () => draw.pickDraw(p)
+  const reload = () => draw.reload(p)
+  const texts = () => draw.texts(p)
   const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
+  const boxText = () => p.locator(TEXT_BOX).inputValue()
   // Every cell's digit, mark and colour, so a key that reached SudokuPad shows as a change.
   const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
-  const saved = () => read((prefix) => Framework.getData(prefix + String(Framework.app.puzzle.puzzleId || window.location.href)), DRAWING_PREFIX)
+  const saved = () => draw.saved(p)
   const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
   // The computed fill, fill opacity and font size of the text that reads `content`.
   const textStyle = (content) => read(([selector, want]) => {
@@ -63,11 +52,9 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
-    await boot()
-    await read(([prefix, keys]) => {
-      Object.keys(window.localStorage).filter((k) => k.includes(prefix)).forEach((k) => window.localStorage.removeItem(k))
-      keys.forEach((k) => Framework.removeData(k))
-    }, [DRAWING_PREFIX, [INDEX_KEY, COLOR_KEY, TEXT_SIZE_KEY]])
+    await draw.boot(p)
+    await draw.forgetDrawings(p)
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, TEXT_SIZE_KEY])
     await reload()
   })
   after(async () => { await context.close() })
@@ -132,7 +119,8 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
   it('a click on text reopens it with its text, and Enter saves the change', async () => {
     await clickAt(SUM_AT)
     assert.equal(await boxOpen(), true)
-    assert.deepEqual(await texts(), ['Zx CZ', '7', '15'], 'the open box shows the text, drawn last')
+    assert.equal(await boxText(), '15', 'the open box holds the text')
+    assert.deepEqual(await texts(), ['Zx CZ', '7'], 'the board leaves out the text the box holds')
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Backspace')
     await p.keyboard.type('23')
@@ -155,6 +143,47 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     await p.keyboard.press('Enter')
     assert.deepEqual(await texts(), ['23', 'Zx CZ'])
     assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx CZ'])
+  })
+
+  it('in the box, arrow keys move the caret and Delete deletes, as in any input, and reach no cell', async () => {
+    const cells = await cellState()
+    await clickAt(SECOND_AT)
+    await p.keyboard.press('Home')
+    await p.keyboard.press('Delete')
+    await p.keyboard.press('ArrowRight')
+    await p.keyboard.type('y')
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await texts(), ['23', 'xy CZ'])
+    assert.equal(await cellState(), cells)
+    assert.equal(await tool(), 'draw')
+  })
+
+  it('with a box open, a click on a keypad color finishes it, and a key typed after reaches no drawing', async () => {
+    await clickAt(FOURTH_AT)
+    await p.keyboard.type('8')
+    await p.click('.controls-input button[data-key="5"]')
+    assert.equal(await boxOpen(), false)
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
+    await p.keyboard.type('4')
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'xy CZ', '8'])
+  })
+
+  it('with a box open, opening SudokuPad\'s settings finishes it, and a key typed in the dialog reaches no drawing', async () => {
+    await clickAt(EMPTY_AT)
+    await p.keyboard.type('5')
+    await p.click('#control-settings')
+    await p.locator(DIALOG).waitFor({ state: 'visible' })
+    assert.equal(await boxOpen(), false)
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '8', '5'])
+    await p.keyboard.type('9')
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '8', '5'])
+    await p.keyboard.press('Escape')
+    await p.locator(DIALOG).waitFor({ state: 'detached' })
+    await clickAt(EMPTY_AT)
+    await p.keyboard.press('Backspace')
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
   })
 
   it('the text size control has three sizes, and a new text takes the one picked and the current pen color', async () => {

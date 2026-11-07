@@ -3,23 +3,13 @@
 // draws nothing and opens no text box. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import * as draw from './draw-tool-fixtures.mjs'
+import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, DRAW_BUTTON, script, STROKES, TEXT_BOX } from './draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from './page.mjs'
 import { gridPoint, mouseDrag } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
-const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
-
-const DRAW_BUTTON = '#control-draw'
-const DIGIT_BUTTON = '#control-normal'
-const CLEAR_BUTTON = '.draw-tool-clear'
-const STROKES = '#draw-tool-layer path'
-const TEXTS = '#draw-tool-layer text.draw-tool-text'
-const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
-const DIALOG = '.dialog'
-const DRAWING_PREFIX = 'DrawTool_drawing_'
-const INDEX_KEY = 'DrawTool_index'
 // Two strokes along rows 2 and 4, from c2 to c7, in cells from the grid's top left.
 const UPPER = [[1.5, 1.5], [1.6, 4], [1.5, 6.5]]
 const LOWER = [[3.5, 1.5], [3.4, 4], [3.5, 6.5]]
@@ -34,11 +24,11 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
   let stockRightClick
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const tool = () => read(() => Framework.app.tool)
-  const pickDraw = () => clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS)
+  const tool = () => draw.tool(p)
+  const pickDraw = () => draw.pickDraw(p)
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
   const strokeCount = () => p.locator(STROKES).count()
-  const texts = () => read((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
+  const texts = () => draw.texts(p)
   const textBoxCount = () => p.locator(TEXT_BOX).count()
   // A click at `at`, in cells from the grid's top left, then `content` typed and Enter.
   const typeText = async (at, content) => {
@@ -46,14 +36,9 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     await p.keyboard.type(content)
     await p.keyboard.press('Enter')
   }
-  const strokePaths = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => e.getAttribute('d')), STROKES)
-  const saved = () => read((prefix) => Framework.getData(prefix + String(Framework.app.puzzle.puzzleId || window.location.href)), DRAWING_PREFIX)
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
-  }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+  const strokePaths = () => draw.strokePaths(p)
+  const saved = () => draw.saved(p)
+  const reload = () => draw.reload(p)
   const drawTwo = async () => {
     await pickDraw()
     await mouseDrag(p, UPPER)
@@ -61,12 +46,7 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.equal(await strokeCount(), 2)
     return strokePaths()
   }
-  const rightDrag = async (points) => {
-    await p.mouse.move(...await gridPoint(p, points[0]))
-    await p.mouse.down({ button: 'right' })
-    for (const point of points.slice(1)) await p.mouse.move(...await gridPoint(p, point), { steps: 8 })
-    await p.mouse.up({ button: 'right' })
-  }
+  const rightDrag = (points) => mouseDrag(p, points, { button: 'right' })
   // A right click at r5c5's middle: whether its contextmenu event ended prevented, and the cells selected after it.
   // The listener is added last, so it runs after every listener the page and the script added.
   const rightClick = async () => {
@@ -112,10 +92,7 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     stockRightClick = await rightClick()
     await p.addScriptTag({ content: script })
     await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
-    await read(([prefix, index]) => {
-      Object.keys(window.localStorage).filter((k) => k.includes(prefix)).forEach((k) => window.localStorage.removeItem(k))
-      Framework.removeData(index)
-    }, [DRAWING_PREFIX, INDEX_KEY])
+    await draw.forgetDrawings(p)
   })
   after(async () => { await context.close() })
 
@@ -143,6 +120,39 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     await pickDraw()
     await rightDrag([[5.5, 1], [6.5, 8]])
     assert.equal(await strokeCount(), 1)
+  })
+
+  // Z switches to Digit with the right button still held, so the release goes to the Digit tool and not to Draw.
+  it('a right-drag cut short by a tool switch keeps what it erased, and erases nothing more when Draw is back', async () => {
+    await pickDraw()
+    await mouseDrag(p, UPPER)
+    const [lower] = await strokePaths()
+    await p.mouse.move(...await gridPoint(p, [1, 3]))
+    await p.mouse.down({ button: 'right' })
+    await p.mouse.move(...await gridPoint(p, [2, 3.3]), { steps: 8 })
+    assert.deepEqual(await strokePaths(), [lower], 'the drag erased the upper stroke')
+    await p.keyboard.press('z')
+    assert.equal(await settle(tool, 'normal'), 'normal')
+    await p.mouse.up({ button: 'right' })
+    assert.equal((await saved()).length, 1, 'the erase was saved when Draw was left')
+    await read(() => Framework.app.changeTool('draw'))
+    assert.equal(await tool(), 'draw')
+    await p.mouse.move(...await gridPoint(p, [2.5, 4]))
+    await p.mouse.move(...await gridPoint(p, [4.5, 4.2]), { steps: 8 })
+    assert.deepEqual(await strokePaths(), [lower])
+  })
+
+  // A mouse move with no button down stands for a release the page never saw, such as one off the window.
+  it('a right-drag whose button is no longer held erases nothing more', async () => {
+    const [lower] = await strokePaths()
+    await p.mouse.move(...await gridPoint(p, [5.5, 0.5]))
+    await p.mouse.down({ button: 'right' })
+    const [x, y] = await gridPoint(p, [3.5, 1])
+    await read(([cx, cy]) => document.elementFromPoint(cx, cy).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, clientX: cx, clientY: cy, buttons: 0 })), [x, y])
+    await p.mouse.move(...await gridPoint(p, [2.5, 4]), { steps: 4 })
+    await p.mouse.move(...await gridPoint(p, [4.5, 4.2]), { steps: 8 })
+    await p.mouse.up({ button: 'right' })
+    assert.deepEqual(await strokePaths(), [lower])
   })
 
   it('a right-drag across a typed text removes it whole and keeps the strokes, and a reload shows the same', async () => {

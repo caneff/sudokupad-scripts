@@ -93,7 +93,7 @@ Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611
 - **Enter and exit.** `changeTool` swaps the class, then runs the old tool's `handleToolExit` while `app.tool` still
   names it, then the new tool's `handleToolEnter`. The pen tool's exit does not take `.current` off its button; Draw's
   enter clears every `.current` digit before marking its own, and its exit clears them again.
-- **The width box** sits where the pen tool's `.penlinemode` does (`position: absolute; top: 13rem; height: 4rem` in
+- **The panel box** (the widths, the text sizes and Clear all) sits where the pen tool's `.penlinemode` does (`position: absolute; top: 13rem; height: 4rem` in
   the last row), over 0 and delete, which Draw's CSS also hides. Its buttons are not SudokuPad's, so a plain `click`
   listener handles them; SudokuPad's window `mousedown` reaches Draw's `handleInputdown`, which ignores a press off
   the board.
@@ -131,10 +131,25 @@ SudokuPad v0.611.0 (`script.js`, `framework.js`, `feature-*.js` in the live reco
 
 - **Where the keys go.** `App` listens for `keydown` on `document` in the capture phase, as do `feature-cellpaste.js`
   and `feature-compactmarks.js`; `feature-markup.js` listens on `window` in the bubble phase, and `framework.js` on
-  `document`. A listener on `window` in the capture phase runs before every one of them, whatever order they were
-  added in. While a text box is open Draw takes every `keydown`, `keypress` and `keyup` there with
-  `stopImmediatePropagation`, so no digit reaches a cell, no tool key (Z X C V B N M) switches the tool and Shift does
-  not switch to Corner. Checked live with `15`, `Zx C` and Shift+Z typed into a box, Shift held.
+  `document`. `App.handleKeydown` does not look at the event's target, so a key typed in an `<input>` still reaches it,
+  and a listener on the input itself runs too late to stop it. A listener on `window` in the capture phase runs before
+  every one of them, whatever order they were added in.
+- **The text box** is an HTML `<input>` over the board at the text's point, sized from the board's scale, in the pen
+  color with a dashed outline. Draw's window capture listener takes only the keys whose target is that input, with
+  `stopImmediatePropagation` and no `preventDefault` but for Enter (finish) and Escape (drop), so no digit reaches a
+  cell, no tool key (Z X C V B N M) switches the tool and Shift does not switch to Corner, while the input types,
+  moves its caret, deletes, pastes and composes as any input does, and F5 and Tab keep their browser action (Tab moves
+  focus out, and the input's blur finishes it). Checked live with `15`, `Zx C`, Shift+Z, Home, Delete and ArrowRight.
+- **A press outside the box.** `App.handleButton` (the keypad, the tool buttons, settings) stops its `mousedown`, so
+  Draw's `handleInputdown` never sees it. Draw finishes the box from a window capture `pointerdown` listener, which
+  runs before any `mousedown`; the same press then does nothing else on the board. Checked live with a click on a
+  keypad color and on the settings button: the box finishes, and a key typed after reaches no drawing.
+- **A gesture cut short.** A tool key pressed mid-drag switches the tool, and the release then goes to the new tool.
+  Draw ends a stroke or an erase in progress when it is left, when the window loses focus, and on a move with the
+  gesture's button no longer held (`event.buttons`), as a release would: a stroke is kept and an erase is saved.
+  Checked live with Z pressed mid right-drag.
+- **A failed save** (an unreadable index, or `localStorage` full) and an unreadable saved drawing are shown once a page
+  in `Framework.showDialog`, at the first save they stop. `showDialog` does nothing while another dialog is open.
 - **A click is a press and release within 2 board units.** Draw tells a click from a stroke at the release of its own
   press, so a text box never opens on a release or a click alone. Clear all's dialog buttons and its overlay stop
   their `mousedown` (§ The right button), so closing the dialog by a plain click over the board opens no box. Checked

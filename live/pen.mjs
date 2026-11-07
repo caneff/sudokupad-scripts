@@ -43,13 +43,13 @@ export const gridPoint = async (page, [r, c]) => {
   return [x0 + (c - 0.5) * size, y0 + (r - 0.5) * size]
 }
 
-// A left drag along `points`, each [row, col] in cells from the grid's top left, with real mouse input and a few mouse
-// moves between each two points.
-export async function mouseDrag (page, points) {
+// A drag along `points` with `button` held (the left one unless given), each [row, col] in cells from the grid's top left,
+// with real mouse input and a few mouse moves between each two points.
+export async function mouseDrag (page, points, { button = 'left' } = {}) {
   await page.mouse.move(...await gridPoint(page, points[0]))
-  await page.mouse.down()
+  await page.mouse.down({ button })
   for (const point of points.slice(1)) await page.mouse.move(...await gridPoint(page, point), { steps: 8 })
-  await page.mouse.up()
+  await page.mouse.up({ button })
 }
 
 // A drag along `points`, as `mouseDrag`, returning once the grid has changed.

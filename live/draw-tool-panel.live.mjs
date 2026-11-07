@@ -2,20 +2,14 @@
 // three widths, the choice kept over a reload, and SudokuPad's own keypad back under another tool.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { openPage, startPuzzle } from './page.mjs'
+import * as draw from './draw-tool-fixtures.mjs'
+import { openPage } from './page.mjs'
 import { gridPoint, mouseDrag, plantUnchecked } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
-const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
-
-const DRAW_BUTTON = '#control-draw'
-const DIGIT_BUTTON = '#control-normal'
-const STROKES = '#draw-tool-layer path'
-const WIDTH_BUTTONS = '.draw-tool-widths button[data-width]'
-const COLOR_KEY = 'DrawTool_color'
-const WIDTH_KEY = 'DrawTool_width'
+const { COLOR_KEY, DIGIT_BUTTON, PANEL_BOX, STROKES, WIDTH_KEY } = draw
+const WIDTH_BUTTONS = `${PANEL_BOX} button[data-width]`
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
 
@@ -27,15 +21,10 @@ describe('Draw Tool\'s panel', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const tool = () => read(() => Framework.app.tool)
-  const pickDraw = () => clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS)
+  const tool = () => draw.tool(p)
+  const pickDraw = () => draw.pickDraw(p)
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
-  }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
+  const reload = () => draw.reload(p)
   // The keypad's digit buttons, 1 to 9: what each shows and whether it is marked current.
   const keypad = () => read(() => [...document.querySelectorAll('.controls-input button.digit')]
     .filter((b) => b.dataset.key !== '0')
@@ -66,7 +55,7 @@ describe('Draw Tool\'s panel', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
-    await boot()
+    await draw.boot(p)
     await read(([c, w]) => { Framework.removeData(c); Framework.removeData(w) }, [COLOR_KEY, WIDTH_KEY])
     await reload()
   })

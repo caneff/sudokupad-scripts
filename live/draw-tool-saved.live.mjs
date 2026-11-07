@@ -1,18 +1,13 @@
 // Live check of draw-tool.user.js's saved drawing on sudokupad.app: kept over a reload, per puzzle, and wiped by Restart.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import * as draw from './draw-tool-fixtures.mjs'
 import { gotoPuzzle, injectAtIdle, newPage, openPage, startPuzzle } from './page.mjs'
-import { mouseDrag } from './pen.mjs'
-import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
+import { gridPoint, mouseDrag } from './pen.mjs'
+import { settle } from './settle.mjs'
 
-const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
-
-const DRAW_BUTTON = '#control-draw'
-const STROKES = '#draw-tool-layer path'
-const DRAWING_PREFIX = 'DrawTool_drawing_'
-const INDEX_KEY = 'DrawTool_index'
+const { DIALOG, DRAWING_PREFIX, INDEX_KEY, script, STROKES } = draw
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -24,18 +19,17 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const strokeCount = () => p.locator(STROKES).count()
-  const strokePaths = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => e.getAttribute('d')), STROKES)
-  // The puzzle's key: its id, or the page URL when it has none, as this recorded puzzle does.
-  const puzzleKey = () => read(() => String(Framework.app.puzzle.puzzleId || window.location.href))
-  const saved = async () => read((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey())
-  const pickDraw = () => clickUntil(() => p.click(DRAW_BUTTON), () => read(() => Framework.app.tool), 'draw', SETTLE_MS)
-
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
+  const strokePaths = () => draw.strokePaths(p)
+  const puzzleKey = () => draw.puzzleKey(p)
+  const saved = () => draw.saved(p)
+  const pickDraw = () => draw.pickDraw(p)
+  const reload = () => draw.reload(p)
+  const dialogText = () => p.locator(DIALOG).textContent()
+  const closeDialog = async () => {
+    await p.waitForFunction(() => !window.dialogJustShown)
+    await p.locator(`${DIALOG} button`).filter({ hasText: 'OK' }).click()
+    await p.locator(DIALOG).waitFor({ state: 'detached' })
   }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
   const restartFromDialog = async () => {
     await p.click('#control-restart')
     await p.locator('.dialog button').filter({ hasText: /Restart/ }).filter({ hasNotText: /Keep Time/ }).first().click()
@@ -46,11 +40,8 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
     ;({ context, p, errors } = await openPage(browser, {
       seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool/.test(m.text())) warnings.push(m.text()) })
     }))
-    await boot()
-    await read(([prefix, index]) => {
-      Object.keys(window.localStorage).filter((k) => k.includes(prefix)).forEach((k) => window.localStorage.removeItem(k))
-      Framework.removeData(index)
-    }, [DRAWING_PREFIX, INDEX_KEY])
+    await draw.boot(p)
+    await draw.forgetDrawings(p)
   })
   after(async () => { await context.close() })
 
@@ -78,12 +69,16 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
     assert.deepEqual(await read((key) => Framework.getData(key), INDEX_KEY), [await puzzleKey()])
   })
 
+  // The recorded puzzle has no id, so its key is the page URL. A drawing is planted under each key a keying mistake
+  // would read instead: the missing id as text, no key, the URL's path with and without its slash, and another puzzle's id.
   it('another puzzle\'s drawing never loads on this one', async () => {
-    await read((key) => Framework.setData(key, [{ kind: 'stroke', color: 1, width: 6, points: [[10, 10], [500, 500]] }]), DRAWING_PREFIX + 'some-other-puzzle')
+    const wrongKeys = await read(() => ['undefined', '', window.location.pathname, window.location.pathname.slice(1), 'scl123abc'])
+    const others = wrongKeys.map((key) => DRAWING_PREFIX + key)
+    await read((keys) => keys.forEach((key) => Framework.setData(key, [{ kind: 'stroke', color: 1, width: 6, points: [[10, 10], [500, 500]] }])), others)
     const mine = await strokePaths()
     await reload()
     assert.deepEqual(await settle(strokePaths, mine), mine)
-    await read((key) => Framework.removeData(key), DRAWING_PREFIX + 'some-other-puzzle')
+    await read((keys) => keys.forEach((key) => Framework.removeData(key)), others)
   })
 
   it('the drawing shows again when the script starts at DOMContentLoaded, before the puzzle has loaded', async () => {
@@ -107,8 +102,9 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
     assert.equal(await strokeCount(), 0)
   })
 
-  it('saved data that cannot be read shows no drawing, warns, and is never written over', async () => {
+  it('saved data that cannot be read shows no drawing, warns, and is never written over by a stroke, a text or an erase', async () => {
     const key = DRAWING_PREFIX + await puzzleKey()
+    const planted = () => read((k) => Framework.getData(k), key)
     await read((k) => Framework.setData(k, 'not a drawing {'), key)
     await reload()
     assert.equal(await strokeCount(), 0)
@@ -116,8 +112,32 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
     await pickDraw()
     await mouseDrag(p, [[2.5, 2.5], [3.5, 4.5]])
     assert.equal(await strokeCount(), 1)
-    assert.equal(await read((k) => Framework.getData(k), key), 'not a drawing {')
+    assert.match(await dialogText(), /saved drawing cannot be read/, 'the solver is told the drawing is not saved')
+    await closeDialog()
+    assert.equal(await planted(), 'not a drawing {', 'after a stroke')
+    await p.mouse.click(...await gridPoint(p, [6.5, 6.5]))
+    await p.keyboard.type('15')
+    await p.keyboard.press('Enter')
+    assert.equal(await p.locator('#draw-tool-layer text').count(), 1)
+    assert.equal(await planted(), 'not a drawing {', 'after a text')
+    await mouseDrag(p, [[2.5, 3.8], [3.5, 3.2]], { button: 'right' })
+    assert.equal(await strokeCount(), 0)
+    assert.equal(await planted(), 'not a drawing {', 'after an erase')
+    assert.equal(await p.locator(DIALOG).count(), 0, 'the dialog is shown once a page')
     await read((k) => Framework.removeData(k), key)
+  })
+
+  it('an index that cannot be read leaves every saved drawing as it is, and the solver is told this drawing was not saved', async () => {
+    await reload()
+    await read((k) => Framework.setData(k, 'not an index {'), INDEX_KEY)
+    await pickDraw()
+    await mouseDrag(p, [[2.5, 2.5], [3.5, 4.5]])
+    assert.equal(await strokeCount(), 1)
+    assert.match(await dialogText(), /could not save this puzzle's drawing: .*saved index/)
+    await closeDialog()
+    assert.equal(await saved(), null)
+    assert.equal(await read((k) => Framework.getData(k), INDEX_KEY), 'not an index {')
+    await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
   it('the page raised no error', () => {
