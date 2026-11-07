@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, shapeBox, shapeItem, nextShapeMode, readShapeMode, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -433,4 +433,69 @@ test('the paste report counts applied and skipped values, and says when the text
   assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
   assert.equal(pasteReport(1, 0), 'Pasted 1 setting.')
   assert.equal(pasteReport(3, 2), 'Pasted 3 settings; skipped 2 that did not check out.')
+})
+
+test('a shape drag snaps outward to the edges of the cells its start and end lie in, whichever way it runs', () => {
+  // r2c2 to r3c4, in board units: a cell is 64 wide from (0, 0).
+  assert.deepEqual(shapeBox([70, 100], [250, 140], false), [64, 64, 256, 192])
+  assert.deepEqual(shapeBox([250, 140], [70, 100], false), [64, 64, 256, 192])
+})
+
+test('a shape drag inside one cell boxes that cell', () => {
+  assert.deepEqual(shapeBox([10, 20], [40, 50], false), [0, 0, 64, 64])
+})
+
+test('a shape drag with Alt held follows the drag exactly, to a tenth of a board unit', () => {
+  assert.deepEqual(shapeBox([250.04, 140], [70.06, 100.12], true), [70.1, 100.1, 250, 140])
+})
+
+test('a shape item holds its kind, its shape, pen color number, width, opacity and its box', () => {
+  assert.deepEqual(shapeItem('ellipse', [64, 0, 192, 128], 2, 4.5, 60), { kind: 'shape', shape: 'ellipse', color: 2, width: 4.5, opacity: 60, box: [64, 0, 192, 128] })
+})
+
+test('a drawing of strokes, texts and shapes saved as JSON reads back equal, item for item', () => {
+  const drawing = [strokeItem([[1, 2], [64, 128]], 1, 6, 100), shapeItem('rect', [0, 0, 64, 64], 4, 6, 100), textItem([5, 5], 'a', 9, 20, 20), shapeItem('ellipse', [70.1, 100.1, 250, 140], 9, 16, 20)]
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
+})
+
+test('a saved shape that is not a shape item throws', () => {
+  const box = shapeItem('rect', [0, 0, 64, 64], 1, 6, 100)
+  for (const item of [{ ...box, shape: 'star' }, { ...box, shape: undefined }, { ...box, box: [0, 0, 64] }, { ...box, box: [0, 0, 64, '64'] }, { ...box, box: [64, 0, 0, 64] }, { ...box, box: [0, 64, 64, 0] }, { ...box, box: 'big' }, { ...box, color: 0 }, { ...box, width: 0.5 }, { ...box, opacity: 15 }]) {
+    assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
+  }
+})
+
+test('a drag across a shape\'s outline touches it, and one inside it that comes nowhere near the outline does not', () => {
+  for (const shape of ['rect', 'ellipse']) {
+    const item = shapeItem(shape, [0, 0, 256, 256], 1, 6, 100)
+    assert.equal(touchesItem(item, [128, -20], [128, 20]), true, `${shape}: across the top`)
+    assert.equal(touchesItem(item, [128, 4], [128, 4]), true, `${shape}: a press on the outline`)
+    assert.equal(touchesItem(item, [100, 100], [156, 156]), false, `${shape}: inside, clear of the outline`)
+    assert.equal(touchesItem(item, [-20, 128 + 300], [300, 128 + 300]), false, `${shape}: well outside`)
+  }
+})
+
+test('a shape is touched within the tolerance of its outline\'s edge, and not just past it', () => {
+  const item = shapeItem('rect', [0, 0, 256, 256], 1, 6, 100)
+  const reach = ERASE_TOLERANCE + 3
+  assert.equal(touchesItem(item, [128, -reach + 0.1], [140, -reach + 0.1]), true)
+  assert.equal(touchesItem(item, [128, -reach - 0.1], [140, -reach - 0.1]), false)
+})
+
+test('an ellipse is touched along its curve, not at the corners of its box', () => {
+  const ellipse = shapeItem('ellipse', [0, 0, 256, 256], 1, 6, 100)
+  const rect = shapeItem('rect', [0, 0, 256, 256], 1, 6, 100)
+  assert.equal(touchesItem(ellipse, [5, 5], [15, 15]), false, 'the ellipse is far from its box\'s corner')
+  assert.equal(touchesItem(rect, [5, 5], [15, 15]), true, 'the rectangle has its corner there')
+  // The circle's outline at 45 degrees, from the centre (128, 128) at radius 128.
+  const onCurve = 128 - 128 / Math.SQRT2
+  assert.equal(touchesItem(ellipse, [onCurve - 2, onCurve - 2], [onCurve - 2, onCurve - 2]), true)
+})
+
+test('the Shape button steps Off, Rectangle, Ellipse and back to Off', () => {
+  assert.deepEqual([nextShapeMode('off'), nextShapeMode('rect'), nextShapeMode('ellipse')], ['rect', 'ellipse', 'off'])
+})
+
+test('a saved Shape mode reads back, and a missing or bad one reads as Off', () => {
+  assert.deepEqual(['off', 'rect', 'ellipse', null, undefined, 'star', 3].map(readShapeMode), ['off', 'rect', 'ellipse', 'off', 'off', 'off', 'off'])
 })
