@@ -202,7 +202,7 @@
 - **shape** — a rectangle or an ellipse in a drawing, drawn as an outline by a drag in Shape mode, in a draw color, with its own
   width and opacity. Its box is exactly the drag's own box. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
 - **Shape mode** — what a left-drag with Draw draws: free lines (Off), rectangles or ellipses. The **Shape button**, between
-  Clear all and the gear, steps Off, Rectangle, Ellipse and shows the one in force; it is saved under `DrawTool_shape`. A click
+  Clear all and the gear, steps Off, Rectangle, Ellipse and draws the mode a press turns to, with a dot per mode filled for the one in force; the color buttons' swatches draw the one in force. It is saved under `DrawTool_shape`. A click
   still opens the text box in every mode.
 - **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
   (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('../draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -512,4 +512,37 @@ test('the Shape button steps Off, Rectangle, Ellipse and back to Off', () => {
 
 test('a saved Shape mode reads back, and a missing or bad one reads as Off', () => {
   assert.deepEqual(['off', 'rect', 'ellipse', null, undefined, 'star', 3].map(readShapeMode), ['off', 'rect', 'ellipse', 'off', 'off', 'off', 'off'])
+})
+
+// The sample drawn for each mode: a path for a free line, a rect, an ellipse.
+const SAMPLE = { off: /<path/, rect: /<rect/, ellipse: /<ellipse/ }
+const sampleOf = (svg) => svg.replace(/<circle[^>]*>/g, '')
+
+test('the Shape button draws the mode a press turns to, and a dot per mode, filled for the current one', () => {
+  for (const [current, next] of [['off', 'rect'], ['rect', 'ellipse'], ['ellipse', 'off']]) {
+    const icon = shapeButtonIcon(current)
+    assert.match(sampleOf(icon), SAMPLE[next], `${current}: shows ${next}`)
+    for (const other of Object.keys(SAMPLE).filter((m) => m !== next)) assert.doesNotMatch(sampleOf(icon), SAMPLE[other], `${current}: not ${other}`)
+    assert.equal((icon.match(/data-shape-dot='filled'/g) || []).length, 1, `${current}: one filled dot`)
+    assert.equal((icon.match(/data-shape-dot='outline'/g) || []).length, 2, `${current}: two outline dots`)
+    const dots = [...icon.matchAll(/data-shape-dot='(\w+)'/g)].map((m) => m[1])
+    assert.equal(dots[SHAPE_MODES.indexOf(current)], 'filled', `${current}: its own dot is filled`)
+  }
+})
+
+test('the Shape button picture is stroked 3 units wide, the weight of the Pen Tool Extras swatches', () => {
+  assert.match(shapeButtonIcon('off'), /stroke-width='3'/)
+})
+
+test('a color swatch draws the current mode: a line, a rectangle outline or an ellipse outline', () => {
+  assert.match(shapeSwatchSvg('off'), /<path d='M2 12H22'/)
+  assert.match(shapeSwatchSvg('rect'), /<rect/)
+  assert.match(shapeSwatchSvg('ellipse'), /<ellipse/)
+  for (const mode of SHAPE_MODES) assert.match(shapeSwatchSvg(mode), /fill='none'/, mode)
+})
+
+test('the Shape button names the current mode and what a press does', () => {
+  assert.equal(SHAPE_LABELS.off, 'Shape: off, free lines. Click for rectangle')
+  assert.equal(SHAPE_LABELS.rect, 'Shape: rectangle. Click for ellipse')
+  assert.equal(SHAPE_LABELS.ellipse, 'Shape: ellipse. Click for off, free lines')
 })
