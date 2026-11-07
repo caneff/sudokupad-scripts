@@ -69,11 +69,15 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
     await typeText(SPOTS[1], 'b')
     assert.equal(await bgCount(), 1)
     assert.deepEqual(await savedBgs(), { a: false, b: true })
-    const inside = await read(([bg, text]) => {
-      const box = document.querySelector(bg).getBoundingClientRect()
-      const t = [...document.querySelectorAll(text)].find((e) => e.textContent === 'b').getBoundingClientRect()
-      return box.left < t.left && box.right > t.right && box.top < t.top && box.bottom > t.bottom
-    }, [TEXT_BGS, draw.TEXTS])
+    // The box is the note's own element, and the text's box is measured by a range over its characters.
+    const inside = await read((bg) => {
+      const note = document.querySelector(bg)
+      const box = note.getBoundingClientRect()
+      const range = document.createRange()
+      range.selectNodeContents(note)
+      const t = range.getBoundingClientRect()
+      return note.textContent === 'b' && box.left < t.left && box.right > t.right && box.top < t.top && box.bottom > t.bottom
+    }, TEXT_BGS)
     assert.equal(inside, true, 'the box surrounds the text')
   })
 

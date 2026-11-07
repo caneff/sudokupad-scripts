@@ -54,7 +54,7 @@ test('spec 301: Text Annotation has its own colors, one Size slider and a settin
 
   // The site: the homepage summary and @description name the notes and the tool's own colors, the details page has a bullet for
   // each part, and the README still says every script but No Tab Letters has a settings entry.
-  const summary = /Text Annotation tool for typed notes on the board, such as cage sums, in colors of its own/
+  const summary = /Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own/
   assert.match(read('site/index.html'), summary)
   assert.match(read('draw-tool.user.js'), summary)
   const details = read('site/draw-tool.html')

@@ -19,9 +19,10 @@ export const DIGIT_BUTTON = '#control-normal'
 // What an earlier version drew: none of it is drawn now.
 export const STROKES = '#draw-tool-layer path'
 export const OLD_SHAPES = '#draw-tool-layer :is(rect:not(.draw-tool-text-bg), ellipse)'
-export const TEXT_BGS = '#draw-tool-layer rect.draw-tool-text-bg'
-export const TEXTS = '#draw-tool-layer text.draw-tool-text'
-export const TEXT_BOX = 'input.draw-tool-textbox'
+// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
+export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
+export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
+export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 export const SLIDERS = '.draw-tool-sliders'
 export const CLEAR_BUTTON = '.draw-tool-clear'
 export const SETTINGS_BUTTON = '.draw-tool-settings'
@@ -62,6 +63,15 @@ export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool
 export const puzzleKey = (p) => p.evaluate(() => String(Framework.app.puzzle.puzzleId || window.location.href))
 // The drawing saved for the puzzle on the page.
 export const saved = async (p) => p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p))
+
+// Each note drawn: its text, its computed color and its size in board units, its font size over the board's scale.
+export const noteLooks = (p) => p.evaluate((selector) => {
+  const scale = Framework.app.svgRenderer.getElem().getScreenCTM().a
+  return [...document.querySelectorAll(selector)].map((e) => {
+    const style = window.getComputedStyle(e)
+    return { text: e.textContent, color: style.color, size: Math.round(parseFloat(style.fontSize) / scale * 10) / 10 }
+  })
+}, TEXTS)
 
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 

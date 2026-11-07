@@ -194,9 +194,12 @@
   color button puts a color picker over each button, and a picked color recolors every note already made in that number,
   since a note saves the number. The digit keys 1 to 9 pick one. A color button shows "Aa" in its color.
 - **text** (a note) — a short string typed onto the notes, in a note color, with its own size (2 x the size slider's value + 8) and opacity (always 100 for a new note; a saved note keeps its own), centred on the
-  point clicked. It is typed in the **text box**, an input over the board that a click on the board opens, and a click on
-  a text reopens.
+  point clicked. It is typed in place, in the **text box**: the note's own element, open for typing, which a click anywhere
+  on the page but SudokuPad's controls (the control panel, the top bar, the menu and an open dialog) opens, and a click on a
+  text reopens. A text put on the board is pinned to its cells (stored in board units under `at`); one put off the board is
+  fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). Both are drawn at the
+  board's scale, in a layer over the page that sits above the digits and below SudokuPad's dialogs and menu.
 - **Size slider** — Text Annotation's one slider, on a light purple tray with a small and a large "A" at its ends. It sets the next text's size (1 to 16, step 0.5, default 6), saved under `DrawTool_width`, and never changes a text already made.
 - **Background** — the button between Clear all and the gear, on or off, and a setting for the NEXT text: a text made while it is on stores `bg: true` and is drawn with a page-colored rounded box behind it, and one made while it is off has none; a saved text with no `bg` has none. The state is remembered under `DrawTool_background`. Pressing it never changes a text already made, except the one open in the text box.
 - **erase** — Text Annotation's right click: the text the pointer is near is removed whole. Clear all erases every note, after asking.
-- **move** — Text Annotation's left-drag that starts on a text (the topmost): the text follows the pointer, and its stored coordinates change once, on release. A click with no drag opens the text box as any click does.
+- **move** — Text Annotation's left-drag that starts on a text (the topmost): the text follows the pointer, and its stored place changes once, on release, pinned or fixed by where it is dropped. It stops at the last point inside the window and clear of the controls. A click with no drag opens the text box as any click does.

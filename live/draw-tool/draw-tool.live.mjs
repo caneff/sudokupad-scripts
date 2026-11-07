@@ -71,12 +71,18 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
     assert.deepEqual(await texts(p), ['15'])
     assert.equal(await selected(), 0, 'no cell selected')
     assert.equal(await tool(), 'draw')
-    const order = await p.evaluate(() => {
-      const children = [...Framework.app.svgRenderer.getElem().children].map((e) => e.id)
-      return children.indexOf('draw-tool-layer') - children.indexOf('cell-values')
-    })
-    assert.equal(order > 0, true, 'the layer comes after the digits in the board SVG')
-    assert.equal(await p.evaluate(() => Framework.app.svgRenderer.getElem().lastElementChild.id), 'draw-tool-layer')
+    // The note is over r3c3's given 8. The layer takes no pointer, so the note is made hit-testable for the one check.
+    const onTop = await p.evaluate((selector) => {
+      const note = document.querySelector(selector)
+      const { x, y, width, height } = note.getBoundingClientRect()
+      note.style.pointerEvents = 'auto'
+      try {
+        return document.elementFromPoint(x + width / 2, y + height / 2) === note
+      } finally {
+        note.style.pointerEvents = ''
+      }
+    }, TEXTS)
+    assert.equal(onTop, true, 'the note is drawn above the digit under it')
   })
 
   it('a drag that starts on no note draws nothing and selects no cell', async () => {

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
 const keydown = (eventPhase) => ({ type: 'keydown', eventPhase })
@@ -318,12 +318,44 @@ test('a drag across a text touches it, and one that passes clear of it does not'
   assert.equal(touchesText(sum, [0, 0], [200, 0]), false, 'above it')
 })
 
-test('movedItem adds the offset to a text\'s anchor, rounded to a tenth, and keeps the rest of the item', () => {
+// A board drawn at twice its size with its corner at (100, 50) on the screen: board units from (0, 0) to (600, 600).
+const toBoard = ([x, y]) => [(x - 100) / 2, (y - 50) / 2]
+const toScreen = ([x, y]) => [x * 2 + 100, y * 2 + 50]
+const board = { box: { left: 100, top: 50, right: 1300, bottom: 1250 }, toBoard }
+
+test('a note placed on the board is stored in board units, rounded to a tenth, and keeps the rest of the item', () => {
   const note = textItem([50, 60], 'hi', 3, 20, true)
-  assert.deepEqual(movedItem(note, [0.04, 10]).at, [50, 70])
-  assert.deepEqual(movedItem(note, [1.26, -2.04]).at, [51.3, 58])
-  assert.deepEqual({ ...movedItem(note, [10, 10]), at: note.at }, note)
+  assert.deepEqual(placedItem(note, [300.06, 250], board), { ...note, at: [100, 100] })
+  assert.deepEqual(placedItem(note, [100, 1250], board).at, [0, 600], 'on the board\'s edge')
   assert.deepEqual(note.at, [50, 60])
+})
+
+test('a note placed off the board is stored as a fixed screen point in its own key, with no board point an older version could read', () => {
+  const note = textItem([50, 60], 'hi', 3, 20, true)
+  const off = placedItem(note, [40.04, 700], board)
+  assert.deepEqual(off, { kind: 'text', color: 3, size: 20, opacity: 100, bg: true, text: 'hi', fixed: [40, 700] })
+  assert.equal('at' in off, false)
+  assert.deepEqual(placedItem(off, [300, 250], board), { ...note, at: [100, 100] }, 'moved back onto the board, it is pinned again')
+})
+
+test('the board view of a note gives an off-board note its board point under the screen point, and leaves an on-board note as it is', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  const off = placedItem(on, [40, 700], board)
+  assert.deepEqual(boardView(on, toBoard), on)
+  assert.deepEqual(boardView(off, toBoard).at, [-30, 325])
+  assert.equal(textAt([on, off].map((item) => boardView(item, toBoard)), toBoard([40, 700])), 1)
+})
+
+test('a note\'s screen point is its fixed point off the board, and its board point taken to the screen on it', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  assert.deepEqual(screenPoint(on, toScreen), [200, 170])
+  assert.deepEqual(screenPoint(placedItem(on, [40, 700], board), toScreen), [40, 700])
+})
+
+test('saved off-board notes read back, and a note with both a board point and a fixed point, or neither, does not', () => {
+  const off = placedItem(sum, [40, 700], board)
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify([sum, off]))), [sum, off])
+  for (const saved of [[{ ...off, at: [1, 1] }], [{ ...sum, at: undefined }], [{ ...off, fixed: [1] }]]) assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
 })
 
 test('a note with a background answers to the box drawn behind it: a click and an erase just outside its text land on it', () => {
