@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.21.0
+// @version      0.21.1
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.21.0'
+  const VERSION = '0.21.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -351,6 +351,26 @@
   const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(item.fixed) } : item
 
   const screenPoint = (item, toScreen) => item.fixed ?? toScreen(item.at)
+
+  // The gap left to the window's edge and to a control, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
+  const REACH_MARGIN_PX = 1
+
+  // The middle nearest `middle` for a note box of `size` (width, height) that lies wholly inside `win` and overlaps none of the `blockers`, all screen pixels.
+  // A box too big for the window is centred on it; with no free point the box is kept inside the window alone.
+  function reachablePoint ([x, y], [width, height], win, blockers) {
+    const [halfWidth, halfHeight] = [width / 2, height / 2]
+    const clamp = (value, low, high) => low > high ? (low + high) / 2 : Math.min(high, Math.max(low, value))
+    const inside = ([px, py]) => [clamp(px, win.left + halfWidth + REACH_MARGIN_PX, win.right - halfWidth - REACH_MARGIN_PX), clamp(py, win.top + halfHeight + REACH_MARGIN_PX, win.bottom - halfHeight - REACH_MARGIN_PX)]
+    const blocked = ([px, py]) => blockers.some((b) => px + halfWidth > b.left && px - halfWidth < b.right && py + halfHeight > b.top && py - halfHeight < b.bottom)
+    const start = inside([x, y])
+    if (!blocked(start)) return start
+    const free = blockers
+      .flatMap((b) => [[b.left - halfWidth - REACH_MARGIN_PX, start[1]], [b.right + halfWidth + REACH_MARGIN_PX, start[1]], [start[0], b.top - halfHeight - REACH_MARGIN_PX], [start[0], b.bottom + halfHeight + REACH_MARGIN_PX]])
+      .map(inside)
+      .filter((point) => !blocked(point))
+    const distance = (point) => Math.hypot(point[0] - start[0], point[1] - start[1])
+    return free.reduce((best, point) => distance(point) < distance(best) ? point : best, free[0] ?? start)
+  }
 
   // The note with its box's bottom right dragged to screen point `corner`, its top left kept at screen point `topLeft`. The box is in board units on the
   // board and off it, since a note off the board is drawn at the board's scale too; the note's point moves to the box's new middle, pinned or fixed as it was.
@@ -902,7 +922,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1453,8 +1473,33 @@
       const box = contentBox(note)
       item[DRAWN_SIZE] = [box.right - box.left, box.bottom - box.top].map((side) => side / map.scale)
     }
+    if (keepFixedReachable(notes, map)) save()
     if (editing) showEditing(map)
     showHover()
+  }
+
+  // The parts of SudokuPad's layout a fixed note must stay clear of; the menu drawer and dialogs are open only for a while, so a note is not moved for them.
+  const LAYOUT_CONTROLS = '#controls, .topbar'
+
+  // A fixed note the window or the layout has put out of reach is moved, and its new point kept, to the nearest point inside the window and clear of the
+  // controls. Whether any note moved.
+  function keepFixedReachable (notes, map) {
+    const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+    const blockers = [...document.querySelectorAll(LAYOUT_CONTROLS)].map((element) => element.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+    let moved = false
+    for (const note of notes) {
+      const item = noteItems.get(note)
+      if (!item.fixed) continue
+      const { width, height } = note.getBoundingClientRect()
+      const fixed = roundPoint(reachablePoint(item.fixed, [width, height], win, blockers))
+      if (fixed[0] === item.fixed[0] && fixed[1] === item.fixed[1]) continue
+      const placed = { ...item, fixed }
+      drawing[drawing.indexOf(item)] = placed
+      noteItems.set(note, placed)
+      styleNote(note, placed, map)
+      moved = true
+    }
+    return moved
   }
 
   // Restyles the open note and puts the handle on its bottom right corner.
@@ -1951,6 +1996,7 @@
     window.addEventListener('contextmenu', suppressMenu)
     installColorPickers()
     window.addEventListener('blur', endGesture)
+    window.addEventListener('resize', placeSoon)
     installSliderGuards(`.${SLIDERS_CLASS}`)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
