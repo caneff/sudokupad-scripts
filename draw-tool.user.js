@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.4
+// @version      0.14.6
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.4'
+  const VERSION = '0.14.6'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -45,7 +45,12 @@
   const COLORS_KEY = 'DrawTool_colors'
   // The CSS variable that holds draw color n: the items, the color buttons and the text box all read it.
   const colorVar = (n) => `--draw-tool-color-${n}`
-  // Copied from Pen Tool Extras: SudokuPad's own pen colors, for a color that cannot be read.
+  // <lib:palette>
+  // Generated from lib/palette.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads parseColor, darkenColor and toOklab from color-math.
+  /* global parseColor, darkenColor, toOklab */
+  // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
     2: '#e87cf1',
@@ -57,18 +62,122 @@
     8: '#7c7c7c',
     9: '#000000'
   })
+  const PALETTE_PEN_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
+  // least saturated darkened default colors are above 0.08.
+  const GREY_CHROMA = 0.04
+  // One page preset per cell color page, up to three, then SudokuPad's own colors.
+  const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
+  const SUDOKUPAD_PRESET = 'sudokupad'
+  const PALETTE_PRESET_LABELS = {
+    'page-1': 'Darker page 1',
+    'page-2': 'Darker page 2',
+    'page-3': 'Darker page 3',
+    [SUDOKUPAD_PRESET]: 'SudokuPad colors'
+  }
+  const COLOR_TOOL_POLL_MS = 100
+
+  // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
+  const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
+
+  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so pen and draw buttons line up with the cell buttons.
+  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
+  function darkerPageColors (keys, readCell) {
+    const colors = {}
+    const missing = []
+    const derived = []
+    PALETTE_PEN_NUMBERS.forEach((n) => {
+      const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
+      if (rgb) {
+        colors[n] = darkenColor(rgb)
+        derived.push(n)
+      } else {
+        colors[n] = SUDOKUPAD_PEN_COLORS[n]
+        missing.push(n)
+      }
+    })
+    let darkest = null
+    let darkestLightness = Infinity
+    for (const n of derived) {
+      const [lightness, a, b] = toOklab(parseColor(colors[n]))
+      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
+        darkest = n
+        darkestLightness = lightness
+      }
+    }
+    if (darkest) colors[darkest] = '#000000'
+    return { colors, missing }
+  }
+
+  function paletteOptions (pageCount) {
+    return [...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+  }
+
+  // `pages` is the palette's pages of color keys, and `readCell` reads a key's color as CSS text.
+  function paletteColors (preset, pages, readCell) {
+    if (preset === SUDOKUPAD_PRESET) return SUDOKUPAD_SET
+    const page = paletteOptions(pages.length).indexOf(preset)
+    if (page === -1) throw new RangeError(`palette: ${preset} is not a preset of this palette`)
+    return { ...darkerPageColors(pages[page], readCell), preset }
+  }
+
+  const colorTool = () => Framework.app?.tools?.colour
+
+  // `init` assigns the page and sets the `--cell-color-<key>` variables in one synchronous step, so a palette on the tool means the variables are set too (the stylesheet's own
+  // values for them exist earlier and say nothing about a custom palette).
+  function readyColorTool () {
+    const tool = colorTool()
+    const pages = tool?.palette?.pages
+    return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
+  }
+
+  // No time limit: until the color tool is ready the caller shows SudokuPad's own colors.
+  function waitForColorTool () {
+    return new Promise((resolve) => {
+      const check = () => {
+        const tool = readyColorTool()
+        if (tool) resolve(tool)
+        else setTimeout(check, COLOR_TOOL_POLL_MS)
+      }
+      check()
+    })
+  }
+
+  // The pages of cell color keys of the palette in force, or none until the color tool has one.
+  function palettePages () {
+    const palette = colorTool()?.palette
+    if (!palette) return []
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    return palette.pages
+  }
+
+  // A custom palette can hold any CSS color (`#f00`, `red`, `hsl()`) and the variable reads back as written, so the browser turns it into `rgb()` text on a probe.
+  // '' for a value it rejects or a variable with none.
+  function readRootColor (name) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    const probe = document.createElement('span')
+    probe.style.color = value
+    if (!probe.style.color) return ''
+    document.body.appendChild(probe)
+    try {
+      return window.getComputedStyle(probe).color
+    } finally {
+      probe.remove()
+    }
+  }
+
+  const readPenColor = (n) => readRootColor(`--puzzle-pencolor-${n}`)
+  // The raw `--cell-color-<key>` value, not the 60% opacity it shows with on the grid. SudokuPad sets the variable of every key in the palette, so any page reads.
+  const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
+  /* eslint-enable no-unused-vars */
+  // </lib:palette>
   const HEX_COLOR = /^#([0-9a-f]{6})$/
   // Preset ids; the labels are what the dialog shows.
   const PEN_PRESET = 'pen'
-  const PAGE_PRESETS = [1, 2, 3].map((page) => `page-${page}`)
-  const SUDOKUPAD_PRESET = 'sudokupad'
   const PRESET_LABELS = {
     [PEN_PRESET]: 'Pen colors',
-    ...Object.fromEntries(PAGE_PRESETS.map((id, i) => [id, `Darker page ${i + 1}`])),
-    [SUDOKUPAD_PRESET]: 'SudokuPad colors'
+    ...PALETTE_PRESET_LABELS
   }
-  // The OKLCH chroma under which a darkened color counts as grey (Pen Tool Extras' value).
-  const GREY_CHROMA = 0.04
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs), as Pen Tool Extras' pen buttons do.
   const HOLD_TO_EDIT_MS = 1000
   const WIDTH_KEY = 'DrawTool_width'
@@ -416,40 +525,13 @@
   // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
   const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
 
-  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the buttons line up.
-  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
-  // A slot with no usable color keeps SudokuPad's own pen color.
-  function darkerPageColors (keys, readCell) {
-    const colors = {}
-    const darkened = []
-    COLOR_NUMBERS.forEach((n) => {
-      const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
-      colors[n] = rgb ? darkenColor(rgb) : SUDOKUPAD_PEN_COLORS[n]
-      if (rgb) darkened.push(n)
-    })
-    let darkest = null
-    let darkestLightness = Infinity
-    for (const n of darkened) {
-      const [lightness, a, b] = toOklab(parseColor(colors[n]))
-      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
-        darkest = n
-        darkestLightness = lightness
-      }
-    }
-    if (darkest) colors[darkest] = '#000000'
-    return colors
-  }
-
-  // The presets the palette in force offers: one Darker page per cell color page, up to three, between the pen colors and SudokuPad's own.
-  const presetOptions = (pageCount) => [PEN_PRESET, ...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+  // The presets the palette in force offers: the pen colors, then the palette's own.
+  const presetOptions = (pageCount) => [PEN_PRESET, ...paletteOptions(pageCount)]
 
   // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
   function presetColors (preset, pages, readCell, readPen) {
-    if (preset === SUDOKUPAD_PRESET) return { ...SUDOKUPAD_PEN_COLORS }
     if (preset === PEN_PRESET) return copiedPenColors(readPen)
-    const page = PAGE_PRESETS.indexOf(preset)
-    if (page === -1 || page >= pages.length) throw new RangeError(`draw-tool: ${preset} is not a preset of this palette`)
-    return darkerPageColors(pages[page], readCell)
+    return { ...paletteColors(preset, pages, readCell).colors }
   }
 
   // Copy and Paste carry the colors and both slider values, and not the drawings or the color picked.
@@ -561,7 +643,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -769,32 +851,6 @@
     colors = next
     Framework.setData(COLORS_KEY, colors)
     showColors()
-  }
-
-  // The browser turns a color of any CSS form into rgb() text. A value it rejects, or none, reads as unreadable.
-  function readRootColor (name) {
-    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-    const probe = document.createElement('span')
-    probe.style.color = value
-    if (!probe.style.color) return undefined
-    document.documentElement.appendChild(probe)
-    try {
-      return window.getComputedStyle(probe).color
-    } finally {
-      probe.remove()
-    }
-  }
-
-  const readPenColor = (n) => readRootColor(`--puzzle-pencolor-${n}`)
-  // The raw `--cell-color-<key>` values, not the 60% opacity they show with on the grid. SudokuPad sets the variable of every key in the palette, so any page reads.
-  const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
-
-  // The pages of cell color keys of the palette in force, or none until the color tool has one.
-  function palettePages () {
-    const palette = Framework.app.tools?.colour?.palette
-    if (!palette) return []
-    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
-    return palette.pages
   }
 
   // A slider sets only the next item and is saved for the next visit, and a paste sets it as a move of the slider would.
