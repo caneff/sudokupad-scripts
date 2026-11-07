@@ -347,18 +347,24 @@ test(`${CBD} lists what the script adds, one item per feature`, () => {
   assert.match(lines[2], /red circle/)
 })
 
-test(`${CBD} describes the settings dialog in text, with no picture`, () => {
+test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its text`, () => {
   const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
-  assert.deepEqual(imgs(m[1]), [])
+  const found = imgs(m[1])
+  assert.equal(found.length, 1, 'the settings dialog section is not one picture')
+  assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/color-by-digit-dialog-annotated.png"`))
+  const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
+  for (const label of ['Top row', 'Profile list', 'Name box', 'Group rows', 'Open group', 'Bottom row']) {
+    assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
+  }
   const text = plain(m[1])
-  for (const word of ['profiles', 'groups', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
+  for (const word of ['profiles', 'groups', 'tags', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
 })
 
 test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, () => {
   assert.deepEqual(section(CBD, 'Good to know'), [
     'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
-    "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had, and undoing a profile switch does not bring that color back."
+    "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had."
   ])
 })
 
