@@ -441,33 +441,34 @@
 
   const shownGroups = (groups, max) => groups.slice(0, max).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
 
-  // The digits the button's chips show in `mode`, each with the cell group and the digit group it falls in (undefined when a profile does not cover it).
-  // Cell and Off show the cell profile's groups, Digit the digit profile's. Both shows as many chips as the larger profile has groups, capped,
-  // on the digits that between them reach the most groups of the two profiles; a tie goes to the set sharing most digits with the Cell strip, then the lowest.
-  function iconChips (mode, cellGroups, digitGroups) {
+  // The chips a profile pair draws in `mode`: each a digit with the cell group and the digit group it falls in (undefined when a profile does not cover it).
+  // Both takes the set of digits that reaches the most groups of the two profiles; see GLOSSARY.md, Cell strip.
+  function shownChips (mode, cellGroups, digitGroups) {
     const cellKeyOf = keyOfDigitMap(cellGroups)
     const digitKeyOf = keyOfDigitMap(digitGroups)
     const chipOf = (digit) => ({ digit, cellKey: cellKeyOf[digit], digitKey: digitKeyOf[digit] })
-    const cellStrip = shownGroups(cellGroups, CHIP_MAX_GROUPS).map((g) => g.digit)
-    if (mode !== 'both') return (mode === 'digit' ? shownGroups(digitGroups, CHIP_MAX_GROUPS) : shownGroups(cellGroups, CHIP_MAX_GROUPS)).map((g) => chipOf(g.digit))
+    const strip = shownGroups(cellGroups, CHIP_MAX_GROUPS).map((g) => g.digit)
+    if (mode !== 'both') return shownGroups(mode === 'digit' ? digitGroups : cellGroups, CHIP_MAX_GROUPS).map((g) => chipOf(g.digit))
     const count = Math.min(Math.max(cellGroups.length, digitGroups.length), CHIP_MAX_GROUPS)
-    const covered = DIGITS.filter((d) => d !== '0' && (d in cellKeyOf || d in digitKeyOf))
-    const scoreOf = (set) => new Set(set.map((d) => cellKeyOf[d]).filter((k) => k !== undefined)).size + new Set(set.map((d) => digitKeyOf[d]).filter((k) => k !== undefined)).size
-    const sharedOf = (set) => set.filter((d) => cellStrip.includes(d)).length
+    // 0 is set aside, as in a group's shown digit, unless a group holds nothing else.
+    const zeroAlone = [...cellGroups, ...digitGroups].some((g) => g.digits.length === 1 && g.digits[0] === '0')
+    const covered = DIGITS.filter((d) => (d in cellKeyOf || d in digitKeyOf) && (d !== '0' || zeroAlone))
+    const reached = (set, keyOf) => new Set(set.map((d) => keyOf[d]).filter((k) => k !== undefined)).size
+    // One number: the groups reached outrank the digits shared with the Cell strip, which at most three digits share.
+    const rankOf = (set) => (reached(set, cellKeyOf) + reached(set, digitKeyOf)) * 10 + set.filter((d) => strip.includes(d)).length
     let best = null
+    let bestRank = -1
+    // Sets are visited in ascending order, so a set replaces the best only on a strictly higher rank and the lowest of a tie stays.
     const visit = (set, from) => {
       if (set.length === count) {
-        const rank = [scoreOf(set), sharedOf(set)]
-        if (!best || rank[0] > best.rank[0] || (rank[0] === best.rank[0] && rank[1] > best.rank[1])) best = { set: [...set], rank }
+        if (rankOf(set) > bestRank) { best = [...set]; bestRank = rankOf(set) }
         return
       }
       for (let i = from; i < covered.length; i++) visit([...set, covered[i]], i + 1)
     }
-    // Sets are visited in ascending order, so a set only replaces the best on a strictly higher rank and the lowest of a tie stays.
     visit([], 0)
-    // The same digits as the Cell strip (a synced profile) keep its order, so Both then shows the Cell strip itself.
-    const sameAsStrip = best && best.set.length === cellStrip.length && best.set.every((d) => cellStrip.includes(d))
-    return (best && !sameAsStrip ? best.set : cellStrip).map(chipOf)
+    // A synced profile keeps the Cell strip's own order, so Both shows the Cell strip.
+    return (best && !sameGroups(cellGroups, digitGroups) ? best : strip).map(chipOf)
   }
 
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
@@ -620,8 +621,8 @@
   // and stays above the arrow box in the lower right.
   const ICON_CELL = 38
   function iconRun (mode, groups, colorOf, digitProfileGroups) {
-    const count = iconChips(mode, groups, digitProfileGroups ?? groups).length
-    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, digitProfileGroups, x: 50 - count * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
+    const chips = shownChips(mode, groups, digitProfileGroups ?? groups)
+    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, chips, x: 50 - chips.length * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
   }
 
   // SudokuPad's own app buttons put their icon in <div class="icon">.
@@ -743,15 +744,18 @@
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
-  // A run of joined cells, one per shown group: fills first, then single dividers and one outline over them, so no line is doubled.
+  // A run of joined cells, one per shown chip (`chips` when given, else the mode's own pick): fills first, then single dividers and one outline over them, so no line is doubled.
   // `size` is one cell's width, in pixels or in the units of an enclosing SVG, which `x` and `y` place it in.
-  function renderChips (groups, colorOf, { size, style = 'cell', x, y, digitProfileGroups = groups }) {
-    const shown = iconChips(style, groups, digitProfileGroups)
+  function renderChips (groups, colorOf, { size, style = 'cell', x, y, digitProfileGroups = groups, chips = shownChips(style, groups, digitProfileGroups) }) {
+    const shown = chips
     const width = shown.length * RUN_CELL
     const { line } = CHIP_LOOKS[style]('')
     const cells = shown.map(({ digit, cellKey, digitKey }, i) => {
       const key = style === 'digit' ? digitKey : cellKey
-      const { fill, ink } = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitKey === undefined ? '' : colorOf(digitKey))
+      const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitKey === undefined ? '' : colorOf(digitKey))
+      // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
+      const fill = cellKey === undefined ? '#fff' : look.fill
+      const ink = look.ink
       return `<g data-role="chip" data-key="${esc(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${esc(fill)}"/>` +
         `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${esc(ink)}">${esc(digit)}</text></g>`
     }).join('')
@@ -929,7 +933,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, iconChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, iconChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -1710,18 +1710,6 @@ test('iconHtml draws the run of cells in the mode\'s look, with no word strip, a
   }
 })
 
-test('iconHtml with a separate digit profile shows the cell profile\'s numbers in Cell, Digit and Both, the digit color from the digit profile', () => {
-  const palette = { 1: 'rgb(200, 0, 0)', 5: 'rgb(0, 200, 0)', 9: 'rgb(0, 0, 200)', 7: 'rgb(200, 200, 0)', 4: 'rgb(200, 0, 200)' }
-  const colorOf = (key) => palette[key]
-  const shade = (key) => darkenColor(parseColor(palette[key]))
-  const cells = (mode) => runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml(mode, LOW, colorOf, ENTROPIC))[0])
-  // LOW's chips are 1, 5, 9; ENTROPIC gives those digits the keys 7, 4, 9.
-  for (const mode of ['cell', 'digit', 'both']) assert.deepEqual(cells(mode).map((c) => c.digit), ['1', '5', '9'], mode)
-  assert.deepEqual(cells('digit').map((c) => c.ink), [shade('7'), shade('4'), shade('9')])
-  assert.deepEqual(cells('both').map((c) => [c.fill, c.ink]), [[palette[1], shade('7')], [palette[5], shade('4')], [palette[9], shade('9')]])
-  assert.deepEqual(cells('digit').map((c) => c.fill), ['#fff', '#fff', '#fff'])
-})
-
 test('the button is titled and labelled with its mode in words', () => {
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
   let spec
@@ -1779,58 +1767,76 @@ test('the profile list\'s delete and + New profile are plain text buttons, not b
   assert.match(plain, /border: none/)
 })
 
-// iconChips: the digits the button's chips show, per mode (#389). Each chip names the cell group and digit group its digit falls in.
+// shownChips: the digits the button's chips show, per mode (#389). Each chip names the cell group and digit group its digit falls in.
 const digitsOf = (chips) => chips.map((c) => c.digit)
 
-test('iconChips: Cell and Off pick one digit per cell-profile group, Digit one per digit-profile group', () => {
-  for (const mode of ['cell', 'off']) assert.deepEqual(digitsOf(iconChips(mode, LOW, ODD)), ['1', '5', '9'], mode)
-  assert.deepEqual(digitsOf(iconChips('digit', LOW, ODD)), ['5', '4'])
+test('shownChips: Cell and Off pick one digit per cell-profile group, Digit one per digit-profile group', () => {
+  for (const mode of ['cell', 'off']) assert.deepEqual(digitsOf(shownChips(mode, LOW, ODD)), ['1', '5', '9'], mode)
+  assert.deepEqual(digitsOf(shownChips('digit', LOW, ODD)), ['5', '4'])
 })
 
-test('iconChips: Both with Low/5/High cells and Odd/Even digits shows 1 5 6, the lowest of the tied sets covering three cell and two digit groups', () => {
-  assert.deepEqual(digitsOf(iconChips('both', LOW, ODD)), ['1', '5', '6'])
+test('shownChips: Both with Low/5/High cells and Odd/Even digits shows 1 5 6, the lowest of the tied sets covering three cell and two digit groups', () => {
+  assert.deepEqual(digitsOf(shownChips('both', LOW, ODD)), ['1', '5', '6'])
 })
 
-test('iconChips: Both names each chip\'s cell group and digit group', () => {
-  assert.deepEqual(iconChips('both', LOW, ODD), [
+test('shownChips: Both names each chip\'s cell group and digit group', () => {
+  assert.deepEqual(shownChips('both', LOW, ODD), [
     { digit: '1', cellKey: '1', digitKey: '1' }, { digit: '5', cellKey: '5', digitKey: '1' }, { digit: '6', cellKey: '9', digitKey: '2' }])
 })
 
-test('iconChips: Both with a synced profile shows the Cell strip', () => {
+test('shownChips: Both with a synced profile shows the Cell strip', () => {
   for (const groups of [LOW, ODD, ENTROPIC, MODULAR, EACH_DIGIT]) {
-    assert.deepEqual(digitsOf(iconChips('both', groups, groups)), digitsOf(iconChips('cell', groups, groups)))
+    assert.deepEqual(digitsOf(shownChips('both', groups, groups)), digitsOf(shownChips('cell', groups, groups)))
   }
 })
 
-test('iconChips: Both with a one-group digit profile takes k from the larger profile and still covers every cell group', () => {
+test('shownChips: Both with a one-group digit profile takes k from the larger profile and still covers every cell group', () => {
   const one = [{ key: 'z', digits: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] }]
-  assert.deepEqual(digitsOf(iconChips('both', LOW, one)), ['1', '5', '9'])
+  assert.deepEqual(digitsOf(shownChips('both', LOW, one)), ['1', '5', '9'])
   // the one cell group shows 5; with k = 2 the set needs an even digit too, and {2,5} is the lowest to keep the 5
-  assert.deepEqual(digitsOf(iconChips('both', one, ODD)), ['2', '5'])
+  assert.deepEqual(digitsOf(shownChips('both', one, ODD)), ['2', '5'])
 })
 
-test('iconChips: Both breaks a tie by the most digits shared with the Cell strip before the lowest digits', () => {
+test('shownChips: Both breaks a tie by the most digits shared with the Cell strip before the lowest digits', () => {
   // Cell strip is 1 5. Every one-from-each pair scores 4; {1,4} is the lowest, {1,5} shares two digits with the strip.
   const cells = [{ key: 'a', digits: ['1', '2', '3'] }, { key: 'b', digits: ['4', '5', '6'] }]
   const digits = [{ key: 'c', digits: ['1', '2', '3'] }, { key: 'd', digits: ['4', '5', '6'] }]
-  assert.deepEqual(digitsOf(iconChips('cell', cells, digits)), ['1', '5'])
-  assert.deepEqual(digitsOf(iconChips('both', cells, digits)), ['1', '5'])
+  assert.deepEqual(digitsOf(shownChips('cell', cells, digits)), ['1', '5'])
+  assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '5'])
 })
 
-test('iconChips: Both takes the lowest sorted set when the tied sets share equally with the Cell strip', () => {
+test('shownChips: Both takes the lowest sorted set when the tied sets share equally with the Cell strip', () => {
   // Cell strip is 1 7. {1,8} and {2,7} both score 4 and share one digit with it; {1,7} scores 3.
   const cells = [{ key: 'a', digits: ['1', '2', '3', '4'] }, { key: 'b', digits: ['5', '6', '7', '8', '9'] }]
   const digits = [{ key: 'c', digits: ['1', '7'] }, { key: 'd', digits: ['2', '8'] }]
-  assert.deepEqual(digitsOf(iconChips('cell', cells, digits)), ['1', '7'])
-  assert.deepEqual(digitsOf(iconChips('both', cells, digits)), ['1', '8'])
+  assert.deepEqual(digitsOf(shownChips('cell', cells, digits)), ['1', '7'])
+  assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '8'])
 })
 
-test('iconChips caps at three chips', () => {
-  assert.equal(iconChips('cell', EACH_DIGIT, EACH_DIGIT).length, 3)
-  assert.equal(iconChips('both', EACH_DIGIT, EACH_DIGIT).length, 3)
+test('shownChips caps at three chips', () => {
+  assert.equal(shownChips('cell', EACH_DIGIT, EACH_DIGIT).length, 3)
+  assert.equal(shownChips('both', EACH_DIGIT, EACH_DIGIT).length, 3)
 })
 
 test('iconHtml with separate profiles shows each mode\'s own digits: Cell and Off the cell profile, Digit the digit profile, Both the most variety', () => {
   const cells = (mode) => runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml(mode, LOW, colorFor, ODD))[0]).map((c) => c.digit)
   assert.deepEqual(['cell', 'off', 'digit', 'both'].map(cells), [['1', '5', '9'], ['1', '5', '9'], ['5', '4'], ['1', '5', '6']])
+})
+
+test('iconHtml draws a Both chip for a digit in no cell group white, and centres a run of two chips differently from three', () => {
+  const palette = { 1: 'rgb(200, 0, 0)', 9: 'rgb(0, 0, 200)' }
+  const cells = [{ key: '1', digits: ['1'] }]
+  const run = (mode, g, d) => /<svg data-role="chips"[^>]*>/.exec(iconHtml(mode, g, (k) => palette[k], d))[0]
+  assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml('both', cells, (k) => palette[k], [{ key: '1', digits: ['1'] }, { key: '9', digits: ['2'] }]))[0]).map((c) => c.fill), [palette[1], '#fff'])
+  assert.match(run('digit', LOW, ODD), /x="12"/)
+  assert.match(run('both', LOW, ODD), /x="-7"/)
+})
+
+test('shownChips: Both with unsynced profiles lists its chips in ascending digit order, and may pick 0', () => {
+  const cells = [{ key: 'a', digits: ['7', '8', '9'] }, { key: 'b', digits: ['1', '2', '3'] }]
+  const digits = [{ key: 'c', digits: ['1', '2', '3', '4', '5'] }, { key: 'd', digits: ['6', '7', '8', '9'] }]
+  assert.deepEqual(digitsOf(shownChips('cell', cells, digits)), ['9', '1'])
+  assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '9'])
+  // A cell group of only 0 is reached: k is 2, and 0 is the one digit of the group a.
+  assert.deepEqual(digitsOf(shownChips('both', [{ key: 'a', digits: ['0'] }, { key: 'b', digits: ['1', '2'] }], ODD)), ['0', '1'])
 })
