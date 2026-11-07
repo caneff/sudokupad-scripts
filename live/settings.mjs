@@ -21,11 +21,15 @@ export async function openSettings (p) {
 }
 
 // Opens a script's settings dialog the way a user finds it (its entry, named `entryText`, in the Experimental group) and waits for
-// its editor, the element matching `editorSel`.
+// its editor, the element matching `editorSel`, to come to rest: SudokuPad slides a dialog in with CSS animations on it and its
+// overlay, so a point read before they end is off by up to the dialog's height.
 export async function openScriptDialog (p, entryText, editorSel) {
   await openSettings(p)
   await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: entryText }).first().click()
-  await p.locator(editorSel).waitFor({ state: 'visible' })
+  const editor = p.locator(editorSel)
+  await editor.waitFor({ state: 'visible' })
+  await editor.evaluate((el) => Promise.all([el.closest('.dialog'), el.closest('.dialog-overlay')]
+    .flatMap((e) => e.getAnimations()).map((a) => a.finished)))
 }
 
 // The open dialog's button whose whole label is `text`.
