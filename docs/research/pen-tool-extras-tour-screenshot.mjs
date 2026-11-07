@@ -6,8 +6,8 @@
 //   3. one cell edge clicked again and again, stepping X, circle and the two arrows, then one grid corner, stepping X and circle
 //   4. the Thickness slider moved, every line and mark thicker and then thinner; the Opacity slider moved, the whole pen layer fainter and then firmer
 //   5. a line across cells colored dark grey with White outlines off and then on, the box switched in the settings dialog
-//   6. one middle click on the first line, which erases the whole of it
-// Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the middle click lands,
+//   6. one right click on the first line, which erases the whole of it
+// Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the right click lands,
 // since a screenshot draws no pointer. Each line, mark and hold is checked to have landed, and the last state holds longer than the rest.
 // The GIF joins with a 256-color palette and dithering, so the Opacity slider's gradient does not band. Needs python3 with Pillow.
 // Run from the repo root: node docs/research/pen-tool-extras-tour-screenshot.mjs
@@ -182,12 +182,12 @@ await frame('White outlines off', 1500)
 await setOutline(true)
 await frame('White outlines on', 1500)
 
-// 6. One middle click erases the whole first line.
+// 6. One right click erases the whole first line.
 const before = await penCount()
 const [lx, ly] = await gridPoint(p, [TEAL_ROW, 1.5])
 await ring(lx, ly)
-await frame('Middle-click a line', 1200)
-await p.mouse.click(lx, ly, { button: 'middle' })
+await frame('Right-click a line', 1200)
+await p.mouse.click(lx, ly, { button: 'right' })
 await unring()
 await park()
 await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })

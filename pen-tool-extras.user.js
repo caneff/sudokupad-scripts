@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.25.0
+// @version      1.26.0
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,13 +21,12 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.25.0'
+  const VERSION = '1.26.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
-  const MIDDLE_BUTTON = 1
   const RIGHT_BUTTON = 2
   const PEN_COLOR_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad draws free lines, the cell circle and the cross 5 wide (in cell units, a cell being 64) and the edge X 2.5 wide. The slider's value is the first width
@@ -91,7 +90,7 @@
     outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline, { label: 'Outline width', under: 'outline' }),
     outline: flag('PenColor_outline', adoptOutline, { label: 'White outlines', section: 'Other' }),
     // The saved key predates the right click: it keeps its name so old saves read the same.
-    eraseClicks: flag('PenColor_middleerase', doNothing, { label: 'Right and middle click erase', section: 'Other' }),
+    eraseClicks: flag('PenColor_middleerase', doNothing, { label: 'Right click erase', section: 'Other' }),
     lineStyles: flags('PenColor_linestyles', ['dashed', 'arrows'], adoptLineStyles,
       { section: 'Line styles', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
     show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
@@ -1400,11 +1399,11 @@
   }
 
   // A click within CORNER_RADIUS of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
-  // was clicked, its `actSend` held back to see the actions it queued. The actions still go out through `actSend`, one group per click, so one undo reverses one click. A middle click, and a right click while the erase is on,
-  // are left to the erase; a right click with the erase off steps the mark as SudokuPad's own right click, which acts as a left click, does.
+  // was clicked, its `actSend` held back to see the actions it queued. The actions still go out through `actSend`, one group per click, so one undo reverses one click. A right click while the erase is on
+  // is left to the erase; a right click with the erase off steps the mark as SudokuPad's own right click, which acts as a left click, does.
   function wrapClickCell (tool, original) {
     steps.marks.wrap(tool, 'clickCell', function (stock, ...args) {
-      if (lastButton === MIDDLE_BUTTON || (lastButton === RIGHT_BUTTON && inForce.eraseClicks)) return stock(...args)
+      if (lastButton === RIGHT_BUTTON && inForce.eraseClicks) return stock(...args)
       const corner = cornerUnderPointer(this)
       if (corner !== null) {
         const acts = cornerActs(corner)
@@ -1436,11 +1435,10 @@
     return layerIn(MARKS_LAYER_ID, false)
   }
 
-  // 7. Right and middle click erase
+  // 7. Right click erase
   const LINE_HIT_RADIUS = 0.2
-  const ERASE_BUTTONS = [RIGHT_BUTTON, MIDDLE_BUTTON]
-  // `PointerEvent.buttons` has one bit per button held: right is 2, middle is 4.
-  const BUTTON_BIT = { [RIGHT_BUTTON]: 2, [MIDDLE_BUTTON]: 4 }
+  // `PointerEvent.buttons` has one bit per button held: right is 2.
+  const RIGHT_BIT = 2
   // A drag is tested every this many cells along its way, so a fast move cannot step over a line (LINE_HIT_RADIUS) or a mark.
   const ERASE_SAMPLE_STEP = 0.1
 
@@ -1540,9 +1538,9 @@
     return isEdgeActs(queued) ? held(queued[0].arg[0], ['x', ...ADDED_ORDER].map((type) => valueOfType(queued[1].arg, type))) : null
   }
 
-  // A press or a drag with the right or middle button gathers everything it crosses, and the release erases it as one undo step. At each point a line wins over a mark.
-  function startErase (button, firstPoint) {
-    return { button, segments: lineSegmentsOf(Framework.app.puzzle.cells), lines: new Set(), marks: new Map(), at: firstPoint }
+  // A press or a drag with the right button gathers everything it crosses, and the release erases it as one undo step. At each point a line wins over a mark.
+  function startErase (firstPoint) {
+    return { segments: lineSegmentsOf(Framework.app.puzzle.cells), lines: new Set(), marks: new Map(), at: firstPoint }
   }
 
   function crossPoint (marksAtPoint, erase, point) {
@@ -1575,9 +1573,8 @@
     sendActs(tool, acts)
   }
 
-  // A right or middle press over the grid in the pen tool starts an erase and has its default prevented, which stops the browser's autoscroll (middle) and SudokuPad's
-  // own draw (right). A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's `clickCell` (checked live), so no pen mark or drag
-  // follows. `mousedown` is prevented too for a browser that still sends it, which stops only the autoscroll: SudokuPad's own `mousedown` handler still runs there.
+  // A right press over the grid in the pen tool starts an erase and has its default prevented, which stops SudokuPad's own draw. A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's `clickCell` (checked live), so no pen mark or drag
+  // follows. `mousedown` is prevented too for a browser that still sends it: SudokuPad's own `mousedown` handler still runs there.
   // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
   // The browser's menu stays shut: Linux raises it on the press, over the grid, and Windows on the release, wherever the drag ended, so a right press owes it one refusal.
   function installLineErase (app, tool) {
@@ -1586,8 +1583,8 @@
     let erase = null
     let menuOwed = false
     // A press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
-    steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => ERASE_BUTTONS.includes(lastButton) && inForce.eraseClicks ? undefined : stock(...args))
-    const erasePress = (event) => inForce.eraseClicks && ERASE_BUTTONS.includes(event.button) && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
+    steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => lastButton === RIGHT_BUTTON && inForce.eraseClicks ? undefined : stock(...args))
+    const erasePress = (event) => inForce.eraseClicks && event.button === RIGHT_BUTTON && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
     const guarded = (handler) => (event) => steps.lineErase.run(() => handler(event), () => { erase = null; menuOwed = false })
     window.addEventListener('pointerdown', guarded((event) => {
@@ -1597,17 +1594,17 @@
       // The point is read before the default is prevented, so a failure leaves the press to SudokuPad.
       const point = pointOf(event)
       event.preventDefault()
-      erase = startErase(event.button, point)
-      menuOwed = event.button === RIGHT_BUTTON
+      erase = startErase(point)
+      menuOwed = true
       crossPoint(marksAtPoint, erase, point)
     }), true)
     window.addEventListener('pointermove', guarded((event) => {
       if (erase === null) return
-      if (event.buttons & BUTTON_BIT[erase.button]) crossTo(marksAtPoint, erase, pointOf(event))
+      if (event.buttons & RIGHT_BIT) crossTo(marksAtPoint, erase, pointOf(event))
     }), true)
     window.addEventListener('pointerup', guarded((event) => {
-      // With two buttons held, the `pointerup` is the last button's, whichever it is, so the drag ends when its own button is no longer held.
-      if (erase === null || (event.buttons & BUTTON_BIT[erase.button])) return
+      // With two buttons held, the `pointerup` is the last button's, whichever it is, so the drag ends when the right button is no longer held.
+      if (erase === null || (event.buttons & RIGHT_BIT)) return
       const done = erase
       erase = null
       crossTo(marksAtPoint, done, pointOf(event))

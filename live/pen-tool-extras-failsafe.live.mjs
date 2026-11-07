@@ -46,15 +46,6 @@ const CASES = [
     breaks: `const pages = Framework.app.tools.colour.palette.pages
       pages[0] = new Proxy(pages[0], { get (page, key) { if (key === 'length') throw new TypeError('no length'); return page[key] } })`
   },
-  // The call fails once, in the middle press's handling, so SudokuPad's own pointer reading, which uses it, goes on.
-  {
-    name: 'line erase',
-    off: 'line erase',
-    warns: changed('line erase'),
-    breaks: `const xyToRCExact = Framework.app.xyToRCExact
-      window.addEventListener('pointerdown', (e) => { window.middle = e.button === 1 && !window.middleFailed; setTimeout(() => { window.middle = false }) }, true)
-      Framework.app.xyToRCExact = function () { if (window.middle) { window.middle = false; window.middleFailed = true; throw new TypeError('xyToRCExact is gone') } return xyToRCExact.apply(this, arguments) }`
-  },
   // SudokuPad builds the pen tool's panel without the element the sliders and the buttons sit beside.
   {
     name: 'panel row',
@@ -161,7 +152,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         await context.close()
       })
 
-      // Some failures show only when the step is used: a page 3 line is drawn, a middle click, a context menu, an edge click. The panel check
+      // Some failures show only when the step is used: a page 3 line is drawn, a context menu, an edge click. The panel check
       // and the color tool wait are the script's own timers (1 s and 10 s), so an infinite quiet window waits them out.
       const triggerFailure = async () => {
         if (kase.name === 'arrow lines') {
@@ -173,10 +164,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           assert.ok(await read(() => document.querySelectorAll('#cell-pen path.cell-pen').length) > 0, 'SudokuPad\'s plain line is drawn on the drag that failed')
           await p.locator(PAGE_BUTTON).click()
           await undoAll()
-        }
-        if (kase.name === 'line erase') {
-          const [x, y] = await gridPoint(p, [2.5, 2.5])
-          await p.mouse.click(x, y, { button: 'middle' })
         }
         if (kase.name === 'right click') {
           const prevented = () => read(() => new Promise((resolve) => {

@@ -130,9 +130,9 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('each line style\'s box is before its label, and Other reads White outlines and Right and middle click erase', async () => {
+  it('each line style\'s box is before its label, and Other reads White outlines and Right click erase', async () => {
     await openSettledEditor(p)
-    for (const [path, text] of [['lineStyles.dashed', 'Dashed lines'], ['lineStyles.arrows', 'Directional arrow lines'], ['outline', 'White outlines'], ['eraseClicks', 'Right and middle click erase']]) {
+    for (const [path, text] of [['lineStyles.dashed', 'Dashed lines'], ['lineStyles.arrows', 'Directional arrow lines'], ['outline', 'White outlines'], ['eraseClicks', 'Right click erase']]) {
       const box = editor().locator(`input[data-box="${path}"]`)
       const label = editor().locator(`label[for="${await box.getAttribute('id')}"]`)
       assert.equal((await label.textContent()).trim(), text)
