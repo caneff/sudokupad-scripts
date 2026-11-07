@@ -1,4 +1,5 @@
-// Live check of draw-tool.user.js's saved drawing on sudokupad.app: kept over a reload, per puzzle, and wiped by Restart.
+// Live check of draw-tool.user.js's saved notes on sudokupad.app: kept over a reload, per puzzle, and wiped by Restart; the strokes and shapes an earlier version
+// saved are never drawn and stay in storage as they were.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -7,19 +8,28 @@ import { gotoPuzzle, injectAtIdle, newPage, openPage, startPuzzle } from '../pag
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { DIALOG, DRAWING_PREFIX, INDEX_KEY, script, STROKES } = draw
+const { DIALOG, DRAWING_PREFIX, INDEX_KEY, OLD_SHAPES, script, STROKES, TEXTS } = draw
+
+// What an earlier version saved, planted as it wrote it.
+const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
+const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, from: [64, 320], to: [256, 448] }
+const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
+describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
   let context, p, errors
   const warnings = []
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const strokeCount = () => p.locator(STROKES).count()
-  const strokePaths = () => draw.strokePaths(p)
+  const texts = () => draw.texts(p)
+  const typeText = async (at, content) => {
+    await p.mouse.click(...await gridPoint(p, at))
+    await p.keyboard.type(content)
+    await p.keyboard.press('Enter')
+  }
   const puzzleKey = () => draw.puzzleKey(p)
   const saved = () => draw.saved(p)
   const pickDraw = () => draw.pickDraw(p)
@@ -45,27 +55,25 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('getReplay() is the same with a drawing on the board as without one', async () => {
+  it('getReplay() is the same with a note on the board as without one', async () => {
     const replay = await read(() => Framework.app.getReplay())
     await pickDraw()
-    await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5], [3.6, 6.5]])
-    assert.equal(await strokeCount(), 1)
+    await typeText([2.5, 2.5], '15')
+    assert.deepEqual(await texts(), ['15'])
     assert.equal(await read(() => Framework.app.getReplay()), replay)
   })
 
-  it('a drawing survives a page reload, stroke for stroke', async () => {
-    await p.keyboard.down('Shift')
-    await mouseDrag(p, [[1.5, 1.5], [4, 2], [5.5, 6.5]])
-    await p.keyboard.up('Shift')
-    const before = await strokePaths()
-    assert.equal(before.length, 2)
+  it('the notes survive a page reload, note for note', async () => {
+    await typeText([5.5, 4.5], '20')
+    const before = await texts()
+    assert.deepEqual(before, ['15', '20'])
     await reload()
-    assert.deepEqual(await settle(strokePaths, before), before)
+    assert.deepEqual(await settle(texts, before), before)
   })
 
-  it('the drawing is saved under the puzzle\'s key, as a list of stroke items in draw color 1', async () => {
+  it('the notes are saved under the puzzle\'s key, as a list of text items in color 1 with opacity 100 and no background', async () => {
     const items = await saved()
-    assert.deepEqual(items.map(({ kind, color, width, opacity }) => [kind, color, width, opacity]), [['stroke', 1, 6, 100], ['stroke', 1, 6, 100]])
+    assert.deepEqual(items.map(({ kind, color, size, opacity, bg }) => [kind, color, size, opacity, bg]), [['text', 1, 20, 100, undefined], ['text', 1, 20, 100, undefined]])
     assert.deepEqual(await read((key) => Framework.getData(key), INDEX_KEY), [await puzzleKey()])
   })
 
@@ -74,66 +82,91 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
   it('another puzzle\'s drawing never loads on this one', async () => {
     const wrongKeys = await read(() => ['undefined', '', window.location.pathname, window.location.pathname.slice(1), 'scl123abc'])
     const others = wrongKeys.map((key) => DRAWING_PREFIX + key)
-    await read((keys) => keys.forEach((key) => Framework.setData(key, [{ kind: 'stroke', color: 1, width: 6, points: [[10, 10], [500, 500]] }])), others)
-    const mine = await strokePaths()
+    await read((keys) => keys.forEach((key) => Framework.setData(key, [{ kind: 'text', color: 1, size: 20, opacity: 100, text: 'WRONG', at: [10, 10] }])), others)
+    const mine = await texts()
     await reload()
-    assert.deepEqual(await settle(strokePaths, mine), mine)
+    assert.deepEqual(await settle(texts, mine), mine)
     await read((keys) => keys.forEach((key) => Framework.removeData(key)), others)
   })
 
-  it('the drawing shows again when the script starts at DOMContentLoaded, before the puzzle has loaded', async () => {
-    const mine = await strokePaths()
+  it('the notes show again when the script starts at DOMContentLoaded, before the puzzle has loaded', async () => {
+    const mine = await texts()
     const { p: early, errors: earlyErrors } = await newPage(context)
     await injectAtIdle(early, script)
     await gotoPuzzle(early)
     await startPuzzle(early)
-    const paths = () => early.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.getAttribute('d')), STROKES)
-    assert.deepEqual(await settle(paths, mine), mine)
+    const earlyTexts = () => early.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => e.textContent), TEXTS)
+    assert.deepEqual(await settle(earlyTexts, mine), mine)
     assert.deepEqual(earlyErrors, [])
     await early.close()
   })
 
-  it('Restart empties the drawing, and a reload after it shows none', async () => {
-    assert.equal(await strokeCount(), 2)
+  it('Restart empties the notes, and a reload after it shows none', async () => {
+    assert.equal((await texts()).length, 2)
     await restartFromDialog()
-    assert.equal(await settle(strokeCount, 0), 0)
+    assert.deepEqual(await settle(texts, []), [])
     assert.equal(await saved(), null)
     await reload()
-    assert.equal(await strokeCount(), 0)
+    assert.deepEqual(await texts(), [])
   })
 
-  it('saved data that cannot be read shows no drawing, warns, and is never written over by a stroke, a text or an erase', async () => {
+  it('a puzzle saved with a stroke, a shape and a note shows only the note, and drawing nothing else changes nothing in the layer', async () => {
+    await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    assert.equal(await p.locator(STROKES).count(), 0, 'no path: the stroke is not drawn')
+    assert.equal(await p.locator(OLD_SHAPES).count(), 0, 'no rect or ellipse: the shape is not drawn')
+    assert.equal(await p.locator('#draw-tool-layer > *').count(), 1, 'the layer holds the note alone')
+  })
+
+  it('typing, moving and erasing a note leave the stored stroke and shape as they were', async () => {
+    const old = async () => (await saved()).filter((item) => item.kind !== 'text')
+    await pickDraw()
+    await typeText([6.5, 6.5], '20')
+    assert.deepEqual(await texts(), ['15', '20'])
+    assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after typing')
+    await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
+    const [first] = (await saved()).filter((item) => item.kind === 'text')
+    assert.equal(first.at[0] > 200, true, `the note moved to x ${first.at[0]}`)
+    assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after moving')
+    await mouseDrag(p, [[6.5, 6], [6.5, 7]], { button: 'right' })
+    assert.deepEqual(await texts(), ['15'])
+    assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after erasing')
+    assert.equal(await p.locator(STROKES).count() + await p.locator(OLD_SHAPES).count(), 0, 'still not drawn')
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after a reload')
+  })
+
+  it('saved data that cannot be read shows no notes, warns, and is never written over by a note, a move or an erase', async () => {
     const key = DRAWING_PREFIX + await puzzleKey()
     const planted = () => read((k) => Framework.getData(k), key)
     await read((k) => Framework.setData(k, 'not a drawing {'), key)
     await reload()
-    assert.equal(await strokeCount(), 0)
+    assert.deepEqual(await texts(), [])
     assert.equal(warnings.some((w) => /saved drawing/.test(w)), true, warnings.join('\n'))
     await pickDraw()
-    await mouseDrag(p, [[2.5, 2.5], [3.5, 4.5]])
-    assert.equal(await strokeCount(), 1)
-    assert.match(await dialogText(), /saved drawing cannot be read/, 'the solver is told the drawing is not saved')
+    await typeText([2.5, 2.5], '15')
+    assert.deepEqual(await texts(), ['15'])
+    assert.match(await dialogText(), /saved drawing cannot be read/, 'the solver is told the notes are not saved')
     await closeDialog()
-    assert.equal(await planted(), 'not a drawing {', 'after a stroke')
-    await p.mouse.click(...await gridPoint(p, [6.5, 6.5]))
-    await p.keyboard.type('15')
-    await p.keyboard.press('Enter')
-    assert.equal(await p.locator('#draw-tool-layer text').count(), 1)
-    assert.equal(await planted(), 'not a drawing {', 'after a text')
-    await mouseDrag(p, [[2.5, 3.8], [3.5, 3.2]], { button: 'right' })
-    assert.equal(await strokeCount(), 0)
+    assert.equal(await planted(), 'not a drawing {', 'after a note')
+    await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
+    assert.equal(await planted(), 'not a drawing {', 'after a move')
+    await mouseDrag(p, [[2.2, 4.5], [2.8, 4.5]], { button: 'right' })
+    assert.deepEqual(await texts(), [])
     assert.equal(await planted(), 'not a drawing {', 'after an erase')
     assert.equal(await p.locator(DIALOG).count(), 0, 'the dialog is shown once a page')
     await read((k) => Framework.removeData(k), key)
   })
 
-  it('an index that cannot be read leaves every saved drawing as it is, and the solver is told this drawing was not saved', async () => {
+  it('an index that cannot be read leaves every saved drawing as it is, and the solver is told these notes were not saved', async () => {
     await reload()
     await read((k) => Framework.setData(k, 'not an index {'), INDEX_KEY)
     await pickDraw()
-    await mouseDrag(p, [[2.5, 2.5], [3.5, 4.5]])
-    assert.equal(await strokeCount(), 1)
-    assert.match(await dialogText(), /could not save this puzzle's drawing: .*saved index/)
+    await typeText([2.5, 2.5], '15')
+    assert.deepEqual(await texts(), ['15'])
+    assert.match(await dialogText(), /could not save this puzzle's notes: .*saved index/)
     await closeDialog()
     assert.equal(await saved(), null)
     assert.equal(await read((k) => Framework.getData(k), INDEX_KEY), 'not an index {')

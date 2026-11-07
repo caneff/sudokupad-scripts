@@ -12,7 +12,7 @@ import { chromium } from 'playwright'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { MODES, openPage, START, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
-import { keydownDefaults, mouseDrag, openPenTool, penEntries } from './pen.mjs'
+import { gridPoint, keydownDefaults, openPenTool, penEntries } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
@@ -131,16 +131,18 @@ const SCRIPTS = [
     }
   },
   {
-    name: 'Draw Tool',
+    name: 'Text Annotation',
     file: 'draw-tool.user.js',
     ready: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'attached' }),
     control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
-    // With Draw picked, a left drag across r3 leaves one stroke.
+    // With Text Annotation picked, a left click on r3c3 and 15 typed leave one note.
     act: async (p) => {
       const tool = () => p.evaluate(() => Framework.app.tool)
       assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS), 'draw')
-      await mouseDrag(p, [[2.5, 0.5], [3, 6.5]])
-      assert.equal(await settle(() => p.locator('#draw-tool-layer path').count(), 1), 1)
+      await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+      await p.keyboard.type('15')
+      await p.keyboard.press('Enter')
+      assert.equal(await settle(() => p.locator('#draw-tool-layer text.draw-tool-text').count(), 1), 1)
     }
   }
 ]
