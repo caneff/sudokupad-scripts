@@ -43,14 +43,19 @@ export const gridPoint = async (page, [r, c]) => {
   return [x0 + (c - 0.5) * size, y0 + (r - 0.5) * size]
 }
 
-// A drag along `points`, each [row, col] in cells from the grid's top left, with real mouse input, returning once
-// the grid has changed.
+// A drag along `points` with `button` held (the left one unless given), each [row, col] in cells from the grid's top left,
+// with real mouse input and a few mouse moves between each two points.
+export async function mouseDrag (page, points, { button = 'left' } = {}) {
+  await page.mouse.move(...await gridPoint(page, points[0]))
+  await page.mouse.down({ button })
+  for (const point of points.slice(1)) await page.mouse.move(...await gridPoint(page, point), { steps: 8 })
+  await page.mouse.up({ button })
+}
+
+// A drag along `points`, as `mouseDrag`, returning once the grid has changed.
 export async function drag (page, points) {
   const before = JSON.stringify(await penEntries(page))
-  await page.mouse.move(...await gridPoint(page, points[0]))
-  await page.mouse.down()
-  for (const point of points.slice(1)) await page.mouse.move(...await gridPoint(page, point), { steps: 8 })
-  await page.mouse.up()
+  await mouseDrag(page, points)
   const changed = await settle(async () => JSON.stringify(await penEntries(page)) !== before, true)
   if (changed !== true) throw new Error('the drag changed nothing on the grid')
 }

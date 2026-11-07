@@ -138,3 +138,16 @@
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
   browser under `ToolLetter_letterMode`. The button and `/` toggle it; No Tab Letters makes Tab do nothing in play instead.
+- **Draw Tool** — the script `draw-tool.user.js`, and the tool it adds to SudokuPad's tool buttons as Draw. It takes no
+  tool key.
+- **drawing** — everything Draw Tool has put on one puzzle: its strokes and texts, oldest first. Saved per puzzle (keyed by
+  the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles drawn on last; it is not in the replay, Undo
+  does not touch it, and Restart and Clear all empty it.
+- **stroke** — one freehand line of a drawing, or a straight one drawn with Shift, in a pen color and one of three
+  widths. The homepage, the script's description and its buttons call it a line, for the solver; code and tests say
+  stroke. Not a pen tool line, which SudokuPad stores in the cells.
+- **text** — a short string typed into a drawing, solid, in a pen color and one of three text sizes, centred on the
+  point clicked. It is typed in the **text box**, an input over the board that a click on the board opens, and a click on
+  a text reopens.
+- **erase** — Draw's right-drag: every stroke and text the drag passes near is removed whole. Clear all erases the whole
+  drawing, after asking.
