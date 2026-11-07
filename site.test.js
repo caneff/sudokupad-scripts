@@ -352,7 +352,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the settings dialog section is not one picture')
-  assert.ok(found[0].includes(`src="${RAW}docs/research/color-by-digit-dialog-annotated.png"`))
+  assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/color-by-digit-dialog-annotated.png"`))
   const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
   for (const label of ['Top row', 'Profile list', 'Name box', 'Group rows', 'Open group', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
