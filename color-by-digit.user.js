@@ -33,7 +33,6 @@
   const MODES = ['cell', 'digit', 'both', 'off']
   const DIGITLESS_MODES = ['cell', 'off']
   const DIGITLESS_FALLBACK = { digit: 'off', both: 'cell' }
-  const MODE_LABELS = { cell: 'CELL', digit: 'DIGIT', both: 'BOTH', off: 'OFF' }
   const MODE_NAMES = { cell: 'Cell', digit: 'Digit', both: 'Both', off: 'Off' }
   // Each key is set once its preloads have been offered to an install that already had profiles, so deleting one keeps it deleted.
   const ADDED_PRELOADS = [
@@ -460,16 +459,14 @@
   function darkenColor (rgb) {
     const [L, a, b] = toOklab(rgb.map(clamp255))
     const target = L * LIGHTNESS_FACTOR
-    let low = 0
+    let low = inGamut(fromOklabLinear([target, a, b])) ? 1 : 0
     let high = 1
-    if (!inGamut(fromOklabLinear([target, a, b]))) {
+    if (low === 0) {
       for (let i = 0; i < 30; i++) {
         const mid = (low + high) / 2
         if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
         else high = mid
       }
-    } else {
-      low = 1
     }
     const out = fromOklabLinear([target, a * low, b * low])
     return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
@@ -555,7 +552,7 @@
   function modeLabelHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-3px;top:-2px;' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : GREY}">${MODE_LABELS[mode]}</span>`
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
@@ -695,7 +692,10 @@
       `<button type="button" class="cbd-button" data-act="add"${full ? ' disabled' : ''}>+ Add</button></div>`
   }
 
-  const menuHeading = (text, extra = '') => `<div style="font:600 11px/1 sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px${extra}">${text}</div>`
+  const MENU_HEADING_STYLE = `font:600 11px/1 sans-serif;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px`
+  const menuHeading = (text) => `<div style="${MENU_HEADING_STYLE};letter-spacing:.08em">${text}</div>`
+  // The Cells and Digits sections' headings, set tighter than the menu's own.
+  const sectionHeading = (text) => `<div style="${MENU_HEADING_STYLE};letter-spacing:.04em">${text}</div>`
 
   // Rows are not focusable, so the keyboard stays with the puzzle. A row's target says which pick it sets.
   function renderMenuRows (profiles, picked, target, colorOf) {
@@ -710,7 +710,7 @@
   function renderMenu (state, colorOf) {
     const cells = renderMenuRows(state.profiles, state.active, 'cells', colorOf)
     const rows = usesDigitColors(state) && !isSynced(state)
-      ? `${menuHeading('Cells', ';letter-spacing:.04em')}${cells}${menuHeading('Digits', ';letter-spacing:.04em')}${renderMenuRows(state.profiles, state.digitActive, 'digits', colorOf)}`
+      ? `${sectionHeading('Cells')}${cells}${sectionHeading('Digits')}${renderMenuRows(state.profiles, state.digitActive, 'digits', colorOf)}`
       : cells
     return `${menuHeading('Color by digit profile')}${rows}` +
       '<div style="height:1px;background:#ece8f2;margin:4px 6px"></div>' +
@@ -998,7 +998,7 @@
     showDigitColors()
   }
 
-  // Leaving cell coloring takes the colors of `keys` off every cell; a Save that also changed the groups passes the old ones too.
+  // Leaving cell coloring takes the colors of `keys`, the group keys to take off, off every cell.
   function setMode (app, next, keys = groupKeys(loadGroups())) {
     const was = mode
     mode = next
