@@ -44,7 +44,7 @@ test('every picture the site loads is in a script folder of docs/research/ or in
     for (const shot of screenshots(read(name))) {
       const m = shot.match(/^docs\/research\/([^/]+)\/([^/]+)$/)
       assert.ok(m && RESEARCH_FOLDERS.includes(m[1]), `site/${name} loads ${shot}, which is not in a folder of docs/research/`)
-      const script = RESEARCH_FOLDERS.find(f => f !== 'site' && m[2].startsWith(f + '-'))
+      const script = RESEARCH_FOLDERS.find(f => f !== 'site' && (m[2].startsWith(f + '-') || m[2].startsWith(f + '.')))
       if (script) assert.equal(m[1], script, `site/${name} loads ${shot}, which is named for ${script}`)
     }
   }
