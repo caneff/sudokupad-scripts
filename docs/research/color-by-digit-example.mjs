@@ -10,8 +10,9 @@ import { savedProfiles } from '../../live/color-by-digit-fixtures.mjs'
 // The pixel density every picture is taken at.
 export const DEVICE_SCALE = 2
 export const BUTTON = '#control-colorbydigit'
-export const MODES = ['CELL', 'DIGIT', 'BOTH', 'OFF']
-const MODE_LABEL = `${BUTTON} [data-role="mode"]`
+export const MODES = ['Cell', 'Digit', 'Both', 'Off']
+// The button's aria-label names its mode.
+const modeOf = (want) => `Color by digit: ${want}`
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
 // The demo profile is active; Modular (orange, pink, yellow) follows it for the menu picture. savedProfiles also sets the two flags that stop the script adding its
@@ -73,15 +74,15 @@ export async function typeInto (p, tool, row, col, keys) {
 // Color by Digit gives no signal that its styles are applied, so a change gets this long to show.
 export const SETTLE_MS = 500
 
-// Presses the button until its label reads `want`, then waits for the colors to settle.
+// Presses the button until its aria-label names mode `want`, then waits for the colors to settle.
 export async function pressTo (p, want) {
   const button = p.locator(BUTTON)
-  const label = () => p.evaluate((selector) => document.querySelector(selector).textContent, MODE_LABEL)
-  for (let i = 0; i < MODES.length && await label() !== want; i++) {
+  const label = () => button.getAttribute('aria-label')
+  for (let i = 0; i < MODES.length && await label() !== modeOf(want); i++) {
     const box = await button.boundingBox()
     await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
   }
-  await p.waitForFunction(([selector, want]) => document.querySelector(selector).textContent === want, [MODE_LABEL, want])
+  await p.waitForFunction(([selector, label]) => document.querySelector(selector).getAttribute('aria-label') === label, [BUTTON, modeOf(want)])
   await p.waitForTimeout(SETTLE_MS)
 }
 

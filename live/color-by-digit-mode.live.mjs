@@ -78,11 +78,10 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
   after(async () => { await context.close() })
 
-  it('the button names Off in its label and draws its chips white with grey digits and a grey outline, and has no AUTO box or word strip', async () => {
+  it('the button names Off in its label and draws its chips white with grey digits and a grey outline, and has no AUTO box', async () => {
     assert.equal(await label(), 'Off')
     assert.equal(await p.locator(BUTTON).getAttribute('title'), 'Color by digit: Off')
     await assertLook('off')
-    assert.equal(await p.locator(`${BUTTON} [data-role="mode"]`).count(), 0)
     assert.equal(await p.locator(`${BUTTON} [data-role="auto"]`).count(), 0)
     assert.equal(/AUTO/.test(await p.locator(BUTTON).textContent()), false)
   })

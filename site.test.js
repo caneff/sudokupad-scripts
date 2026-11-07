@@ -331,7 +331,7 @@ const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === l
 
 test(`${CBD}'s Four modes item is one sentence, and it and the Kept in step and profile menu items have no picture of their own`, () => {
   const four = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
-  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
+  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off. The button\'s chips, a short run of board cells, are drawn the way the mode colors the board: filled cells, shaded digits, both, or plain white.')
   for (const lead of ['Four modes.', 'Kept in step as you solve.', 'The profile menu.']) assert.equal(itemImg(CBD, lead), '', `"${lead}" has a picture`)
 })
 
