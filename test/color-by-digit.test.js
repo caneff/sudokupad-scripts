@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -1566,28 +1566,6 @@ function oklch (hex) {
   const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
   return { L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, C: Math.hypot(A, B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 }
 }
-const hueGap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
-
-test('parseColor reads rgb(), rgba() and #rrggbb, clamping out-of-range channels, and gives null for transparent or unreadable values', () => {
-  assert.deepEqual(parseColor('rgb(61, 153, 245)'), [61, 153, 245])
-  assert.deepEqual(parseColor('rgba(0, 0, 255, 0.5)'), [0, 0, 255])
-  assert.deepEqual(parseColor('#3d99f5'), [61, 153, 245])
-  assert.deepEqual(parseColor('#fff'), [255, 255, 255])
-  assert.deepEqual(parseColor('rgb(-36, -36, -36)'), [0, 0, 0])
-  for (const bad of ['transparent', '', 'banana', 'rgb(1, 2)', undefined, null, 'rgba(0, 0, 0, 0)', 'red']) assert.equal(parseColor(bad), null, String(bad))
-})
-
-test('darkenColor keeps the hue, lowers OKLCH lightness by the named factor, and gives #rrggbb', () => {
-  for (const rgb of [[61, 153, 245], [245, 58, 55], [232, 124, 241], [228, 150, 50], [179, 229, 106]]) {
-    const hex = '#' + rgb.map((c) => c.toString(16).padStart(2, '0')).join('')
-    const out = darkenColor(rgb)
-    assert.match(out, /^#[0-9a-f]{6}$/)
-    assert.ok(hueGap(oklch(hex).h, oklch(out).h) < 3, `${hex} -> ${out}`)
-    assert.ok(Math.abs(oklch(out).L - oklch(hex).L * LIGHTNESS_FACTOR) < 0.02, `${hex} -> ${out}`)
-  }
-  assert.equal(darkenColor([0, 0, 0]), '#000000')
-  for (const rgb of [[255, 255, 255], [-36, -36, -36], [999, -5, 40]]) assert.match(darkenColor(rgb), /^#[0-9a-f]{6}$/, JSON.stringify(rgb))
-})
 
 // The palette the puzzle shows, as readColor resolves it: key b unreadable.
 const SHOWN = { a: 'rgb(61, 153, 245)', c: 'rgb(245, 58, 55)', b: '' }

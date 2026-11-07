@@ -28,6 +28,12 @@ test('a block with no generated line is rewritten', () => {
   assert.equal(result.text, script(current, '1.2.4'))
 })
 
+test('a module that silences the linter keeps the silence inside its copy, so a script may use part of it', () => {
+  const silenced = { plain: '/* eslint-disable no-unused-vars */\nconst a = 1\n' }
+  const result = syncText(script(block('  const a = 0')), (name) => silenced[name])
+  assert.equal(result.text, script(`  // <lib:plain>\n  ${generatedLine('plain')}\n  /* eslint-disable no-unused-vars */\n  const a = 1\n  /* eslint-enable no-unused-vars */\n  // </lib:plain>`, '1.2.4'))
+})
+
 test('an unknown module is a problem and the text is untouched', () => {
   const source = script('  // <lib:nope>\n  // </lib:nope>')
   const result = syncText(source, read)

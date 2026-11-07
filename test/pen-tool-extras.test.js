@@ -5,9 +5,9 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
-  buildCss, SUDOKUPAD_PEN_COLORS, parseColor, isTransparent, darkenColor, derivedPenColors, editedColors,
+  buildCss, SUDOKUPAD_PEN_COLORS, parseColor, darkenColor, derivedPenColors, editedColors,
   readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle,
-  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, GREY_CHROMA, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
@@ -86,57 +86,6 @@ function oklch (hex) {
   const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
   return { L, C: Math.hypot(A, B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 }
 }
-const hueGap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
-
-test('parseColor reads rgb() and #rrggbb, clamping out-of-range channels', () => {
-  assert.deepEqual(parseColor('rgb(61, 153, 245)'), [61, 153, 245])
-  assert.deepEqual(parseColor('#3d99f5'), [61, 153, 245])
-  assert.deepEqual(parseColor('rgb(-36, -36, -36)'), [0, 0, 0])
-  assert.deepEqual(parseColor('rgb(300, 12.4, 0)'), [255, 12, 0])
-})
-
-test('parseColor gives null for transparent, empty and unreadable values', () => {
-  for (const bad of ['transparent', '', '  ', 'banana', 'rgb(1, 2)', undefined, null, 'rgba(0, 0, 0, 0)', '#abc', 'red', 'hsl(0, 100%, 50%)']) {
-    assert.equal(parseColor(bad), null, String(bad))
-  }
-})
-
-test('parseColor reads a partly transparent rgba() by its color, and isTransparent names only the fully transparent', () => {
-  assert.deepEqual(parseColor('rgba(0, 0, 255, 0.5)'), [0, 0, 255])
-  assert.deepEqual(parseColor('rgba(0, 0, 255, 1)'), [0, 0, 255])
-  for (const clear of ['transparent', ' TRANSPARENT ', 'rgba(0, 0, 0, 0)', 'rgba(9, 9, 9, 0)']) assert.equal(isTransparent(clear), true, clear)
-  for (const seen of ['rgb(0, 0, 0)', 'rgba(0, 0, 0, 0.1)', '#abc', 'red', '', undefined, null, 'banana']) assert.equal(isTransparent(seen), false, String(seen))
-})
-
-test('darkenColor keeps the hue, lowers lightness by the named factor, and gives #rrggbb', () => {
-  for (const rgb of [[61, 153, 245], [245, 58, 55], [232, 124, 241], [228, 150, 50], [179, 229, 106]]) {
-    const hex = '#' + rgb.map((c) => c.toString(16).padStart(2, '0')).join('')
-    const out = darkenColor(rgb)
-    assert.match(out, /^#[0-9a-f]{6}$/)
-    const before = oklch(hex)
-    const after = oklch(out)
-    assert.ok(hueGap(before.h, after.h) < 3, `${hex} -> ${out}: hue ${before.h} -> ${after.h}`)
-    assert.ok(Math.abs(after.L - before.L * LIGHTNESS_FACTOR) < 0.02, `${hex} -> ${out}: L ${before.L} -> ${after.L}`)
-  }
-})
-
-test('darkenColor makes every color darker, and black stays black', () => {
-  assert.equal(darkenColor([0, 0, 0]), '#000000')
-  assert.ok(oklch(darkenColor([214, 214, 214])).L < oklch('#d6d6d6').L)
-  assert.ok(LIGHTNESS_FACTOR < 1 && LIGHTNESS_FACTOR > 0)
-})
-
-test('darkenColor gives a valid hex for near-black, white and out-of-range input', () => {
-  for (const rgb of [[1, 1, 1], [0, 0, 1], [255, 255, 255], [-36, -36, -36], [999, -5, 40]]) {
-    assert.match(darkenColor(rgb), /^#[0-9a-f]{6}$/, JSON.stringify(rgb))
-  }
-})
-
-test('a darkened light color has OKLCH lightness under 0.8, the bar for a 5px line on white', () => {
-  for (const rgb of [[252, 235, 63], [214, 214, 214], [255, 255, 255]]) {
-    assert.ok(oklch(darkenColor(rgb)).L < 0.8, JSON.stringify(rgb))
-  }
-})
 
 const PAGE_KEYS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 const CELL = {

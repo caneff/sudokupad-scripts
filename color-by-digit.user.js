@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.18.0
+// @version      0.18.1
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.18.0'
+  const VERSION = '0.18.1'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -442,24 +442,54 @@
 
   const shownGroups = (groups, max) => groups.slice(0, max).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
 
+  // <lib:color-math>
+  // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
 
-  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
-  function parseColor (color) {
-    const v = String(color ?? '').trim().toLowerCase()
-    if (!isVisibleColor(v)) return null
-    const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(v)
-    if (hex) {
-      const h = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
-      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
-    }
-    const fn = /^rgba?\(([^)]*)\)$/.exec(v)
-    const channels = fn ? fn[1].split(/[,/\s]+/).filter(Boolean).slice(0, 3).map(Number) : []
-    return channels.length === 3 && !channels.some(Number.isNaN) ? channels.map((x) => Math.round(clamp255(x))) : null
+  // The share of its OKLCH lightness a cell color keeps when darkened: low enough to read against cell colors drawn at 60% opacity, high enough that the lightest still show as 5px lines on white and the nine stay apart.
+  const LIGHTNESS_FACTOR = 0.75
+  const GAMUT_EDGE = 1e-6
+  const LIGHT_TEXT = '#dddddd'
+  const DARK_TEXT = '#222222'
+
+  const RGB_FUNCTION = /^rgba?\(([^)]*)\)$/
+  const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+
+  // The channels and alpha of an rgb() or rgba() text with comma, space or slash separators, or null for any other text.
+  function rgbFunction (value) {
+    const fn = RGB_FUNCTION.exec(value)
+    if (!fn) return null
+    const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
+    const numbers = parts.map(Number)
+    if (parts.length < 3 || numbers.some(Number.isNaN)) return null
+    return { channels: numbers.slice(0, 3), alpha: numbers[3] }
   }
 
-  // The digit shade is Pen Tool Extras' pen color from a cell color, copied since the scripts share no code: the share of its OKLCH lightness a cell color keeps.
-  const LIGHTNESS_FACTOR = 0.75
+  // A page lists `transparent` or an rgba() with alpha 0 to leave a slot empty (key 0 of each default page).
+  function isTransparent (text) {
+    if (typeof text !== 'string') return false
+    const value = text.trim().toLowerCase()
+    const fn = rgbFunction(value)
+    return value === 'transparent' || Boolean(fn && fn.alpha !== undefined && fn.alpha <= 0)
+  }
+
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
+  function parseColor (text) {
+    if (typeof text !== 'string' || isTransparent(text)) return null
+    const value = text.trim().toLowerCase()
+    const hex = HEX_DIGITS.exec(value)
+    if (hex) {
+      const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
+      return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
+    }
+    const fn = rgbFunction(value)
+    return fn ? fn.channels.map((x) => Math.round(clamp255(x))) : null
+  }
+
+  const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
+
   const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
   const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
 
@@ -487,16 +517,16 @@
     ]
   }
 
-  const EDGE = 1e-6
-  const inGamut = (linear) => linear.every((x) => x >= -EDGE && x <= 1 + EDGE)
+  const inGamut = (linear) => linear.every((x) => x >= -GAMUT_EDGE && x <= 1 + GAMUT_EDGE)
 
   // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
   function darkenColor (rgb) {
     const [L, a, b] = toOklab(rgb.map(clamp255))
     const target = L * LIGHTNESS_FACTOR
-    let low = inGamut(fromOklabLinear([target, a, b])) ? 1 : 0
-    let high = 1
-    if (low === 0) {
+    let low = 1
+    if (!inGamut(fromOklabLinear([target, a, b]))) {
+      low = 0
+      let high = 1
       for (let i = 0; i < 30; i++) {
         const mid = (low + high) / 2
         if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
@@ -504,9 +534,28 @@
       }
     }
     const out = fromOklabLinear([target, a * low, b * low])
-    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
-      .toString(16).padStart(2, '0')).join('')
+    return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
+
+  // WCAG relative luminance of [r, g, b] channels.
+  function wcagLuminance (rgb) {
+    const [r, g, b] = rgb.map((c) => {
+      const x = c / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+
+  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background) {
+    const rgb = parseColor(background)
+    if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
+    const page = wcagLuminance(rgb) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-math>
 
   // An entered digit's text element carries no digit attribute, so the script adds this one.
   const DIGIT_ATTR = 'data-color-by-digit'
@@ -915,7 +964,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
