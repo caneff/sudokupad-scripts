@@ -12,7 +12,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { gotoPuzzle, newPage, openPage, startPuzzle } from './page.mjs'
 import { closeExtrasEditorWith, dialogButton, openExtrasEditor } from './settings.mjs'
-import { cellCentre, openPenTool, padValues, penStrings, setSlider } from './pen.mjs'
+import { cellCentre, goToPenPage, openPenTool, PAGE_BUTTON, PAGE_ONE, PAGE_THREE, PAGE_TWO, padValues, penStrings, setSlider } from './pen.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -23,10 +23,6 @@ const COLORS_KEY = 'PenColor_colors'
 const DASH_KEY = 'PenColor_dash'
 const THICKNESS_KEY = 'PenColor_thickness'
 const LINE_STYLES_KEY = 'PenColor_linestyles'
-const PAGE_BUTTON = '.pen-tool-extras-page'
-const PAGE_ONE = '123456789'
-const PAGE_TWO = 'abcdefghi'
-const PAGE_THREE = 'jlnprtvxz'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -60,13 +56,7 @@ function group (title, extra = []) {
       assert.equal(await settle(async () => (await strokeCount()) > before, true), true, 'a stroke appeared')
     }
 
-    const goToPage = async (values) => {
-      for (let i = 0; i < 3 && (await padValues(p)) !== values; i++) {
-        await p.locator(PAGE_BUTTON).click()
-        await settle(() => padValues(p), values, 500)
-      }
-      assert.equal(await settle(() => padValues(p), values), values)
-    }
+    const goToPage = (values) => goToPenPage(p, values)
     const editor = () => p.locator('#pen-tool-extras-editor')
     const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
     const turnPageWithWheel = async (deltaY) => {

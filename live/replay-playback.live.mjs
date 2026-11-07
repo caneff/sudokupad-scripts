@@ -6,24 +6,21 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit-fixtures.mjs'
-import { DIGIT_BUTTON, DRAW_BUTTON, strokePaths, TEXT_BOX, TOOL_KEYS, texts as drawTexts } from './draw-tool-fixtures.mjs'
+import { DIGIT_BUTTON, DRAW_BUTTON, strokePaths, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from './page.mjs'
-import { cellCentre, gridPoint, mouseDrag, openPenTool, padValues, penStrings } from './pen.mjs'
+import { cellCentre, goToPenPage, gridPoint, mouseDrag, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const ROOT = new URL('../', import.meta.url)
 const SCRIPT_FILES = readdirSync(ROOT).filter((f) => f.endsWith('.user.js')).sort()
-const sources = (files) => files.map((f) => readFileSync(new URL(f, ROOT), 'utf8'))
 
 const REPLAY_BUTTON = '#control-replay'
 const PLAY_BUTTON = '.controls-input button[data-key="2"]'
 const START_BUTTON = '.controls-input button[data-key="1"]'
-const PAGE_BUTTON = '.pen-tool-extras-page'
-const PAGE_ONE = '123456789'
-const PAGE_TWO = 'abcdefghi'
-const PAGE_THREE = 'jlnprtvxz'
 
 const PLAYBACK_MS = 60000
+// "Nothing happened" is not what these wait for: how long a tool key gets to switch the tool before the tool is read as unchanged.
+const KEY_SWITCHES_MS = 700
 
 let browser
 let solved
@@ -37,14 +34,12 @@ async function openSolver (files) {
     seed: (page) => page.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
   })
   await startPuzzle(opened.p)
-  for (const content of sources(files)) await opened.p.addScriptTag({ content })
+  for (const file of files) await opened.p.addScriptTag({ content: readFileSync(new URL(file, ROOT), 'utf8') })
   await opened.p.evaluate(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolreplay', true) })
   await opened.p.locator('#control-pen').waitFor({ state: 'visible' })
   await opened.p.locator(REPLAY_BUTTON).waitFor({ state: 'visible' })
   return opened
 }
-
-const tool = (p) => p.evaluate(() => Framework.app.tool)
 
 describe('the replay tool plays a solve back with every script installed', { concurrency: false }, () => {
   let context, p, errors
@@ -58,23 +53,18 @@ describe('the replay tool plays a solve back with every script installed', { con
     await p.click(id)
     await settle(() => tool(p), id.replace('#control-', ''))
   }
-  const goToPage = async (values) => {
-    for (let i = 0; i < 3 && (await padValues(p)) !== values; i++) {
-      await p.locator(PAGE_BUTTON).click()
-      await settle(() => padValues(p), values, 500)
-    }
-    assert.equal(await settle(() => padValues(p), values), values)
-  }
+  const goToPage = (values) => goToPenPage(p, values)
   const dragLine = async (points) => {
-    const before = (await penStrings(p)).length
+    const count = (await penStrings(p)).length
     await mouseDrag(p, points)
-    assert.equal(await settle(async () => (await penStrings(p)).length > before, true), true, 'a pen line appeared')
+    assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'a pen line appeared')
   }
 
   // The board as a solver sees it: every cell's digit, marks, colors (as Color by Digit and the color tool set them), the
   // pen elements as drawn, and the Draw drawing.
   const board = async () => ({
-    cells: await read(() => Framework.app.puzzle.cells.map((c) => [c.row, c.col, c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), [...(c.colours || [])]])),
+    cells: await read(() => Framework.app.puzzle.cells.map((c) => [c.row, c.col, c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), [...(c.colours || [])], c.given])),
+    actions: await read(() => Framework.app.puzzle.replayStack.length),
     pen: await penStrings(p),
     penDrawn: await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => e.outerHTML)),
     draw: { strokes: await strokePaths(p), texts: await drawTexts(p) }
@@ -108,11 +98,11 @@ describe('the replay tool plays a solve back with every script installed', { con
     await goToPage(PAGE_THREE)
     await dragLine([[8.5, 1.5], [8.5, 3.5]])
     await goToPage(PAGE_ONE)
-    const [x, y] = await cellCentre(p, 1, 6)
-    const half = (await cellCentre(p, 1, 6))[2] / 2
-    const before = (await penStrings(p)).length
+    const [x, y, width] = await cellCentre(p, 1, 6)
+    const half = width / 2
+    const count = (await penStrings(p)).length
     await p.mouse.click(x + half - 2, y)
-    assert.equal(await settle(async () => (await penStrings(p)).length > before, true), true, 'an edge mark appeared')
+    assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'an edge mark appeared')
     // Draw: a line and a text
     await useTool(DRAW_BUTTON)
     await mouseDrag(p, [[2.5, 6.5], [3.2, 7.5], [2.4, 8.5]])
@@ -141,23 +131,31 @@ describe('the replay tool plays a solve back with every script installed', { con
     assert.deepEqual(solved.draw.texts, ['15'])
   })
 
-  it('the replay button opens the tool, and its Start button rewinds the board to the givens', async () => {
+  it('the replay button opens the tool, and its Start button rewinds the digits, marks and pen lines', async () => {
     await clickUntil(() => p.click(REPLAY_BUTTON), () => tool(p), 'replay', SETTLE_MS)
     await p.click(START_BUTTON)
-    const rewound = await settle(async () => (await board()).cells.find((x) => x[0] === 0 && x[1] === 2)[2] ?? '', '')
-    assert.equal(rewound, '', 'the digit entered at r1c3 is gone while the tool shows the start of the replay')
+    const rewound = await settle(async () => {
+      const b = await board()
+      return { entered: b.cells.filter((c) => c[2] && !c[6]).length, marks: b.cells.filter((c) => c[3].length || c[4].length).length, pen: b.pen }
+    }, { entered: 0, marks: 0, pen: [] })
+    assert.deepEqual(rewound, { entered: 0, marks: 0, pen: [] }, 'no entered digit, mark or pen entry while the tool shows the start')
   })
 
   it('Play runs to the end, and the board then equals the board before: digits, marks, colors, pen lines, and the Draw drawing', async () => {
+    // Armed before the click: at speed 10 the whole solve plays in about a second.
+    const playing = p.locator('body.replay-playing').waitFor({ state: 'attached' })
     await p.click(PLAY_BUTTON)
-    await p.locator('body.replay-playing').waitFor({ state: 'attached' })
+    await playing
     await p.locator('body.replay-paused').waitFor({ state: 'attached', timeout: PLAYBACK_MS })
-    const after = await settle(board, solved)
-    assert.deepEqual(after.cells.map((c) => c.slice(0, 5)), solved.cells.map((c) => c.slice(0, 5)), 'digits and marks')
-    assert.deepEqual(after.pen, solved.pen, 'pen entries')
-    assert.deepEqual(after.penDrawn, solved.penDrawn, 'pen lines as drawn')
-    assert.deepEqual(after.cells.map((c) => c[5]), solved.cells.map((c) => c[5]), 'cell colors: playback adds no Color by Digit coloring beyond what the replay holds')
-    assert.deepEqual(after.draw, solved.draw, 'the Draw drawing is not part of the replay, and playback leaves it')
+    const played = await settle(board, solved)
+    assert.deepEqual(played.cells.map((c) => c.slice(0, 5)), solved.cells.map((c) => c.slice(0, 5)), 'digits and marks')
+    assert.deepEqual(played.pen, solved.pen, 'pen entries')
+    assert.deepEqual(played.penDrawn, solved.penDrawn, 'pen lines as drawn')
+    assert.deepEqual(played.cells.map((c) => c[5]), solved.cells.map((c) => c[5]), 'cell colors')
+    // Color by Digit only adds a color that is missing, so a coloring of its own during playback ends on the same colors;
+    // the replay's action count shows it, since it would add actions.
+    assert.equal(played.actions, solved.actions, 'playback adds no action beyond what the replay holds')
+    assert.deepEqual(played.draw, solved.draw, 'the Draw drawing is not part of the replay, and playback leaves it')
   })
 
   it('no page error', () => { assert.deepEqual(errors, []) })
@@ -169,7 +167,7 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     await p.click(DIGIT_BUTTON)
     await settle(() => tool(p), 'normal')
     await p.keyboard.press(key)
-    return settle(() => tool(p), 'normal', 700)
+    return settle(() => tool(p), 'normal', KEY_SWITCHES_MS)
   }
 
   before(async () => {
@@ -199,6 +197,13 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     await p.click(DIGIT_BUTTON)
     assert.equal(await clickUntil(() => p.click(REPLAY_BUTTON), () => tool(p), 'replay', SETTLE_MS), 'replay')
     assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS), 'draw')
+  })
+
+  it('the replay button comes before Draw\'s among the tool buttons, as it does without Draw', async () => {
+    const ids = (page) => page.evaluate(() => [...document.querySelectorAll('.controls-tool > button')].map((b) => b.id))
+    const [withIds, withoutIds] = [await ids(withDraw.p), await ids(without.p)]
+    assert.equal(withIds.indexOf('control-replay') < withIds.indexOf('control-draw'), true, withIds.join())
+    assert.deepEqual(withIds.filter((id) => id !== 'control-draw'), withoutIds)
   })
 
   it('no page error', () => {

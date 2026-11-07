@@ -1,7 +1,8 @@
 # SudokuPad's replay tool: how it is turned on, its button, its key and how it plays
 
-Ticket #313. Read from `tool-replay.js`, `framework.js` and `script.js` as the live test's recording holds them (SudokuPad 0.611.0), and checked on
-the running page by `live/replay-playback.live.mjs`. `docs/research/sudokupad-replay-files.md` (#98) covers replay *files* and the Replay Save/Load
+Ticket #313. Read from `tool-replay.js`, `framework.js` and `script.js` as the live test's recording holds them (SudokuPad 0.611.0). `live/replay-playback.live.mjs`
+runs on the page: the setting, the `#control-replay` button, the tool key (`N`), buttons 1 and 2, and Play's end state. Read from the source and **not run**: buttons
+3, 4, 6, 7 and 9, the pace between actions, the `--tool-text` readout, and that a tool past the seventh has no key. `docs/research/sudokupad-replay-files.md` (#98) covers replay *files* and the Replay Save/Load
 dialog; this note covers the tool.
 
 ## Turned on
