@@ -11,6 +11,8 @@ import { gridPoint } from '../pen.mjs'
 const { COLOR_KEY, MENU, OUTLINE_BUTTON, OUTLINE_KEY, SIZE_BUTTON, TEXT_BOX, WIDTH_KEY, face, menuCurrent, menuItems, pickMenu } = draw
 const SIZES = ['10', '14', '20', '26', '32', '40']
 const OUTLINES = ['None', 'Thin', 'Medium', 'Thick']
+// How far each outline reaches past the letters, as a share of the text size.
+const REACH_EM = { Thin: 0.07, Medium: 0.14, Thick: 0.24 }
 const A = [1.5, 1.5]
 const B = [1.5, 3.5]
 const C = [5.5, 5.5]
@@ -199,7 +201,9 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
       await clickAt(A)
       await pickMenu(p, OUTLINE_BUTTON, outline)
       const shadow = await textShadowOf('oddx')
-      const radius = Math.max(...[...shadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px 0px/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2]))))
+      const fontSize = await p.evaluate(([selector, want]) => parseFloat(window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).fontSize), [draw.TEXTS, 'oddx'])
+      // The radius is the outline's reach typed out here, as a share of the text size, and not read back from the shadow it checks.
+      const radius = fontSize * REACH_EM[outline]
       await p.keyboard.press('Escape')
       const { beyond, reached } = await ringCheck(p, shadow, radius)
       assert.equal(beyond, 0, `${outline}: ${beyond} ring pixels lie more than 1.5px past ${radius}px from a letter`)
