@@ -201,6 +201,13 @@
   **selected**, and a double-click on a text reopens. A text put on the board is pinned to its cells (stored in board units under `at`); one put off the board is
   fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). Both are drawn at the
   board's scale, in a layer over the page that sits above the digits and below SudokuPad's dialogs and menu.
+- **box** (a note's) — the room a Text Annotation note's text takes. A note never resized has one 16 em wide and 8 lines high at its text size, which
+  it fits up to; a resized one is exactly the size its **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
+  or off it, since a note off the board is drawn at the board's scale too. A long line wraps inside it and text past its bottom scrolls: the wheel over
+  the note scrolls it, and reaches SudokuPad only once the note can scroll no further that way, and a thin scroll bar shows while the pointer is over
+  it. The scroll position is not saved.
+- **resize handle** — the small purple square on the bottom right corner of the note open in the **text box**, and of no other note, so a drag on a
+  finished note always moves it. Dragging it sets the note's **box**, its top left kept still, down to about 3 em wide and one line high.
 - **Size slider** — Text Annotation's one slider, on a light purple tray with a small and a large "A" at its ends. It sets the next text's size (1 to 16, step 0.5, default 6), saved under `DrawTool_width`, and never changes a text already made, except the **selected** ones: while texts are selected it shows the oldest one's size and sets theirs, and leaves the next text's alone.
 - **Background** — the button between Clear all and the gear, on or off, and a setting for the NEXT text: a text made while it is on stores `bg: true` and is drawn with a page-colored rounded box behind it, and one made while it is off has none; a saved text with no `bg` has none. The state is remembered under `DrawTool_background`. Pressing it never changes a text already made, except the one open in the text box and the **selected** ones: while texts are selected it shows theirs (neither on nor off when they differ: a dashed ring, `aria-pressed="mixed"`) and turns them all on, or all off when all have one.
 - **erase** — Text Annotation's right click: the text the pointer is near is removed whole. Clear all (the trash button) erases every note, after asking, while nothing is selected; while texts are selected it deletes only them, without asking, as the Delete and Backspace keys do.

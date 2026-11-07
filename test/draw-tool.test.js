@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -441,12 +441,60 @@ test('each line is read on its own, so a marker does not reach across a line bre
   assert.deepEqual(parseMarkdown(''), [[]])
 })
 
+const width = (item) => textBox(item).right - textBox(item).left
+const height = (item) => textBox(item).bottom - textBox(item).top
+
 test('a note\'s box is as wide as its longest line shown, markers left out, and one line taller for each line break', () => {
-  const width = (item) => textBox(item).right - textBox(item).left
-  const height = (item) => textBox(item).bottom - textBox(item).top
   assert.equal(width(textItem([100, 50], '**15**', 3, 20)), width(sum))
   const two = textItem([100, 50], '15\n150', 3, 20)
   assert.equal(width(two), width(textItem([100, 50], '150', 3, 20)))
   assert.equal(height(two), 46)
   assert.equal((textBox(two).top + textBox(two).bottom) / 2, 50)
+})
+
+// A note of text size 20 has a line 1.15 x 20 = 23 board units high, so its automatic box is 16 x 20 = 320 wide and 8 x 23 = 184 high.
+test('a line longer than the box wraps: the box stops at 16 em wide and is a line taller for each wrap', () => {
+  const long = textItem([100, 50], 'x'.repeat(40), 3, 20)
+  assert.equal(width(long), 320)
+  assert.equal(height(long), 46)
+  assert.equal((textBox(long).left + textBox(long).right) / 2, 100)
+})
+
+test('a note of more than 8 lines stops growing at 8 lines high', () => {
+  assert.equal(height(textItem([100, 50], Array(8).fill('a').join('\n'), 3, 20)), 184)
+  assert.equal(height(textItem([100, 50], Array(12).fill('a').join('\n'), 3, 20)), 184)
+})
+
+test('a resized note\'s box is its stored size, whatever its text, centred on its point', () => {
+  const resized = { ...textItem([100, 50], 'a', 3, 20), box: [200, 60] }
+  assert.deepEqual(textBox(resized), { left: 0, right: 200, top: 20, bottom: 80 })
+})
+
+test('a saved size reads back, and a note without one has none', () => {
+  const resized = { ...sum, box: [200.5, 60] }
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify([resized, sum]))), [resized, sum])
+  for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.throws(() => readDrawing([{ ...sum, box }]), /saved drawing/, JSON.stringify(box))
+})
+
+// The resize keeps the box's top left still: on the board the stub's scale is 2 screen pixels a board unit.
+test('dragging a note\'s corner sets its box in board units and moves its point so its top left stays put', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  const resized = resizedItem(on, [200, 170], [600, 290], { ...board, scale: 2 })
+  assert.deepEqual(resized, { ...on, box: [200, 60], at: [150, 90] })
+})
+
+test('a note off the board keeps its fixed point\'s kind, and its box is in board units too, as its text is', () => {
+  const off = placedItem(textItem([50, 60], 'hi', 3, 20), [40, 700], board)
+  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }), { ...off, box: [200, 60], fixed: [200, 740] })
+})
+
+test('a resize stops at about three characters wide and one line high', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  assert.deepEqual(resizedItem(on, [200, 170], [190, 160], { ...board, scale: 2 }).box, [60, 23])
+})
+
+test('once a note is drawn its box is the size drawn, not the guess from its characters, and a resized note keeps its stored box', () => {
+  const long = textItem([100, 50], 'x'.repeat(40), 3, 20)
+  assert.deepEqual(textBox({ ...long, [DRAWN_SIZE]: [300, 23] }), { left: -50, right: 250, top: 38.5, bottom: 61.5 })
+  assert.deepEqual(textBox({ ...long, box: [200, 60], [DRAWN_SIZE]: [300, 23] }), { left: 0, right: 200, top: 20, bottom: 80 })
 })

@@ -1,4 +1,4 @@
-// Takes the eight slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
+// Takes the nine slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
 //   draw-tool-slide-1-type.png        a cage sum typed in a cell's corner
 //   draw-tool-slide-2-size.png        the Size slider moved: a small note and a large one
 //   draw-tool-slide-3-background.png  the Background button on: a note in a page-colored box over the digits, beside one made with it off
@@ -7,6 +7,7 @@
 //   draw-tool-slide-6-select.png      three notes selected by a drag on empty space, the dragged box dashed, and recolored together from the panel
 //   draw-tool-slide-7-erase.png       the pointer on a note with a red ring round it, where a right click erases it
 //   draw-tool-slide-8-erased.png      the same board after the right click: the note gone
+//   draw-tool-slide-9-long.png        a long note open for typing, made smaller with its corner handle, its text wrapped and scrolled, the scroll bar under the pointer
 // Every note is typed with real clicks and keys. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool/draw-tool-slides-screenshot.mjs
@@ -45,7 +46,8 @@ const addDashedBox = (p, box) => p.evaluate(({ x, y, width, height }) => {
 // The notes Text Annotation saved for the puzzle on the page.
 const storedNotes = (p) => p.evaluate((prefix) => Framework.getData(prefix + (Framework.app.puzzle.puzzleId || window.location.href)), DRAWING_PREFIX)
 
-const browser = await chromium.launch()
+// Headless Chromium hides every scroll bar unless told not to, and slide 9 shows one.
+const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] })
 
 // A fresh page with Draw on and helpers working in cell units from the grid's top left.
 async function scene () {
@@ -202,5 +204,33 @@ async function scene () {
   await s.p.evaluate(() => { for (const el of document.querySelectorAll('body > div[style*="z-index:9999"]')) el.remove() })
   await s.p.mouse.move(0, 0)
   await s.shoot('8-erased')
+}
+// 9: a ten-line note with a background box, open for typing, dragged smaller by its corner handle, so its text wraps and scrolls; a ring marks the handle and the pointer rests on the note.
+{
+  const s = await scene()
+  await s.pick(BLUE, 4)
+  await s.background(true)
+  const LINES = ['Box 9 needs 1, 2 and 3', 'r7c8 sees 2 and 3', 'so r7c8 is 1', 'then r9c7 is 2', 'and r8c9 is 3', 'r7c7 + r8c8 = 14', 'so 5 and 9, or 6 and 8', 'r9c9 is not 7', 'check the 17 cage', 'last: r9c8']
+  await s.p.mouse.click(...s.at([6.4, 6.8]))
+  for (const [i, line] of LINES.entries()) {
+    if (i) await s.p.keyboard.press('Enter')
+    await s.p.keyboard.type(line)
+  }
+  const handle = s.p.locator('#draw-tool-layer .draw-tool-resize')
+  const { x, y, width, height } = await handle.boundingBox()
+  const [hx, hy] = [x + width / 2, y + height / 2]
+  const BY = [-30, -40]
+  await s.p.mouse.move(hx, hy)
+  await s.p.mouse.down()
+  await s.p.mouse.move(hx + BY[0], hy + BY[1], { steps: DRAG_STEPS })
+  await s.p.mouse.up()
+  const open = s.p.locator('#draw-tool-layer .draw-tool-textbox')
+  const scrolls = await open.evaluate((el) => el.classList.contains('draw-tool-scrolls'))
+  if (!scrolls) throw new Error('the resized note does not scroll')
+  const box = await open.boundingBox()
+  await s.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await s.p.mouse.wheel(0, -30)
+  await addRing(s.p, [hx + BY[0], hy + BY[1]], 30)
+  await s.shoot('9-long')
 }
 await browser.close()

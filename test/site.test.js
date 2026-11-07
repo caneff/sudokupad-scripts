@@ -241,7 +241,7 @@ const PEN_SLIDES = [
 const DRAW_SLIDES = [
   ['1-type', 'Left click to type a note'], ['2-size', 'One size slider'], ['3-background', 'Background: a box behind the next note'],
   ['4-colors', 'Your own colors: hold a color button'], ['5-move', 'Move: drag a note, on or off the grid'],
-  ['6-select', 'Select: drag a box round notes, then change them together'], ['7-erase', 'Erase: right-click a note'], ['8-erased', 'The note is gone']
+  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag the corner to resize'], ['7-erase', 'Erase: right-click a note'], ['8-erased', 'The note is gone']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
@@ -445,7 +445,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 // Text Annotation's entry and details page.
 const DRAW_SUMMARY = 'Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes', 'Bold, italic and strikethrough', 'Readable over digits', 'Colors of its own', 'Text size', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
+const DRAW_LEAD_INS = ['Typed notes', 'Long notes', 'Bold, italic and strikethrough', 'Readable over digits', 'Colors of its own', 'Text size', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Text Annotation in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Text Annotation<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -456,6 +456,7 @@ test(`${HOME} describes Text Annotation in a short summary ending in a Details l
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it.',
+    'Long notes A long line wraps, and a note stops growing at 8 lines and scrolls: turn the wheel over it, and a thin scroll bar shows while the pointer is on it. While you type, drag the handle on the note\'s bottom right corner to make its box wider, narrower, taller or shorter; the note keeps that size.',
     'Bold, italic and strikethrough Write **bold**, *italic* (or _italic_) and ~~strikethrough~~ in a note, and nest them, such as **bold *and italic***. The markers show while you type and are hidden once the note is finished; a marker with no partner shows as typed.',
     'Readable over digits Each note has a halo, a thin outline of its letters in the page color, so it reads over digits, pencil marks and colored cells.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",

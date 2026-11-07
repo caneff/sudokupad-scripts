@@ -34,7 +34,7 @@ const SHOWS = [
     heading: 'Text Annotation',
     row: 3,
     details: 'draw-tool.html',
-    slides: 8,
+    slides: 9,
     first: ['draw-tool-slide-1-type.png', 'Left click to type a note'],
     second: ['draw-tool-slide-2-size.png', 'One size slider'],
     last: ['draw-tool-slide-8-erased.png', 'The note is gone'],
