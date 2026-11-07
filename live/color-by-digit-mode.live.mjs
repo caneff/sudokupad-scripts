@@ -41,7 +41,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
   const getMode = () => read((key) => Framework.getData(key), MODE_KEY)
   const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
-  const chooseProfile = (index) => p.click(`${EDITOR} [data-act=activate][data-index="${index}"]`)
+  const chooseProfile = (index) => p.click(`${EDITOR} [data-act=tag-cells][data-index="${index}"]`)
   const label = () => labelOn(p)
   const labelLook = () => p.locator(LABEL).evaluate((e) => `${window.getComputedStyle(e).color} ${window.getComputedStyle(e).fontWeight}`)
   const modeChoice = (mode) => p.locator(`${EDITOR} button[data-role="mode-draft"][data-mode="${mode}"]`)

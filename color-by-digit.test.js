@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -254,33 +254,55 @@ function cloneOf (value) { return JSON.parse(JSON.stringify(value)) }
 
 const three = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD }, { name: 'C', groups: [] }], active: 1 }
 
-test('addProfile appends a copy of the active profile under the trimmed name, and leaves the active one alone', () => {
-  const next = addProfile(three, '  Mine ')
-  assert.deepEqual(names(next), ['A', 'B', 'C', 'Mine'])
+test('copyProfile appends a copy of the chosen profile named "<name> copy", and leaves the chosen one alone', () => {
+  const next = copyProfile(three, 1)
+  assert.deepEqual(names(next), ['A', 'B', 'C', 'B copy'])
   assert.deepEqual(next.profiles[3].groups, ODD)
   assert.equal(next.active, 1)
   next.profiles[3].groups[0].digits.push('x')
   assert.deepEqual(next.profiles[1].groups, ODD)
+  assert.deepEqual(copyProfile(three, 0).profiles[3].groups, LOW)
 })
 
-test('addProfile does nothing at six profiles or with a blank name', () => {
-  const six = addProfile(addProfile(addProfile(three, 'D'), 'E'), 'F')
+test('copyProfile does nothing at six profiles or for an index outside the list', () => {
+  const six = copyProfile(copyProfile(copyProfile(three, 0), 0), 0)
   assert.equal(MAX_PROFILES, 6)
   assert.equal(six.profiles.length, 6)
-  assert.deepEqual(addProfile(six, 'G'), six)
-  assert.deepEqual(addProfile(three, '   '), three)
+  assert.deepEqual(copyProfile(six, 0), six)
+  assert.deepEqual(copyProfile(three, 3), three)
 })
 
-test('a profile name is cut to the longest name allowed, typed or saved', () => {
+test('a profile name is cut to the longest name allowed, copied, renamed or saved', () => {
   const long = 'x'.repeat(MAX_NAME_LENGTH + 5)
   const cut = 'x'.repeat(MAX_NAME_LENGTH)
-  assert.equal(addProfile(three, long).profiles[3].name, cut)
+  assert.equal(copyProfile(renameProfile(three, 0, 'y'.repeat(MAX_NAME_LENGTH)), 0).profiles[3].name, 'y'.repeat(MAX_NAME_LENGTH))
+  assert.equal(renameProfile(three, 0, long).profiles[0].name, cut)
   assert.equal(stateFromStored({ profiles: [{ name: long, groups: [] }], active: 0 }).profiles[0].name, cut)
+})
+
+test('renameProfile trims the new name, and a blank one keeps the old name', () => {
+  assert.deepEqual(names(renameProfile(three, 1, '  Mine ')), ['A', 'Mine', 'C'])
+  assert.deepEqual(renameProfile(three, 1, '   '), three)
+  assert.deepEqual(renameProfile(three, 1, ''), three)
+  assert.deepEqual(renameProfile(three, 5, 'x'), three)
+  assert.deepEqual(renameProfile(three, 1, 'Mine').profiles[1].groups, ODD)
+})
+
+test('indexAfterDelete and indexAfterMove: a chosen index follows its own profile, and a deleted one falls to its neighbour', () => {
+  assert.equal(indexAfterDelete(2, 0, 3), 1)
+  assert.equal(indexAfterDelete(0, 2, 3), 0)
+  assert.equal(indexAfterDelete(1, 1, 3), 1)
+  assert.equal(indexAfterDelete(2, 2, 3), 1)
+  assert.equal(indexAfterMove(0, 0, 2), 2)
+  assert.equal(indexAfterMove(1, 0, 2), 0)
+  assert.equal(indexAfterMove(2, 2, 0), 0)
+  assert.equal(indexAfterMove(0, 2, 0), 1)
+  assert.equal(indexAfterMove(1, 1, 1), 1)
 })
 
 test('edits never change the state they are given', () => {
   const before = cloneOf(three)
-  addProfile(three, 'D'); deleteProfile(three, 0); moveProfile(three, 0, 2); setActive(three, 0); setActiveGroups(three, [])
+  copyProfile(three, 0); renameProfile(three, 0, 'Z'); deleteProfile(three, 0); moveProfile(three, 0, 2); setActive(three, 0); setProfileGroups(three, 0, [])
   assert.deepEqual(three, before)
 })
 
@@ -313,9 +335,10 @@ test('setActive picks one profile; an index outside the list changes nothing', (
   assert.deepEqual(setActive(three, -1), three)
 })
 
-test('setActiveGroups replaces only the active profile\'s groups', () => {
-  const next = setActiveGroups(three, [{ key: 'z', digits: ['1'] }])
-  assert.deepEqual(next.profiles.map((p) => p.groups), [LOW, [{ key: 'z', digits: ['1'] }], []])
+test('setProfileGroups replaces only the chosen profile\'s groups', () => {
+  const next = setProfileGroups(three, 2, [{ key: 'z', digits: ['1'] }])
+  assert.deepEqual(next.profiles.map((p) => p.groups), [LOW, ODD, [{ key: 'z', digits: ['1'] }]])
+  assert.equal(next.active, 1)
 })
 
 // The digit profile: "Sync digit profile with cell profile" and "Use digit colors".
@@ -381,8 +404,8 @@ test('sync: deleting the digit profile makes digits follow the cell profile; del
 test('sync: the digit pick follows its own profile through a move, an add, a groups edit and an added preload', () => {
   assert.deepEqual(digitGroups(moveProfile(apart, 2, 0)), ENTROPIC)
   assert.deepEqual(digitGroups(moveProfile(apart, 0, 2)), ENTROPIC)
-  assert.deepEqual(digitGroups(addProfile(apart, 'D')), ENTROPIC)
-  assert.deepEqual(digitGroups(setActiveGroups(apart, [])), ENTROPIC)
+  assert.deepEqual(digitGroups(copyProfile(apart, 0)), ENTROPIC)
+  assert.deepEqual(digitGroups(setProfileGroups(apart, 0, [])), ENTROPIC)
   assert.deepEqual(digitGroups(withAddedPreloads(apart, ['Modular'])), ENTROPIC)
   assert.equal(isSynced(moveProfile(synced, 0, 2)), true)
 })
@@ -397,7 +420,7 @@ test('use digit colors: off is saved as false and kept through every edit; anyth
   const off = setUseDigitColors(apart, false)
   assert.equal(usesDigitColors(off), false)
   assert.equal(off.useDigitColors, false)
-  for (const next of [setActive(off, 0), setSync(off, true), deleteProfile(off, 0), moveProfile(off, 0, 1), addProfile(off, 'D'), setActiveGroups(off, []), setDigitActive(off, 0), withAddedPreloads(off, ['Modular'])]) {
+  for (const next of [setActive(off, 0), setSync(off, true), deleteProfile(off, 0), moveProfile(off, 0, 1), copyProfile(off, 0), renameProfile(off, 0, 'Z'), setProfileGroups(off, 0, []), setDigitActive(off, 0), withAddedPreloads(off, ['Modular'])]) {
     assert.equal(usesDigitColors(next), false)
   }
   assert.equal(usesDigitColors(stateFromStored(off, null)), false)
@@ -412,6 +435,13 @@ test('use digit colors: off, a press steps Cell and Off only; Digit falls back t
   assert.equal(nextMode('off', false), 'cell')
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map((m) => allowedMode(m, false)), ['cell', 'off', 'cell', 'off'])
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map((m) => allowedMode(m, true)), ['cell', 'digit', 'both', 'off'])
+})
+
+test('the right column starts with the selected profile\'s name in an editable box, cut to the longest name allowed', () => {
+  const html = renderEditor([], [], [], 'cell', '', true, true, 'Mine "x"')
+  assert.match(html, new RegExp(`<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="Mine &quot;x&quot;"`))
+  assert.equal(html.indexOf('data-role="profile-name"') < html.indexOf('data-act="add-group"'), true)
+  assert.doesNotMatch(html, /active profile/)
 })
 
 const checkbox = (html, role) => new RegExp(`<input type="checkbox" data-role="${role}"`).test(html)
@@ -440,7 +470,7 @@ test('sync: the top row has the sync checkbox beside Use digit colors, ticked wh
   assert.equal(checked(renderEditor([], [], [], 'cell', '', true, false), 'sync'), false)
   assert.equal(checkbox(renderEditor([], [], [], 'cell', '', true, false), 'sync'), true)
   assert.equal(checkbox(renderEditor([], [], [], 'cell', '', false, true), 'sync'), false)
-  assert.equal(checkbox(renderProfiles(apart, colorFor, ''), 'sync'), false)
+  assert.equal(checkbox(renderProfiles(apart, colorFor, 0), 'sync'), false)
 })
 
 test('the mode is one row of buttons, none of them a radio input, and a button group announces the draft mode', () => {
@@ -451,7 +481,7 @@ test('the mode is one row of buttons, none of them a radio input, and a button g
 
 test('the dialog has the profile list and the groups editor as two columns of one grid, the list first', () => {
   const html = renderEditor([], [], [], 'cell', '<div id="mark-profiles"></div>', true, true)
-  assert.match(html, /<div class="cbd-columns cbd-divider"><div class="cbd-column"><div id="mark-profiles"><\/div><\/div><div class="cbd-column">.*Groups of the active profile/s)
+  assert.match(html, /<div class="cbd-columns cbd-divider"><div class="cbd-column"><div id="mark-profiles"><\/div><\/div><div class="cbd-column">.*profile-name.*Groups</s)
   const css = STYLE_CSS.replace(/\s+/g, ' ')
   assert.match(css, /#color-by-digit-editor \.cbd-columns \{ display: grid; gap: \d+px; grid-template-columns: repeat\(auto-fit, minmax\(\d+px, 1fr\)\)/)
 })
@@ -501,6 +531,7 @@ test('iconLayout shows at most four groups: up to three in one row, four as 2 by
   const rows = (n) => new Set(iconLayout(g(n)).map((c) => c.y)).size
   assert.deepEqual(iconLayout(g(0)), [])
   assert.equal(ICON_MAX_GROUPS, 4)
+  assert.equal(CHIP_MAX_GROUPS, 3)
   for (const n of [1, 2, 3]) assert.equal(rows(n), 1, `${n} groups`)
   assert.equal(rows(4), 2)
   assert.equal(rows(6), 2)
@@ -779,18 +810,19 @@ test('iconHtml gives a group whose palette color is unreadable a grey cell, so t
 
 const profileState = { profiles: [{ name: 'Low <b>', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 1 }
 
+const tagsOf = (html, i) => [...html.matchAll(new RegExp(`<button[^>]*data-act="(tag-\\w+)" data-index="${i}"[^>]*aria-pressed="(\\w+)"[^>]*>([^<]*)<`, 'g'))].map((m) => [m[1], m[2], m[3]])
+
 test('renderProfiles lists each profile as a radio row with its handle, colors with shown digits, name and delete button', () => {
-  const html = renderProfiles(profileState, colorFor, '')
+  const html = renderProfiles(profileState, colorFor, 0)
   assert.equal(count(html, /data-role="profile-row"/g), 2)
   assert.equal(count(html, /data-role="handle"/g), 2)
   assert.match(html, /role="radiogroup"/)
   assert.equal(count(html, /role="radio"/g), 2)
-  assert.equal(count(html, /aria-checked="true"/g), 1)
-  assert.match(html, /data-index="1"[^>]*aria-checked="true"/)
-  assert.match(html, /data-index="0"[^>]*aria-checked="false"/)
-  assert.equal(count(html, /role="radio"[^>]*tabindex="0"/g), 1)
-  assert.match(html, /data-index="1"[^>]*tabindex="0"/)
-  assert.match(html, /data-index="0"[^>]*tabindex="-1"/)
+  assert.equal(count(html, /role="radio"[^>]*aria-checked="true"/g), 1)
+  assert.match(html, /data-act="select" data-index="0"[^>]*aria-checked="true"/)
+  assert.match(html, /data-act="select" data-index="1"[^>]*aria-checked="false"/)
+  assert.match(html, /data-index="0"[^>]*tabindex="0"/)
+  assert.match(html, /data-index="1"[^>]*tabindex="-1"/)
   assert.equal(count(html, /data-act="delete"/g), 2)
   assert.match(html, />2 of 6</)
   assert.match(html, /Low &lt;b&gt;/)
@@ -798,25 +830,58 @@ test('renderProfiles lists each profile as a radio row with its handle, colors w
   assert.equal(count(html, /data-role="chip"/g), 5)
 })
 
-test('renderProfiles marks the active row by aria-checked alone, and the stylesheet gives that row the highlight and a bold name', () => {
-  const html = renderProfiles(profileState, colorFor, '')
+test('renderProfiles marks the selected row by aria-checked, not the active one, and the stylesheet gives that row the highlight and a bold name', () => {
+  assert.match(renderProfiles(profileState, colorFor, 0), /data-act="select" data-index="0"[^>]*aria-checked="true"/)
+  const html = renderProfiles(profileState, colorFor, 0)
   assert.doesNotMatch(html, /#f1ebfb|font-weight/)
   assert.match(STYLE_CSS, /\[aria-checked="true"\] \{[^}]*background: #f1ebfb/)
   assert.match(STYLE_CSS, /\[aria-checked="true"\] \.cbd-name \{[^}]*font-weight: 600/)
 })
 
-test('renderProfiles disables delete on the last profile and Add at six', () => {
-  const one = { profiles: [profileState.profiles[0]], active: 0 }
-  assert.equal(count(renderProfiles(one, colorFor, ''), /data-act="delete"[^>]*disabled/g), 1)
-  assert.equal(count(renderProfiles(profileState, colorFor, ''), /data-act="delete"[^>]*disabled/g), 0)
-  assert.equal(count(renderProfiles(profileState, colorFor, ''), /data-act="add"[^>]*disabled/g), 0)
-  const six = { profiles: [...profileState.profiles, ...profileState.profiles, ...profileState.profiles], active: 0 }
-  assert.match(renderProfiles(six, colorFor, ''), /data-act="add"[^>]*disabled/)
-  assert.match(renderProfiles(six, colorFor, ''), />6 of 6</)
+test('renderProfiles with sync on gives each row one Active tag, pressed on the active profile', () => {
+  const html = renderProfiles(profileState, colorFor, 0)
+  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Active']])
+  assert.deepEqual(tagsOf(html, 1), [['tag-cells', 'true', 'Active']])
 })
 
-test('renderProfiles keeps the typed name in the name field, escaped', () => {
-  assert.match(renderProfiles(profileState, colorFor, 'a"b'), /data-role="new-name"[^>]*value="a&quot;b"/)
+test('renderProfiles with sync off gives each row a Cells tag and a Digits tag, each pressed on its own profile', () => {
+  const split = { ...profileState, digitActive: 0 }
+  const html = renderProfiles(split, colorFor, 1)
+  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Cells'], ['tag-digits', 'true', 'Digits']])
+  assert.deepEqual(tagsOf(html, 1), [['tag-cells', 'true', 'Cells'], ['tag-digits', 'false', 'Digits']])
+})
+
+test('renderProfiles drops the two tags to a second line only when sync is off', () => {
+  assert.equal(count(renderProfiles({ ...profileState, digitActive: 0 }, colorFor, 0), /class="cbd-profile cbd-two-tags"/g), 2)
+  assert.equal(count(renderProfiles(profileState, colorFor, 0), /cbd-two-tags/g), 0)
+  assert.match(STYLE_CSS, /\.cbd-two-tags \.cbd-tags \{[^}]*flex-basis: 100%/)
+})
+
+test('renderProfiles with digit colors off gives each row one Active tag, since no digit profile is in use', () => {
+  const html = renderProfiles({ ...profileState, digitActive: 0, useDigitColors: false }, colorFor, 0)
+  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Active']])
+})
+
+test('renderProfiles disables delete on the last profile and + New profile at six', () => {
+  const one = { profiles: [profileState.profiles[0]], active: 0 }
+  assert.equal(count(renderProfiles(one, colorFor, 0), /data-act="delete"[^>]*disabled/g), 1)
+  assert.equal(count(renderProfiles(profileState, colorFor, 0), /data-act="delete"[^>]*disabled/g), 0)
+  assert.match(renderProfiles(profileState, colorFor, 0), /data-act="new-profile"[^>]*>\+ New profile</)
+  assert.equal(count(renderProfiles(profileState, colorFor, 0), /data-act="new-profile"[^>]*disabled/g), 0)
+  const six = { profiles: [...profileState.profiles, ...profileState.profiles, ...profileState.profiles], active: 0 }
+  assert.match(renderProfiles(six, colorFor, 0), /data-act="new-profile"[^>]*disabled/)
+  assert.match(renderProfiles(six, colorFor, 0), />6 of 6</)
+})
+
+test('renderProfiles has no name box and no Add button: the name is edited on the right', () => {
+  assert.doesNotMatch(renderProfiles(profileState, colorFor, 0), /new-name|data-act="add"/)
+})
+
+test('renderProfiles and renderMenu show at most three chips for a profile of six groups, while the icon keeps four', () => {
+  const each = { profiles: [{ name: 'Each', groups: Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] })) }], active: 0 }
+  assert.equal(count(renderProfiles(each, colorFor, 0), /data-role="chip"/g), 3)
+  assert.equal(count(renderMenu(each, colorFor), /data-role="chip"/g), 3)
+  assert.equal(iconLayout(each.profiles[0].groups).length, 4)
 })
 
 test('renderMenu has the heading, one row per profile in order with the active one marked, then Edit profiles', () => {
@@ -1337,7 +1402,7 @@ test('renderEditor gives each group a red × in its box\'s upper right corner, n
 const VALUE_PROPERTIES = ['background', 'color', 'width', 'height', 'font-size', 'font-weight', 'opacity']
 
 test('the editor and the profile list carry inline only the styles that depend on a value', () => {
-  const profiles = renderProfiles(profileState, colorFor, '')
+  const profiles = renderProfiles(profileState, colorFor, 0)
   const html = editor([{ key: 'a2', digits: ['1', '3'] }, { key: 'zz', digits: [] }], twoPages(), [0, 0])
   const properties = [...(profiles + html).matchAll(/ style="([^"]*)"/g)].flatMap((m) => m[1].split(';').filter(Boolean).map((d) => d.split(':')[0].trim()))
   assert.ok(properties.length > 0)

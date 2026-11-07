@@ -242,7 +242,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   describe('saved groups', { concurrency: false }, () => {
     it('Save with Low/5/High made the active profile writes it and closes the dialog', async () => {
       await openEditor()
-      await p.click(`${EDITOR} [data-act=activate][data-index="1"]`)
+      await p.click(`${EDITOR} [data-act=tag-cells][data-index="1"]`)
       await closeDialogWith(p, 'Save', EDITOR)
       const expected = { ...SEED, active: 1 }
       assert.deepEqual(await settle(getData, expected), expected)

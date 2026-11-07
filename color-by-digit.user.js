@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.11.0
+// @version      0.12.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.11.0'
+  const VERSION = '0.12.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -349,19 +349,38 @@
   const digitGroups = (state) => state.profiles[isSynced(state) ? state.active : state.digitActive].groups
   const iconGroups = (state, mode) => (mode === 'digit' ? digitGroups(state) : activeGroups(state))
 
-  function addProfile (state, name) {
-    const trimmed = cleanName(name)
-    if (state.profiles.length >= MAX_PROFILES || trimmed === '') return state
-    const copy = { name: trimmed, groups: cloneGroups(activeGroups(state)) }
+  const NEW_PROFILE_SUFFIX = ' copy'
+
+  function copyProfile (state, index) {
+    const source = state.profiles[index]
+    if (!source || state.profiles.length >= MAX_PROFILES) return state
+    const copy = { name: cleanName(source.name + NEW_PROFILE_SUFFIX), groups: cloneGroups(source.groups) }
     return withProfiles(state, [...state.profiles.map(cloneProfile), copy], state.active, state.digitActive)
+  }
+
+  // A blank name keeps the old one.
+  function renameProfile (state, index, name) {
+    const trimmed = cleanName(name)
+    if (!state.profiles[index] || trimmed === '') return state
+    return withProfiles(state, state.profiles.map((p, i) => (i === index ? { name: trimmed, groups: cloneGroups(p.groups) } : cloneProfile(p))), state.active, state.digitActive)
+  }
+
+  // Where a profile index lands when another profile is deleted: a deleted one falls to its neighbour.
+  const indexAfterDelete = (index, deleted, count) => (deleted < index ? index - 1 : Math.min(index, count - 2))
+
+  // Where a profile index lands when the profile at `from` is dragged to `to`.
+  function indexAfterMove (index, from, to) {
+    const order = Array.from({ length: Math.max(from, to, index) + 1 }, (_, i) => i)
+    order.splice(to, 0, ...order.splice(from, 1))
+    return order.indexOf(index)
   }
 
   function deleteProfile (state, index) {
     if (state.profiles.length <= 1 || !state.profiles[index]) return state
     const profiles = state.profiles.filter((_, i) => i !== index).map(cloneProfile)
-    const active = index < state.active ? state.active - 1 : Math.min(state.active, profiles.length - 1)
+    const active = indexAfterDelete(state.active, index, state.profiles.length)
     // Deleting the digit profile makes the digits follow the cell profile.
-    const digitActive = isSynced(state) || index === state.digitActive ? undefined : state.digitActive - (index < state.digitActive ? 1 : 0)
+    const digitActive = isSynced(state) || index === state.digitActive ? undefined : indexAfterDelete(state.digitActive, index, state.profiles.length)
     return withProfiles(state, profiles, active, digitActive)
   }
 
@@ -385,8 +404,8 @@
 
   const setUseDigitColors = (state, on) => makeState(state.profiles.map(cloneProfile), state.active, state.digitActive, on)
 
-  function setActiveGroups (state, groups) {
-    return withProfiles(state, state.profiles.map((p, i) => (i === state.active ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), state.active, state.digitActive)
+  function setProfileGroups (state, index, groups) {
+    return withProfiles(state, state.profiles.map((p, i) => (i === index ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), state.active, state.digitActive)
   }
 
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
@@ -395,6 +414,8 @@
   const ICON_TOP = 22
   const ARROW_START = 78
   const ICON_MAX_GROUPS = 4
+  // The profile menu's and dialog's chips stop at the three groups every preload but Each digit has.
+  const CHIP_MAX_GROUPS = 3
 
   function shownDigit (digits) {
     const sorted = [...digits].sort()
@@ -405,8 +426,10 @@
     return nonZero[Math.ceil(nonZero.length / 2) - 1]
   }
 
+  const shownGroups = (groups, max) => groups.slice(0, max).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
+
   function iconLayout (groups) {
-    const shown = groups.slice(0, ICON_MAX_GROUPS).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
+    const shown = shownGroups(groups, ICON_MAX_GROUPS)
     const gap = 3
     if (shown.length === ICON_MAX_GROUPS) {
       const top = ICON_TOP + 5
@@ -665,7 +688,7 @@
   }
 
   function renderChips (groups, colorOf, size) {
-    return iconLayout(groups).map(({ key, digit }) => {
+    return shownGroups(groups, CHIP_MAX_GROUPS).map(({ key, digit }) => {
       const color = colorOf(key)
       return `<span data-role="chip" title="${esc(key)}" class="cbd-chip" style="width:${size}px;height:${size}px;` +
         `background:${esc(color || UNREADABLE_FILL)};color:${inkFor(color)};font-size:${Math.round(size * 0.6)}px">${esc(digit)}</span>`
@@ -695,22 +718,30 @@
 
   const checkboxHtml = (role, on, label) => `<label class="cbd-check"><input type="checkbox" data-role="${role}"${on ? ' checked' : ''}> ${label}</label>`
 
-  function renderProfiles (state, colorOf, newName) {
+  // The Active tag is the one pick while the digits follow the cells, or no digit is colored.
+  const hasTwoTags = (state) => usesDigitColors(state) && !isSynced(state)
+
+  function renderTags (state, i) {
+    const tag = (act, label, on) => `<button type="button" class="cbd-button cbd-tag" data-act="${act}" data-index="${i}" aria-pressed="${on}">${label}</button>`
+    if (!hasTwoTags(state)) return tag('tag-cells', 'Active', i === state.active)
+    return tag('tag-cells', 'Cells', i === state.active) + tag('tag-digits', 'Digits', i === state.digitActive)
+  }
+
+  function renderProfiles (state, colorOf, selected) {
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
-      const active = i === state.active
-      return `<div class="cbd-profile" data-role="profile-row" data-act="activate" data-index="${i}" role="radio" aria-checked="${active}" tabindex="${active ? 0 : -1}" aria-label="${esc(profile.name)}">` +
+      const chosen = i === selected
+      return `<div class="cbd-profile${hasTwoTags(state) ? ' cbd-two-tags' : ''}" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${esc(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
-        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, 22)}</span>` +
+        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, 20)}</span>` +
         `<span class="cbd-name">${esc(profile.name)}</span>` +
+        `<span class="cbd-tags">${renderTags(state, i)}</span>` +
         `<button type="button" class="cbd-button cbd-small" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
     return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
-      `<div role="radiogroup" aria-label="Active profile">${rows}</div>` +
-      '<div class="cbd-add-row">' +
-      `<input type="text" data-role="new-name" maxlength="${MAX_NAME_LENGTH}" placeholder="New profile name" value="${esc(newName)}" aria-label="New profile name">` +
-      `<button type="button" class="cbd-button" data-act="add"${full ? ' disabled' : ''}>+ Add</button></div>`
+      `<div role="radiogroup" aria-label="Profile to edit">${rows}</div>` +
+      `<button type="button" class="cbd-button cbd-new" data-act="new-profile"${full ? ' disabled' : ''}>+ New profile</button>`
   }
 
   const MENU_HEADING_STYLE = `font:600 11px/1 sans-serif;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px`
@@ -738,7 +769,7 @@
       '<div role="menuitem" data-act="edit" style="padding:9px 10px;border-radius:8px;cursor:pointer;color:#5d5868">&#9881; Edit profiles…</div>'
   }
 
-  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors, synced) {
+  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors, synced, selectedName = '') {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
       const digits = NUMPAD_DIGITS.map((d) =>
@@ -758,7 +789,9 @@
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
     return `<div class="cbd-checks">${checks}</div>${heading('Mode')}${modeChoice}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
-      `<div class="cbd-column">${heading('Groups of the active profile', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
+      '<div class="cbd-column">' +
+      `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${esc(selectedName)}" aria-label="Profile name">` +
+      `${heading('Groups', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
       '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div></div>'
   }
 
@@ -801,14 +834,21 @@
     [`${EDITOR} [data-role="chosen"]`, 'display: inline-block; box-sizing: border-box; width: 1.6em; height: 1.6em; border-radius: 3px; vertical-align: middle; border: 1px solid #888'],
     [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
     [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 6px'],
-    [`${EDITOR} .cbd-profile`, `cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 8px; box-shadow: inset 0 0 0 1px ${IDLE_RING}`],
+    [`${EDITOR} .cbd-profile`, `cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; box-shadow: inset 0 0 0 1px ${IDLE_RING}`],
     [`${EDITOR} .cbd-profile[aria-checked="true"]`, `background: ${ACTIVE_FILL}; box-shadow: inset 0 0 0 1.5px ${ACTIVE_RING}`],
     [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
-    [`${EDITOR} .cbd-chips`, 'display: flex; gap: 3px; width: 100px'],
-    [`${EDITOR} .cbd-name`, 'flex: 1; text-align: left; font-weight: 400'],
+    [`${EDITOR} .cbd-chips`, 'display: flex; gap: 3px; flex: none'],
+    [`${EDITOR} .cbd-name`, 'flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400'],
     [`${EDITOR} [aria-checked="true"] .cbd-name`, 'font-weight: 600'],
-    [`${EDITOR} .cbd-add-row`, 'display: flex; gap: 8px; margin: 8px 0'],
-    [`${EDITOR} [data-role="new-name"]`, 'flex: 1; padding: 6px 8px'],
+    [`${EDITOR} .cbd-new`, 'margin: 8px 0'],
+    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; width: 100%; padding: 6px 8px; margin: 0 0 10px'],
+    [`${EDITOR} .cbd-tags`, 'display: flex; gap: 4px; flex: none'],
+    [`${EDITOR} .cbd-profile .cbd-small`, 'flex: none; padding: 0 8px'], [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
+    // Two tags would leave the name no room, so they drop to a second line under it.
+    [`${EDITOR} .cbd-two-tags`, 'flex-wrap: wrap'],
+    [`${EDITOR} .cbd-two-tags .cbd-tags`, 'order: 1; flex-basis: 100%; padding-left: 28px'],
+    [`${EDITOR} .cbd-tag`, 'padding: 0 6px; height: 24px; line-height: 22px; font-size: .75rem'],
+    [`${EDITOR} .cbd-tag[aria-pressed="true"]`, `background: ${ACTIVE_FILL}; border-color: ${ACTIVE_RING}; color: ${ACTIVE_INK}; font-weight: 600`],
     [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
     [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
@@ -817,7 +857,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1202,7 +1242,7 @@
     let savedState = loadState()
     let draft = savedState
     let draftMode = mode
-    let newName = ''
+    let selected = draft.active
     addStyle()
     Framework.showDialog({
       centerOverBoard: true,
@@ -1231,36 +1271,37 @@
     }
     let shown = []
     const draw = () => {
-      const groups = activeGroups(draft)
+      const { groups, name } = draft.profiles[selected]
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, newName), usesDigitColors(draft), isSynced(draft))
+      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, selected), usesDigitColors(draft), isSynced(draft), name)
     }
-    const reshow = (next) => { draft = next; shown = [] }
-    const addProfileFromField = () => {
+    const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; shown = [] }
+    const newProfile = () => {
       const before = draft
-      draft = addProfile(draft, newName)
-      const added = draft !== before
-      if (added) newName = ''
+      reshow(copyProfile(draft, selected), draft.profiles.length)
+      if (draft === before) return
       draw()
-      if (!added && newName.trim() === '') box.querySelector('[data-role="new-name"]').focus()
+      const nameBox = box.querySelector('[data-role="profile-name"]')
+      nameBox.focus()
+      nameBox.select()
     }
     draw()
     wireCopyPaste(box.closest('.dialog'), (values) => {
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
-      reshow(savedState)
+      reshow(savedState, savedState.active)
       draftMode = mode
       draw()
     })
     box.addEventListener('input', (event) => {
-      if (event.target.matches('[data-role="new-name"]')) newName = event.target.value
+      if (event.target.matches('[data-role="profile-name"]')) draft = renameProfile(draft, selected, event.target.value)
     })
     box.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' || !event.target.matches('[data-role="new-name"]')) return
+      if (event.key !== 'Enter' || !event.target.matches('[data-role="profile-name"]')) return
       event.preventDefault()
       event.stopPropagation()
-      addProfileFromField()
+      draw()
     })
     box.addEventListener('change', (event) => {
       // The draft mode is kept as chosen: unticking "Use digit colors" shows its fallback, and ticking it again before Save shows the mode again.
@@ -1289,32 +1330,32 @@
         handle.removeEventListener('pointermove', move)
         handle.removeEventListener('pointerup', finish)
         handle.removeEventListener('pointercancel', finish)
-        if (e.type === 'pointerup' && to !== from) reshow(moveProfile(draft, from, to))
+        if (e.type === 'pointerup' && to !== from) reshow(moveProfile(draft, from, to), indexAfterMove(selected, from, to))
         draw()
       }
       handle.addEventListener('pointermove', move)
       handle.addEventListener('pointerup', finish)
       handle.addEventListener('pointercancel', finish)
     })
-    const activateRow = (index, refocus) => {
-      reshow(setActive(draft, index))
+    const selectRow = (index, refocus) => {
+      reshow(draft, index)
       draw()
-      if (refocus) box.querySelector(`[data-act="activate"][data-index="${index}"]`).focus()
+      if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
     box.addEventListener('keydown', (event) => {
-      if (!event.target.matches('[data-act="activate"]')) return
+      if (!event.target.matches('[data-act="select"]')) return
       const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)
       if (target === null) return
       event.preventDefault()
       event.stopPropagation()
-      activateRow(target, true)
+      selectRow(target, true)
     })
     box.addEventListener('click', (event) => {
-      const row = event.target.closest('[data-act="activate"]')
+      const row = event.target.closest('[data-act="select"]')
       if (row && !event.target.closest('[data-role="handle"], button')) {
         event.preventDefault()
         event.stopPropagation()
-        activateRow(Number(row.dataset.index), false)
+        selectRow(Number(row.dataset.index), false)
         return
       }
       const modeButton = event.target.closest('button[data-role="mode-draft"]')
@@ -1331,12 +1372,16 @@
       event.preventDefault()
       event.stopPropagation()
       const act = el.dataset.act
-      if (act === 'add') { addProfileFromField(); return }
-      if (act === 'delete') {
-        reshow(deleteProfile(draft, Number(el.dataset.index)))
+      if (act === 'new-profile') { newProfile(); return }
+      if (act === 'tag-cells' || act === 'tag-digits') {
+        const set = act === 'tag-cells' ? setActive : setDigitActive
+        draft = set(draft, Number(el.dataset.index))
+      } else if (act === 'delete') {
+        const index = Number(el.dataset.index)
+        reshow(deleteProfile(draft, index), indexAfterDelete(selected, index, draft.profiles.length))
       } else {
-        const edit = editGroupsFor(activeGroups(draft), shown, act, { group: Number(el.dataset.group), key: el.dataset.key, digit: el.dataset.digit }, colors)
-        draft = setActiveGroups(draft, edit.groups)
+        const edit = editGroupsFor(draft.profiles[selected].groups, shown, act, { group: Number(el.dataset.group), key: el.dataset.key, digit: el.dataset.digit }, colors)
+        draft = setProfileGroups(draft, selected, edit.groups)
         shown = edit.shown
       }
       draw()
