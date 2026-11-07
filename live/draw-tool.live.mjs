@@ -77,7 +77,7 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     assert.equal(await p.evaluate(() => Framework.app.svgRenderer.getElem().lastElementChild.id), 'draw-tool-layer')
   })
 
-  it('the stroke is a smoothed curve with round ends and joins, see-through, in pen color 1 at the default width', async () => {
+  it('the stroke is a smoothed curve with round ends and joins, solid by default, in draw color 1 (pen color 1, copied on first use) at the default width', async () => {
     const look = await p.evaluate((selector) => {
       const path = document.querySelector(selector)
       const style = window.getComputedStyle(path)
@@ -96,7 +96,7 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     assert.equal(look.commands < 30, true, `${look.commands} path commands: the mouse points were simplified`)
     assert.equal(look.cap, 'round')
     assert.equal(look.join, 'round')
-    assert.equal(look.opacity > 0 && look.opacity < 1, true, `stroke opacity ${look.opacity}`)
+    assert.equal(look.opacity, 1)
     assert.equal(look.width, '6px')
     assert.equal(look.stroke, look.pen1)
   })

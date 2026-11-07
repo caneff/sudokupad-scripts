@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
-// SudokuPad, Enter, a click elsewhere and Escape end it, a click on text edits it, and the text size control. Real
+// SudokuPad, Enter, a click elsewhere and Escape end it, a click on text edits it, and the Size and Opacity sliders. Real
 // mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,8 +9,7 @@ import { openPage } from './page.mjs'
 import { gridPoint, plantUnchecked } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
 
-const { COLOR_KEY, DIALOG, PANEL_BOX, TEXT_BOX, TEXT_SIZE_KEY, TEXTS } = draw
-const SIZE_BUTTONS = `${PANEL_BOX} button[data-text-size]`
+const { COLOR_KEY, DIALOG, TEXT_BOX, OPACITY_KEY, SIZE_SLIDER, OPACITY_SLIDER, TEXTS, WIDTH_KEY } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -42,7 +41,7 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     return { fill: style.fill, opacity: style.fillOpacity, size: style.fontSize }
   }, [TEXTS, content])
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
-  const currentSize = () => read((selector) => [...document.querySelectorAll(selector)].filter((b) => b.classList.contains('current')).map((b) => Number(b.dataset.textSize)), SIZE_BUTTONS)
+  const sliderValue = (selector) => read((s) => Number(document.querySelector(s).value), selector)
   // The middle of the text that reads `content`, in cells from the grid's top left.
   const textInCells = (content) => read(([selector, want]) => {
     const t = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
@@ -54,7 +53,7 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
     await draw.forgetDrawings(p)
-    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, TEXT_SIZE_KEY])
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, OPACITY_KEY])
     await reload()
   })
   after(async () => { await context.close() })
@@ -87,7 +86,7 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     assert.equal(await tool(), 'draw')
   })
 
-  it('the text is solid, in the current pen color, at the middle text size', async () => {
+  it('the text is solid, in the current draw color, at the default size', async () => {
     assert.deepEqual(await textStyle('15'), { fill: await penColor(1), opacity: '1', size: '20px' })
   })
 
@@ -198,31 +197,32 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
   })
 
-  it('the text size control has three sizes, and a new text takes the one picked and the current pen color', async () => {
-    assert.equal(await p.locator(SIZE_BUTTONS).count(), 3)
-    assert.deepEqual(await currentSize(), [20])
-    await p.click(`${SIZE_BUTTONS} >> nth=2`)
-    assert.deepEqual(await settle(currentSize, [28]), [28])
+  it('the Size slider sets the next text\'s size to 2 x the width + 8, and the Opacity slider its opacity; the earlier text is unchanged', async () => {
+    assert.equal(await sliderValue(SIZE_SLIDER), 6)
+    await p.locator(SIZE_SLIDER).fill('10')
+    await p.locator(OPACITY_SLIDER).fill('40')
     await p.click('.controls-input button[data-key="4"]')
     await clickAt(THIRD_AT)
     await p.keyboard.type('6')
     await p.keyboard.press('Enter')
-    assert.deepEqual(await textStyle('6'), { fill: await penColor(4), opacity: '1', size: '28px' })
+    assert.deepEqual(await textStyle('6'), { fill: await penColor(4), opacity: '0.4', size: '28px' })
+    assert.deepEqual(await textStyle('23'), { fill: await penColor(1), opacity: '1', size: '20px' })
   })
 
-  it('the text and the text size come back after a reload', async () => {
+  it('the text and the slider values come back after a reload', async () => {
     const before = await texts()
     await reload()
     assert.deepEqual(await settle(texts, before), before)
     await pickDraw()
-    assert.deepEqual(await currentSize(), [28])
+    assert.deepEqual([await sliderValue(SIZE_SLIDER), await sliderValue(OPACITY_SLIDER)], [10, 40])
   })
 
-  it('a bad saved text size reads as the middle size', async () => {
-    await plantUnchecked(p, TEXT_SIZE_KEY, '"huge"')
+  it('bad saved slider values read as the defaults', async () => {
+    await plantUnchecked(p, WIDTH_KEY, '"huge"')
+    await plantUnchecked(p, OPACITY_KEY, '7')
     await reload()
     await pickDraw()
-    assert.deepEqual(await currentSize(), [20])
+    assert.deepEqual([await sliderValue(SIZE_SLIDER), await sliderValue(OPACITY_SLIDER)], [6, 100])
   })
 
   it('after a window resize each text still sits over the cells it was typed on', async () => {

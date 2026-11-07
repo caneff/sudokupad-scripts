@@ -33,11 +33,11 @@ test('spec 268 gives a solver a Draw tool whose strokes and texts are kept per p
   assert.match(strokePath(smooth), /^M100 0 (Q[\d. ]+ )+L0 100$/)
   assert.deepEqual(straightLine(denseArc), [denseArc[0], denseArc[159]])
   assert.equal(isClick(denseArc), false, 'a drag is no click')
-  const arc = strokeItem(smooth, 3, draw.WIDTHS[2])
+  const arc = strokeItem(smooth, 3, 10, 100)
 
   // A text: a click that does not move opens it, and a later click on it finds it.
   assert.equal(isClick([[300, 300], [301, 300]]), true)
-  const sum = textItem([300, 300], '15', 1, draw.DEFAULT_TEXT_SIZE)
+  const sum = textItem([300, 300], '15', 1, draw.textSizeFor(draw.DEFAULT_WIDTH), 100)
   const drawing = [arc, sum]
   assert.equal(textAt(drawing, [302, 298]), 1)
   assert.equal(textAt(drawing, [400, 400]), -1)
@@ -66,6 +66,6 @@ test('spec 268 gives a solver a Draw tool whose strokes and texts are kept per p
   assert.throws(() => draw.readDrawing('not a drawing {'), /saved drawing/)
 
   // The panel's choices read back, and bad saved values read as the defaults.
-  assert.deepEqual([draw.readColor(4), draw.readWidth(draw.WIDTHS[0]), draw.readTextSize(draw.TEXT_SIZES[2])], [4, draw.WIDTHS[0], draw.TEXT_SIZES[2]])
-  assert.deepEqual([draw.readColor('purple'), draw.readWidth(7), draw.readTextSize('huge')], [draw.DEFAULT_COLOR, draw.DEFAULT_WIDTH, draw.DEFAULT_TEXT_SIZE])
+  assert.deepEqual([draw.readColor(4), draw.readWidth(3), draw.readOpacity(45)], [4, 3, 45])
+  assert.deepEqual([draw.readColor('purple'), draw.readWidth(17), draw.readOpacity('huge')], [draw.DEFAULT_COLOR, draw.DEFAULT_WIDTH, draw.DEFAULT_OPACITY])
 })

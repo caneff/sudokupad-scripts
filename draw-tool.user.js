@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.0
-// @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
+// @version      0.11.1
+// @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,33 +16,96 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.7.0'
+  const VERSION = '0.11.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
-  // Board units: SudokuPad's board SVG draws a cell 64 wide. Test Markup's brush is 3.
-  const WIDTHS = [3, 6, 10]
-  const DEFAULT_WIDTH = WIDTHS[1]
-  const STROKE_OPACITY = 0.75
-  // A stroke's color is the number of a SudokuPad pen color, 1 to 9; its color is the CSS variable --puzzle-pencolor-<n>.
-  const PEN_COLORS = 9
+  // Board units: SudokuPad's board SVG draws a cell 64 wide, from (0, 0). Test Markup's brush is 3.
+  const CELL_SIZE = 64
+  // The shapes a drag can draw, as a shape item saves them.
+  const RECT = 'rect'
+  const ELLIPSE = 'ellipse'
+  const SHAPES = [RECT, ELLIPSE]
+  // The Shape button's modes in the order it steps through them: Off draws free lines.
+  const SHAPE_OFF = 'off'
+  const SHAPE_MODES = [SHAPE_OFF, ...SHAPES]
+  const SHAPE_KEY = 'DrawTool_shape'
+  const MIN_WIDTH = 1
+  const MAX_WIDTH = 16
+  const WIDTH_STEP = 0.5
+  const DEFAULT_WIDTH = 6
+  // Percent. An item saved before opacity existed has none and reads as the default.
+  const MIN_OPACITY = 20
+  const MAX_OPACITY = 100
+  const OPACITY_STEP = 5
+  const DEFAULT_OPACITY = 100
+  // An item saves its color as a number, 1 to 9, the number of one of Draw's nine colors, so a recolor recolors it.
+  const DRAW_COLORS = 9
+  const COLOR_NUMBERS = Array.from({ length: DRAW_COLORS }, (_, i) => i + 1)
   const DEFAULT_COLOR = 1
   const COLOR_KEY = 'DrawTool_color'
+  const COLORS_KEY = 'DrawTool_colors'
+  // The CSS variable that holds draw color n: the items, the color buttons and the text box all read it.
+  const colorVar = (n) => `--draw-tool-color-${n}`
+  // Copied from Pen Tool Extras: SudokuPad's own pen colors, for a color that cannot be read.
+  const SUDOKUPAD_PEN_COLORS = Object.freeze({
+    1: '#1f8020',
+    2: '#e87cf1',
+    3: '#e49632',
+    4: '#f53a37',
+    5: '#d2be32',
+    6: '#3d99f5',
+    7: '#d6d6d6',
+    8: '#7c7c7c',
+    9: '#000000'
+  })
+  const HEX_COLOR = /^#([0-9a-f]{6})$/
+  // Preset ids; the labels are what the dialog shows.
+  const PEN_PRESET = 'pen'
+  const PAGE_PRESETS = [1, 2, 3].map((page) => `page-${page}`)
+  const SUDOKUPAD_PRESET = 'sudokupad'
+  const PRESET_LABELS = {
+    [PEN_PRESET]: 'Pen colors',
+    ...Object.fromEntries(PAGE_PRESETS.map((id, i) => [id, `Darker page ${i + 1}`])),
+    [SUDOKUPAD_PRESET]: 'SudokuPad colors'
+  }
+  // The share of its OKLCH lightness a cell color keeps as a Darker page color, and the OKLCH chroma under which a darkened color counts as grey (Pen Tool Extras' values).
+  const LIGHTNESS_FACTOR = 0.75
+  const GREY_CHROMA = 0.04
+  const GAMUT_EDGE = 1e-6
+  const SHORT_HEX_COLOR = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/
+  const RGB_TEXT = /^rgba?\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+)\s*)?\)$/
+  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs), as Pen Tool Extras' pen buttons do.
+  const HOLD_TO_EDIT_MS = 1000
   const WIDTH_KEY = 'DrawTool_width'
-  // Board units, as a text's height. Separate from the line widths.
-  const TEXT_SIZES = [14, 20, 28]
-  const DEFAULT_TEXT_SIZE = TEXT_SIZES[1]
-  const TEXT_SIZE_KEY = 'DrawTool_textsize'
+  const OPACITY_KEY = 'DrawTool_opacity'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
   // How far, in board units, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
-  const PANEL_BOX_CLASS = 'draw-tool-panel-box'
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
+  const SETTINGS_CLASS = 'draw-tool-settings'
+  const SHAPE_BUTTON_CLASS = 'draw-tool-shape-mode'
+  const SHAPE_ITEM_CLASS = 'draw-tool-shape'
+  const TRAY_CLASS = 'draw-tool-tray'
+  const SLIDERS_CLASS = 'draw-tool-sliders'
+  const SLIDER_ROW_CLASS = 'draw-tool-slider'
+  const EDITING_CLASS = 'draw-tool-editing'
+  const PICKER_CLASS = 'draw-tool-picker'
+  const COLORS_STYLE_ID = 'draw-tool-colors'
+  const PANEL_STYLE_ID = 'draw-tool-style'
+  const SIZE_SLIDER = 'draw-tool-size'
+  const OPACITY_SLIDER = 'draw-tool-opacity'
+  // Pen Tool Extras' slider tray: the same purple tray, wedge track for size and fade track for opacity.
+  const PANEL_COLOR = '#6a1b9a'
+  const TRAY_COLOR = '#efeaf4'
+  const SLIDER_TRACK_REM = 0.8
+  const SLIDER_THUMB_REM = 1.1
+  const SLIDER_THUMB_RING_REM = 0.2
   const CLEAR_QUESTION = 'Clear the drawing?'
-  const CLEAR_OK = 'OK'
-  const CLEAR_CANCEL = 'Cancel'
+  const OK_LABEL = 'OK'
+  const CANCEL_LABEL = 'Cancel'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
   // How far, in board units, a mouse point may stray from the simplified line before it is kept.
@@ -51,11 +114,14 @@
   const ERASE_TOLERANCE = 4
   // Straight pieces per curve when a stroke's drawn line is hit-tested.
   const CURVE_STEPS = 8
+  // Straight pieces round an ellipse's outline when it is hit-tested.
+  const ELLIPSE_STEPS = 64
   const KEPT_PUZZLES = 50
   const PRIMARY_BUTTON = 0
   const SECONDARY_BUTTON = 2
-  const SHIFT_KEY = 'Shift'
-  const BUTTON_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/></svg>'
+  const HELD_KEYS = ['Shift', 'Alt']
+  const FREE_LINE_ICON = '<path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/>'
+  const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${FREE_LINE_ICON}</svg>`
 
   const distanceToSegment = ([px, py], [ax, ay], [bx, by]) => {
     const dx = bx - ax
@@ -128,16 +194,29 @@
     ? 0
     : Math.min(distanceToSegment(a, c, d), distanceToSegment(b, c, d), distanceToSegment(c, a, b), distanceToSegment(d, a, b))
 
-  // Whether a right-drag from `from` to `to` passes within the tolerance of the line's edge.
-  function touchesStroke (item, from, to) {
-    const reach = ERASE_TOLERANCE + item.width / 2
-    const line = drawnLine(item.points)
+  // Whether a right-drag from `from` to `to` passes within the tolerance of the edge of a line drawn `width` wide.
+  function touchesLine (line, width, from, to) {
+    const reach = ERASE_TOLERANCE + width / 2
     if (line.length === 1) return distanceToSegment(line[0], from, to) <= reach
     for (let i = 1; i < line.length; i++) {
       if (segmentsDistance(from, to, line[i - 1], line[i]) <= reach) return true
     }
     return false
   }
+
+  const touchesStroke = (item, from, to) => touchesLine(drawnLine(item.points), item.width, from, to)
+
+  // A shape's outline as a closed line of straight pieces; an ellipse's are close enough to its curve to hit-test.
+  function shapeOutline ({ shape, box: [left, top, right, bottom] }) {
+    if (shape === RECT) return [[left, top], [right, top], [right, bottom], [left, bottom], [left, top]]
+    const [cx, cy, rx, ry] = [(left + right) / 2, (top + bottom) / 2, (right - left) / 2, (bottom - top) / 2]
+    return Array.from({ length: ELLIPSE_STEPS + 1 }, (_, i) => {
+      const a = (2 * Math.PI * i) / ELLIPSE_STEPS
+      return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]
+    })
+  }
+
+  const touchesShape = (item, from, to) => touchesLine(shapeOutline(item), item.width, from, to)
 
   // The box a text takes on the board, centred on its point: the text is drawn anchored at its middle.
   function textBox (item) {
@@ -165,38 +244,235 @@
     return corners.some((corner, i) => segmentsCross(from, to, corner, corners[(i + 1) % 4]))
   }
 
-  const touchesItem = (item, from, to) => item.kind === 'text' ? touchesText(item, from, to) : touchesStroke(item, from, to)
+  const TOUCHES = { stroke: touchesStroke, text: touchesText, shape: touchesShape }
+  const touchesItem = (item, from, to) => TOUCHES[item.kind](item, from, to)
 
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
 
   // A keypad button's data-value is text, and Framework.getData parses a saved number back as a number.
-  function penColor (value) {
+  function drawColor (value) {
     const n = typeof value === 'string' && /^[0-9]$/.test(value) ? Number(value) : value
-    return Number.isInteger(n) && n >= 1 && n <= PEN_COLORS ? n : undefined
+    return Number.isInteger(n) && n >= 1 && n <= DRAW_COLORS ? n : undefined
   }
-  const readColor = (saved) => penColor(saved) ?? DEFAULT_COLOR
-  const readWidth = (saved) => WIDTHS.includes(saved) ? saved : DEFAULT_WIDTH
-  const readTextSize = (saved) => TEXT_SIZES.includes(saved) ? saved : DEFAULT_TEXT_SIZE
+  const readColor = (saved) => drawColor(saved) ?? DEFAULT_COLOR
+  const onSlider = (value, min, max, step) => isNumber(value) && value >= min && value <= max && Number.isInteger((value - min) / step)
+  const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
+  const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
+  const readShapeMode = (saved) => SHAPE_MODES.includes(saved) ? saved : SHAPE_OFF
+  const nextShapeMode = (mode) => SHAPE_MODES[(SHAPE_MODES.indexOf(mode) + 1) % SHAPE_MODES.length]
+  const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
+  const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
+  // Board units, as a text's height: the line width's slider also sets the text size.
+  const TEXT_SIZE_PER_WIDTH = 2
+  const TEXT_SIZE_BASE = 8
+  const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
+  const isTextSize = (value) => Number.isInteger(value) && isWidth((value - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH)
+  const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
+
+  const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+  const clamp255 = (x) => Math.max(0, Math.min(255, x))
+
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black. Copied from Pen Tool Extras.
+  function parseColor (text) {
+    if (typeof text !== 'string') return null
+    const value = text.trim().toLowerCase()
+    const short = SHORT_HEX_COLOR.exec(value)
+    const hex = HEX_COLOR.exec(short ? `#${short.slice(1).map((c) => c + c).join('')}` : value)
+    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
+    const rgb = RGB_TEXT.exec(value)
+    if (!rgb || (rgb[4] !== undefined && Number(rgb[4]) <= 0)) return null
+    return rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x))))
+  }
+
+  const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
+
+  // A color picker takes only #rrggbb, so every draw color is kept as one. A transparent color has none to keep.
+  const hexColor = (text) => {
+    const rgb = parseColor(text)
+    return rgb ? toHex(rgb) : undefined
+  }
+
+  const savedHex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
+
+  // null when nothing is saved, which means the first-use copy of the pen colors is still owed. A saved value that is not
+  // nine colors still counts as saved, so the copy never writes over it: each color it lacks shows SudokuPad's own.
+  function readDrawColors (saved) {
+    if (saved === null || saved === undefined) return null
+    const entries = isPlainObject(saved) ? saved : {}
+    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(entries[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+  }
+
+  // `readPenColor(n)` reads pen color n as the browser computes it.
+  const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
+
+  function editedColor (colors, n, value) {
+    if (drawColor(n) === undefined) throw new RangeError(`draw-tool: ${n} is not a color number`)
+    const hex = hexColor(value)
+    if (!hex) throw new RangeError(`draw-tool: ${value} is not a color`)
+    return { ...colors, [n]: hex }
+  }
+
+  // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
+  const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
+
+  const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
+  const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
+
+  // Ottosson's published matrices. The way back returns the unclamped linear channels, so a caller can tell an out-of-gamut color.
+  function toOklab ([r, g, b]) {
+    const [lr, lg, lb] = [r, g, b].map(toLinear)
+    const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+    const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+    const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+    ]
+  }
+
+  function fromOklabLinear ([L, a, b]) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+    return [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+    ]
+  }
+
+  const inGamut = (linear) => linear.every((x) => x >= -GAMUT_EDGE && x <= 1 + GAMUT_EDGE)
+
+  // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
+  function darkenColor (rgb) {
+    const [L, a, b] = toOklab(rgb.map(clamp255))
+    const target = L * LIGHTNESS_FACTOR
+    let low = 0
+    let high = 1
+    if (!inGamut(fromOklabLinear([target, a, b]))) {
+      for (let i = 0; i < 30; i++) {
+        const mid = (low + high) / 2
+        if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
+        else high = mid
+      }
+    } else {
+      low = 1
+    }
+    const out = fromOklabLinear([target, a * low, b * low])
+    return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
+  }
+
+  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the buttons line up.
+  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
+  // A slot with no usable color keeps SudokuPad's own pen color.
+  function darkerPageColors (keys, readCell) {
+    const colors = {}
+    const darkened = []
+    COLOR_NUMBERS.forEach((n) => {
+      const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
+      colors[n] = rgb ? darkenColor(rgb) : SUDOKUPAD_PEN_COLORS[n]
+      if (rgb) darkened.push(n)
+    })
+    let darkest = null
+    let darkestLightness = Infinity
+    for (const n of darkened) {
+      const [lightness, a, b] = toOklab(parseColor(colors[n]))
+      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
+        darkest = n
+        darkestLightness = lightness
+      }
+    }
+    if (darkest) colors[darkest] = '#000000'
+    return colors
+  }
+
+  // The presets the palette in force offers: one Darker page per cell color page, up to three, between the pen colors and SudokuPad's own.
+  const presetOptions = (pageCount) => [PEN_PRESET, ...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+
+  // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
+  function presetColors (preset, pages, readCell, readPen) {
+    if (preset === SUDOKUPAD_PRESET) return { ...SUDOKUPAD_PEN_COLORS }
+    if (preset === PEN_PRESET) return copiedPenColors(readPen)
+    const page = PAGE_PRESETS.indexOf(preset)
+    if (page === -1 || page >= pages.length) throw new RangeError(`draw-tool: ${preset} is not a preset of this palette`)
+    return darkerPageColors(pages[page], readCell)
+  }
+
+  // Copy and Paste carry the colors and both slider values, and not the drawings or the color picked.
+  const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
+  const READERS = {
+    [COLORS_KEY]: readPastedColors,
+    [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
+    [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined
+  }
+
+  // The width and opacity in force, defaults included, so a paste can put one back to its default; the colors only once they are saved.
+  function copiedSettings (store) {
+    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)) }
+    const savedColors = readDrawColors(store.getData(COLORS_KEY))
+    if (savedColors) copied[COLORS_KEY] = savedColors
+    return JSON.stringify(copied)
+  }
+
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
+  function pastedSettings (text) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!isPlainObject(data)) throw new Error('the clipboard text is not a settings object')
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(READERS)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // A shape's box as [left, top, right, bottom]: out to the edges of the cells `from` and `to` lie in, or the drag's own box when `exact`.
+  function shapeBox ([ax, ay], [bx, by], exact) {
+    const low = (a, b) => exact ? Math.min(a, b) : Math.floor(Math.min(a, b) / CELL_SIZE) * CELL_SIZE
+    const high = (a, b) => exact ? Math.max(a, b) : (Math.floor(Math.max(a, b) / CELL_SIZE) + 1) * CELL_SIZE
+    return [low(ax, bx), low(ay, by), high(ax, bx), high(ay, by)].map(roundToTenth)
+  }
 
   const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
 
-  // A drawing is a list of items, each with a kind: a stroke or a text. Their points are in board units.
-  const strokeItem = (points, color, width) => ({ kind: 'stroke', color, width, points: points.map(([x, y]) => [roundToTenth(x), roundToTenth(y)]) })
-  const textItem = ([x, y], text, color, size) => ({ kind: 'text', color, size, text, at: [roundToTenth(x), roundToTenth(y)] })
+  // A drawing is a list of items, each with a kind: a stroke, a text or a shape. Their points and boxes are in board units.
+  const strokeItem = (points, color, width, opacity) => ({ kind: 'stroke', color, width, opacity, points: points.map(([x, y]) => [roundToTenth(x), roundToTenth(y)]) })
+  const textItem = ([x, y], text, color, size, opacity) => ({ kind: 'text', color, size, opacity, text, at: [roundToTenth(x), roundToTenth(y)] })
+  const shapeItem = (shape, box, color, width, opacity) => ({ kind: 'shape', shape, color, width, opacity, box })
 
-  const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
-  const isStroke = (item) => item !== null && typeof item === 'object' && item.kind === 'stroke' &&
-    penColor(item.color) !== undefined && WIDTHS.includes(item.width) && Array.isArray(item.points) && item.points.length > 0 &&
-    item.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(isNumber))
-  const isText = (item) => item !== null && typeof item === 'object' && item.kind === 'text' &&
-    penColor(item.color) !== undefined && TEXT_SIZES.includes(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
-    Array.isArray(item.at) && item.at.length === 2 && item.at.every(isNumber)
+  const isItem = (item, kind, isItemOpacity) => isPlainObject(item) && item.kind === kind && drawColor(item.color) !== undefined && isItemOpacity(item.opacity)
+  const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
+  const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
+  // SVG draws nothing for a rectangle or an ellipse with no width or no height.
+  const hasArea = ([left, top, right, bottom]) => left < right && top < bottom
+  const isStroke = (item) => isItem(item, 'stroke', isOpacityOrNone) && isWidth(item.width) && Array.isArray(item.points) && item.points.length > 0 && item.points.every(isPoint)
+  const isText = (item) => isItem(item, 'text', isOpacityOrNone) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 && isPoint(item.at)
+  // A shape is newer than opacity, so it always has one.
+  const isShape = (item) => isItem(item, 'shape', isOpacity) && SHAPES.includes(item.shape) && isWidth(item.width) &&
+    Array.isArray(item.box) && item.box.length === 4 && item.box.every(isNumber) && hasArea(item.box)
 
   // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
   function readDrawing (saved) {
     if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((item) => isStroke(item) || isText(item))) throw new Error(`the saved drawing is not a list of strokes and texts: ${JSON.stringify(saved).slice(0, 200)}`)
+    if (!Array.isArray(saved) || !saved.every((item) => isStroke(item) || isText(item) || isShape(item))) throw new Error(`the saved drawing is not a list of strokes, texts and shapes: ${JSON.stringify(saved).slice(0, 200)}`)
     return saved
   }
 
@@ -240,7 +516,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP }
+    module.exports = { VERSION, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -276,22 +552,40 @@
     return [p.x, p.y]
   }
 
-  const penColorVar = (n) => `var(--puzzle-pencolor-${n})`
+  // Until Draw is first made current its colors are not copied yet, so an item drawn by an older version shows in the pen color.
+  const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
-  function newStroke (layer, color, width) {
-    const path = document.createElementNS(SVG_NS, 'path')
-    path.setAttribute('class', 'draw-tool-stroke')
-    path.setAttribute('fill', 'none')
-    path.setAttribute('stroke-width', String(width))
+  // An unfilled line in a draw color, as a stroke and a shape are drawn.
+  function newOutline (layer, tag, className, color, width, opacity) {
+    const element = document.createElementNS(SVG_NS, tag)
+    element.setAttribute('class', className)
+    element.setAttribute('fill', 'none')
+    element.setAttribute('stroke-width', String(width))
+    element.setAttribute('stroke-linejoin', 'round')
+    element.setAttribute('stroke-opacity', String(opacity / 100))
+    element.style.stroke = itemColor(color)
+    layer.appendChild(element)
+    return element
+  }
+
+  function newStroke (layer, color, width, opacity) {
+    const path = newOutline(layer, 'path', 'draw-tool-stroke', color, width, opacity)
     path.setAttribute('stroke-linecap', 'round')
-    path.setAttribute('stroke-linejoin', 'round')
-    path.setAttribute('stroke-opacity', String(STROKE_OPACITY))
-    path.style.stroke = penColorVar(color)
-    layer.appendChild(path)
     return path
   }
 
-  // Solid, unlike a stroke, so a typed sum reads like one of the puzzle's own.
+  function newShape (layer, item) {
+    const [left, top, right, bottom] = item.box
+    const element = newOutline(layer, item.shape === RECT ? 'rect' : 'ellipse', SHAPE_ITEM_CLASS, item.color, item.width, item.opacity)
+    const geometry = item.shape === RECT
+      ? { x: left, y: top, width: right - left, height: bottom - top }
+      : { cx: (left + right) / 2, cy: (top + bottom) / 2, rx: (right - left) / 2, ry: (bottom - top) / 2 }
+    for (const [name, value] of Object.entries(geometry)) element.setAttribute(name, coordinate(value))
+    return element
+  }
+
+  const drawStroke = (layer, item) => newStroke(layer, item.color, item.width, itemOpacity(item)).setAttribute('d', strokePath(item.points))
+
   function newText (layer, item) {
     const text = document.createElementNS(SVG_NS, 'text')
     text.setAttribute('class', 'draw-tool-text')
@@ -300,36 +594,103 @@
     text.setAttribute('font-size', String(item.size))
     text.setAttribute('text-anchor', 'middle')
     text.setAttribute('dominant-baseline', 'central')
-    text.style.fill = penColorVar(item.color)
+    text.style.fill = itemColor(item.color)
+    text.setAttribute('fill-opacity', String(itemOpacity(item) / 100))
     text.textContent = item.text
     layer.appendChild(text)
     return text
   }
 
-  // The keypad with Draw current, in the style of SudokuPad's tool-pen.css: each digit button a pen color swatch,
-  // 0 and delete covered by the panel box. The swatches read the pen color variables, so a changed one shows.
-  const GREY = 'rgb(124, 124, 124)'
-  const PANEL_CSS = `
-.tool-draw .controls-input { position: relative; }
-.tool-draw .controls-input button.digit { position: relative; text-indent: -999em; overflow: hidden; }
-.tool-draw .controls-input button.digit:not(.current) { color: transparent; background-color: var(--body-bg); }
-.tool-draw .controls-input button.digit:after { content: ""; position: absolute; width: 60%; height: 60%; left: 20%; top: 20%; }
-${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input button[data-key="${i + 1}"]:after { background-color: ${penColorVar(i + 1)}; }`).join('\n')}
-.tool-draw .controls-input button[data-key="0"], .tool-draw .controls-input button[data-control="delete"] { visibility: hidden; }
-.${PANEL_BOX_CLASS} { position: absolute; left: 0; right: 0; top: 13rem; height: 4rem; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 0.25rem 0.4rem; }
-.tool-draw .controls-input .${PANEL_BOX_CLASS} button { width: auto; height: auto; min-height: 0; margin: 0; padding: 0; }
-.tool-draw .controls-input .${PANEL_BOX_CLASS} button:not(.current) { background-color: var(--body-bg); color: ${GREY}; }
-.${PANEL_BOX_CLASS} svg { width: 100%; height: 100%; pointer-events: none; }
-.tool-draw .controls-input .${PANEL_BOX_CLASS} button.${CLEAR_CLASS} { grid-column: 4; grid-row: 1 / span 2; font-size: 0.85rem; line-height: 1.15; color: ${GREY}; background-color: var(--body-bg); }
-.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }
-`
-  const widthIcon = (width) => `<svg viewBox="0 0 48 32"><line x1="10" y1="16" x2="38" y2="16" stroke="currentColor" stroke-linecap="round" stroke-width="${width}"/></svg>`
-  const textSizeIcon = (size) => `<svg viewBox="0 0 48 32"><text x="24" y="16" text-anchor="middle" dominant-baseline="central" fill="currentColor" font-size="${size}">15</text></svg>`
+  const DRAWERS = { stroke: drawStroke, text: newText, shape: newShape }
 
+  // Pen Tool Extras' pen panel, in the same sizes: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
+  // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape button and the settings gear at the full 4rem, and the sliders across the rest. The tray
+  // sits behind the last two rows; it is placed in their area but takes no cell. Each color button shows a line in its draw color, cut out of the button so a recolor follows.
+  const rem = (value) => Math.round(value * 100) / 100
+  const PANEL_BUTTON_REM = 4
+  const COLOR_BUTTON_REM = 2.5
+  const PANEL_BUTTON_MARGIN_REM = 0.15
+  const PANEL_CELL_REM = rem(PANEL_BUTTON_REM + 2 * PANEL_BUTTON_MARGIN_REM)
+  const COLOR_CELL_REM = rem(COLOR_BUTTON_REM + 2 * PANEL_BUTTON_MARGIN_REM)
+  const PANEL_HEIGHT_REM = 4 * PANEL_CELL_REM
+  const PANEL_COLUMNS = 3
+  const COLOR_ROWS = 3
+  const CONTROLS_ROW = COLOR_ROWS + 1
+  const SLIDERS_ROW = CONTROLS_ROW + 1
+  const CONTROLS_GAP_REM = 0.75
+  const TRAY_RADIUS_PX = 14
+  const TRAY_REACH_REM = 0.25
+  const TRAY_PADDING_REM = 0.4
+  const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
+  const SLIDER_ROW_HEIGHT_REM = 1.4
+  const SWATCH_REM = 2.4
+  // The column of each control in its row.
+  const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SHAPE_BUTTON_CLASS]: 2, [SETTINGS_CLASS]: 3 }
+  const GREY = 'rgb(124, 124, 124)'
+  const SWATCH_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2 12H22' stroke='black' stroke-width='3' stroke-linecap='round'/></svg>"
+  const SWATCH_MASK = `url("data:image/svg+xml,${encodeURIComponent(SWATCH_SVG).replace(/'/g, '%27')}") center / 100% no-repeat`
+  // A CSS gradient cannot draw a slanted edge, so the wedge is a data-URI picture stretched over the track.
+  const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
+  const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
+  const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
+  const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
+  const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
+  const PANEL = '.tool-draw .controls-input'
+  const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
+  const PANEL_CSS = [
+    `${PANEL} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
+    `${PANEL} > .button-row { display: contents !important; }`,
+    `${PANEL} button[data-key="0"], ${PANEL} button[data-control="delete"] { display: none !important; }`,
+    `${PANEL} button.digit { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; text-indent: -999em; overflow: hidden; color: transparent; }`,
+    `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
+    `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; -webkit-mask: ${SWATCH_MASK}; mask: ${SWATCH_MASK}; }`,
+    ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(${colorVar(n)}); }`),
+    `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
+    `${PANEL} button.${CLEAR_CLASS} { font-size: 0.85rem; line-height: 1.15; color: ${GREY}; }`,
+    `:is(.${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
+    // SudokuPad's CSS fills every 'svg path', which would turn the icons' lines into blobs.
+    `:is(.${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse) { fill: none !important; }`,
+    `.${TRAY_CLASS} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
+    // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each '.button-row', which has no box here, so the rows are swapped by grid row.
+    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} :is(button[data-key="${key}"], .${PICKER_CLASS}[data-color="${key}"]) { grid-row: ${row} / span 1; }`)),
+    ...COLOR_NUMBERS.map((n) => `${PANEL} .${PICKER_CLASS}[data-color="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
+    // Edit mode: a color picker sits over each color button, with the button's line hidden under it, in the sizes SudokuPad's color tool uses for the same job.
+    `.${EDITING_CLASS} button.digit::after { opacity: 0; }`,
+    `.${EDITING_CLASS} .${PICKER_CLASS} { position: relative; justify-self: stretch; align-self: stretch; z-index: 10; }`,
+    `.${EDITING_CLASS} .${PICKER_CLASS} input { position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; padding: 0; pointer-events: all; }`,
+    `.${SLIDERS_CLASS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
+    `.${SLIDER_ROW_CLASS} { display: flex; align-items: center; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
+    `.${SLIDER_ROW_CLASS} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
+    `.${SLIDER_ROW_CLASS} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
+    `.${SLIDER_ROW_CLASS} input::-moz-range-track { ${TRACK_SHAPE} }`,
+    `#${SIZE_SLIDER}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
+    `#${SIZE_SLIDER}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
+    `#${OPACITY_SLIDER}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
+    `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
+    `.${SLIDER_ROW_CLASS} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
+    `.${SLIDER_ROW_CLASS} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
+    `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`
+  ].join('\n')
+  // Pen Tool Extras' gear, at its viewBox.
+  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
+  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
+  const SETTINGS_LABEL = 'Draw Tool settings'
+  // The Shape button shows the mode in force: a free line, a rectangle or an ellipse.
+  const SHAPE_LABELS = { [SHAPE_OFF]: 'Shape: off, free lines', [RECT]: 'Shape: rectangle', [ELLIPSE]: 'Shape: ellipse' }
+  const SHAPE_ICONS = {
+    [SHAPE_OFF]: FREE_LINE_ICON,
+    [RECT]: '<rect x="4" y="5" width="16" height="14" rx="1"/>',
+    [ELLIPSE]: '<ellipse cx="12" cy="12" rx="9" ry="7"/>'
+  }
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
-  let textSize = DEFAULT_TEXT_SIZE
-  let panelBox = null
+  let opacity = DEFAULT_OPACITY
+  let shapeMode = SHAPE_OFF
+  // Draw's nine colors, or null until they are first copied from the pen colors.
+  let colors = null
+  // The elements the panel adds to SudokuPad's keypad while Draw is current.
+  let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
 
@@ -340,60 +701,300 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     keypad().querySelector(`button[data-key="${color}"]`).classList.add('current')
   }
 
-  function markPanelBox () {
-    if (!panelBox) return
-    for (const button of panelBox.querySelectorAll('button[data-width]')) button.classList.toggle('current', Number(button.dataset.width) === width)
-    for (const button of panelBox.querySelectorAll('button[data-text-size]')) button.classList.toggle('current', Number(button.dataset.textSize) === textSize)
-  }
-
   function pickColor (next) {
     color = next
     Framework.setData(COLOR_KEY, color)
     markColor()
   }
 
-  function pickWidth (next) {
-    width = next
-    Framework.setData(WIDTH_KEY, width)
-    markPanelBox()
-  }
-
-  function pickTextSize (next) {
-    textSize = next
-    Framework.setData(TEXT_SIZE_KEY, textSize)
-    markPanelBox()
-  }
-
-  function showPanelBox () {
-    panelBox = document.createElement('div')
-    panelBox.className = PANEL_BOX_CLASS
-    const choices = [[WIDTHS, 'width', 'Line width', widthIcon], [TEXT_SIZES, 'textSize', 'Text size', textSizeIcon]]
-    for (const [values, data, label, icon] of choices) {
-      values.forEach((value, i) => {
-        const button = document.createElement('button')
-        button.dataset[data] = String(value)
-        button.title = `${label} ${i + 1} of ${values.length}`
-        button.innerHTML = icon(value)
-        panelBox.appendChild(button)
-      })
+  function showColors () {
+    let style = document.getElementById(COLORS_STYLE_ID)
+    if (!style) {
+      style = document.createElement('style')
+      style.id = COLORS_STYLE_ID
+      document.head.appendChild(style)
     }
+    style.textContent = colors ? colorsCss(colors) : ''
+  }
+
+  function saveColors (next) {
+    colors = next
+    Framework.setData(COLORS_KEY, colors)
+    showColors()
+  }
+
+  // The browser turns a color of any CSS form into rgb() text. A value it rejects, or none, reads as unreadable.
+  function readRootColor (name) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+    const probe = document.createElement('span')
+    probe.style.color = value
+    if (!probe.style.color) return undefined
+    document.documentElement.appendChild(probe)
+    try {
+      return window.getComputedStyle(probe).color
+    } finally {
+      probe.remove()
+    }
+  }
+
+  const readPenColor = (n) => readRootColor(`--puzzle-pencolor-${n}`)
+  // The raw `--cell-color-<key>` values, not the 60% opacity they show with on the grid. SudokuPad sets the variable of every key in the palette, so any page reads.
+  const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
+
+  // The pages of cell color keys of the palette in force, or none until the color tool has one.
+  function palettePages () {
+    const palette = Framework.app.tools?.colour?.palette
+    if (!palette) return []
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    return palette.pages
+  }
+
+  // A slider sets only the next item and is saved for the next visit, and a paste sets it as a move of the slider would.
+  const SLIDERS = [
+    { id: SIZE_SLIDER, label: 'Size', key: WIDTH_KEY, min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP, read: readWidth, get: () => width, set: (value) => { width = value } },
+    { id: OPACITY_SLIDER, label: 'Opacity (%)', key: OPACITY_KEY, min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP, read: readOpacity, get: () => opacity, set: (value) => { opacity = value } }
+  ]
+
+  function setSlider (slider, value) {
+    slider.set(value)
+    Framework.setData(slider.key, value)
+  }
+
+  function sliderRow ({ id, label, min, max, step, get }) {
+    const row = document.createElement('div')
+    row.className = SLIDER_ROW_CLASS
+    row.title = label
+    const input = document.createElement('input')
+    Object.assign(input, { type: 'range', id, min, max, step, value: get(), tabIndex: -1 })
+    input.setAttribute('aria-label', label)
+    row.appendChild(input)
+    return row
+  }
+
+  // The settings dialog: nine color pickers and a preset list that fill a draft Save writes, and Copy and Paste settings, which act at once.
+  const DIALOG_ID = 'draw-tool-dialog'
+  const DIALOG_STYLE_ID = 'draw-tool-dialog-style'
+  const SETTINGS_ENTRY_GROUP = 'experimental'
+  const CUSTOM_LABEL = 'Custom'
+  const SAVE_LABEL = 'Save'
+  const DIALOG_CSS = [
+    `#${DIALOG_ID} .draw-tool-presets { margin: 6px 0; }`,
+    `#${DIALOG_ID} .draw-tool-swatches { display: grid; grid-template-columns: repeat(3, auto); gap: 8px; justify-content: start; margin: 6px 0; }`,
+    `#${DIALOG_ID} .draw-tool-swatches label { display: flex; align-items: center; gap: 6px; }`,
+    `#${DIALOG_ID} .draw-tool-swatches input { width: 2.4rem; height: 2.4rem; padding: 0; }`,
+    '.draw-tool-version { opacity: .6; font-weight: normal; }'
+  ].join('\n')
+
+  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+    '<button type="button" data-act="copy-settings">Copy settings</button>' +
+    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
+    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+
+  function wireCopyPaste (root, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copiedSettings(Framework))
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+
+  // A pasted value is saved and shown at once, whether or not Draw is current.
+  function applyPasted (values) {
+    for (const slider of SLIDERS) {
+      if (!(slider.key in values)) continue
+      setSlider(slider, values[slider.key])
+      const input = document.getElementById(slider.id)
+      if (input) input.value = values[slider.key]
+    }
+    if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
+  }
+
+  function openDialog () {
+    if (!document.getElementById(DIALOG_STYLE_ID)) {
+      const style = document.createElement('style')
+      style.id = DIALOG_STYLE_ID
+      style.textContent = DIALOG_CSS
+      document.head.appendChild(style)
+    }
+    // Until the colors are first copied, the draft is the pen colors a first use would copy.
+    let draft = colors ?? copiedPenColors(readPenColor)
+    let chosen = null
+    let changed = false
+    let pages = []
+    let paletteNote = ''
+    try {
+      pages = palettePages()
+    } catch (error) {
+      console.warn(`draw-tool: ${error.message}`)
+      paletteNote = error.message
+    }
+    Framework.showDialog({
+      centerOverBoard: true,
+      parts: [
+        { tag: 'text', innerHTML: `<b>Draw Tool</b> <small class="draw-tool-version">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<div id="${DIALOG_ID}"></div>` },
+        { tag: 'text', innerHTML: COPY_PASTE_HTML },
+        {
+          tag: 'options',
+          options: [
+            { tag: 'button', content: CANCEL_LABEL, action: 'close' },
+            { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); Framework.closeDialog() } }
+          ]
+        }
+      ]
+    })
+    const box = document.getElementById(DIALOG_ID)
+    if (!box) return
+    const draw = () => {
+      const options = [`<option value="">${CUSTOM_LABEL}</option>`, ...presetOptions(pages.length).map((id) => `<option value="${id}"${id === chosen ? ' selected' : ''}>${PRESET_LABELS[id]}</option>`)]
+      box.innerHTML = `<label class="draw-tool-presets">Colors <select data-role="preset">${options.join('')}</select></label>` +
+        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        `<div class="draw-tool-swatches">${COLOR_NUMBERS.map((n) => `<label>${n} <input type="color" data-color="${n}" value="${draft[n]}"></label>`).join('')}</div>`
+    }
+    draw()
+    box.addEventListener('change', (event) => {
+      const target = event.target
+      if (target.matches('[data-role="preset"]')) {
+        chosen = target.value || null
+        if (chosen) {
+          draft = presetColors(chosen, pages, readCellColor, readPenColor)
+          changed = true
+        }
+        draw()
+      } else if (target.matches('input[data-color]')) {
+        draft = editedColor(draft, Number(target.dataset.color), target.value)
+        chosen = null
+        changed = true
+        draw()
+      }
+    })
+    wireCopyPaste(box.closest('.dialog'), (values) => {
+      applyPasted(values)
+      draft = colors ?? draft
+      chosen = null
+      changed = false
+      draw()
+    })
+  }
+
+  function showShapeMode (button) {
+    button.dataset.mode = shapeMode
+    button.title = SHAPE_LABELS[shapeMode]
+    button.setAttribute('aria-label', SHAPE_LABELS[shapeMode])
+    button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHAPE_ICONS[shapeMode]}</svg>`
+  }
+
+  function showPanel () {
+    const tray = document.createElement('div')
+    tray.className = TRAY_CLASS
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.title = 'Clear the whole drawing'
     clear.innerHTML = 'Clear<br>all'
-    panelBox.appendChild(clear)
-    panelBox.addEventListener('click', (event) => {
-      const button = event.target.closest('button')
-      if (!button) return
-      if (button === clear) confirmClear()
-      else if (button.dataset.textSize) pickTextSize(Number(button.dataset.textSize))
-      else pickWidth(Number(button.dataset.width))
+    clear.addEventListener('click', confirmClear)
+    const settings = document.createElement('button')
+    settings.className = SETTINGS_CLASS
+    settings.title = SETTINGS_LABEL
+    settings.setAttribute('aria-label', SETTINGS_LABEL)
+    settings.innerHTML = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
+    settings.addEventListener('click', openDialog)
+    const shapeButton = document.createElement('button')
+    shapeButton.className = SHAPE_BUTTON_CLASS
+    showShapeMode(shapeButton)
+    shapeButton.addEventListener('click', () => {
+      shapeMode = nextShapeMode(shapeMode)
+      Framework.setData(SHAPE_KEY, shapeMode)
+      showShapeMode(shapeButton)
     })
-    keypad().querySelector('.button-row:last-child').appendChild(panelBox)
-    markPanelBox()
+    const sliders = document.createElement('div')
+    sliders.className = SLIDERS_CLASS
+    sliders.append(...SLIDERS.map(sliderRow))
+    sliders.addEventListener('input', (event) => {
+      const slider = SLIDERS.find((s) => s.id === event.target.id)
+      setSlider(slider, slider.read(Number(event.target.value)))
+    })
+    panelParts = [tray, clear, shapeButton, settings, sliders]
+    keypad().append(...panelParts)
   }
 
-  let stroke = null
+  function hidePanel () {
+    exitEditMode()
+    for (const part of panelParts) part.remove()
+    panelParts = []
+  }
+
+  // Edit mode: a hold on a color button puts a color picker over each one, and another hold takes them away.
+  function exitEditMode () {
+    const panel = keypad()
+    panel.classList.remove(EDITING_CLASS)
+    for (const picker of panel.querySelectorAll(`.${PICKER_CLASS}`)) picker.remove()
+  }
+
+  function enterEditMode () {
+    const panel = keypad()
+    panel.classList.add(EDITING_CLASS)
+    for (const n of COLOR_NUMBERS) {
+      const picker = document.createElement('div')
+      picker.className = PICKER_CLASS
+      picker.dataset.color = n
+      const input = document.createElement('input')
+      Object.assign(input, { type: 'color', value: colors[n] })
+      input.dataset.color = n
+      picker.appendChild(input)
+      panel.appendChild(picker)
+    }
+  }
+
+  const toggleEditMode = () => keypad().classList.contains(EDITING_CLASS) ? exitEditMode() : enterEditMode()
+
+  const HOLD_TARGETS = `.tool-draw .controls-input button.digit, .tool-draw .${PICKER_CLASS} input`
+
+  // As Pen Tool Extras' hold on a pen button: either mouse button, and touch, through pointer events.
+  function installHoldToEdit () {
+    let timer
+    let holdDone = false
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    document.addEventListener('pointerdown', (event) => {
+      cancel()
+      holdDone = false
+      if (!event.target.closest(HOLD_TARGETS)) return
+      timer = setTimeout(() => {
+        timer = undefined
+        holdDone = true
+        if (Framework.app.tool === TOOL_NAME) toggleEditMode()
+      }, HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // The browser's menu would open over the picker during a right-click hold: Linux opens it on the press, Windows on the release, over the picker
+    // that appeared under the pointer. A quick right-click on a button, released before the delay, keeps its menu on Windows.
+    document.addEventListener('contextmenu', (event) => {
+      if ((timer !== undefined || holdDone) && event.target.closest(HOLD_TARGETS)) event.preventDefault()
+    }, true)
+    // Every item in that color number reads the variable, so the recolor shows on them at once.
+    document.addEventListener('input', (event) => {
+      const input = event.target
+      if (input.matches(`.${PICKER_CLASS} input`)) saveColors(editedColor(colors, Number(input.dataset.color), input.value))
+    })
+  }
+
+  // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
+  // `held` is whether its key is held: Alt keeps a shape to the drag's own box, and Shift draws a free line straight.
+  let drag = null
   // A right-drag in progress: the last point it reached, and whether it has erased an item yet.
   let erasing = null
   // The open text box: the index of the text it reopened, or -1 for a new one, the item, and the input the solver types in.
@@ -412,9 +1013,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     const layer = drawingLayer()
     layer.replaceChildren()
     drawing.forEach((item, i) => {
-      if (editing && editing.index === i) return
-      if (item.kind === 'text') newText(layer, item)
-      else newStroke(layer, item.color, item.width).setAttribute('d', strokePath(item.points))
+      if (!editing || editing.index !== i) DRAWERS[item.kind](layer, item)
     })
   }
 
@@ -425,7 +1024,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     if (reported.has(message) || document.querySelector('.dialog-overlay')) return
     reported.add(message)
     Framework.showDialog({
-      parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: CLEAR_OK }] }],
+      parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }] }],
       centerOverBoard: true
     })
   }
@@ -459,12 +1058,12 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
 
   function openText (at) {
     const index = textAt(drawing, at)
-    const item = index === -1 ? textItem(at, '', color, textSize) : { ...drawing[index] }
+    const item = index === -1 ? textItem(at, '', color, textSizeFor(width), opacity) : { ...drawing[index] }
     const input = document.createElement('input')
     input.className = TEXT_BOX_CLASS
     input.type = 'text'
     input.value = item.text
-    input.style.color = penColorVar(item.color)
+    input.style.color = itemColor(item.color)
     input.style.fontFamily = window.getComputedStyle(drawingLayer()).fontFamily
     // As SudokuPad's own buttons do: a press in the box is the box's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) input.addEventListener(type, (event) => event.stopPropagation())
@@ -524,14 +1123,35 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     finishText()
   }
 
-  // A stroke or erase in progress ends as a release ends it; a press that never moved opens no text box.
+  // A drag or erase in progress ends as a release ends it; a press that never moved opens no text box.
   function endGesture () {
     if (erasing) endErase()
-    if (!stroke) return
-    if (isClick(stroke.points)) {
-      stroke.path.remove()
-      stroke = null
-    } else endStroke(stroke.straight)
+    if (!drag) return
+    if (isClick(drag.points)) dropDrag()
+    else if (drag.shape) endShape()
+    else endStroke()
+  }
+
+  function dropDrag () {
+    drag.element?.remove()
+    drag = null
+  }
+
+  const dragKeyHeld = (event) => drag.shape ? event.altKey : event.shiftKey
+  const dragShape = () => shapeItem(drag.shape, shapeBox(drag.points[0], drag.points[drag.points.length - 1], drag.held), drag.color, drag.width, drag.opacity)
+
+  // An Alt drag straight along a row or a column has no box to draw, so it saves nothing.
+  function endShape () {
+    const item = dragShape()
+    if (!hasArea(item.box)) {
+      dropDrag()
+      return
+    }
+    drag.element?.remove()
+    newShape(drag.layer, item)
+    drag = null
+    drawing.push(item)
+    save()
   }
 
   function endErase () {
@@ -540,17 +1160,17 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     if (erased) save()
   }
 
-  function endStroke (straight) {
-    const { path, points, color: strokeColor, width: strokeWidth } = stroke
-    stroke = null
-    const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth)
+  function endStroke () {
+    const { element: path, points, held, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = drag
+    drag = null
+    const item = strokeItem(held ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
     path.setAttribute('d', strokePath(item.points))
     drawing.push(item)
     save()
   }
 
   function cancelInput () {
-    stroke = null
+    drag = null
     erasing = null
     if (editing) editing.input.remove()
     editing = null
@@ -598,9 +1218,9 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     Framework.showDialog({
       parts: [
         { tag: 'text', content: CLEAR_QUESTION },
-        { tag: 'options', options: [{ tag: 'button', content: CLEAR_OK }, { tag: 'button', content: CLEAR_CANCEL }] }
+        { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: (label) => { if (label === CLEAR_OK) emptyDrawing() },
+      onButton: (label) => { if (label === OK_LABEL) emptyDrawing() },
       centerOverBoard: true
     })
   }
@@ -612,10 +1232,10 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   const tool = {
     name: TOOL_NAME,
     isTool: true,
-    // A press that starts a stroke returns true, so SudokuPad starts no drag and selects no cell. A press that
+    // A press that starts a drag returns true, so SudokuPad starts no drag of its own and selects no cell. A press that
     // finished a text box does nothing else on the board.
     handleInputdown (event) {
-      if (event.type !== 'mousedown' || stroke || erasing) return false
+      if (event.type !== 'mousedown' || drag || erasing) return false
       if (pressFinishedText) return onBoard(event)
       if (!onBoard(event)) return false
       if (event.button === SECONDARY_BUTTON) {
@@ -626,13 +1246,18 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       }
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
-      stroke = { layer, path: newStroke(layer, color, width), color, width, straight: false, points: [toBoard(layer, event)] }
-      stroke.path.setAttribute('d', strokePath(stroke.points))
+      const shape = shapeMode === SHAPE_OFF ? null : shapeMode
+      drag = { layer, shape, element: null, color, width, opacity, held: false, points: [toBoard(layer, event)] }
+      // A shape shows only once the press moves, so a click that opens a text box flashes no box.
+      if (!shape) {
+        drag.element = newStroke(layer, color, width, opacity)
+        drag.element.setAttribute('d', strokePath(drag.points))
+      }
       return true
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
     handleInputMove (event) {
-      if (event.type === 'mousemove' && (erasing || stroke) && !(event.buttons & (erasing ? SECONDARY_HELD : PRIMARY_HELD))) {
+      if (event.type === 'mousemove' && (erasing || drag) && !(event.buttons & (erasing ? SECONDARY_HELD : PRIMARY_HELD))) {
         endGesture()
         return false
       }
@@ -642,10 +1267,15 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
         erasing.last = at
         return true
       }
-      if (!stroke) return false
-      stroke.points.push(toBoard(stroke.layer, event))
-      stroke.straight = event.shiftKey
-      stroke.path.setAttribute('d', strokePath(stroke.straight ? straightLine(stroke.points) : stroke.points))
+      if (!drag) return false
+      drag.points.push(toBoard(drag.layer, event))
+      drag.held = dragKeyHeld(event)
+      if (drag.shape) {
+        drag.element?.remove()
+        drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape())
+      } else {
+        drag.element.setAttribute('d', strokePath(drag.held ? straightLine(drag.points) : drag.points))
+      }
       return true
     },
     handleInputup (event) {
@@ -653,39 +1283,41 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
         endErase()
         return true
       }
-      if (!stroke) return false
+      if (!drag) return false
       // A text box opens only on the release of Draw's own press, never on a release or click alone.
-      if (isClick(stroke.points)) {
-        const [at] = stroke.points
-        stroke.path.remove()
-        stroke = null
+      if (isClick(drag.points)) {
+        const [at] = drag.points
+        dropDrag()
         openText(at)
         return true
       }
-      endStroke(event.shiftKey)
+      drag.held = dragKeyHeld(event)
+      if (drag.shape) endShape()
+      else endStroke()
       return true
     },
     handleToolEnter () {
-      showPanelBox()
+      if (!colors) saveColors(copiedPenColors(readPenColor))
+      showPanel()
       markColor()
     },
     handleToolExit () {
       endGesture()
       if (editing) finishText()
-      panelBox?.remove()
-      panelBox = null
+      hidePanel()
       unmarkColor()
     },
-    // A digit key or keypad button gets the button's data-value. With Draw current it picks a pen color, and no key
+    // A digit key or keypad button gets the button's data-value. With Draw current it picks a draw color, and no key
     // or button enters anything in a cell.
     handleToolButton (value) {
-      const picked = penColor(value)
+      const picked = drawColor(value)
       if (picked !== undefined) pickColor(picked)
       return true
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch
-    // to Corner for as long as it is held (that tool's tempKey), and Shift+drag would never reach Draw.
-    handleKeydown (event) { return Framework.app.tool === TOOL_NAME && event.key === SHIFT_KEY }
+    // to Corner for as long as it is held (that tool's tempKey), and Alt to Letter or Corner by the Letter Tool Hotkey
+    // setting, and a drag with either held would never reach Draw.
+    handleKeydown (event) { return Framework.app.tool === TOOL_NAME && HELD_KEYS.includes(event.key) }
   }
 
   // Every tool button is appended to the bar when it is added (the pen tool's on its setting, a script's whenever it
@@ -701,9 +1333,12 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
 
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
-    width = readWidth(Framework.getData(WIDTH_KEY))
-    textSize = readTextSize(Framework.getData(TEXT_SIZE_KEY))
+    for (const slider of SLIDERS) slider.set(slider.read(Framework.getData(slider.key)))
+    shapeMode = readShapeMode(Framework.getData(SHAPE_KEY))
+    colors = readDrawColors(Framework.getData(COLORS_KEY))
+    showColors()
     const style = document.createElement('style')
+    style.id = PANEL_STYLE_ID
     style.textContent = PANEL_CSS
     document.head.appendChild(style)
     const names = app.getToolNames
@@ -712,10 +1347,22 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       button: { name: TOOL_NAME, title: 'Draw', content: `<div class="icon">${BUTTON_ICON}</div>Draw` },
       tool
     })
+    // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first.
+    Framework.addSetting({
+      tag: 'button',
+      name: 'drawtool',
+      group: SETTINGS_ENTRY_GROUP,
+      content: 'Draw Tool',
+      handler: () => {
+        Framework.closeDialog()
+        setTimeout(openDialog, 0)
+      }
+    })
     keepButtonLast()
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
+    installHoldToEdit()
     window.addEventListener('blur', endGesture)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })

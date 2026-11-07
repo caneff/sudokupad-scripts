@@ -1,6 +1,6 @@
 // Takes the one annotated picture of the Draw panel on site/draw-tool.html ("The Draw panel"), from the real
-// draw-tool.user.js on the recorded puzzle: the panel (nine pen color buttons, the width and text size buttons and
-// Clear all) cropped close at 3x, with each part labelled beside it by a short line from the label to the part:
+// draw-tool.user.js on the recorded puzzle: the panel (nine color buttons, Clear all, the Shape button, the settings gear
+// and the Size and Opacity sliders) cropped close at 3x, with each part labelled beside it by a short line from the label to the part:
 //   draw-tool-panel-annotated.png
 // Labels are laid out from the parts' own boxes. The script fails when a part is missing, and writes the file only when
 // the picture is taken. The mascot is hidden.
@@ -17,15 +17,13 @@ const LABEL_WIDTH = 230
 const SIDE_GAP = 36
 const PAD = 10
 const FONT = '15px system-ui, sans-serif'
-// Pixels the width and text size labels sit above and below their buttons' middles, so two-line labels do not touch.
-const ROW_SPREAD = 24
-// Pixels under the panel for the text size label, which sits below the panel's last row.
+// Pixels under the panel for the Opacity label, which sits below the panel's last row.
 const BOTTOM_ROOM = 6
 const LINE_COLOR = '#6a1b9a'
 
 const browser = await chromium.launch()
 const page = await openDrawPage(browser, 3)
-await page.locator('.draw-tool-panel-box').waitFor({ state: 'visible' })
+await page.locator('.draw-tool-shape-mode').waitFor({ state: 'visible' })
 await page.mouse.move(5, 5)
 
 const box = async (selector) => {
@@ -35,27 +33,33 @@ const box = async (selector) => {
 }
 const panel = await box('.controls-input')
 const colors = await Promise.all([1, 4, 7].map((k) => box(`.controls-input button[data-key="${k}"]`)))
-const widths = await box('.draw-tool-panel-box button[data-width] >> nth=1')
-const sizes = await box('.draw-tool-panel-box button[data-text-size] >> nth=1')
+const sizeSlider = await box('#draw-tool-size')
+const opacitySlider = await box('#draw-tool-opacity')
 const clearButton = await box('.draw-tool-clear')
+const shapeButton = await box('.draw-tool-shape-mode')
+const gearButton = await box('.draw-tool-settings')
 const panelPng = (await page.screenshot({ clip: panel })).toString('base64')
 
 // Positions inside the panel picture, whose top left is (0, 0).
 const rel = (b) => ({ x: b.x - panel.x, y: b.y - panel.y, w: b.width, h: b.height, cx: b.x - panel.x + b.width / 2, cy: b.y - panel.y + b.height / 2 })
 const colorBlock = { x: Math.min(...colors.map((b) => b.x)), y: colors[0].y, width: colors[0].width, height: colors[2].y + colors[2].height - colors[0].y }
-const part = { colors: rel(colorBlock), widths: rel(widths), sizes: rel(sizes), clear: rel(clearButton) }
+const part = { colors: rel(colorBlock), sizeSlider: rel(sizeSlider), opacitySlider: rel(opacitySlider), clear: rel(clearButton), shape: rel(shapeButton), gear: rel(gearButton) }
 
 // Each label: its text, the side it sits on, the y of its middle, and the line from the label to the part.
+// The Shape label sits in the gap above the controls row, its line running along the gap and down onto the button.
+const gapY = (part.colors.y + part.colors.h + part.clear.y) / 2
 const labels = [
-  { text: '<b>Pen color buttons</b><br>A click or the digit keys 1 to 9 pick one', side: 'left', y: part.colors.cy, to: [[part.colors.x + 6, part.colors.cy]] },
-  { text: '<b>Width buttons</b><br>Thin, middle or thick line', side: 'left', y: part.widths.cy - ROW_SPREAD, to: [[part.widths.x - 12, part.widths.cy - ROW_SPREAD], [part.widths.x + 8, part.widths.cy]] },
-  { text: '<b>Text size buttons</b><br>Small, middle or large text', side: 'left', y: part.sizes.cy + ROW_SPREAD, to: [[part.sizes.x - 12, part.sizes.cy + ROW_SPREAD], [part.sizes.x + 8, part.sizes.cy]] },
-  { text: '<b>Clear all</b><br>Erases the whole drawing, after asking', side: 'right', y: part.clear.cy, to: [[part.clear.x + part.clear.w - 6, part.clear.cy]] }
+  { text: '<b>Color buttons</b><br>A click or the digit keys 1 to 9 pick one; a hold edits it', side: 'left', y: part.colors.cy, to: [[part.colors.x + 6, part.colors.cy]] },
+  { text: '<b>Clear all</b><br>Erases the whole drawing, after asking', side: 'left', y: part.clear.cy, to: [[part.clear.x + 6, part.clear.cy]] },
+  { text: '<b>Size slider</b><br>Line width, and text size', side: 'left', y: part.sizeSlider.cy, to: [[part.sizeSlider.x + 8, part.sizeSlider.cy]] },
+  { text: '<b>Opacity slider</b><br>Faint to solid', side: 'right', y: part.opacitySlider.cy, to: [[part.opacitySlider.x + part.opacitySlider.w - 8, part.opacitySlider.cy]] },
+  { text: '<b>Shape</b><br>Off, rectangle or ellipse', side: 'right', y: gapY - 14, to: [[part.shape.cx, gapY - 14], [part.shape.cx, part.shape.y + 8]] },
+  { text: '<b>Settings</b><br>The gear opens the colors and presets', side: 'right', y: part.gear.cy, to: [[part.gear.x + part.gear.w - 6, part.gear.cy]] }
 ]
 
 const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width + SIDE_GAP + LABEL_WIDTH
 const panelLeft = PAD + LABEL_WIDTH + SIDE_GAP
-const height = panel.height + 2 * PAD + ROW_SPREAD + BOTTOM_ROOM
+const height = panel.height + 2 * PAD + BOTTOM_ROOM
 const html = labels.map((l) => {
   const left = l.side === 'left' ? PAD : panelLeft + panel.width + SIDE_GAP
   return `<div class="l ${l.side}" style="left:${left}px;top:${PAD + l.y}px">${l.text}</div>`
