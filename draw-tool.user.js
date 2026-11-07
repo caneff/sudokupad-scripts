@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.15.0
+// @version      0.16.0
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.15.0'
+  const VERSION = '0.16.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -243,6 +243,25 @@
 
   const TOUCHES = { stroke: touchesStroke, text: touchesText, shape: touchesShape }
   const touchesItem = (item, from, to) => TOUCHES[item.kind](item, from, to)
+
+  // The index of the topmost item under a press at `at`, found the way an erase finds one, or -1 for none.
+  function itemAt (drawing, at) {
+    for (let i = drawing.length - 1; i >= 0; i--) {
+      if (touchesItem(drawing[i], at, at)) return i
+    }
+    return -1
+  }
+
+  const shifted = ([x, y], [dx, dy]) => [roundToTenth(x + dx), roundToTenth(y + dy)]
+  const MOVES = {
+    stroke: (item, by) => ({ ...item, points: item.points.map((p) => shifted(p, by)) }),
+    shape: (item, by) => {
+      const [left, top, right, bottom] = item.box
+      return { ...item, box: [...shifted([left, top], by), ...shifted([right, bottom], by)] }
+    },
+    text: (item, by) => ({ ...item, at: shifted(item.at, by) })
+  }
+  const movedItem = (item, by) => MOVES[item.kind](item, by)
 
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
@@ -528,7 +547,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, itemAt, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1007,7 +1026,7 @@
     })
   }
 
-  // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
+  // A left-drag in progress: a free line, a shape when `shape` is set, or a move of the item `move` names. `element` is what it shows on the board so far.
   // `straight` is whether Shift is held, which draws a free line straight.
   let drag = null
   // A right-drag in progress: the last point it reached and whether it has erased an item yet. The right button's `buttons` bit holds it.
@@ -1143,6 +1162,7 @@
     if (erasing) endErase()
     if (!drag) return
     if (isClick(drag.points)) dropDrag()
+    else if (drag.move) endMove()
     else if (drag.shape) endShape()
     else endStroke()
   }
@@ -1165,6 +1185,21 @@
     newShape(drag.layer, item)
     drag = null
     drawing.push(item)
+    save()
+  }
+
+  const dragOffset = () => {
+    const [x, y] = drag.points[0]
+    const [lastX, lastY] = drag.points[drag.points.length - 1]
+    return [lastX - x, lastY - y]
+  }
+
+  const applyMove = () => { drawing[drag.move.index] = movedItem(drag.move.item, dragOffset()) }
+
+  function endMove () {
+    applyMove()
+    drag = null
+    renderDrawing()
     save()
   }
 
@@ -1261,10 +1296,14 @@
       }
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
-      const shape = shapeMode === SHAPE_OFF ? null : shapeMode
-      drag = { layer, shape, element: null, color, width, opacity, straight: false, points: [toBoard(layer, event)] }
+      const at = toBoard(layer, event)
+      // A press on an item moves it once it drags, in every Shape mode; a click on it does what a click does.
+      const index = itemAt(drawing, at)
+      const move = index === -1 ? null : { index, item: drawing[index] }
+      const shape = shapeMode === SHAPE_OFF || move ? null : shapeMode
+      drag = { layer, shape, move, element: null, color, width, opacity, straight: false, points: [at] }
       // A shape shows only once the press moves, so a click that opens a text box flashes no box.
-      if (!shape) {
+      if (!shape && !move) {
         drag.element = newStroke(layer, color, width, opacity)
         drag.element.setAttribute('d', strokePath(drag.points))
       }
@@ -1283,9 +1322,16 @@
         return true
       }
       if (!drag) return false
+      // An item stays where a press on it can still reach it: a move ends at the last point on the board.
+      if (drag.move && !onBoard(event)) return true
       drag.points.push(toBoard(drag.layer, event))
       drag.straight = event.shiftKey
-      if (drag.shape) {
+      if (drag.move) {
+        if (!isClick(drag.points)) {
+          applyMove()
+          renderDrawing()
+        }
+      } else if (drag.shape) {
         drag.element?.remove()
         drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape())
       } else {
@@ -1307,7 +1353,8 @@
         return true
       }
       drag.straight = event.shiftKey
-      if (drag.shape) endShape()
+      if (drag.move) endMove()
+      else if (drag.shape) endShape()
       else endStroke()
       return true
     },

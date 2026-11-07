@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, itemAt, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('../draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -545,4 +545,30 @@ test('the Shape button names the current mode and what a press does', () => {
   assert.equal(SHAPE_LABELS.off, 'Shape: off, free lines. Click for rectangle')
   assert.equal(SHAPE_LABELS.rect, 'Shape: rectangle. Click for ellipse')
   assert.equal(SHAPE_LABELS.ellipse, 'Shape: ellipse. Click for off, free lines')
+})
+
+test('movedItem adds the offset to a stroke\'s points, a shape\'s box and a text\'s anchor, rounded to a tenth', () => {
+  const stroke = strokeItem([[10, 10], [20, 15]], 1, 6, 100)
+  assert.deepEqual(movedItem(stroke, [1.26, -2.04]).points, [[11.3, 8], [21.3, 13]])
+  const shape = shapeItem('rect', [10, 20, 30, 40], 1, 6, 100)
+  assert.deepEqual(movedItem(shape, [5, -5.55]).box, [15, 14.5, 35, 34.5])
+  const text = textItem([50, 60], 'hi', 1, 20, 100)
+  assert.deepEqual(movedItem(text, [0.04, 10]).at, [50, 70])
+})
+
+test('movedItem keeps everything else of the item and leaves the original untouched', () => {
+  const text = textItem([50, 60], 'hi', 3, 20, 80)
+  const moved = movedItem(text, [10, 10])
+  assert.deepEqual({ ...moved, at: text.at }, text)
+  assert.deepEqual(text.at, [50, 60])
+})
+
+test('itemAt finds the topmost item under a press the way erase touches it, or -1', () => {
+  const lower = shapeItem('rect', [0, 0, 100, 100], 1, 6, 100)
+  const upper = strokeItem([[0, 0], [100, 0]], 1, 6, 100)
+  assert.equal(itemAt([lower, upper], [50, 0]), 1)
+  assert.equal(itemAt([lower, upper], [0, 50]), 0)
+  assert.equal(itemAt([lower, upper], [50, 50]), -1)
+  assert.equal(itemAt([lower, upper], [50, ERASE_TOLERANCE + upper.width]), -1)
+  assert.equal(itemAt([], [1, 1]), -1)
 })

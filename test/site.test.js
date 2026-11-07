@@ -240,7 +240,8 @@ const PEN_SLIDES = [
 ]
 const DRAW_SLIDES = [
   ['1-line', 'Draw a line'], ['2-straight', 'Hold Shift for a straight line'], ['3-opacity', 'Size and opacity'], ['4-rectangle', 'Shape: rectangle'], ['5-ellipse', 'Shape: ellipse'],
-  ['6-text', 'Left click to type text'], ['7-colors', 'Your own colors: hold a color button'], ['8-erase', 'Erase: right-click a line'], ['9-erased', 'The whole line is gone']
+  ['6-text', 'Left click to type text'], ['7-colors', 'Your own colors: hold a color button'], ['8-erase', 'Erase: right-click a line'], ['9-erased', 'The whole line is gone'],
+  ['10-move', 'Move: drag a text']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
@@ -444,7 +445,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 // Draw Tool's entry and details page.
 const DRAW_SUMMARY = 'Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.'
-const DRAW_LEAD_INS = ['Freehand lines', 'Shapes', 'Text', 'Colors of its own', 'Size and opacity', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
+const DRAW_LEAD_INS = ['Freehand lines', 'Shapes', 'Text', 'Colors of its own', 'Size and opacity', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -459,6 +460,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Text Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
     "Colors of its own Nine colors that belong to Draw Tool, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
     'Size and opacity Two sliders. A line, shape or text keeps the size and opacity it was drawn with.',
+    'Move Drag a text to move it. A click on text still changes it, and a drag that starts anywhere else draws as before.',
     'Erasing Right-click a line, shape or text to erase it. Clear all, in the panel, erases everything.',
     'Settings Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.',
     'Stays on the cells Drawings stay put, and stay visible when you switch back to entering digits.',
