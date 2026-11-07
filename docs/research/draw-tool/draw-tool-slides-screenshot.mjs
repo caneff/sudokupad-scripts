@@ -58,6 +58,7 @@ async function scene () {
     return [box.x, box.y, box.width]
   })
   const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
+  const clipRect = () => ({ x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
   const items = () => p.locator(NOTES).count()
   const pick = (color, size) => p.click(`.controls-input button[data-key="${color}"]`).then(() => p.locator('#draw-tool-size').fill(String(size)))
   const note = async (cell, text) => {
@@ -72,23 +73,34 @@ async function scene () {
     if ((await button.getAttribute('aria-pressed')) !== String(on)) await button.click()
     if ((await button.getAttribute('aria-pressed')) !== String(on)) throw new Error(`Background did not turn ${on ? 'on' : 'off'}`)
   }
-  // No note may sit on a cell's middle, and none may be a lone digit: what a solver writes is a remark, placed beside the grid or on a corner or an edge.
+  // No note may sit on a cell's middle or cover a given digit, none may be a lone digit, and every note, open or not, lies wholly inside the picture.
   const checkNotes = async () => {
-    const found = await p.evaluate(({ x0, y0, cell, selector }) => [...document.querySelectorAll(selector)].map((el) => {
-      const r = el.getBoundingClientRect()
-      const [row, col] = [(r.y + r.height / 2 - y0) / cell, (r.x + r.width / 2 - x0) / cell]
-      const off = (v) => Math.abs(v - Math.floor(v) - 0.5)
-      const inGrid = row > 0 && row < 9 && col > 0 && col < 9
-      return { text: el.textContent, away: inGrid ? Math.hypot(off(row), off(col)) : Infinity }
-    }), { x0, y0, cell, selector: NOTES })
-    for (const { text, away } of found) {
+    const found = await p.evaluate(({ x0, y0, cell, selector, clip }) => {
+      const given = [...document.querySelectorAll('text.cell-given')].map((el) => {
+        const r = el.getBoundingClientRect()
+        return { digit: el.textContent, x: r.x + r.width / 2, y: r.y + r.height / 2 }
+      })
+      return [...document.querySelectorAll(selector)].map((el) => {
+        const r = el.getBoundingClientRect()
+        const [row, col] = [(r.y + r.height / 2 - y0) / cell, (r.x + r.width / 2 - x0) / cell]
+        const off = (v) => Math.abs(v - Math.floor(v) - 0.5)
+        const inGrid = row > 0 && row < 9 && col > 0 && col < 9
+        // A digit's glyph fills about 0.45 of a cell across and 0.6 down from its middle.
+        const covers = given.filter((g) => Math.abs(g.x - (r.x + r.width / 2)) < r.width / 2 + cell * 0.225 && Math.abs(g.y - (r.y + r.height / 2)) < r.height / 2 + cell * 0.3).map((g) => g.digit)
+        const inside = r.left >= clip.x && r.right <= clip.x + clip.width && r.top >= clip.y && r.bottom <= clip.y + clip.height
+        return { text: el.textContent, away: inGrid ? Math.hypot(off(row), off(col)) : Infinity, covers, inside }
+      })
+    }, { x0, y0, cell, selector: `${NOTES}, #draw-tool-layer .draw-tool-textbox`, clip: clipRect() })
+    for (const { text, away, covers, inside } of found) {
       if (/^\d$/.test(text.trim())) throw new Error(`the note ${text} is a lone digit`)
       if (away < 0.3) throw new Error(`the note ${text} sits in the middle of a cell`)
+      if (covers.length) throw new Error(`the note ${text} covers the digit ${covers.join(', ')}`)
+      if (!inside) throw new Error(`the note ${text} is not wholly inside the picture`)
     }
   }
   const shoot = async (name, { keepOpen = false } = {}) => {
     await checkNotes()
-    await p.screenshot({ path: out(name), clip: { x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] } })
+    await p.screenshot({ path: out(name), clip: clipRect() })
     console.log(`wrote ${out(name)}`)
     if (!keepOpen) await p.close()
   }
@@ -96,12 +108,12 @@ async function scene () {
 }
 
 // Beside the grid, next to row 2, in the free space above the panel.
-const BESIDE_ROW_2 = [1.3, 10.9]
+const BESIDE_ROW_2 = [1.3, 11.2]
 
 // 1: a remark typed beside the grid, next to the row it talks about.
 {
   const s = await scene()
-  await s.pick(ORANGE, 8)
+  await s.pick(ORANGE, 10)
   await s.note(BESIDE_ROW_2, 'r2: 3 must be in c7-9')
   await s.p.mouse.move(0, 0)
   await s.shoot('1-type')
@@ -110,10 +122,10 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 // 2: the Size slider moved between two notes: a small one beside row 2, a large one in the margin above the grid.
 {
   const s = await scene()
-  await s.pick(BLUE, 5)
+  await s.pick(BLUE, 7)
   await s.note(BESIDE_ROW_2, 'r2: 3 must be in c7-9')
-  await s.p.locator('#draw-tool-size').fill('11')
-  await s.note([-0.55, 5.6], '*X-wing* on 6')
+  await s.p.locator('#draw-tool-size').fill('13')
+  await s.note([-0.5, 5.6], '*X-wing* on 6')
   await s.p.mouse.move(0, 0)
   await s.shoot('2-size')
 }
@@ -121,11 +133,11 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 // 3: one note made with Background off, one with it on, both over digits and on cell edges.
 {
   const s = await scene()
-  await s.pick(RED, 9)
+  await s.pick(RED, 11)
   await s.background(false)
-  await s.note([3.75, 4.8], '**not** 5 (box 5)')
+  await s.note([3.3, 6.2], '**not** 5 (box 5)')
   await s.background(true)
-  await s.note([5.7, 4.75], 'cage = 17')
+  await s.note([5.2, 6.4], 'cage = 17')
   if ((await s.p.locator('#draw-tool-layer .draw-tool-text-bg').count()) !== 1) throw new Error('only the second note should have a box')
   await s.p.mouse.move(0, 0)
   await s.shoot('3-background')
@@ -134,8 +146,8 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 // 4: a note in color 3, then a hold on a color button puts a picker over each color, and color 3 is changed in its picker.
 {
   const s = await scene()
-  await s.pick(ORANGE, 7)
-  await s.note([4, 7.3], '**not** 5 (box 6)')
+  await s.pick(ORANGE, 9)
+  await s.note([2.5, 5.0], '**not** 5 (box 6)')
   await s.p.mouse.move(...await s.p.locator('.controls-input button[data-key="2"]').evaluate((b) => { const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] }))
   await s.p.mouse.down()
   await s.p.waitForTimeout(HOLD_MS)
@@ -152,8 +164,8 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 // 5: a note dragged by its middle off the grid, into the margin above it; the old place is a dashed gray box and a ring marks where the pointer holds it.
 {
   const s = await scene()
-  await s.pick(ORANGE, 8)
-  const FROM = [6.0, 6.6]
+  await s.pick(ORANGE, 10)
+  const FROM = [5.2, 6.4]
   const TO = [-0.55, 7.4]
   await s.note(FROM, 'cage = 17')
   const text = s.p.locator(NOTES)
@@ -175,12 +187,12 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 // 6: three orange notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn dashed gray where it was.
 {
   const s = await scene()
-  await s.pick(ORANGE, 7)
-  await s.note([3.75, 5.9], '**not** 5')
-  await s.note([4.95, 7.35], 'cage = 17')
-  await s.note([6.2, 5.6], '*X-wing* on 6')
-  const FROM = [3.3, 4.2]
-  const TO = [6.6, 8.75]
+  await s.pick(ORANGE, 9)
+  await s.note([3.5, 6.1], '**not** 5')
+  await s.note([5.2, 6.4], 'cage = 17')
+  await s.note([6.3, 4.2], '*X-wing* on 6')
+  const FROM = [2.9, 2.9]
+  const TO = [7.0, 7.25]
   await s.p.mouse.move(...s.at(FROM))
   await s.p.mouse.down()
   await s.p.mouse.move(...s.at(TO), { steps: DRAG_STEPS })
@@ -198,8 +210,8 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 // 7: the pointer on a note with a ring round it, where a right click lands. The click itself follows the shot and must erase the note.
 {
   const s = await scene()
-  await s.pick(GREEN, 9)
-  await s.note([5.0, 6.7], 'cage = 17')
+  await s.pick(GREEN, 11)
+  await s.note([5.2, 6.4], 'cage = 17')
   const box = await s.p.locator(NOTES).boundingBox()
   const x = box.x + box.width / 2
   const y = box.y + box.height / 2
@@ -222,10 +234,10 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 // 9: a two-line note with a background box, open for typing, dragged smaller by its corner handle, so its text wraps and scrolls; a ring marks the handle and the pointer rests on the note.
 {
   const s = await scene()
-  await s.pick(BLUE, 8)
+  await s.pick(BLUE, 10)
   await s.background(true)
   const LINES = ['r1: 1 and 2 only fit in c8 and c9', 'so r1c9 is not 4, and r2c9 is 5']
-  await s.p.mouse.click(...s.at([0.7, 10.8]))
+  await s.p.mouse.click(...s.at([0.6, 10.8]))
   for (const [i, line] of LINES.entries()) {
     if (i) await s.p.keyboard.press('Enter')
     await s.p.keyboard.type(line)
@@ -239,12 +251,24 @@ const BESIDE_ROW_2 = [1.3, 10.9]
   await s.p.mouse.move(hx + BY[0], hy + BY[1], { steps: DRAG_STEPS })
   await s.p.mouse.up()
   const open = s.p.locator('#draw-tool-layer .draw-tool-textbox')
+  // Make the box exactly two lines tall, so the scrolled text ends on a whole line and not in the middle of one.
+  const { lineHeight, padding, clientHeight } = await open.evaluate((el) => {
+    const css = window.getComputedStyle(el)
+    return { lineHeight: parseFloat(css.lineHeight), padding: parseFloat(css.paddingTop) + parseFloat(css.paddingBottom), clientHeight: el.clientHeight }
+  })
+  const grow = 2 * lineHeight + padding - clientHeight
+  const grip = await handle.boundingBox()
+  await s.p.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
+  await s.p.mouse.down()
+  await s.p.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2 + grow, { steps: DRAG_STEPS })
+  await s.p.mouse.up()
   const scrolls = await open.evaluate((el) => el.classList.contains('draw-tool-scrolls'))
   if (!scrolls) throw new Error('the resized note does not scroll')
   const box = await open.boundingBox()
   await s.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await s.p.mouse.wheel(0, -30)
-  await addRing(s.p, [hx + BY[0], hy + BY[1]], 30)
+  const end = await handle.boundingBox()
+  await addRing(s.p, [end.x + end.width / 2, end.y + end.height / 2], 30)
   await s.shoot('9-long')
 }
 await browser.close()

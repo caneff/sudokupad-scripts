@@ -455,7 +455,7 @@ test(`${HOME} describes Text Annotation in a short summary ending in a Details l
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it. While a note is open, the color buttons and the size slider change that note, and it stays open.',
+    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it. While a note is open, the color buttons and the size slider change that note, and it stays open. On a note you are still writing, the pick is also the next note\'s color or size; on one you reopened, it changes only that note.',
     'Long notes A long line wraps, and a note stops growing at 8 lines and scrolls: turn the wheel over it, and a thin scroll bar shows while the pointer is on it. While you type, drag the handle on the note\'s bottom right corner to make its box wider, narrower, taller or shorter; the note keeps that size.',
     'Bold, italic and strikethrough Write **bold**, *italic* (or _italic_) and ~~strikethrough~~ in a note, and nest them, such as **bold *and italic***. The markers show while you type and are hidden once the note is finished; a marker with no partner shows as typed.',
     'Readable over digits Each note has a halo, a thin outline of its letters in the page color, so it reads over digits, pencil marks and colored cells.',

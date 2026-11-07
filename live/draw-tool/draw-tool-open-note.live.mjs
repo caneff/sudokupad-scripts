@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's panel while a note is open: it shows the open note's color and size, a color button or the size slider changes that note
-// and leaves the next-note settings alone, the press keeps the note open with its caret, and finishing the note brings the next-note values back. Real mouse input.
+// and leaves the next-note settings alone (a brand-new note's color and size also become the next note's), the press keeps the note open with its caret, and finishing the note brings the next-note values back. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -115,6 +115,61 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
     await p.mouse.click(bar.x + 2, bar.y + bar.height / 2)
     await p.keyboard.press('Escape')
     assert.ok((await draw.saved(p))[0].size < before, 'the smaller size was saved')
+  })
+
+  it('no page error', () => { assert.deepEqual(errors, []) })
+})
+
+describe('Text Annotation\'s panel while a brand-new note is open', { concurrency: false }, () => {
+  let context, p, errors
+
+  const read = (fn, arg) => p.evaluate(fn, arg)
+  const key = (n) => `.controls-input button[data-key="${n}"]`
+  const currentKeys = () => read(() => [...document.querySelectorAll('.controls-input button.digit.current')].map((b) => Number(b.dataset.key)))
+  const stored = (name) => read((k) => Framework.getData(k) ?? null, name)
+  const slider = () => read((s) => Number(document.querySelector(s).value), SIZE_SLIDER)
+  const openNew = async () => {
+    await p.mouse.click(...await gridPoint(p, SPOT))
+    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'a new note is open')
+  }
+
+  before(async () => {
+    ;({ context, p, errors } = await openPage(browser))
+    await draw.boot(p)
+    await draw.forgetDrawings(p)
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY])
+    await draw.reload(p)
+    await draw.pickDraw(p)
+  })
+  after(async () => { await context.close() })
+
+  it('a color pick recolors the new note and becomes the next-note color', async () => {
+    await openNew()
+    await p.keyboard.type('ab')
+    await p.click(key(RED))
+    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
+    assert.equal(await stored(COLOR_KEY), RED, 'the next-note color is now red')
+    await p.keyboard.press('Escape')
+    assert.deepEqual((await draw.saved(p)).map((i) => [i.text, i.color]), [['ab', RED]])
+    assert.deepEqual(await currentKeys(), [RED], 'the panel shows the next-note color, red')
+  })
+
+  it('a size change resizes the new note and becomes the next-note size', async () => {
+    await draw.forgetDrawings(p)
+    await draw.reload(p)
+    await draw.pickDraw(p)
+    const before = await slider()
+    await openNew()
+    await p.keyboard.type('ab')
+    const bar = await p.locator(SIZE_SLIDER).boundingBox()
+    await p.mouse.click(bar.x + bar.width - 2, bar.y + bar.height / 2)
+    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
+    const picked = await slider()
+    assert.ok(picked > before, 'the slider moved up')
+    assert.equal(await stored(WIDTH_KEY), picked, 'the next-note size is the one picked')
+    await p.keyboard.press('Escape')
+    assert.equal(await slider(), picked, 'the slider still shows it after the note is saved')
+    assert.ok((await draw.saved(p))[0].size > 20, 'the new note was saved larger than the 20 px a default-size note has')
   })
 
   it('no page error', () => { assert.deepEqual(errors, []) })

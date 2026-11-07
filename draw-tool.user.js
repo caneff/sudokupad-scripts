@@ -1174,24 +1174,29 @@
 
   const unmarkColor = () => { for (const button of keypad().querySelectorAll('button.digit.current')) button.classList.remove('current') }
 
-  // The open note's own look changes, and nothing else: the next-note settings stay as they are.
-  function changeOpen (change) {
+  // The open note's own look changes. A brand-new note's color or size also becomes the next note's (`alsoNext`); an existing note's changes only itself.
+  function changeOpen (change, alsoNext) {
     editing.item = change(editing.item)
+    if (editing.index === -1) alsoNext()
     showEditing(boardMap())
     showPanelValues()
   }
 
+  function setColor (next) {
+    color = next
+    Framework.setData(COLOR_KEY, color)
+  }
+
   function pickColor (next) {
     if (editing) {
-      changeOpen((item) => ({ ...item, color: next }))
+      changeOpen((item) => ({ ...item, color: next }), () => setColor(next))
       return
     }
     if (selected.length) {
       changeSelected((item) => ({ ...item, color: next }))
       return
     }
-    color = next
-    Framework.setData(COLOR_KEY, color)
+    setColor(next)
     showPanelValues()
   }
 
@@ -1383,7 +1388,7 @@
     sliders.addEventListener('change', returnFocusToNote)
     sliders.addEventListener('input', (event) => {
       const value = readWidth(Number(event.target.value))
-      if (editing) changeOpen((item) => ({ ...item, size: textSizeFor(value) }))
+      if (editing) changeOpen((item) => ({ ...item, size: textSizeFor(value) }), () => setSize(value))
       else if (selected.length) changeSelected((item) => ({ ...item, size: textSizeFor(value) }))
       else setSize(value)
     })
