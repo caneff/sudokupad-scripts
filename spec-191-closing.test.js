@@ -16,7 +16,7 @@ const BEFORE = {
   'pen-tool-extras.user.js': [2406, '1.14.10']
 }
 // The scripts that gained features after spec 191 closed: their line counts passed its ceiling and their versions changed.
-const GREW_AFTER_SPEC = ['dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js']
+const GREW_AFTER_SPEC = ['dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js', 'no-tab-letters.user.js']
 const lineCount = (text) => text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
 const versionOf = (text) => /^\/\/ @version\s+(\S+)$/m.exec(text)[1]
 

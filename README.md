@@ -49,8 +49,7 @@ In Cell mode, every cell holding a digit, and every empty cell whose center mark
 - Pick a color in the settings dialog, or use the Black button to go back. The choice is kept and applies without a reload.
 - The page's own text turns dark on a light color.
 - On a dark color, the control buttons go dark gray with light purple icons. On a light color, they stay as SudokuPad draws them.
-- A rectangle around everything the puzzle draws, and the cells you write in, stays as SudokuPad renders it.
-- It is not SudokuPad's dark mode.
+- Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 
 ### No Tab Letters
 
