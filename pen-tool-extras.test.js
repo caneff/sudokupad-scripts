@@ -14,14 +14,13 @@ const {
   PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
-  linePoints, lineIdentityOf, segmentNear, connectedLine, eraseLineActs, LINE_HIT_RADIUS,
+  linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS,
   createStep, lackingInternals, STEP_LABELS,
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('./pen-tool-extras.user.js')
 const { SOLVER_REACH } = require('./dark-page.user.js')
 
-const nextType = (current, settings) => stepType(current, settings, 1, EDGE_CYCLE)
-const previousType = (current, settings) => stepType(current, settings, -1, EDGE_CYCLE)
+const nextType = (current, settings) => stepType(current, settings, EDGE_CYCLE)
 
 // SudokuPad's tool-pen.css (v0.611.0) as #rrggbb, typed out here as the independent source.
 // Pen color 9 is written there as rgb(-36, -36, -36), which clamps to black.
@@ -577,50 +576,6 @@ test('a mark whose type is unticked moves to the next ticked mark, or to empty',
   assert.equal(nextType('circle', { x: true, directions: false, circle: false }), 'empty')
 })
 
-test('with everything ticked the backward cycle is empty, other direction, direction, circle, X, empty', () => {
-  const seen = []
-  let type = 'empty'
-  for (let i = 0; i < 5; i++) {
-    type = previousType(type, ALL)
-    seen.push(type)
-  }
-  assert.deepEqual(seen, ['dirB', 'dirA', 'circle', 'x', 'empty'])
-})
-
-test('going backwards from empty lands on the last ticked mark, and from the X on empty', () => {
-  assert.equal(previousType('empty', { x: true, directions: true, circle: false }), 'dirB')
-  assert.equal(previousType('empty', { x: true, directions: false, circle: true }), 'circle')
-  assert.equal(previousType('empty', { x: true, directions: false, circle: false }), 'x')
-  assert.equal(previousType('x', ALL), 'empty')
-  assert.equal(previousType('empty', NONE), 'empty')
-})
-
-test('going backwards skips an unticked type', () => {
-  assert.equal(previousType('dirA', { x: true, directions: true, circle: false }), 'x')
-  assert.equal(previousType('circle', { x: false, directions: true, circle: true }), 'empty')
-  assert.equal(previousType('empty', { x: true, directions: false, circle: true }), 'circle')
-  assert.equal(previousType('dirA', { x: true, directions: true, circle: true }), 'circle')
-})
-
-test('a mark whose type is unticked moves back to the previous ticked mark, or to empty', () => {
-  assert.equal(previousType('dirA', { x: true, directions: false, circle: false }), 'x')
-  assert.equal(previousType('dirB', { x: false, directions: false, circle: true }), 'circle')
-  assert.equal(previousType('circle', { x: false, directions: false, circle: true }), 'empty')
-  assert.equal(previousType('dirA', NONE), 'empty')
-})
-
-test('backwards on a right edge goes empty, i, h, j, 3, empty', () => {
-  assert.deepEqual(planClick('3', [], ALL, true), { remove: [], add: 'i' })
-  assert.deepEqual(planClick('3', ['i'], ALL, true), { remove: ['i'], add: 'h' })
-  assert.deepEqual(planClick('3', ['h'], ALL, true), { remove: ['h'], add: 'j' })
-  assert.deepEqual(planClick('3', ['j'], ALL, true), { remove: ['j'], add: '3' })
-  assert.deepEqual(planClick('3', ['3'], ALL, true), { remove: ['3'], add: null })
-})
-
-test('backwards with nothing ticked does nothing', () => {
-  assert.equal(planClick('3', ['3'], NONE, true), null)
-})
-
 test('a click on an empty right edge adds the X, which is the character 3', () => {
   assert.deepEqual(planClick('3', [], ALL), { remove: [], add: '3' })
 })
@@ -825,13 +780,6 @@ test('the corner cycle is X, circle, empty, and a click on an empty corner adds 
   assert.deepEqual(planCornerClick('br', [], ALL), { remove: [], add: x })
   assert.deepEqual(planCornerClick('br', [x], ALL), { remove: [x], add: circle })
   assert.deepEqual(planCornerClick('br', [circle], ALL), { remove: [circle], add: null })
-})
-
-test('the corner cycle backwards is circle, X, empty', () => {
-  const [x, circle] = CORNER_VALUES.tl
-  assert.deepEqual(planCornerClick('tl', [], ALL, true), { remove: [], add: circle })
-  assert.deepEqual(planCornerClick('tl', [circle], ALL, true), { remove: [circle], add: x })
-  assert.deepEqual(planCornerClick('tl', [x], ALL, true), { remove: [x], add: null })
 })
 
 test('an unticked corner type is skipped, and with both unticked the corner click does nothing', () => {
@@ -1349,7 +1297,7 @@ test('Other: the White outlines box has its own line with Outline width under it
 })
 
 test('the middle click box is ticked unless the setting is off', () => {
-  const box = (html) => /<input type="checkbox" id="pen-tool-extras-box-middleErase" data-box="middleErase"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-middleErase"[^>]*>Middle click erase<\/label>/.exec(html)
+  const box = (html) => /<input type="checkbox" id="pen-tool-extras-box-middleErase" data-box="middleErase"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-middleErase"[^>]*>Right and middle click erase<\/label>/.exec(html)
   assert.equal(box(renderEditor(editorState()))[1], ' checked')
   assert.equal(box(renderEditor(editorState({ middleErase: false })))[1], undefined)
 })
@@ -2027,9 +1975,9 @@ test('connectedLine does not join lines that only cross, sharing no end point', 
   assert.deepEqual(connectedLine([centre, edge], centre), [centre])
 })
 
-test('eraseLineActs removes each value from its own cells as one select and one bare pen action per value', () => {
+test('eraseActs removes each value from its own cells as one select and one bare pen action per value', () => {
   const cellAt = (row, col) => ({ row, col })
-  const acts = eraseLineActs([seg('1', 0, 0, 'j'), seg('2', 0, 1), seg('1', 0, 2, 'k')], cellAt)
+  const acts = eraseActs([seg('1', 0, 0, 'j'), seg('2', 0, 1), seg('1', 0, 2, 'k')], [], cellAt)
   assert.deepEqual(acts, [
     { type: 'select', arg: [{ row: 0, col: 0 }, { row: 0, col: 2 }] },
     { type: 'pen', arg: '1' },
@@ -2037,7 +1985,24 @@ test('eraseLineActs removes each value from its own cells as one select and one 
     { type: 'select', arg: [{ row: 0, col: 1 }] },
     { type: 'pen', arg: '2' }
   ])
-  assert.deepEqual(eraseLineActs([], cellAt), [])
+  assert.deepEqual(eraseActs([], [], cellAt), [])
+})
+
+test('eraseActs removes a cell\'s marks after the lines, each cell in its own group', () => {
+  const cellAt = (row, col) => ({ row, col })
+  const [one, two] = [{ row: 1, col: 1 }, { row: 2, col: 2 }]
+  assert.deepEqual(eraseActs([seg('1', 0, 0)], [{ cell: one, values: ['3', 'u'] }, { cell: two, values: ['j'] }], cellAt), [
+    { type: 'select', arg: [{ row: 0, col: 0 }] },
+    { type: 'pen', arg: '1' },
+    { type: 'deselect' },
+    { type: 'select', arg: [one] },
+    { type: 'pen', arg: '3' },
+    { type: 'pen', arg: 'u' },
+    { type: 'deselect' },
+    { type: 'select', arg: [two] },
+    { type: 'pen', arg: 'j' }
+  ])
+  assert.deepEqual(eraseActs([], [{ cell: one, values: ['3'] }], cellAt), [{ type: 'select', arg: [one] }, { type: 'pen', arg: '3' }])
 })
 
 // A step with its warnings and skipped labels caught.
@@ -2423,15 +2388,15 @@ test('a complete SudokuPad lacks nothing', () => {
 // Each internal removed alone, and the steps it holds back.
 const LACKING_ALONE = [
   ...['actStart', 'actAdd', 'actSend', 'clickCell', '_actList'].map((name) => [name, (s) => { delete s.tool[name] }, ['arrowLines', 'marks', 'lineErase']]),
-  ['getInputRc', (s) => { delete s.tool.getInputRc }, ['marks']],
+  ['getInputRc', (s) => { delete s.tool.getInputRc }, ['marks', 'lineErase']],
   ['setSelectedColor', (s) => { delete s.tool.setSelectedColor }, ['pages']],
   ['handleToolEnter', (s) => { delete s.tool.handleToolEnter }, ['pages']],
   ['handleToolExit', (s) => { delete s.tool.handleToolExit }, ['pages']],
   ['drawLineHint', (s) => { delete s.tool.drawLineHint }, ['dragHint']],
   ['getCell', (s) => { delete s.app.grid.getCell }, ['marks', 'lineErase']],
   ['puzzle.cells', (s) => { delete s.app.puzzle.cells }, ['arrowLines', 'marks', 'lineErase']],
-  ['grid.rows', (s) => { s.app.grid.rows = '9' }, ['marks']],
-  ['grid.cols', (s) => { s.app.grid.cols = 9.5 }, ['marks']],
+  ['grid.rows', (s) => { s.app.grid.rows = '9' }, ['marks', 'lineErase']],
+  ['grid.cols', (s) => { s.app.grid.cols = 9.5 }, ['marks', 'lineErase']],
   ['CellSize', (s) => { delete s.app.svgRenderer.constructor.CellSize }, ['marks']],
   ['rcToPathData', (s) => { delete s.app.svgRenderer.constructor.rcToPathData }, ['marks']],
   ['renderPen', (s) => { delete Object.getPrototypeOf(s.app.svgRenderer).renderPen }, ['arrowLines', 'marks']],
