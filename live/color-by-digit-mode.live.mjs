@@ -325,6 +325,13 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await p.locator(`${EDITOR} button[data-role="mode-draft"]`).evaluateAll((es) => es.map((e) => e.dataset.mode)), ['cell', 'digit', 'both', 'off'])
     assert.equal(await modeIsChosen('cell'), true)
     await modeChoice('off').click()
+    // One radio group: only the chosen mode is a tab stop, and an arrow key moves the choice.
+    assert.deepEqual(await p.locator(`${EDITOR} button[data-role="mode-draft"]`).evaluateAll((es) => es.map((e) => e.tabIndex)), [-1, -1, -1, 0])
+    await p.keyboard.press('ArrowLeft')
+    assert.equal(await modeIsChosen('both'), true)
+    assert.equal(await p.evaluate(() => document.activeElement.dataset.mode), 'both')
+    await p.keyboard.press('ArrowRight')
+    assert.equal(await modeIsChosen('off'), true)
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.equal(await label(), 'CELL')
     assert.equal(await getMode(), 'cell')

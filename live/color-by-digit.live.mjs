@@ -355,6 +355,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await getGroups()).length, 3)
     })
 
+    it('an open group\'s new color and a digit moved into it are saved', async () => {
+      await openEditor()
+      await openGroup(p, 0)
+      const used = await p.$$eval(`${EDITOR} [data-role="swatch"]`, (es) => es.map((e) => e.title))
+      const free = await p.$$eval(`${EDITOR} button[data-act=color][data-group="0"]`, (es, used) => es.map((e) => e.dataset.key).find((k) => !used.includes(k)), used)
+      await p.click(`${EDITOR} button[data-act=color][data-group="0"][data-key="${free}"]`)
+      await p.click(`${EDITOR} button[data-act=digit][data-group="0"][data-digit="5"]`)
+      await closeDialogWith(p, 'Save', EDITOR)
+      assert.equal(await settle(async () => (await getGroups())[0].key, free), free)
+      const groups = await getGroups()
+      assert.equal(groups[0].digits.includes('5'), true)
+      assert.equal(groups.slice(1).some((g) => g.digits.includes('5')), false)
+    })
+
     it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a step to Both colors nothing', async () => {
       await openEditor()
       const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()

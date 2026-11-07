@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.13.0
+// @version      0.13.1
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.13.0'
+  const VERSION = '0.13.1'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -382,9 +382,10 @@
 
   // Where a profile index lands when the profile at `from` is dragged to `to`.
   function indexAfterMove (index, from, to) {
-    const order = Array.from({ length: Math.max(from, to, index) + 1 }, (_, i) => i)
-    order.splice(to, 0, ...order.splice(from, 1))
-    return order.indexOf(index)
+    if (index === from) return to
+    if (from < index && index <= to) return index - 1
+    if (to <= index && index < from) return index + 1
+    return index
   }
 
   function deleteProfile (state, index) {
@@ -426,7 +427,7 @@
   const ICON_TOP = 22
   const ARROW_START = 78
   const ICON_MAX_GROUPS = 4
-  // The profile menu's and dialog's chips stop at the three groups every preload but Each digit has.
+  // The profile menu's and dialog's chips stop at three groups, the most any preload but Each digit has.
   const CHIP_MAX_GROUPS = 3
 
   function shownDigit (digits) {
@@ -724,6 +725,8 @@
   const ACTIVE_RING = '#b79be0'
   const ACTIVE_INK = '#5b2a9a'
   const IDLE_RING = '#e2dcea'
+  // The pressed look of a chosen mode button and a tag that is on.
+  const PRESSED_LOOK = `background: ${ACTIVE_FILL}; border-color: ${ACTIVE_RING}; color: ${ACTIVE_INK}; font-weight: 600`
 
   const checkboxHtml = (role, on, label) => `<label class="cbd-check"><input type="checkbox" data-role="${role}"${on ? ' checked' : ''}> ${label}</label>`
 
@@ -810,7 +813,7 @@
     const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
     const shownMode = allowedMode(mode, useDigitColors)
     const modeChoice = `<div class="cbd-mode" role="radiogroup" aria-label="Mode">${modesFor(useDigitColors).map((m) =>
-      `<button type="button" class="cbd-button" role="radio" aria-checked="${m === shownMode}" data-role="mode-draft" data-mode="${m}">${MODE_NAMES[m]}</button>`).join('')}</div>`
+      `<button type="button" class="cbd-button" role="radio" aria-checked="${m === shownMode}" tabindex="${m === shownMode ? 0 : -1}" data-role="mode-draft" data-mode="${m}">${MODE_NAMES[m]}</button>`).join('')}</div>`
     const checks = checkboxHtml('use-digit-colors', useDigitColors, 'Use digit colors') +
       (useDigitColors ? checkboxHtml('sync', synced, 'Sync digit profile with cell profile') : '')
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
@@ -822,7 +825,7 @@
       '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div></div>'
   }
 
-  // One stylesheet, every rule scoped to the editor, the profile menu (for the chips), or the dialog's options row.
+  // One stylesheet, every rule scoped to the editor, the profile menu (for the chips), the dialog itself (its width), or the dialog's options row.
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id and the options row's two classes outrank those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const OPTIONS = `.dialog-options.${DIALOG_CLASS}`
@@ -839,7 +842,7 @@
     // Outranks the profile list's column rule on [role="radiogroup"].
     [`${EDITOR} .cbd-mode[role="radiogroup"]`, 'display: flex; flex-direction: row; gap: 8px; margin: 0 0 4px'],
     [`${EDITOR} .cbd-mode .cbd-button`, 'flex: 1'],
-    [`${EDITOR} .cbd-mode [aria-checked="true"]`, `background: ${ACTIVE_FILL}; border-color: ${ACTIVE_RING}; color: ${ACTIVE_INK}; font-weight: 600`],
+    [`${EDITOR} .cbd-mode [aria-checked="true"]`, PRESSED_LOOK],
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
     [`${EDITOR} .cbd-column`, 'min-width: 0'],
     [`${EDITOR} .cbd-check`, 'display: flex; align-items: center; gap: 6px; flex: none; width: auto; min-width: 0; margin: 0; padding: 0; text-align: left; white-space: nowrap'],
@@ -882,7 +885,7 @@
     [`${EDITOR} .cbd-two-tags`, 'flex-wrap: wrap'],
     [`${EDITOR} .cbd-two-tags .cbd-tags`, 'order: 1; flex-basis: 100%; padding-left: 28px'],
     [`${EDITOR} .cbd-tag`, 'padding: 0 6px; height: 24px; line-height: 22px; font-size: .75rem'],
-    [`${EDITOR} .cbd-tag[aria-pressed="true"]`, `background: ${ACTIVE_FILL}; border-color: ${ACTIVE_RING}; color: ${ACTIVE_INK}; font-weight: 600`],
+    [`${EDITOR} .cbd-tag[aria-pressed="true"]`, PRESSED_LOOK],
     [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
     [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
@@ -1277,6 +1280,8 @@
     let draft = savedState
     let draftMode = mode
     let selected = draft.active
+    // The selected profile's name when it was selected: an emptied name box keeps it.
+    let keptName = draft.profiles[selected].name
     addStyle()
     Framework.showDialog({
       centerOverBoard: true,
@@ -1310,11 +1315,11 @@
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
       box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, selected), usesDigitColors(draft), isSynced(draft), name, open)
     }
-    const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; shown = []; open = null }
+    const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; keptName = draft.profiles[selected].name; shown = []; open = null }
     const newProfile = () => {
-      const before = draft
-      reshow(copyProfile(draft, selected), draft.profiles.length)
-      if (draft === before) return
+      const next = copyProfile(draft, selected)
+      if (next === draft) return
+      reshow(next, next.profiles.length - 1)
       draw()
       const nameBox = box.querySelector('[data-role="profile-name"]')
       nameBox.focus()
@@ -1329,16 +1334,24 @@
       draftMode = mode
       draw()
     })
+    // Typing renames the draft and its row in place, so the name box keeps the focus.
     box.addEventListener('input', (event) => {
-      if (event.target.matches('[data-role="profile-name"]')) draft = renameProfile(draft, selected, event.target.value)
+      if (!event.target.matches('[data-role="profile-name"]')) return
+      draft = renameProfile(draft, selected, event.target.value.trim() === '' ? keptName : event.target.value)
+      const row = box.querySelector(`[data-role="profile-row"][data-index="${selected}"]`)
+      row.setAttribute('aria-label', draft.profiles[selected].name)
+      row.querySelector('.cbd-name').textContent = draft.profiles[selected].name
     })
+    // Enter, or leaving the box, shows the name the draft holds: a blank box shows the kept name again.
+    const settleName = (nameBox) => { nameBox.value = draft.profiles[selected].name }
     box.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' || !event.target.matches('[data-role="profile-name"]')) return
       event.preventDefault()
       event.stopPropagation()
-      draw()
+      settleName(event.target)
     })
     box.addEventListener('change', (event) => {
+      if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
       // The draft mode is kept as chosen: unticking "Use digit colors" shows its fallback, and ticking it again before Save shows the mode again.
       if (event.target.matches('[data-role="use-digit-colors"]')) { draft = setUseDigitColors(draft, event.target.checked); draw(); return }
       if (event.target.matches('[data-role="sync"]')) { draft = setSync(draft, event.target.checked); draw(); return }
@@ -1377,6 +1390,19 @@
       draw()
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
+    const chooseMode = (next) => {
+      draftMode = next
+      draw()
+      box.querySelector(`[data-role="mode-draft"][data-mode="${draftMode}"]`).focus()
+    }
+    // The mode row is one radio group: an arrow key moves the choice, as the profile rows do.
+    box.addEventListener('keydown', (event) => {
+      if (!event.target.matches('[data-role="mode-draft"]') || !ARROW_STEP[event.key]) return
+      const modes = [...box.querySelectorAll('[data-role="mode-draft"]')]
+      event.preventDefault()
+      event.stopPropagation()
+      chooseMode(modes[rowAfterKey(event.key, modes.indexOf(event.target), modes.length)].dataset.mode)
+    })
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="select"]')) return
       const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)
@@ -1397,9 +1423,7 @@
       if (modeButton) {
         event.preventDefault()
         event.stopPropagation()
-        draftMode = modeButton.dataset.mode
-        draw()
-        box.querySelector(`[data-role="mode-draft"][data-mode="${draftMode}"]`).focus()
+        chooseMode(modeButton.dataset.mode)
         return
       }
       const el = event.target.closest('button[data-act]')
@@ -1413,7 +1437,9 @@
         draft = set(draft, Number(el.dataset.index))
       } else if (act === 'delete') {
         const index = Number(el.dataset.index)
-        reshow(deleteProfile(draft, index), indexAfterDelete(selected, index, draft.profiles.length))
+        const next = deleteProfile(draft, index)
+        if (next === draft) return
+        reshow(next, indexAfterDelete(selected, index, draft.profiles.length))
       } else {
         const before = draft.profiles[selected].groups
         const group = Number(el.dataset.group)

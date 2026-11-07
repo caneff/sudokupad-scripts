@@ -553,7 +553,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal((await t.getState()).active, 0)
     assert.equal((await t.names()).length, 3)
     await t.openEditor()
-    // The drag tests below start with Low/5/High, the second row, active in the draft.
+    // The drag tests below start with Low/5/High, the second row, selected in the draft.
     await p.click(`${ROWS}:nth-child(2)`)
     assert.equal(await t.selectedRow(), 1)
   })
@@ -609,18 +609,21 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.deepEqual(await t.names(), ['Four', 'Odd/Even', 'Low/5/High'])
   })
 
-  it('typing in the name box renames the selected profile, a blank box keeps the old name, and Cancel drops it', async () => {
+  it('typing in the name box renames the selected profile and its row, a box emptied a key at a time keeps the old name, and Cancel drops it', async () => {
     await t.openEditor()
     await p.click(`${ROWS}:nth-child(1)`, { position: { x: 4, y: 4 } })
     await typeName('Mine')
+    assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
     await p.click(`${ROWS}:nth-child(3)`, { position: { x: 4, y: 4 } })
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
     await p.click(`${ROWS}:nth-child(1)`, { position: { x: 4, y: 4 } })
-    await p.locator(NAME_BOX).press('Control+a')
-    await p.locator(NAME_BOX).press('Backspace')
-    await p.locator(NAME_BOX).press('Enter')
+    await p.locator(NAME_BOX).press('End')
+    for (let i = 0; i < 'Mine'.length; i++) await p.locator(NAME_BOX).press('Backspace')
+    assert.equal(await p.inputValue(NAME_BOX), '')
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
+    await p.locator(NAME_BOX).press('Enter')
     assert.equal(await p.inputValue(NAME_BOX), 'Mine')
+    assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-role')), 'profile-name')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await t.names(), ['Four', 'Odd/Even', 'Low/5/High'])
   })

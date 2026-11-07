@@ -1394,6 +1394,8 @@ test('renderEditor gives each group a red × at the end of its row, named "Remov
   assert.equal(buttons.length, 2)
   assert.deepEqual(buttons.map((m) => m[1]), ['&#215;', '&#215;'])
   assert.deepEqual([...html.matchAll(/data-act="remove" data-group="(\d)"/g)].map((m) => m[1]), ['0', '1'])
+  // The × follows its row's open button inside the row's head, so it sits at the row's end.
+  assert.match(html, /<div class="cbd-group-head"><button[^>]*data-act="open" data-group="0"[\s\S]*?<\/button><button[^>]*data-act="remove" data-group="0"[^>]*>&#215;<\/button><\/div>/)
   const tag = buttons[0][0]
   assert.match(tag, /aria-label="Remove group"/)
   assert.match(tag, /title="Remove group"/)
@@ -1699,4 +1701,10 @@ test('digitOfText reads a single digit and nothing else', () => {
 test('the mode row outranks the profile list\'s column rule, so the four buttons stay in a row', () => {
   const css = STYLE_CSS.replace(/\s+/g, ' ')
   assert.match(css, /#color-by-digit-editor \.cbd-mode\[role="radiogroup"\] \{ display: flex; flex-direction: row;/)
+})
+
+test('renderEditor makes only the chosen mode a tab stop, so the mode row is one radio group', () => {
+  const tabStops = (html) => [...html.matchAll(/<button[^>]*tabindex="(-?\d)"[^>]*data-role="mode-draft" data-mode="(\w+)"/g)].map((m) => `${m[2]}:${m[1]}`)
+  assert.deepEqual(tabStops(renderEditor([], [], [], 'both', '', true, true)), ['cell:-1', 'digit:-1', 'both:0', 'off:-1'])
+  assert.deepEqual(tabStops(renderEditor([], [], [], 'both', '', false, true)), ['cell:0', 'off:-1'])
 })

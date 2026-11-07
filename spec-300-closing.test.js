@@ -73,7 +73,7 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.equal(renameProfile(STATE, 0, 'Parity').profiles[0].name, 'Parity')
   assert.match(renderEditor(EACH, PAGES, [], 'cell', '', true, true, 'Each digit'), /data-role="profile-name" maxlength="24" value="Each digit"/)
 
-  // Groups: nine compact rows, one open with its pad; a digit another group holds shows that group's color dot.
+  // Groups: three compact rows, one open with its pad; a digit another group holds shows that group's color dot.
   const groups = renderEditor(LOW_HIGH, PAGES, [0, 0, 0], 'cell', '', true, true, 'Low/5/High', 1)
   assert.equal(count(groups, /data-act="open"/g), 3)
   assert.equal(count(groups, /aria-expanded="true"/g), 1)
@@ -81,6 +81,19 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.match(groups, /data-digit="1" style="[^"]*">1<span data-role="holder" title="a3"/)
   assert.doesNotMatch(groups, /data-digit="5" style="[^"]*">5<span data-role="holder"/)
   assert.equal(count(renderEditor(EACH, PAGES, [], 'cell', '', true, true, 'Each digit', null), /data-role="numpad"/g), 0)
+  // A group Add group makes opens; a click on a digit another group holds moves it to the open group.
+  assert.equal(byDigit.openGroupAfter(null, 'add-group', undefined, 3, 4), 3)
+  assert.deepEqual(byDigit.assignDigit(LOW_HIGH, 1, '1').map((g) => g.digits), [['2', '3', '4'], ['1', '5'], ['6', '7', '8', '9']])
+
+  // The selected profile follows its row through a reorder and a delete, and the mode row is one tab stop.
+  assert.equal(byDigit.indexAfterMove(2, 2, 0), 0)
+  assert.equal(byDigit.indexAfterMove(1, 2, 0), 2)
+  assert.equal(byDigit.indexAfterDelete(2, 0, 3), 1)
+  assert.match(top, /aria-checked="true" tabindex="0" data-role="mode-draft" data-mode="both"/)
+
+  // Copy settings and Paste settings join Cancel and Save in the bottom row, sized by the row's one button rule.
+  assert.doesNotMatch(byDigit.COPY_PASTE_BUTTONS_HTML, /style=|class=/)
+  assert.match(css, /\.dialog-options\.color-by-digit-dialog button \{ background: #f1eff5;[^}]*height: 38px/)
 
   // Chips stop at three in the menu and the list; the button's icon keeps four.
   const eachRow = (html, marker) => html.split(marker).find((row) => row.includes('Each digit'))
@@ -88,7 +101,7 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.equal(count(eachRow(renderMenu(STATE, colorOf), 'role="menuitemradio"'), /data-role="chip"/g), 3)
   assert.equal(byDigit.CHIP_MAX_GROUPS, 3)
   assert.equal(byDigit.ICON_MAX_GROUPS, 4)
-  assert.ok(iconLayout(EACH).length >= 4)
+  assert.equal(iconLayout(EACH).length, 4)
 
   // The details page shows the annotated dialog picture, and the undo-with-Multi-color-off claim is gone.
   const page = read('site/color-by-digit.html')
