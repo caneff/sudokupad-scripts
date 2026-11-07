@@ -259,20 +259,20 @@
   const readShapeMode = (saved) => SHAPE_MODES.includes(saved) ? saved : SHAPE_OFF
   const nextShapeMode = (mode) => SHAPE_MODES[(SHAPE_MODES.indexOf(mode) + 1) % SHAPE_MODES.length]
   // Pen Tool Extras' page button and swatches draw in a 24-unit box with a 3-unit round stroke; Draw's modes are drawn the same way.
-  const SHAPE_PAINT = "fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'"
+  const shapePaint = (stroke) => `fill='none' stroke='${stroke}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'`
   const SHAPE_PICTURES = {
     [SHAPE_OFF]: FREE_LINE_ICON,
     [RECT]: "<rect x='3.5' y='7.5' width='17' height='11'/>",
     [ELLIPSE]: "<ellipse cx='12' cy='13' rx='9.5' ry='5.5'/>"
   }
-  // The swatch shows a straight line for free lines, the way every color button did before the modes had pictures of their own.
+  // The swatch shows a straight line for free lines, where the button's picture is a freehand squiggle.
   const SWATCH_PICTURES = { ...SHAPE_PICTURES, [SHAPE_OFF]: "<path d='M2 12H22'/>" }
-  const shapeSwatchSvg = (mode) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ${SHAPE_PAINT.replace('currentColor', 'black')}>${SWATCH_PICTURES[mode]}</svg>`
+  const shapeSwatchSvg = (mode) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ${shapePaint('black')}>${SWATCH_PICTURES[mode]}</svg>`
   // The picture is the mode a press turns to, with a dot per mode under it filled for the current one, as Pen Tool Extras' page button has.
   const shapeButtonIcon = (mode) => {
     const dots = SHAPE_MODES.map((m, i) =>
-      `<circle cx='${20 - 3 * (SHAPE_MODES.length - i - 1)}' cy='3' r='1.1' data-shape-dot='${m === mode ? 'filled' : 'outline'}'${m === mode ? '' : " fill='none'"}/>`)
-    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' aria-hidden='true'><g ${SHAPE_PAINT}>${SHAPE_PICTURES[nextShapeMode(mode)]}</g>` +
+      `<circle cx='${20 - 3 * (SHAPE_MODES.length - i - 1)}' cy='3' r='1.1' data-shape-dot='${m === mode ? 'filled' : 'outline'}'/>`)
+    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' aria-hidden='true'><g ${shapePaint('currentColor')}>${SHAPE_PICTURES[nextShapeMode(mode)]}</g>` +
       `<g stroke='currentColor' fill='currentColor' stroke-width='0.5'>${dots.join('')}</g></svg>`
   }
   const SHAPE_NAMES = { [SHAPE_OFF]: 'off, free lines', [RECT]: 'rectangle', [ELLIPSE]: 'ellipse' }
@@ -528,7 +528,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -654,7 +654,8 @@
     `${PANEL} button.digit { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
     `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; }`,
-    ...SHAPE_MODES.map((mode) => `${PANEL}[data-draw-shape="${mode}"] button.digit::after { -webkit-mask: ${swatchMask(mode)}; mask: ${swatchMask(mode)}; }`),
+    `${PANEL} button.digit::after { -webkit-mask: ${swatchMask(SHAPE_OFF)}; mask: ${swatchMask(SHAPE_OFF)}; }`,
+    ...SHAPES.map((mode) => `${PANEL}[data-draw-shape="${mode}"] button.digit::after { -webkit-mask: ${swatchMask(mode)}; mask: ${swatchMask(mode)}; }`),
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(${colorVar(n)}); }`),
     `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
