@@ -175,6 +175,7 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
   const m = read(HOME).match(/<h2>Pen Tool Extras<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Pen Tool Extras description`)
   assert.doesNotMatch(m[1], /slider/i)
+  assert.match(m[1], /^Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners\.$/)
 })
 
 test('netlify.toml publishes only site/', () => {
@@ -191,10 +192,10 @@ test(`${DETAILS} shows the pen panel as one annotated picture whose alt text nam
   const m = read(DETAILS).match(/<h2>The pen panel<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${DETAILS} has no <h2>The pen panel</h2>`)
   assert.doesNotMatch(m[1], /<li\b/, 'the pen panel section is still a list')
-  const imgs = [...m[1].matchAll(/<img\b[^>]*>/g)].map(i => i[0])
-  assert.equal(imgs.length, 1, 'the pen panel section is not one picture')
-  assert.match(imgs[0], /pen-tool-extras-panel-annotated\.png/)
-  const alt = (imgs[0].match(/alt="([^"]*)"/) || [])[1] || ''
+  const found = imgs(m[1])
+  assert.equal(found.length, 1, 'the pen panel section is not one picture')
+  assert.match(found[0], /pen-tool-extras-panel-annotated\.png/)
+  const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
   for (const label of ['Pen color buttons', 'Line mode button', 'Line type button', 'Settings button', 'Thickness and Opacity sliders']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }

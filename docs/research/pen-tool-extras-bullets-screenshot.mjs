@@ -85,11 +85,11 @@ const gridClip = (row0, col0, rows, cols) => {
 }
 const quiet = async () => { await page.mouse.move(5, 5); await page.waitForTimeout(400) }
 const png = async (clip) => (await page.screenshot({ clip })).toString('base64')
-// Puts pictures on one white page, in a row or a column, and saves the result.
-const compose = async (name, pictures, vertical) => {
+// Puts pictures on one white page, in a row, and saves the result.
+const compose = async (name, pictures) => {
   const p = await (await browser.newContext({ viewport: { width: 1400, height: 400 }, deviceScaleFactor: 1 })).newPage()
   const imgs = pictures.map((b) => `<img src="data:image/png;base64,${b}" style="display:block">`).join('')
-  await p.setContent(`<body style="margin:0;background:#fff"><div id="c" style="display:inline-flex;flex-direction:${vertical ? 'column' : 'row'};gap:8px;padding:8px;align-items:flex-start">${imgs}</div></body>`)
+  await p.setContent(`<body style="margin:0;background:#fff"><div id="c" style="display:inline-flex;flex-direction:row;gap:8px;padding:8px;align-items:flex-start">${imgs}</div></body>`)
   await p.locator('#c img').last().evaluate((i) => i.decode())
   save(name, await p.locator('#c').screenshot())
   await p.close()
@@ -104,7 +104,7 @@ await pick(6); await drag([[3.5, 1.5], [3.5, 3.5]])
 await quiet()
 const lines = await png(gridClip(1, 1, 3, 3))
 const pageShot = (await pageButton.screenshot()).toString('base64')
-await compose('lines', [lines, pageShot], false)
+await compose('lines', [lines, pageShot])
 
 // Edges and corners, on page 1 so each takes its pen's solid color.
 await pageButton.click()

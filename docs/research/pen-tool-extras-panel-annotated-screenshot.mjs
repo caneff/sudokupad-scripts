@@ -1,6 +1,6 @@
 // Takes the one annotated picture of the pen panel on site/pen-tool-extras.html ("The pen panel"), from the current
 // pen-tool-extras.user.js on sudokupad.app: the panel cropped close at 3x, with each part labelled beside it by a short
-// line from the label to the part. The labels carry what the page's bullets used to say:
+// line from the label to the part. The labels carry the facts about each part:
 //   pen-tool-extras-panel-annotated.png
 // The panel is the real one, so the picture changes when the panel does. Labels are laid out from the parts' own boxes:
 // the pen color buttons, line mode button and sliders on the left, the line type and settings buttons on the right. The line type
@@ -65,7 +65,7 @@ const gapY = (rel(colors[2]).y + rel(colors[2]).h + part.type.y) / 2
 const labels = [
   { text: '<b>Pen color buttons</b><br>Hold one to change its color', side: 'left', y: part.colors.cy, to: [[part.colors.x + 6, part.colors.cy]] },
   { text: '<b>Line mode button</b><br>Steps Center &amp; Edge, Center only, Edge only', side: 'left', y: part.mode.cy, to: [[part.mode.x + 8, part.mode.cy]] },
-  { text: '<b>Line type button</b><br>Switches the solid, dashed and arrow pens', side: 'right', y: gapY - 10, to: [[part.type.cx, gapY - 10], [part.type.cx, part.type.y + 8]] },
+  { text: '<b>Line type button</b><br>Switches the solid, dashed and arrow pens', side: 'right', y: gapY, to: [[part.type.cx, gapY], [part.type.cx, part.type.y + 8]] },
   { text: '<b>Settings button</b><br>Opens the settings', side: 'right', y: part.gear.cy + 14, to: [[part.gear.x + part.gear.w - 8, part.gear.cy + 14]] },
   { text: '<b>Thickness and Opacity sliders</b><br>Make lines thicker or fainter', side: 'left', y: part.sliders.cy, to: [[part.sliders.x + 10, part.sliders.cy]] }
 ]
@@ -73,13 +73,12 @@ const labels = [
 const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width + SIDE_GAP + LABEL_WIDTH
 const panelLeft = PAD + LABEL_WIDTH + SIDE_GAP
 const height = panel.height + 2 * PAD
-const mid = { left: panelLeft, right: panelLeft + panel.width }
 const html = labels.map((l) => {
   const left = l.side === 'left' ? PAD : panelLeft + panel.width + SIDE_GAP
   return `<div class="l ${l.side}" style="left:${left}px;top:${PAD + l.y}px">${l.text}</div>`
 }).join('')
 const lines = labels.map((l) => {
-  const start = l.side === 'left' ? [PAD + LABEL_WIDTH, l.y] : [mid.right + SIDE_GAP, l.y]
+  const start = l.side === 'left' ? [PAD + LABEL_WIDTH, l.y] : [panelLeft + panel.width + SIDE_GAP, l.y]
   const points = [start, ...l.to.map(([x, y]) => [panelLeft + x, y])].map(([x, y]) => `${x},${y + PAD}`).join(' ')
   const end = l.to[l.to.length - 1]
   return `<polyline points="${points}" fill="none" stroke="${LINE_COLOR}" stroke-width="1.5"/><circle cx="${panelLeft + end[0]}" cy="${end[1] + PAD}" r="3.5" fill="${LINE_COLOR}"/>`
