@@ -282,13 +282,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual([await keyOf('4'), await keyOf('5'), await keyOf('6')], ['', '', ''])
   })
 
-  it('a press in a gap before a key paints from the first digit the drag reaches, and selects no text', async () => {
+  it('a press in a gap before a key paints from the first digit the drag reaches, leaving no text selected', async () => {
     await reopen()
     await swatch('5').click()
     const [one, two, three] = await Promise.all(['1', '2', '3'].map((d) => centre(digitKey(d))))
     // The gap column sits left of key 1.
-    await dragThrough({ x: one.x - 30, y: one.y }, [one, two, three])
+    // Then it runs on over the headings' text, which an unprotected press would select.
+    const headings = await Promise.all([2, 1].map((column) => centre(p.locator(`${EDITOR} .cbd-column:nth-child(${column}) .cbd-heading`).first())))
+    await dragThrough({ x: one.x - 30, y: one.y }, [one, two, three, ...headings])
     assert.deepEqual([await keyOf('1'), await keyOf('2'), await keyOf('3')], ['5', '5', '5'])
+    // SudokuPad's dialog already has user-select: none, so this holds without the script's own rule: it guards against that changing.
     assert.equal(await p.evaluate(() => window.getSelection().toString()), '')
   })
 
