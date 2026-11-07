@@ -64,7 +64,16 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('a preset sets all nine colors in the dialog, and Save writes them and recolors the panel', async () => {
+  it('a Darker page preset sets nine colors that are not SudokuPad\'s, and Save writes them', async () => {
+    await p.click(SETTINGS_BUTTON)
+    await p.locator(PRESET).selectOption('page-1')
+    const colors = await dialogColors(p)
+    assert.equal(NINE.some((n) => colors[n] !== SUDOKUPAD_COLORS[n]), true)
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.deepEqual(await savedColors(p), colors)
+  })
+
+  it('SudokuPad colors, after Darker page 1, sets all nine colors in the dialog, and Save writes them and recolors the panel', async () => {
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('sudokupad')
     assert.deepEqual(await dialogColors(p), SUDOKUPAD_COLORS)
@@ -72,15 +81,6 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await savedColors(p), SUDOKUPAD_COLORS)
     const lines = await p.locator('.controls-input button.digit').evaluateAll((bs) => bs.map((b) => window.getComputedStyle(b, '::after').backgroundColor))
     assert.equal(lines[3], 'rgb(245, 58, 55)', 'color 4 shows SudokuPad\'s red')
-  })
-
-  it('a Darker page preset sets nine colors that are not SudokuPad\'s, and Save writes them', async () => {
-    await p.click(SETTINGS_BUTTON)
-    await p.locator(PRESET).selectOption('page-1')
-    const colors = await dialogColors(p)
-    assert.equal(NINE.some((n) => colors[n] !== SUDOKUPAD_COLORS[n]), true)
-    await closeDialogWith(p, 'Save', EDITOR)
-    assert.deepEqual(await savedColors(p), Object.fromEntries(NINE.map((n) => [String(n), colors[n]])))
   })
 
   it('editing one color in the dialog makes the list Custom, and Save keeps the edit', async () => {
