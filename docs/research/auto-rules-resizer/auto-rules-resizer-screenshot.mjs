@@ -38,7 +38,7 @@ const area = await p.evaluate(() => {
   return { left: rules.left, right: rules.right, top: header.top, bottom: rules.bottom, centerX: (rules.left + rules.right) / 2, centerY: (rules.top + rules.bottom) / 2 }
 })
 await p.mouse.move(area.centerX, area.centerY) // over the pane, so the drag corners and the f+ and f- buttons show
-await p.locator('#auto-rules-resizer-font').waitFor({ state: 'visible' }) // the bar and the corners show on the same hover class
+await p.locator('#auto-rules-resizer-font').waitFor({ state: 'visible' }) // the bar and the corners show on the same hover rule
 await p.screenshot({
   path: out,
   clip: {

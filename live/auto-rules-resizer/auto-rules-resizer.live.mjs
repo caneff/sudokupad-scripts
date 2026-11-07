@@ -213,6 +213,21 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
     assert.equal(rect.left >= Math.floor(await boardRight(p)), true, `pane left ${rect.left} clear of the board`)
   })
 
+  it('the corners and the bar stay shown during a corner drag with the pointer off the pane, and hide once it ends there (last: the drag resizes the pane)', async () => {
+    const shown = () => Promise.all([FONT_BAR, CORNER('ur'), CORNER('dl')].map((s) => p.locator(s).isVisible()))
+    await hoverPane(p)
+    assert.deepEqual(await settle(shown, [true, true, true]), [true, true, true], 'pointer on the pane')
+    const box = await p.locator(CORNER('ur')).boundingBox()
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(100, 500, { steps: 8 }) // far off the pane, over the board
+    assert.deepEqual(await shown(), [true, true, true], 'mid-drag, pointer off the pane')
+    await p.mouse.up()
+    assert.deepEqual(await settle(shown, [false, false, false]), [false, false, false], 'drag ended off the pane')
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })
