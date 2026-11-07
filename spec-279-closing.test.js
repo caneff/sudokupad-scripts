@@ -25,13 +25,13 @@ const digitsIn = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m
 // the rendering of cells, digits and circles, and undo are `npm run test:live`'s, and neither run covers a real
 // Tampermonkey install or crackingthecryptic.com.
 test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is merged into it', () => {
-  const { nextMode, allowedMode, startingMode, modeLabelHtml, copiedSettings, pastedSettings } = byDigit
+  const { nextMode, allowedMode, startingMode, buttonLabel, copiedSettings, pastedSettings } = byDigit
 
-  // A press steps Cell, Digit, Both, Off and round; the label names the mode where AUTO was.
+  // A press steps Cell, Digit, Both, Off and round; the button's label names the mode (#354: its chips show it, its title says it).
   const cycle = ['cell']
   for (let i = 0; i < 4; i++) cycle.push(nextMode(cycle[i], true))
   assert.deepEqual(cycle, ['cell', 'digit', 'both', 'off', 'cell'])
-  assert.deepEqual(cycle.slice(0, 4).map((mode) => />([A-Z]+)</.exec(modeLabelHtml(mode))[1]), ['CELL', 'DIGIT', 'BOTH', 'OFF'])
+  assert.deepEqual(cycle.slice(0, 4).map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
   assert.doesNotMatch(byDigit.iconHtml('cell', ODD_EVEN, colorOf), /AUTO/)
 
   // Starting mode: the saved one, else Cell, or Off when auto mode was saved off.
@@ -72,20 +72,20 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
   assert.deepEqual(byDigit.withAddedPreloads(added, ['Each digit']), added)
 
   // The digit profile: synced by default; unticked it starts at the cell profile; a Digits pick moves only the digits;
-  // the icon shows the digit profile in Digit; the menu has Cells and Digits sections only while unsynced.
+  // the icon shows the digit profile in Digit; the menu has Cell and Digit dot columns only while unsynced (#354).
   const two = { profiles: [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }
   assert.equal(byDigit.isSynced(two), true)
   const apart = byDigit.setDigitActive(byDigit.setSync(two, false), 1)
   assert.deepEqual([byDigit.activeGroups(apart), byDigit.digitGroups(apart)], [SPLIT, ODD_EVEN])
   assert.deepEqual([byDigit.iconGroups(apart, 'digit'), byDigit.iconGroups(apart, 'both')], [ODD_EVEN, SPLIT])
-  assert.match(byDigit.renderMenu(apart, colorOf), />Cells<[\s\S]*>Digits</)
-  assert.doesNotMatch(byDigit.renderMenu(two, colorOf), />Cells<|>Digits</)
+  assert.match(byDigit.renderMenu(apart, colorOf), />Cell<[\s\S]*>Digit<[\s\S]*data-target="digits"/)
+  assert.doesNotMatch(byDigit.renderMenu(two, colorOf), />Cell<|>Digit<|data-target="digits"/)
 
   // "Use digit colors" off: the cycle is Cell and Off, Digit falls back to Off and Both to Cell, and the menu is one list.
   const off = byDigit.setUseDigitColors(apart, false)
   assert.deepEqual([nextMode('cell', false), nextMode('off', false)], ['off', 'cell'])
   assert.deepEqual([allowedMode('digit', false), allowedMode('both', false)], ['off', 'cell'])
-  assert.doesNotMatch(byDigit.renderMenu(off, colorOf), />Digits</)
+  assert.doesNotMatch(byDigit.renderMenu(off, colorOf), />Digit<|data-target="digits"/)
 
   // Digit Color is gone: no script, and the homepage names it nowhere.
   assert.equal(existsSync(join(__dirname, 'digit-color.user.js')), false)

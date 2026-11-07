@@ -148,9 +148,9 @@ test(`${DETAILS} lists what the script adds to drawing, one item per feature`, (
   assert.deepEqual(section(DETAILS, 'What it adds'), [
     'Customizable pen colors. Hold a pen color button, or pick a preset in the settings.',
     'Dashed lines and arrow lines. Two more pages of pens.',
-    'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
+    'Marks on cell edges. Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
-    'Erase a whole line. Middle-click a line to remove all of it.',
+    'Erase a whole line. Right-click or middle-click a line to remove all of it, or a mark to remove that.',
     'White outlines. An outline keeps lines readable over colored cells.'
   ])
 })
@@ -380,7 +380,7 @@ const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === l
 
 test(`${CBD}'s Four modes item is one sentence, and it and the Kept in step and profile menu items have no picture of their own`, () => {
   const four = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
-  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
+  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off. The button\'s chips, a short run of board cells, are drawn the way the mode colors the board: filled cells, shaded digits, both, or plain white.')
   for (const lead of ['Four modes.', 'Kept in step as you solve.', 'The profile menu.']) assert.equal(itemImg(CBD, lead), '', `"${lead}" has a picture`)
 })
 

@@ -29,7 +29,7 @@ const browser = await chromium.launch()
 // The Digit picture: the boxes in Digit, after the circles are drawn.
 {
   const p = await openExample(browser)
-  await pressTo(p, 'DIGIT')
+  await pressTo(p, 'Digit')
   await waitForCircles(p)
   await p.mouse.move(0, 0)
   await p.screenshot({ path: out('digit'), clip: await exampleClip(p) })
@@ -46,7 +46,7 @@ const browser = await chromium.launch()
   await hideOthers(true)
   const button = p.locator(BUTTON)
   const modular = p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Modular' })
-  await pressTo(p, 'CELL')
+  await pressTo(p, 'Cell')
   await p.click(MENU_ARROW)
   await p.locator(MENU).waitFor({ state: 'visible' })
   await p.waitForTimeout(SETTLE_MS)
@@ -71,7 +71,7 @@ const browser = await chromium.launch()
   }
   const press = async (mode) => {
     await pressTo(p, mode)
-    if (mode === 'DIGIT' || mode === 'BOTH') await waitForCircles(p)
+    if (mode === 'Digit' || mode === 'Both') await waitForCircles(p)
   }
   await snap('Start', FRAME_MS)
   await typeInto(p, '#control-normal', 2, 4, '1')
@@ -80,9 +80,9 @@ const browser = await chromium.launch()
   await snap('Center marks 7 and 9', FRAME_MS)
   await typeInto(p, '#control-centre', 2, 5, '2')
   await snap('Add a center mark 2', FRAME_MS + 200)
-  for (const mode of ['DIGIT', 'BOTH', 'OFF', 'CELL']) {
+  for (const mode of ['Digit', 'Both', 'Off', 'Cell']) {
     await press(mode)
-    await snap(mode.charAt(0) + mode.slice(1).toLowerCase(), FRAME_MS)
+    await snap(mode, FRAME_MS)
   }
   await hideOthers(true)
   await p.click(MENU_ARROW)

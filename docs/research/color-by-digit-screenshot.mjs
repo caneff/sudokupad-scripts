@@ -9,8 +9,8 @@ const out = new URL('./site-color-by-digit.png', import.meta.url).pathname
 
 const browser = await chromium.launch()
 const p = await openExample(browser)
-await pressTo(p, 'DIGIT')
-await pressTo(p, 'BOTH')
+await pressTo(p, 'Digit')
+await pressTo(p, 'Both')
 await waitForCircles(p)
 await p.screenshot({ path: out, clip: await exampleClip(p) })
 await browser.close()

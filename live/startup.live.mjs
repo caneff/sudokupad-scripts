@@ -9,6 +9,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
+import { labelOn } from './color-by-digit-fixtures.mjs'
 import { MODES, openPage, START, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
 import { keydownDefaults, mouseDrag, openPenTool, penEntries } from './pen.mjs'
@@ -44,11 +45,11 @@ const SCRIPTS = [
     // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Digit, which takes them off.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
-      const label = () => p.locator('#control-colorbydigit [data-role="mode"]').textContent()
+      const label = () => labelOn(p)
       assert.equal(await settle(colored, true), true, 'Cell colored a cell')
-      assert.equal(await label(), 'CELL')
+      assert.equal(await label(), 'Cell')
       await p.click('#control-colorbydigit')
-      assert.equal(await settle(label, 'DIGIT'), 'DIGIT')
+      assert.equal(await settle(label, 'Digit'), 'Digit')
       assert.equal(await settle(colored, false), false, 'Digit took the colors off')
     }
   },

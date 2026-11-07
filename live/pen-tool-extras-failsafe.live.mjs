@@ -37,7 +37,7 @@ function planted (anchor, line) {
 const CASES = [
   { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
   { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
-  { name: 'marks missing', off: 'marks', warns: missing('marks', 'grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
+  { name: 'marks missing', off: 'marks, line erase', warns: missing('marks, line erase', 'grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
   // Cell color page 1 cannot be read when the install save darkens it.
   {
     name: 'colors',
@@ -46,14 +46,14 @@ const CASES = [
     breaks: `const pages = Framework.app.tools.colour.palette.pages
       pages[0] = new Proxy(pages[0], { get (page, key) { if (key === 'length') throw new TypeError('no length'); return page[key] } })`
   },
-  // The call fails only while the middle press is handled, so SudokuPad's own pointer reading, which uses it, goes on.
+  // The call fails once, in the middle press's handling, so SudokuPad's own pointer reading, which uses it, goes on.
   {
     name: 'line erase',
     off: 'line erase',
     warns: changed('line erase'),
     breaks: `const xyToRCExact = Framework.app.xyToRCExact
-      window.addEventListener('pointerdown', (e) => { window.middle = e.button === 1; setTimeout(() => { window.middle = false }) }, true)
-      Framework.app.xyToRCExact = function () { if (window.middle) throw new TypeError('xyToRCExact is gone'); return xyToRCExact.apply(this, arguments) }`
+      window.addEventListener('pointerdown', (e) => { window.middle = e.button === 1 && !window.middleFailed; setTimeout(() => { window.middle = false }) }, true)
+      Framework.app.xyToRCExact = function () { if (window.middle) { window.middle = false; window.middleFailed = true; throw new TypeError('xyToRCExact is gone') } return xyToRCExact.apply(this, arguments) }`
   },
   // SudokuPad builds the pen tool's panel without the element the sliders and the buttons sit beside.
   {
@@ -75,16 +75,14 @@ const CASES = [
     breaks: `const renderPart = Framework.app.svgRenderer.renderPart
       Framework.app.svgRenderer.renderPart = function (opts) { if (opts && opts.type === 'g') throw new TypeError('renderPart has no group'); return renderPart.apply(this, arguments) }`
   },
-  // The right click handler asks the pen tool where the pointer is; here that call fails only while a context menu is being asked for.
+  // The same call, failing only while the right press is handled: the erase is skipped, and the press, the click and the menu are SudokuPad's own.
   {
     name: 'right click',
-    off: 'marks',
-    warns: changed('marks'),
-    edgeAgain: null,
-    breaks: `const getInputRc = ToolPen.tool.getInputRc
-      window.addEventListener('contextmenu', () => { window.asking = true }, true)
-      window.addEventListener('contextmenu', () => { window.asking = false })
-      ToolPen.tool.getInputRc = function () { if (window.asking) throw new TypeError('getInputRc is gone'); return getInputRc.apply(this, arguments) }`
+    off: 'line erase',
+    warns: changed('line erase'),
+    breaks: `const xyToRCExact = Framework.app.xyToRCExact
+      window.addEventListener('pointerdown', (e) => { window.right = e.button === 2 && !window.rightFailed; setTimeout(() => { window.right = false }) }, true)
+      Framework.app.xyToRCExact = function () { if (window.right) { window.right = false; window.rightFailed = true; throw new TypeError('xyToRCExact is gone') } return xyToRCExact.apply(this, arguments) }`
   },
   // A throw in the click wrapper's own code, after SudokuPad's click has queued its actions and before they are sent.
   {
@@ -184,10 +182,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           const prevented = () => read(() => new Promise((resolve) => {
             document.addEventListener('contextmenu', (e) => setTimeout(() => resolve(e.defaultPrevented)), { once: true })
           }))
-          for (let i = 0; i < 2; i++) {
+          // SudokuPad's own right click acts as a left click: its X on the first, its toggle off on the second
+          for (const want of [['4'], []]) {
             const answer = prevented()
             await clickEdge('right')
             assert.equal(await answer, false, 'the menu is not suppressed on the right click that failed or after it')
+            assert.deepEqual(await settle(edgeValues, want), want, 'the press that failed is left to SudokuPad')
           }
           await undoAll()
         }

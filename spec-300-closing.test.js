@@ -25,7 +25,7 @@ const count = (html, re) => (html.match(re) || []).length
 // dialog's rendering at 1200 and 390 px, Save reaching the puzzle and undo are `npm run test:live`'s
 // (live/color-by-digit*.live.mjs), and neither run covers a real Tampermonkey install or crackingthecryptic.com.
 test('spec 300: the Color by Digit settings dialog edits a selected profile in two columns, by painting digits', () => {
-  const { renderEditor, renderProfiles, renderMenu, iconLayout, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
+  const { renderEditor, renderProfiles, renderMenu, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
 
   // Top row: the Mode pulldown offers four modes, or Cell and Off without digit colors.
   const modes = (html) => [...html.match(/<select data-role="mode-draft">(.*?)<\/select>/s)[1].matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1])
@@ -74,13 +74,11 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.equal(byDigit.indexAfterMove(1, 2, 0), 2)
   assert.equal(byDigit.indexAfterDelete(2, 0, 3), 1)
 
-  // Chips stop at three in the menu and the list; the button's icon keeps four.
+  // Chips stop at three in the menu, the list and the button's icon.
   const eachRow = (html, marker) => html.split(marker).find((row) => row.includes('Each digit'))
   assert.equal(count(eachRow(renderProfiles(STATE, colorOf, 0), 'data-role="profile-row"'), /data-role="chip"/g), 3)
-  assert.equal(count(eachRow(renderMenu(STATE, colorOf), 'role="menuitemradio"'), /data-role="chip"/g), 3)
-  assert.equal(byDigit.CHIP_MAX_GROUPS, 3)
-  assert.equal(byDigit.ICON_MAX_GROUPS, 4)
-  assert.equal(iconLayout(EACH).length, 4)
+  assert.equal(count(eachRow(renderMenu(STATE, colorOf), 'data-role="menu-row"'), /data-role="chip"/g), 3)
+  assert.equal(count(byDigit.iconHtml('cell', EACH, colorOf), /data-role="chip"/g), 3)
 
   // The details page shows the annotated dialog picture, and the undo-with-Multi-color-off claim is gone.
   const page = read('site/color-by-digit.html')
