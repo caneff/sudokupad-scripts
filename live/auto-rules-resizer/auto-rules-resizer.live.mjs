@@ -87,7 +87,8 @@ async function clickFont (p, label) {
 }
 
 // Drags `corner` by (dx, dy) in steps, the way a hand does: over the pane first, so the corner shows.
-async function dragCorner (p, corner, dx, dy) {
+// `midDrag()` runs once the pointer has made the move, before the release.
+async function dragCorner (p, corner, dx, dy, midDrag) {
   const now = await pane(p)
   await p.mouse.move((now.left + now.right) / 2, (now.top + now.bottom) / 2)
   await p.locator(CORNER(corner)).waitFor({ state: 'visible' })
@@ -97,6 +98,7 @@ async function dragCorner (p, corner, dx, dy) {
   await p.mouse.move(x, y)
   await p.mouse.down()
   await p.mouse.move(x + dx, y + dy, { steps: 8 })
+  await midDrag?.()
   await p.mouse.up()
 }
 
@@ -211,6 +213,17 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
     assert.equal(now.bottom <= SMALLER.height, true, `column bottom ${now.bottom} in a ${SMALLER.height} px window`)
     const rect = await stable(() => pane(p))
     assert.equal(rect.left >= Math.floor(await boardRight(p)), true, `pane left ${rect.left} clear of the board`)
+  })
+
+  it('the corners and the bar stay shown during a corner drag with the pointer off the pane, and hide once it ends there (last: the drag resizes the pane)', async () => {
+    const shown = () => Promise.all([FONT_BAR, CORNER('ur'), CORNER('dl')].map((s) => p.locator(s).isVisible()))
+    await hoverPane(p)
+    assert.deepEqual(await settle(shown, [true, true, true]), [true, true, true], 'pointer on the pane')
+    // Far off the pane, over the board.
+    await dragCorner(p, 'ur', -1100, 300, async () => {
+      assert.deepEqual(await shown(), [true, true, true], 'mid-drag, pointer off the pane')
+    })
+    assert.deepEqual(await settle(shown, [false, false, false]), [false, false, false], 'drag ended off the pane')
   })
 
   it('the page raised no error', () => {
