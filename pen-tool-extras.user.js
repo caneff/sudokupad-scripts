@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.24.0
+// @version      1.24.1
 // @description  Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.24.0'
+  const VERSION = '1.24.1'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -618,8 +618,8 @@
   const PICKER = 'pen-tool-extras-picker'
   const EDIT_CSS = [
     `.${EDITING} button[data-value]::after { opacity: 0; }`,
-    // The panel is a grid, so a picker in the flow would take a cell: it is absolute, and `enterEditMode` gives it its button's box.
-    `.${EDITING} .${PICKER} { position: absolute; z-index: 10; }`,
+    // The panel is a grid, so a picker in the flow would take a cell: it is absolute and fills its button's cell, which `PANEL_CSS` names.
+    `.${EDITING} .${PICKER} { position: absolute; inset: 0; z-index: 10; }`,
     `.${EDITING} .${PICKER} input { position: absolute; inset: 0; margin: auto; width: 2.4rem; height: 2.4rem; pointer-events: all; }`
   ].join('\n')
   // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
@@ -714,7 +714,7 @@
     panel.classList.add(EDITING)
     buttons.forEach((button, i) => {
       button.insertAdjacentHTML('beforebegin',
-        `<div class="${PICKER}" style="left: ${button.offsetLeft}px; top: ${button.offsetTop}px; width: ${button.offsetWidth}px; height: ${button.offsetHeight}px"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active.colors[PEN_COLOR_NUMBERS[i]]}"></div>`)
+        `<div class="${PICKER}" data-pen="${PEN_COLOR_NUMBERS[i]}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active.colors[PEN_COLOR_NUMBERS[i]]}"></div>`)
     })
     leaveWatch = new window.MutationObserver(() => {
       if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
@@ -1706,7 +1706,9 @@
     // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
     `.tool-pen .controls-input:not(:has(.${SLIDERS})) .${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
     // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
-    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad .tool-pen .controls-input button[data-key="${key}"] { grid-row: ${row}; }`)),
+    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad .tool-pen .controls-input :is(button[data-key="${key}"], .${PICKER}[data-pen="${key}"]) { grid-row: ${row} / span 1; }`)),
+    // In edit mode a picker sits in its button's cell, so it follows the button when Keypad Flipped moves it.
+    ...PEN_COLOR_NUMBERS.map((n) => `.tool-pen .controls-input .${PICKER}[data-pen="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     `.${SLIDERS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
     `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
     `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
