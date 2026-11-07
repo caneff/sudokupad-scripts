@@ -2,7 +2,16 @@
 // the real mouse, setting its sliders, planting saved values and probing keydowns. Not a check itself, so
 // `live/*.live.mjs` skips it.
 
+import assert from 'node:assert/strict'
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'
+
+// Pen Tool Extras' page button, and the values of the number pad's buttons 1 to 9 on each of its pages.
+export const PAGE_BUTTON = '.pen-tool-extras-page'
+export const PAGE_ONE = '123456789'
+export const PAGE_TWO = 'abcdefghi'
+export const PAGE_THREE = 'jlnprtvxz'
+// How long one press on the page button gets to turn the page before it is pressed again.
+const PAGE_TURN_MS = 500
 
 // How long one click on the pen button gets to show the tool: longer than the tool takes to open, since a second click
 // on the toggle closes it again.
@@ -100,4 +109,13 @@ export async function keydownDefaults (page, key) {
   })
   await page.keyboard.press(key)
   return page.evaluate(() => window.__keydowns)
+}
+
+// Turns the pen tool's page with the page button until the number pad shows `values` (a PAGE_ constant).
+export async function goToPenPage (page, values) {
+  for (let i = 0; i < 3 && (await padValues(page)) !== values; i++) {
+    await page.locator(PAGE_BUTTON).click()
+    await settle(() => padValues(page), values, PAGE_TURN_MS)
+  }
+  assert.equal(await settle(() => padValues(page), values), values)
 }
