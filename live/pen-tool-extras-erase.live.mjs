@@ -116,7 +116,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     const lines = await penEntries(p)
     await openExtrasEditor(p)
-    const box = editor().locator('input[data-box="middleErase"]')
+    const box = editor().locator('input[data-box="eraseClicks"]')
     assert.equal(await box.isChecked(), true, 'ticked on a fresh install')
     assert.equal(await p.getByLabel('Right and middle click erase').isChecked(), true)
     await box.uncheck()
@@ -226,7 +226,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undoAll()
   })
 
-  it('a right-drag across two lines erases both and the marks it crosses, as one undo step', async () => {
+  it('a right-drag across two lines and a mark erases all three, as one undo step', async () => {
     await undoAll()
     await selectPenOnPage(1, 3)
     await drag(p, [[1.5, 1.5], [1.5, 3.5]])
@@ -246,6 +246,53 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undo()
     const all = [...withMark, ...third].sort()
     assert.deepEqual(await settle(() => penEntries(p), all), all, 'one undo brings everything back')
+    await undoAll()
+  })
+
+  it('a bent drag erases what it crosses on the way, not only on the straight run from the press to the release', async () => {
+    await undoAll()
+    await selectPenOnPage(1, 3)
+    await drag(p, [[1.5, 1.5], [1.5, 3.5]])
+    await drag(p, [[5.5, 1.5], [5.5, 3.5]])
+    const both = await penEntries(p)
+    const second = both.filter((v) => v.startsWith('5,'))
+    assert.ok(second.length > 0 && second.length < both.length)
+    // press and release in the same empty place, with the first line between them on the way
+    await mouseDrag(p, [[3.5, 2.5], [1.5, 2.0], [3.5, 2.5]], { button: 'right' })
+    assert.deepEqual(await settle(() => penEntries(p), second), second, 'only the first line went')
+    await undoAll()
+  })
+
+  for (const button of ['right', 'middle']) {
+    it(`a second button pressed and released during a ${button}-drag does not end it, and the drag erases when its own button is released`, async () => {
+      await undoAll()
+      await selectPenOnPage(1, 3)
+      await drag(p, [[1.5, 1.5], [1.5, 3.5]])
+      const other = button === 'right' ? 'middle' : 'right'
+      await p.mouse.move(...await gridPoint(p, [3.5, 2.0]))
+      await p.mouse.down({ button })
+      await p.mouse.move(...await gridPoint(p, [2.5, 2.0]), { steps: 4 })
+      await p.mouse.down({ button: other })
+      await p.mouse.up({ button: other })
+      await p.mouse.move(...await gridPoint(p, [0.5, 2.0]), { steps: 6 })
+      await p.mouse.up({ button })
+      assert.deepEqual(await settle(() => penEntries(p), []), [], 'the line the drag crossed is erased')
+      await p.mouse.click(5, 5) // as after any middle press: a click off the grid, or the next drag draws nothing
+      await undoAll()
+    })
+  }
+
+  it('a middle-drag across two lines erases both as one undo step', async () => {
+    await undoAll()
+    await selectPenOnPage(1, 3)
+    await drag(p, [[1.5, 1.5], [1.5, 3.5]])
+    await drag(p, [[5.5, 1.5], [5.5, 3.5]])
+    const lines = await penEntries(p)
+    await mouseDrag(p, [[0.5, 2.0], [6.5, 2.0]], { button: 'middle' })
+    assert.deepEqual(await settle(() => penEntries(p), []), [])
+    await undo()
+    assert.deepEqual(await settle(() => penEntries(p), lines), lines, 'one undo brings both back')
+    await p.mouse.click(5, 5) // as after any middle press
     await undoAll()
   })
 

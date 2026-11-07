@@ -91,6 +91,7 @@
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type.
+- **pen erase** — Pen Tool Extras' right or middle click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Draw's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle and
   cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark

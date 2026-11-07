@@ -1056,7 +1056,7 @@ const editorState = (over = {}) => ({
   dash: 0,
   arrowSpacing: 7,
   lineStyles: { dashed: true, arrows: true },
-  middleErase: true,
+  eraseClicks: true,
   outline: true,
   outlineWidth: 2,
   off: [],
@@ -1195,7 +1195,7 @@ test('every slider in the settings table has one dialog row, with the label and 
 test('a box ticked in the dialog sets its setting in the draft through the table, a mark box included', () => {
   const draft = editorState()
   assert.equal(draftWithBox(draft, 'outline', false).outline, false)
-  assert.equal(draftWithBox(draft, 'middleErase', false).middleErase, false)
+  assert.equal(draftWithBox(draft, 'eraseClicks', false).eraseClicks, false)
   assert.deepEqual(draftWithBox(draft, 'lineStyles.dashed', false).lineStyles, { dashed: false, arrows: true })
   assert.deepEqual(draftWithBox(draft, 'show.opacity', false).show, { thickness: true, opacity: false })
   assert.deepEqual(draft.lineStyles, { dashed: true, arrows: true }, 'the draft given is left alone')
@@ -1281,11 +1281,11 @@ test('the marks table shows pictures only in its headings, in #444 at stroke 2.6
   assert.ok(cell('directions') && cell('cornerCircle'), 'a box is alone in its label')
 })
 
-test('Other: the White outlines box has its own line with Outline width under it, hidden while the box is unticked, and the middle click box follows', () => {
+test('Other: the White outlines box has its own line with Outline width under it, hidden while the box is unticked, and the right and middle click erase box follows', () => {
   const html = renderEditor(editorState())
   assert.match(html, />Other</)
   assert.match(html, /<input type="checkbox" id="pen-tool-extras-box-outline" data-box="outline" checked[^>]*>\s*<label for="pen-tool-extras-box-outline"[^>]*>White outlines<\/label>/)
-  assert.equal(html.indexOf('data-box="outline"') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-box="middleErase"'), true)
+  assert.equal(html.indexOf('data-box="outline"') < html.indexOf('data-setting="outlineWidth"') && html.indexOf('data-setting="outlineWidth"') < html.indexOf('data-box="eraseClicks"'), true)
   assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
@@ -1296,10 +1296,10 @@ test('Other: the White outlines box has its own line with Outline width under it
   assert.match(rowOf(off, 'outlineWidth'), /value="5"/)
 })
 
-test('the middle click box is ticked unless the setting is off', () => {
-  const box = (html) => /<input type="checkbox" id="pen-tool-extras-box-middleErase" data-box="middleErase"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-middleErase"[^>]*>Right and middle click erase<\/label>/.exec(html)
+test('the right and middle click erase box is ticked unless the setting is off', () => {
+  const box = (html) => /<input type="checkbox" id="pen-tool-extras-box-eraseClicks" data-box="eraseClicks"( checked)?[^>]*>\s*<label for="pen-tool-extras-box-eraseClicks"[^>]*>Right and middle click erase<\/label>/.exec(html)
   assert.equal(box(renderEditor(editorState()))[1], ' checked')
-  assert.equal(box(renderEditor(editorState({ middleErase: false })))[1], undefined)
+  assert.equal(box(renderEditor(editorState({ eraseClicks: false })))[1], undefined)
 })
 
 test('the editor is a two by two grid: Pen colors | Line settings and Line styles above Marks to cycle | Other, with one divider between Line settings and Line styles', () => {
@@ -1829,9 +1829,9 @@ test('arrow spacing runs 3 to 12 in whole steps and starts at 5, and the arrow s
   for (const bad of [undefined, null, 2, 13, 4.5, '6', true, {}, []]) assert.equal(SETTINGS.arrowSpacing.normalize(bad), 5, JSON.stringify(bad))
 })
 
-test('middle click erase is on unless saved as the boolean false', () => {
-  assert.equal(SETTINGS.middleErase.normalize(false), false)
-  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(SETTINGS.middleErase.normalize(ok), true, JSON.stringify(ok))
+test('right and middle click erase is on unless saved as the boolean false', () => {
+  assert.equal(SETTINGS.eraseClicks.normalize(false), false)
+  for (const ok of [true, undefined, null, 0, 'false', {}, []]) assert.equal(SETTINGS.eraseClicks.normalize(ok), true, JSON.stringify(ok))
 })
 
 test('both line styles are enabled unless saved as the boolean false, each on its own; saved junk enables both', () => {
@@ -2164,7 +2164,7 @@ test('the table holds each setting\'s saved key and default', () => {
     arrowSpacing: ['PenColor_arrowspacing', 5],
     outlineWidth: ['PenColor_outlinewidth', 2],
     outline: ['PenColor_outline', true],
-    middleErase: ['PenColor_middleerase', true],
+    eraseClicks: ['PenColor_middleerase', true],
     lineStyles: ['PenColor_linestyles', { dashed: true, arrows: true }],
     show: ['PenColor_sliders', { thickness: true, opacity: true }],
     marks: ['EdgeMarks_marks', ALL]
@@ -2209,7 +2209,7 @@ test('a slider row built from a range normalizes and saves by that range alone',
 
 test('a row built with no effect has one that does nothing', () => {
   assert.equal(flag('Flag_key').effect(), undefined)
-  assert.equal(SETTINGS.middleErase.effect(), undefined)
+  assert.equal(SETTINGS.eraseClicks.effect(), undefined)
 })
 
 test('saving what changed updates the values in force and names what changed', () => {
@@ -2264,7 +2264,7 @@ test('readSettings normalizes what is saved under each key and falls back for th
 })
 
 test('settingDefaults holds every row\'s default', () => {
-  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, middleErase: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true }, marks: ALL })
+  assert.deepEqual(settingDefaults(), { thickness: 5, opacity: 80, dash: 3, arrowSpacing: 5, outlineWidth: 2, outline: true, eraseClicks: true, lineStyles: { dashed: true, arrows: true }, show: { thickness: true, opacity: true }, marks: ALL })
 })
 
 test('changedSettings names only the settings whose value differs, reading flags by value', () => {

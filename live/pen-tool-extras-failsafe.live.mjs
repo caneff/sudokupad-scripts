@@ -46,14 +46,14 @@ const CASES = [
     breaks: `const pages = Framework.app.tools.colour.palette.pages
       pages[0] = new Proxy(pages[0], { get (page, key) { if (key === 'length') throw new TypeError('no length'); return page[key] } })`
   },
-  // The call fails only while the middle press is handled, so SudokuPad's own pointer reading, which uses it, goes on.
+  // The call fails once, in the middle press's handling, so SudokuPad's own pointer reading, which uses it, goes on.
   {
     name: 'line erase',
     off: 'line erase',
     warns: changed('line erase'),
     breaks: `const xyToRCExact = Framework.app.xyToRCExact
-      window.addEventListener('pointerdown', (e) => { window.middle = e.button === 1; setTimeout(() => { window.middle = false }) }, true)
-      Framework.app.xyToRCExact = function () { if (window.middle) throw new TypeError('xyToRCExact is gone'); return xyToRCExact.apply(this, arguments) }`
+      window.addEventListener('pointerdown', (e) => { window.middle = e.button === 1 && !window.middleFailed; setTimeout(() => { window.middle = false }) }, true)
+      Framework.app.xyToRCExact = function () { if (window.middle) { window.middle = false; window.middleFailed = true; throw new TypeError('xyToRCExact is gone') } return xyToRCExact.apply(this, arguments) }`
   },
   // SudokuPad builds the pen tool's panel without the element the sliders and the buttons sit beside.
   {
@@ -182,10 +182,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           const prevented = () => read(() => new Promise((resolve) => {
             document.addEventListener('contextmenu', (e) => setTimeout(() => resolve(e.defaultPrevented)), { once: true })
           }))
-          for (let i = 0; i < 2; i++) {
+          // SudokuPad's own right click acts as a left click: its X on the first, its toggle off on the second
+          for (const want of [['4'], []]) {
             const answer = prevented()
             await clickEdge('right')
             assert.equal(await answer, false, 'the menu is not suppressed on the right click that failed or after it')
+            assert.deepEqual(await settle(edgeValues, want), want, 'the press that failed is left to SudokuPad')
           }
           await undoAll()
         }

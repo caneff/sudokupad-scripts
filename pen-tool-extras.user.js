@@ -90,8 +90,8 @@
     arrowSpacing: slider('PenColor_arrowspacing', ARROW_SPACING, adoptArrowSpacing, { label: 'Arrow spacing', under: 'lineStyles.arrows' }),
     outlineWidth: slider('PenColor_outlinewidth', OUTLINE_WIDTH, adoptOutline, { label: 'Outline width', under: 'outline' }),
     outline: flag('PenColor_outline', adoptOutline, { label: 'White outlines', section: 'Other' }),
-    // Saved under its old name, from when only the middle click erased, so old saves read the same.
-    middleErase: flag('PenColor_middleerase', doNothing, { label: 'Right and middle click erase', section: 'Other' }),
+    // The saved key predates the right click: it keeps its name so old saves read the same.
+    eraseClicks: flag('PenColor_middleerase', doNothing, { label: 'Right and middle click erase', section: 'Other' }),
     lineStyles: flags('PenColor_linestyles', ['dashed', 'arrows'], adoptLineStyles,
       { section: 'Line styles', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
     show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
@@ -1354,17 +1354,25 @@
     })
   }
 
+  // `fn` runs with `owner[name]` replaced by `value` as an own property, and the owner as it was after.
+  function withOwnProperty (owner, name, value, fn) {
+    const hadOwn = Object.prototype.hasOwnProperty.call(owner, name)
+    const ownValue = owner[name]
+    owner[name] = value
+    try {
+      return fn()
+    } finally {
+      if (hadOwn) owner[name] = ownValue
+      else delete owner[name]
+    }
+  }
+
   // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back.
   function queuedActs (tool, click) {
-    const hadOwn = Object.prototype.hasOwnProperty.call(tool, 'actSend')
-    const ownSend = tool.actSend
     let queued = null
-    tool.actSend = function () { queued = this._actList.slice() }
     try {
-      click()
+      withOwnProperty(tool, 'actSend', function () { queued = this._actList.slice() }, click)
     } finally {
-      if (hadOwn) tool.actSend = ownSend
-      else delete tool.actSend
       tool._actList.length = 0
     }
     return queued
@@ -1379,19 +1387,24 @@
     return cornerAt(r, c, rows, cols)
   }
 
-  function cornerActs (corner) {
+  // The cell that stores a corner's marks, and the kind of corner it stores.
+  function cornerCellOf (corner) {
     const { rows, cols } = Framework.app.grid
     const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
-    const cell = Framework.app.grid.getCell(row, col)
+    return { kind, cell: Framework.app.grid.getCell(row, col) }
+  }
+
+  function cornerActs (corner) {
+    const { kind, cell } = cornerCellOf(corner)
     return planActs(cell, planCornerClick(kind, penValuesOf(cell), inForce.marks))
   }
 
   // A click within CORNER_RADIUS of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
-  // was clicked, its `actSend` held back to see the actions it queued. The actions still go out through `actSend`, one group per click, so one undo reverses one click. A middle or right
-  // click is left to the erase, or to SudokuPad's own click when the erase is off.
+  // was clicked, its `actSend` held back to see the actions it queued. The actions still go out through `actSend`, one group per click, so one undo reverses one click. A middle click, and a right click while the erase is on,
+  // are left to the erase; a right click with the erase off steps the mark as SudokuPad's own right click, which acts as a left click, does.
   function wrapClickCell (tool, original) {
     steps.marks.wrap(tool, 'clickCell', function (stock, ...args) {
-      if (ERASE_BUTTONS.includes(lastButton)) return stock(...args)
+      if (lastButton === MIDDLE_BUTTON || (lastButton === RIGHT_BUTTON && inForce.eraseClicks)) return stock(...args)
       const corner = cornerUnderPointer(this)
       if (corner !== null) {
         const acts = cornerActs(corner)
@@ -1504,21 +1517,9 @@
       .map((valueColor) => ({ value: valueColor[0], row: cell.row, col: cell.col, color: valueColor.slice(1) })))
   }
 
-  function edgeMarkValues (edge) {
-    return ['x', ...ADDED_ORDER].map((type) => valueOfType(edge, type))
-  }
-
   // SudokuPad's own `clickCell` hit-tests `getInputRc()`, which is put at the point for the call.
   function stockClickActsAt (tool, stockClick, { r, c }) {
-    const hadOwn = Object.prototype.hasOwnProperty.call(tool, 'getInputRc')
-    const ownRc = tool.getInputRc
-    tool.getInputRc = () => ({ r, c })
-    try {
-      return queuedActs(tool, () => stockClick.apply(tool, []))
-    } finally {
-      if (hadOwn) tool.getInputRc = ownRc
-      else delete tool.getInputRc
-    }
+    return withOwnProperty(tool, 'getInputRc', () => ({ r, c }), () => queuedActs(tool, () => stockClick.apply(tool, [])))
   }
 
   // The marks at the point as `{ cell, values }`, or null: a grid corner first, as a click does, then the edge SudokuPad's own click would take. A cell's middle is not an edge.
@@ -1531,12 +1532,12 @@
       return there.length ? { cell, values: there } : null
     }
     if (corner !== null) {
-      const { kind, row, col } = cornerStorage(corner.row, corner.col, rows, cols)
-      const found = held(Framework.app.grid.getCell(row, col), CORNER_VALUES[kind])
+      const { kind, cell } = cornerCellOf(corner)
+      const found = held(cell, CORNER_VALUES[kind])
       if (found !== null) return found
     }
     const queued = stockClickActsAt(tool, stockClick, point)
-    return isEdgeActs(queued) ? held(queued[0].arg[0], edgeMarkValues(queued[1].arg)) : null
+    return isEdgeActs(queued) ? held(queued[0].arg[0], ['x', ...ADDED_ORDER].map((type) => valueOfType(queued[1].arg, type))) : null
   }
 
   // A press or a drag with the right or middle button gathers everything it crosses, and the release erases it as one undo step. At each point a line wins over a mark.
@@ -1544,25 +1545,25 @@
     return { button, segments: lineSegmentsOf(Framework.app.puzzle.cells), lines: new Set(), marks: new Map(), at: firstPoint }
   }
 
-  function crossPoint (tool, stockClick, erase, point) {
+  function crossPoint (marksAtPoint, erase, point) {
     const hit = segmentNear([point.r, point.c], erase.segments, LINE_HIT_RADIUS)
     if (hit !== null) {
       connectedLine(erase.segments, hit).forEach((segment) => erase.lines.add(segment))
       return
     }
-    const found = marksAt(tool, stockClick, point)
+    const found = marksAtPoint(point)
     if (found === null) return
     const values = erase.marks.get(found.cell) || new Set()
     found.values.forEach((value) => values.add(value))
     erase.marks.set(found.cell, values)
   }
 
-  function crossTo (tool, stockClick, erase, to) {
+  function crossTo (marksAtPoint, erase, to) {
     const length = Math.hypot(to.r - erase.at.r, to.c - erase.at.c)
     const samples = Math.max(1, Math.ceil(length / ERASE_SAMPLE_STEP))
     for (let i = 1; i <= samples; i++) {
       const t = i / samples
-      crossPoint(tool, stockClick, erase, { r: erase.at.r + t * (to.r - erase.at.r), c: erase.at.c + t * (to.c - erase.at.c) })
+      crossPoint(marksAtPoint, erase, { r: erase.at.r + t * (to.r - erase.at.r), c: erase.at.c + t * (to.c - erase.at.c) })
     }
     erase.at = to
   }
@@ -1570,7 +1571,6 @@
   function finishErase (tool, erase) {
     const marks = [...erase.marks].map(([cell, values]) => ({ cell, values: [...values] }))
     const acts = eraseActs([...erase.lines], marks, (row, col) => Framework.app.grid.getCell(row, col))
-    if (acts.length === 0) return
     tool.actStart()
     sendActs(tool, acts)
   }
@@ -1579,38 +1579,50 @@
   // own draw (right). A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's `clickCell` (checked live), so no pen mark or drag
   // follows. `mousedown` is prevented too for a browser that still sends it, which stops only the autoscroll: SudokuPad's own `mousedown` handler still runs there.
   // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
-  // The browser's menu stays shut over the grid: Linux raises it on the press and Windows on the release, after the drag.
+  // The browser's menu stays shut: Linux raises it on the press, over the grid, and Windows on the release, wherever the drag ended, so a right press owes it one refusal.
   function installLineErase (app, tool) {
     const stockClick = tool.clickCell
+    const marksAtPoint = (point) => marksAt(tool, stockClick, point)
     let erase = null
+    let menuOwed = false
     // A press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
-    steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => ERASE_BUTTONS.includes(lastButton) && inForce.middleErase ? undefined : stock(...args))
-    const erasePress = (event) => inForce.middleErase && ERASE_BUTTONS.includes(event.button) && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
+    steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => ERASE_BUTTONS.includes(lastButton) && inForce.eraseClicks ? undefined : stock(...args))
+    const erasePress = (event) => inForce.eraseClicks && ERASE_BUTTONS.includes(event.button) && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
-    const guarded = (handler) => (event) => steps.lineErase.run(() => handler(event), () => { erase = null })
+    const guarded = (handler) => (event) => steps.lineErase.run(() => handler(event), () => { erase = null; menuOwed = false })
     window.addEventListener('pointerdown', guarded((event) => {
+      // A second button pressed during a drag joins it: the drag ends when its own button is released.
+      if (erase !== null && erasePress(event)) {
+        event.preventDefault()
+        return
+      }
       erase = null
+      menuOwed = false
       if (!erasePress(event)) return
-      event.preventDefault()
+      // The point is read before the default is prevented, so a failure leaves the press to SudokuPad.
       const point = pointOf(event)
+      event.preventDefault()
       erase = startErase(event.button, point)
-      crossPoint(tool, stockClick, erase, point)
+      menuOwed = event.button === RIGHT_BUTTON
+      crossPoint(marksAtPoint, erase, point)
     }), true)
     window.addEventListener('pointermove', guarded((event) => {
       if (erase === null) return
-      if (event.buttons & BUTTON_BIT[erase.button]) crossTo(tool, stockClick, erase, pointOf(event))
+      if (event.buttons & BUTTON_BIT[erase.button]) crossTo(marksAtPoint, erase, pointOf(event))
     }), true)
     window.addEventListener('pointerup', guarded((event) => {
-      if (erase === null || event.button !== erase.button) return
+      if (erase === null || (event.buttons & BUTTON_BIT[erase.button])) return
       const done = erase
       erase = null
-      crossTo(tool, stockClick, done, pointOf(event))
+      crossTo(marksAtPoint, done, pointOf(event))
       finishErase(tool, done)
     }), true)
     window.addEventListener('pointercancel', guarded(() => { erase = null }), true)
     window.addEventListener('mousedown', guarded((event) => { if (erasePress(event)) event.preventDefault() }), true)
     document.addEventListener('contextmenu', guarded((event) => {
-      if (inForce.middleErase && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)) event.preventDefault()
+      const overGrid = inForce.eraseClicks && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
+      if (overGrid || menuOwed) event.preventDefault()
+      menuOwed = false
     }), true)
   }
 
