@@ -181,8 +181,8 @@
   point clicked. It is typed in the **text box**, an input over the board that a click on the board opens, and a click on
   a text reopens.
 - **shape** — a rectangle or an ellipse in a drawing, drawn as an outline by a drag in Shape mode, in a draw color, with its own
-  width and opacity. Its box runs out to the edges of the cells the drag starts and ends in, or follows the drag exactly with
-  Alt held. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
+  width and opacity. Each corner of its box snaps to the nearest quarter-cell line of the drag's start and end, or follows the drag
+  exactly with Alt held. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
 - **Shape mode** — what a left-drag with Draw draws: free lines (Off), rectangles or ellipses. The **Shape button**, between
   Clear all and the gear, steps Off, Rectangle, Ellipse and shows the one in force; it is saved under `DrawTool_shape`. A click
   still opens the text box in every mode.

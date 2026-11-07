@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, shapeBox, shapeItem, nextShapeMode, readShapeMode, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -440,14 +440,22 @@ test('the paste report counts applied and skipped values, and says when the text
   assert.equal(pasteReport(3, 2), 'Pasted 3 settings; skipped 2 that did not check out.')
 })
 
-test('a shape drag snaps outward to the edges of the cells its start and end lie in, whichever way it runs', () => {
-  // r2c2 to r3c4, in board units: a cell is 64 wide from (0, 0).
-  assert.deepEqual(shapeBox([70, 100], [250, 140], false), [64, 64, 256, 192])
-  assert.deepEqual(shapeBox([250, 140], [70, 100], false), [64, 64, 256, 192])
+test('a shape drag snaps each corner to the nearest quarter-cell line, whichever way it runs', () => {
+  // Board units: a cell is 64 wide from (0, 0), so a quarter is 16. Near-corner points box whole cells (r2c2 to r3c4).
+  assert.deepEqual(shapeBox([66, 62], [250, 195], false), [64, 64, 256, 192])
+  assert.deepEqual(shapeBox([250, 195], [66, 62], false), [64, 64, 256, 192])
+  // Cell centre to cell centre, and to quarters, give offset boxes.
+  assert.deepEqual(shapeBox([96, 96], [224, 160], false), [96, 96, 224, 160])
+  assert.deepEqual(shapeBox([75, 70], [117, 150], false), [80, 64, 112, 144])
 })
 
-test('a shape drag inside one cell boxes that cell', () => {
-  assert.deepEqual(shapeBox([10, 20], [40, 50], false), [0, 0, 64, 64])
+test('a shape drag rounds a corner halfway between two quarter lines up', () => {
+  assert.deepEqual(shapeBox([8, 24], [72, 40], false), [16, 32, 80, 48])
+})
+
+test('a shape drag within one quarter of a cell snaps to no width, which has no area', () => {
+  assert.deepEqual(shapeBox([10, 20], [14, 50], false), [16, 16, 16, 48])
+  assert.equal(hasArea(shapeBox([10, 20], [14, 50], false)), false)
 })
 
 test('a shape drag with Alt held follows the drag exactly, to a tenth of a board unit', () => {

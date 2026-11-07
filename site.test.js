@@ -464,7 +464,7 @@ test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, 
 test(`${DRAW} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
-    'Shapes. The Shape button steps between Off, rectangle and ellipse. With a shape on, a drag draws it, snapped to the edges of the cells it covers; hold Alt for the exact box you dragged.',
+    'Shapes. The Shape button steps between Off, rectangle and ellipse. With a shape on, a drag draws it, with each corner snapped to the nearest quarter of a cell, so a drag between cell corners boxes whole cells and one between cell centers gives a smaller, offset shape; hold Alt for the exact box you dragged.',
     'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
     'Colors of its own. Nine colors that belong to Draw Tool, not to SudokuPad\'s pen. A click on a color button or the digit keys 1 to 9 pick one, and a hold on a button puts a color picker over each to change it.',
     'Size and opacity. The Size slider sets the width of the next line or shape and the size of the next text, and the Opacity slider how solid it is. A line, shape or text keeps the size and opacity it was drawn with.',
