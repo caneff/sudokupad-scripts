@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad No Tab Letters
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.0
-// @description  Stops Tab from toggling SudokuPad's letter mode, so a stray Tab no longer switches the number pad to letters and saves that choice. During play Tab does nothing, as before; the letter button and "/" still toggle it, and Tab still moves focus in dialogs.
+// @version      0.1.1
+// @description  Stops a stray Tab from switching SudokuPad's number pad to letters. The letter button and the / key still switch it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
