@@ -178,7 +178,7 @@ async function record (file) {
     await start.click()
     await p.locator('#control-undo').waitFor({ state: 'visible' })
     await openSettings(p)
-    // Test Markup loads fabric.js only once it is turned on, and Draw Tool's live check turns it on.
+    // Test Markup loads fabric.js only once it is turned on, and Text Annotation's live check turns it on.
     await p.evaluate(() => Framework.setSetting('markup', true))
     await p.waitForLoadState('networkidle')
     await loadEveryWebFont(p, stylesheet)
