@@ -1,14 +1,14 @@
-// Takes docs/research/auto-rules-resizer/site-auto-rules-resizer.png, the homepage's picture of Auto Rules Resizer: the rules pane of
+// Takes docs/research/auto-rules-resizer/auto-rules-resizer.png, the homepage's picture of Auto Rules Resizer: the rules pane of
 // one puzzle in a 1920x1080 window once the script has fitted it, with the pointer over the pane so the drag corners
 // and the f+ and f- buttons show. The recorded puzzle has no rules, so they are shown through SudokuPad's own
 // showMetaInfoUI, as in live/auto-rules-resizer/auto-rules-resizer.live.mjs. Run from the repo root:
-// node docs/research/auto-rules-resizer/site-auto-rules-resizer-screenshot.mjs
+// node docs/research/auto-rules-resizer/auto-rules-resizer-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
 
 const script = readFileSync(new URL('../../../auto-rules-resizer.user.js', import.meta.url), 'utf8')
-const out = new URL('./site-auto-rules-resizer.png', import.meta.url).pathname
+const out = new URL('./auto-rules-resizer.png', import.meta.url).pathname
 
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle; digits may repeat on an arrow. ' +
   'Cells separated by a white dot contain consecutive digits. Not all possible white dots are given. ' +
