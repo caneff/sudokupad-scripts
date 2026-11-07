@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.1
+// @version      0.14.2
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.1'
+  const VERSION = '0.14.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -645,7 +645,8 @@
     `.${TRAY_CLASS} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
     // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each '.button-row', which has no box here, so the rows are swapped by grid row.
     ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} :is(button[data-key="${key}"], .${PICKER_CLASS}[data-color="${key}"]) { grid-row: ${row} / span 1; }`)),
-    ...COLOR_NUMBERS.map((n) => `${PANEL} .${PICKER_CLASS}[data-color="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
+    // Each color button is placed too: left to auto-placement, the buttons flow round the pickers' cells into rows below the panel.
+    ...COLOR_NUMBERS.map((n) => `${PANEL} :is(button[data-key="${n}"], .${PICKER_CLASS}[data-color="${n}"]) { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     // Edit mode: a color picker sits over each color button, with the button's line hidden under it, in the sizes SudokuPad's color tool uses for the same job.
     `.${EDITING_CLASS} button.digit::after { opacity: 0; }`,
     `.${EDITING_CLASS} .${PICKER_CLASS} { position: relative; justify-self: stretch; align-self: stretch; z-index: 10; }`,
