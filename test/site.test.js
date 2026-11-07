@@ -241,7 +241,7 @@ const PEN_SLIDES = [
 const DRAW_SLIDES = [
   ['1-type', 'Left click to type a note'], ['2-size', 'Size menu: pick a text size'], ['3-background', 'Background: a box behind the next note'],
   ['4-colors', 'Your own colors: hold a color button'], ['5-move', 'Move: drag a note, on or off the grid'],
-  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag the corner to resize'], ['7-erase', 'Erase: right-click a note'], ['8-erased', 'The note is gone']
+  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note'], ['8-erased', 'The note is gone']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
@@ -456,7 +456,7 @@ test(`${HOME} describes Text Annotation in a short summary ending in a Details l
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it. While a note is open, the color buttons and the Size and Outline menus change that note, and it stays open. On a note you are still writing, the pick is also the next note\'s color or size; on one you reopened, it changes only that note.',
-    'Long notes A long line wraps, and a note stops growing at 8 lines and scrolls: turn the wheel over it, and a thin scroll bar shows while the pointer is on it. While you type, drag the handle on the note\'s bottom right corner to make its box wider, narrower, taller or shorter; the note keeps that size.',
+    'Long notes A long line wraps, and a note stops growing at 8 lines and scrolls: turn the wheel over it, and a thin scroll bar shows while the pointer is on it. Select a note, or open it to type, and a small square shows on each of its four corners: drag any of them to make the note\'s box wider, narrower, taller or shorter, with the opposite corner staying where it is. The note keeps that size, and a double-click on a square sets it back to its automatic size. With several notes selected, no squares show.',
     'Bold, italic and strikethrough Write **bold**, *italic* (or _italic_) and ~~strikethrough~~ in a note, and nest them, such as **bold *and italic***. The markers show while you type and are hidden once the note is finished; a marker with no partner shows as typed.',
     'Readable over digits Each note has a halo, a round outline of its letters in the page color, so it reads over digits, pencil marks and colored cells. The Outline menu makes it Off, Thinner or Thicker, which is the default.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",

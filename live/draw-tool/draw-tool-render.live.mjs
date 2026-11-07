@@ -240,13 +240,13 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
   it('a resize shows only after the next frame, to the last pointer move', async () => {
     await p.mouse.click(...await gridPoint(p, [8.5, 6.5]))
     await p.keyboard.type('resize me')
-    const handle = await p.locator('#draw-tool-layer .draw-tool-resize').boundingBox()
+    const handle = await p.locator('#draw-tool-layer .draw-tool-resize').last().boundingBox()
     const from = draw.middleOf(handle)
     await p.mouse.move(...from)
     await p.mouse.down()
     const target = [1, 2, 3].map((k) => [from[0] + 10 * k, from[1] + 5 * k])
     const look = await movesInOneTask(target, 1, () => {
-      const { right, bottom } = document.querySelector('#draw-tool-layer .draw-tool-resize').getBoundingClientRect()
+      const { right, bottom } = [...document.querySelectorAll('#draw-tool-layer .draw-tool-resize')].at(-1).getBoundingClientRect()
       return [right, bottom]
     })
     await p.mouse.up()

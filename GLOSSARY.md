@@ -204,12 +204,13 @@
   board's scale, in a layer over the page that sits above the digits and below SudokuPad's dialogs and menu. Where they overlap a fixed text is drawn, and
   clicked, above a pinned one; among texts of one kind the one made last is on top.
 - **box** (a note's) — the room a Text Annotation note's text takes. A note never resized has one 16 em wide and 8 lines high at its text size, which
-  it fits up to; a resized one is exactly the size its **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
+  it fits up to; a resized one is exactly the size a **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
   or off it, since a note off the board is drawn at the board's scale too. A long line wraps inside it and text past its bottom scrolls: the wheel over
   the note scrolls it, and reaches SudokuPad only once the note can scroll no further that way, and a thin scroll bar shows while the pointer is over
   it. The scroll position is not saved.
-- **resize handle** — the small purple square on the bottom right corner of the note open in the **text box**, and of no other note, so a drag on a
-  finished note always moves it. Dragging it sets the note's **box**, its top left kept still, down to about 3 em wide and one line high.
+- **resize handle** — one of the four small purple squares on the corners of the note open in the **text box**, or of the one note **selected** alone (none
+  show with several selected), so a drag anywhere else on a note moves it. Dragging one sets the note's **box**, the opposite corner kept still, down to about 3 em wide and one
+  line high, with diagonal resize cursors; a double-click on one removes the stored `box`, so the note goes back to auto size.
 - **Size menu** — Text Annotation's Size button, the first of the **menu row** of buttons under its controls row, whose face shows the current size and which opens a menu of six sizes (10, 14, 20, 26, 32, 40: the text sizes of widths 1 to 16, with the default 20). It sets the next text's size, saved under `DrawTool_width` as the slider's width (1 to 16, text size = 2 x width + 8) and read back as the nearest menu size, and never changes a text already made, except the open note and the **selected** ones: while texts are selected it shows their size (blank when they differ), highlights no item for a size the menu lacks, and sets theirs, leaving the next text's alone.
 - **Outline menu** — Text Annotation's Outline button, beside the **Size menu**: Off, Thinner or Thicker, the reach of a note's **halo** (0, 0.07 or 0.14 of its text size). A note stores it as `outline`; no field reads as Thicker (the `medium` id, the default), and Thicker is stored as no field. The next text's outline is saved under `DrawTool_outline`; with texts selected it shows theirs (blank when they differ) and sets only theirs.
 - **menu row** — Text Annotation's row of three buttons under its controls row: the **Size menu**, the **Outline menu** and an empty slot kept for a later button. It holds the buttons that set a note's look beyond its color and background.

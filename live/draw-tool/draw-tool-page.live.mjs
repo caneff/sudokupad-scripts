@@ -190,6 +190,24 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     assert.deepEqual(await noteInCells('old'), ON_AT)
   })
 
+  it('a corner drag that carries a selected off-board note past the window\'s edge ends with the note wholly inside the window, and saved there', async () => {
+    await typeAt((await blankPoints()).right, 'N')
+    await p.mouse.click(...await noteMiddle('N'))
+    const before = (await savedNote('N')).fixed
+    const handle = await p.locator('#draw-tool-layer .draw-tool-resize').last().boundingBox()
+    const [x, y] = [handle.x + handle.width / 2, handle.y + handle.height / 2]
+    await dragFromTo([x, y], [x + 150, y + 20])
+    const edges = await read((selector) => {
+      const { right, bottom } = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'N').getBoundingClientRect()
+      return { right, bottom, width: window.innerWidth, height: window.innerHeight }
+    }, TEXTS)
+    assert.equal(edges.right <= edges.width && edges.bottom <= edges.height, true, `the note ends at ${edges.right}, ${edges.bottom} in a ${edges.width} x ${edges.height} window`)
+    const note = await savedNote('N')
+    assert.equal(note.box.length, 2)
+    assert.notDeepEqual(note.fixed, before, 'the point moved with the resize')
+    await p.keyboard.press('Escape')
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })
