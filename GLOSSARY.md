@@ -6,7 +6,7 @@
 - **brush** — the palette color picked in the dialog's palette, shown selected. A click on a digit key paints the
   digit with it, or clears the digit when it already has that color. It starts as the color of the selected
   profile's lowest group, else the first visible color of the current page.
-- **digit key** — one of the ten buttons in the dialog's pad (1 to 9, then 0 right of 9). It is filled with its
+- **digit key** — one of the ten buttons in the dialog's pad (1 to 9, then 0 under 7). It is filled with its
   digit's group color, or blank when the digit is in no group.
 - **pure cell** — a cell that belongs to exactly one group: its given or entered digit is in that
   group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit
@@ -23,10 +23,16 @@
 - **settings pulldowns** — the three drafts at the top of Color by Digit's settings dialog: **Mode** (Cell, Digit,
   Both, Off; only Cell and Off while Digit is None), **Cell** (the cell profile, by name) and **Digit** (Same as
   cell, a profile by name, or None). They apply at Save; Cancel drops them.
-- **chips** — a profile's colors in Color by Digit, drawn as a run of joined square board cells: one per group,
-  the first three groups at most, one outline with single dividers, no gaps or rounded corners, each cell with its
-  group's **shown digit**. The button draws them in the **mode**'s look; the profile menu and the dialog's profile
+- **chips** — a profile's colors in Color by Digit, drawn as a run of joined square board cells: three at most,
+  one outline with single dividers, no gaps or rounded corners, each cell with a digit. In Cell and Off one cell per
+  group of the cell profile, with the group's **shown digit**; in Digit the same from the digit profile; in Both the
+  digits that reach the most groups of the two profiles (see **Cell strip**). The button draws them in the **mode**'s look; the profile menu and the dialog's profile
   list draw them as Cell does.
+- **Cell strip** — the chips the button shows in Cell: one cell per group of the cell profile, each with its shown digit.
+  Both shows as many chips as the larger of the two profiles has groups (three at most), on the set of digits that
+  scores most (the cell groups plus the digit groups its digits fall in); a tie goes to the set sharing most digits with
+  the Cell strip, then to the lowest digits. The chips run in ascending digit order, except that Both with one profile
+  on both shows the Cell strip itself.
 - **shown digit** — the one digit that stands for a group on its cell of the Color by Digit **chips**, on
   the button, in the profile menu and in the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
   are below 5, the highest if all are above 5, else the middle (the lower of the two middle ones on an even
@@ -59,7 +65,7 @@
 - **digit profile** — the profile whose groups give the **digit colors**. While the Digit pulldown says Same as
   cell (the default) it is the active profile; on a profile's name, it is a second pick from the same list,
   saved as `digitActive`, picked too by the profile menu's Digit dots. Deleting it makes the digits follow the
-  active profile again (Same as cell). The button's icon shows it in Digit, and the active profile in every other mode.
+  active profile again (Same as cell). The button's chips come from it in Digit, from the active profile in Cell and Off, and from both in Both.
 - **Use digit colors** — whether Color by Digit colors digits at all, saved as `useDigitColors` (on by default) and
   set by the Digit pulldown: None is off, Same as cell and a profile's name are on. Off, the **mode** is only Cell or
   Off (Digit falls back to Off, Both to Cell), the profile menu drops its Cell and Digit dots, and nothing is drawn
@@ -195,11 +201,12 @@
   a text reopens.
 - **shape** — a rectangle or an ellipse in a drawing, drawn as an outline by a drag in Shape mode, in a draw color, with its own
   width and opacity. Its box is exactly the drag's own box. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
-- **Shape mode** — what a left-drag with Draw draws: free lines (Off), rectangles or ellipses. The **Shape button**, between
-  Clear all and the gear, steps Off, Rectangle, Ellipse and shows the one in force; it is saved under `DrawTool_shape`. A click
+- **Shape mode** — what a left-drag with Draw draws when it starts off every item (one that starts on an item **moves** it): free lines (Off), rectangles or ellipses. The **Shape button**, between
+  Clear all and the gear, steps Off, Rectangle, Ellipse and draws the mode a press turns to, with a dot per mode filled for the one in force; the color buttons' swatches draw the one in force. It is saved under `DrawTool_shape`. A click
   still opens the text box in every mode.
 - **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
   (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.
   Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
-- **erase** — Draw's right-drag: every stroke and text the drag passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
+- **erase** — Draw's right click, or right-drag as an extra: every stroke and text the pointer passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
   drawing, after asking.
+- **move** — Draw's left-drag that starts on an existing item (found the way erase finds one, the topmost): the item follows the pointer, and its stored coordinates change once, on release. A click with no drag opens a text box as any click does, and a drag that starts off every item draws.

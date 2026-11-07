@@ -5,7 +5,7 @@ premise checked in a browser: SudokuPad's `.controls-tool` is `display: grid`, s
 
 | # | Where | Now | CSS | Verdict |
 |---|---|---|---|---|
-| 1 | draw-tool `keepButtonLast` | MutationObserver on `.controls-tool` re-appends the Draw button whenever another tool button lands after it | `.controls-tool #control-draw { order: 1 }` | Win: drops an observer and its reorder race |
+| 1 | draw-tool `keepButtonLast` | MutationObserver on `.controls-tool` re-appends the Draw button whenever another tool button lands after it | `.controls-tool #control-draw { order: 1 }` | Win: drops an observer and its reorder race. Done (#380) |
 | 2 | pen-tool-extras dialog `showRows` | Slider rows hidden by inline `display:none`, recomputed from the draft | `:has(input[data-box=...]:checked)` selectors | Small win: less code |
 | 3 | color-by-digit and pen-tool-extras, class stamped on SudokuPad's `.dialog` after open | Script adds a class so styles can target the dialog | `.dialog:has(#<editor id>)` | Small win: no unstyled first frame |
 | 4 | dark-page `updateRect` | Measured rectangle round board and text, body-wide observer | none found | Needs JS (union of measured boxes) |

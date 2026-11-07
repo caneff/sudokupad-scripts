@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, findOrMakeButtonRow, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -384,11 +384,8 @@ test('sync: ticking again makes the digits take the cell profile', () => {
   assert.equal('digitActive' in ticked, false)
 })
 
-test('sync: the button icon shows the cell profile in Cell, Both and Off, and the digit profile in Digit', () => {
-  assert.deepEqual(iconGroups(apart, 'cell'), ODD)
-  assert.deepEqual(iconGroups(apart, 'both'), ODD)
-  assert.deepEqual(iconGroups(apart, 'off'), ODD)
-  assert.deepEqual(iconGroups(apart, 'digit'), ENTROPIC)
+test("sync: the cell profile is the profile the button's numbers come from", () => {
+  assert.deepEqual(activeGroups(apart), ODD)
 })
 
 test('sync: deleting the digit profile makes digits follow the cell profile; deleting another keeps the digit pick on its profile', () => {
@@ -517,7 +514,7 @@ test('the dialog has the profile list and the paint editor as two columns of one
 
 test('the dialog is 640 px wide on a desktop and never wider than the window', () => {
   const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\.dialog\.color-by-digit-dialog \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
+  assert.match(css, /\.dialog:has\(#color-by-digit-editor\) \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
 })
 
 test('the bottom row keeps no style rule for the copy and paste buttons', () => {
@@ -846,61 +843,21 @@ test('renderMenu has no heading: one dense row per profile in order with the act
   assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
 })
 
-test('installButton: adds an icon button titled "Color by digit" in the row it is given, then refreshControls so the click handler binds', () => {
+test('installButton: adds an icon button titled "Color by digit" in the bottom row, then refreshControls so the click handler binds', () => {
   const calls = []
   const framework = {
     addControlButton: (spec) => calls.push(['add', spec]),
     addAppButton: () => calls.push(['wrong row'])
   }
   const app = { refreshControls: () => calls.push(['refresh']) }
-  installButton(framework, app, 'off', ODD, colorFor, '.controls-aux-extensions')
+  installButton(framework, app, 'off', ODD, colorFor, ODD)
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
-  assert.equal(spec.parent, '.controls-aux-extensions')
+  assert.equal(spec.parent, '.controls-aux')
   assert.equal(spec.title, 'Color by digit: Off')
   assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="menu"[\s\S]*<\/span><\/div>$/)
   assert.equal(typeof spec.onClick, 'function')
-})
-
-// A page with the rows `rows` names, each a count of buttons, in page order; made rows are recorded in `made`.
-function pageWithRows (...rows) {
-  const made = []
-  const rowEl = (count, className) => ({ className, after (el) { made.push(el); el.placedAfter = this }, querySelectorAll: (sel) => (sel === 'button' ? new Array(count).fill({}) : []) })
-  const els = rows.map((count, i) => rowEl(count, i === 0 ? 'controls-aux' : 'controls-aux controls-aux-extensions'))
-  return {
-    made,
-    first: els[0],
-    createElement: (tag) => ({ tag, className: '', querySelectorAll: () => [] }),
-    querySelector: (sel) => (sel === '.controls-aux' ? els[0] : sel === '.controls-aux-extensions' ? els[1] || null : null)
-  }
-}
-
-test('findOrMakeButtonRow: the first row while it holds fewer than FULL_ROW buttons, and no second row is made', () => {
-  assert.equal(FULL_ROW, 5)
-  const page = pageWithRows(4)
-  assert.equal(findOrMakeButtonRow(page), '.controls-aux')
-  assert.deepEqual(page.made, [])
-})
-
-test('findOrMakeButtonRow: a page with no first row names it anyway and makes nothing, as Framework then skips the button', () => {
-  const page = { querySelector: () => null }
-  assert.equal(findOrMakeButtonRow(page), '.controls-aux')
-})
-
-test('findOrMakeButtonRow: a full first row sends the button to a new .controls-aux-extensions made right after it', () => {
-  const page = pageWithRows(5)
-  assert.equal(findOrMakeButtonRow(page), '.controls-aux-extensions')
-  assert.equal(page.made.length, 1)
-  assert.equal(page.made[0].tag, 'div')
-  assert.equal(page.made[0].className, 'controls-aux controls-aux-extensions')
-  assert.equal(page.made[0].placedAfter, page.first)
-})
-
-test('findOrMakeButtonRow: a .controls-aux-extensions another script made is reused, with no second copy', () => {
-  const page = pageWithRows(6, 1)
-  assert.equal(findOrMakeButtonRow(page), '.controls-aux-extensions')
-  assert.deepEqual(page.made, [])
 })
 
 // The parts of a page the script reads to draw the button: the palette variables and a probe element
@@ -1400,15 +1357,36 @@ test('renderEditor marks only the brush as selected', () => {
   assert.equal(count(editor([], twoPages(), 0, null), /aria-pressed="true"/g), 0)
 })
 
-test('renderEditor puts the digit pad beside the swatch grid, in rows of three keys the swatches\' size, with 0 right of 9', () => {
+test('renderEditor puts the digit pad beside the swatch grid, in rows of three keys the swatches\' size, with 0 under 7', () => {
   const html = editor([], twoPages(), 0, 'a1')
-  const pad = /<div class="cbd-swatches">.*?<\/div><div data-role="paint">(.*?)<\/div>/.exec(html)
-  assert.ok(pad, 'the pad follows the swatch grid in its row')
-  const cells = [...pad[1].matchAll(/<(?:button|span)[^>]*(?:data-digit="(\d)"|data-empty="pad")[^>]*>/g)].map((m) => m[1] || 'pad')
-  assert.deepEqual(cells, ['1', '2', '3', 'pad', '4', '5', '6', 'pad', '7', '8', '9', '0'])
+  assert.deepEqual(padCells(html), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'pad', 'pad'])
   const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\[data-role="paint"\] \{ display: grid; gap: 4px; grid-template-columns: repeat\(4, 34px\);/)
+  assert.match(css, /\[data-role="paint"\] \{ display: grid; gap: 4px; grid-template-columns: repeat\(3, 34px\);/)
   assert.match(css, /\.cbd-swatches \{[^}]*grid-template-columns: repeat\(3, 34px\); gap: 4px;/)
+})
+
+// The swatch grid's cells and the digit pad's cells, left to right and row by row: a swatch by its key, a digit key by its digit, an empty cell by its kind.
+function paintBlock (html) {
+  const block = /<div class="cbd-swatches">(.*?)<\/div><div data-role="paint">(.*?)<\/div>/.exec(html)
+  assert.ok(block, 'the pad follows the swatch grid in its row')
+  const swatches = [...block[1].matchAll(/<(?:button|span)[^>]*?(?:data-key="([a-z0-9]+)"|data-empty="(\w+)")[^>]*>/g)].map((m) => m[1] || m[2])
+  const pad = [...block[2].matchAll(/<(?:button|span)[^>]*?(?:data-digit="(\d)"|data-empty="(\w+)")[^>]*>/g)].map((m) => m[1] || m[2])
+  return { swatches, pad }
+}
+const padCells = (html) => paintBlock(html).pad
+
+test('renderEditor puts 0 on a fourth row under 7, beside the page\'s 0 swatch', () => {
+  const [lit] = layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  const { swatches, pad } = paintBlock(editor([], [lit]))
+  assert.deepEqual(swatches, ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'z'])
+  assert.deepEqual(pad.slice(9), ['0', 'pad', 'pad'])
+})
+
+test('renderEditor puts 0 on a fourth row under 7 when the page has no 0 swatch', () => {
+  const [dark] = layoutPages([keys('clear a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
+  const { swatches, pad } = paintBlock(editor([], [dark]))
+  assert.equal(swatches.length, 9)
+  assert.deepEqual(pad.slice(9), ['0', 'pad', 'pad'])
 })
 
 test('renderEditor draws a digit key as a cell filled with its group\'s color, and a digit in no group blank', () => {
@@ -1469,7 +1447,7 @@ test('the editor and the profile list carry inline only the styles that depend o
 test('the stylesheet scopes every rule to the editor, the dialog and its options row, or Color by Digit\'s own classes', () => {
   const selectors = [...STYLE_CSS.matchAll(/^([^{}\n]+) \{/gm)].flatMap((m) => m[1].split(', '))
   assert.ok(selectors.length > 20)
-  const scope = /^(#color-by-digit-editor|#color-by-digit-menu|\.dialog\.color-by-digit-dialog|\.dialog-options\.color-by-digit-dialog|\.cbd-)/
+  const scope = /^(#color-by-digit-editor|#color-by-digit-menu|\.dialog:has\(#color-by-digit-editor\)|\.cbd-)/
   assert.deepEqual(selectors.filter((s) => !scope.test(s)), [])
 })
 
@@ -1691,7 +1669,7 @@ test('iconHtml draws the run of cells in the mode\'s look, with no word strip, a
 test('the button is titled and labelled with its mode in words', () => {
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
   let spec
-  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor, '.controls-aux')
+  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor, ODD)
   assert.equal(spec.title, 'Color by digit: Both')
 })
 
@@ -1708,6 +1686,10 @@ test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a 
 // The declarations of every STYLE_CSS rule whose selector list holds `selector`, joined.
 const declarationsOf = (selector) => [...STYLE_CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)]
   .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector)).map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
+
+test('the bottom row is capped at 21.6rem, which live/color-by-digit-rows.live.mjs shows wraps it at five buttons a row', () => {
+  assert.match(BOTTOM_ROW_CSS, /^\.controls-aux \{ max-width: 21\.6rem; \}$/)
+})
 
 test('renderProfiles draws each row\'s chips as a run of cells in the Cell look', () => {
   const html = renderProfiles(profileState, colorFor, 0)
@@ -1739,4 +1721,78 @@ test('the profile list\'s delete and + New profile are plain text buttons, not b
   const plain = declarationsOf('#color-by-digit-editor .cbd-text-button')
   assert.match(plain, /background: none/)
   assert.match(plain, /border: none/)
+})
+
+// shownChips: the digits the button's chips show, per mode (#389). Each chip names the cell group and digit group its digit falls in.
+const digitsOf = (chips) => chips.map((c) => c.digit)
+
+test('shownChips: Cell and Off pick one digit per cell-profile group, Digit one per digit-profile group', () => {
+  for (const mode of ['cell', 'off']) assert.deepEqual(digitsOf(shownChips(mode, LOW, ODD)), ['1', '5', '9'], mode)
+  assert.deepEqual(digitsOf(shownChips('digit', LOW, ODD)), ['5', '4'])
+})
+
+test('shownChips: Both with Low/5/High cells and Odd/Even digits shows 1 5 6, the lowest of the tied sets covering three cell and two digit groups', () => {
+  assert.deepEqual(digitsOf(shownChips('both', LOW, ODD)), ['1', '5', '6'])
+})
+
+test('shownChips: Both names each chip\'s cell group and digit group', () => {
+  assert.deepEqual(shownChips('both', LOW, ODD), [
+    { digit: '1', cellKey: '1', digitKey: '1' }, { digit: '5', cellKey: '5', digitKey: '1' }, { digit: '6', cellKey: '9', digitKey: '2' }])
+})
+
+test('shownChips: Both with a synced profile shows the Cell strip', () => {
+  for (const groups of [LOW, ODD, ENTROPIC, MODULAR, EACH_DIGIT]) {
+    assert.deepEqual(digitsOf(shownChips('both', groups, groups)), digitsOf(shownChips('cell', groups, groups)))
+  }
+})
+
+test('shownChips: Both with a one-group digit profile takes k from the larger profile and still covers every cell group', () => {
+  const one = [{ key: 'z', digits: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] }]
+  assert.deepEqual(digitsOf(shownChips('both', LOW, one)), ['1', '5', '9'])
+  // the one cell group shows 5; with k = 2 the set needs an even digit too, and {2,5} is the lowest to keep the 5
+  assert.deepEqual(digitsOf(shownChips('both', one, ODD)), ['2', '5'])
+})
+
+test('shownChips: Both breaks a tie by the most digits shared with the Cell strip before the lowest digits', () => {
+  // Cell strip is 1 5. Every one-from-each pair scores 4; {1,4} is the lowest, {1,5} shares two digits with the strip.
+  const cells = [{ key: 'a', digits: ['1', '2', '3'] }, { key: 'b', digits: ['4', '5', '6'] }]
+  const digits = [{ key: 'c', digits: ['1', '2', '3'] }, { key: 'd', digits: ['4', '5', '6'] }]
+  assert.deepEqual(digitsOf(shownChips('cell', cells, digits)), ['1', '5'])
+  assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '5'])
+})
+
+test('shownChips: Both takes the lowest sorted set when the tied sets share equally with the Cell strip', () => {
+  // Cell strip is 1 7. {1,8} and {2,7} both score 4 and share one digit with it; {1,7} scores 3.
+  const cells = [{ key: 'a', digits: ['1', '2', '3', '4'] }, { key: 'b', digits: ['5', '6', '7', '8', '9'] }]
+  const digits = [{ key: 'c', digits: ['1', '7'] }, { key: 'd', digits: ['2', '8'] }]
+  assert.deepEqual(digitsOf(shownChips('cell', cells, digits)), ['1', '7'])
+  assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '8'])
+})
+
+test('shownChips caps at three chips', () => {
+  assert.equal(shownChips('cell', EACH_DIGIT, EACH_DIGIT).length, 3)
+  assert.equal(shownChips('both', EACH_DIGIT, EACH_DIGIT).length, 3)
+})
+
+test('iconHtml with separate profiles shows each mode\'s own digits: Cell and Off the cell profile, Digit the digit profile, Both the most variety', () => {
+  const cells = (mode) => runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml(mode, LOW, colorFor, ODD))[0]).map((c) => c.digit)
+  assert.deepEqual(['cell', 'off', 'digit', 'both'].map(cells), [['1', '5', '9'], ['1', '5', '9'], ['5', '4'], ['1', '5', '6']])
+})
+
+test('iconHtml draws a Both chip for a digit in no cell group white, and centres a run of two chips differently from three', () => {
+  const palette = { 1: 'rgb(200, 0, 0)', 9: 'rgb(0, 0, 200)' }
+  const cells = [{ key: '1', digits: ['1'] }]
+  const run = (mode, g, d) => /<svg data-role="chips"[^>]*>/.exec(iconHtml(mode, g, (k) => palette[k], d))[0]
+  assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml('both', cells, (k) => palette[k], [{ key: '1', digits: ['1'] }, { key: '9', digits: ['2'] }]))[0]).map((c) => c.fill), [palette[1], '#fff'])
+  assert.match(run('digit', LOW, ODD), /x="12"/)
+  assert.match(run('both', LOW, ODD), /x="-7"/)
+})
+
+test('shownChips: Both with unsynced profiles lists its chips in ascending digit order, and may pick 0', () => {
+  const cells = [{ key: 'a', digits: ['7', '8', '9'] }, { key: 'b', digits: ['1', '2', '3'] }]
+  const digits = [{ key: 'c', digits: ['1', '2', '3', '4', '5'] }, { key: 'd', digits: ['6', '7', '8', '9'] }]
+  assert.deepEqual(digitsOf(shownChips('cell', cells, digits)), ['9', '1'])
+  assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '9'])
+  // A cell group of only 0 is reached: k is 2, and 0 is the one digit of the group a.
+  assert.deepEqual(digitsOf(shownChips('both', [{ key: 'a', digits: ['0'] }, { key: 'b', digits: ['1', '2'] }], ODD)), ['0', '1'])
 })

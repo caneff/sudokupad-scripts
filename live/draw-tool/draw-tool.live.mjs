@@ -168,6 +168,17 @@ describe('Draw Tool with SudokuPad\'s Test Markup turned on', { concurrency: fal
     assert.equal(await strokeCount(), 0)
   })
 
+  it('a right click on a stroke, with no drag, erases it', async () => {
+    await pick(p)
+    await mouseDrag(p, [[2.5, 2.5], [3.5, 5.5]])
+    assert.equal(await strokeCount(), 1)
+    // The middle of the straight stroke.
+    const [x, y] = await gridPoint(p, [3, 4])
+    await p.mouse.move(x, y)
+    await p.mouse.click(x, y, { button: 'right' })
+    assert.equal(await strokeCount(), 0)
+  })
+
   it('holding M with Draw current draws with Test Markup, not with Draw, and its release ends it', async () => {
     await p.keyboard.down('m')
     assert.equal(await settle(markupDrawing, true), true)

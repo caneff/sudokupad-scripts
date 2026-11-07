@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.18.7
+// @version      0.22.1
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.18.7'
+  const VERSION = '0.22.1'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -295,7 +295,6 @@
 
   const activeGroups = (state) => state.profiles[state.active].groups
   const digitGroups = (state) => state.profiles[isSynced(state) ? state.active : state.digitActive].groups
-  const iconGroups = (state, mode) => (mode === 'digit' ? digitGroups(state) : activeGroups(state))
 
   const NEW_PROFILE_SUFFIX = ' copy'
 
@@ -380,6 +379,36 @@
   }
 
   const shownGroups = (groups, max) => groups.slice(0, max).map((g) => ({ key: g.key, digit: shownDigit(g.digits) }))
+
+  // The chips a profile pair draws in `mode`: each a digit with the cell group and the digit group it falls in (undefined when a profile does not cover it).
+  // Both takes the set of digits that reaches the most groups of the two profiles; see GLOSSARY.md, Cell strip.
+  function shownChips (mode, cellGroups, digitGroups) {
+    const cellKeyOf = keyOfDigitMap(cellGroups)
+    const digitKeyOf = keyOfDigitMap(digitGroups)
+    const chipOf = (digit) => ({ digit, cellKey: cellKeyOf[digit], digitKey: digitKeyOf[digit] })
+    const strip = shownGroups(cellGroups, CHIP_MAX_GROUPS).map((g) => g.digit)
+    if (mode !== 'both') return shownGroups(mode === 'digit' ? digitGroups : cellGroups, CHIP_MAX_GROUPS).map((g) => chipOf(g.digit))
+    const count = Math.min(Math.max(cellGroups.length, digitGroups.length), CHIP_MAX_GROUPS)
+    // 0 is set aside, as in a group's shown digit, unless a group holds nothing else.
+    const zeroAlone = [...cellGroups, ...digitGroups].some((g) => g.digits.length === 1 && g.digits[0] === '0')
+    const covered = DIGITS.filter((d) => (d in cellKeyOf || d in digitKeyOf) && (d !== '0' || zeroAlone))
+    const reached = (set, keyOf) => new Set(set.map((d) => keyOf[d]).filter((k) => k !== undefined)).size
+    // One number: the groups reached outrank the digits shared with the Cell strip, which at most three digits share.
+    const rankOf = (set) => (reached(set, cellKeyOf) + reached(set, digitKeyOf)) * 10 + set.filter((d) => strip.includes(d)).length
+    let best = null
+    let bestRank = -1
+    // Sets are visited in ascending order, so a set replaces the best only on a strictly higher rank and the lowest of a tie stays.
+    const visit = (set, from) => {
+      if (set.length === count) {
+        if (rankOf(set) > bestRank) { best = [...set]; bestRank = rankOf(set) }
+        return
+      }
+      for (let i = from; i < covered.length; i++) visit([...set, covered[i]], i + 1)
+    }
+    visit([], 0)
+    // A synced profile keeps the Cell strip's own order, so Both shows the Cell strip.
+    return (best && !sameGroups(cellGroups, digitGroups) ? best : strip).map(chipOf)
+  }
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -848,42 +877,30 @@
   // The icon is drawn in 100 by 100 units. A run of three cells reaches a little past its sides, into the button's margin,
   // and stays above the arrow box in the lower right.
   const ICON_CELL = 38
-  function iconRun (mode, groups, colorOf) {
-    const count = Math.min(groups.length, CHIP_MAX_GROUPS)
-    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, x: 50 - count * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
+  function iconRun (mode, groups, colorOf, digitProfileGroups) {
+    const chips = shownChips(mode, groups, digitProfileGroups ?? groups)
+    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, chips, x: 50 - chips.length * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
   }
 
   // SudokuPad's own app buttons put their icon in <div class="icon">.
-  const iconHtml = (mode, groups, colorOf) =>
+  const iconHtml = (mode, groups, colorOf, digitProfileGroups) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
-    iconRun(mode, groups, colorOf) + '</svg>' + ARROW_BOX_HTML + '</div>'
+    iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + ARROW_BOX_HTML + '</div>'
 
   // The mode in words, which the chips' look alone does not say.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
-  // The shared rule for a crowded bottom row: a button joins the first row while it holds fewer than FULL_ROW
-  // buttons, else the second row, which a script that finds none makes. Checked once, when the button is added.
-  // With no first row it names that row anyway: Framework then skips the button, as it always has.
+  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
   const BOTTOM_ROW = '.controls-aux'
-  const SECOND_ROW = '.controls-aux-extensions'
-  const FULL_ROW = 5
-
-  function findOrMakeButtonRow (doc) {
-    const first = doc.querySelector(BOTTOM_ROW)
-    if (!first || first.querySelectorAll('button').length < FULL_ROW) return BOTTOM_ROW
-    if (!doc.querySelector(SECOND_ROW)) {
-      const row = doc.createElement('div')
-      row.className = [BOTTOM_ROW, SECOND_ROW].map((selector) => selector.slice(1)).join(' ')
-      first.after(row)
-    }
-    return SECOND_ROW
-  }
+  // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
+  const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
+  const BOTTOM_ROW_STYLE_ID = 'color-by-digit-row'
 
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a
   // button added later needs refreshControls. Its onClick is left empty: listenForButton takes every
   // press before SudokuPad sees it.
-  function installButton (framework, app, mode, groups, colorOf, row) {
-    framework.addControlButton({ parent: row, name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, groups, colorOf), onClick () {} })
+  function installButton (framework, app, mode, groups, colorOf, digitProfileGroups) {
+    framework.addControlButton({ parent: BOTTOM_ROW, name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, groups, colorOf, digitProfileGroups), onClick () {} })
     app.refreshControls()
   }
 
@@ -945,19 +962,20 @@
     return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${escapeHtml(key || '')}"${look}>${digit}</button>`
   }
 
-  // The digit keys in rows of three, 0 right of 9, beside the swatch grid.
+  // The digit keys in rows of three beside the swatch grid, and a fourth row with the 0 key under 7, where SudokuPad's own pad puts 0.
   function renderPad (groups, colors) {
     const keyOfDigit = keyOfDigitMap(groups)
     const digitKey = (d) => renderDigitKey(d, keyOfDigit[d], colors)
     const pad = '<span data-empty="pad"></span>'
     const rows = Math.floor(NUMPAD_DIGITS.length / PAGE_COLUMNS)
     const zero = NUMPAD_DIGITS[NUMPAD_DIGITS.length - 1]
-    const lines = Array.from({ length: rows }, (_, r) =>
-      NUMPAD_DIGITS.slice(r * PAGE_COLUMNS, (r + 1) * PAGE_COLUMNS).map(digitKey).join('') + (r === rows - 1 ? digitKey(zero) : pad))
+    const lines = Array.from({ length: rows }, (_, r) => NUMPAD_DIGITS.slice(r * PAGE_COLUMNS, (r + 1) * PAGE_COLUMNS).map(digitKey).join(''))
+    lines.push(digitKey(zero) + pad.repeat(PAGE_COLUMNS - 1))
     return `<div data-role="paint">${lines.join('')}</div>`
   }
 
-  // The shown page's swatches in the shared color block, its index 0 color after 1 to 9, as the pad puts 0 after 9.
+  // The shown page's swatches in the shared color block, its index 0 color after 1 to 9, so it sits on a fourth row
+  // beside the 0 key, which the pad puts under 7.
   function renderPaint (groups, pages, shown, brush, colors) {
     return renderColorBlock({
       prefix: PICKER_PREFIX,
@@ -974,23 +992,27 @@
   const shadeOf = (color) => { const rgb = parseColor(color); return rgb ? darkenColor(rgb) : ENTERED_DIGIT_BLUE }
   const CHIP_LOOKS = {
     cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
-    digit: (color) => ({ fill: '#fff', ink: shadeOf(color), line: '#000' }),
-    both: (color) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(color), line: '#000' }),
+    digit: (color, digitColor) => ({ fill: '#fff', ink: shadeOf(digitColor), line: '#000' }),
+    both: (color, digitColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitColor), line: '#000' }),
     off: () => ({ fill: '#fff', ink: '#999', line: '#aaa' })
   }
   // One cell of the run, in the run's own units; the strokes stay 1 px at any size.
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
-  // A run of joined cells, one per shown group: fills first, then single dividers and one outline over them, so no line is doubled.
+  // A run of joined cells, one per shown chip (`chips` when given, else the mode's own pick): fills first, then single dividers and one outline over them, so no line is doubled.
   // `size` is one cell's width, in pixels or in the units of an enclosing SVG, which `x` and `y` place it in.
-  function renderChips (groups, colorOf, { size, style = 'cell', x, y }) {
-    const shown = shownGroups(groups, CHIP_MAX_GROUPS)
+  function renderChips (groups, colorOf, { size, style = 'cell', x, y, digitProfileGroups = groups, chips = shownChips(style, groups, digitProfileGroups) }) {
+    const shown = chips
     const width = shown.length * RUN_CELL
     const { line } = CHIP_LOOKS[style]('')
-    const cells = shown.map(({ key, digit }, i) => {
-      const { fill, ink } = CHIP_LOOKS[style](colorOf(key))
-      return `<g data-role="chip" data-key="${escapeHtml(key)}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"/>` +
+    const cells = shown.map(({ digit, cellKey, digitKey }, i) => {
+      const key = style === 'digit' ? digitKey : cellKey
+      const look = CHIP_LOOKS[style](cellKey === undefined ? '' : colorOf(cellKey), digitKey === undefined ? '' : colorOf(digitKey))
+      // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
+      const fill = cellKey === undefined ? '#fff' : look.fill
+      const ink = look.ink
+      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"/>` +
         `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
     const dividers = shown.slice(1).map((_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" stroke="${line}" ${STROKE}/>`).join('')
@@ -1009,7 +1031,6 @@
   const SAVE_LABEL = 'Save'
   const EDITOR_ID = 'color-by-digit-editor'
   const MENU = '#color-by-digit-menu'
-  const DIALOG_CLASS = 'color-by-digit-dialog'
   const STYLE_ID = 'color-by-digit-style'
 
   const MUTED = '#8a8496'
@@ -1105,13 +1126,14 @@
   }
 
   // One stylesheet, every rule scoped to the editor, the dialog itself (its width), or the dialog's options row.
-  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id and the options row's two classes outrank those rules, so none needs !important.
+  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
-  const OPTIONS = `.dialog-options.${DIALOG_CLASS}`
+  const DIALOG = `.dialog:has(${EDITOR})`
+  const OPTIONS = `${DIALOG} .dialog-options`
   const STYLE_CSS = [
     [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
-    [`.dialog.${DIALOG_CLASS}`, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
+    [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
     [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
@@ -1121,8 +1143,8 @@
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
-    // The pad's columns: three digit keys and the 0 key.
-    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS + 1}, ${KEY_SIZE}); touch-action: none`],
+    // The pad's columns: three digit keys; the 0 key sits under 7.
+    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}); touch-action: none`],
     [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
     [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
     [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
@@ -1291,7 +1313,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1489,7 +1511,8 @@
   // The palette can change after the button was drawn, so the icon and the digit shades are drawn from it again.
   function redraw () {
     const icon = document.querySelector(`${BUTTON} .icon`)
-    if (icon) icon.outerHTML = iconHtml(mode, iconGroups(loadState(), mode), readColor)
+    const state = loadState()
+    if (icon) icon.outerHTML = iconHtml(mode, activeGroups(state), readColor, digitGroups(state))
     labelButton()
     showDigitColors()
   }
@@ -1537,11 +1560,11 @@
 
   let menu = null
 
-  function addStyle () {
-    if (document.getElementById(STYLE_ID)) return
+  function addStyle (id = STYLE_ID, css = STYLE_CSS) {
+    if (document.getElementById(id)) return
     const style = document.createElement('style')
-    style.id = STYLE_ID
-    style.textContent = STYLE_CSS
+    style.id = id
+    style.textContent = css
     document.head.appendChild(style)
   }
 
@@ -1697,12 +1720,9 @@
     const box = document.getElementById(EDITOR_ID)
     if (!box) return
     const dialog = box.closest('.dialog')
-    if (dialog) dialog.classList.add(DIALOG_CLASS)
+    // No selector tells Save from Cancel but its text, so the script marks it for the stylesheet.
     const row = dialog && dialog.querySelector('.dialog-options')
-    if (row) {
-      row.classList.add(DIALOG_CLASS)
-      row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
-    }
+    if (row) row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     let brush
     let page
     const groupsShown = () => draft.profiles[selected].groups
@@ -1902,7 +1922,8 @@
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))
-    installButton(Framework, app, mode, iconGroups(state, mode), readColor, findOrMakeButtonRow(document))
+    addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
+    installButton(Framework, app, mode, activeGroups(state), readColor, digitGroups(state))
     labelButton()
     installCellColoring(app)
     listenForButton(app, openEditor)

@@ -122,16 +122,16 @@ for (const viewport of [DESKTOP, PHONE]) {
       }
     })
 
-    it('puts each swatch row level with a pad row, 0 right of 9, and the pad inside the column at this width', async () => {
+    it('puts each swatch row level with a pad row, 0 on a fourth row under 7, and the pad inside the column at this width', async () => {
       const box = (selector) => p.locator(selector).first().boundingBox()
-      const [swatch1, swatch4, swatch7, d1, d4, d7, d9, d0, column] = await Promise.all([
+      const [swatch1, swatch4, swatch7, d1, d4, d7, d0, column] = await Promise.all([
         box(`${EDITOR} button[data-role=swatch]`), box(`${EDITOR} button[data-role=swatch] >> nth=3`), box(`${EDITOR} button[data-role=swatch] >> nth=6`),
-        box(`${EDITOR} [data-digit="1"]`), box(`${EDITOR} [data-digit="4"]`), box(`${EDITOR} [data-digit="7"]`), box(`${EDITOR} [data-digit="9"]`), box(`${EDITOR} [data-digit="0"]`),
+        box(`${EDITOR} [data-digit="1"]`), box(`${EDITOR} [data-digit="4"]`), box(`${EDITOR} [data-digit="7"]`), box(`${EDITOR} [data-digit="0"]`),
         box(`${EDITOR} .cbd-column:nth-child(2)`)
       ])
       assert.deepEqual([swatch1.y, swatch4.y, swatch7.y], [d1.y, d4.y, d7.y])
-      assert.equal(d0.y, d7.y)
-      assert.equal(d0.x > d9.x, true, JSON.stringify([d9, d0]))
+      assert.equal(d0.x, d7.x)
+      assert.equal(d0.y > d7.y, true, JSON.stringify([d7, d0]))
       assert.equal(d0.x + d0.width <= column.x + column.width + 1, true, `pad inside the column: ${JSON.stringify([d0, column])}`)
       if (viewport === DESKTOP) {
         const { dialog, window } = await heights()
@@ -182,3 +182,18 @@ for (const viewport of [DESKTOP, PHONE]) {
     })
   }
 }
+
+describe('the dialog at 1280x720', { concurrency: false }, () => {
+  it('is styled from SudokuPad\'s own elements: no class is stamped on them, it is 640 px wide, and its button row is flex with a purple Save', async () => {
+    const { context, p } = await openSession(browser, script, { contextOptions: { viewport: { width: 1280, height: 720 } } })
+    try {
+      await openScriptDialog(p, 'Color by Digit', EDITOR)
+      assert.deepEqual(await p.evaluate(() => [[...document.querySelector('.dialog').classList], [...document.querySelector('.dialog-options').classList]]), [['dialog'], ['dialog-options']])
+      assert.equal(await p.locator('.dialog').evaluate((el) => Math.round(el.getBoundingClientRect().width)), DESKTOP_DIALOG_PX)
+      assert.equal(await p.locator('.dialog-options').evaluate((el) => window.getComputedStyle(el).display), 'flex')
+      assert.equal(await p.locator('.dialog-options button[data-role="save"]').evaluate((el) => window.getComputedStyle(el).backgroundColor), 'rgb(107, 63, 160)')
+    } finally {
+      await context.close()
+    }
+  })
+})

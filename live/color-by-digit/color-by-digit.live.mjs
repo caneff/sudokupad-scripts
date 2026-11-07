@@ -237,6 +237,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await background(digitKey('2')), await background(swatch('2')))
   })
 
+  it('the 0 key, on its own row under 7, paints and clears like any digit key', async () => {
+    await reopen()
+    await swatch('5').click()
+    await digitKey('0').click()
+    assert.equal(await keyOf('0'), '5')
+    await digitKey('0').click()
+    assert.equal(await keyOf('0'), '')
+  })
+
   it('the palette is read from the CSS variables: three pages of 9 visible swatches, 27 in all', async () => {
     const select = p.locator(`${EDITOR} select[data-role="color-choice"]`)
     const seen = []
@@ -507,9 +516,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   // Runs after the press tests: it calls refreshControls itself, which would bind this script's
-  // button and hide whether installButton's own call does. Five buttons fit one row at 1200x900,
-  // so the row wraps only once the stand-ins push it past SudokuPad's width limit.
-  it('with another script\'s button in the row, the row still fits and the footer stays clear, and with enough more the row wraps to a second row', async () => {
+  // button and hide whether installButton's own call does. The script's own cap wraps the row at five.
+  it('with another script\'s button in the row, the row still fits and the footer stays clear, and with enough more the row has a second row', async () => {
     const own = (await settledLayout()).neighbours.length
     const add = (from, to) => read(([from, to]) => {
       for (let i = from; i < to; i++) Framework.addAuxButton({ name: `other${i}`, title: `Other ${i}`, content: '<div class="icon"><svg viewBox="0 0 10 10"><rect width="10" height="10"/></svg></div>', onClick () {} })

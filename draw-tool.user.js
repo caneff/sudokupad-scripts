@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.11
+// @version      0.16.1
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.11'
+  const VERSION = '0.16.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -341,6 +341,25 @@
   const TOUCHES = { stroke: touchesStroke, text: touchesText, shape: touchesShape }
   const touchesItem = (item, from, to) => TOUCHES[item.kind](item, from, to)
 
+  // The index of the topmost item under a press at `at`, found the way an erase finds one, or -1 for none.
+  function itemAt (drawing, at) {
+    for (let i = drawing.length - 1; i >= 0; i--) {
+      if (touchesItem(drawing[i], at, at)) return i
+    }
+    return -1
+  }
+
+  const shifted = ([x, y], [dx, dy]) => [roundToTenth(x + dx), roundToTenth(y + dy)]
+  const MOVES = {
+    stroke: (item, by) => ({ ...item, points: item.points.map((p) => shifted(p, by)) }),
+    shape: (item, by) => {
+      const [left, top, right, bottom] = item.box
+      return { ...item, box: [...shifted([left, top], by), ...shifted([right, bottom], by)] }
+    },
+    text: (item, by) => ({ ...item, at: shifted(item.at, by) })
+  }
+  const movedItem = (item, by) => MOVES[item.kind](item, by)
+
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
 
@@ -355,6 +374,25 @@
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
   const readShapeMode = (saved) => SHAPE_MODES.includes(saved) ? saved : SHAPE_OFF
   const nextShapeMode = (mode) => SHAPE_MODES[(SHAPE_MODES.indexOf(mode) + 1) % SHAPE_MODES.length]
+  // Pen Tool Extras' page button and swatches draw in a 24-unit box with a 3-unit round stroke; Draw's modes are drawn the same way.
+  const shapePaint = (stroke) => `fill='none' stroke='${stroke}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'`
+  const SHAPE_PICTURES = {
+    [SHAPE_OFF]: FREE_LINE_ICON,
+    [RECT]: "<rect x='3.5' y='7.5' width='17' height='11'/>",
+    [ELLIPSE]: "<ellipse cx='12' cy='13' rx='9.5' ry='5.5'/>"
+  }
+  // The swatch shows a straight line for free lines, where the button's picture is a freehand squiggle.
+  const SWATCH_PICTURES = { ...SHAPE_PICTURES, [SHAPE_OFF]: "<path d='M2 12H22'/>" }
+  const shapeSwatchSvg = (mode) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ${shapePaint('black')}>${SWATCH_PICTURES[mode]}</svg>`
+  // The picture is the mode a press turns to, with a dot per mode under it filled for the current one, as Pen Tool Extras' page button has.
+  const shapeButtonIcon = (mode) => {
+    const dots = SHAPE_MODES.map((m, i) =>
+      `<circle cx='${20 - 3 * (SHAPE_MODES.length - i - 1)}' cy='3' r='1.1' data-shape-dot='${m === mode ? 'filled' : 'outline'}'/>`)
+    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' aria-hidden='true'><g ${shapePaint('currentColor')}>${SHAPE_PICTURES[nextShapeMode(mode)]}</g>` +
+      `<g stroke='currentColor' fill='currentColor' stroke-width='0.5'>${dots.join('')}</g></svg>`
+  }
+  const SHAPE_NAMES = { [SHAPE_OFF]: 'off, free lines', [RECT]: 'rectangle', [ELLIPSE]: 'ellipse' }
+  const SHAPE_LABELS = Object.fromEntries(SHAPE_MODES.map((mode) => [mode, `Shape: ${SHAPE_NAMES[mode]}. Click for ${SHAPE_NAMES[nextShapeMode(mode)]}`]))
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
   // Board units, as a text's height: the line width's slider also sets the text size.
@@ -891,7 +929,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, itemAt, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1065,23 +1103,27 @@
   const SWATCH_REM = 2.4
   // The column of each control in its row.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SHAPE_BUTTON_CLASS]: 2, [SETTINGS_CLASS]: 3 }
-  const SWATCH_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2 12H22' stroke='black' stroke-width='3' stroke-linecap='round'/></svg>"
-  const SWATCH_MASK = `url("data:image/svg+xml,${encodeURIComponent(SWATCH_SVG).replace(/'/g, '%27')}") center / 100% no-repeat`
+  // Each color button shows the current mode (a line, a rectangle or an ellipse) in its draw color, cut out of the button so a recolor follows.
+  const swatchMask = (mode) => `url("data:image/svg+xml,${encodeURIComponent(shapeSwatchSvg(mode)).replace(/'/g, '%27')}") center / 100% no-repeat`
   const PANEL = '.tool-draw .controls-input'
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
   const PANEL_CSS = [
     ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
-    `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; -webkit-mask: ${SWATCH_MASK}; mask: ${SWATCH_MASK}; }`,
+    `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; }`,
+    `${PANEL} button.digit::after { -webkit-mask: ${swatchMask(SHAPE_OFF)}; mask: ${swatchMask(SHAPE_OFF)}; }`,
+    ...SHAPES.map((mode) => `${PANEL}[data-draw-shape="${mode}"] button.digit::after { -webkit-mask: ${swatchMask(mode)}; mask: ${swatchMask(mode)}; }`),
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(${colorVar(n)}); }`),
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path', which would turn the icons' lines into blobs.
-    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse) { fill: none !important; }`,
+    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse):not([data-shape-dot="filled"]) { fill: none !important; }`,
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     pickerCss(PICKER_PREFIX, TOOL_NAME),
-    `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`
+    `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`,
+    // The tool bar is a grid and stock buttons have order 0, so Draw's stays last whenever another is added.
+    `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
   // Pen Tool Extras' gear, at its viewBox.
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
@@ -1092,13 +1134,6 @@
   // Clear all is a trash can.
   const CLEAR_LABEL = 'Clear all'
   const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
-  // The Shape button shows the mode in force: a free line, a rectangle or an ellipse.
-  const SHAPE_LABELS = { [SHAPE_OFF]: 'Shape: off, free lines', [RECT]: 'Shape: rectangle', [ELLIPSE]: 'Shape: ellipse' }
-  const SHAPE_ICONS = {
-    [SHAPE_OFF]: FREE_LINE_ICON,
-    [RECT]: '<rect x="4" y="5" width="16" height="14" rx="1"/>',
-    [ELLIPSE]: '<ellipse cx="12" cy="12" rx="9" ry="7"/>'
-  }
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
   let opacity = DEFAULT_OPACITY
@@ -1255,7 +1290,8 @@
     button.dataset.mode = shapeMode
     button.title = SHAPE_LABELS[shapeMode]
     button.setAttribute('aria-label', SHAPE_LABELS[shapeMode])
-    button.innerHTML = controlIcon(SHAPE_ICONS[shapeMode])
+    button.innerHTML = shapeButtonIcon(shapeMode)
+    keypad().dataset.drawShape = shapeMode
   }
 
   function showPanel () {
@@ -1294,6 +1330,7 @@
 
   function hidePanel () {
     for (const part of panelParts) part.remove()
+    delete keypad().dataset.drawShape
     panelParts = []
   }
 
@@ -1302,7 +1339,7 @@
     installHoldToEdit({ prefix: PICKER_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)) })
   }
 
-  // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
+  // A left-drag in progress: a free line, a shape when `shape` is set, or a move of the item `move` names. `element` is what it shows on the board so far.
   // `straight` is whether Shift is held, which draws a free line straight.
   let drag = null
   // A right-drag in progress: the last point it reached and whether it has erased an item yet. The right button's `buttons` bit holds it.
@@ -1438,6 +1475,7 @@
     if (erasing) endErase()
     if (!drag) return
     if (isClick(drag.points)) dropDrag()
+    else if (drag.move) endMove()
     else if (drag.shape) endShape()
     else endStroke()
   }
@@ -1460,6 +1498,21 @@
     newShape(drag.layer, item)
     drag = null
     drawing.push(item)
+    save()
+  }
+
+  const dragOffset = () => {
+    const [x, y] = drag.points[0]
+    const [lastX, lastY] = drag.points[drag.points.length - 1]
+    return [lastX - x, lastY - y]
+  }
+
+  const applyMove = () => { drawing[drag.move.index] = movedItem(drag.move.item, dragOffset()) }
+
+  function endMove () {
+    applyMove()
+    drag = null
+    renderDrawing()
     save()
   }
 
@@ -1556,10 +1609,14 @@
       }
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
-      const shape = shapeMode === SHAPE_OFF ? null : shapeMode
-      drag = { layer, shape, element: null, color, width, opacity, straight: false, points: [toBoard(layer, event)] }
+      const at = toBoard(layer, event)
+      // A press on an item moves it once it drags, in every Shape mode; a click on it does what a click does.
+      const index = itemAt(drawing, at)
+      const move = index === -1 ? null : { index, item: drawing[index] }
+      const shape = shapeMode === SHAPE_OFF || move ? null : shapeMode
+      drag = { layer, shape, move, element: null, color, width, opacity, straight: false, points: [at] }
       // A shape shows only once the press moves, so a click that opens a text box flashes no box.
-      if (!shape) {
+      if (!shape && !move) {
         drag.element = newStroke(layer, color, width, opacity)
         drag.element.setAttribute('d', strokePath(drag.points))
       }
@@ -1578,9 +1635,16 @@
         return true
       }
       if (!drag) return false
+      // An item stays where a press on it can still reach it: a move ends at the last point on the board.
+      if (drag.move && !onBoard(event)) return true
       drag.points.push(toBoard(drag.layer, event))
       drag.straight = event.shiftKey
-      if (drag.shape) {
+      if (drag.move) {
+        if (!isClick(drag.points)) {
+          applyMove()
+          renderDrawing()
+        }
+      } else if (drag.shape) {
         drag.element?.remove()
         drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape())
       } else {
@@ -1602,7 +1666,8 @@
         return true
       }
       drag.straight = event.shiftKey
-      if (drag.shape) endShape()
+      if (drag.move) endMove()
+      else if (drag.shape) endShape()
       else endStroke()
       return true
     },
@@ -1629,17 +1694,6 @@
     handleKeydown (event) { return Framework.app.tool === TOOL_NAME && event.key === 'Shift' }
   }
 
-  // Every tool button is appended to the bar when it is added (the pen tool's on its setting, a script's whenever it
-  // runs), so Draw's moves back to the end each time one lands after it.
-  function keepButtonLast () {
-    const bar = document.querySelector('.controls-tool')
-    const button = bar?.querySelector(`#control-${TOOL_NAME}`)
-    if (!button) return
-    const moveToEnd = () => { if (bar.lastElementChild !== button) bar.appendChild(button) }
-    moveToEnd()
-    new window.MutationObserver(moveToEnd).observe(bar, { childList: true })
-  }
-
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
     for (const slider of SLIDERS) slider.set(slider.read(Framework.getData(slider.key)))
@@ -1657,7 +1711,6 @@
       tool
     })
     addSettingsEntry(Framework, { name: 'drawtool', content: 'Draw Tool', open: openDialog })
-    keepButtonLast()
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)

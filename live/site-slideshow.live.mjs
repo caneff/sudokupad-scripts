@@ -1,5 +1,5 @@
 // Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Draw Tool), opened from disk: Next and Previous step
-// the slideshow's picture, caption and counter, and both ends wrap. The page's raw.githubusercontent.com
+// the slideshow's picture, caption and counter, and both ends wrap. Each details page's slides also fill their frame to its inset and are never shown wider than their own width, at 1280x720 and 1600x900. The page's raw.githubusercontent.com
 // pictures are served from this checkout, since a branch is not on main yet.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -34,11 +34,11 @@ const SHOWS = [
     heading: 'Draw Tool',
     row: 3,
     details: 'draw-tool.html',
-    slides: 8,
+    slides: 10,
     first: ['draw-tool-slide-1-line.png', 'Draw a line'],
     second: ['draw-tool-slide-2-straight.png', 'Hold Shift for a straight line'],
-    last: ['draw-tool-slide-8-erase.png', 'Erase: right-drag across a line'],
-    beforeLast: ['draw-tool-slide-7-colors.png', 'Your own colors: hold a color button']
+    last: ['draw-tool-slide-10-move.png', 'Move: drag a text'],
+    beforeLast: ['draw-tool-slide-9-erased.png', 'The whole line is gone']
   }
 ]
 
@@ -62,6 +62,56 @@ const shown = (root) => page.evaluate((root) => {
   }
 }, root)
 const at = (n, [picture, caption], slides) => ({ count: `${n} / ${slides}`, captions: [caption], pictures: [picture], visible: 1 })
+
+// Each slide's gap to the frame's inside edge on all four sides, and the frame's inset (.6rem) in px. All slides stack in one cell, so each is measured though only one shows.
+const gaps = (root) => page.evaluate((root) => {
+  const frame = document.querySelector(`${root} .slide-frame`)
+  const f = frame.getBoundingClientRect()
+  const gap = (img) => {
+    const i = img.getBoundingClientRect()
+    return { left: i.left - f.left - frame.clientLeft, right: f.right - i.right - frame.clientLeft, top: i.top - f.top - frame.clientTop, bottom: f.bottom - i.bottom - frame.clientTop }
+  }
+  return { inset: 0.6 * parseFloat(window.getComputedStyle(document.documentElement).fontSize), gaps: [...frame.querySelectorAll('.slide')].map(gap) }
+}, root)
+const sizes = () => page.evaluate(() => {
+  const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, width: r.width } }
+  return {
+    slides: [...document.querySelectorAll('.slideshow .slide')].map((i) => ({ shown: i.getBoundingClientRect().width, own: Number(i.getAttribute('width')) })),
+    lede: box(document.querySelector('.lede')),
+    frame: box(document.querySelector('.slide-frame')),
+    inset: 0.6 * parseFloat(window.getComputedStyle(document.documentElement).fontSize)
+  }
+})
+const DEFAULT_VIEWPORT = { width: 1280, height: 720 }
+const openDetails = async (show, width, height) => {
+  await page.setViewportSize({ width, height })
+  await page.goto(new URL(`site/${show.details}`, ROOT).href, { waitUntil: 'load' })
+  await page.waitForFunction(() => [...document.images].every((i) => i.complete))
+}
+
+for (const show of SHOWS) {
+  for (const [width, height] of [[1280, 720], [1600, 900]]) {
+    describe(`${show.heading}'s details page at ${width}x${height}`, () => {
+      after(() => page.setViewportSize(DEFAULT_VIEWPORT))
+      // A slide of another shape would sit off the inset on one side, so every slide of a show must share one size.
+      it('every slide fills its frame to the inset on each side', async () => {
+        await openDetails(show, width, height)
+        const { inset, gaps: all } = await gaps('.slideshow')
+        assert.equal(all.length, show.slides)
+        for (const g of all) for (const side of ['left', 'right', 'top', 'bottom']) assert.ok(Math.abs(g[side] - inset) <= 1, `${side} gap ${g[side]} px, want ${inset} px: ${JSON.stringify(g)}`)
+      })
+      it('no slide is shown wider than its own width, and the frame is no wider than its widest slide and sits left-aligned with the text', async () => {
+        await openDetails(show, width, height)
+        const { slides, lede, frame, inset } = await sizes()
+        for (const { shown, own } of slides) assert.ok(shown <= own + 1, `slide shown ${shown} px wide, its own width is ${own} px`)
+        assert.ok(Math.abs(frame.left - lede.left) <= 1, `frame left ${frame.left} px, text left ${lede.left} px`)
+        // A caption wider than the slides must not widen the frame (the 2 px are its border).
+        const widest = Math.max(...slides.map(({ own }) => own))
+        assert.ok(frame.width <= widest + 2 * inset + 2 + 1, `frame ${frame.width} px wide, widest slide ${widest} px`)
+      })
+    })
+  }
+}
 
 for (const [where, file] of [['the homepage', 'index.html'], ...SHOWS.map((show) => [`${show.heading}'s details page`, show.details])]) {
   for (const show of SHOWS.filter((show) => file === 'index.html' || file === show.details)) {

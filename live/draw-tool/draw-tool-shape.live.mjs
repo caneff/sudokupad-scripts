@@ -62,7 +62,41 @@ describe('Draw Tool\'s Shape mode', { concurrency: false }, () => {
       await p.click(SHAPE_BUTTON)
       steps.push([await mode(), await savedMode(), await p.locator(SHAPE_BUTTON).getAttribute('title')])
     }
-    assert.deepEqual(steps, [['rect', 'rect', 'Shape: rectangle'], ['ellipse', 'ellipse', 'Shape: ellipse'], ['off', 'off', 'Shape: off, free lines']])
+    assert.deepEqual(steps, [['rect', 'rect', 'Shape: rectangle. Click for ellipse'], ['ellipse', 'ellipse', 'Shape: ellipse. Click for off, free lines'], ['off', 'off', 'Shape: off, free lines. Click for rectangle']])
+  })
+
+  // What the button draws, and the picture masking each color button's swatch, as the first shape element's tag in each.
+  const pictures = () => read(({ button, keypad }) => {
+    const tagOf = (svg) => /<(path|rect|ellipse)[ />]/.exec(svg)?.[1]
+    const maskOf = (b) => decodeURIComponent(/url\("data:image\/svg\+xml,([^"]*)"\)/.exec(window.getComputedStyle(b, '::after').maskImage)[1])
+    return {
+      button: [...document.querySelector(button).querySelectorAll('svg > g:first-of-type > *')].map((e) => e.tagName.toLowerCase()),
+      dots: [...document.querySelectorAll(`${button} circle`)].map((c) => c.dataset.shapeDot),
+      swatches: [...document.querySelectorAll(`${keypad} button.digit:not([data-key="0"])`)].map((b) => tagOf(maskOf(b)))
+    }
+  }, { button: SHAPE_BUTTON, keypad: draw.KEYPAD })
+
+  it('the Shape button draws the mode a press turns to, with a dot per mode, and every color swatch draws the current mode', async () => {
+    const seen = []
+    for (const wanted of ['off', 'rect', 'ellipse']) {
+      await stepTo(wanted)
+      seen.push([wanted, await pictures()])
+    }
+    const nine = (tag) => Array(9).fill(tag)
+    assert.deepEqual(seen, [
+      ['off', { button: ['rect'], dots: ['filled', 'outline', 'outline'], swatches: nine('path') }],
+      ['rect', { button: ['ellipse'], dots: ['outline', 'filled', 'outline'], swatches: nine('rect') }],
+      ['ellipse', { button: ['path'], dots: ['outline', 'outline', 'filled'], swatches: nine('ellipse') }]
+    ])
+    await stepTo('off')
+  })
+
+  it('a saved mode shows its swatches on load', async () => {
+    await stepTo('ellipse')
+    await reload()
+    await pickDraw()
+    assert.deepEqual((await pictures()).swatches, Array(9).fill('ellipse'))
+    await stepTo('off')
   })
 
   it('a drag in Rectangle mode draws a rectangle on exactly the drag box, and draws no stroke', async () => {

@@ -22,6 +22,9 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
 - **Shared code**: after editing `lib/<name>.js`, run `node sync-lib.js`, as `node tag-pictures.js` is run after a picture: it rewrites each
   marked block in the `*.user.js` and raises the version of every script it changed. `test/sync-lib.test.js` fails until you do.
+- **No feature relies on a right-button drag** (Chris, 2026-11-07): SudokuPad's Test Large Puzzle UI setting pans the board on it and no
+  script sees the moves (`docs/research/large-puzzle-ui-right-drag.md`). A right click is fine; a right-drag may only be an extra on top of
+  one, and the site teaches the right click.
 - **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
   demonstrated at a phone or tablet size, and no ticket or PR asks for it.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,

@@ -567,7 +567,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal(await t.selectedRow(), 1)
   })
 
-  it('the pad: 1 2 3 over 4 5 6 over 7 8 9, with 0 right of 9', async () => {
+  it('the pad: 1 2 3 over 4 5 6 over 7 8 9, with 0 on a fourth row under 7', async () => {
     const box = async (d) => p.locator(`${EDITOR} [data-act=digit][data-digit="${d}"]`).boundingBox()
     const at = {}
     for (const d of '0123456789') at[d] = await box(d)
@@ -575,8 +575,8 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal(at[1].y, at[3].y)
     assert.ok(at[1].y < at[4].y && at[4].y < at[7].y)
     assert.deepEqual([at[4].x, at[7].x], [at[1].x, at[1].x])
-    assert.equal(at[0].y, at[9].y)
-    assert.ok(at[0].x > at[9].x, JSON.stringify([at[0], at[9]]))
+    assert.equal(at[0].x, at[7].x)
+    assert.ok(at[0].y > at[7].y, JSON.stringify([at[0], at[7]]))
   })
 
   it('a drag of the handle with the mouse reorders the draft, and Cancel drops it', async () => {

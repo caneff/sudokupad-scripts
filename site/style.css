@@ -24,8 +24,8 @@ p { margin: 0 0 .5rem; }
 
 /* The slideshow: a framed picture, then a caption on the left and a pager on the right. slides.js adds the pager. */
 .slideshow { display: flex; flex-direction: column; }
-.slide-frame { position: relative; aspect-ratio: 16 / 10; background: var(--frame-bg); border: 1px solid var(--frame-edge); border-radius: 8px; }
-.slide-frame img { position: absolute; inset: .6rem; margin: auto; max-width: calc(100% - 1.2rem); max-height: calc(100% - 1.2rem); width: auto; height: auto; }
+.slide-frame { --slide-inset: .6rem; position: relative; aspect-ratio: 16 / 10; background: var(--frame-bg); border: 1px solid var(--frame-edge); border-radius: 8px; }
+.slide-frame img { position: absolute; inset: var(--slide-inset); margin: auto; max-width: calc(100% - 2 * var(--slide-inset)); max-height: calc(100% - 2 * var(--slide-inset)); width: auto; height: auto; }
 /* Every slide shares the frame, and only the current one shows, so the first one shows without script. */
 .slideshow .slide:not(.current) { visibility: hidden; }
 .slide-bar { display: flex; align-items: flex-start; gap: 1rem; margin-top: .55rem; }
@@ -46,15 +46,21 @@ p { margin: 0 0 .5rem; }
 /* The details layout (body.details): a back link, title, warning, lede and Install, then the slideshow, then sections divided by thin rules. */
 .details .back { font-size: .95rem; margin: .25rem 0 1rem; }
 .details .slide-caption { font-size: 1.25rem; }
+/* On a details page the frame takes the slides' own shape: the pictures stack in one grid cell at their own width (never larger), shrinking to fit a narrow window, so the frame is as wide and tall as the biggest. */
+.details .slideshow { display: grid; width: fit-content; max-width: 100%; }
+.details .slide-frame { display: grid; aspect-ratio: auto; padding: var(--slide-inset); }
+.details .slide-frame img { position: static; grid-area: 1 / 1; margin: 0; max-width: 100%; max-height: none; }
+/* The bar adds nothing to the slideshow's width, so the caption and pager sit under the frame at its width. */
+.details .slide-bar { contain: inline-size; }
 .details .lede { max-width: 44rem; font-size: 1.1rem; }
 .details .actions { margin: .75rem 0 1.5rem; }
 .details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }
-.details .prose, .details .steps, .details .notes { max-width: 44rem; }
+.details .prose, .details .notes { max-width: 44rem; }
 .details .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 2rem; margin: 0; padding: 0; list-style: none; }
 .details .features strong { display: block; margin-bottom: .15rem; }
 .details .features p { margin: 0; }
 .details .figure { margin: 1rem 0; }
 .details .figure img { display: block; max-width: 100%; height: auto; }
-.details .steps li, .details .notes li { margin-bottom: .45rem; }
-.details .steps, .details .notes { padding-left: 1.4rem; }
+.details .notes li { margin-bottom: .45rem; }
+.details .notes { padding-left: 1.4rem; }
 .details footer { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--frame-edge); font-size: .95rem; }

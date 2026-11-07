@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.26.10
+// @version      1.27.1
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.26.10'
+  const VERSION = '1.27.1'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -105,8 +105,6 @@
   const SETTING_NAMES = Object.keys(SETTINGS)
 
   // A dialog box and a row `under` one name a setting by its path: `<setting>` for a flag, `<setting>.<flag>` for one of a set of flags.
-  const boxValue = (state, path) => path.split('.').reduce((value, name) => value[name], state)
-
   function draftWithBox (draft, path, checked) {
     const [name, flagName, ...rest] = path.split('.')
     const fallback = Object.hasOwn(SETTINGS, name) ? SETTINGS[name].fallback : undefined
@@ -2126,20 +2124,22 @@
 
   const sectionTitle = (text) => `<div class="${SECTION_TITLE}">${text}</div>`
 
-  const DIALOG_CLASS = 'pen-tool-extras-dialog'
-
   const EDITOR = `#${EDITOR_ID}`
 
-  // Scoped by DIALOG_CLASS and the editor's id, so SudokuPad's other dialogs are left alone.
+  // Scoped by the editor's id, so SudokuPad's other dialogs are left alone; `:has` reaches the dialog and its buttons from the editor, so they are styled from the first frame.
+  const OPTIONS = `.dialog:has(${EDITOR}) .dialog-options`
+  // A slider row under a checkbox shows only while that checkbox is ticked.
+  const hiddenRowCss = (name) => `${EDITOR}:not(:has(input[data-box="${SETTINGS[name].dialog.under}"]:checked)) [data-row="${name}"] { display: none; }`
   const DIALOG_CSS = [
     // Sized to its content and centred in the window; the paragraph around the editor loses SudokuPad's bottom margin so the vertical line meets the footer's line.
     `.dialog:has(${EDITOR}) { width: fit-content !important; max-width: 96vw !important; }`,
     `.dialog p:has(> ${EDITOR}) { margin-bottom: 0 !important; }`,
-    `.dialog-options.${DIALOG_CLASS} { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; justify-content: flex-end; border-top: 1px solid ${LINE_COLOR}; padding: 14px 4px 2px; margin-top: 0; box-sizing: border-box; width: 100%; }`,
-    `.dialog-options.${DIALOG_CLASS} button { width: auto !important; min-width: 0 !important; margin: 0 !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; border-radius: 8px !important; font-size: 1rem !important; flex: none; }`,
-    `.dialog-options.${DIALOG_CLASS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
-    `.dialog-options.${DIALOG_CLASS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
-    `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: ${MUTED_COLOR} !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
+    `${OPTIONS} { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; justify-content: flex-end; border-top: 1px solid ${LINE_COLOR}; padding: 14px 4px 2px; margin-top: 0; box-sizing: border-box; width: 100%; }`,
+    `${OPTIONS} button { width: auto !important; min-width: 0 !important; margin: 0 !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; border-radius: 8px !important; font-size: 1rem !important; flex: none; }`,
+    `${OPTIONS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+    `${OPTIONS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
+    `${OPTIONS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: ${MUTED_COLOR} !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
+    ...SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under).map(hiddenRowCss),
     `${EDITOR} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
     // In the first column the note wraps to the column set by the marks table; it never sets it.
     `${EDITOR} .${CELL} .${NOTE} { width: 0; min-width: 100%; max-width: none; }`,
@@ -2194,7 +2194,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     const sliderRow = (key) => {
       const { range, dialog: { label, under } } = SETTINGS[key]
       const value = state[key]
-      return `<div data-row="${key}" class="${SLIDER_COLUMNS}"${!under || boxValue(state, under) ? '' : ' style="display:none"'}>` +
+      return `<div data-row="${key}" class="${SLIDER_COLUMNS}">` +
         `<label for="pen-tool-extras-setting-${key}" class="pen-tool-extras-label${under ? ' pen-tool-extras-under' : ''}">${label}</label>` +
         `<input type="range" data-setting="${key}" min="${range.min}" max="${range.max}" step="${range.step}" value="${value}" id="pen-tool-extras-setting-${key}" class="pen-tool-extras-range">` +
         `<output data-readout="${key}">${value}</output></div>`
@@ -2235,7 +2235,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }, true)
   }
 
-  // A dialog whose buttons are not the three of this one's is left with SudokuPad's own stacked buttons.
+  // The buttons are reordered only when all three of this dialog's are there; the stylesheet's row and button styles apply either way.
   function arrangeButtons (editor) {
     const dialog = editor.closest('.dialog')
     const options = dialog && dialog.querySelector('.dialog-options')
@@ -2249,7 +2249,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       button.dataset.role = role
     })
     if (Object.keys(byRole).length !== Object.keys(roles).length) return
-    options.classList.add(DIALOG_CLASS)
     options.replaceChildren(byRole.restore, byRole.cancel, byRole.save)
   }
 
@@ -2305,9 +2304,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     })
     box = document.getElementById(EDITOR_ID)
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
-    const showRows = () => SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under).forEach((name) => {
-      box.querySelector(`[data-row="${name}"]`).style.display = boxValue(draft, SETTINGS[name].dialog.under) ? 'grid' : 'none'
-    })
     draw()
     arrangeButtons(box)
     wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
@@ -2323,7 +2319,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
         colorsChosen = false
       }
       draw()
-      showRows()
     })
     // `change` fires when a color picker closes (the swatch the user sees is already the new color), and when a mark box or a slider box is ticked.
     box.addEventListener('input', (event) => {
@@ -2343,7 +2338,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       const ticked = event.target.closest('input[type="checkbox"]')
       if (ticked) {
         draft = draftWithBox(draft, ticked.dataset.box || '', ticked.checked)
-        showRows()
         return
       }
       const el = event.target.closest('input[data-role="swatch"]')
