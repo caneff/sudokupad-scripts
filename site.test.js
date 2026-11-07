@@ -504,9 +504,9 @@ test(`${DRAW}'s Text, Erasing and Shapes pictures are animations under 300 KB wh
     const alt = altOf(img)
     assert.match(alt, /^An animation/, `"${lead}" alt text does not say it is an animation`)
     assert.match(alt, what, `"${lead}" alt text does not describe its steps`)
-    const file2 = `docs/research/${file}`
-    assert.ok(fs.statSync(path.join(__dirname, file2)).size < GIF_LIMIT_BYTES, `${file} is over 300 KB`)
-    assertDeclaredAtFileShape(img, file2, `"${lead}"`)
+    const gifPath = `docs/research/${file}`
+    assert.ok(fs.statSync(path.join(__dirname, gifPath)).size < GIF_LIMIT_BYTES, `${file} is over 300 KB`)
+    assertDeclaredAtFileShape(img, gifPath, `"${lead}"`)
   }
 })
 

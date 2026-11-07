@@ -7,12 +7,10 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { writeFileSync } from 'node:fs'
-import { openDrawPage } from './draw-tool-screenshot-page.mjs'
+import { openDrawPage, OLD_WIDTHS } from './draw-tool-screenshot-page.mjs'
 
 const DRAG_STEPS = 10
 const MARGIN = 4
-// The Size slider's values for the thin, middle and thick lines.
-const OLD_WIDTHS = [3, 6, 10]
 
 const browser = await chromium.launch()
 

@@ -8,12 +8,10 @@
 //   node docs/research/site-draw-tool-screenshot.mjs
 // Not part of any test.
 import { chromium } from 'playwright'
-import { openDrawPage } from './draw-tool-screenshot-page.mjs'
+import { openDrawPage, OLD_WIDTHS } from './draw-tool-screenshot-page.mjs'
 
 const out = new URL('./site-draw-tool.png', import.meta.url).pathname
 
-// The Size slider's values for the thin, middle and thick lines; the thick one also sets the sum's text size.
-const OLD_WIDTHS = [3, 6, 10]
 // Mouse moves per segment of a drag, so the drag reads as a hand-drawn stroke and not a jump.
 const DRAG_STEPS = 10
 // The picture's left edge, in cells from the grid's left; it runs from there past the tool buttons, and from the

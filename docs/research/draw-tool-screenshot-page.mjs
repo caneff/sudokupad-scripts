@@ -5,6 +5,9 @@ import { openPage, startPuzzle } from '../../live/page.mjs'
 
 const script = readFileSync(new URL('../../draw-tool.user.js', import.meta.url), 'utf8')
 
+// The Size slider's values for the thin, middle and thick lines the site pictures draw.
+export const OLD_WIDTHS = [3, 6, 10]
+
 export async function openDrawPage (browser, deviceScaleFactor) {
   const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor } })
   await startPuzzle(p)
