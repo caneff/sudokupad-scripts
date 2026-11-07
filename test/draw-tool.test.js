@@ -373,8 +373,9 @@ test('a selection rectangle selects every note it touches, whichever way it was 
   assert.deepEqual(notesTouched(rectDrawing, [0, 100], [150, 0]), [0, 1, 3])
 })
 
-test('a selection rectangle that only grazes a note\'s box selects it, and one that stops short does not', () => {
-  assert.deepEqual(notesTouched([sum], [111, 59], [130, 80]), [0])
+test('a selection rectangle that only touches the corner of a note\'s box selects it, and one that stops short does not', () => {
+  const { right, bottom } = noteBox(sum)
+  assert.deepEqual(notesTouched([sum], [right, bottom], [130, 80]), [0], 'a rectangle whose corner is the box\'s corner')
   assert.deepEqual(notesTouched([sum], [113, 0], [130, 80]), [])
   assert.deepEqual(notesTouched([sum], [90, 61], [100, 80]), [])
 })
