@@ -363,8 +363,15 @@ test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, (
 })
 
 // Draw Tool's entry and details page.
-const DRAW_SUMMARY = 'Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.'
-const DRAW_LEAD_INS = ['Freehand lines.', 'Text.', 'Size and opacity.', 'Erasing.', 'Stays on the cells.', 'Kept for each puzzle.']
+const DRAW_SUMMARY = 'Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.'
+const DRAW_LEAD_INS = ['Freehand lines.', 'Shapes.', 'Text.', 'Colors of its own.', 'Size and opacity.', 'Erasing.', 'Settings.', 'Stays on the cells.', 'Kept for each puzzle.']
+// The three animations on the details page: the lead-in each sits on, its file, and what its alt text must say.
+const DRAW_GIFS = {
+  'Shapes.': ['draw-tool-details-shapes.gif', /rectangle[^"]*snaps to the edges/],
+  'Text.': ['draw-tool-details-text.gif', /Enter[^"]*\b15\b/],
+  'Erasing.': ['draw-tool-details-erasing.gif', /right-drag[^"]*removes/]
+}
+const GIF_LIMIT_BYTES = 300 * 1024
 
 test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -375,10 +382,13 @@ test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, 
 test(`${DRAW} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
+    'Shapes. The Shape button steps between Off, rectangle and ellipse. With a shape on, a drag draws it, snapped to the edges of the cells it covers; hold Alt for the exact box you dragged.',
     'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
-    'Size and opacity. The Size slider sets the width of the next line and the size of the next text, and the Opacity slider how solid it is. A line or text keeps the size and opacity it was drawn with.',
-    'Erasing. Drag with the right mouse button across a line or text to erase it. Clear all, which asks first, erases everything.',
-    'Stays on the cells. Lines and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
+    'Colors of its own. Nine colors that belong to Draw Tool, not to SudokuPad\'s pen. A click on a color button or the digit keys 1 to 9 pick one, and a hold on a button puts a color picker over each to change it.',
+    'Size and opacity. The Size slider sets the width of the next line or shape and the size of the next text, and the Opacity slider how solid it is. A line, shape or text keeps the size and opacity it was drawn with.',
+    'Erasing. Drag with the right mouse button across a line, shape or text to erase it. Clear all, which asks first, erases everything.',
+    'Settings. The gear opens a dialog with a list of color presets (the pen colors, three darker page sets and SudokuPad\'s colors), a color picker for each of the nine colors, and Copy settings and Paste settings to move them to another browser.',
+    'Stays on the cells. Lines, shapes and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
     'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'
   ])
   assert.deepEqual(leadIns(read(DRAW)), DRAW_LEAD_INS)
@@ -391,10 +401,26 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
   assert.equal(found.length, 1, 'the Draw panel section is not one picture')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool-panel-annotated.png"`))
   const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
-  for (const label of ['Pen color buttons', 'Size slider', 'Opacity slider', 'Clear all']) {
+  for (const label of ['Color buttons', 'Clear all', 'Shape', 'Settings', 'Size slider', 'Opacity slider']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   assert.match(alt, /digit keys 1 to 9/)
+})
+
+test(`${DRAW}'s Text, Erasing and Shapes pictures are animations under 300 KB whose alt text says so`, () => {
+  const byLeadIn = new Map(items(read(DRAW)).map(li => [leadIn(li), li]))
+  for (const [lead, [file, what]] of Object.entries(DRAW_GIFS)) {
+    const [img] = imgs(byLeadIn.get(lead))
+    assert.ok(withoutTag(img).includes(`src="${RAW}docs/research/${file}"`), `"${lead}" does not show ${file}`)
+    const alt = (img.match(/alt="([^"]*)"/) || [])[1] || ''
+    assert.match(alt, /^An animation/, `"${lead}" alt text does not say it is an animation`)
+    assert.match(img.match(/alt="[^"]*"/)[0], what, `"${lead}" alt text does not describe its steps`)
+    const file2 = `docs/research/${file}`
+    assert.ok(fs.statSync(path.join(__dirname, file2)).size < GIF_LIMIT_BYTES, `${file} is over 300 KB`)
+    const [fileW, fileH] = pictureSize(file2)
+    const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
+    assert.ok(Math.abs(w * fileH - h * fileW) <= fileW, `"${lead}" is declared ${w} by ${h} but its file is ${fileW} by ${fileH}`)
+  }
 })
 
 test(`${DRAW} good to know says the drawing stays in this browser`, () => {
@@ -422,9 +448,9 @@ shared({
   script: 'draw-tool',
   name: 'Draw Tool',
   summary: DRAW_SUMMARY,
-  intro: 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines, and click to type text, such as cage sums, in the pen colors.',
+  intro: 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines or shapes, and click to type text, such as cage sums, in colors of its own.',
   leadIns: DRAW_LEAD_INS,
-  pictures: { 'Freehand lines.': 'draw-tool-bullet-lines', 'Text.': 'draw-tool-bullet-text' },
+  pictures: { 'Freehand lines.': 'draw-tool-bullet-lines', 'Shapes.': 'draw-tool-details-shapes.gif', 'Text.': 'draw-tool-details-text.gif', 'Erasing.': 'draw-tool-details-erasing.gif' },
   homePicture: 'site-draw-tool.png'
 })
 
