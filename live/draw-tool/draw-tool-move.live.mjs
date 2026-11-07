@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a note moves it (following the pointer, and kept over a
-// reload), a drag never leaves the note under the controls or off the window, a click on a note still edits it, a drag that starts off every note makes nothing, and a
+// reload), a drag never leaves the note under the controls or off the window, a double-click on a note still edits it, a drag that starts off every note makes nothing, and a
 // moved note keeps its background. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -61,11 +61,11 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a click on a note still edits it, and a left-drag that starts on it moves it, keeps the text, and a reload keeps the new place', async () => {
+  it('a double-click on a note still edits it, and a left-drag that starts on it moves it, keeps the text, and a reload keeps the new place', async () => {
     await typeText(TEXT_AT, '15')
     assert.deepEqual(await texts(), ['15'])
-    await p.mouse.click(...await gridPoint(p, TEXT_AT))
-    assert.equal(await p.locator(TEXT_BOX).textContent(), '15', 'the click reopened the text')
+    await p.mouse.dblclick(...await gridPoint(p, TEXT_AT))
+    assert.equal(await p.locator(TEXT_BOX).textContent(), '15', 'the double-click reopened the text')
     await p.keyboard.press('Escape')
     const [before] = await textAts()
     await p.mouse.move(...await gridPoint(p, TEXT_AT))

@@ -49,8 +49,8 @@ const gapY = (part.colors.y + part.colors.h + part.clear.y) / 2
 const lowGapY = part.gear.y + part.gear.h + 5
 const labels = [
   { text: 'Click or press 1 to 9; hold to edit', y: part.colors.cy, to: [[part.colors.x + 6, part.colors.cy]] },
-  { text: 'A box behind the next note', y: gapY, to: [[part.background.cx, gapY], [part.background.cx, part.background.y + 8]] },
-  { text: 'Erases every note', y: part.clear.cy, to: [[part.clear.x + 6, part.clear.cy]] },
+  { text: 'Boxes new or selected notes', y: gapY, to: [[part.background.cx, gapY], [part.background.cx, part.background.y + 8]] },
+  { text: 'Deletes the selected notes, or all', y: part.clear.cy, to: [[part.clear.x + 6, part.clear.cy]] },
   { text: 'Opens the settings', y: lowGapY - 12, to: [[-14, lowGapY - 12], [-14, lowGapY], [part.gear.cx, lowGapY], [part.gear.cx, part.gear.y + part.gear.h - 8]] },
   { text: 'Text size, small to large', y: part.sizeSlider.cy, to: [[part.sizeSlider.x + 26, part.sizeSlider.cy]] }
 ]

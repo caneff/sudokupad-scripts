@@ -127,9 +127,9 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     assert.deepEqual(covered, ['dialog', 'dialog'])
   })
 
-  it('a click on an off-board note reopens it in place, and a right click erases it', async () => {
+  it('a double-click on an off-board note reopens it in place, and a right click erases it', async () => {
     const { right } = await blankPoints()
-    await p.mouse.click(...right)
+    await p.mouse.dblclick(...right)
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'R')
     await p.keyboard.press('Escape')
     await p.mouse.click(...right, { button: 'right' })

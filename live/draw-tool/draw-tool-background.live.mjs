@@ -32,6 +32,8 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
   // Which saved notes have a background, by text.
   const savedBgs = async () => Object.fromEntries((await saved()).map((item) => [item.text, item.bg ?? false]))
   const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
+  // A double-click opens a note already made.
+  const openAt = async (at) => p.mouse.dblclick(...await gridPoint(p, at))
   const typeText = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)
@@ -108,7 +110,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
   })
 
   it('while a note is open, pressing Background turns that note\'s box on, keeps the box open, and changes no other note', async () => {
-    await clickAt(SPOTS[0])
+    await openAt(SPOTS[0])
     assert.equal(await boxOpen(), true)
     assert.equal(await boxFilled(), false)
     await p.click(BACKGROUND_BUTTON)
@@ -121,7 +123,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
   })
 
   it('pressing Background again with that note open turns its box off', async () => {
-    await clickAt(SPOTS[0])
+    await openAt(SPOTS[0])
     assert.equal(await boxFilled(), true)
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await pressed(), 'false')
@@ -144,7 +146,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
   })
 
   it('Escape on an open note after toggling Background leaves the note as it was', async () => {
-    await clickAt(SPOTS[2])
+    await openAt(SPOTS[2])
     await p.click(BACKGROUND_BUTTON)
     await p.keyboard.press('Escape')
     assert.equal(await bgCount(), 1)
@@ -153,7 +155,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
 
   it('pressing Background on a note whose box differs from the setting turns that note\'s box over in one press and leaves the setting alone', async () => {
     assert.equal(await storedSetting(), false)
-    await clickAt(SPOTS[1])
+    await openAt(SPOTS[1])
     assert.equal(await pressed(), 'true', 'the button shows the open note, not the setting')
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await pressed(), 'false')

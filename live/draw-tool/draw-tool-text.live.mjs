@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
-// SudokuPad, Enter, a click elsewhere and Escape end it, a click on text edits it, and the Size slider. Real
+// SudokuPad, Enter, a click elsewhere and Escape end it, a double-click on text edits it, and the Size slider. Real
 // mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -35,6 +35,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   const saved = () => draw.saved(p)
   const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
+  const doubleClickAt = async (at) => p.mouse.dblclick(...await gridPoint(p, at))
   // The computed color and the size in board units of the text that reads `content`: a color with no alpha is solid.
   const textStyle = async (content) => {
     const { color, size } = (await draw.noteLooks(p)).find((note) => note.text === content)
@@ -110,8 +111,8 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.equal((await saved()).length, 3)
   })
 
-  it('a click on text reopens it with its text, and Enter saves the change', async () => {
-    await clickAt(SUM_AT)
+  it('a double-click on text reopens it with its text, and Enter saves the change', async () => {
+    await doubleClickAt(SUM_AT)
     assert.equal(await boxOpen(), true)
     assert.equal(await boxText(), '15', 'the open box holds the text')
     assert.deepEqual(await texts(), ['Zx CZ', '7'], 'the board leaves out the text the box holds')
@@ -124,7 +125,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   })
 
   it('Escape on a reopened box restores the text it had', async () => {
-    await clickAt(SUM_AT)
+    await doubleClickAt(SUM_AT)
     await p.keyboard.press('Backspace')
     await p.keyboard.type('x')
     await p.keyboard.press('Escape')
@@ -132,7 +133,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   })
 
   it('clearing a reopened text removes it', async () => {
-    await clickAt(THIRD_AT)
+    await doubleClickAt(THIRD_AT)
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Enter')
     assert.deepEqual(await texts(), ['23', 'Zx CZ'])
@@ -141,7 +142,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
 
   it('in the box, arrow keys move the caret and Delete deletes, as in any input, and reach no cell', async () => {
     const cells = await cellState()
-    await clickAt(SECOND_AT)
+    await doubleClickAt(SECOND_AT)
     await p.keyboard.press('Home')
     await p.keyboard.press('Delete')
     await p.keyboard.press('ArrowRight')
@@ -158,7 +159,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.keyboard.press('Tab')
     assert.equal(await boxOpen(), false)
     assert.deepEqual(await texts(), ['23', 'xy CZ', '3'])
-    await clickAt(EMPTY_AT)
+    await doubleClickAt(EMPTY_AT)
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Enter')
     assert.deepEqual(await texts(), ['23', 'xy CZ'])
@@ -186,7 +187,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ', '8', '5'])
     await p.keyboard.press('Escape')
     await p.locator(DIALOG).waitFor({ state: 'detached' })
-    await clickAt(EMPTY_AT)
+    await doubleClickAt(EMPTY_AT)
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Enter')
     assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
