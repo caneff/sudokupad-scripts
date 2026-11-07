@@ -52,7 +52,7 @@ edge marks. Only the result text was read.
 - Not run: Windows, where `contextmenu` follows the release (after `clickCell`). The same
   `inputPos` is still the point hit-tested, so the code should hold there.
 
-## Grid-corner marks, 2026-11-03 (v0.611.0, `tool-pen.js`, `script.js`; run on the page in `live/pen-tool-extras-marks.live.mjs`)
+## Grid-corner marks, 2026-11-03 (v0.611.0, `tool-pen.js`, `script.js`; run on the page in `live/pen-tool-extras/pen-tool-extras-marks.live.mjs`)
 
 - `clickCell` has no corner case. It floors `getInputRc()` (the pointer in cell units from the
   grid's top left) to a cell, picks the nearer side by `|dx| >= |dy|`, and takes an edge mark when the
@@ -79,8 +79,8 @@ edge marks. Only the result text was read.
 - Dark Page's kept rectangle: an X centred on an outer corner reaches 8 units (plus half the stroke) past the
   cell box on two sides, the same as an edge X reaches past an outer edge, so it is inside `SOLVER_REACH`
   (checked on all four outer corners at the default thickness).
-- Pictures: `pen-tool-extras-corners-grid.png`, `pen-tool-extras-corners-dialog.png`
-  (`pen-tool-extras-corners-screenshot.mjs`).
+- Pictures: `pen-tool-extras/pen-tool-extras-corners-grid.png`, `pen-tool-extras/pen-tool-extras-corners-dialog.png`
+  (`pen-tool-extras/pen-tool-extras-corners-screenshot.mjs`).
 
 ## Pen values past `z`, 2026-11-06 (v0.611.0, `script.js`; run on the page with `sudokupad-pen-alphabet-probe.mjs`)
 
@@ -117,7 +117,7 @@ A second route needs no new characters: for a new value, the color character's p
 the page 3 forward set, the page 3 reverse set) can name the kind of mark, giving four kinds in nine colors per
 value. Existing values `h` to `y` cannot take it, since marks already saved with a page 2 or 3 pen draw solid.
 
-## A dialog button over the grid leaves a pen mark, 2026-11-03 (v0.611.0, #63; run on the page in `live/pen-tool-extras-marks.live.mjs`)
+## A dialog button over the grid leaves a pen mark, 2026-11-03 (v0.611.0, #63; run on the page in `live/pen-tool-extras/pen-tool-extras-marks.live.mjs`)
 
 - `wrapClickCell` is not the cause: stock SudokuPad does it, with no script loaded. A dialog from `Framework.showDialog({ centerOverBoard: true })`
   whose button handler calls `Framework.closeDialog()` removes the dialog on the press. Event order of one real
@@ -137,7 +137,7 @@ value. Existing values `h` to `y` cannot take it, since marks already saved with
   the keyboard and no release follows. Stock dialogs and every other script's dialog are unchanged.
 - Not run: a touch screen (the `touchend` swallow is by reading, not by a run), Windows, Tampermonkey.
 
-## A press on a dialog's overlay over the grid leaves a pen mark, 2026-11-03 (v0.611.0, #66; run on the page in `live/pen-tool-extras-marks.live.mjs`)
+## A press on a dialog's overlay over the grid leaves a pen mark, 2026-11-03 (v0.611.0, #66; run on the page in `live/pen-tool-extras/pen-tool-extras-marks.live.mjs`)
 
 - SudokuPad closes a dialog on `pointerdown` on its overlay, which covers the page. The grid never saw the press, so
   the release (`mouseup` on the grid's `svg`) goes to `clickCell`, which hit-tests `getInputRc()`, the pointer's

@@ -1,5 +1,5 @@
 // Shared by the live checks: waits for a page to show an expected value (`settle`), to stop changing (`stable`) or to give a reading that passes a test (`readUntil`), and clicks until a click takes (`clickUntil`). Not a check itself, so
-// `live/*.live.mjs` skips it.
+// `live/**/*.live.mjs` skips it.
 
 import { setTimeout as sleep } from 'node:timers/promises'
 

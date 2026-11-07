@@ -23,7 +23,7 @@ Not duplicated: storage helpers (each script reads its own keys), `Framework.add
 
 ## How a copied block would be tested
 
-Every script is a `'use strict'` IIFE, `@grant none`, whose pure part ends in `if (typeof module !== 'undefined' && module.exports) { module.exports = { ... } }`. Tests `require('./<script>.user.js')` and destructure. A copied module must sit above that block to be exported, and its names join the script's one export list. `pen-tool-extras.test.js` already imports `SOLVER_REACH` from `dark-page.user.js`. `package.json` declares `Framework` and `ToolLetter` as lint globals.
+Every script is a `'use strict'` IIFE, `@grant none`, whose pure part ends in `if (typeof module !== 'undefined' && module.exports) { module.exports = { ... } }`. Tests `require('./<script>.user.js')` and destructure. A copied module must sit above that block to be exported, and its names join the script's one export list. `test/pen-tool-extras.test.js` already imports `SOLVER_REACH` from `dark-page.user.js`. `package.json` declares `Framework` and `ToolLetter` as lint globals.
 
 ## Names a copied block would collide with inside one script
 

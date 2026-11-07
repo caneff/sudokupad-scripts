@@ -1,7 +1,7 @@
 # A custom tool in SudokuPad: Draw Tool's findings (#269)
 
 SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the live recording, and run on the page in
-`live/draw-tool.live.mjs` (2026-11-06).
+`live/draw-tool/draw-tool.live.mjs` (2026-11-06).
 
 ## Registering
 
@@ -25,7 +25,7 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
 - Draw Tool keeps its button last: after `addTool` it moves the button to the end of `.controls-tool` and watches the bar
   with a `MutationObserver` (`childList`), appending the button again whenever another button lands after it. Only the
   button moves. `app.tools` keeps its order, so the tool keys are unchanged (§ Tool keys). Clicking the moved button still selects Draw
-  (checked live). Run in `live/draw-tool-order.live.mjs`: the pen
+  (checked live). Run in `live/draw-tool/draw-tool-order.live.mjs`: the pen
   tool on at startup (script injected at DOMContentLoaded, which gave Draw before pen without the move), the pen turned
   off and on, a later `addTool` and a later `addToolButton`, Draw still selectable, and Z X C V B on the same tools.
 
@@ -77,7 +77,7 @@ acts nothing and both replays stay empty.
 
 ## Saving the drawing (#270)
 
-Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run in `live/draw-tool-saved.live.mjs`
+Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run in `live/draw-tool/draw-tool-saved.live.mjs`
 (2026-11-06).
 
 - **Restart**: `App.restartPuzzle` ends with `this.trigger('restarted')`, after `Puzzle.restartPuzzle`, whichever of the
@@ -97,7 +97,7 @@ Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run
 ## The Draw panel (#271)
 
 Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611.0, and run in
-`live/draw-tool-panel.live.mjs` (2026-11-06).
+`live/draw-tool/draw-tool-panel.live.mjs` (2026-11-06).
 
 - **One keypad for every tool.** `.controls-input` holds rows of `button.digit` with `data-key` 1 to 9 and 0, and a
   last row of 0 and `data-control="delete"`. A tool's look is CSS on `.controls-main.tool-<name>`: `tool-pen.css`
@@ -120,7 +120,7 @@ Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611
 
 ## The right button, erasing and Clear all (#272)
 
-SudokuPad v0.612.0 (`framework.js`, `script.js`, `utilities.js`), run on the page in `live/draw-tool-erase.live.mjs`
+SudokuPad v0.612.0 (`framework.js`, `script.js`, `utilities.js`), run on the page in `live/draw-tool/draw-tool-erase.live.mjs`
 in headless Chromium on Linux.
 
 - `addDownEventHandler` listens for `mousedown touchstart`, whatever the button, so a right press reaches the current
@@ -145,7 +145,7 @@ in headless Chromium on Linux.
 ## Typed text (#273)
 
 SudokuPad v0.611.0 (`script.js`, `framework.js`, `feature-*.js` in the live recording), run on the page in
-`live/draw-tool-text.live.mjs` and `live/draw-tool-erase.live.mjs` (2026-11-06).
+`live/draw-tool/draw-tool-text.live.mjs` and `live/draw-tool/draw-tool-erase.live.mjs` (2026-11-06).
 
 - **Where the keys go.** `App` listens for `keydown` on `document` in the capture phase, as do `feature-cellpaste.js`
   and `feature-compactmarks.js`; `feature-markup.js` listens on `window` in the bubble phase, and `framework.js` on
@@ -178,7 +178,7 @@ SudokuPad v0.611.0 (`script.js`, `framework.js`, `feature-*.js` in the live reco
 
 ## Test Markup
 
-SudokuPad v0.611.0 (`feature-markup.js`), run on the page in `live/draw-tool.live.mjs` (2026-11-07) with the Experimental
+SudokuPad v0.611.0 (`feature-markup.js`), run on the page in `live/draw-tool/draw-tool.live.mjs` (2026-11-07) with the Experimental
 setting "Test Markup (Press: "M")" on (`Framework.setSetting('markup', true)`). It loads `fabric-5.3.1.min.js` only once
 turned on, so the live recording turns it on too.
 
