@@ -606,16 +606,17 @@
 
   // The shared rule for a crowded bottom row: a button joins the first row while it holds fewer than FULL_ROW
   // buttons, else the second row, which a script that finds none makes. Checked once, when the button is added.
+  // With no first row it names that row anyway: Framework then skips the button, as it always has.
   const BOTTOM_ROW = '.controls-aux'
   const SECOND_ROW = '.controls-aux-extensions'
   const FULL_ROW = 5
 
-  function bottomRowFor (doc) {
+  function findOrMakeButtonRow (doc) {
     const first = doc.querySelector(BOTTOM_ROW)
-    if (first.querySelectorAll('button').length < FULL_ROW) return BOTTOM_ROW
+    if (!first || first.querySelectorAll('button').length < FULL_ROW) return BOTTOM_ROW
     if (!doc.querySelector(SECOND_ROW)) {
       const row = doc.createElement('div')
-      row.className = 'controls-aux controls-aux-extensions'
+      row.className = [BOTTOM_ROW, SECOND_ROW].map((selector) => selector.slice(1)).join(' ')
       first.after(row)
     }
     return SECOND_ROW
@@ -914,7 +915,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, bottomRowFor, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1530,7 +1531,7 @@
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))
-    installButton(Framework, app, mode, iconGroups(state, mode), readColor, bottomRowFor(document))
+    installButton(Framework, app, mode, iconGroups(state, mode), readColor, findOrMakeButtonRow(document))
     labelButton()
     installCellColoring(app)
     listenForButton(app, openEditor)

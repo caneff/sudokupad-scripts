@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, bottomRowFor, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -883,25 +883,30 @@ function pageWithRows (...rows) {
   }
 }
 
-test('bottomRowFor: the first row while it holds fewer than FULL_ROW buttons, and no second row is made', () => {
+test('findOrMakeButtonRow: the first row while it holds fewer than FULL_ROW buttons, and no second row is made', () => {
   assert.equal(FULL_ROW, 5)
   const page = pageWithRows(4)
-  assert.equal(bottomRowFor(page), '.controls-aux')
+  assert.equal(findOrMakeButtonRow(page), '.controls-aux')
   assert.deepEqual(page.made, [])
 })
 
-test('bottomRowFor: a full first row sends the button to a new .controls-aux-extensions made right after it', () => {
+test('findOrMakeButtonRow: a page with no first row names it anyway and makes nothing, as Framework then skips the button', () => {
+  const page = { querySelector: () => null }
+  assert.equal(findOrMakeButtonRow(page), '.controls-aux')
+})
+
+test('findOrMakeButtonRow: a full first row sends the button to a new .controls-aux-extensions made right after it', () => {
   const page = pageWithRows(5)
-  assert.equal(bottomRowFor(page), '.controls-aux-extensions')
+  assert.equal(findOrMakeButtonRow(page), '.controls-aux-extensions')
   assert.equal(page.made.length, 1)
   assert.equal(page.made[0].tag, 'div')
   assert.equal(page.made[0].className, 'controls-aux controls-aux-extensions')
   assert.equal(page.made[0].placedAfter, page.first)
 })
 
-test('bottomRowFor: a .controls-aux-extensions another script made is reused, with no second copy', () => {
+test('findOrMakeButtonRow: a .controls-aux-extensions another script made is reused, with no second copy', () => {
   const page = pageWithRows(6, 1)
-  assert.equal(bottomRowFor(page), '.controls-aux-extensions')
+  assert.equal(findOrMakeButtonRow(page), '.controls-aux-extensions')
   assert.deepEqual(page.made, [])
 })
 
