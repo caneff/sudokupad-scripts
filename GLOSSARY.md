@@ -103,7 +103,7 @@
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type.
-- **pen erase** — Pen Tool Extras' right or middle click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Draw's **erase** is a different feature. The install step that does it is `line erase`.
+- **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Draw's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle and
   cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
@@ -201,5 +201,5 @@
 - **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
   (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.
   Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
-- **erase** — Draw's right-drag or middle-drag: every stroke and text the drag passes near, and every shape whose outline it passes near, is removed whole. A middle click deletes only the topmost item at the point. Clear all erases the whole
+- **erase** — Draw's right-drag: every stroke and text the drag passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
   drawing, after asking.

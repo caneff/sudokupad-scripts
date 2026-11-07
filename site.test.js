@@ -144,7 +144,7 @@ test(`${DETAILS} lists what the script adds to drawing, one item per feature`, (
     'Dashed lines and arrow lines. Two more pages of pens.',
     'Marks on cell edges. Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
-    'Erase a whole line. Right-click or middle-click a line to remove all of it, or a mark to remove that.',
+    'Erase a whole line. Right-click a line to remove all of it, or a mark to remove that.',
     'White outlines. An outline keeps lines readable over colored cells.'
   ])
 })
@@ -160,7 +160,7 @@ test(`${DETAILS} opens each item with its bold lead-in`, () => {
   ])
 })
 
-// The items listed here have one picture inside them; every other item has none (a middle click, for one, does not
+// The items listed here have one picture inside them; every other item has none (a right click, for one, does not
 // show in a still picture). The pen panel section has its own one picture, tested below. The page has no figure.
 const PICTURES = {
   'Customizable pen colors.': 'colors',
@@ -376,7 +376,7 @@ test(`${DETAILS} opens with a tour animation between the install link and What i
   const alt = altOf(found[0])
   assert.match(alt, /^An animation/)
   assert.doesNotMatch(alt, /page button/i, 'the tour alt text names the page button')
-  const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /cell edge/i, /grid corner/i, /Thickness slider/i, /Opacity slider/i, /White outlines off and then on/i, /middle.click/i, /erase/i]
+  const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /cell edge/i, /grid corner/i, /Thickness slider/i, /Opacity slider/i, /White outlines off and then on/i, /right.click/i, /erase/i]
   let at = 0
   for (const step of steps) {
     const found = alt.slice(at).search(step)
@@ -469,7 +469,7 @@ test(`${DRAW} lists what the script adds, one item per feature`, () => {
     'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
     'Colors of its own. Nine colors that belong to Draw Tool, not to SudokuPad\'s pen. A click on a color button or the digit keys 1 to 9 pick one, and a hold on a button puts a color picker over each to change it.',
     'Size and opacity. The Size slider sets the width of the next line or shape and the size of the next text, and the Opacity slider how solid it is. A line, shape or text keeps the size and opacity it was drawn with.',
-    'Erasing. Drag with the right or middle mouse button across a line, shape or text to erase it, or click one with the middle button. Clear all, which asks first, erases everything.',
+    'Erasing. Drag with the right mouse button across a line, shape or text to erase it; a right click erases what is under the pointer. Clear all, which asks first, erases everything.',
     'Settings. The gear, or the Experimental settings entry, opens a dialog with a list of color presets (the pen colors, three darker page sets and SudokuPad\'s colors), a color picker for each of the nine colors, and Copy settings and Paste settings to move the colors and both slider values to another browser.',
     'Stays on the cells. Lines, shapes and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
     'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'

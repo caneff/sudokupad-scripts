@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.0
+// @version      0.14.1
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.0'
+  const VERSION = '0.14.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -116,7 +116,6 @@
   const ELLIPSE_STEPS = 64
   const KEPT_PUZZLES = 50
   const PRIMARY_BUTTON = 0
-  const MIDDLE_BUTTON = 1
   const SECONDARY_BUTTON = 2
   const FREE_LINE_ICON = '<path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/>'
   const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${FREE_LINE_ICON}</svg>`
@@ -993,7 +992,7 @@
   // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
   // `straight` is whether Shift is held, which draws a free line straight.
   let drag = null
-  // A right-drag or middle-drag in progress: the last point it reached, whether it has erased an item yet, and the `buttons` bit that holds it.
+  // A right-drag in progress: the last point it reached and whether it has erased an item yet. The right button's `buttons` bit holds it.
   let erasing = null
   // The open text box: the index of the text it reopened, or -1 for a new one, the item, and the input the solver types in.
   let editing = null
@@ -1204,26 +1203,12 @@
     renderDrawing()
   }
 
-  // A middle click deletes the topmost item at the point: the last drawn, which shows over the others.
-  function eraseTopmostAt (at) {
-    const index = drawing.findLastIndex((item) => touchesItem(item, at, at))
-    if (index < 0) return
-    drawing.splice(index, 1)
-    erasing.erased = true
-    renderDrawing()
-  }
-
   // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
   // release on Windows, so it is suppressed over the board for as long as Draw is current. On Windows a right-drag
   // that ends off the board still opens the menu there.
   const overBoardWhileDrawing = (event) => Framework.app.tool === TOOL_NAME && onBoard(event)
   function suppressMenu (event) {
     if (overBoardWhileDrawing(event)) event.preventDefault()
-  }
-
-  // The browser's middle-click autoscroll and Linux's paste start on the mousedown and its auxclick. The pointerdown is left alone: preventing it makes the browser send no mousedown, which is how SudokuPad hands Draw the press.
-  function suppressMiddle (event) {
-    if (event.button === MIDDLE_BUTTON && overBoardWhileDrawing(event)) event.preventDefault()
   }
 
   function confirmClear () {
@@ -1240,9 +1225,6 @@
   // The mouse button each gesture is held by, as a bit of a MouseEvent's `buttons`.
   const PRIMARY_HELD = 1
   const SECONDARY_HELD = 2
-  const MIDDLE_HELD = 4
-  // An erase is held by the right or the middle button.
-  const ERASE_HELD = { [SECONDARY_BUTTON]: SECONDARY_HELD, [MIDDLE_BUTTON]: MIDDLE_HELD }
 
   const tool = {
     name: TOOL_NAME,
@@ -1253,11 +1235,10 @@
       if (event.type !== 'mousedown' || drag || erasing) return false
       if (pressFinishedText) return onBoard(event)
       if (!onBoard(event)) return false
-      if (event.button in ERASE_HELD) {
+      if (event.button === SECONDARY_BUTTON) {
         const at = toBoard(drawingLayer(), event)
-        erasing = { last: at, erased: false, held: ERASE_HELD[event.button] }
-        if (event.button === MIDDLE_BUTTON) eraseTopmostAt(at)
-        else eraseAlong(at, at)
+        erasing = { last: at, erased: false }
+        eraseAlong(at, at)
         return true
       }
       if (event.button !== PRIMARY_BUTTON) return false
@@ -1273,7 +1254,7 @@
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
     handleInputMove (event) {
-      if (event.type === 'mousemove' && (erasing || drag) && !(event.buttons & (erasing ? erasing.held : PRIMARY_HELD))) {
+      if (event.type === 'mousemove' && (erasing || drag) && !(event.buttons & (erasing ? SECONDARY_HELD : PRIMARY_HELD))) {
         endGesture()
         return false
       }
@@ -1377,7 +1358,6 @@
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
-    for (const type of ['mousedown', 'auxclick']) window.addEventListener(type, suppressMiddle)
     installHoldToEdit()
     window.addEventListener('blur', endGesture)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
