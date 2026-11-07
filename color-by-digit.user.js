@@ -175,7 +175,7 @@
     return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
-  // A group is the digits that share a color. 0 counts after 9 in the order of groups, and a group lists its digits as saved, 0 first.
+  // A group is the digits that share a color. 0 counts after 9 in the order of groups; a group's own digits are listed 0 first, as the preloads save them.
   const digitRank = (digit) => (digit === '0' ? 10 : Number(digit))
   const lowestRank = (group) => Math.min(...group.digits.map(digitRank))
 
@@ -187,11 +187,6 @@
       .map(([key, digits]) => ({ key, digits: [...new Set(digits)].sort() }))
       .filter((g) => g.digits.length > 0)
       .sort((a, b) => lowestRank(a) - lowestRank(b))
-  }
-
-  function canonicalState (state) {
-    const profiles = state.profiles.map((p) => ({ name: p.name, groups: canonicalGroups(p.groups) }))
-    return withProfiles(state, profiles, state.active, state.digitActive)
   }
 
   // A null key takes the digit out of every group.
@@ -223,7 +218,7 @@
       digits.forEach((d) => seen.add(d))
       out.push({ key: g.key, digits })
     }
-    return out
+    return canonicalGroups(out)
   }
 
   const cleanName = (name) => String(name).trim().slice(0, MAX_NAME_LENGTH)
@@ -678,6 +673,8 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
   const KEY_SIZE = '34px'
+  // SudokuPad's own color for an entered digit, which a painted digit key shows on its group's color.
+  const ENTERED_DIGIT_BLUE = 'rgb(29, 106, 229)'
 
   // The brush is ringed twice (white inside, black outside) so it shows on any swatch color.
   function renderSwatch (slot, brush) {
@@ -694,8 +691,9 @@
     return found ? found.page : 0
   }
 
+  // The lowest group's color, when some page shows it; else the first visible color of the current page, so the brush is always drawable.
   function startingBrush (groups, pages) {
-    if (groups.length > 0) return groups[0].key
+    if (groups.length > 0 && layoutColors(pages).some((c) => c.key === groups[0].key)) return groups[0].key
     const page = pages.find((p) => p.current) || pages[0]
     const first = page && [...page.rows.flat(), page.zero].find(Boolean)
     return first ? first.key : null
@@ -709,7 +707,7 @@
   // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
-    const look = !key ? '' : color ? ` style="background:${esc(color.value)};color:${inkFor(color.value)}"` : ' class="cbd-unset"'
+    const look = !key ? '' : color ? ` style="background:${esc(color.value)}"` : ' class="cbd-unset"'
     return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${esc(key || '')}"${look}>${digit}</button>`
   }
 
@@ -726,7 +724,7 @@
       const digits = NUMPAD_DIGITS.slice(r * 3, r * 3 + 3).map(digitKey).join('')
       return row.map((slot) => renderSwatch(slot, brush)).join('') + gap + digits + (r === shown.rows.length - 1 ? digitKey(zero) : pad)
     })
-    if (shown.zero) rows.push(renderSwatch(shown.zero, brush) + '<span data-empty="slot"></span>'.repeat(2) + gap + pad.repeat(4))
+    if (shown.zero) rows.push(renderSwatch(shown.zero, brush) + renderSwatch(null).repeat(2) + gap + pad.repeat(4))
     return `<div data-role="paint">${rows.join('')}</div>`
   }
 
@@ -817,12 +815,12 @@
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    const note = colors.length === 0
+    const head = colors.length === 0
       ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>'
       : `<div class="cbd-palette-head">${renderPageSelect(pages, shown)}</div>`
     return `${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
-      `<div class="cbd-column">${heading('Digits', clear)}${note}${renderPaint(groups, shown || emptyPage, brush, colors)}</div></div>`
+      `<div class="cbd-column">${heading('Digits', clear)}${head}${renderPaint(groups, shown || emptyPage, brush, colors)}</div></div>`
   }
 
   // One stylesheet, every rule scoped to the editor, the profile menu (for the chips), the dialog itself (its width), or the dialog's options row.
@@ -858,7 +856,8 @@
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
     // The pad's columns: three swatches, a gap, three digit keys and the 0 key.
     [`${EDITOR} [data-role="paint"]`, `display: grid; gap: 4px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}) 12px repeat(4, ${KEY_SIZE}); touch-action: none; margin-top: 8px`],
-    [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
+    [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
+    [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
     [`${EDITOR} [data-act="color"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888`],
     [`${EDITOR} [data-act="color"][aria-pressed="true"]`, 'border: 2px solid #fff; outline: 3px solid #000'],
     [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
@@ -880,7 +879,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, canonicalState, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1262,7 +1261,7 @@
   function openDialog (app) {
     const pages = readPages()
     let savedState = loadState()
-    let draft = canonicalState(savedState)
+    let draft = savedState
     let draftMode = mode
     let selected = draft.active
     // The selected profile's name when it was selected: an emptied name field keeps it.
@@ -1319,7 +1318,7 @@
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
-      reshow(canonicalState(savedState), savedState.active)
+      reshow(savedState, savedState.active)
       draftMode = mode
       draw()
     })
@@ -1371,6 +1370,7 @@
       }
       if (pressed) paint(pressed.dataset.digit)
       const move = (e) => {
+        if (e.buttons === 0) { finish(); return }
         const under = document.elementFromPoint(e.clientX, e.clientY)
         const digit = under && box.contains(under) && under.closest('[data-act="digit"]')
         if (digit) paint(digit.dataset.digit)
@@ -1455,10 +1455,10 @@
       } else if (act === 'color') {
         brush = el.dataset.key
       } else if (act === 'clear') {
-        draft = setProfileGroups(draft, selected, [])
+        setGroups([])
       } else if (act === 'digit' && event.detail === 0 && brush !== null) {
         // A mouse or touch press has already painted on pointerdown; only a keyboard click, which has no pointer, lands here.
-        draft = setProfileGroups(draft, selected, paintDigit(groupsShown(), el.dataset.digit, brush))
+        setGroups(paintDigit(groupsShown(), el.dataset.digit, brush))
       }
       draw()
       // The redraw replaced the button; a keyboard user keeps the focus on its successor.

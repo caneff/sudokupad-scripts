@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, canonicalState, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -437,7 +437,7 @@ test('use digit colors: off, a press steps Cell and Off only; Digit falls back t
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map((m) => allowedMode(m, true)), ['cell', 'digit', 'both', 'off'])
 })
 
-test('the right column has no name box: the groups come straight after the Digits heading', () => {
+test('the right column has no name box: the digit keys come straight after the Digits heading', () => {
   const html = renderEditor({ groups: [], pages: [], page: 0, brush: null })
   assert.doesNotMatch(html, /profile-name/)
   assert.match(html, /<div class="cbd-column"><div class="cbd-heading">Digits/)
@@ -499,7 +499,7 @@ test('each pulldown option that names a profile carries its index, so a rename c
   assert.equal(count(renderPulldowns(hostile, 'cell'), /<option value="\d" data-index="\d"/g), 6)
 })
 
-test('the pulldowns sit above the profile list and the groups, one per row, each label in a fixed-width column left of its select', () => {
+test('the pulldowns sit above the profile list and the paint editor, one per row, each label in a fixed-width column left of its select', () => {
   const html = renderEditor({ groups: [], pages: [], page: 0, brush: null, pulldownsHtml: '<div id="pulldowns"></div>', profilesHtml: '<div id="mark-profiles"></div>' })
   assert.equal(html.indexOf('id="pulldowns"') < html.indexOf('mark-profiles'), true)
   const css = STYLE_CSS.replace(/\s+/g, ' ')
@@ -638,6 +638,10 @@ test('isVisibleColor rejects every transparent spelling and accepts real colors'
   ['', 'transparent', 'rgba(0, 0, 0, 0)', 'rgba(10,20,30,0)', '#0000', '#00000000', 'hsla(0, 0%, 0%, 0)']
     .forEach((c) => assert.equal(isVisibleColor(c), false, c));
   ['rgb(214, 214, 214)', 'rgba(1,2,3,0.5)', '#fff', '#ffffff', 'red'].forEach((c) => assert.equal(isVisibleColor(c), true, c))
+})
+
+test('normalizeGroups puts what it keeps in canonical form: shared colors merged, empty groups dropped, ordered by lowest digit', () => {
+  assert.deepEqual(normalizeGroups([g('b', ['5']), g('a', []), g('c', ['2']), g('b', ['3'])]), [g('c', ['2']), g('b', ['3', '5'])])
 })
 
 test('normalizeGroups rejects malformed saved data and keeps an empty list', () => {
@@ -1327,13 +1331,13 @@ test('a group that loses its last digit disappears, to a paint over it or a clea
   assert.deepEqual(paintDigit([g('a', ['1'])], '1', 'a'), [])
 })
 
-test('groups follow their lowest digit, with 0 counting after 9, and a group keeps its digits in the saved order', () => {
+test('groups follow their lowest digit, with 0 counting after 9, and a group lists its digits 0 first', () => {
   assert.deepEqual(paintDigit([g('b', ['5', '6']), g('c', ['0', '8'])], '2', 'z'), [g('z', ['2']), g('b', ['5', '6']), g('c', ['0', '8'])])
   assert.deepEqual(paintDigit([g('b', ['5', '6']), g('c', ['0', '8'])], '1', 'c'), [g('c', ['0', '1', '8']), g('b', ['5', '6'])])
   assert.deepEqual(paintDigit([g('a', ['0']), g('b', ['9'])], '4', 'b'), [g('b', ['4', '9']), g('a', ['0'])])
 })
 
-test('groups that share a color merge into one at the first of them\'s place', () => {
+test('groups that share a color merge into one, then the groups are ordered by lowest digit', () => {
   assert.deepEqual(canonicalGroups([g('a', ['4']), g('b', ['1']), g('a', ['2'])]), [g('b', ['1']), g('a', ['2', '4'])])
   assert.deepEqual(canonicalGroups([g('a', ['5']), g('a', ['3'])]), [g('a', ['3', '5'])])
 })
@@ -1368,19 +1372,13 @@ test('strokeKey is the brush color to paint with, or null to clear, from the dig
   assert.equal(strokeKey(groups, '3', 'a'), 'a')
 })
 
-test('canonicalState canonicalizes every profile and keeps the rest of the state', () => {
-  const state = stateFromStored({ profiles: [{ name: 'P', groups: [g('a', ['2']), g('a', ['1'])] }, { name: 'Q', groups: [g('b', [])] }], active: 1 })
-  const out = canonicalState(state)
-  assert.deepEqual(out.profiles.map((p) => p.groups), [[g('a', ['1', '2'])], []])
-  assert.equal(out.active, 1)
-})
-
 test('startingBrush is the lowest group\'s color, else the first visible color of the current page, else null', () => {
   const pages = twoPages()
   assert.equal(startingBrush(canonicalGroups([g('b3', ['2']), g('a2', ['1'])]), pages), 'a2')
   assert.equal(startingBrush([], pages), 'b1')
   assert.equal(startingBrush([], layoutPages([keys('z a1')], 0, colorOf)), 'a1')
   assert.equal(startingBrush([], layoutPages([keys('z')], 0, colorOf)), 'z')
+  assert.equal(startingBrush(canonicalGroups([g('gone', ['1'])]), pages), 'b1')
   assert.equal(startingBrush([], []), null)
   assert.equal(startingBrush([], layoutPages([keys('clear')], 0, colorOf)), null)
 })
@@ -1427,14 +1425,19 @@ test('renderEditor lays the swatches and the digit keys out as one grid, three s
   assert.match(STYLE_CSS, /\[data-role="paint"\] \{[^}]*grid-template-columns: repeat\(3, [^)]*\) \d+px repeat\(4, /)
 })
 
-test('renderEditor draws a digit key in its group\'s color with readable ink, and a digit in no group blank', () => {
-  const real = layoutPages([keys('clear dark light')], 0, (key) => ({ dark: '#112233', light: '#eeeeee' })[key] || 'transparent')
-  const html = editor([g('dark', ['1', '3']), g('light', ['0'])], real, 0, 'dark')
+test('renderEditor draws a digit key as a cell filled with its group\'s color, and a digit in no group blank', () => {
+  const html = editor([g('a2', ['1', '3']), g('b2', ['0'])], twoPages(), 0, 'a2')
   const key = (d) => html.match(new RegExp(`<button[^>]*data-digit="${d}"[^>]*>`))[0]
-  assert.match(key('1'), /data-key="dark" style="background:#112233;color:#fff"/)
-  assert.match(key('0'), /data-key="light" style="background:#eeeeee;color:#000"/)
+  assert.match(key('1'), /data-key="a2" style="background:#a2"/)
+  assert.match(key('0'), /data-key="b2" style="background:#b2"/)
   assert.match(key('2'), /data-key=""/)
   assert.doesNotMatch(key('2'), /style=/)
+})
+
+test('a digit key is a square-cornered cell with a black outline: a painted digit in SudokuPad\'s entered-digit blue, an unpainted one white with a grey digit', () => {
+  const css = STYLE_CSS.replace(/\s+/g, ' ')
+  assert.match(css, /\[data-act="digit"\] \{[^}]*border-radius: 0;[^}]*border: 1px solid #000;[^}]*background: #fff; color: #999;/)
+  assert.match(css, /\[data-act="digit"\]:not\(\[data-key=""\]\) \{ color: rgb\(29, 106, 229\);/)
 })
 
 test('renderEditor draws a digit whose color is on no page with the unset look', () => {
@@ -1466,8 +1469,8 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'color-by-digit.user.js'), 'utf8')))
 })
 
-// What stays inline is what depends on a value: a swatch's or chip's color, a chip's size, a digit's weight and dimming.
-const VALUE_PROPERTIES = ['background', 'color', 'width', 'height', 'font-size', 'font-weight', 'opacity']
+// What stays inline is what depends on a value: a swatch's, digit key's or chip's color, and a chip's size.
+const VALUE_PROPERTIES = ['background', 'color', 'width', 'height', 'font-size']
 
 test('the editor and the profile list carry inline only the styles that depend on a value', () => {
   const profiles = renderProfiles(profileState, colorFor, 0)

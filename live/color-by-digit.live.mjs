@@ -273,6 +273,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await keyOf('4'), '')
   })
 
+  it('a mouse click on a digit key paints once: a click event that follows a pointer press is not a second paint, and one with no pointer is the keyboard\'s', async () => {
+    await reopen()
+    const click = (detail) => digitKey('4').evaluate((e, detail) => e.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail })), detail)
+    await click(1)
+    assert.equal(await keyOf('4'), '2')
+    await click(0)
+    assert.equal(await keyOf('4'), '1')
+  })
+
   it('a drag over digits paints each, and one that starts on a digit already in the brush color clears each', async () => {
     await reopen()
     const [four, five, six] = await Promise.all(['4', '5', '6'].map((d) => centre(digitKey(d))))

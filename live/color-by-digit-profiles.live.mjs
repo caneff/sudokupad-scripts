@@ -369,8 +369,9 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   it('the switch survives a reload: the saved profile is the active one', async () => {
     await p.reload({ waitUntil: 'load' })
     await startInjected(p, script)
+    // Six's groups are 0 to 5 one digit each; the group of 0 sorts last, so the icon's four cells are 1 to 4.
     assert.equal((await t.getState()).active, 3)
-    assert.deepEqual(await t.iconShownDigits(), ['0', '1', '2', '3'])
+    assert.deepEqual(await t.iconShownDigits(), ['1', '2', '3', '4'])
   })
 
   it('no uncaught page errors', () => {

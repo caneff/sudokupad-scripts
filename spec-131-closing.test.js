@@ -36,7 +36,7 @@ function warningWithoutGetApp (name) {
 // Tampermonkey install or crackingthecryptic.com.
 test('Color by Digit and Dark Page hold spec 131 together', () => {
   const { paintDigit, rowAfterKey, layoutPages } = colorByDigit
-  // The group editor became a brush (#347): painting a digit moves it, and a group left with no digits is gone.
+  // Painting a digit moves it, and a group left with no digits is gone.
   let groups = paintDigit([{ key: 'a', digits: ['5'] }], '2', 'b')
   assert.deepEqual(groups, [{ key: 'b', digits: ['2'] }, { key: 'a', digits: ['5'] }])
   groups = paintDigit(groups, '5', 'b')
