@@ -594,7 +594,7 @@
   }
 
   // Pen Tool Extras' pen panel, in the same sizes: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
-  // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape slot and the settings gear at the full 4rem, and the sliders across the rest. The tray
+  // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape button and the settings gear at the full 4rem, and the sliders across the rest. The tray
   // sits behind the last two rows; it is placed in their area but takes no cell. Each color button shows a line in its draw color, cut out of the button so a recolor follows.
   const rem = (value) => Math.round(value * 100) / 100
   const PANEL_BUTTON_REM = 4
