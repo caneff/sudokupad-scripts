@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE, throwaway: homepage polish variants. ?v=a|b|c -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE homepage</title>
+<link rel="stylesheet" href="../../../../site/style.css">
+<style>
+  body { max-width: 72rem; }
+  .lede { max-width: 46rem; color: inherit; }
+  .warning { max-width: none; }
+  h1 { font-size: 2.1rem; letter-spacing: -.01em; }
+  .card h2 { font-size: 1.25rem; margin: 0 0 .35rem; }
+  .card p { margin: 0 0 .75rem; }
+  .card .more { font-size: .95rem; }
+  .actions { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: auto; }
+  .frame { background: light-dark(#f4f2f7, #221d29); border: 1px solid light-dark(#e2dde9, #3b3446); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .frame img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+  footer { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid light-dark(#e2dde9, #3b3446); font-size: .95rem; color: inherit; opacity: .85; }
+
+  /* A: cards */
+  .v-a .list { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1.25rem; margin: 1.75rem 0; }
+  .v-a .card { display: flex; flex-direction: column; border: 1px solid light-dark(#e2dde9, #3b3446); border-radius: 12px; padding: 1rem; box-shadow: 0 1px 2px rgb(0 0 0 / .05); }
+  .v-a .frame { aspect-ratio: 16 / 10; margin-bottom: .9rem; padding: .6rem; }
+
+  /* B: rows */
+  .v-b .list { margin: 1.75rem 0; border-top: 1px solid light-dark(#e2dde9, #3b3446); }
+  .v-b .card { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.5rem 0; border-bottom: 1px solid light-dark(#e2dde9, #3b3446); }
+  .v-b .frame { aspect-ratio: 16 / 10; padding: .6rem; }
+  .v-b .text { max-width: 36rem; display: flex; flex-direction: column; }
+  @media (max-width: 44rem) { .v-b .card { grid-template-columns: 1fr; gap: .9rem; } }
+
+  /* C: showcase, alternating, larger pictures */
+  .v-c .list { margin: 2rem 0; display: grid; gap: 2.75rem; }
+  .v-c .card { display: grid; grid-template-columns: 1.25fr 1fr; gap: 2.25rem; align-items: center; }
+  .v-c .card:nth-child(even) .frame { order: 2; }
+  .v-c .frame { aspect-ratio: 16 / 10; padding: 1rem; border-radius: 14px; }
+  .v-c .card h2 { font-size: 1.5rem; }
+  .v-c .text { display: flex; flex-direction: column; }
+  @media (max-width: 44rem) { .v-c .card { grid-template-columns: 1fr; gap: .9rem; } .v-c .card:nth-child(even) .frame { order: 0; } }
+
+
+  .frame { position: relative; }
+  .frame .nav { position: absolute; top: 50%; transform: translateY(-50%); padding: .25rem .4rem; border: 0; background: none; color: var(--accent); font: 400 2.4rem/1 system-ui; cursor: pointer; }
+  .frame .nav { transition: transform .12s ease, color .12s ease; }
+  .frame .nav:hover, .frame .nav:focus-visible { color: light-dark(#3d0a5c, #f0dcff); }
+  .frame .prev:hover { transform: translateY(-50%) translateX(-3px) scale(1.25); }
+  .frame .next:hover { transform: translateY(-50%) translateX(3px) scale(1.25); }
+  .frame .nav:active { transform: translateY(-50%) scale(.95); }
+  .frame .nav:focus-visible { outline: 2px solid #6a1b9a; outline-offset: 2px; border-radius: 4px; }
+  .frame .prev { left: -2.6rem; } .frame .next { right: -2.6rem; }
+  .frame.slides { margin-inline: 2.6rem; }
+  .frame .count { position: absolute; bottom: .35rem; right: .6rem; font: 600 .75rem system-ui; color: #6b6478; background: rgb(255 255 255 / .85); padding: 1px 6px; border-radius: 999px; }
+  .capline { display: flex; align-items: baseline; gap: 1rem; margin-inline: 2.6rem; }
+  .num { margin-left: auto; flex: none; font-size: .9rem; opacity: .7; font-variant-numeric: tabular-nums; }
+  .cap { font-size: 1.1rem; font-weight: 500; margin: .55rem 0 0; min-height: 1.3em; }
+  .pic { display: flex; flex-direction: column; }
+  #bar { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 6px 10px; border-radius: 999px; font: 14px system-ui; display: flex; gap: 6px; z-index: 9; }
+  #bar a { color: #fff; text-decoration: none; padding: 2px 10px; border-radius: 999px; }
+  #bar a.on { background: #6a1b9a; }
+</style>
+</head>
+<body>
+  <h1>SudokuPad scripts</h1>
+  <p class="warning">These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.</p>
+  <p class="lede">Small userscripts for <a href="https://sudokupad.app">SudokuPad</a>. Install <a href="https://www.tampermonkey.net/">Tampermonkey</a>, then click a script's Install button and Tampermonkey asks if you want it.</p>
+  <div class="list" id="list"></div>
+  <footer><a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
+  <div id="bar"></div>
+<script>
+const R = '../../'
+const H = 'slides/home/'
+const S = [
+  ['Color by Digit', [['slides/cbdnc/cbd-001.png', 'Start: two boxes in Cell mode'],['slides/cbdnc/cbd-002.png', "Type a 1: the cell takes its group's color"],['slides/cbdnc/cbd-003.png', 'Center marks 7 and 9, one group: the cell takes its color'],['slides/cbdnc/cbd-004.png', 'Add a center mark 2: the color goes'],['slides/cbdnc/cbd-005.png', 'Digit mode: digits and marks in darker shades'],['slides/cbdnc/cbd-006.png', 'Both: fills and shades'],['slides/cbdnc/cbd-007.png', 'Off'],['slides/cbdnc/cbd-009.png', "Open the profile menu from the button's arrow"],['slides/cbdnc/cbd-010.png', 'Pick Modular: the boxes recolor at once']], 'Colors cells, or the digits and marks in them, by groups of digits you choose, and keeps the colors in step as you solve.', true],
+  ['Pen Tool Extras', [['slides/pennc/pen-003.png', 'Hold a color button'],['slides/pennc/pen-004.png', 'Pick a color'],['slides/pennc/pen-006.png', 'A solid line'],['slides/pennc/pen-007.png', 'A dashed line'],['slides/pennc/pen-008.png', 'An arrow line'],['slides/pennc/pen-009.png', 'Click a cell edge: an X'],['slides/pennc/pen-010.png', 'Click again: a circle'],['slides/pennc/pen-013.png', 'Click near a corner: an X'],['slides/pennc/pen-015.png', 'Thickness up'],['slides/pennc/pen-018.png', 'Opacity down'],['slides/pennc/pen-022.png', 'White outlines on'],['slides/pennc/pen-023.png', 'Right-click a line'],['slides/pennc/pen-024.png', 'The whole line is gone']], 'Your own pen colors, dashed lines and arrows, and marks on cell edges and grid corners.', true],
+  ['Draw Tool', [[R + 'site-draw-tool.png', 'The Draw panel beside a drawing'], [H + 'draw-shape.png', 'A rectangle drawn round two cells'], [H + 'draw-text.png', 'A cage sum typed in a corner'], [H + 'draw-erase1.png', 'Erase: drag across a line'], [H + 'draw-erase2.png', 'The line is gone']], 'Freehand lines, shapes and typed text such as cage sums, in colors of its own. Each puzzle keeps its own drawing.', true],
+  ['Dark Page', [[R + 'dark-page.png', '']], 'A black page around the puzzle, or any color you pick. Puzzle colors stay as the setter made them, unlike SudokuPad\'s dark mode.', false],
+  ['Auto Rules Resizer', [[R + 'site-auto-rules-resizer.png', '']], 'Fits the rules to your screen in landscape: the text grows as large as fits, and the pane widens only as far as long rules need. Grew from Nell Gwynn\'s resizing scripts.', false],
+]
+const v = new URLSearchParams(location.search).get('v') || 'b'
+document.body.className = 'v-' + v
+document.getElementById('list').innerHTML = S.map(([n, slides, t, d], k) => `
+  <section class="card">
+    <div class="pic">
+      <div class="frame${slides.length > 1 ? " slides" : ""}" data-k="${k}"><img src="${slides[0][0]}" alt="">${slides.length > 1 ? `<button class="nav prev" aria-label="Previous">&#8249;</button><button class="nav next" aria-label="Next">&#8250;</button>` : ''}</div>
+      ${slides.length > 1 ? `<div class="capline"><p class="cap">${slides[0][1]}</p><span class="num"></span></div>` : ''}
+    </div>
+    <div class="text">
+      <h2>${n}</h2>
+      <p>${t}</p>
+      <div class="actions"><a class="install" href="#">Install</a>${d ? '<a class="more" href="#">Details &rarr;</a>' : ''}</div>
+    </div>
+  </section>`).join('')
+const pos = S.map(() => 0)
+function show (k) {
+  const f = document.querySelector(`.frame[data-k="${k}"]`), sl = S[k][1], i = pos[k]
+  f.querySelector('img').src = sl[i][0]
+  const c = f.parentNode.querySelector('.cap'); if (c) c.textContent = sl[i][1]
+  const m = f.parentNode.querySelector('.num'); if (m) m.textContent = `${i + 1} / ${sl.length}`
+}
+document.querySelectorAll('.frame .nav').forEach(b => b.addEventListener('click', () => {
+  const k = +b.parentNode.dataset.k
+  const n = S[k][1].length; pos[k] = (pos[k] + (b.classList.contains('next') ? 1 : -1) + n) % n
+  show(k)
+}))
+S.forEach((x, k) => { if (x[1].length > 1) show(k) })
+document.getElementById('bar').innerHTML = [['a','A cards'],['b','B rows'],['c','C showcase']].map(([k,l]) => `<a href="?v=${k}" class="${k===v?'on':''}">${l}</a>`).join('')
+</script>
+</body>
+</html>

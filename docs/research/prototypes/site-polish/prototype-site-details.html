@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE, throwaway: Color by Digit details page to match homepage variant B. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE Color by Digit details</title>
+<link rel="stylesheet" href="../../../../site/style.css">
+<style>
+  body { max-width: 60rem; }
+  .back { font-size: .95rem; margin: .25rem 0 1rem; }
+  h1 { font-size: 2.1rem; letter-spacing: -.01em; }
+  .lede { max-width: 44rem; font-size: 1.1rem; }
+  .actions { display: flex; align-items: center; gap: 1rem; margin: .75rem 0 1.5rem; }
+  h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid light-dark(#e2dde9, #3b3446); }
+  .prose { max-width: 44rem; }
+  .frame { position: relative; background: light-dark(#f4f2f7, #221d29); border: 1px solid light-dark(#e2dde9, #3b3446); border-radius: 10px; display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 7; padding: 1rem; }
+  .frame img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; }
+  .frame .nav { position: absolute; top: 50%; transform: translateY(-50%); padding: .25rem .5rem; border: 0; background: none; color: var(--accent); font: 400 2.8rem/1 system-ui; cursor: pointer; }
+  .frame .nav { transition: transform .12s ease, color .12s ease; }
+  .frame .nav:hover, .frame .nav:focus-visible { color: light-dark(#3d0a5c, #f0dcff); }
+  .frame .prev:hover { transform: translateY(-50%) translateX(-3px) scale(1.25); }
+  .frame .next:hover { transform: translateY(-50%) translateX(3px) scale(1.25); }
+  .frame .nav:active { transform: translateY(-50%) scale(.95); }
+  .frame .nav:focus-visible { outline: 2px solid #6a1b9a; outline-offset: 2px; border-radius: 4px; }
+  .frame .prev { left: -2.6rem; } .frame .next { right: -2.6rem; }
+  .frame.slides { margin-inline: 2.6rem; }
+  .capline { display: flex; align-items: baseline; gap: 1rem; margin-inline: 2.6rem; }
+  .num { margin-left: auto; flex: none; font-size: .9rem; opacity: .7; font-variant-numeric: tabular-nums; }
+  .cap { margin: .75rem 0 0; font-size: 1.25rem; font-weight: 500; color: inherit; min-height: 1.5em; }
+  .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 2rem; margin: 0; padding: 0; list-style: none; }
+  .features li { margin: 0; }
+  .features strong { display: block; margin-bottom: .15rem; }
+  .features p { margin: 0; color: inherit; }
+  .figure { margin: 1rem 0; }
+  .figure img { display: block; max-width: 100%; height: auto; }
+  ol.steps { max-width: 44rem; padding-left: 1.4rem; }
+  ol.steps li { margin-bottom: .45rem; }
+  .notes { max-width: 44rem; padding-left: 1.25rem; }
+  .notes li { margin-bottom: .3rem; }
+  footer { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid light-dark(#e2dde9, #3b3446); font-size: .95rem; color: inherit; opacity: .85; }
+</style>
+</head>
+<body>
+  <p class="back"><a href="#">&larr; All SudokuPad scripts</a></p>
+  <h1>Color by Digit</h1>
+  <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad.</p>
+  <p class="lede">A button that colors cells, or the digits and marks in them, by groups of digits you choose, and keeps the colors in step as you solve.</p>
+  <div class="actions"><a class="install" href="#">Install Color by Digit</a></div>
+
+  <div class="frame slides"><img id="slide" src="" alt=""><button class="nav prev" aria-label="Previous">&#8249;</button><button class="nav next" aria-label="Next">&#8250;</button></div>
+  <div class="capline"><p class="cap" id="cap"></p><span class="num" id="num"></span></div>
+
+  <h2>What it adds</h2>
+  <ul class="features">
+    <li><strong>Four modes</strong><p>A press on the button steps Cell, Digit, Both and Off.</p></li>
+    <li><strong>Kept in step</strong><p>A cell whose digit, or every center mark, falls in one group takes that group's color, and loses it when that changes.</p></li>
+    <li><strong>Digit and mark shades</strong><p>In Digit and Both, digits and marks take a darker shade of their group's color. A conflicting mark gets a small red circle.</p></li>
+    <li><strong>Profiles</strong><p>Up to six sets of groups. Five come preloaded: Low/5/High, Odd/Even, Entropic, Modular and Each digit.</p></li>
+    <li><strong>The profile menu</strong><p>Opens from the arrow on the button, a right click or a hold. A pick takes effect at once.</p></li>
+    <li><strong>Separate cell and digit profiles</strong><p>Color the cells from one profile and the digits from another, or turn digit coloring off.</p></li>
+  </ul>
+
+  <h2>The settings dialog</h2>
+  <p class="prose">Open it with <em>Edit profiles</em> in the profile menu.</p>
+  <div class="figure"><img src="../../color-by-digit-dialog-annotated.png" alt=""></div>
+  <ol class="steps">
+    <li><strong>Pick what colors what.</strong> Mode sets the button's mode. Cell picks the profile for cells; Digit picks Same as cell, another profile, or None.</li>
+    <li><strong>Pick a profile to edit.</strong> Click it in the list. Rename it in its row, drag to reorder, × to delete, or + New profile for a copy.</li>
+    <li><strong>Paint its digits.</strong> Click a color, then click or drag across digits. A click on a digit already in that color clears it.</li>
+    <li><strong>Save.</strong> Save applies every change at once; Cancel drops them. The two icons in the title row copy and paste all settings between browsers.</li>
+  </ol>
+
+  <h2>Good to know</h2>
+  <ul class="notes">
+    <li>A digit change and its color change are one undo step. Undo, redo and replays never color.</li>
+    <li>With SudokuPad's Multi-color setting off, a group's color replaces any other color the cell had.</li>
+  </ul>
+  <footer><a href="#">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
+<script>
+const S = [['001','Start: two boxes in Cell mode'],['002','Type a 1: the cell takes its group\'s color'],['003','Center marks 7 and 9, both in one group: the cell takes that color'],['004','Add a center mark 2 from another group: the color goes'],['005','Digit mode: digits and marks in darker shades, conflicts circled'],['006','Both: fills and shades'],['007','Off'],['009','Open the profile menu from the button\'s arrow'],['010','Pick Modular: the boxes recolor at once']]
+let i = 0
+const show = () => { document.getElementById('slide').src = 'slides/cbdnc/cbd-' + S[i][0] + '.png'; document.getElementById('cap').textContent = S[i][1]; document.getElementById('num').textContent = `${i + 1} / ${S.length}` }
+document.querySelector('.prev').onclick = () => { i = (i + S.length - 1) % S.length; show() }
+document.querySelector('.next').onclick = () => { i = (i + 1) % S.length; show() }
+show()
+</script>
+</body>
+</html>
