@@ -51,7 +51,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   its startup changed); the full suite runs once, at the controller's merge check.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- It does not cover a real Tampermonkey install or `crackingthecryptic.com`: a PR names those as still owed.
+- It does not cover a real Tampermonkey install: a PR names that as still owed. `crackingthecryptic.com` only redirects to
+  SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`. Run it before you hand off a change:
 `land.testcmd` runs only the tests, and no hook or CI job runs the linter.
