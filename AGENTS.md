@@ -18,6 +18,9 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
   show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
+- **No feature relies on a right-button drag** (Chris, 2026-11-07): SudokuPad's Test Large Puzzle UI setting pans the board on it and no
+  script sees the moves (`docs/research/large-puzzle-ui-right-drag.md`). A right click is fine; a right-drag may only be an extra on top of
+  one, and the site teaches the right click.
 - **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
   demonstrated at a phone or tablet size, and no ticket or PR asks for it.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
