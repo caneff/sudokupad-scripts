@@ -3,6 +3,7 @@
 // reload; the box stops at about three characters by one line; and off the editor a drag on the note moves it and never resizes it. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
@@ -18,7 +19,7 @@ const NOTE_TEXT = 'word '.repeat(12).trim()
 // A real mouse lands on whole page pixels.
 const NEAR_PX = 1.5
 // The smallest box, in em of the note's text size.
-const MIN_EM = [3, 1.15]
+const { MIN_BOX_EM: MIN_EM } = createRequire(import.meta.url)('../../draw-tool.user.js')
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -122,8 +123,8 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
     const smallest = await box(TEXT_BOX)
     assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em) && near(smallest.bottom - smallest.top, MIN_EM[1] * smallest.em), `${smallest.right - smallest.left} x ${smallest.bottom - smallest.top}`)
     await p.keyboard.press('Escape')
-    // The note is 20 board units a line: 3 em by 1.15 em.
-    assert.deepEqual((await saved())[0].box, [60, 23])
+    // The note's text size is 20 board units.
+    assert.deepEqual((await saved())[0].box, MIN_EM.map((em) => em * 20))
   })
 
   it('off the editor, a drag from the note\'s bottom right corner moves it and never resizes it', async () => {
@@ -145,6 +146,19 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
     assert.equal(await handleCount(), 1)
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     assert.equal(await handleCount(), 0)
+  })
+
+  it('a right click on the handle erases nothing and leaves the note open', async () => {
+    const before = (await saved()).map((item) => item.text)
+    await p.mouse.click(...await gridPoint(p, EMPTY_AT))
+    await p.keyboard.type('second')
+    await p.keyboard.press('Escape')
+    const { left, top, right, bottom } = await box(TEXTS)
+    await p.mouse.dblclick((left + right) / 2, (top + bottom) / 2)
+    await p.mouse.click(...await handleMiddle(), { button: 'right' })
+    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
+    await p.keyboard.press('Escape')
+    assert.deepEqual((await saved()).map((item) => item.text), [...before, 'second'])
   })
 
   it('the page raised no error', () => {

@@ -1,24 +1,31 @@
 // Live check of draw-tool.user.js's note box on sudokupad.app: a long line wraps at 16 em, a note of more than 8 lines stops growing
 // there and the wheel scrolls it without reaching SudokuPad, typing keeps the caret in view, a short note and the board keep the wheel,
-// the scroll bar shows only under the pointer, and markdown, line breaks and the halo still draw in a scrolled box. Real mouse and keyboard input.
+// the scroll bar shows only under the pointer, and markdown, line breaks and the halo still draw in a scrolled box. Ctrl+wheel and a dialog over a note keep
+// the wheel, a click just under a wrapped note misses it, and a note off the board wraps and scrolls too. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 
-const { TEXT_BOX, TEXTS } = draw
+const { DIALOG, TEXT_BOX, TEXTS } = draw
+const { BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT } = createRequire(import.meta.url)('../../draw-tool.user.js')
 // In cells from the grid's top left: a long one-line note, a tall note, a short note, and a cell clear of them all.
 const LONG_AT = [1.5, 4.5]
 const TALL_AT = [4.5, 4.5]
 const SHORT_AT = [7.5, 1.5]
 const EMPTY_AT = [7.5, 7.5]
+// Beside the grid, between it and the panel, clear of every control.
+const OFF_BOARD_AT = [2.5, 9.45]
+// Narrow letters: the guess from the character count makes this two lines, and it is drawn on one.
+const NARROW_AT = [0.5, 1.5]
+const NARROW_TEXT = 'il '.repeat(15).trim()
 const LONG_TEXT = 'word '.repeat(20).trim()
+const OFF_TEXT = 'side '.repeat(20).trim()
 const TALL_LINES = [...Array.from({ length: 11 }, (_, i) => `line ${i + 1}`), '**end**']
-// The box's automatic size, in em of the note's text size: 16 wide and 8 lines of 1.15 high.
-const BOX_WIDTH_EM = 16
-const BOX_HEIGHT_EM = 8 * 1.15
+const BOX_HEIGHT_EM = BOX_LINES * LINE_HEIGHT
 const NEAR_PX = 1.5
 
 let browser
@@ -80,7 +87,7 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
     await p.keyboard.press('Escape')
     const long = await note('word')
     assert.ok(long.widthEm <= BOX_WIDTH_EM + 0.05 && long.widthEm > BOX_WIDTH_EM - 2, `${long.widthEm} em wide`)
-    assert.ok(long.heightEm > 2 * 1.15 - 0.05, `${long.heightEm} em high: wrapped onto more than one line`)
+    assert.ok(long.heightEm > 2 * LINE_HEIGHT - 0.05, `${long.heightEm} em high: wrapped onto more than one line`)
     assert.equal(long.overflowY, 'hidden', 'no scroll bar')
   })
 
@@ -130,6 +137,30 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
     assert.deepEqual(await wheelsSeen(), [false], 'at the bottom, the wheel down reaches SudokuPad untouched')
   })
 
+  it('Ctrl+wheel over the tall note stays the browser\'s zoom: the note does not scroll and SudokuPad sees the wheel', async () => {
+    await moveTo(TALL_AT)
+    const before = (await note('line 1')).scrollTop
+    await wheelsSeen()
+    await p.keyboard.down('Control')
+    await p.mouse.wheel(0, -40)
+    await p.keyboard.up('Control')
+    assert.equal((await note('line 1')).scrollTop, before)
+    assert.equal((await wheelsSeen()).length, 1)
+  })
+
+  it('with SudokuPad\'s settings dialog over the tall note, the wheel goes to the dialog and the note does not scroll', async () => {
+    const before = (await note('line 1')).scrollTop
+    await p.click('#control-settings')
+    await p.locator(DIALOG).waitFor({ state: 'visible' })
+    await moveTo(TALL_AT)
+    await wheelsSeen()
+    await p.mouse.wheel(0, -40)
+    assert.equal((await note('line 1')).scrollTop, before)
+    assert.deepEqual(await wheelsSeen(), [false])
+    await p.keyboard.press('Escape')
+    await p.locator(DIALOG).waitFor({ state: 'detached' })
+  })
+
   it('markdown, line breaks and the halo still draw in the scrolled box, the halo inside its padding', async () => {
     const tall = await note('line 1')
     assert.deepEqual(tall.bold, ['end'])
@@ -155,6 +186,30 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
     await p.mouse.wheel(0, 40)
     assert.deepEqual(await wheelsSeen(), [false, false])
     assert.equal((await note('15')).overflowY, 'hidden', 'a short note has no scroll bar')
+  })
+
+  it('a click just under a wrapped note, where its characters alone would guess it reaches, misses it and opens a new note', async () => {
+    await typeNote(NARROW_AT, [NARROW_TEXT])
+    await p.keyboard.press('Escape')
+    const narrow = await note('il')
+    assert.ok(narrow.heightEm < 1.5 * LINE_HEIGHT, `drawn ${narrow.heightEm} em high: one line`)
+    const [x, y] = await gridPoint(p, NARROW_AT)
+    await p.mouse.click(x, y + 0.9 * LINE_HEIGHT * narrow.em)
+    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'a new note opened, so the click missed the note')
+    await p.keyboard.press('Escape')
+  })
+
+  it('a long note off the board wraps, stops at 8 lines and scrolls with the wheel, and is stored by its screen point', async () => {
+    await typeNote(OFF_BOARD_AT, [OFF_TEXT, ...TALL_LINES.slice(0, 9)])
+    await p.keyboard.press('Escape')
+    const saved = (await draw.saved(p)).find((item) => item.text.startsWith('side'))
+    assert.ok(saved.fixed, `stored off the board: ${JSON.stringify(saved)}`)
+    const off = await note('side')
+    assert.ok(off.widthEm <= BOX_WIDTH_EM + 0.05, `${off.widthEm} em wide`)
+    assert.ok(Math.abs(off.height - BOX_HEIGHT_EM * off.em) <= NEAR_PX, `${off.heightEm} em high`)
+    await moveTo(OFF_BOARD_AT)
+    await p.mouse.wheel(0, 40)
+    assert.ok((await note('side')).scrollTop > 0)
   })
 
   it('the page raised no error', () => {

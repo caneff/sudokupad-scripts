@@ -280,9 +280,14 @@
 
   const shownLength = (runs) => runs.reduce((sum, run) => sum + run.text.length, 0)
 
-  // A note's width and height in board units: its stored `box` once resized, else its text wrapped at BOX_WIDTH_EM and cut off at BOX_LINES.
+  // The size a note was last drawn at, in board units, kept on its item under a symbol, which a spread copies and JSON leaves out, so no save stores it.
+  const DRAWN_SIZE = Symbol('drawn size')
+
+  // A note's width and height in board units: its stored `box` once resized, else the size it was drawn at, else a guess from its text wrapped at
+  // BOX_WIDTH_EM and cut off at BOX_LINES, which errs wide.
   function noteSize (item) {
     if (item.box) return item.box
+    if (item[DRAWN_SIZE]) return item[DRAWN_SIZE]
     const widths = parseMarkdown(item.text).map((runs) => Math.max(1, shownLength(runs)) * CHAR_WIDTH)
     const rows = widths.reduce((sum, width) => sum + Math.ceil(width / BOX_WIDTH_EM), 0)
     return [Math.min(BOX_WIDTH_EM, Math.max(...widths)) * item.size, Math.min(BOX_LINES, rows) * LINE_HEIGHT * item.size]
@@ -349,7 +354,6 @@
 
   // The note with its box's bottom right dragged to screen point `corner`, its top left kept at screen point `topLeft`. The box is in board units on the
   // board and off it, since a note off the board is drawn at the board's scale too; the note's point moves to the box's new middle, pinned or fixed as it was.
-  // `board` has the map from a screen point to board units and the screen pixels per board unit.
   function resizedItem (item, topLeft, corner, board) {
     const box = [0, 1].map((i) => roundToTenth(Math.max(MIN_BOX_EM[i] * item.size, (corner[i] - topLeft[i]) / board.scale)))
     const middle = [0, 1].map((i) => topLeft[i] + box[i] * board.scale / 2)
@@ -898,7 +902,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -915,6 +919,8 @@
   const CONTROLS = '#controls, .topbar, #appmenu, .dialog-overlay, button, a, input, select, textarea'
   const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
 
+  // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
+  const ABOVE_NOTES = '.dialog-overlay, #appmenu'
   // The notes' layer covers the page, above the board's digits and SudokuPad's clock and rules copy (z-index 10) and below its dialogs and menu drawer (1000).
   const LAYER_Z = 20
 
@@ -957,15 +963,16 @@
   function styleNote (element, item, map) {
     const [x, y] = screenPoint(item, map.toScreen)
     const px = (units) => `${roundToTenth(units * item.size * map.scale)}px`
-    const [boxWidth, boxHeight] = item.box ? item.box.map((side) => `${roundToTenth(side * map.scale)}px`) : ['', '']
+    const [width, height] = item.box ? item.box.map((side) => `${roundToTenth(side * map.scale)}px`) : ['', '']
+    const limit = item.box ? 'none' : ''
     Object.assign(element.style, {
       left: `${roundToTenth(x)}px`,
       top: `${roundToTenth(y)}px`,
       fontSize: px(1),
-      width: boxWidth,
-      height: boxHeight,
-      maxWidth: item.box ? 'none' : '',
-      maxHeight: item.box ? 'none' : '',
+      width,
+      height,
+      maxWidth: limit,
+      maxHeight: limit,
       color: textColor(item),
       backgroundColor: item.bg ? PAGE_COLOR : 'transparent',
       padding: item.bg ? `${px(BACKGROUND_PAD_Y)} ${px(BACKGROUND_PAD_X)}` : px(HALO_EM),
@@ -1440,14 +1447,17 @@
     })
     layer.prepend(...notes)
     for (const note of notes) {
+      const item = noteItems.get(note)
       markScrolling(note)
-      note.scrollTop = noteItems.get(note)[SCROLL] ?? 0
+      note.scrollTop = item[SCROLL] ?? 0
+      const box = contentBox(note)
+      item[DRAWN_SIZE] = [box.right - box.left, box.bottom - box.top].map((side) => side / map.scale)
     }
     if (editing) showEditing(map)
     showHover()
   }
 
-  // The handle sits on the open note's bottom right corner.
+  // Restyles the open note and puts the handle on its bottom right corner.
   function showEditing (map) {
     const { element, item, handle } = editing
     styleNote(element, item, map)
@@ -1457,7 +1467,7 @@
     handle.style.top = `${roundToTenth(bottom - HANDLE_PX / 2)}px`
   }
 
-  // The open note's text box, inside its padding, on the screen.
+  // A note's text box, inside its padding, on the screen.
   function contentBox (element) {
     const { left, top, right, bottom } = element.getBoundingClientRect()
     const style = window.getComputedStyle(element)
@@ -1465,11 +1475,11 @@
     return { left: left + pad('Left'), top: top + pad('Top'), right: right - pad('Right'), bottom: bottom - pad('Bottom') }
   }
 
-  // A press on the handle keeps the note's focus, and never reaches SudokuPad.
+  // A press on the handle, with any button, keeps the note's focus and never reaches SudokuPad; only the left button resizes.
   function startResize (event) {
-    if (event.button !== PRIMARY_BUTTON || !editing) return
     event.preventDefault()
     event.stopPropagation()
+    if (event.button !== PRIMARY_BUTTON || !editing) return
     const box = contentBox(editing.element)
     const [x, y] = eventPoint(event)
     resizing = { item: editing.item, topLeft: [box.left, box.top], offset: [box.right - x, box.bottom - y] }
@@ -1501,8 +1511,10 @@
     note.classList.toggle(SCROLLS_CLASS, scrollRoom(note) > 1)
   }
 
-  // The topmost note whose box holds screen point `point`, or null. The notes' layer takes no pointer, so the page cannot say.
+  // The topmost note whose box holds screen point `point`, or null, also when a dialog or the menu drawer, which sit above the notes, is there. The notes'
+  // layer takes no pointer, so the page cannot say which note.
   function noteUnder ([x, y]) {
+    if (document.elementFromPoint(x, y)?.closest(ABOVE_NOTES)) return null
     const notes = [...drawingLayer().querySelectorAll(`.${TEXT_CLASS}`)].reverse()
     return notes.find((note) => inBox([x, y], note.getBoundingClientRect())) ?? null
   }
@@ -1627,12 +1639,18 @@
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
 
   // An empty box removes its text.
-  function finishText () {
-    const { index, item, element, handle } = editing
+  // Takes the open note's element and handle off the page, and ends any resize.
+  function closeEditing () {
+    const open = editing
     editing = null
     resizing = null
-    element.remove()
-    handle.remove()
+    open.element.remove()
+    open.handle.remove()
+    return open
+  }
+
+  function finishText () {
+    const { index, item, element } = closeEditing()
     const before = index === -1 ? '' : drawing[index].text
     const text = typedText(element)
     const changed = text !== before || (index !== -1 && (Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
@@ -1763,13 +1781,7 @@
     drag = null
     erasing = null
     selected = []
-    const open = editing
-    editing = null
-    resizing = null
-    if (open) {
-      open.element.remove()
-      open.handle.remove()
-    }
+    if (editing) closeEditing()
   }
 
   function showSavedDrawing () {
