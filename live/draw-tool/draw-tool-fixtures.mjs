@@ -87,3 +87,10 @@ export async function plantDrawing (p, items) {
   const key = DRAWING_PREFIX + await puzzleKey(p)
   await p.evaluate(([k, value]) => Framework.setData(k, value), [key, items])
 }
+
+// The tool buttons in the order they are drawn (the bar fills a column down, then the next one), not their order in the page:
+// Text Annotation's place comes from a CSS rule, so the page order does not change.
+export const buttonIds = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-tool > button')]
+  .map((b) => ({ id: b.id, ...b.getBoundingClientRect().toJSON() }))
+  .sort((a, b) => Math.round(a.left) - Math.round(b.left) || a.top - b.top)
+  .map((b) => b.id))

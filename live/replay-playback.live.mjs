@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { DIGIT_BUTTON, DRAW_BUTTON, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
+import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from './page.mjs'
 import { cellCentre, goToPenPage, gridPoint, mouseDrag, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
@@ -196,9 +196,8 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS), 'draw')
   })
 
-  it('the replay button comes before Draw\'s among the tool buttons, as it does without Draw', async () => {
-    const ids = (page) => page.evaluate(() => [...document.querySelectorAll('.controls-tool > button')].map((b) => b.id))
-    const [withIds, withoutIds] = [await ids(withDraw.p), await ids(without.p)]
+  it('the replay button comes before Text Annotation\'s among the tool buttons on screen, as it does without it', async () => {
+    const [withIds, withoutIds] = [await buttonIds(withDraw.p), await buttonIds(without.p)]
     assert.equal(withIds.indexOf('control-replay') < withIds.indexOf('control-draw'), true, withIds.join())
     assert.deepEqual(withIds.filter((id) => id !== 'control-draw'), withoutIds)
   })
