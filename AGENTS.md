@@ -13,7 +13,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 - **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
   Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a whole site page in `docs/research/site/`,
   and notes about SudokuPad itself at the top.
-- **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), a spec's closing test in `test/specs/`, and live tests in
+- **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), each shared module's in `lib/<name>.test.js`, a spec's closing test in `test/specs/`, and live tests in
   `live/<script name>/`. The six `*.user.js` stay at the root: every installed copy checks that address for updates.
 - **`GLOSSARY.md`**: the vocabulary.
 - **A change to what a script shows** (its panel, buttons, dialog or drawing) updates that script's text in `site/` and retakes the site pictures that
@@ -50,7 +50,7 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 
 ## End-to-end seam
 
-- **Seam**: `npm test` (`node --test`), against each script's pure functions (`test/`), the live harness's helper tests
+- **Seam**: `npm test` (`node --test`), against each script's pure functions (`test/`), each shared module's (`lib/*.test.js`), the live harness's helper tests
   (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script has an install link on the homepage)
 - **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/**/*.live.mjs`)
   covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.

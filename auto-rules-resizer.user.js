@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.3
+// @version      0.3.4
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.3'
+  const VERSION = '0.3.4'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -345,15 +345,13 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The title row's icon slot, filled with the Copy settings and Paste settings buttons and the status line they report to.
-  function renderCopyPasteIcons (prefix) {
-    return '<span data-role="settings-status"></span>' +
-      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span>`
-  }
-
-  // The dialog's first part: the name, the version beside it, and `icons` (HTML) at the right end.
-  function renderDialogTitle ({ prefix, name, version, icons = '' }) {
-    return `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>${icons}</div>`
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
   function dialogTitleCss (prefix) {
@@ -370,16 +368,6 @@
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
-  }
-
-  // Puts the title rules in the page once, for a dialog whose script has no stylesheet of its own to hold them.
-  function installDialogTitleStyle (prefix, doc = document) {
-    const id = `${prefix}title-style`
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = dialogTitleCss(prefix)
-    doc.head.appendChild(style)
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
@@ -619,17 +607,16 @@
     }
   }
 
-  const TITLE_PREFIX = 'rules-resizer-'
+  const CLASS_PREFIX = 'rules-resizer-'
 
   function openDialog () {
-    installDialogTitleStyle(TITLE_PREFIX)
     const row = (id, label, value) => `<label for="${id}">${label}</label>` +
       `<input type="number" id="${id}" min="1" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
       '<span>px</span>'
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: TITLE_PREFIX, name: 'Rules Resizer', version: VERSION, icons: renderCopyPasteIcons(TITLE_PREFIX) }) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Rules Resizer', version: VERSION }) },
         {
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +

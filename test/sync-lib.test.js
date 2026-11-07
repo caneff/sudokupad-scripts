@@ -2,7 +2,9 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
+const { spawnSync } = require('node:child_process')
 const { syncText, readLib, scriptFiles, generatedLine } = require('../sync-lib.js')
 
 const modules = { plain: 'const a = 1\n\nconst b = 2\n' }
@@ -52,6 +54,48 @@ test('a problem anywhere leaves a stale block in the same script unrewritten', (
   const result = syncText(script(`${block('  const a = 0')}\n  // <lib:nope>\n  // </lib:nope>`), read)
   assert.equal(result.changed.length, 0)
   assert.equal(result.problems.length, 1)
+})
+
+test('a version that is not X.Y.Z is a problem, and the stale block is not rewritten', () => {
+  for (const source of [script(block('  const a = 0'), '1.2.3-beta'), script(block('  const a = 0')).replace("VERSION = '1.2.3'", 'VERSION = "1.2.3"')]) {
+    const result = syncText(source, read)
+    assert.deepEqual(result.problems, ['@version or const VERSION is not X.Y.Z, so the version cannot be raised'])
+    assert.deepEqual({ text: result.text, changed: result.changed }, { text: source, changed: [] })
+  }
+})
+
+test('a script with no const VERSION has only its @version raised', () => {
+  const result = syncText(`// @version      1.2.3\n${block('  const a = 0')}\n`, read)
+  assert.equal(result.text, `// @version      1.2.4\n${current}\n`)
+})
+
+// The command run on a copy of itself, beside its own lib/ and scripts, so the repo's files are not touched.
+function runCommand (scripts) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-lib-'))
+  try {
+    fs.copyFileSync(path.join(__dirname, '..', 'sync-lib.js'), path.join(dir, 'sync-lib.js'))
+    fs.mkdirSync(path.join(dir, 'lib'))
+    fs.writeFileSync(path.join(dir, 'lib', 'plain.js'), modules.plain)
+    for (const [file, text] of Object.entries(scripts)) fs.writeFileSync(path.join(dir, file), text)
+    const run = spawnSync(process.execPath, ['sync-lib.js'], { cwd: dir, encoding: 'utf8' })
+    return { status: run.status, stderr: run.stderr, files: Object.fromEntries(Object.keys(scripts).map((file) => [file, fs.readFileSync(path.join(dir, file), 'utf8')])) }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+test('node sync-lib.js rewrites a stale script and exits 0', () => {
+  const run = runCommand({ 'a.user.js': script(block('  const a = 0')) })
+  assert.equal(run.status, 0, run.stderr)
+  assert.equal(run.files['a.user.js'], script(current, '1.2.4'))
+})
+
+test('node sync-lib.js exits 1 on a marker problem, names it, and still rewrites the other scripts', () => {
+  const broken = script('  // <lib:Plain>')
+  const run = runCommand({ 'a.user.js': script(block('  const a = 0')), 'b.user.js': broken })
+  assert.equal(run.status, 1)
+  assert.match(run.stderr, /^b\.user\.js: line 4: malformed lib marker$/m)
+  assert.deepEqual(run.files, { 'a.user.js': script(current, '1.2.4'), 'b.user.js': broken })
 })
 
 test('every script\'s lib blocks match lib/ (run node sync-lib.js to fix)', () => {

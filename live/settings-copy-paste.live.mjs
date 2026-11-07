@@ -1,4 +1,4 @@
-// Live check of the Copy settings and Paste settings buttons of the four scripts with a settings dialog, on sudokupad.app in
+// Live check of the Copy settings and Paste settings buttons of the five scripts with a settings dialog, on sudokupad.app in
 // headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -19,6 +19,7 @@ const SCRIPTS = [
   { file: 'dark-page.user.js', owns: /^DarkPage_/, entry: 'Dark Page', editor: '#dark-page-input', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
   { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Rules Resizer', editor: '#auto-rules-resizer-max-width', key: 'AutoRulesResizer_maxWidth', saved: 640, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
   { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by Digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, badKey: 'ColorByDigit_mode', bad: 'sideways' },
+  { file: 'draw-tool.user.js', owns: /^DrawTool_/, entry: 'Draw Tool', editor: '#draw-tool-dialog', key: 'DrawTool_width', saved: 3.5, badKey: 'DrawTool_opacity', bad: 500 },
   { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }
 ]
 

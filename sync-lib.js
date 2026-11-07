@@ -29,9 +29,15 @@ const blockLines = (name, module, indent) => {
   ]
 }
 
-const bumpPatch = (source) => [SCRIPT_VERSION, CONST_VERSION].reduce(
-  (text, pattern) => text.replace(pattern, (_, head, major, minor, patch, tail) => `${head}${major}.${minor}.${Number(patch) + 1}${tail}`),
-  source)
+const ANY_CONST_VERSION = /^\s*const VERSION =/m
+
+// Raises the patch of @version, and of `const VERSION` where the script has one; null when either is not a plain X.Y.Z it can raise.
+function bumpPatch (source) {
+  if (!SCRIPT_VERSION.test(source) || (ANY_CONST_VERSION.test(source) && !CONST_VERSION.test(source))) return null
+  return [SCRIPT_VERSION, CONST_VERSION].reduce(
+    (text, pattern) => text.replace(pattern, (_, head, major, minor, patch, tail) => `${head}${major}.${minor}.${Number(patch) + 1}${tail}`),
+    source)
+}
 
 // Rewrites every lib block of one script from readModule(name) (undefined for a missing module).
 // Returns the new text, the names of the blocks that changed, and the problems found; a script with a problem is left as it was.
@@ -70,7 +76,10 @@ function syncText (source, readModule) {
   }
   if (problems.length > 0) return { text: source, changed: [], problems }
   const text = out.join('\n')
-  return { text: changed.length > 0 ? bumpPatch(text) : text, changed, problems }
+  if (changed.length === 0) return { text, changed, problems }
+  const raised = bumpPatch(text)
+  if (raised === null) return { text: source, changed: [], problems: ['@version or const VERSION is not X.Y.Z, so the version cannot be raised'] }
+  return { text: raised, changed, problems }
 }
 
 const LIB_DIR = path.join(__dirname, 'lib')

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.1
+// @version      0.22.2
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.1'
+  const VERSION = '0.22.2'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -421,28 +421,33 @@
   const LIGHT_TEXT = '#dddddd'
   const DARK_TEXT = '#222222'
 
-  const RGB_FUNCTION = /^rgba?\(([^)]*)\)$/
+  const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+  const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
-  // The channels and alpha of an rgb() or rgba() text with comma, space or slash separators, or null for any other text.
-  function rgbFunction (value) {
-    const fn = RGB_FUNCTION.exec(value)
+  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
+  const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
+
+  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
+  function colorFunction (value) {
+    const fn = COLOR_FUNCTION.exec(value)
     if (!fn) return null
-    const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
-    const numbers = parts.map(Number)
-    if (parts.length < 3 || numbers.some(Number.isNaN)) return null
-    return { channels: numbers.slice(0, 3), alpha: numbers[3] }
+    const parts = fn[2].split(/[,/\s]+/).filter(Boolean)
+    return { kind: fn[1], args: parts.slice(0, 3), alpha: parts.length > 3 ? alphaOf(parts[3]) : undefined }
   }
 
-  // A page lists `transparent` or an rgba() with alpha 0 to leave a slot empty (key 0 of each default page).
+  // A page lists `transparent`, or a color with alpha 0, to leave a slot empty (key 0 of each default page).
   function isTransparent (text) {
     if (typeof text !== 'string') return false
     const value = text.trim().toLowerCase()
-    const fn = rgbFunction(value)
-    return value === 'transparent' || Boolean(fn && fn.alpha !== undefined && fn.alpha <= 0)
+    if (value === 'transparent') return true
+    const hex = HEX_ALPHA.exec(value)
+    if (hex) return parseInt(hex[1] ?? hex[2], 16) === 0
+    const fn = colorFunction(value)
+    return Boolean(fn && fn.alpha <= 0)
   }
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
@@ -452,8 +457,10 @@
       const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
       return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
     }
-    const fn = rgbFunction(value)
-    return fn ? fn.channels.map((x) => Math.round(clamp255(x))) : null
+    const fn = colorFunction(value)
+    if (!fn || fn.kind !== 'rgb' || fn.args.length < 3) return null
+    const channels = fn.args.map(Number)
+    return channels.some(Number.isNaN) ? null : channels.map((x) => Math.round(clamp255(x)))
   }
 
   const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
@@ -541,7 +548,7 @@
     8: '#7c7c7c',
     9: '#000000'
   })
-  const PALETTE_PEN_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  const PEN_COLOR_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
   // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
@@ -559,13 +566,13 @@
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
 
-  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so pen and draw buttons line up with the cell buttons.
+  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so color N lines up with cell color button N.
   // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
   function darkerPageColors (keys, readCell) {
     const colors = {}
     const missing = []
     const derived = []
-    PALETTE_PEN_NUMBERS.forEach((n) => {
+    PEN_COLOR_NUMBERS.forEach((n) => {
       const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
       if (rgb) {
         colors[n] = darkenColor(rgb)
@@ -653,6 +660,8 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // Reads PEN_COLOR_NUMBERS from palette.
+  /* global PEN_COLOR_NUMBERS */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
@@ -661,7 +670,6 @@
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
-  const PICKER_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
 
@@ -709,12 +717,12 @@
   function pickerCss (prefix, tool) {
     const panel = `.tool-${tool} .controls-input`
     const picker = (n) => `${panel} .${prefix}picker[data-key="${n}"]`
-    const rows = PICKER_NUMBERS.length / PICKER_COLUMNS
+    const rows = PEN_COLOR_NUMBERS.length / PICKER_COLUMNS
     return [
       `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
       `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
       `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
-      ...PICKER_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
+      ...PEN_COLOR_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
       // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
       ...[[[1, 2, 3], rows], [[7, 8, 9], 1]].flatMap(([keys, row]) => keys.map((n) => `.setting-flipkeypad ${picker(n)} { grid-row: ${row} / span 1; }`))
     ].join('\n')
@@ -745,14 +753,14 @@
 
     function enter (panel) {
       // Every button is found before anything changes, so a missing one leaves no half edit mode.
-      const buttons = PICKER_NUMBERS.map((n) => {
+      const buttons = PEN_COLOR_NUMBERS.map((n) => {
         const button = panel.querySelector(`.controls-input button[data-key="${n}"]`)
         if (!button) throw new Error(`${prefix}color-picker: the ${tool} tool has no button for color ${n}`)
         return button
       })
       panel.classList.add(editing)
       buttons.forEach((button, i) => {
-        const n = PICKER_NUMBERS[i]
+        const n = PEN_COLOR_NUMBERS[i]
         button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
       })
       leaveWatch = new window.MutationObserver(() => {
@@ -854,16 +862,8 @@
   }
 
   function isVisibleColor (value) {
-    const v = String(value).trim().toLowerCase()
-    if (v === '' || v === 'transparent') return false
-    if (/^#[0-9a-f]{4}$/.test(v)) return v[3] !== '0'
-    if (/^#[0-9a-f]{8}$/.test(v)) return v.slice(7) !== '00'
-    const fn = /^(?:rgba|hsla)\(([^)]*)\)$/.exec(v)
-    if (fn) {
-      const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
-      if (parts.length === 4 && Number(parts[3]) === 0) return false
-    }
-    return true
+    const text = String(value)
+    return text.trim() !== '' && !isTransparent(text)
   }
 
   const PURPLE = '#6a1b9a'
@@ -934,8 +934,7 @@
 
   // A digit key is a swatch's size, so each row of the pad lines up with a row of swatches.
   const KEY_SIZE = `${SWATCH_PX}px`
-  // The color picker's class prefix, which the paint editor's color block carries.
-  const PICKER_PREFIX = 'cbd-'
+  const CLASS_PREFIX = 'cbd-'
   // SudokuPad's own color for an entered digit, which a painted digit key shows on its group's color.
   const ENTERED_DIGIT_BLUE = 'rgb(29, 106, 229)'
 
@@ -978,7 +977,7 @@
   // beside the 0 key, which the pad puts under 7.
   function renderPaint (groups, pages, shown, brush, colors) {
     return renderColorBlock({
-      prefix: PICKER_PREFIX,
+      prefix: CLASS_PREFIX,
       label: 'Cell color page',
       options: pages.map((p) => ({ value: String(p.page), label: pageLabel(p), selected: p === shown })),
       swatches: [...shown.rows.flat(), ...(shown.zero ? [shown.zero] : [])].map((slot) => slot && { ...slot, label: slot.key }),
@@ -1113,6 +1112,9 @@
       '</div>'
   }
 
+  // Matched as text, not by a selector, since a custom palette's key may hold a quote.
+  const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
+
   function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '' }) {
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
@@ -1172,7 +1174,7 @@
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
     [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
     [`${OPTIONS} button[data-role="save"]`, 'background: #6b3fa0; color: #fff; border: 1px solid #5a3489; font-weight: 600']
-  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(PICKER_PREFIX, EDITOR)
+  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
 
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
@@ -1221,15 +1223,13 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The title row's icon slot, filled with the Copy settings and Paste settings buttons and the status line they report to.
-  function renderCopyPasteIcons (prefix) {
-    return '<span data-role="settings-status"></span>' +
-      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span>`
-  }
-
-  // The dialog's first part: the name, the version beside it, and `icons` (HTML) at the right end.
-  function renderDialogTitle ({ prefix, name, version, icons = '' }) {
-    return `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>${icons}</div>`
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
   function dialogTitleCss (prefix) {
@@ -1246,16 +1246,6 @@
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
-  }
-
-  // Puts the title rules in the page once, for a dialog whose script has no stylesheet of its own to hold them.
-  function installDialogTitleStyle (prefix, doc = document) {
-    const id = `${prefix}title-style`
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = dialogTitleCss(prefix)
-    doc.head.appendChild(style)
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
@@ -1313,7 +1303,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1702,11 +1692,10 @@
     // The selected profile's name when it was selected: an emptied name field keeps it.
     let keptName = draft.profiles[selected].name
     addStyle()
-    installDialogTitleStyle(PICKER_PREFIX)
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: PICKER_PREFIX, name: 'Color by Digit', version: VERSION, icons: renderCopyPasteIcons(PICKER_PREFIX) }) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Color by Digit', version: VERSION }) },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',
@@ -1883,7 +1872,7 @@
         brush = swatch.dataset.key
         draw()
         // The redraw replaced the swatch; a keyboard user keeps the focus on its successor.
-        if (event.detail === 0) box.querySelector(`button[data-role="swatch"][data-key="${swatch.dataset.key}"]`).focus()
+        if (event.detail === 0) swatchWithKey(box, brush)?.focus()
         return
       }
       const el = event.target.closest('button[data-act]')

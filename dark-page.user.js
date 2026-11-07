@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.5
+// @version      0.4.6
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.5'
+  const VERSION = '0.4.6'
   const STYLE_ID = 'dark-page-style'
   const RECT_ID = 'dark-page-rect'
   const DATA_KEY = 'DarkPage_color'
@@ -74,28 +74,33 @@
   const LIGHT_TEXT = '#dddddd'
   const DARK_TEXT = '#222222'
 
-  const RGB_FUNCTION = /^rgba?\(([^)]*)\)$/
+  const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+  const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
-  // The channels and alpha of an rgb() or rgba() text with comma, space or slash separators, or null for any other text.
-  function rgbFunction (value) {
-    const fn = RGB_FUNCTION.exec(value)
+  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
+  const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
+
+  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
+  function colorFunction (value) {
+    const fn = COLOR_FUNCTION.exec(value)
     if (!fn) return null
-    const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
-    const numbers = parts.map(Number)
-    if (parts.length < 3 || numbers.some(Number.isNaN)) return null
-    return { channels: numbers.slice(0, 3), alpha: numbers[3] }
+    const parts = fn[2].split(/[,/\s]+/).filter(Boolean)
+    return { kind: fn[1], args: parts.slice(0, 3), alpha: parts.length > 3 ? alphaOf(parts[3]) : undefined }
   }
 
-  // A page lists `transparent` or an rgba() with alpha 0 to leave a slot empty (key 0 of each default page).
+  // A page lists `transparent`, or a color with alpha 0, to leave a slot empty (key 0 of each default page).
   function isTransparent (text) {
     if (typeof text !== 'string') return false
     const value = text.trim().toLowerCase()
-    const fn = rgbFunction(value)
-    return value === 'transparent' || Boolean(fn && fn.alpha !== undefined && fn.alpha <= 0)
+    if (value === 'transparent') return true
+    const hex = HEX_ALPHA.exec(value)
+    if (hex) return parseInt(hex[1] ?? hex[2], 16) === 0
+    const fn = colorFunction(value)
+    return Boolean(fn && fn.alpha <= 0)
   }
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
@@ -105,8 +110,10 @@
       const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
       return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
     }
-    const fn = rgbFunction(value)
-    return fn ? fn.channels.map((x) => Math.round(clamp255(x))) : null
+    const fn = colorFunction(value)
+    if (!fn || fn.kind !== 'rgb' || fn.args.length < 3) return null
+    const channels = fn.args.map(Number)
+    return channels.some(Number.isNaN) ? null : channels.map((x) => Math.round(clamp255(x)))
   }
 
   const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
@@ -305,15 +312,13 @@
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The title row's icon slot, filled with the Copy settings and Paste settings buttons and the status line they report to.
-  function renderCopyPasteIcons (prefix) {
-    return '<span data-role="settings-status"></span>' +
-      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span>`
-  }
-
-  // The dialog's first part: the name, the version beside it, and `icons` (HTML) at the right end.
-  function renderDialogTitle ({ prefix, name, version, icons = '' }) {
-    return `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>${icons}</div>`
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
   function dialogTitleCss (prefix) {
@@ -330,16 +335,6 @@
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
-  }
-
-  // Puts the title rules in the page once, for a dialog whose script has no stylesheet of its own to hold them.
-  function installDialogTitleStyle (prefix, doc = document) {
-    const id = `${prefix}title-style`
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = dialogTitleCss(prefix)
-    doc.head.appendChild(style)
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
@@ -493,15 +488,14 @@
     style.textContent = buildCss(pageColor)
   }
 
-  const TITLE_PREFIX = 'dark-page-'
+  const CLASS_PREFIX = 'dark-page-'
 
   function openDialog () {
     let picked = pageColor
-    installDialogTitleStyle(TITLE_PREFIX)
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: TITLE_PREFIX, name: 'Dark Page', version: VERSION, icons: renderCopyPasteIcons(TITLE_PREFIX) }) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Dark Page', version: VERSION }) },
         {
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +

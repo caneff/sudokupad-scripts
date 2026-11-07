@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.27.1
+// @version      1.27.2
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,13 +21,12 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.27.1'
+  const VERSION = '1.27.2'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
   const RIGHT_BUTTON = 2
-  const PEN_COLOR_NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
   // SudokuPad draws free lines, the cell circle and the cross 5 wide (in cell units, a cell being 64) and the edge X 2.5 wide. The slider's value is the first width
   // and everything else scales with it.
   const THICKNESS = { min: 1, max: 16, step: 0.5, fallback: 5 }
@@ -324,7 +323,7 @@
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
       buildPagesCss(inForce.thickness, inForce.dash),
-      pickerCss(PICKER_PREFIX, 'pen'),
+      pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
     ].join('\n')
@@ -378,7 +377,7 @@
     8: '#7c7c7c',
     9: '#000000'
   })
-  const PALETTE_PEN_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
+  const PEN_COLOR_NUMBERS = Object.freeze([1, 2, 3, 4, 5, 6, 7, 8, 9])
   // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
@@ -396,13 +395,13 @@
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
 
-  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so pen and draw buttons line up with the cell buttons.
+  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so color N lines up with cell color button N.
   // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
   function darkerPageColors (keys, readCell) {
     const colors = {}
     const missing = []
     const derived = []
-    PALETTE_PEN_NUMBERS.forEach((n) => {
+    PEN_COLOR_NUMBERS.forEach((n) => {
       const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
       if (rgb) {
         colors[n] = darkenColor(rgb)
@@ -487,6 +486,8 @@
   const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
   /* eslint-enable no-unused-vars */
   // </lib:palette>
+  // The pen color numbers as their buttons' data-key text.
+  const PEN_COLOR_KEYS = PEN_COLOR_NUMBERS.map(String)
   const HEX_COLOR = /^#[0-9a-f]{6}$/i
   // A pen color preset's id is saved beside the colors under `preset`; a set with none, or one not in SAVED_PRESETS, is Custom. UNSAVED is SudokuPad's own colors before the install save, never saved.
   const SAVED_PRESETS = [...PAGE_PRESETS, SUDOKUPAD_PRESET]
@@ -501,8 +502,8 @@
 
   // null when nothing usable is saved, which means the install save is still owed. A bad entry beside a usable one keeps SudokuPad's own color.
   function readPenColors (data) {
-    if (!isPlainObject(data) || !PEN_COLOR_NUMBERS.some((n) => isHexColor(data[n]))) return null
-    const colors = Object.fromEntries(PEN_COLOR_NUMBERS.map((n) => [n, isHexColor(data[n]) ? data[n].toLowerCase() : SUDOKUPAD_PEN_COLORS[n]]))
+    if (!isPlainObject(data) || !PEN_COLOR_KEYS.some((n) => isHexColor(data[n]))) return null
+    const colors = Object.fromEntries(PEN_COLOR_KEYS.map((n) => [n, isHexColor(data[n]) ? data[n].toLowerCase() : SUDOKUPAD_PEN_COLORS[n]]))
     return { colors, preset: SAVED_PRESETS.includes(data.preset) ? data.preset : CUSTOM, missing: [] }
   }
 
@@ -514,7 +515,7 @@
   // A table passes when it holds a usable color and every pen color it holds is one: `readPenColors` would keep SudokuPad's own color for a bad entry.
   const readPastedColors = (data) => {
     const set = readPenColors(data)
-    return set && PEN_COLOR_NUMBERS.every((n) => !(n in data) || isHexColor(data[n])) ? storedPenColors(set) : undefined
+    return set && PEN_COLOR_KEYS.every((n) => !(n in data) || isHexColor(data[n])) ? storedPenColors(set) : undefined
   }
 
   const READERS = {
@@ -539,7 +540,7 @@
 
   // The set is what gets saved, so an invalid pen or value throws rather than saving a wrong entry.
   function editedColors (colors, pen, value) {
-    if (!PEN_COLOR_NUMBERS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
+    if (!PEN_COLOR_KEYS.includes(pen)) throw new RangeError(`pen-tool-extras: ${pen} is not a pen color`)
     if (!isHexColor(value)) throw new RangeError(`pen-tool-extras: ${value} is not a #rrggbb color`)
     return { ...colors, [pen]: value.toLowerCase() }
   }
@@ -555,28 +556,33 @@
   const LIGHT_TEXT = '#dddddd'
   const DARK_TEXT = '#222222'
 
-  const RGB_FUNCTION = /^rgba?\(([^)]*)\)$/
+  const COLOR_FUNCTION = /^(rgb|hsl)a?\(([^)]*)\)$/
   const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+  const HEX_ALPHA = /^#[0-9a-f]{3}([0-9a-f])$|^#[0-9a-f]{6}([0-9a-f]{2})$/
 
-  // The channels and alpha of an rgb() or rgba() text with comma, space or slash separators, or null for any other text.
-  function rgbFunction (value) {
-    const fn = RGB_FUNCTION.exec(value)
+  // An alpha written as a number or a percentage, as a number from 0 to 1 (NaN for other text).
+  const alphaOf = (text) => text.endsWith('%') ? Number(text.slice(0, -1)) / 100 : Number(text)
+
+  // The kind (rgb or hsl), first three arguments and alpha of a color function with comma, space or slash separators, or null for any other text.
+  function colorFunction (value) {
+    const fn = COLOR_FUNCTION.exec(value)
     if (!fn) return null
-    const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
-    const numbers = parts.map(Number)
-    if (parts.length < 3 || numbers.some(Number.isNaN)) return null
-    return { channels: numbers.slice(0, 3), alpha: numbers[3] }
+    const parts = fn[2].split(/[,/\s]+/).filter(Boolean)
+    return { kind: fn[1], args: parts.slice(0, 3), alpha: parts.length > 3 ? alphaOf(parts[3]) : undefined }
   }
 
-  // A page lists `transparent` or an rgba() with alpha 0 to leave a slot empty (key 0 of each default page).
+  // A page lists `transparent`, or a color with alpha 0, to leave a slot empty (key 0 of each default page).
   function isTransparent (text) {
     if (typeof text !== 'string') return false
     const value = text.trim().toLowerCase()
-    const fn = rgbFunction(value)
-    return value === 'transparent' || Boolean(fn && fn.alpha !== undefined && fn.alpha <= 0)
+    if (value === 'transparent') return true
+    const hex = HEX_ALPHA.exec(value)
+    if (hex) return parseInt(hex[1] ?? hex[2], 16) === 0
+    const fn = colorFunction(value)
+    return Boolean(fn && fn.alpha <= 0)
   }
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text (its alpha a number or a percentage), or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
@@ -586,8 +592,10 @@
       const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
       return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
     }
-    const fn = rgbFunction(value)
-    return fn ? fn.channels.map((x) => Math.round(clamp255(x))) : null
+    const fn = colorFunction(value)
+    if (!fn || fn.kind !== 'rgb' || fn.args.length < 3) return null
+    const channels = fn.args.map(Number)
+    return channels.some(Number.isNaN) ? null : channels.map((x) => Math.round(clamp255(x)))
   }
 
   const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
@@ -661,6 +669,8 @@
   // <lib:color-picker>
   // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // Reads PEN_COLOR_NUMBERS from palette.
+  /* global PEN_COLOR_NUMBERS */
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
   const HOLD_TO_EDIT_MS = 1000
   // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
@@ -669,7 +679,6 @@
   // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
   const PICKER_INPUT_REM = 2.4
   const PICKER_COLUMNS = 3
-  const PICKER_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
 
@@ -717,12 +726,12 @@
   function pickerCss (prefix, tool) {
     const panel = `.tool-${tool} .controls-input`
     const picker = (n) => `${panel} .${prefix}picker[data-key="${n}"]`
-    const rows = PICKER_NUMBERS.length / PICKER_COLUMNS
+    const rows = PEN_COLOR_NUMBERS.length / PICKER_COLUMNS
     return [
       `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
       `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
       `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
-      ...PICKER_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
+      ...PEN_COLOR_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
       // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
       ...[[[1, 2, 3], rows], [[7, 8, 9], 1]].flatMap(([keys, row]) => keys.map((n) => `.setting-flipkeypad ${picker(n)} { grid-row: ${row} / span 1; }`))
     ].join('\n')
@@ -753,14 +762,14 @@
 
     function enter (panel) {
       // Every button is found before anything changes, so a missing one leaves no half edit mode.
-      const buttons = PICKER_NUMBERS.map((n) => {
+      const buttons = PEN_COLOR_NUMBERS.map((n) => {
         const button = panel.querySelector(`.controls-input button[data-key="${n}"]`)
         if (!button) throw new Error(`${prefix}color-picker: the ${tool} tool has no button for color ${n}`)
         return button
       })
       panel.classList.add(editing)
       buttons.forEach((button, i) => {
-        const n = PICKER_NUMBERS[i]
+        const n = PEN_COLOR_NUMBERS[i]
         button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
       })
       leaveWatch = new window.MutationObserver(() => {
@@ -805,12 +814,11 @@
   // Strokes (`.pencolor-N`) and the tool's button swatches both read these variables; the eraser has its own fixed color and no variable.
   // SudokuPad's `tool-pen.css` loads when the pen tool is enabled, so a plain `:root` rule would lose to it by coming first; `:root:root` outranks it whichever loads last.
   function buildCss (colors) {
-    const lines = PEN_COLOR_NUMBERS.map((n) => `  --puzzle-pencolor-${n}: ${colors[n]};`)
+    const lines = PEN_COLOR_KEYS.map((n) => `  --puzzle-pencolor-${n}: ${colors[n]};`)
     return [':root:root {', ...lines, '}'].join('\n')
   }
 
-  // The class prefix of the color picker's edit mode and the dialog's color block.
-  const PICKER_PREFIX = 'pen-tool-extras-'
+  const CLASS_PREFIX = 'pen-tool-extras-'
 
   // The set in force. Until the install save it is SudokuPad's own, which is what the page shows with no override.
   let active = { ...SUDOKUPAD_SET, preset: UNSAVED }
@@ -827,7 +835,7 @@
     active = set
     activePickedPreset = pickedPreset
     applyStyle()
-    refreshPickers(PICKER_PREFIX, (n) => set.colors[n])
+    refreshPickers(CLASS_PREFIX, (n) => set.colors[n])
   }
 
   function saveColors (set, pickedPreset) {
@@ -841,17 +849,17 @@
 
   // A hold on a pen button toggles a color picker over each, and a picker recolors its pen at once.
   function installPenPickers () {
-    installHoldToEdit({ prefix: PICKER_PREFIX, tool: 'pen', colorOf: (n) => active.colors[n], save: savePenColor, guard: (toggle) => steps.colors.run(toggle) })
+    installHoldToEdit({ prefix: CLASS_PREFIX, tool: 'pen', colorOf: (n) => active.colors[n], save: savePenColor, guard: (toggle) => steps.colors.run(toggle) })
   }
 
   // 3. Pen pages: the pages, line styles and the page button
-  // The pen pages in paging order. Page N's characters line up with PEN_COLOR_NUMBERS, so a recolor changes the pen on every page.
+  // The pen pages in paging order. Page N's characters line up with PEN_COLOR_KEYS, so a recolor changes the pen on every page.
   // A stroke stores the character after its value (`pc:a`), and any lowercase letter draws, undoes and replays (docs/research/sudokupad-pen-tool.md, "Pen colors past nine").
   // Page 1 is SudokuPad's own and stays first: stock SudokuPad can select only its characters.
   // A pen value has no direction, so an arrow page's pen is two characters: `chars` for a line dragged the way SudokuPad draws the value, `reverse` for the other way.
   // Only `chars` is ever selected.
   const PEN_PAGES = [
-    { chars: PEN_COLOR_NUMBERS, dashed: false },
+    { chars: PEN_COLOR_KEYS, dashed: false },
     { chars: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], dashed: true },
     { chars: ['j', 'l', 'n', 'p', 'r', 't', 'v', 'x', 'z'], reverse: ['k', 'm', 'o', 'q', 's', 'u', 'w', 'y', '0'], dashed: false, arrowLines: true }
   ]
@@ -863,7 +871,7 @@
   // Each color character of the pen pages: its pen (the character on its button), its page, its color number, and `forward`, the way an arrow page's character was dragged
   // (null off an arrow page). An arrow page's pen also gives its `reverse` character.
   const COLOR_CHARS = new Map(PEN_PAGES.flatMap((page, index) => page.chars.flatMap((pen, i) => {
-    const entry = (forward) => ({ pen, page: index, number: PEN_COLOR_NUMBERS[i], forward, reverse: page.arrowLines ? page.reverse[i] : undefined })
+    const entry = (forward) => ({ pen, page: index, number: PEN_COLOR_KEYS[i], forward, reverse: page.arrowLines ? page.reverse[i] : undefined })
     return page.arrowLines ? [[pen, entry(true)], [page.reverse[i], entry(false)]] : [[pen, entry(null)]]
   })))
 
@@ -884,7 +892,7 @@
   }
 
   function penCharOn (page, number) {
-    return PEN_PAGES[page].chars[PEN_COLOR_NUMBERS.indexOf(number)]
+    return PEN_PAGES[page].chars[PEN_COLOR_KEYS.indexOf(number)]
   }
 
   // SudokuPad's `getData` parses what it reads, so a saved '3' comes back as the number 3.
@@ -922,13 +930,13 @@
   // is a zero-length dash with the round cap `.cell-pen` already has, spaced by `thickness`, so it scales with the slider. `:root:root` outranks SudokuPad's own rules whichever
   // stylesheet loads last.
   function buildPagesCss (thickness, dash) {
-    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_NUMBERS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
+    const rules = PEN_PAGES.flatMap((page, index) => PEN_COLOR_KEYS.map((n) => swatchRule(n, index + 1, pageSwatch(page, dash, 0))))
     PEN_PAGES.forEach((page, index) => {
       if (index === 0) return
       page.chars.forEach((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])].forEach((c) => {
-        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLOR_NUMBERS[i]}); }`)
+        rules.push(`.pencolor-${c} { stroke: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); }`)
         // A line is stroked and an arrow is filled, in the same color: the arrows' path has no stroke of its own.
-        if (page.arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${PEN_COLOR_NUMBERS[i]}); stroke: none; }`)
+        if (page.arrowLines) rules.push(`:root:root .pencolor-${c} [data-arrow-line-part='arrows'] { fill: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); stroke: none; }`)
       }))
       if (!page.dashed) return
       const colors = `:is(${page.chars.map((char) => `.pencolor-${char}`).join(',')})`
@@ -983,7 +991,7 @@
   // selection both read `data-value`. Button 0 is not a pen.
   function setPadPage (page) {
     document.querySelectorAll('.controls-input button[data-key]').forEach((button) => {
-      const index = PEN_COLOR_NUMBERS.indexOf(button.dataset.key)
+      const index = PEN_COLOR_KEYS.indexOf(button.dataset.key)
       if (index === -1) return
       const pen = PEN_PAGES[page].chars[index]
       button.dataset.value = pen
@@ -1012,7 +1020,7 @@
 
   // A page turn keeps the color and changes how it draws, and a pen is always selected on the page showing.
   function turnPage (delta) {
-    const number = penNumber(selectedPen()) || PEN_COLOR_NUMBERS[0]
+    const number = penNumber(selectedPen()) || PEN_COLOR_KEYS[0]
     ToolPen.tool.setSelectedColor(penCharOn(stepEnabledPage(currentPage(), delta, inForce.lineStyles), number))
   }
 
@@ -1825,7 +1833,7 @@
   /* eslint-disable no-unused-vars */
   // Reads rem from plain.
   /* global rem */
-  // The purple panel Pen Tool Extras and Draw Tool give their tool: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
+  // A tool's purple panel: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in
   // their area but takes no cell, so the buttons fill the row.
   // SudokuPad's purple, as its own icons draw it.
@@ -1859,7 +1867,7 @@
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
 
-  // The rules both panels share, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
+  // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
   // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
   // (widening to the right) and the one drawn as a fade (faint to solid).
   function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
@@ -2173,7 +2181,7 @@ ${EDITOR} .pen-tool-extras-layout { grid-template-columns: minmax(0, 1fr); }
 ${EDITOR} .${CELL}:nth-child(n) { border-left: none; padding: 10px 0; }
 ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 }`,
-    colorBlockCss(PICKER_PREFIX, EDITOR)
+    colorBlockCss(CLASS_PREFIX, EDITOR)
   ].join('\n')
 
   const boxId = (path) => `pen-tool-extras-box-${path.replace('.', '-')}`
@@ -2182,10 +2190,10 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   // Its values are drafts that take effect on Save, so the panel's sliders and these agree when the dialog opens.
   function renderEditor (state) {
     const colorBlock = renderColorBlock({
-      prefix: PICKER_PREFIX,
+      prefix: CLASS_PREFIX,
       label: 'Pen color preset',
       options: presetChoices(state.preset, state.presets),
-      swatches: PEN_COLOR_NUMBERS.map((n) => ({ key: String(n), value: state.colors[n], label: `Pen color ${n}` }))
+      swatches: PEN_COLOR_KEYS.map((n) => ({ key: String(n), value: state.colors[n], label: `Pen color ${n}` }))
     })
     // A box with no word label carries its name as its accessible name and hover title.
     const markBox = (key, name) =>
@@ -2253,7 +2261,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   }
 
   function openDialog () {
-    installDialogTitleStyle(PICKER_PREFIX)
     let set = active
     let pickedPreset = activePickedPreset
     // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
@@ -2282,7 +2289,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     Framework.showDialog({
       parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: PICKER_PREFIX, name: 'Pen Tool Extras', version: VERSION, icons: renderCopyPasteIcons(PICKER_PREFIX) }) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Pen Tool Extras', version: VERSION }) },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',
@@ -2404,15 +2411,13 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   const titleIconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The title row's icon slot, filled with the Copy settings and Paste settings buttons and the status line they report to.
-  function renderCopyPasteIcons (prefix) {
-    return '<span data-role="settings-status"></span>' +
-      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span>`
-  }
-
-  // The dialog's first part: the name, the version beside it, and `icons` (HTML) at the right end.
-  function renderDialogTitle ({ prefix, name, version, icons = '' }) {
-    return `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>${icons}</div>`
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
   function dialogTitleCss (prefix) {
@@ -2429,16 +2434,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
-  }
-
-  // Puts the title rules in the page once, for a dialog whose script has no stylesheet of its own to hold them.
-  function installDialogTitleStyle (prefix, doc = document) {
-    const id = `${prefix}title-style`
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = dialogTitleCss(prefix)
-    doc.head.appendChild(style)
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>

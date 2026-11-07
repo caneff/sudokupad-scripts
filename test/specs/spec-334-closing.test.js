@@ -20,9 +20,9 @@ const CARRIES = {
   'settings-transfer': SETTINGS_SCRIPTS,
   panel: ['draw-tool', 'pen-tool-extras']
 }
-// Names a module provides that a script used to define for itself (the shared-code inventory's collision list).
-const MODULE_NAMES = ['parseColor', 'darkenColor', 'toHex', 'isTransparent', 'GAMUT_EDGE', 'LIGHTNESS_FACTOR', 'inkFor', 'pastedSettings', 'pasteReport',
-  'SUDOKUPAD_PEN_COLORS', 'darkerPageColors', 'isPlainObject', 'rem', 'installSliderGuards']
+// Names a module provides, which no script may define again outside its blocks.
+const MODULE_NAMES = ['parseColor', 'darkenColor', 'toHex', 'isTransparent', 'GAMUT_EDGE', 'LIGHTNESS_FACTOR', 'pastedSettings', 'pasteReport',
+  'SUDOKUPAD_PEN_COLORS', 'PEN_COLOR_NUMBERS', 'darkerPageColors', 'isPlainObject', 'rem', 'installSliderGuards']
 
 const outsideBlocks = (source) => source.split('\n').filter(((inside) => (line) => {
   if (/\/\/ <lib:/.test(line)) inside = true
