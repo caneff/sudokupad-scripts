@@ -920,7 +920,7 @@ async function withAutoMode (app, fn, stored = {}) {
     getApp: () => Promise.resolve(app),
     getData: (key) => ({ ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 }, ...stored }[key] ?? null),
     setData: () => {},
-    addAuxButton: () => {},
+    addAuxButton: (spec) => { app.buttonContent = spec.content },
     addSetting: () => {}
   }
   try {
@@ -1016,8 +1016,9 @@ test('mode: in Cell, nothing saved or auto mode saved on, loading colors the giv
 
 test('use digit colors: saved off, a saved Both loads as Cell and colors the givens, and a saved Digit loads as Off and colors nothing', async () => {
   const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
-  for (const [savedMode, colours] of [['both', [['1'], ['2']]], ['digit', [[], []]]]) {
+  for (const [savedMode, label, colours] of [['both', 'CELL', [['1'], ['2']]], ['digit', 'OFF', [[], []]]]) {
     await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+      assert.match(app.buttonContent, new RegExp(`>${label}<`), savedMode)
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
     }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
   }
