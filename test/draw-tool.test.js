@@ -423,6 +423,7 @@ test('an unmatched marker, or one with a space inside it, shows as typed', () =>
   assert.deepEqual(runs('a * b * c'), [{ text: 'a * b * c' }])
   assert.deepEqual(runs('5 ** 2'), [{ text: '5 ** 2' }])
   assert.deepEqual(runs('**a *b**'), [{ text: '**a ' }, { text: 'b', italic: true }, { text: '*' }])
+  assert.deepEqual(runs('*a *'), [{ text: '*a *' }], 'a closing marker after a space')
   assert.deepEqual(runs('~~~'), [{ text: '~~~' }])
   assert.deepEqual(runs('****'), [{ text: '****' }])
 })
