@@ -515,8 +515,8 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.click(`${ROWS}:nth-child(1)`)
   })
 
-  it('the buttons row is Cancel then Save, Save filled purple, and the page pulldown has the dialog\'s own look', async () => {
-    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Cancel', 'Save'])
+  it('the buttons row is Copy settings, Paste settings, Cancel then Save, Save filled purple, and the page pulldown has the dialog\'s own look', async () => {
+    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Copy settings', 'Paste settings', 'Cancel', 'Save'])
     assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
     assert.match(await p.$eval(`${EDITOR} select[data-act=page]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
   })

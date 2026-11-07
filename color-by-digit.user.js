@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.10.1
+// @version      0.11.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.10.1'
+  const VERSION = '0.11.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -279,10 +279,10 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
-    '<button type="button" data-act="copy-settings">Copy settings</button>' +
-    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
-    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+  // The buttons are moved into the dialog's options row, beside Cancel and Save; the status stays under the editor.
+  const COPY_PASTE_BUTTONS_HTML = '<button type="button" data-act="copy-settings">Copy settings</button>' +
+    '<button type="button" data-act="paste-settings">Paste settings</button>'
+  const COPY_PASTE_STATUS_HTML = '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
 
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
@@ -674,6 +674,9 @@
 
   const RULE_COLOR = '#e3dff0'
   const SMALL_BUTTON_SIZE = 28
+  // Two columns need this much room each; the dialog's 640 px gives them two, a phone gives one.
+  const COLUMN_MIN = 270
+  const DIALOG_WIDTH = 640
   // REMOVE_ROOM keeps the × off the pulldown and the numpad.
   const REMOVE_INSET = 8
   const REMOVE_ROOM = `${SMALL_BUTTON_SIZE + REMOVE_INSET + 4}px`
@@ -693,7 +696,6 @@
   const checkboxHtml = (role, on, label) => `<label class="cbd-check"><input type="checkbox" data-role="${role}"${on ? ' checked' : ''}> ${label}</label>`
 
   function renderProfiles (state, colorOf, newName) {
-    const sync = usesDigitColors(state) ? checkboxHtml('sync', isSynced(state), 'Sync digit profile with cell profile') : ''
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
@@ -704,7 +706,7 @@
         `<button type="button" class="cbd-button cbd-small" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
-    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) + sync +
+    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
       `<div role="radiogroup" aria-label="Active profile">${rows}</div>` +
       '<div class="cbd-add-row">' +
       `<input type="text" data-role="new-name" maxlength="${MAX_NAME_LENGTH}" placeholder="New profile name" value="${esc(newName)}" aria-label="New profile name">` +
@@ -736,7 +738,7 @@
       '<div role="menuitem" data-act="edit" style="padding:9px 10px;border-radius:8px;cursor:pointer;color:#5d5868">&#9881; Edit profiles…</div>'
   }
 
-  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors) {
+  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors, synced) {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
       const digits = NUMPAD_DIGITS.map((d) =>
@@ -750,11 +752,14 @@
     const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
     const shownMode = allowedMode(mode, useDigitColors)
     const modeChoice = `<div class="cbd-mode" role="radiogroup" aria-label="Mode">${modesFor(useDigitColors).map((m) =>
-      `<label><input type="radio" name="color-by-digit-mode" data-role="mode-draft" value="${m}"${m === shownMode ? ' checked' : ''}> ${MODE_NAMES[m]}</label>`).join('')}</div>`
+      `<button type="button" class="cbd-button" role="radio" aria-checked="${m === shownMode}" data-role="mode-draft" data-mode="${m}">${MODE_NAMES[m]}</button>`).join('')}</div>`
+    const checks = checkboxHtml('use-digit-colors', useDigitColors, 'Use digit colors') +
+      (useDigitColors ? checkboxHtml('sync', synced, 'Sync digit profile with cell profile') : '')
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    return `${checkboxHtml('use-digit-colors', useDigitColors, 'Use digit colors')}${heading('Mode')}${modeChoice}<div class="cbd-divider">${profilesHtml}</div>` +
-      `<div class="cbd-divider">${heading('Groups of the active profile', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
-      '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div>'
+    return `<div class="cbd-checks">${checks}</div>${heading('Mode')}${modeChoice}` +
+      `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
+      `<div class="cbd-column">${heading('Groups of the active profile', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
+      '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div></div>'
   }
 
   // One stylesheet, every rule scoped to the editor, the profile menu (for the chips), or the dialog's options row.
@@ -767,13 +772,18 @@
     ['.cbd-version', 'opacity: .6'],
     [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
+    [`.dialog.${DIALOG_CLASS}`, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
-    [`${EDITOR} .cbd-mode`, 'display: flex; align-items: center; gap: 18px; margin: 0 0 4px'],
-    [`${EDITOR} .cbd-mode label`, 'display: flex; align-items: center; gap: 6px; width: auto; min-width: 0; margin: 0; text-align: left'],
-    [`${EDITOR} .cbd-mode input`, 'margin: 0'],
-    [`${EDITOR} .cbd-check`, 'display: flex; align-items: center; gap: 6px; width: auto; min-width: 0; margin: 0 0 10px; text-align: left'],
-    [`${EDITOR} .cbd-check input`, 'margin: 0'],
+    [`${EDITOR} .cbd-checks`, 'display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0 0 10px'],
+    // Outranks the profile list's column rule on [role="radiogroup"].
+    [`${EDITOR} .cbd-mode[role="radiogroup"]`, 'display: flex; flex-direction: row; gap: 8px; margin: 0 0 4px'],
+    [`${EDITOR} .cbd-mode .cbd-button`, 'flex: 1'],
+    [`${EDITOR} .cbd-mode [aria-checked="true"]`, `background: ${ACTIVE_FILL}; border-color: ${ACTIVE_RING}; color: ${ACTIVE_INK}; font-weight: 600`],
+    [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
+    [`${EDITOR} .cbd-column`, 'min-width: 0'],
+    [`${EDITOR} .cbd-check`, 'display: flex; align-items: center; gap: 6px; flex: none; width: auto; min-width: 0; margin: 0; padding: 0; text-align: left; white-space: nowrap'],
+    [`${EDITOR} .cbd-check input`, 'flex: none; width: auto; min-width: 0; margin: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-small`, `padding: 0 10px; height: ${SMALL_BUTTON_SIZE}px; line-height: ${SMALL_BUTTON_SIZE - 2}px`],
     [`${EDITOR} [data-act="remove"]`, `position: absolute; top: ${REMOVE_INSET}px; right: ${REMOVE_INSET}px; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
@@ -800,13 +810,14 @@
     [`${EDITOR} .cbd-add-row`, 'display: flex; gap: 8px; margin: 8px 0'],
     [`${EDITOR} [data-role="new-name"]`, 'flex: 1; padding: 6px 8px'],
     [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
-    [OPTIONS, `display: flex; flex-direction: row; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
+    [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
     [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
+    [`${OPTIONS} button[data-act="paste-settings"]`, 'margin-right: auto'],
     [`${OPTIONS} button[data-role="save"]`, 'background: #6b3fa0; color: #fff; border: 1px solid #5a3489; font-weight: 600']
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1198,7 +1209,7 @@
       parts: [
         { tag: 'text', innerHTML: `<b>Color by Digit</b> <small class="cbd-version">v${VERSION}</small>` },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
-        { tag: 'text', innerHTML: COPY_PASTE_HTML },
+        { tag: 'text', innerHTML: COPY_PASTE_STATUS_HTML },
         {
           tag: 'options',
           options: [
@@ -1210,16 +1221,19 @@
     })
     const box = document.getElementById(EDITOR_ID)
     if (!box) return
-    const row = box.closest('.dialog') && box.closest('.dialog').querySelector('.dialog-options')
+    const dialog = box.closest('.dialog')
+    if (dialog) dialog.classList.add(DIALOG_CLASS)
+    const row = dialog && dialog.querySelector('.dialog-options')
     if (row) {
       row.classList.add(DIALOG_CLASS)
+      row.insertAdjacentHTML('afterbegin', COPY_PASTE_BUTTONS_HTML)
       row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     }
     let shown = []
     const draw = () => {
       const groups = activeGroups(draft)
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, newName), usesDigitColors(draft))
+      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, newName), usesDigitColors(draft), isSynced(draft))
     }
     const reshow = (next) => { draft = next; shown = [] }
     const addProfileFromField = () => {
@@ -1249,8 +1263,6 @@
       addProfileFromField()
     })
     box.addEventListener('change', (event) => {
-      const choice = event.target.closest('input[data-role="mode-draft"]')
-      if (choice) { draftMode = choice.value; return }
       // The draft mode is kept as chosen: unticking "Use digit colors" shows its fallback, and ticking it again before Save shows the mode again.
       if (event.target.matches('[data-role="use-digit-colors"]')) { draft = setUseDigitColors(draft, event.target.checked); draw(); return }
       if (event.target.matches('[data-role="sync"]')) { draft = setSync(draft, event.target.checked); draw(); return }
@@ -1303,6 +1315,15 @@
         event.preventDefault()
         event.stopPropagation()
         activateRow(Number(row.dataset.index), false)
+        return
+      }
+      const modeButton = event.target.closest('button[data-role="mode-draft"]')
+      if (modeButton) {
+        event.preventDefault()
+        event.stopPropagation()
+        draftMode = modeButton.dataset.mode
+        draw()
+        box.querySelector(`[data-role="mode-draft"][data-mode="${draftMode}"]`).focus()
         return
       }
       const el = event.target.closest('button[data-act]')

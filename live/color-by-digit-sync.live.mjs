@@ -69,7 +69,7 @@ const tools = (p) => {
     await p.click(selector)
     assert.equal(await settle(() => p.locator(selector).isChecked(), want), want)
   }
-  const modeChoice = () => p.$$eval(`${EDITOR} input[data-role="mode-draft"]`, (es) => es.map((e) => `${e.value}${e.checked ? '*' : ''}`))
+  const modeChoice = () => p.$$eval(`${EDITOR} button[data-role="mode-draft"]`, (es) => es.map((e) => `${e.dataset.mode}${e.getAttribute('aria-checked') === 'true' ? '*' : ''}`))
   return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, menu, pick, openEditor, save, toggle, modeChoice }
 }
 
