@@ -1,5 +1,5 @@
-// Live check of Color by Digit's digit profile on sudokupad.app, in headless Chromium: "Sync digit profile with cell
-// profile" unticked, so cells and digits take different profiles, and "Use digit colors" turning digit coloring off.
+// Live check of Color by Digit's digit profile on sudokupad.app, in headless Chromium: the dialog's Digit pulldown on a named
+// profile, so cells and digits take different profiles, on Same as cell, and on None, which turns digit coloring off.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -13,8 +13,8 @@ const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url
 const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../color-by-digit.user.js'))
 
 const CIRCLES = '#color-by-digit-circles'
-const SYNC = `${EDITOR} input[data-role="sync"]`
-const USE_DIGIT_COLORS = `${EDITOR} input[data-role="use-digit-colors"]`
+const DIGIT_SELECT = `${EDITOR} select[data-role="digit-profile"]`
+const CELL_SELECT = `${EDITOR} select[data-role="cell-profile"]`
 // 1 to 5 on palette key 4, 8 and 9 on key 6. Its icon shows 3 and 9; Odd/Even's shows 5 and 4.
 const SPLIT = [group('4', ['1', '2', '3', '4', '5']), group('6', ['8', '9'])]
 const SPLIT_ICON = ['3', '9']
@@ -64,13 +64,13 @@ const tools = (p) => {
   }
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
   const save = () => closeDialogWith(p, 'Save', EDITOR)
-  // Clicked, not checked: a click redraws the editor, so the box Playwright clicked is gone when it would look.
-  const toggle = async (selector, want) => {
-    await p.click(selector)
-    assert.equal(await settle(() => p.locator(selector).isChecked(), want), want)
+  // A pick redraws the editor, so the pulldown is read again after it.
+  const chooseDigit = async (value) => {
+    await p.selectOption(DIGIT_SELECT, value)
+    assert.equal(await settle(() => p.locator(DIGIT_SELECT).inputValue(), value), value)
   }
-  const modeChoice = () => p.$$eval(`${EDITOR} button[data-role="mode-draft"]`, (es) => es.map((e) => `${e.dataset.mode}${e.getAttribute('aria-checked') === 'true' ? '*' : ''}`))
-  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, menu, pick, openEditor, save, toggle, modeChoice }
+  const modeChoice = () => p.$$eval(`${EDITOR} select[data-role="mode-draft"] option`, (es) => es.map((e) => `${e.value}${e.selected ? '*' : ''}`))
+  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, menu, pick, openEditor, save, chooseDigit, modeChoice }
 }
 
 describe('the digit profile unsynced, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
@@ -86,18 +86,19 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   })
   after(async () => { await context.close() })
 
-  it('synced, the menu is one list and the dialog\'s sync checkbox is ticked', async () => {
+  it('synced, the menu is one list and the dialog\'s Digit pulldown says Same as cell', async () => {
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], sections: [] })
     await t.openEditor()
-    assert.equal(await p.locator(SYNC).isChecked(), true)
+    assert.equal(await p.locator(DIGIT_SELECT).inputValue(), 'same')
+    assert.equal(await p.locator(DIGIT_SELECT).evaluate((e) => e.selectedOptions[0].textContent), 'Same as cell')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('unticking sync and saving changes no color on the board, and the menu shows Cells and Digits, each on Split', async () => {
+  it('picking the cell profile in Digit and saving changes no color on the board, and the menu shows Cells and Digits, each on Split', async () => {
     assert.deepEqual(await settle(t.cells, SPLIT_CELLS), SPLIT_CELLS)
     assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
     await t.openEditor()
-    await t.toggle(SYNC, false)
+    await t.chooseDigit('0')
     await t.save()
     assert.equal((await t.getState()).digitActive, 0)
     assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
@@ -182,11 +183,12 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], sections: ['Cells', 'Digits'] })
   })
 
-  it('ticking sync again makes the digits take the cell profile, and the menu is one list again', async () => {
+  it('picking Same as cell again makes the digits take the cell profile, and the menu is one list again', async () => {
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     await t.openEditor()
-    await t.toggle(SYNC, true)
+    await t.chooseDigit('same')
     await t.save()
+    assert.equal('digitActive' in await t.getState(), false)
     assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
     assert.deepEqual(await t.icon(), SPLIT_ICON)
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], sections: [] })
@@ -197,7 +199,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   })
 })
 
-describe('the dialog\'s Cells and Digits tags, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
+describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors, t
   const SHADE = {}
   const fill = (digit) => allFillsOn(p, 'entered', digit)
@@ -211,28 +213,47 @@ describe('the dialog\'s Cells and Digits tags, saved synced in Both, injected af
   })
   after(async () => { await context.close() })
 
-  it('selecting a row changes no color and saves no pick; with sync off each row has a Cells and a Digits tag', async () => {
+  it('selecting a row changes no color and saves no pick, and a row has no tag', async () => {
     assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
     await t.openEditor()
-    await t.toggle(SYNC, false)
-    assert.deepEqual(await p.$$eval(`${ROW(1)} .cbd-tag`, (es) => es.map((e) => e.textContent)), ['Cells', 'Digits'])
+    await t.chooseDigit('0')
+    assert.equal(await p.locator(`${ROW(1)} button:not([data-act=delete])`).count(), 0)
     await p.click(ROW(1), { position: { x: 4, y: 4 } })
     assert.equal(await p.locator(`${ROW(1)}[aria-checked=true]`).count(), 1)
+    assert.equal(await p.locator(CELL_SELECT).inputValue(), '0')
+    assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '0')
     await t.save()
     assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive]), [0, 0])
     assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
     assert.deepEqual(await watch(fill('4')), [[SHADE[4]]])
   })
 
-  it('tagging a digit profile and saving colors the digits from it and no cell', async () => {
+  it('choosing a separate digit profile and saving colors the digits from it and no cell', async () => {
     await t.openEditor()
-    await p.click(`${ROW(1)} [data-act=tag-digits]`)
-    assert.equal(await p.locator(`${ROW(1)} [data-act=tag-digits][aria-pressed=true]`).count(), 1)
-    assert.equal(await p.locator(`${ROW(0)} [data-act=tag-cells][aria-pressed=true]`).count(), 1)
+    await t.chooseDigit('1')
+    assert.equal(await p.locator(CELL_SELECT).inputValue(), '0')
     await t.save()
     assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive]), [0, 1])
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
+  })
+
+  it('the Cell pulldown sets the cell profile and leaves the digit profile', async () => {
+    await t.openEditor()
+    await p.selectOption(CELL_SELECT, '1')
+    await t.save()
+    assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive]), [1, 1])
+    assert.deepEqual(await settle(t.cells, ODD_EVEN_CELLS), ODD_EVEN_CELLS)
+  })
+
+  it('Cancel drops all three pulldowns', async () => {
+    await t.openEditor()
+    await p.selectOption(CELL_SELECT, '0')
+    await p.selectOption(`${EDITOR} select[data-role="mode-draft"]`, 'off')
+    await t.chooseDigit('none')
+    await closeDialogWith(p, 'Cancel', EDITOR)
+    assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive, s.useDigitColors]), [1, 1, undefined])
+    assert.deepEqual(await settle(t.cells, ODD_EVEN_CELLS), ODD_EVEN_CELLS)
   })
 
   it('no uncaught page errors', () => {
@@ -240,7 +261,7 @@ describe('the dialog\'s Cells and Digits tags, saved synced in Both, injected af
   })
 })
 
-describe('"Use digit colors" turned off and on, saved unsynced in Both, injected after Start Puzzle', { concurrency: false }, () => {
+describe('the Digit pulldown on None and back, saved unsynced in Both, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors, t
   const SHADE = {}
   const fill = (digit) => allFillsOn(p, 'entered', digit)
@@ -262,16 +283,17 @@ describe('"Use digit colors" turned off and on, saved unsynced in Both, injected
     assert.equal(await settle(t.shownCircles, 1), 1)
   })
 
-  it('the checkbox sits at the top of the dialog; unticked, the mode choice is Cell and Off with Both fallen back to Cell, and the sync checkbox hides', async () => {
+  it('the Digit pulldown is at the top of the dialog; on None, the mode choice is Cell and Off with Both fallen back to Cell', async () => {
     await t.openEditor()
-    const order = await p.$$eval(`${EDITOR} input`, (es) => es.map((e) => e.dataset.role))
-    assert.equal(order[0], 'use-digit-colors')
-    assert.equal(await p.locator(USE_DIGIT_COLORS).isChecked(), true)
+    assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '1')
     assert.deepEqual(await t.modeChoice(), ['cell', 'digit', 'both*', 'off'])
-    assert.equal(await p.locator(SYNC).count(), 1)
-    await t.toggle(USE_DIGIT_COLORS, false)
+    assert.deepEqual(await p.locator(`${DIGIT_SELECT} option`).evaluateAll((es) => es.map((e) => e.textContent)), ['Same as cell', 'Split', 'Odd/Even', 'None'])
+    await t.chooseDigit('none')
     assert.deepEqual(await t.modeChoice(), ['cell*', 'off'])
-    assert.equal(await p.locator(SYNC).count(), 0)
+    // The draft mode moved with it: a digit profile picked again shows Cell, not the Both it fell back from.
+    await t.chooseDigit('1')
+    assert.deepEqual(await t.modeChoice(), ['cell*', 'digit', 'both', 'off'])
+    await t.chooseDigit('none')
     await t.save()
   })
 
@@ -301,11 +323,12 @@ describe('"Use digit colors" turned off and on, saved unsynced in Both, injected
     assert.deepEqual(await watch(fill('4')), [[DEFAULT_FILL]])
   })
 
-  it('ticked again: the four modes, the sync checkbox unticked, and both picks as they were', async () => {
+  it('a digit profile picked again: the four modes with Cell still chosen, and the cell profile as it was', async () => {
     await t.openEditor()
-    await t.toggle(USE_DIGIT_COLORS, true)
+    assert.equal(await p.locator(DIGIT_SELECT).inputValue(), 'none')
+    await t.chooseDigit('1')
     assert.deepEqual(await t.modeChoice(), ['cell*', 'digit', 'both', 'off'])
-    assert.equal(await p.locator(SYNC).isChecked(), false)
+    assert.equal(await p.locator(CELL_SELECT).inputValue(), '0')
     await t.save()
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], sections: ['Cells', 'Digits'] })
     await pressTo(p, 'DIGIT')
@@ -313,9 +336,9 @@ describe('"Use digit colors" turned off and on, saved unsynced in Both, injected
     assert.equal(await settle(t.shownCircles, 1), 1)
   })
 
-  it('unticked while in Digit, the mode falls back to Off and the digits lose their color', async () => {
+  it('None picked while in Digit, the mode falls back to Off and the digits lose their color', async () => {
     await t.openEditor()
-    await t.toggle(USE_DIGIT_COLORS, false)
+    await t.chooseDigit('none')
     assert.deepEqual(await t.modeChoice(), ['cell', 'off*'])
     await t.save()
     assert.equal(await settle(t.label, 'OFF'), 'OFF')

@@ -1,5 +1,5 @@
-// Live check of the Color by Digit dialog's layout (#304) at 1200x900 and 390x800 on sudokupad.app in headless Chromium: checkboxes beside
-// their labels, the mode as one row of buttons, Copy and Paste settings in the options row at the other buttons' height, two columns on a
+// Live check of the Color by Digit dialog's layout (#304, #333) at 1200x900 and 390x800 on sudokupad.app in headless Chromium: the Mode, Cell
+// and Digit pulldowns in one row on a desktop and stacked on a phone, Copy and Paste settings as icons in the title row, two columns on a
 // desktop and one on a phone, with no sideways overflow. How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'
@@ -14,7 +14,6 @@ const DESKTOP = { width: 1200, height: 900 }
 const PHONE = { width: 390, height: 800 }
 const DESKTOP_DIALOG_PX = 640
 const NEAR_PX = 1
-const MAX_ONE_LINE_PX = 30
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -30,24 +29,15 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
     })
     after(async () => { await context?.close() })
 
-    it('puts each checkbox beside its label, in one row at the top', async () => {
-      const boxes = await p.locator(`${EDITOR} .cbd-check`).evaluateAll((labels) => labels.map((l) => {
-        const input = l.querySelector('input').getBoundingClientRect()
-        const text = l.getBoundingClientRect()
-        return { height: text.height, inputRight: input.right, labelRight: text.right, inputMid: input.y + input.height / 2, labelMid: text.y + text.height / 2, labelWidth: text.width }
-      }))
-      assert.equal(boxes.length, 2)
-      for (const b of boxes) {
-        assert.equal(b.height < MAX_ONE_LINE_PX, true, `label text stays on one line: ${JSON.stringify(b)}`)
-        assert.equal(Math.abs(b.inputMid - b.labelMid) <= 2, true, `checkbox and label share a line: ${JSON.stringify(b)}`)
-        assert.equal(b.labelWidth > b.inputRight - (b.labelRight - b.labelWidth) + 40, true, `label text sits beside the box: ${JSON.stringify(b)}`)
-      }
-    })
-
-    it('lays the four mode buttons in one row', async () => {
-      const tops = await p.locator(`${EDITOR} button[data-role="mode-draft"]`).evaluateAll((es) => es.map((e) => Math.round(e.getBoundingClientRect().y)))
-      assert.equal(tops.length, 4)
-      assert.deepEqual([...new Set(tops)].length, 1)
+    it(`lays the Mode, Cell and Digit pulldowns ${columns === 2 ? 'in one row' : 'one under another'}, with no checkbox and no mode button`, async () => {
+      const boxes = await p.locator(`${EDITOR} .cbd-pulldown select`).evaluateAll((es) => es.map((e) => { const r = e.getBoundingClientRect(); return { role: e.dataset.role, x: Math.round(r.x), y: Math.round(r.y), right: Math.round(r.right), width: Math.round(r.width) } }))
+      assert.deepEqual(boxes.map((b) => b.role), ['mode-draft', 'cell-profile', 'digit-profile'])
+      assert.equal(await p.locator(`${EDITOR} input[type=checkbox], ${EDITOR} button[data-role="mode-draft"]`).count(), 0)
+      const rows = new Set(boxes.map((b) => b.y)).size
+      const columnsUsed = new Set(boxes.map((b) => b.x)).size
+      assert.deepEqual([rows, columnsUsed], columns === 2 ? [1, 3] : [3, 1], JSON.stringify(boxes))
+      const dialog = await rect('.dialog')
+      for (const b of boxes) assert.equal(b.right <= dialog.right, true, `inside the dialog: ${JSON.stringify(boxes)}`)
     })
 
     it(`has ${columns} column${columns === 1 ? '' : 's'}, the list left of or above the editor, and no sideways overflow`, async () => {
@@ -60,10 +50,14 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
       assert.equal(overflow.doc <= overflow.win, true, JSON.stringify(overflow))
     })
 
-    it('sizes Copy and Paste settings like Cancel and Save, in the same row', async () => {
-      const heights = await p.locator('.dialog-options button').evaluateAll((es) => es.map((e) => ({ text: e.textContent.trim(), height: e.getBoundingClientRect().height })))
-      assert.deepEqual(heights.map((h) => h.text), ['Copy settings', 'Paste settings', 'Cancel', 'Save'])
-      for (const h of heights) assert.equal(Math.abs(h.height - heights[3].height) <= NEAR_PX, true, JSON.stringify(heights))
+    it('puts Copy settings and Paste settings as two icons at the right end of the title row, and only Cancel and Save in the bottom row', async () => {
+      const icons = await p.locator('.cbd-title-row [data-act$="-settings"]').evaluateAll((es) => es.map((e) => ({ act: e.dataset.act, label: e.getAttribute('aria-label'), title: e.title, text: e.textContent.trim(), ...(({ x, y, right, width, height }) => ({ x, y, right, width, height }))(e.getBoundingClientRect()) })))
+      assert.deepEqual(icons.map((i) => [i.act, i.label, i.title, i.text]), [['copy-settings', 'Copy settings', 'Copy settings', ''], ['paste-settings', 'Paste settings', 'Paste settings', '']])
+      const row = await rect('.cbd-title-row')
+      assert.equal(row.right - icons[1].right <= 12, true, `paste icon sits at the row's right end: ${JSON.stringify([row, icons])}`)
+      assert.equal(icons[1].x >= icons[0].right - NEAR_PX && Math.abs(icons[0].y - icons[1].y) <= NEAR_PX, true, JSON.stringify(icons))
+      for (const i of icons) assert.equal(i.width >= 20 && i.height >= 20 && i.height <= 40, true, `icon size: ${JSON.stringify(i)}`)
+      assert.deepEqual(await p.locator('.dialog-options button').evaluateAll((es) => es.map((e) => e.textContent.trim())), ['Cancel', 'Save'])
     })
 
     if (viewport === DESKTOP) {

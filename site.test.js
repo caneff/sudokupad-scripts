@@ -281,7 +281,7 @@ const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, 
 
 // Color by Digit's entry and details page.
 const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
-const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Sync digit profile with cell profile.', 'Use digit colors.']
+const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Digit: Same as cell.', 'Digit: None.']
 // The lead-ins that carry one picture, and the picture each shows.
 const CBD_PICTURES = {
   'Digit and mark shades.': 'color-by-digit-details-digit'
@@ -430,11 +430,11 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   assert.equal(found.length, 1, 'the settings dialog section is not one picture')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/color-by-digit-dialog-annotated.png"`))
   const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
-  for (const label of ['Top row', 'Profile list', 'Name box', 'Group rows', 'Open group', 'Bottom row']) {
+  for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Group rows', 'Open group', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   const text = plain(m[1])
-  for (const word of ['profiles', 'groups', 'tags', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
+  for (const word of ['profiles', 'groups', 'pulldowns', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
 })
 
 test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, () => {
