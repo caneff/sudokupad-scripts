@@ -24,7 +24,7 @@
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
   const DEFAULT_WIDTH = 6
-  // Percent. There is no opacity control now; a note saved with one keeps it, and one saved before opacity existed reads as the default.
+  // Percent. A note has no opacity control; one saved with an opacity keeps it, and one saved without reads as the default.
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
@@ -88,6 +88,7 @@
   const COLORS_STYLE_ID = 'draw-tool-colors'
   const PANEL_STYLE_ID = 'draw-tool-style'
   const SIZE_SLIDER = 'draw-tool-size'
+  const SIZE_LABEL = 'Size'
   // Pen Tool Extras' slider tray: the same purple tray and wedge track.
   const PANEL_COLOR = '#6a1b9a'
   const TRAY_COLOR = '#efeaf4'
@@ -104,6 +105,7 @@
   const ERASE_TOLERANCE = 4
   const PRIMARY_BUTTON = 0
   const SECONDARY_BUTTON = 2
+  const TEXT_KIND = 'text'
   // Kinds an earlier version saved; they stay in storage and are never drawn.
   const HIDDEN_KINDS = ['stroke', 'shape']
   const TEXT_GLYPH = '<path d="M8 15l4-8 4 8M9.5 12.5h5"/>'
@@ -126,19 +128,27 @@
     return { left: x - halfWidth, right: x + halfWidth, top: y - item.size / 2, bottom: y + item.size / 2 }
   }
 
+  // What a note answers to: its text's box, and with a background the box drawn behind it.
+  function noteBox (item) {
+    const box = textBox(item)
+    if (!item.bg) return box
+    const [padX, padY] = [item.size * BACKGROUND_PAD_X, item.size * BACKGROUND_PAD_Y]
+    return { left: box.left - padX, right: box.right + padX, top: box.top - padY, bottom: box.bottom + padY }
+  }
+
   const inBox = ([x, y], box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
 
   // The index of the text a click at `at` lands on, the one drawn last when texts overlap, or -1 for none.
   function textAt (drawing, at) {
     for (let i = drawing.length - 1; i >= 0; i--) {
-      if (drawing[i].kind === 'text' && inBox(at, textBox(drawing[i]))) return i
+      if (drawing[i].kind === TEXT_KIND && inBox(at, noteBox(drawing[i]))) return i
     }
     return -1
   }
 
-  // Whether an erase from `from` to `to` passes within the tolerance of the text's box.
+  // Whether an erase from `from` to `to` passes within the tolerance of the note's box.
   function touchesText (item, from, to) {
-    const b = textBox(item)
+    const b = noteBox(item)
     const box = { left: b.left - ERASE_TOLERANCE, right: b.right + ERASE_TOLERANCE, top: b.top - ERASE_TOLERANCE, bottom: b.bottom + ERASE_TOLERANCE }
     if (inBox(from, box) || inBox(to, box)) return true
     const corners = [[box.left, box.top], [box.right, box.top], [box.right, box.bottom], [box.left, box.bottom]]
@@ -161,7 +171,7 @@
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readBackground = (saved) => saved === true
-  // Board units, as a text's height: the slider's value, the width it once set a line's, gives the text size.
+  // Board units, as a text's height: the size slider's value gives the text size.
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
@@ -342,11 +352,11 @@
   }
 
   // A note is a text item. `bg` is set only on a note made with the Background button on, so a note saved without it has no box.
-  const textItem = ([x, y], text, color, size, background) => ({ kind: 'text', color, size, opacity: DEFAULT_OPACITY, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
+  const textItem = ([x, y], text, color, size, background) => ({ kind: TEXT_KIND, color, size, opacity: DEFAULT_OPACITY, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
   const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
-  const isText = (item) => isPlainObject(item) && item.kind === 'text' && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
+  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
     (item.bg === undefined || item.bg === true) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 && isPoint(item.at)
   // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
@@ -398,7 +408,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -614,22 +624,18 @@
   }
 
   // The slider sets only the next note and is saved for the next visit, and a paste sets it as a move of the slider would.
-  const SLIDERS = [
-    { id: SIZE_SLIDER, label: 'Size', key: WIDTH_KEY, min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP, read: readWidth, get: () => width, set: (value) => { width = value } }
-  ]
-
-  function setSlider (slider, value) {
-    slider.set(value)
-    Framework.setData(slider.key, value)
+  function setSize (value) {
+    width = value
+    Framework.setData(WIDTH_KEY, value)
   }
 
-  function sliderRow ({ id, label, min, max, step, get }) {
+  function sizeRow () {
     const row = document.createElement('div')
     row.className = SLIDER_ROW_CLASS
-    row.title = label
+    row.title = SIZE_LABEL
     const input = document.createElement('input')
-    Object.assign(input, { type: 'range', id, min, max, step, value: get(), tabIndex: -1 })
-    input.setAttribute('aria-label', label)
+    Object.assign(input, { type: 'range', id: SIZE_SLIDER, min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP, value: width, tabIndex: -1 })
+    input.setAttribute('aria-label', SIZE_LABEL)
     const [small, large] = ['A', 'A'].map((letter) => Object.assign(document.createElement('span'), { textContent: letter }))
     row.append(small, input, large)
     return row
@@ -678,11 +684,10 @@
 
   // A pasted value is saved and shown at once, whether or not Text Annotation is current.
   function applyPasted (values) {
-    for (const slider of SLIDERS) {
-      if (!(slider.key in values)) continue
-      setSlider(slider, values[slider.key])
-      const input = document.getElementById(slider.id)
-      if (input) input.value = values[slider.key]
+    if (WIDTH_KEY in values) {
+      setSize(values[WIDTH_KEY])
+      const input = document.getElementById(SIZE_SLIDER)
+      if (input) input.value = values[WIDTH_KEY]
     }
     if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
   }
@@ -759,11 +764,34 @@
   const BACKGROUND_OFF_LABEL = 'Background: off. Click to turn on'
   const BACKGROUND_ICON = `<rect class="${BACKGROUND_FILL_CLASS}" x="3" y="5" width="18" height="14" rx="3" fill="currentColor" fill-opacity=".22"/><rect x="3" y="5" width="18" height="14" rx="3" stroke-dasharray="3 3"/>${TEXT_GLYPH}`
 
-  function showBackground (button) {
-    const label = background ? BACKGROUND_ON_LABEL : BACKGROUND_OFF_LABEL
+  // The button shows the open note's own background while a note is open, and the setting for the next note otherwise.
+  const backgroundShown = () => editing ? Boolean(editing.item.bg) : background
+
+  function showBackground () {
+    const button = document.querySelector(`.${BACKGROUND_CLASS}`)
+    if (!button) return
+    const label = backgroundShown() ? BACKGROUND_ON_LABEL : BACKGROUND_OFF_LABEL
     button.title = label
     button.setAttribute('aria-label', label)
-    button.setAttribute('aria-pressed', String(background))
+    button.setAttribute('aria-pressed', String(backgroundShown()))
+  }
+
+  function setBackground (on) {
+    background = on
+    Framework.setData(BACKGROUND_KEY, on)
+  }
+
+  // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the setting.
+  function pressBackground () {
+    if (!editing) setBackground(!background)
+    else {
+      const on = !editing.item.bg
+      const { bg, ...rest } = editing.item
+      editing.item = on ? { ...rest, bg: true } : rest
+      editing.input.style.backgroundColor = on ? PAGE_COLOR : 'transparent'
+      if (editing.index === -1) setBackground(on)
+    }
+    showBackground()
   }
 
   function showPanel () {
@@ -784,24 +812,16 @@
     const backgroundButton = document.createElement('button')
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
-    showBackground(backgroundButton)
     // A press on the button keeps the focus in an open text box, so the box stays open for the click.
     backgroundButton.addEventListener('mousedown', (event) => event.preventDefault())
-    backgroundButton.addEventListener('click', () => {
-      background = !background
-      Framework.setData(BACKGROUND_KEY, background)
-      showBackground(backgroundButton)
-      if (editing) setEditedBackground()
-    })
+    backgroundButton.addEventListener('click', pressBackground)
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
-    sliders.append(...SLIDERS.map(sliderRow))
-    sliders.addEventListener('input', (event) => {
-      const slider = SLIDERS.find((s) => s.id === event.target.id)
-      setSlider(slider, slider.read(Number(event.target.value)))
-    })
+    sliders.append(sizeRow())
+    sliders.addEventListener('input', (event) => setSize(readWidth(Number(event.target.value))))
     panelParts = [tray, clear, backgroundButton, settings, sliders]
     keypad().append(...panelParts)
+    showBackground()
   }
 
   function hidePanel () {
@@ -885,7 +905,7 @@
     const layer = drawingLayer()
     layer.replaceChildren()
     drawing.forEach((item, i) => {
-      if (item.kind === 'text' && (!editing || editing.index !== i)) newText(layer, item)
+      if (item.kind === TEXT_KIND && (!editing || editing.index !== i)) newText(layer, item)
     })
   }
 
@@ -903,7 +923,7 @@
 
   function save () {
     if (!savable) {
-      report('This puzzle\'s saved drawing cannot be read, so Text Annotation leaves it as it is and does not save the notes on this puzzle. Clear all or Restart replaces it.')
+      report('This puzzle\'s saved notes cannot be read, so Text Annotation leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
       return
     }
     try {
@@ -946,6 +966,7 @@
     document.body.appendChild(input)
     placeTextBox()
     renderDrawing()
+    showBackground()
     input.focus()
   }
 
@@ -963,14 +984,8 @@
       else drawing[index] = { ...item, text }
     }
     renderDrawing()
+    showBackground()
     if (changed) save()
-  }
-
-  // While a note is open, the Background button turns that note's background on or off with the setting.
-  function setEditedBackground () {
-    const { bg, ...rest } = editing.item
-    editing.item = background ? { ...rest, bg: true } : rest
-    editing.input.style.backgroundColor = background ? PAGE_COLOR : 'transparent'
   }
 
   function dropText () {
@@ -978,6 +993,7 @@
     editing = null
     input.remove()
     renderDrawing()
+    showBackground()
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
@@ -1009,11 +1025,7 @@
     if (erasing) endErase()
     if (!drag) return
     if (drag.move && !isClick(drag.points)) endMove()
-    else dropDrag()
-  }
-
-  function dropDrag () {
-    drag = null
+    else drag = null
   }
 
   const dragOffset = () => {
@@ -1050,25 +1062,25 @@
       drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
       savable = true
     } catch (err) {
-      console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's drawing is not saved.`)
+      console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's notes are not saved.`)
       drawing = []
       savable = false
     }
     renderDrawing()
   }
 
-  // An unreadable saved drawing is written over too.
+  // The saved strokes and shapes of an earlier version are left as they are, but an unreadable saved drawing is written over.
   function emptyDrawing () {
-    drawing = []
+    drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
     drawingLayer().replaceChildren()
     savable = true
     save()
   }
 
-  // Deletes, whole, every item the drag from `from` to `to` passes near.
+  // Deletes, whole, every note the drag from `from` to `to` passes near.
   function eraseAlong (from, to) {
-    const kept = drawing.filter((item) => item.kind !== 'text' || !touchesText(item, from, to))
+    const kept = drawing.filter((item) => item.kind !== TEXT_KIND || !touchesText(item, from, to))
     if (kept.length === drawing.length) return
     drawing = kept
     erasing.erased = true
@@ -1152,12 +1164,12 @@
       // A text box opens only on the release of Text Annotation's own press, never on a release or click alone.
       if (isClick(drag.points)) {
         const [at] = drag.points
-        dropDrag()
+        drag = null
         openText(at)
         return true
       }
       if (drag.move) endMove()
-      else dropDrag()
+      else drag = null
       return true
     },
     handleToolEnter () {
@@ -1185,7 +1197,7 @@
 
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
-    for (const slider of SLIDERS) slider.set(slider.read(Framework.getData(slider.key)))
+    width = readWidth(Framework.getData(WIDTH_KEY))
     background = readBackground(Framework.getData(BACKGROUND_KEY))
     colors = readDrawColors(Framework.getData(COLORS_KEY))
     showColors()

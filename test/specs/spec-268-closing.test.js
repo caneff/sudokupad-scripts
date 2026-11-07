@@ -9,8 +9,7 @@ const storeOf = (saved) => ({
   removeData: (key) => { delete saved[key] }
 })
 
-// Spec 268's acceptance at `npm test`, through Text Annotation's pure functions (the script was Draw Tool, with strokes and shapes, until #404
-// dropped them): a text and a click on it, the notes saved per puzzle and read back, the 51st puzzle dropping the oldest, a stored stroke
+// Spec 268's acceptance at `npm test`, through Text Annotation's pure functions: a text and a click on it, the notes saved per puzzle and read back, the 51st puzzle dropping the oldest, a stored stroke
 // kept untouched, and the panel's choices read back with bad values refused. This seam is blind to real
 // SudokuPad: the Text button, the mouse and keys, the notes on the board, the text box, the dialogs, Restart and the
 // reload are `npm run test:live`'s. Neither run covers a real Tampermonkey install, touch, a
@@ -26,7 +25,7 @@ test('spec 268 gives a solver a text tool whose notes are kept per puzzle', () =
   assert.equal(isClick([[300, 300], [301, 300]]), true)
   assert.equal(isClick([[300, 300], [340, 300]]), false, 'a drag is no click')
   const sum = textItem([300, 300], '15', 1, draw.textSizeFor(draw.DEFAULT_WIDTH))
-  // A stroke saved by Draw Tool before #404 stays in the saved list.
+  // A stroke saved by an earlier version stays in the saved list.
   const oldStroke = { kind: 'stroke', color: 1, width: 6, points: [[0, 0], [64, 64]] }
   const drawing = [oldStroke, sum]
   assert.equal(textAt(drawing, [302, 298]), 1)

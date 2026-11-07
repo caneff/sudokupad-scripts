@@ -15,8 +15,7 @@ const SUDOKUPAD = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '
 const PEN = { 1: '#112233', 2: '#223344', 3: '#334455', 4: '#445566', 5: '#556677', 6: '#667788', 7: '#778899', 8: '#8899aa', 9: '#99aabb' }
 const readPen = (n) => PEN[n]
 
-// Spec 301's acceptance as one pass over Text Annotation's pure functions and the site, at `npm test` (the script was Draw Tool, with Opacity
-// and Shape mode, until #404 dropped them): the slider range and text size from it, a missing opacity read as solid (Chris's ruling D4),
+// Spec 301's acceptance as one pass over Text Annotation's pure functions and the site, at `npm test`: the slider range and text size from it, a missing opacity read as solid (Chris's ruling D4),
 // its own nine colors and the first-use copy; the presets and Copy/Paste settings; old drawings; and the homepage, details page
 // and README. This seam is blind to real
 // SudokuPad: the panel's layout in the keypad, the hold-to-recolor picker, a drag on the board, rendering, the settings
@@ -46,7 +45,7 @@ test('spec 301: Text Annotation has its own colors, one Size slider and a settin
   assert.deepEqual(draw.presetColors('sudokupad', [], null, readPen), SUDOKUPAD)
   assert.deepEqual(draw.presetColors('pen', [], null, readPen), PEN)
 
-  // Copy carries the colors, the size and the Background choice and no notes; Paste keeps its own values, skips bad ones and counts them.
+  // Copy carries the colors and the size and no notes; Paste keeps its own values, skips bad ones and counts them.
   const copied = JSON.parse(draw.copiedSettings(storeOf({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
   assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5 })
   const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }))

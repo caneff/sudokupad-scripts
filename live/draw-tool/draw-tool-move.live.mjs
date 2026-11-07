@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, STROKES, TEXT_BGS, TEXT_BOX } = draw
+const { BACKGROUND_BUTTON, STROKES, TEXT_BGS, TEXT_BOX, TEXTS } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0); a real mouse lands on whole page pixels, so positions are checked to within a unit.
 const CELL = 64
 const NEAR_UNITS = 1.5
@@ -64,13 +64,13 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     await p.mouse.move(...await gridPoint(p, TEXT_AT))
     await p.mouse.down()
     await p.mouse.move(...await gridPoint(p, [TEXT_AT[0] + BY[0], TEXT_AT[1] + BY[1]]), { steps: 8 })
-    const duringBox = await p.locator('#draw-tool-layer text.draw-tool-text').boundingBox()
+    const duringBox = await p.locator(TEXTS).boundingBox()
     await p.mouse.up()
     const [after] = await textAts()
     assert.equal(near(after, [before[0] + BY[1] * CELL, before[1] + BY[0] * CELL]), true, `the note ${after} moved from ${before}`)
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     assert.deepEqual(await texts(), ['15'])
-    const endBox = await p.locator('#draw-tool-layer text.draw-tool-text').boundingBox()
+    const endBox = await p.locator(TEXTS).boundingBox()
     assert.deepEqual([duringBox.x, duringBox.y], [endBox.x, endBox.y], 'the note followed the pointer before the release')
     await reload()
     assert.deepEqual(await settle(textAts, [after]), [after])

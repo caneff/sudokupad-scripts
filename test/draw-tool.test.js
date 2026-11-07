@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
 const keydown = (eventPhase) => ({ type: 'keydown', eventPhase })
@@ -32,6 +32,12 @@ const storeOf = (saved) => ({
 })
 const line = textItem([0, 0], 'a', 1, 20)
 const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
+
+// A cage sum "15" at size 20, centred on (100, 50) in board units.
+const sum = textItem([100, 50], '15', 3, 20)
+// What an earlier version saved: neither is drawn, and both stay in storage.
+const oldStroke = { kind: 'stroke', color: 1, width: 6, opacity: 100, points: [[0, 50], [200, 50]] }
+const oldShape = { kind: 'shape', shape: 'rect', color: 2, width: 6, opacity: 100, box: [0, 0, 100, 100] }
 
 test('saving a drawing for a 51st puzzle drops the oldest puzzle and keeps the other 50', () => {
   const { index, dropped } = touchIndex(puzzles(50), 'p51')
@@ -87,7 +93,7 @@ test('the size slider runs 1 to 16 and starts at 6, a new note is fully opaque, 
   assert.equal(DEFAULT_COLOR, 1)
 })
 
-test('a text is 2 x the width + 8 tall: 10 to 40, and 20 at the default width', () => {
+test('a text is 2 x the size value + 8 tall: 10 to 40, and 20 at the default size', () => {
   assert.equal(textSizeFor(1), 10)
   assert.equal(textSizeFor(16), 40)
   assert.equal(textSizeFor(DEFAULT_WIDTH), 20)
@@ -165,25 +171,6 @@ test('a saved width reads back for any slider value, and a missing or bad one re
   for (const saved of [null, undefined, 0, 0.5, 16.5, 17, 6.25, '6', 'wide', {}, NaN]) assert.equal(readWidth(saved), DEFAULT_WIDTH, JSON.stringify(saved))
 })
 
-test('saved text that is not a text item throws', () => {
-  for (const item of [{ ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, size: 1e6 }, { ...sum, size: 9 }, { ...sum, size: 41 }, { ...sum, size: 20.5 }, { ...sum, opacity: 10 }, { ...sum, color: null }, { ...sum, color: 42 }]) {
-    assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
-  }
-})
-
-test('a text\'s box is centred on its point, as tall as its size and wider with more characters', () => {
-  const box = textBox(sum)
-  assert.equal((box.left + box.right) / 2, 100)
-  assert.equal((box.top + box.bottom) / 2, 50)
-  assert.equal(box.bottom - box.top, 20)
-  const longer = textBox(textItem([100, 50], '150', 3, 20))
-  assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
-})
-
-test('a click on two texts that overlap lands on the one drawn last', () => {
-  assert.equal(textAt([sum, textItem([104, 52], '7', 1, 20)], [102, 51]), 1)
-})
-
 test('a press and release with the mouse still, or moved no more than the slop, is a click; a drag is not', () => {
   assert.equal(isClick([[10, 10]]), true)
   assert.equal(isClick([[10, 10], [10 + CLICK_SLOP, 10], [10, 10 - CLICK_SLOP]]), true)
@@ -253,19 +240,6 @@ test('the paste report counts applied and skipped values, and says when the text
   assert.equal(pasteReport(1, 0), 'Pasted 1 setting.')
   assert.equal(pasteReport(3, 2), 'Pasted 3 settings; skipped 2 that did not check out.')
 })
-
-test('movedItem keeps everything else of the item and leaves the original untouched', () => {
-  const text = textItem([50, 60], 'hi', 3, 20, 80)
-  const moved = movedItem(text, [10, 10])
-  assert.deepEqual({ ...moved, at: text.at }, text)
-  assert.deepEqual(text.at, [50, 60])
-})
-
-// A cage sum "15" at size 20, centred on (100, 50) in board units.
-const sum = textItem([100, 50], '15', 3, 20)
-// What an earlier version saved: neither is drawn, and both stay in storage.
-const oldStroke = { kind: 'stroke', color: 1, width: 6, opacity: 100, points: [[0, 50], [200, 50]] }
-const oldShape = { kind: 'shape', shape: 'rect', color: 2, width: 6, opacity: 100, box: [0, 0, 100, 100] }
 
 test('a text item holds its kind, color number, text size, full opacity, text and its point rounded to a tenth, and a background only when it is made with one', () => {
   assert.deepEqual(textItem([10.04, 20.06], '15', 3, 20), { kind: 'text', color: 3, size: 20, opacity: 100, text: '15', at: [10, 20.1] })
@@ -350,4 +324,16 @@ test('movedItem adds the offset to a text\'s anchor, rounded to a tenth, and kee
   assert.deepEqual(movedItem(note, [1.26, -2.04]).at, [51.3, 58])
   assert.deepEqual({ ...movedItem(note, [10, 10]), at: note.at }, note)
   assert.deepEqual(note.at, [50, 60])
+})
+
+test('a note with a background answers to the box drawn behind it: a click and an erase just outside its text land on it', () => {
+  const plain = textItem([100, 50], '15', 3, 20)
+  const boxed = textItem([100, 50], '15', 3, 20, true)
+  const edge = [textBox(boxed).right + 3, 50]
+  assert.equal(textAt([plain], edge), -1)
+  assert.equal(textAt([boxed], edge), 0)
+  const past = textBox(boxed).right + 20 * 0.35 + 0.1
+  assert.equal(textAt([boxed], [past, 50]), -1, 'past the box')
+  assert.equal(touchesText(boxed, [past + ERASE_TOLERANCE - 0.2, 0], [past + ERASE_TOLERANCE - 0.2, 100]), true, 'an erase within the tolerance of the box')
+  assert.deepEqual(noteBox(plain), textBox(plain))
 })

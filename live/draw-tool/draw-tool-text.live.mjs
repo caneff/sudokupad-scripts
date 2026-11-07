@@ -197,7 +197,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
   })
 
-  it('the Size slider sets the next text\'s size to 2 x the width + 8; the earlier text is unchanged, and every note is solid', async () => {
+  it('the Size slider sets the next text\'s size to 2 x the size value + 8; the earlier text is unchanged, and every note is solid', async () => {
     assert.equal(await sliderValue(SIZE_SLIDER), 6)
     await p.locator(SIZE_SLIDER).fill('10')
     await p.click('.controls-input button[data-key="4"]')

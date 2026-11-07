@@ -10,7 +10,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, SLIDERS, TEXTS, WIDTH_KEY } = draw
+const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, SLIDERS, TEXTS, WIDTH_KEY } = draw
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
 // #rrggbb as the browser computes it.
@@ -139,7 +139,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
-    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, COLORS_KEY, 'DrawTool_background'])
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, COLORS_KEY, BACKGROUND_KEY])
     await draw.forgetDrawings(p)
     await reload()
   })

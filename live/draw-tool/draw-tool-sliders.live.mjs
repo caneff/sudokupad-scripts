@@ -34,22 +34,20 @@ describe('Text Annotation\'s slider drags like Pen Tool Extras\'', { concurrency
     await p.mouse.move(...at(to), { steps: 12 })
   }
 
-  for (const [name, selector] of [['Size', SIZE_SLIDER]]) {
-    it(`a press on the ${name} track away from the thumb and a drag across make the value follow the pointer`, async () => {
-      const { min, max } = await p.evaluate((s) => ({ min: Number(document.querySelector(s).min), max: Number(document.querySelector(s).max) }), selector)
-      const range = max - min
-      await dragTrack(selector, 0.1, 0.9)
-      await readUntil(() => valueOf(selector), (v) => v >= min + range * 0.8)
-      await p.mouse.up()
-      await dragTrack(selector, 0.9, 0.2)
-      await readUntil(() => valueOf(selector), (v) => v <= min + range * 0.3)
-      await p.mouse.up()
-    })
+  it('a press on the Size track away from the thumb and a drag across make the value follow the pointer', async () => {
+    const { min, max } = await p.evaluate((s) => ({ min: Number(document.querySelector(s).min), max: Number(document.querySelector(s).max) }), SIZE_SLIDER)
+    const range = max - min
+    await dragTrack(SIZE_SLIDER, 0.1, 0.9)
+    await readUntil(() => valueOf(SIZE_SLIDER), (v) => v >= min + range * 0.8)
+    await p.mouse.up()
+    await dragTrack(SIZE_SLIDER, 0.9, 0.2)
+    await readUntil(() => valueOf(SIZE_SLIDER), (v) => v <= min + range * 0.3)
+    await p.mouse.up()
+  })
 
-    it(`the ${name} slider hands the focus back to the page when the pointer is released`, async () => {
-      await dragTrack(selector, 0.3, 0.6)
-      await p.mouse.up()
-      assert.equal(await focusedSlider(), false, 'no slider keeps the focus')
-    })
-  }
+  it('the Size slider hands the focus back to the page when the pointer is released', async () => {
+    await dragTrack(SIZE_SLIDER, 0.3, 0.6)
+    await p.mouse.up()
+    assert.equal(await focusedSlider(), false, 'no slider keeps the focus')
+  })
 })

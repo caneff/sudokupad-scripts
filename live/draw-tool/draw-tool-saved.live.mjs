@@ -12,7 +12,7 @@ const { DIALOG, DRAWING_PREFIX, INDEX_KEY, OLD_SHAPES, script, STROKES, TEXTS } 
 
 // What an earlier version saved, planted as it wrote it.
 const OLD_STROKE = { kind: 'stroke', color: 2, width: 6, opacity: 100, points: [[100, 100], [300, 200], [500, 100]] }
-const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, from: [64, 320], to: [256, 448] }
+const OLD_SHAPE = { kind: 'shape', shape: 'rect', color: 3, width: 4, opacity: 60, box: [64, 320, 256, 448] }
 const NOTE = { kind: 'text', color: 1, size: 20, opacity: 100, text: '15', at: [160, 160] }
 
 let browser
@@ -110,7 +110,7 @@ describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
     assert.deepEqual(await texts(), [])
   })
 
-  it('a puzzle saved with a stroke, a shape and a note shows only the note, and drawing nothing else changes nothing in the layer', async () => {
+  it('a puzzle saved with a stroke, a shape and a note shows only the note: nothing but the note is in the layer', async () => {
     await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
@@ -132,10 +132,35 @@ describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
     await mouseDrag(p, [[6.5, 6], [6.5, 7]], { button: 'right' })
     assert.deepEqual(await texts(), ['15'])
     assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after erasing')
+    // Right-drags along the stroke's peak and the shape's bottom edge, clear of every note.
+    await mouseDrag(p, [[3.125, 4], [3.125, 5.3]], { button: 'right' })
+    await mouseDrag(p, [[7, 1.5], [7, 3]], { button: 'right' })
+    assert.deepEqual(await texts(), ['15'], 'those drags crossed no note')
+    assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after erasing across them')
     assert.equal(await p.locator(STROKES).count() + await p.locator(OLD_SHAPES).count(), 0, 'still not drawn')
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
     assert.deepEqual(await old(), [OLD_STROKE, OLD_SHAPE], 'after a reload')
+  })
+
+  it('Clear all removes the notes and leaves the stored stroke and shape as they were', async () => {
+    await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    await pickDraw()
+    await p.click('.draw-tool-clear')
+    await p.locator(`${DIALOG} button`).filter({ hasText: 'OK' }).click()
+    assert.deepEqual(await settle(texts, []), [])
+    assert.deepEqual(await saved(), [OLD_STROKE, OLD_SHAPE])
+  })
+
+  it('Restart removes the notes and leaves the stored stroke and shape as they were', async () => {
+    await draw.plantDrawing(p, [OLD_STROKE, NOTE, OLD_SHAPE])
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    await restartFromDialog()
+    assert.deepEqual(await settle(texts, []), [])
+    assert.deepEqual(await saved(), [OLD_STROKE, OLD_SHAPE])
   })
 
   it('saved data that cannot be read shows no notes, warns, and is never written over by a note, a move or an erase', async () => {
@@ -148,7 +173,7 @@ describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
     await pickDraw()
     await typeText([2.5, 2.5], '15')
     assert.deepEqual(await texts(), ['15'])
-    assert.match(await dialogText(), /saved drawing cannot be read/, 'the solver is told the notes are not saved')
+    assert.match(await dialogText(), /saved notes cannot be read/, 'the solver is told the notes are not saved')
     await closeDialog()
     assert.equal(await planted(), 'not a drawing {', 'after a note')
     await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])

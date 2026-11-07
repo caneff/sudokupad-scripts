@@ -187,7 +187,7 @@
   tool key. Called Draw Tool before 0.17.0, when it also drew lines and shapes.
 - **notes** — everything Text Annotation has put on one puzzle: its texts, oldest first. Saved per puzzle (keyed by
   the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles noted on last, under the storage keys it always used (`DrawTool_drawing_*`, `DrawTool_index`); it is not in the replay, Undo
-  does not touch it, and Restart and Clear all empty it. A stored item of kind `stroke` or `shape`, from before 0.17.0, is never drawn and never deleted.
+  does not touch it, and Restart and Clear all empty it. A stored item of kind `stroke` or `shape`, from before 0.17.0, is never drawn, and a save, Clear all and Restart leave it as it is.
 - **note color** — one of Text Annotation's nine colors, numbered 1 to 9, saved under `DrawTool_colors`. With none saved, it copies the
   pen colors once, when it is first made current; after that they no longer follow the pen colors. A saved value it cannot
   read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a

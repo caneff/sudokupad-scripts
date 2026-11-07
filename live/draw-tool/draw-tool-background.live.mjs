@@ -147,6 +147,19 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
     assert.deepEqual(await savedBgs(), { a: false, b: true, c: false, d: false })
   })
 
+  it('pressing Background on a note whose box differs from the setting turns that note\'s box over in one press and leaves the setting alone', async () => {
+    assert.equal(await storedSetting(), false)
+    await clickAt(SPOTS[1])
+    assert.equal(await pressed(), 'true', 'the button shows the open note, not the setting')
+    await p.click(BACKGROUND_BUTTON)
+    assert.equal(await pressed(), 'false')
+    assert.equal(await boxFilled(), false)
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await savedBgs(), { a: false, b: false, c: false, d: false })
+    assert.equal(await storedSetting(), false, 'the setting is unchanged')
+    assert.equal(await pressed(), 'false', 'with no note open the button shows the setting')
+  })
+
   it('the page raised no error', () => {
     assert.deepEqual(errors, [])
   })
