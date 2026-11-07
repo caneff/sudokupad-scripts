@@ -756,7 +756,6 @@
   const SAVE_LABEL = 'Save'
   const EDITOR_ID = 'color-by-digit-editor'
   const MENU = '#color-by-digit-menu'
-  const DIALOG_CLASS = 'color-by-digit-dialog'
   const STYLE_ID = 'color-by-digit-style'
 
   const MUTED = '#8a8496'
@@ -852,10 +851,11 @@
   }
 
   // One stylesheet, every rule scoped to the editor, the dialog itself (its width), or the dialog's options row.
-  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id and the options row's two classes outrank those rules, so none needs !important.
+  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
-  const OPTIONS = `.dialog-options.${DIALOG_CLASS}`
-  const TITLE = `.dialog.${DIALOG_CLASS} .cbd-title-row`
+  const DIALOG = `.dialog:has(${EDITOR})`
+  const OPTIONS = `${DIALOG} .dialog-options`
+  const TITLE = `${DIALOG} .cbd-title-row`
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const PULLDOWN_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
   const STYLE_CSS = [
@@ -870,7 +870,7 @@
     [`${TITLE} [data-role="settings-status"]`, `flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${MUTED}`],
     [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
-    [`.dialog.${DIALOG_CLASS}`, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
+    [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
     [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
@@ -1329,12 +1329,9 @@
     const box = document.getElementById(EDITOR_ID)
     if (!box) return
     const dialog = box.closest('.dialog')
-    if (dialog) dialog.classList.add(DIALOG_CLASS)
+    // No selector tells Save from Cancel but its text, so the script marks it for the stylesheet.
     const row = dialog && dialog.querySelector('.dialog-options')
-    if (row) {
-      row.classList.add(DIALOG_CLASS)
-      row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
-    }
+    if (row) row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     let brush
     let page
     const groupsShown = () => draft.profiles[selected].groups

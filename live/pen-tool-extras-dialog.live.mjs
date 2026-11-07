@@ -218,15 +218,15 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its own box is unticked', async () => {
+  it('Dash length, Arrow spacing and Outline width are hidden by the stylesheet while their own box is unticked (Dash length and Arrow spacing indented under their style names)', async () => {
     await openSettledEditor(p)
     const label = (key) => editor().locator(`[data-row="${key}"] label`)
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
     assert.equal(await left(editor().locator('input[data-box="lineStyles.dashed"]')) <= await left(label('dash')), true)
-    for (const [style, row] of [['dashed', 'dash'], ['arrows', 'arrowSpacing']]) {
-      await editor().locator(`input[data-box="lineStyles.${style}"]`).uncheck()
+    for (const [style, row] of [['lineStyles.dashed', 'dash'], ['lineStyles.arrows', 'arrowSpacing'], ['outline', 'outlineWidth']]) {
+      await editor().locator(`input[data-box="${style}"]`).uncheck()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), false, `${row} hidden`)
-      await editor().locator(`input[data-box="lineStyles.${style}"]`).check()
+      await editor().locator(`input[data-box="${style}"]`).check()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), true, `${row} back`)
     }
     await closeExtrasEditorWith(p, 'Cancel')
