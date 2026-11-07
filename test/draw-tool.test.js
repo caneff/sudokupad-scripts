@@ -4,103 +4,24 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, itemAt, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('../draw-tool.user.js')
-
-// A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
-const denseArc = () => Array.from({ length: 160 }, (_, i) => {
-  const a = (Math.PI / 2) * (i / 159)
-  return [100 * Math.cos(a), 100 * Math.sin(a)]
-})
-
-test('simplifyPath keeps the first and the last point', () => {
-  const points = denseArc()
-  const simple = simplifyPath(points)
-  assert.deepEqual(simple[0], points[0])
-  assert.deepEqual(simple[simple.length - 1], points[points.length - 1])
-})
-
-test('simplifyPath drops a point 2 board units off the line between its neighbours, and keeps one 3 units off', () => {
-  assert.deepEqual(simplifyPath([[0, 0], [50, 2], [100, 0]]), [[0, 0], [100, 0]])
-  assert.deepEqual(simplifyPath([[0, 0], [50, 3], [100, 0]]), [[0, 0], [50, 3], [100, 0]])
-})
-
-test('simplifyPath leaves fewer points than a dense mouse path, and more than its two ends on a curve', () => {
-  const simple = simplifyPath(denseArc())
-  assert.equal(simple.length < 40, true, `${simple.length} points left of 160`)
-  assert.equal(simple.length > 2, true, `${simple.length} points left of 160`)
-})
-
-test('simplifyPath leaves a straight run as its two ends', () => {
-  const points = Array.from({ length: 50 }, (_, i) => [i * 2, i])
-  assert.deepEqual(simplifyPath(points), [[0, 0], [98, 49]])
-})
-
-test('simplifyPath leaves a path of one or two points as it is', () => {
-  assert.deepEqual(simplifyPath([[3, 4]]), [[3, 4]])
-  assert.deepEqual(simplifyPath([[3, 4], [5, 6]]), [[3, 4], [5, 6]])
-})
-
-test('strokePath gives a curved path through the points, starting and ending on the ends', () => {
-  const d = strokePath([[0, 0], [10, 0], [10, 10], [20, 10]])
-  assert.match(d, /^M0 0 /)
-  assert.match(d, /Q/, 'the path has curves')
-  assert.match(d, / L20 10$/)
-})
-
-test('strokePath draws two points as a straight segment and one point as a dot', () => {
-  assert.equal(strokePath([[0, 0], [10, 5]]), 'M0 0 L10 5')
-  assert.equal(strokePath([[4, 4]]), 'M4 4 L4 4')
-})
-
-test('strokePath rounds each number to a tenth of a board unit', () => {
-  assert.equal(strokePath([[0.123, 1.06], [10.55, 5.04]]), 'M0.1 1.1 L10.6 5')
-})
-
-test('straightLine keeps only the press point and the release point', () => {
-  assert.deepEqual(straightLine([[1, 2], [5, 9], [7, 3], [20, 4]]), [[1, 2], [20, 4]])
-  assert.deepEqual(straightLine([[1, 2]]), [[1, 2]])
-})
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
 const keydown = (eventPhase) => ({ type: 'keydown', eventPhase })
 const NAMES = ['normal', 'corner', 'centre', 'colour', TOOL_NAME, 'pen']
 
-test('toolNamesFor leaves Draw out while a keydown is being dispatched, so no tool key lands on it', () => {
+test('toolNamesFor leaves Text Annotation out while a keydown is being dispatched, so no tool key lands on it', () => {
   assert.deepEqual(toolNamesFor(NAMES, keydown(1)), ['normal', 'corner', 'centre', 'colour', 'pen'])
 })
 
-test('toolNamesFor keeps Draw for anything else: a keydown already dispatched, a mouse event, or none', () => {
+test('toolNamesFor keeps Text Annotation for anything else: a keydown already dispatched, a mouse event, or none', () => {
   assert.deepEqual(toolNamesFor(NAMES, keydown(0)), NAMES)
   assert.deepEqual(toolNamesFor(NAMES, { type: 'mousedown', eventPhase: 3 }), NAMES)
   assert.deepEqual(toolNamesFor(NAMES, undefined), NAMES)
 })
 
-test('a drawing saved as JSON reads back equal, stroke for stroke', () => {
-  const drawing = [strokeItem([[1, 2], [30.5, 40.25], [64, 128]], 1, 6, 100), strokeItem([[0, 0], [5, 5]], 3, 7.5, 35)]
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
-})
-
-test('a stroke item holds its kind, draw color number, width, opacity and its points rounded to a tenth of a board unit', () => {
-  assert.deepEqual(strokeItem([[0.123, 1.06], [10.55, 5.04]], 1, 6, 50), { kind: 'stroke', color: 1, width: 6, opacity: 50, points: [[0.1, 1.1], [10.6, 5]] })
-})
-
 test('a puzzle with no saved drawing starts empty', () => {
   assert.deepEqual(readDrawing(null), [])
-})
-
-// Framework.getData hands back the raw text when it is not JSON.
-test('saved data that is not a drawing throws, and is never read as an empty drawing', () => {
-  const stroke = { kind: 'stroke', color: 1, width: 6, points: [[0, 0]] }
-  assert.deepEqual(readDrawing([stroke]), [stroke])
-  for (const saved of ['[{"kind":"stroke"', {}, 'text', [{ ...stroke, points: [] }], [{ kind: 'blob' }], [{ ...stroke, color: 42 }], [{ ...stroke, color: 0 }], [{ ...stroke, width: -1 }], [{ ...stroke, width: 0.5 }], [{ ...stroke, width: 17 }], [{ ...stroke, width: 6.25 }], [{ ...stroke, opacity: 0 }], [{ ...stroke, opacity: 15 }], [{ ...stroke, opacity: 101 }], [{ ...stroke, opacity: 52 }], [{ ...stroke, opacity: '50' }]]) {
-    assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
-  }
-})
-
-test('the key is the puzzle id, or the page URL for a puzzle with none', () => {
-  assert.equal(puzzleKey('scl123abc', 'https://sudokupad.app/scl123abc'), 'scl123abc')
-  assert.equal(puzzleKey(undefined, 'https://sudokupad.app/?puzzle=x'), 'https://sudokupad.app/?puzzle=x')
-  assert.equal(puzzleKey('', 'https://sudokupad.app/'), 'https://sudokupad.app/')
 })
 
 // Framework's saved-data calls over a plain object, as test/specs/spec-204-closing.test.js has them.
@@ -109,7 +30,7 @@ const storeOf = (saved) => ({
   setData: (key, value) => { saved[key] = value },
   removeData: (key) => { delete saved[key] }
 })
-const line = strokeItem([[0, 0], [64, 64]], 1, 6)
+const line = textItem([0, 0], 'a', 1, 20)
 const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
 
 test('saving a drawing for a 51st puzzle drops the oldest puzzle and keeps the other 50', () => {
@@ -160,7 +81,7 @@ test('an index with no saved data is empty, and one that is not a list of keys t
   for (const saved of ['oops', { a: 1 }, [1, 2]]) assert.throws(() => readIndex(saved), /saved index/, JSON.stringify(saved))
 })
 
-test('the size slider runs 1 to 16 and starts at 6, the opacity slider 20 to 100 and starts at 100, and draw color 1 is the default', () => {
+test('the size slider runs 1 to 16 and starts at 6, a new note is fully opaque, and color 1 is the default', () => {
   assert.deepEqual([MIN_WIDTH, MAX_WIDTH, DEFAULT_WIDTH], [1, 16, 6])
   assert.equal(DEFAULT_OPACITY, 100)
   assert.equal(DEFAULT_COLOR, 1)
@@ -244,94 +165,6 @@ test('a saved width reads back for any slider value, and a missing or bad one re
   for (const saved of [null, undefined, 0, 0.5, 16.5, 17, 6.25, '6', 'wide', {}, NaN]) assert.equal(readWidth(saved), DEFAULT_WIDTH, JSON.stringify(saved))
 })
 
-test('a saved opacity reads back for any slider value, and a missing or bad one reads as the default opacity', () => {
-  for (const opacity of [20, 25, 75, 100]) assert.equal(readOpacity(opacity), opacity)
-  for (const saved of [null, undefined, 0, 15, 22, 105, '50', 'faint', {}, NaN]) assert.equal(readOpacity(saved), DEFAULT_OPACITY, JSON.stringify(saved))
-})
-
-test('an item with no opacity reads as the default opacity, and one with an opacity as its own', () => {
-  assert.equal(itemOpacity({ kind: 'stroke', color: 1, width: 6, points: [[0, 0]] }), DEFAULT_OPACITY)
-  assert.equal(itemOpacity(strokeItem([[0, 0]], 1, 6, 40)), 40)
-  assert.equal(itemOpacity(textItem([0, 0], '1', 1, 20, 65)), 65)
-})
-
-test('an old drawing, with the three old widths and text sizes and no opacity, reads back as it was', () => {
-  const old = [
-    { kind: 'stroke', color: 1, width: 3, points: [[0, 0], [5, 5]] },
-    { kind: 'stroke', color: 2, width: 10, points: [[0, 0], [5, 5]] },
-    { kind: 'text', color: 3, size: 14, text: '9', at: [1, 1] },
-    { kind: 'text', color: 3, size: 28, text: '9', at: [1, 1] }
-  ]
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(old))), old)
-})
-
-// Board units: a cell is 64 wide. A stroke of width 6 along row 1's middle, from x 0 to x 192.
-const flat = strokeItem([[0, 32], [192, 32]], 1, 6)
-// How far a drag may pass from the line's middle and still erase it: the tolerance plus half the line's width.
-const reach = ERASE_TOLERANCE + 6 / 2
-
-test('a drag across a stroke touches it, wherever it crosses', () => {
-  assert.equal(touchesStroke(flat, [96, 0], [96, 64]), true)
-  assert.equal(touchesStroke(flat, [10, 64], [180, 0]), true)
-})
-
-test('a drag that passes within the tolerance of a stroke touches it, and one just past it does not', () => {
-  assert.equal(touchesStroke(flat, [50, 32 + reach - 0.1], [150, 32 + reach - 0.1]), true)
-  assert.equal(touchesStroke(flat, [50, 32 + reach + 0.1], [150, 32 + reach + 0.1]), false)
-  assert.equal(touchesStroke(flat, [192 + reach + 0.1, 0], [192 + reach + 0.1, 64]), false, 'past the end')
-})
-
-test('a thicker stroke is touched from farther away', () => {
-  const thick = strokeItem([[0, 32], [192, 32]], 1, 10)
-  const y = 32 + reach + 1
-  assert.equal(touchesStroke(flat, [50, y], [150, y]), false)
-  assert.equal(touchesStroke(thick, [50, y], [150, y]), true)
-})
-
-test('a press with no move, a drag of one point, touches a stroke under it', () => {
-  assert.equal(touchesStroke(flat, [100, 33], [100, 33]), true)
-  assert.equal(touchesStroke(flat, [100, 60], [100, 60]), false)
-})
-
-test('a stroke of one point is touched near that point only', () => {
-  const dot = strokeItem([[64, 64]], 1, 6)
-  assert.equal(touchesStroke(dot, [60, 0], [60, 128]), true)
-  assert.equal(touchesStroke(dot, [0, 0], [0, 128]), false)
-})
-
-// strokePath cuts each corner with a curve, so a sharp V is drawn well inside its corner point.
-const vee = strokeItem([[0, 0], [100, 200], [200, 0]], 1, 6)
-
-test('the drawn line of a curved stroke follows the curve the board shows, not the corner points', () => {
-  const line = drawnLine(vee.points)
-  assert.deepEqual(line[0], [0, 0])
-  assert.deepEqual(line[line.length - 1], [200, 0])
-  const lowest = Math.max(...line.map(([, y]) => y))
-  assert.equal(lowest, 100, 'the curve from (0, 0) round (100, 200) to (200, 0) reaches y 100 at its middle')
-})
-
-test('a drag across the curve, inside the stroke\'s corner point, touches it; one across the bare corner does not', () => {
-  assert.equal(touchesStroke(vee, [90, 100], [110, 100]), true, 'across the curve\'s bottom')
-  assert.equal(touchesStroke(vee, [90, 180], [110, 180]), false, 'below the curve, near the corner point')
-})
-
-test('the drawn line of a two-point stroke is its two points', () => {
-  assert.deepEqual(drawnLine([[0, 0], [10, 5]]), [[0, 0], [10, 5]])
-  assert.deepEqual(drawnLine([[4, 4]]), [[4, 4]])
-})
-
-// A cage sum "15" at size 20, centred on (100, 50) in board units.
-const sum = textItem([100, 50], '15', 3, 20, 100)
-
-test('a text item holds its kind, draw color number, text size, opacity, text and its point rounded to a tenth of a board unit', () => {
-  assert.deepEqual(textItem([10.04, 20.06], '15', 3, 20, 55), { kind: 'text', color: 3, size: 20, opacity: 55, text: '15', at: [10, 20.1] })
-})
-
-test('a drawing of strokes and text saved as JSON reads back equal, item for item', () => {
-  const drawing = [strokeItem([[1, 2], [64, 128]], 1, 6, 100), sum, textItem([5, 5], 'a b', 9, 23, 20)]
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
-})
-
 test('saved text that is not a text item throws', () => {
   for (const item of [{ ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, size: 1e6 }, { ...sum, size: 9 }, { ...sum, size: 41 }, { ...sum, size: 20.5 }, { ...sum, opacity: 10 }, { ...sum, color: null }, { ...sum, color: 42 }]) {
     assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
@@ -347,32 +180,8 @@ test('a text\'s box is centred on its point, as tall as its size and wider with 
   assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
 })
 
-test('a click on a text lands on it, and a click beside it on none', () => {
-  const drawing = [strokeItem([[0, 50], [200, 50]], 1, 6), sum]
-  assert.equal(textAt(drawing, [100, 50]), 1)
-  assert.equal(textAt(drawing, [textBox(sum).right - 1, textBox(sum).top + 1]), 1)
-  assert.equal(textAt(drawing, [100, 80]), -1)
-  assert.equal(textAt(drawing, [textBox(sum).right + 3, 50]), -1)
-  assert.equal(textAt([], [100, 50]), -1)
-})
-
 test('a click on two texts that overlap lands on the one drawn last', () => {
   assert.equal(textAt([sum, textItem([104, 52], '7', 1, 20)], [102, 51]), 1)
-})
-
-test('a drag across a text touches it, and one that passes clear of it does not', () => {
-  const box = textBox(sum)
-  assert.equal(touchesItem(sum, [100, 0], [100, 100]), true, 'across its middle')
-  assert.equal(touchesItem(sum, [0, 0], [200, 100]), true, 'on a slant through it')
-  assert.equal(touchesItem(sum, [100, 50], [100, 50]), true, 'a press on it')
-  assert.equal(touchesItem(sum, [box.right + ERASE_TOLERANCE - 0.1, 0], [box.right + ERASE_TOLERANCE - 0.1, 100]), true, 'within the tolerance')
-  assert.equal(touchesItem(sum, [box.right + ERASE_TOLERANCE + 0.1, 0], [box.right + ERASE_TOLERANCE + 0.1, 100]), false, 'just past it')
-  assert.equal(touchesItem(sum, [0, 0], [200, 0]), false, 'above it')
-})
-
-test('touchesItem tests a stroke as touchesStroke does', () => {
-  assert.equal(touchesItem(flat, [96, 0], [96, 64]), true)
-  assert.equal(touchesItem(flat, [96, 50], [96, 64]), false)
 })
 
 test('a press and release with the mouse still, or moved no more than the slop, is a click; a drag is not', () => {
@@ -415,20 +224,20 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
   assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
 })
 
-test('Copy settings holds the colors and both slider values, defaults included, and no drawing or color pick', () => {
+test('Copy settings holds the colors and the size, default included, and no notes, color pick or background', () => {
   const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, DrawTool_color: 4, DrawTool_drawing_x: [] })))
-  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, [OPACITY_KEY]: DEFAULT_OPACITY })
+  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3 })
 })
 
 test('Copy settings leaves the colors out until they are saved', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY })
+  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH })
 })
 
-test('Paste settings returns the colors and sliders, ignores other scripts\' keys and counts a refused value as skipped', () => {
-  const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
-  assert.deepEqual(pastedSettings(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35 }, skipped: 0 })
-  const bad = pastedSettings(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99, [OPACITY_KEY]: 50 }))
-  assert.deepEqual(bad, { values: { [OPACITY_KEY]: 50 }, skipped: 2 })
+test('Paste settings returns the colors and size, ignores other scripts\' keys, the old opacity and counts a refused value as skipped', () => {
+  const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, DrawTool_opacity: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
+  assert.deepEqual(pastedSettings(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5 }, skipped: 0 })
+  const bad = pastedSettings(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99 }))
+  assert.deepEqual(bad, { values: {}, skipped: 2 })
   assert.deepEqual(pastedSettings(JSON.stringify({ [COLORS_KEY]: {} })), { values: {}, skipped: 1 }, 'colors with no color in them')
 })
 
@@ -445,117 +254,6 @@ test('the paste report counts applied and skipped values, and says when the text
   assert.equal(pasteReport(3, 2), 'Pasted 3 settings; skipped 2 that did not check out.')
 })
 
-test('a shape drag is exactly the drag box, whichever way it runs, to a tenth of a board unit', () => {
-  assert.deepEqual(shapeBox([250.04, 140], [70.06, 100.12]), [70.1, 100.1, 250, 140])
-  assert.deepEqual(shapeBox([70.06, 100.12], [250.04, 140]), [70.1, 100.1, 250, 140])
-})
-
-test('a shape drag with no width or no height has no area', () => {
-  assert.equal(hasArea(shapeBox([10, 20], [10, 50])), false)
-  assert.equal(hasArea(shapeBox([10, 20], [50, 20])), false)
-  assert.equal(hasArea(shapeBox([10, 20], [14, 50])), true)
-})
-
-test('a shape item holds its kind, its shape, draw color number, width, opacity and its box', () => {
-  assert.deepEqual(shapeItem('ellipse', [64, 0, 192, 128], 2, 4.5, 60), { kind: 'shape', shape: 'ellipse', color: 2, width: 4.5, opacity: 60, box: [64, 0, 192, 128] })
-})
-
-test('a drawing of strokes, texts and shapes saved as JSON reads back equal, item for item', () => {
-  const drawing = [strokeItem([[1, 2], [64, 128]], 1, 6, 100), shapeItem('rect', [0, 0, 64, 64], 4, 6, 100), textItem([5, 5], 'a', 9, 20, 20), shapeItem('ellipse', [70.1, 100.1, 250, 140], 9, 16, 20)]
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
-})
-
-test('a saved shape that is not a shape item, or has no opacity, throws', () => {
-  const box = shapeItem('rect', [0, 0, 64, 64], 1, 6, 100)
-  const { opacity, ...noOpacity } = box
-  for (const item of [{ ...box, shape: 'star' }, { ...box, shape: undefined }, { ...box, box: [0, 0, 64] }, { ...box, box: [0, 0, 64, '64'] }, { ...box, box: [64, 0, 0, 64] }, { ...box, box: [0, 64, 64, 0] }, { ...box, box: 'big' }, { ...box, color: 0 }, { ...box, width: 0.5 }, { ...box, opacity: 15 }, noOpacity]) {
-    assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
-  }
-})
-
-test('a saved shape with no width or no height, which SVG never draws, throws', () => {
-  for (const box of [[100, 10, 100, 150], [10, 100, 150, 100], [5, 5, 5, 5]]) {
-    assert.throws(() => readDrawing([shapeItem('ellipse', box, 1, 6, 100)]), /saved drawing/, JSON.stringify(box))
-  }
-})
-
-test('a drag across a shape\'s outline touches it, and one inside it that comes nowhere near the outline does not', () => {
-  for (const shape of ['rect', 'ellipse']) {
-    const item = shapeItem(shape, [0, 0, 256, 256], 1, 6, 100)
-    assert.equal(touchesItem(item, [128, -20], [128, 20]), true, `${shape}: across the top`)
-    assert.equal(touchesItem(item, [128, 4], [128, 4]), true, `${shape}: a press on the outline`)
-    assert.equal(touchesItem(item, [100, 100], [156, 156]), false, `${shape}: inside, clear of the outline`)
-    assert.equal(touchesItem(item, [-20, 128 + 300], [300, 128 + 300]), false, `${shape}: well outside`)
-  }
-})
-
-test('a shape is touched within the tolerance of its outline\'s edge, and not just past it', () => {
-  const item = shapeItem('rect', [0, 0, 256, 256], 1, 6, 100)
-  const reach = ERASE_TOLERANCE + 3
-  assert.equal(touchesItem(item, [128, -reach + 0.1], [140, -reach + 0.1]), true)
-  assert.equal(touchesItem(item, [128, -reach - 0.1], [140, -reach - 0.1]), false)
-})
-
-test('an ellipse is touched along its curve, not at the corners of its box', () => {
-  const ellipse = shapeItem('ellipse', [0, 0, 256, 256], 1, 6, 100)
-  const rect = shapeItem('rect', [0, 0, 256, 256], 1, 6, 100)
-  assert.equal(touchesItem(ellipse, [5, 5], [15, 15]), false, 'the ellipse is far from its box\'s corner')
-  assert.equal(touchesItem(rect, [5, 5], [15, 15]), true, 'the rectangle has its corner there')
-  // The circle's outline at 45 degrees, from the centre (128, 128) at radius 128.
-  const onCurve = 128 - 128 / Math.SQRT2
-  assert.equal(touchesItem(ellipse, [onCurve - 2, onCurve - 2], [onCurve - 2, onCurve - 2]), true)
-})
-
-test('the Shape button steps Off, Rectangle, Ellipse and back to Off', () => {
-  assert.deepEqual([nextShapeMode('off'), nextShapeMode('rect'), nextShapeMode('ellipse')], ['rect', 'ellipse', 'off'])
-})
-
-test('a saved Shape mode reads back, and a missing or bad one reads as Off', () => {
-  assert.deepEqual(['off', 'rect', 'ellipse', null, undefined, 'star', 3].map(readShapeMode), ['off', 'rect', 'ellipse', 'off', 'off', 'off', 'off'])
-})
-
-// The sample drawn for each mode: a path for a free line, a rect, an ellipse.
-const SAMPLE = { off: /<path/, rect: /<rect/, ellipse: /<ellipse/ }
-const sampleOf = (svg) => svg.replace(/<circle[^>]*>/g, '')
-
-test('the Shape button draws the mode a press turns to, and a dot per mode, filled for the current one', () => {
-  for (const [current, next] of [['off', 'rect'], ['rect', 'ellipse'], ['ellipse', 'off']]) {
-    const icon = shapeButtonIcon(current)
-    assert.match(sampleOf(icon), SAMPLE[next], `${current}: shows ${next}`)
-    for (const other of Object.keys(SAMPLE).filter((m) => m !== next)) assert.doesNotMatch(sampleOf(icon), SAMPLE[other], `${current}: not ${other}`)
-    assert.equal((icon.match(/data-shape-dot='filled'/g) || []).length, 1, `${current}: one filled dot`)
-    assert.equal((icon.match(/data-shape-dot='outline'/g) || []).length, 2, `${current}: two outline dots`)
-    const dots = [...icon.matchAll(/data-shape-dot='(\w+)'/g)].map((m) => m[1])
-    assert.equal(dots[SHAPE_MODES.indexOf(current)], 'filled', `${current}: its own dot is filled`)
-  }
-})
-
-test('the Shape button picture is stroked 3 units wide, the weight of the Pen Tool Extras swatches', () => {
-  assert.match(shapeButtonIcon('off'), /stroke-width='3'/)
-})
-
-test('a color swatch draws the current mode: a line, a rectangle outline or an ellipse outline', () => {
-  assert.match(shapeSwatchSvg('off'), /<path d='M2 12H22'/)
-  assert.match(shapeSwatchSvg('rect'), /<rect/)
-  assert.match(shapeSwatchSvg('ellipse'), /<ellipse/)
-  for (const mode of SHAPE_MODES) assert.match(shapeSwatchSvg(mode), /fill='none'/, mode)
-})
-
-test('the Shape button names the current mode and what a press does', () => {
-  assert.equal(SHAPE_LABELS.off, 'Shape: off, free lines. Click for rectangle')
-  assert.equal(SHAPE_LABELS.rect, 'Shape: rectangle. Click for ellipse')
-  assert.equal(SHAPE_LABELS.ellipse, 'Shape: ellipse. Click for off, free lines')
-})
-
-test('movedItem adds the offset to a stroke\'s points, a shape\'s box and a text\'s anchor, rounded to a tenth', () => {
-  const stroke = strokeItem([[10, 10], [20, 15]], 1, 6, 100)
-  assert.deepEqual(movedItem(stroke, [1.26, -2.04]).points, [[11.3, 8], [21.3, 13]])
-  const shape = shapeItem('rect', [10, 20, 30, 40], 1, 6, 100)
-  assert.deepEqual(movedItem(shape, [5, -5.55]).box, [15, 14.5, 35, 34.5])
-  const text = textItem([50, 60], 'hi', 1, 20, 100)
-  assert.deepEqual(movedItem(text, [0.04, 10]).at, [50, 70])
-})
-
 test('movedItem keeps everything else of the item and leaves the original untouched', () => {
   const text = textItem([50, 60], 'hi', 3, 20, 80)
   const moved = movedItem(text, [10, 10])
@@ -563,12 +261,93 @@ test('movedItem keeps everything else of the item and leaves the original untouc
   assert.deepEqual(text.at, [50, 60])
 })
 
-test('itemAt finds the topmost item under a press the way erase touches it, or -1', () => {
-  const lower = shapeItem('rect', [0, 0, 100, 100], 1, 6, 100)
-  const upper = strokeItem([[0, 0], [100, 0]], 1, 6, 100)
-  assert.equal(itemAt([lower, upper], [50, 0]), 1)
-  assert.equal(itemAt([lower, upper], [0, 50]), 0)
-  assert.equal(itemAt([lower, upper], [50, 50]), -1)
-  assert.equal(itemAt([lower, upper], [50, ERASE_TOLERANCE + upper.width]), -1)
-  assert.equal(itemAt([], [1, 1]), -1)
+// A cage sum "15" at size 20, centred on (100, 50) in board units.
+const sum = textItem([100, 50], '15', 3, 20)
+// What an earlier version saved: neither is drawn, and both stay in storage.
+const oldStroke = { kind: 'stroke', color: 1, width: 6, opacity: 100, points: [[0, 50], [200, 50]] }
+const oldShape = { kind: 'shape', shape: 'rect', color: 2, width: 6, opacity: 100, box: [0, 0, 100, 100] }
+
+test('a text item holds its kind, color number, text size, full opacity, text and its point rounded to a tenth, and a background only when it is made with one', () => {
+  assert.deepEqual(textItem([10.04, 20.06], '15', 3, 20), { kind: 'text', color: 3, size: 20, opacity: 100, text: '15', at: [10, 20.1] })
+  assert.deepEqual(textItem([10, 20], '15', 3, 20, true), { kind: 'text', color: 3, size: 20, opacity: 100, bg: true, text: '15', at: [10, 20] })
+  assert.deepEqual(textItem([10, 20], '15', 3, 20, false), textItem([10, 20], '15', 3, 20))
+})
+
+test('a drawing of texts saved as JSON reads back equal, item for item, with or without a background', () => {
+  const drawing = [sum, textItem([5, 5], 'a b', 9, 24, true)]
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
+})
+
+test('a drawing with strokes and shapes saved by an earlier version reads back whole, so a save writes them back untouched', () => {
+  const drawing = [oldStroke, sum, oldShape]
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
+  const saved = {}
+  saveDrawingTo(storeOf(saved), 'p1', readDrawing(drawing).concat(textItem([1, 1], 'x', 1, 20)))
+  assert.deepEqual(saved[DRAWING_PREFIX + 'p1'].slice(0, 3), drawing)
+})
+
+test('a note saved before opacity existed reads back as it was, and a saved opacity is kept', () => {
+  const old = [{ kind: 'text', color: 3, size: 14, text: '9', at: [1, 1] }, { kind: 'text', color: 3, size: 28, text: '9', at: [1, 1], opacity: 65 }]
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(old))), old)
+  assert.equal(itemOpacity(old[0]), DEFAULT_OPACITY)
+  assert.equal(itemOpacity(old[1]), 65)
+})
+
+// Framework.getData hands back the raw text when it is not JSON.
+test('saved data that is not a drawing throws, and is never read as an empty drawing', () => {
+  for (const saved of ['[{"kind":"text"', {}, 'text', [{ kind: 'blob' }], [{ ...sum, text: '' }], [{ ...sum, text: 15 }], [{ ...sum, at: [1] }], [{ ...sum, size: 'big' }], [{ ...sum, size: 9 }], [{ ...sum, size: 41 }], [{ ...sum, size: 20.5 }], [{ ...sum, opacity: 10 }], [{ ...sum, opacity: 52 }], [{ ...sum, color: null }], [{ ...sum, color: 42 }], [{ ...sum, bg: 'yes' }], [{ ...sum, bg: false }], [null], [{ ...oldStroke, kind: 'line' }]]) {
+    assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
+  }
+})
+
+test('the key is the puzzle id, or the page URL for a puzzle with none', () => {
+  assert.equal(puzzleKey('scl123abc', 'https://sudokupad.app/scl123abc'), 'scl123abc')
+  assert.equal(puzzleKey(undefined, 'https://sudokupad.app/?puzzle=x'), 'https://sudokupad.app/?puzzle=x')
+  assert.equal(puzzleKey('', 'https://sudokupad.app/'), 'https://sudokupad.app/')
+})
+
+test('the Background setting is on only when it was saved as true', () => {
+  assert.equal(readBackground(true), true)
+  for (const saved of [false, null, undefined, 'true', 1, {}]) assert.equal(readBackground(saved), false, JSON.stringify(saved))
+})
+
+test('a text\'s box is centred on its point, as tall as its size and wider with more characters', () => {
+  const box = textBox(sum)
+  assert.equal((box.left + box.right) / 2, 100)
+  assert.equal((box.top + box.bottom) / 2, 50)
+  assert.equal(box.bottom - box.top, 20)
+  const longer = textBox(textItem([100, 50], '150', 3, 20))
+  assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
+})
+
+test('a click on a text lands on it, and a click beside it, or on a stroke or shape, on none', () => {
+  const drawing = [oldStroke, sum, oldShape]
+  assert.equal(textAt(drawing, [100, 50]), 1)
+  assert.equal(textAt(drawing, [textBox(sum).right - 1, textBox(sum).top + 1]), 1)
+  assert.equal(textAt(drawing, [100, 80]), -1)
+  assert.equal(textAt(drawing, [textBox(sum).right + 3, 50]), -1)
+  assert.equal(textAt(drawing, [10, 50]), -1, 'on the hidden stroke')
+  assert.equal(textAt([], [100, 50]), -1)
+})
+
+test('a click on two texts that overlap lands on the one drawn last', () => {
+  assert.equal(textAt([sum, textItem([104, 52], '7', 1, 20)], [102, 51]), 1)
+})
+
+test('a drag across a text touches it, and one that passes clear of it does not', () => {
+  const box = textBox(sum)
+  assert.equal(touchesText(sum, [100, 0], [100, 100]), true, 'across its middle')
+  assert.equal(touchesText(sum, [0, 0], [200, 100]), true, 'on a slant through it')
+  assert.equal(touchesText(sum, [100, 50], [100, 50]), true, 'a press on it')
+  assert.equal(touchesText(sum, [box.right + ERASE_TOLERANCE - 0.1, 0], [box.right + ERASE_TOLERANCE - 0.1, 100]), true, 'within the tolerance')
+  assert.equal(touchesText(sum, [box.right + ERASE_TOLERANCE + 0.1, 0], [box.right + ERASE_TOLERANCE + 0.1, 100]), false, 'just past it')
+  assert.equal(touchesText(sum, [0, 0], [200, 0]), false, 'above it')
+})
+
+test('movedItem adds the offset to a text\'s anchor, rounded to a tenth, and keeps the rest of the item', () => {
+  const note = textItem([50, 60], 'hi', 3, 20, true)
+  assert.deepEqual(movedItem(note, [0.04, 10]).at, [50, 70])
+  assert.deepEqual(movedItem(note, [1.26, -2.04]).at, [51.3, 58])
+  assert.deepEqual({ ...movedItem(note, [10, 10]), at: note.at }, note)
+  assert.deepEqual(note.at, [50, 60])
 })
