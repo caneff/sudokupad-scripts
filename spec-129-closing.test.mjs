@@ -16,7 +16,7 @@ const OWNED = {
   'page.mjs': ['openPage', 'startPuzzle', 'waitForFramework', 'gotoPuzzle', 'newPage', 'captureConsoleErrors'],
   'settings.mjs': ['openScriptDialog', 'closeDialogWith'],
   'settle.mjs': ['clickUntil', 'POLL_MS', 'SETTLE_MS'],
-  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'cellCentre', 'gridPoint', 'drag', 'draw', 'setSlider', 'plantSaved', 'plantUnchecked', 'keydownDefaults']
+  'pen.mjs': ['openPenTool', 'padValues', 'penEntries', 'penValuesNoColor', 'penValuesAt', 'penStrings', 'cellCentre', 'gridPoint', 'mouseDrag', 'drag', 'draw', 'setSlider', 'plantSaved', 'plantUnchecked', 'keydownDefaults']
 }
 // The names the spec removed: their job is now a shared module's.
 const REMOVED = ['closeWith', 'pressUntil', 'sleep', 'selectPen']

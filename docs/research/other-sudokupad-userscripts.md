@@ -34,8 +34,8 @@ Read from the live tests' recording of sudokupad.app (`~/.cache/sudokupad-script
 - **Test Markup (Press: "M")**, an Experimental toggle (`feature-markup.js`, left out of the lists above when first written;
   its setting is added in `handleInit`): holding M draws freehand on a fabric.js canvas over the whole page, one red brush 3
   wide (`C.BrushStyle`); C while drawing clears every stroke. No eraser, no per-stroke undo, nothing saved (not in the
-  puzzle, the replay or the browser), and the canvas is in page pixels, not the board's. Read, not run. #268 wants a
-  better one.
+  puzzle, the replay or the browser), and the canvas is in page pixels, not the board's. #268 wants a better one; run
+  beside Draw Tool in `sudokupad-custom-tool.md` § Test Markup.
 - Hold-to-repeat undo exists: `script.js` reads `repeatundodelay` and `repeatundointerval` settings.
 - **Export Settings / Import Settings** (`feature-settingssave.js`) write and read `Framework.getSettings()` only,
   the toggles. The scripts save with `Framework.setData`, a separate key per value, so their data is not in that file.

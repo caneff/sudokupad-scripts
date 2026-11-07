@@ -156,7 +156,7 @@ async function loadEveryWebFont (p, stylesheet) {
   await p.evaluate((list) => Promise.all(list.map((u) => new window.FontFace('recorded', `url(${u})`).load())), urls)
 }
 
-// Loads the puzzle the way a player does (page, Start Puzzle, the settings dialog) with SudokuPad's own
+// Loads the puzzle the way a player does (page, Start Puzzle, the settings dialog, Test Markup on) with SudokuPad's own
 // requests recorded, then writes the cleaned recording over `file`. The recording is written when the
 // context closes.
 async function record (file) {
@@ -178,6 +178,8 @@ async function record (file) {
     await start.click()
     await p.locator('#control-undo').waitFor({ state: 'visible' })
     await openSettings(p)
+    // Test Markup loads fabric.js only once it is turned on, and Draw Tool's live check turns it on.
+    await p.evaluate(() => Framework.setSetting('markup', true))
     await p.waitForLoadState('networkidle')
     await loadEveryWebFont(p, stylesheet)
     await context.close()
