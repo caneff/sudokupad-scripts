@@ -52,7 +52,7 @@ Read 2026-11-03 from SudokuPad 0.611.0's `tool-color.js`. Nothing here was run l
   that started the hold still counts as user activation. Headless Chromium draws no popup, so
   whether the native picker would stay open through the release is not checked, and the script
   keeps SudokuPad's extra click.
-- Screenshot of edit mode: `pen-color-edit-mode.png`.
+- Screenshot of edit mode: `pen-tool-extras/pen-color-edit-mode.png`.
 
 
 ## The panel's line mode box and a slider drag (read 2026-11-04, #60)
@@ -72,8 +72,8 @@ Read 2026-11-03 from SudokuPad 0.611.0's `tool-color.js`. Nothing here was run l
 - A digit key does nothing in the pen tool (no pen color change), and arrow keys are handled by
   SudokuPad, so neither shows whether a slider holds the focus; `document.activeElement` does.
 - Dragging a line over an existing line in the same cells erases it.
-- Pictures of the panel: `pen-tool-extras-panel.png`, `-moved.png`, `-letter.png` (the letter
-  tool and Color by Digit on) and `-dialog.png`; `pen-tool-extras-panel-screenshot.mjs` takes them.
+- Pictures of the panel: `pen-tool-extras/pen-tool-extras-panel.png`, `-moved.png`, `-letter.png` (the letter
+  tool and Color by Digit on) and `-dialog.png`; `pen-tool-extras/pen-tool-extras-panel-screenshot.mjs` takes them.
 
 ## Pen colors past nine (run on the page 2026-11-04, SudokuPad 0.611.0, headless Chromium, no script loaded)
 
@@ -103,9 +103,9 @@ drew real mouse drags.
 
 ## The second page of pens, built and run live 2026-11-04 (#71, SudokuPad 0.612.0, headless Chromium)
 
-What `pen-tool-extras.user.js` 1.5.0 does, and what running it found. Live checks: `live/pen-tool-extras-pages.live.mjs`
+What `pen-tool-extras.user.js` 1.5.0 does, and what running it found. Live checks: `live/pen-tool-extras/pen-tool-extras-pages.live.mjs`
 (paging by button, Tab and wheel, drawing, undo, replay, reload, at the three injection times, and with No Tab Letters
-installed too) and `live/pen-tool-extras-panel.live.mjs`.
+installed too) and `live/pen-tool-extras/pen-tool-extras-panel.live.mjs`.
 
 - **Pages.** Page 1 is `1` to `9`, page 2 is the color characters `a` to `i`. Each color button keeps its `data-key`
   and takes the page's character as `data-value` and title, as `ToolColor.setButtonPad` does. Page 2 strokes draw
@@ -138,8 +138,8 @@ Page 2 draws lines as dots: `stroke-dasharray: 0 <gap>` on the line values (`1 2
 `5` or cross `6`) with the round cap `.cell-pen` already has. Each segment is its own `<path>`, so each starts its own
 pattern on a dot. The gap is two line widths snapped so a cell side (64 units) holds a whole number of dots, and the
 diagonal (64 * sqrt(2)) its own; the same is done at each thickness, so the dots stay even across a join. Picture:
-`pen-tool-extras-dots-joins.png` (center, edge and diagonal lines, one drag each with turns, at thickness 1, 5, 12;
-`pen-tool-extras-dots-joins-screenshot.mjs`).
+`pen-tool-extras/pen-tool-extras-dots-joins.png` (center, edge and diagonal lines, one drag each with turns, at thickness 1, 5, 12;
+`pen-tool-extras/pen-tool-extras-dots-joins-screenshot.mjs`).
 
 - At 5 and 12 the dots are evenly spaced through every turn and at every join between a side and a diagonal.
 - At 1 the dots are 1 unit across with 2 between, which reads as a faint line at the page's own zoom.
@@ -152,9 +152,9 @@ diagonal (64 * sqrt(2)) its own; the same is done at each thickness, so the dots
 All pen strokes sit in `g#cell-pen`, and SudokuPad gives each path `opacity: 0.8`, so overlapping segments darken (dark
 dots at joins). Moving the opacity to the group (`:root:root .cell-pen { opacity: 1 }` and
 `:root:root #cell-pen { opacity: <slider> }`) fades the layer as one picture, so overlaps show as the rest of the
-stroke. Where two colors cross the later stroke covers the earlier one. Picture: `pen-tool-extras-pages-layer-opacity.png`
+stroke. Where two colors cross the later stroke covers the earlier one. Picture: `pen-tool-extras/pen-tool-extras-pages-layer-opacity.png`
 (the first two panels are before and after; the last two are the pen panel on pages 1 and 2;
-`pen-tool-extras-pages-layer-opacity-screenshot.mjs`). This replaces the reading in `pen-tool-extras-opacity.md`
+`pen-tool-extras/pen-tool-extras-pages-layer-opacity-screenshot.mjs`). This replaces the reading in `pen-tool-extras/pen-tool-extras-opacity.md`
 that the slider sets `opacity` on `.cell-pen` and that overlaps darken at every value.
 
 - The drag highlight (`.penhint`, opacity 0.6) and the erase highlight (`.pencolor-erase`, 0.5) are children of the same
@@ -175,8 +175,8 @@ button was white on white.
 What `pen-tool-extras.user.js` 1.7.0 does and what reading and running SudokuPad found. Live checks:
 `live/pen-tool-extras-chevrons.live.mjs` (both drag directions, a drag with turns, center, edge and diagonal lines, undo and redo,
 replay, reload, erasing either way, thickness, opacity, pen 9 with the characters `z` and `0`, at the three injection times).
-Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras-chevrons.png`
-(`pen-tool-extras-chevrons-screenshot.mjs`).
+Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras/pen-tool-extras-chevrons.png`
+(`pen-tool-extras/pen-tool-extras-chevrons-screenshot.mjs`).
 
 - **A pen action can carry its own color.** `Cell.togglePen` splits its argument into value and color (`1j` is value `1`, color
   `j`) and only reads the pen tool's state color when there is none. `propContains('pen', '1j')` is `pen.includes('1j')`, an exact
@@ -217,7 +217,7 @@ Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras-che
 So a click with a modifier held doesn't reach the pen tool unless the script stops the temporary switch (`App.changeTool` with
 `tempChange`, found through each tool's `tempKey`). Only the key press was run, not a click with it held.
 
-## Middle click (run on the page 2026-11-04, SudokuPad 0.612.0, headless Chromium, `live/pen-tool-extras-erase.live.mjs`)
+## Middle click (run on the page 2026-11-04, SudokuPad 0.612.0, headless Chromium, `live/pen-tool-extras/pen-tool-extras-erase.live.mjs`)
 
 - A real middle press raises `pointerdown`, `pointerup` and `auxclick` with button 1 and, when `pointerdown` is not prevented, `mousedown`
   and `mouseup`, which end in `clickCell` as for a left click.

@@ -1807,8 +1807,8 @@
     center: '<path data-line="center" d="M7.5 7.5H16.5V16.5"/>',
     edge: '<path data-line="edge" d="M3 12H12V21"/>'
   }
-  // Each icon is drawn at one size, 34 px on the longest side of its visible ink, centred on its ink, at 1200x900 (docs/research/pen-tool-extras-panel-redesign-mockup.png). The
-  // corrections were measured from rendered pixels, one for each picture an icon can show, and live in its viewBox (live/pen-tool-extras-panel-layout.live.mjs measures them again).
+  // Each icon is drawn at one size, 34 px on the longest side of its visible ink, centred on its ink, at 1200x900 (docs/research/pen-tool-extras/pen-tool-extras-panel-redesign-mockup.png). The
+  // corrections were measured from rendered pixels, one for each picture an icon can show, and live in its viewBox (live/pen-tool-extras/pen-tool-extras-panel-layout.live.mjs measures them again).
   const MODE_ICON_VIEWBOX = { both: '-0.62 -0.8 25.059 25.059', centeronly: '0.25 -0.57 24 24', edgeonly: '-0.54 -0.7 24.882 24.882' }
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const MODE_ICON_SHOWS = { both: ['center', 'edge'], centeronly: ['center'], edgeonly: ['edge'] }

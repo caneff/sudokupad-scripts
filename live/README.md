@@ -1,6 +1,6 @@
 # Live tests
 
-`npm run test:live` runs every `live/*.live.mjs` on sudokupad.app in headless Chromium, with the
+`npm run test:live` runs every `live/**/*.live.mjs` on sudokupad.app in headless Chromium, with the
 script under test injected. `AGENTS.md` § End-to-end seam says when to run it; this file is what
 you need to write or debug one.
 
@@ -11,7 +11,7 @@ all three times: at `DOMContentLoaded`, after load before Start Puzzle, after St
 
 - `live/startup.live.mjs` checks each script's startup that way: it loads with no page error, its
   control appears, one action works.
-- The two "auto mode saved on and no mode saved" groups of `live/color-by-digit-mode.live.mjs` do too.
+- The two "auto mode saved on and no mode saved" groups of `live/color-by-digit/color-by-digit-mode.live.mjs` do too.
 - Dark Page's page color dialog group injects at `DOMContentLoaded` only.
 
 ## The recording

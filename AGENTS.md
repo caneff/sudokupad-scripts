@@ -9,11 +9,15 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
   spends 15 of the plan's 300 credits a month (`docs/research/netlify-credits.md`). It is pushed very rarely, so it lags
   `main` by design: Chris kept Netlify on 2026-11-05.
 - **`docs/research/`**: research notes, chiefly what was read from SudokuPad's source, and also screenshots, the scripts that take them and frozen scratch.
+  Each script's notes and pictures are in its own folder (`docs/research/<script name>/`), pictures of a whole site page in `docs/research/site/`,
+  and notes about SudokuPad itself at the top.
+- **Tests**: unit tests are in `test/` (`test/<script name>.test.js`), a spec's closing test in `test/specs/`, and live tests in
+  `live/<script name>/`. The six `*.user.js` stay at the root: every installed copy checks that address for updates.
 - **`GLOSSARY.md`**: the vocabulary.
 - **A change to what a script shows** (its panel, buttons, dialog or drawing) updates that script's text in `site/` and retakes the site pictures that
-  show it, with their scripts in `docs/research/` (`*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
+  show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
-  and `site.test.js` fails until you do. README pictures, if added, follow the same rule.
+  and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
 - **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
   demonstrated at a phone or tablet size, and no ticket or PR asks for it.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
@@ -39,15 +43,15 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 
 ## End-to-end seam
 
-- **Seam**: `npm test` (`node --test`), against each script's pure functions, the live harness's helper tests
-  (`live/*.test.mjs`) and every page in `site/` (`site.test.js`: every script has an install link on the homepage)
-- **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/*.live.mjs`)
+- **Seam**: `npm test` (`node --test`), against each script's pure functions (`test/`), the live harness's helper tests
+  (`live/**/*.test.mjs`) and every page in `site/` (`test/site.test.js`: every script has an install link on the homepage)
+- **Blind to**: real SudokuPad: the `Framework` calls, rendering, undo. `npm run test:live` (every `live/**/*.live.mjs`)
   covers them on sudokupad.app in headless Chromium, with the script injected after Start Puzzle.
 - Before you write or debug a live test: read `live/README.md`.
 - `npm run test:live` needs a Playwright Chromium (`npx playwright install chromium`), so it stays out of `npm test` and
   `land.testcmd`.
 - Run it when a change touches a `Framework` call, rendering or undo.
-- While you iterate, run only the changed script's files (`live/<script name>*.live.mjs`, and `live/startup.live.mjs` when
+- While you iterate, run only the changed script's files (`live/<script name>/*.live.mjs`, and `live/startup.live.mjs` when
   its startup changed); the full suite runs once, at the controller's merge check.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.

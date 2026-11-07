@@ -70,13 +70,13 @@ Run for Dark Page (`dark-page.user.js`, issue #14); the notes above were read fr
 
   "Changed" is pixels inside the rectangle that differ with the script off; "clipped" is
   pixels the page draws outside the rectangle that are not the page's white. `horse_pill` was
-  checked once by hand, not in `live/dark-page.live.mjs`, since its file lives in another repo.
+  checked once by hand, not in `live/dark-page/dark-page.live.mjs`, since its file lives in another repo.
 - `body.setting-darkmode` changes `--body-bg`; the rectangle takes `var(--body-bg)`, so with
   SudokuPad's dark mode on it is dark and unchanged from SudokuPad's own rendering.
 - With no `#svgrenderer` on the page the script leaves the page alone (its stylesheet is
   disabled), so a page of a matched site that is not a puzzle keeps its white.
-- Screenshots at real size: `dark-page.png` (the sample puzzle as it opens, retaken with
-  `dark-page-screenshot.mjs`) and `dark-page-outside-text.png` (a 6x6 with clue text outside the grid).
+- Screenshots at real size: `dark-page/dark-page.png` (the sample puzzle as it opens, retaken with
+  `dark-page/dark-page-screenshot.mjs`) and `dark-page/dark-page-outside-text.png` (a 6x6 with clue text outside the grid).
 - Control buttons on a dark page (Dark Page 0.3.0, checked live on 2026-11-03): SudokuPad's
   own are `#eee` with `#ccc` borders. The script's rules apply only when `textColorFor` gives
   light text, set `#2a2a2a` / `#d2a8f0` / `#4a4a4a` on `.controls-app`, `.controls-tool`
@@ -84,5 +84,5 @@ Run for Dark Page (`dark-page.user.js`, issue #14); the notes above were read fr
   Hover on undo changes nothing with the script on or off; hover on a digit or mode button is
   `filter: brightness(1.25)`, which the rules do not touch. Color swatches, the pen tool's
   white swatches and its mode select, and the svg-painted icons keep their own colors; a
-  button added to `.controls-aux` (Color by Digit) goes dark with the rest. `dark-page.png`
+  button added to `.controls-aux` (Color by Digit) goes dark with the rest. `dark-page/dark-page.png`
   was retaken with the buttons dark.
