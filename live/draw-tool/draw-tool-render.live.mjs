@@ -156,10 +156,22 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     })
   })
 
+  // A redraw that changes nothing writes nothing either, so a redraw is told by its read of the board's computed style, which it takes the notes' font from.
   it('a class change on the board\'s box that leaves the board where it was redraws nothing', async () => {
-    const changed = await changedInLayer(() => document.querySelector('.game').classList.add('draw-tool-probe'))
-    await read(() => document.querySelector('.game').classList.remove('draw-tool-probe'))
-    assert.deepEqual(changed, [])
+    // A first change brings the notes up to anything that moved since their last redraw, such as the panel laying out after the tool was picked.
+    await changedInLayer(() => document.querySelector('.game').classList.toggle('draw-tool-probe'))
+    await read(() => {
+      window.__boardStyleReads = 0
+      const board = Framework.app.svgRenderer.getElem()
+      const computed = window.getComputedStyle
+      window.getComputedStyle = function (element, ...rest) {
+        if (element === board) window.__boardStyleReads++
+        return computed.call(this, element, ...rest)
+      }
+    })
+    const changed = await changedInLayer(() => document.querySelector('.game').classList.toggle('draw-tool-probe'))
+    const reads = await read(() => window.__boardStyleReads)
+    assert.deepEqual({ changed, reads }, { changed: [], reads: 0 })
   })
 
   it('a move shows only after the next frame, at the last pointer move', async () => {
