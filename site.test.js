@@ -35,11 +35,15 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
   }
 })
 
-test('every *.user.js in the repo root has an install link on the homepage', () => {
+// Chris's ruling on #359: this script is for him only, so it is not on the site.
+const NOT_ON_SITE = 'no-tab-letters.user.js'
+
+test(`every *.user.js in the repo root except ${NOT_ON_SITE} has an install link on the homepage, and ${NOT_ON_SITE} has none anywhere on the site`, () => {
   const scripts = rootScripts()
-  assert.ok(scripts.length > 0, 'no userscripts found')
+  assert.ok(scripts.includes(NOT_ON_SITE), `${NOT_ON_SITE} is gone, so the exception is stale`)
   const links = scriptLinks(read(HOME))
-  for (const s of scripts) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of scripts.filter(f => f !== NOT_ON_SITE)) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const name of PAGES) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, `site/${name} names No Tab Letters`)
 })
 
 for (const name of PAGES) {
@@ -61,8 +65,10 @@ for (const name of PAGES) {
     for (const f of shots) assert.ok(tracked.includes(f), `site/${name} loads ${f}, which git does not track`)
   })
 
-  test(`${name} loads no script`, () => {
-    assert.doesNotMatch(page, /<script\b/i)
+  test(`${name} loads no script but the shared slideshow script`, () => {
+    const scripts = [...page.matchAll(/<script\b[^>]*>/gi)].map(m => m[0])
+    for (const tag of scripts) assert.equal(tag, '<script src="slides.js">')
+    assert.doesNotMatch(page, /<script\b[^>]*>\s*[^<\s]/i, 'a script tag holds code')
   })
 
   test(`every link from ${name} into the site is relative and names a file in site/`, () => {
@@ -200,15 +206,58 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
   const m = read(HOME).match(/<h2>Pen Tool Extras<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Pen Tool Extras description`)
   assert.doesNotMatch(m[1], /slider/i)
-  assert.match(m[1], /^Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners\. <a href="pen-tool-extras\.html">Details<\/a>$/)
+  assert.equal(m[1], "Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners.")
 })
 
-test(`${HOME} puts every Install button in a paragraph of its own that clears the picture`, () => {
-  const html = read(HOME)
-  assert.match(html, /section p:has\(\.install\)\s*\{[^}]*clear:\s*both/)
-  const installs = html.match(/<a class="install"/g) || []
-  const alone = html.match(/<p><a class="install" href="[^"]*">[^<]*<\/a><\/p>/g) || []
-  assert.equal(alone.length, installs.length)
+// One row per script, in this order; Details only where a details page exists.
+const ROWS = [
+  ['Color by Digit', CBD], ['Pen Tool Extras', DETAILS], ['Draw Tool', DRAW], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
+]
+const rowsOf = html => html.split('<section class="row">').slice(1)
+
+test(`${HOME} has one row per script in order, each with an Install button beside its Details link where there is one`, () => {
+  const rows = rowsOf(read(HOME))
+  assert.deepEqual(rows.map(r => (r.match(/<h2>([^<]*)<\/h2>/) || [])[1]), ROWS.map(([n]) => n))
+  rows.forEach((row, i) => {
+    const [name, details] = ROWS[i]
+    const script = name.toLowerCase().replace(/ /g, '-') + SCRIPT_SUFFIX
+    assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a class="more" href="${details}">Details &rarr;</a>` : ''}</p>`), name)
+  })
+})
+
+test('the shared Install button is bigger than the old one, in style.css', () => {
+  const css = fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8')
+  const install = css.match(/\.install \{[^}]*\}/)[0]
+  assert.match(install, /font-size: 1\.05rem/)
+  assert.match(css, /\.install::before \{[^}]*width: 1\.3em/)
+})
+
+// Every slideshow on a page: its pictures and captions pair up, the first of each is current, and each has a caption and a picture file.
+const slideshows = html => html.split('<div class="slideshow">').slice(1).map(part => part.split('</section>')[0])
+
+test(`${HOME}'s Draw Tool row is a slideshow of eight slides, each a tagged picture with a caption, the first showing without script`, () => {
+  const [show] = slideshows(rowsOf(read(HOME)).find(r => r.includes('<h2>Draw Tool</h2>')))
+  const pictures = imgs(show)
+  const captions = [...show.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)]
+  assert.equal(pictures.length, 8)
+  assert.deepEqual(captions.map(m => m[2]), [
+    'Draw a line', 'Hold Shift for a straight line', 'Size and opacity', 'Shape: rectangle', 'Shape: ellipse', 'Type text, such as a cage sum',
+    'Your own colors: hold a color button', 'Erase: right-drag across a line'
+  ])
+  pictures.forEach((img, i) => {
+    assert.match(img, i === 0 ? /class="slide current"/ : /class="slide"/)
+    assert.match(img, /src="[^"]*docs\/research\/draw-tool-slide-\d-[a-z]+\.png\?v=[0-9a-f]{7}"/)
+    assert.match(img, /\balt="[^"]*[^"\s][^"]*"/)
+    assertDeclaredAtFileShape(img, (img.match(/(docs\/research\/[^"?]+)/) || [])[1], `slide ${i + 1}`)
+  })
+  assert.deepEqual(captions.map(m => Boolean(m[1])), [true, false, false, false, false, false, false, false])
+})
+
+test(`${HOME}'s other rows show one picture and no pager`, () => {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Draw Tool</h2>'))) {
+    assert.equal(imgs(row).length, 1)
+    assert.doesNotMatch(row, /slide-caption|slideshow/)
+  }
 })
 
 test('netlify.toml publishes only site/', () => {
@@ -288,9 +337,9 @@ const CBD_PICTURES = {
 }
 
 test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside a picture of colored digits`, () => {
-  const m = read(HOME).match(/<img ([^>]*)>\s*<div>\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  const m = read(HOME).match(/<img ([^>]*)>\s*<\/div>\s*<\/div>\s*<div class="row-text">\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
-  assert.equal(m[2], `${CBD_SUMMARY} <a href="${CBD}">Details</a>`)
+  assert.equal(m[2], CBD_SUMMARY)
   assert.match(altOf(m[1]), /digits/i)
 })
 
@@ -458,7 +507,7 @@ const GIF_LIMIT_BYTES = 300 * 1024
 test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Draw Tool description`)
-  assert.equal(m[1], `${DRAW_SUMMARY} <a href="${DRAW}">Details</a>`)
+  assert.equal(m[1], DRAW_SUMMARY)
 })
 
 test(`${DRAW} lists what the script adds, one item per feature`, () => {
@@ -530,7 +579,7 @@ shared({
   intro: 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines or shapes, and click to type text, such as cage sums, in colors of its own.',
   leadIns: DRAW_LEAD_INS,
   pictures: { 'Freehand lines.': 'draw-tool-bullet-lines', 'Shapes.': 'draw-tool-details-shapes.gif', 'Text.': 'draw-tool-details-text.gif', 'Erasing.': 'draw-tool-details-erasing.gif' },
-  homePicture: 'site-draw-tool.png'
+  homePicture: 'draw-tool-slide-1-line.png'
 })
 
 shared({
