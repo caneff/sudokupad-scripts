@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.26.9
+// @version      1.26.10
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.26.9'
+  const VERSION = '1.26.10'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -171,9 +171,6 @@
   function linePoints (value, row, col) {
     return LINE_PATHS[value].map(([r, c]) => [row + r, col + c])
   }
-
-  // SudokuPad's purple, as its own icons draw it.
-  const PANEL_COLOR = '#6a1b9a'
 
   const STEP_LABELS = {
     colors: 'colors',
@@ -1825,9 +1822,17 @@
     return LINE_MODES.some(([value]) => value === data) ? data : LINE_MODES[0][0]
   }
 
-  // SudokuPad draws `.penlinemode` as a box across the panel's last row, which is hidden here. The panel keeps SudokuPad's outer size (four rows of a 4rem button between 0.15rem margins)
-  // and lays itself out as a grid: the nine color buttons shortened to 2.5rem, a gap, a row of the line mode, line type and settings buttons at the full 4rem on the color columns, and
-  // the sliders across the rest. A tray sits behind the last two rows; it is placed in their area but takes no cell, so the buttons fill the row.
+  // <lib:panel>
+  // Generated from lib/panel.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads rem from plain.
+  /* global rem */
+  // The purple panel Pen Tool Extras and Draw Tool give their tool: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
+  // color buttons shortened to 2.5rem, a gap, a row of three controls at the full 4rem, and the sliders across the rest. A tray sits behind the last two rows; it is placed in
+  // their area but takes no cell, so the buttons fill the row.
+  // SudokuPad's purple, as its own icons draw it.
+  const PANEL_COLOR = '#6a1b9a'
+  const TRAY_COLOR = '#efeaf4'
   const PANEL_BUTTON_REM = 4
   const COLOR_BUTTON_REM = 2.5
   const PANEL_BUTTON_MARGIN_REM = 0.15
@@ -1839,55 +1844,79 @@
   const CONTROLS_ROW = COLOR_ROWS + 1
   const SLIDERS_ROW = CONTROLS_ROW + 1
   const CONTROLS_GAP_REM = 0.75
-  const TRAY_COLOR = '#efeaf4'
   const TRAY_RADIUS_PX = 14
   // The tray reaches this far past the color block on each side, and holds its buttons this far from its edge on every side, so the margin of a button and the reach make up most of it.
   const TRAY_REACH_REM = 0.25
   const TRAY_PADDING_REM = 0.4
   const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
-  const MODE_BUTTON = 'pen-tool-extras-mode'
-  const SETTINGS_BUTTON = 'pen-tool-extras-settings'
-  const SETTINGS_LABEL = 'Pen Tool Extras settings'
-  const TRAY = 'pen-tool-extras-tray'
   const SLIDER_TRACK_REM = 0.8
   const SLIDER_THUMB_REM = 1.1
   const SLIDER_THUMB_RING_REM = 0.2
-  // The tracks say what the sliders do: thickness is a wedge widening to the right, opacity fades from faint to solid. The wedge is a data-URI picture, since a CSS gradient
-  // cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
+  // A hidden slider's empty row has the same height, so the other keeps its place.
+  const SLIDER_ROW_HEIGHT_REM = 1.4
+  // The wedge is a data-URI picture, since a CSS gradient cannot draw a slanted edge. `preserveAspectRatio="none"` stretches it over the track.
   const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
   const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
   const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
-  // A hidden slider's empty row has the same height, so the other keeps its place.
-  const SLIDER_ROW_HEIGHT_REM = 1.4
-  // Each color button keeps `position: relative`, since its color line is its `::after`. The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
+
+  // The rules both panels share, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
+  // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
+  // (widening to the right) and the one drawn as a fade (faint to solid).
+  function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
+    const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
+    return [
+      `${panel} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
+      `${panel} > .button-row { display: contents !important; }`,
+      `${panel} button[data-key="0"], ${panel} button[data-control="delete"] { display: none !important; }`,
+      // Each color button keeps `position: relative`, since its color line is its `::after`.
+      `${panel} ${colorButton} { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
+      `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+      `.${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
+      // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
+      `${panel}:not(:has(.${sliders})) .${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
+      // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
+      ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
+      `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
+      `.${sliderRow} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
+      `.${sliderRow} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
+      `.${sliderRow} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-track { ${TRACK_SHAPE} }`,
+      `#${wedgeSlider}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
+      `#${wedgeSlider}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
+      `#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
+      `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`,
+      `.${sliderRow} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${rem((SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2)}rem; ${THUMB_SHAPE} }`,
+      `.${sliderRow} input::-moz-range-thumb { ${THUMB_SHAPE} }`
+    ]
+  }
+
+  // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops the browser dragging a slider's thumb. A move over the sliders is kept from
+  // SudokuPad's handlers, so the thumb drags and the drag reaches nothing else on the page. A drag leaves the focus on the slider, where the arrow keys would move it and not
+  // reach the puzzle, so the focus goes back to the page when the pointer is released. `sliders` is the selector of the block that holds the slider inputs.
+  function installSliderGuards (sliders, doc = document, win = window) {
+    doc.addEventListener('mousemove', (event) => {
+      if (event.target.closest(sliders)) event.stopPropagation()
+    }, true)
+    win.addEventListener('pointerup', () => {
+      const focused = doc.activeElement
+      if (focused && focused.matches(`${sliders} input`)) focused.blur()
+    }, true)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:panel>
+  const MODE_BUTTON = 'pen-tool-extras-mode'
+  const SETTINGS_BUTTON = 'pen-tool-extras-settings'
+  const SETTINGS_LABEL = 'Pen Tool Extras settings'
+  const TRAY = 'pen-tool-extras-tray'
+  // The row of buttons is ordered by `order`, so a missing line type button leaves no hole.
   const CONTROL_BUTTONS = [MODE_BUTTON, PAGE_BUTTON, SETTINGS_BUTTON]
   const controlButtons = CONTROL_BUTTONS.map((name) => `.tool-pen .controls-input button.${name}`).join(', ')
   const PANEL_CSS = [
     `${LINE_MODE_BOX} { display: none; }`,
-    `.tool-pen .controls-input { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; }`,
-    '.tool-pen .controls-input > .button-row { display: contents !important; }',
-    '.tool-pen .controls-input button[data-key="0"], .tool-pen .controls-input button[data-control="delete"] { display: none !important; }',
-    `.tool-pen .controls-input button[data-key] { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; }`,
-    `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    ...panelCss({ panel: '.tool-pen .controls-input', colorButton: 'button[data-key]', controlButtons, tray: TRAY, sliders: SLIDERS, sliderRow: SLIDER_ROW, wedgeSlider: THICKNESS_SLIDER, fadeSlider: OPACITY_SLIDER }),
     ...CONTROL_BUTTONS.map((name, i) => `.tool-pen .controls-input button.${name} { order: ${i + 1}; }`),
-    `.${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
-    // With no sliders the tray ends under the controls, as far past their margin as the other sides: an absolutely placed box needs its end line, or it runs to the panel's edge.
-    `.tool-pen .controls-input:not(:has(.${SLIDERS})) .${TRAY} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
-    // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
-    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad .tool-pen .controls-input button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
-    `.${SLIDERS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
-    `.${SLIDER_ROW} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
-    `.${SLIDER_ROW} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; -webkit-appearance: none; appearance: none; }`,
-    `.${SLIDER_ROW} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
-    `.${SLIDER_ROW} input::-moz-range-track { ${TRACK_SHAPE} }`,
-    `#${THICKNESS_SLIDER}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
-    `#${THICKNESS_SLIDER}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
-    `#${OPACITY_SLIDER}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
-    `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
-    `.${SLIDER_ROW} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
-    `.${SLIDER_ROW} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
     `.${MODE_BUTTON} svg, .${PAGE_BUTTON} svg, .${SETTINGS_BUTTON} svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every `svg path`, which would turn the icon's lines into blobs.
     `.${MODE_BUTTON} path, .${SETTINGS_BUTTON} path, .${SETTINGS_BUTTON} circle { fill: none !important; }`
@@ -2021,8 +2050,6 @@
     removePageButtons()
   }
 
-  // A drag on a slider leaves the focus on it, and then the arrow and paging keys would move the slider
-  // and not reach the puzzle; the focus goes back to the page when the pointer is released.
   function installPenPanel () {
     document.addEventListener('input', (event) => {
       if (event.target.matches(`.${SLIDERS} input`)) saveSlider(event.target)
@@ -2042,16 +2069,7 @@
       const action = actions.find(([name]) => event.target.closest(`.${name}`))
       if (action && Date.now() - tappedAt > TAP_CLICK_MS) action[1]()
     })
-    // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops
-    // the browser dragging a slider's thumb. A mouse move over a slider is kept from SudokuPad's
-    // handlers, so the thumb drags and the drag reaches nothing else on the page.
-    document.addEventListener('mousemove', (event) => {
-      if (event.target.closest(`.${SLIDERS}`)) event.stopPropagation()
-    }, true)
-    window.addEventListener('pointerup', () => {
-      const focused = document.activeElement
-      if (focused && focused.matches(`.${SLIDERS} input`)) focused.blur()
-    }, true)
+    installSliderGuards(`.${SLIDERS}`)
   }
 
   // 10. Settings dialog

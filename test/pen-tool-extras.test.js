@@ -1145,37 +1145,7 @@ test('the three controls are one 4rem square size, in one rule, in the order mod
   ;[['mode', 1], ['page', 2], ['settings', 3]].forEach(([name, order]) => assert.match(ruleOf(`.tool-pen .controls-input button.pen-tool-extras-${name}`), new RegExp(`order: ${order};`)))
 })
 
-test('the color buttons are 2.5rem tall at 4rem wide with 0.15rem margins and keep position: relative, which their color line is placed against', () => {
-  const colors = ruleOf('.tool-pen .controls-input button[data-key]')
-  assert.match(colors, /position: relative;/)
-  assert.match(colors, /width: 4rem !important; height: 2\.5rem !important;/)
-  assert.match(colors, /margin: 0\.15rem !important;/)
-})
-
-test('the panel keeps SudokuPad\'s outer size, 3 columns of 4.3rem and 17.2rem tall, as a grid of three color rows, the controls and the sliders', () => {
-  const panel = ruleOf('.tool-pen .controls-input')
-  assert.match(panel, /grid-template-columns: repeat\(3, 4\.3rem\);/)
-  assert.match(panel, /grid-template-rows: repeat\(3, 2\.8rem\) 5\.05rem 1fr;/)
-  assert.match(panel, /height: 17\.2rem !important;/)
-  assert.match(ruleOf('.tool-pen .controls-input button[data-key="0"], .tool-pen .controls-input button[data-control="delete"]'), /display: none !important;/)
-})
-
-test('the tray is #efeaf4 with 14px corners, reaches 0.25rem past the color block and starts 0.5rem under it, behind the controls and the sliders, taking no cell', () => {
-  const tray = ruleOf('.pen-tool-extras-tray')
-  assert.match(tray, /background: #efeaf4; border-radius: 14px;/)
-  assert.match(tray, /margin: 0\.5rem -0\.25rem 0;/)
-  assert.match(tray, /grid-row: 4 \/ 6; grid-column: 1 \/ 4;/)
-  assert.match(tray, /position: absolute; inset: 0;/)
-  assert.equal(PANEL_CSS.includes('.tool-pen .controls-input:not(:has(.pen-tool-extras-sliders)) .pen-tool-extras-tray { grid-row: 4 / 5; margin-bottom: -0.25rem; }'), true, 'with no sliders the tray ends under the controls, with an end line since a box placed by its start alone runs to the panel\'s edge')
-})
-
-test('the sliders block spans the three columns of the fifth grid row, with the buttons\' margin and 0.4rem below, and draws no box of its own', () => {
-  const rule = ruleOf('.pen-tool-extras-sliders')
-  assert.match(rule, /grid-row: 5; grid-column: 1 \/ 4;/)
-  assert.match(rule, /box-sizing: border-box;/)
-  assert.match(rule, /margin: 0\.15rem 0\.15rem 0\.4rem;/)
-  assert.doesNotMatch(rule, /border:|background/)
-  assert.match(rule, /z-index: 1;/)
+test('the panel sliders block holds the slider rows and no button', () => {
   assert.match(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /^<div class="pen-tool-extras-sliders"><div class="pen-tool-extras-slider"/)
   assert.doesNotMatch(renderPanelSliders(9, 35, { thickness: true, opacity: true }), /<button/)
   assert.equal(PANEL_CSS.includes('sliders-box'), false)
