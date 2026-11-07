@@ -77,7 +77,7 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
   assert.equal(byDigit.isSynced(two), true)
   const apart = byDigit.setDigitActive(byDigit.setSync(two, false), 1)
   assert.deepEqual([byDigit.activeGroups(apart), byDigit.digitGroups(apart)], [SPLIT, ODD_EVEN])
-  assert.deepEqual(byDigit.iconGroups(apart), SPLIT)
+  assert.deepEqual(byDigit.activeGroups(apart), SPLIT)
   assert.match(byDigit.renderMenu(apart, colorOf), />Cell<[\s\S]*>Digit<[\s\S]*data-target="digits"/)
   assert.doesNotMatch(byDigit.renderMenu(two, colorOf), />Cell<|>Digit<|data-target="digits"/)
 

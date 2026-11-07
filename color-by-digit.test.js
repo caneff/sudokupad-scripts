@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -383,8 +383,8 @@ test('sync: ticking again makes the digits take the cell profile', () => {
   assert.equal('digitActive' in ticked, false)
 })
 
-test('sync: the button icon always takes its numbers from the cell profile', () => {
-  assert.deepEqual(iconGroups(apart), ODD)
+test("sync: the cell profile is the profile the button's numbers come from", () => {
+  assert.deepEqual(activeGroups(apart), ODD)
 })
 
 test('sync: deleting the digit profile makes digits follow the cell profile; deleting another keeps the digit pick on its profile', () => {
@@ -857,7 +857,7 @@ test('installButton: adds an icon button titled "Color by digit" in the bottom r
     addAppButton: () => calls.push(['wrong row'])
   }
   const app = { refreshControls: () => calls.push(['refresh']) }
-  installButton(framework, app, 'off', ODD, ODD, colorFor)
+  installButton(framework, app, 'off', ODD, colorFor, ODD)
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
@@ -1686,7 +1686,7 @@ test('iconHtml draws the run of cells in the mode\'s look, with no word strip, a
   }
 })
 
-test('iconHtml with a separate digit profile shows the cell profile\'s numbers in Cell, Digit and Both, the Digit ink from the digit profile', () => {
+test('iconHtml with a separate digit profile shows the cell profile\'s numbers in Cell, Digit and Both, the digit color from the digit profile', () => {
   const palette = { 1: 'rgb(200, 0, 0)', 5: 'rgb(0, 200, 0)', 9: 'rgb(0, 0, 200)', 7: 'rgb(200, 200, 0)', 4: 'rgb(200, 0, 200)' }
   const colorOf = (key) => palette[key]
   const shade = (key) => darkenColor(parseColor(palette[key]))
@@ -1701,7 +1701,7 @@ test('iconHtml with a separate digit profile shows the cell profile\'s numbers i
 test('the button is titled and labelled with its mode in words', () => {
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
   let spec
-  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, ODD, colorFor)
+  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor, ODD)
   assert.equal(spec.title, 'Color by digit: Both')
 })
 
@@ -1719,8 +1719,8 @@ test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a 
 const declarationsOf = (selector) => [...STYLE_CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)]
   .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector)).map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
 
-test('the bottom row is capped at 21.6rem, so SudokuPad wraps it at five buttons a row', () => {
-  assert.equal(BOTTOM_ROW_CSS, '.controls-aux { max-width: 21.6rem; }')
+test('the bottom row is capped at 21.6rem, which live/color-by-digit-rows.live.mjs shows wraps it at five buttons a row', () => {
+  assert.match(BOTTOM_ROW_CSS, /^\.controls-aux \{ max-width: 21\.6rem; \}$/)
 })
 
 test('renderProfiles draws each row\'s chips as a run of cells in the Cell look', () => {

@@ -356,8 +356,6 @@
 
   const activeGroups = (state) => state.profiles[state.active].groups
   const digitGroups = (state) => state.profiles[isSynced(state) ? state.active : state.digitActive].groups
-  // The button's numbers are always the cell profile's; the digit profile only colors them.
-  const iconGroups = activeGroups
 
   const NEW_PROFILE_SUFFIX = ' copy'
 
@@ -592,20 +590,20 @@
   // The icon is drawn in 100 by 100 units. A run of three cells reaches a little past its sides, into the button's margin,
   // and stays above the arrow box in the lower right.
   const ICON_CELL = 38
-  function iconRun (mode, groups, colorOf, inkGroups) {
+  function iconRun (mode, groups, colorOf, digitProfileGroups) {
     const count = Math.min(groups.length, CHIP_MAX_GROUPS)
-    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, inkGroups, x: 50 - count * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
+    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, digitProfileGroups, x: 50 - count * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
   }
 
   // SudokuPad's own app buttons put their icon in <div class="icon">.
-  const iconHtml = (mode, groups, colorOf, inkGroups = groups) =>
+  const iconHtml = (mode, groups, colorOf, digitProfileGroups) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
-    iconRun(mode, groups, colorOf, inkGroups) + '</svg>' + ARROW_BOX_HTML + '</div>'
+    iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + ARROW_BOX_HTML + '</div>'
 
   // The mode in words, which the chips' look alone does not say.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
-  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it, as it always has.
+  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
@@ -614,8 +612,8 @@
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a
   // button added later needs refreshControls. Its onClick is left empty: listenForButton takes every
   // press before SudokuPad sees it.
-  function installButton (framework, app, mode, groups, inkGroups, colorOf) {
-    framework.addControlButton({ parent: BOTTOM_ROW, name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, groups, colorOf, inkGroups), onClick () {} })
+  function installButton (framework, app, mode, groups, colorOf, digitProfileGroups) {
+    framework.addControlButton({ parent: BOTTOM_ROW, name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, groups, colorOf, digitProfileGroups), onClick () {} })
     app.refreshControls()
   }
 
@@ -710,8 +708,8 @@
   const shadeOf = (color) => { const rgb = parseColor(color); return rgb ? darkenColor(rgb) : ENTERED_DIGIT_BLUE }
   const CHIP_LOOKS = {
     cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
-    digit: (color, inkColor) => ({ fill: '#fff', ink: shadeOf(inkColor), line: '#000' }),
-    both: (color, inkColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(inkColor), line: '#000' }),
+    digit: (color, digitColor) => ({ fill: '#fff', ink: shadeOf(digitColor), line: '#000' }),
+    both: (color, digitColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitColor), line: '#000' }),
     off: () => ({ fill: '#fff', ink: '#999', line: '#aaa' })
   }
   // One cell of the run, in the run's own units; the strokes stay 1 px at any size.
@@ -720,14 +718,14 @@
 
   // A run of joined cells, one per shown group: fills first, then single dividers and one outline over them, so no line is doubled.
   // `size` is one cell's width, in pixels or in the units of an enclosing SVG, which `x` and `y` place it in.
-  function renderChips (groups, colorOf, { size, style = 'cell', x, y, inkGroups = groups }) {
+  function renderChips (groups, colorOf, { size, style = 'cell', x, y, digitProfileGroups = groups }) {
     const shown = shownGroups(groups, CHIP_MAX_GROUPS)
-    const inkKeyOfDigit = keyOfDigitMap(inkGroups)
+    const digitKeyOfDigit = keyOfDigitMap(digitProfileGroups)
     const width = shown.length * RUN_CELL
     const { line } = CHIP_LOOKS[style]('')
     const cells = shown.map(({ key, digit }, i) => {
-      const inkKey = inkGroups === groups ? key : inkKeyOfDigit[digit]
-      const { fill, ink } = CHIP_LOOKS[style](colorOf(key), inkKey === undefined ? '' : colorOf(inkKey))
+      const digitKey = digitKeyOfDigit[digit]
+      const { fill, ink } = CHIP_LOOKS[style](colorOf(key), digitKey === undefined ? '' : colorOf(digitKey))
       return `<g data-role="chip" data-key="${esc(key)}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${esc(fill)}"/>` +
         `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${esc(ink)}">${esc(digit)}</text></g>`
     }).join('')
@@ -906,7 +904,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1113,7 +1111,8 @@
   // The palette can change after the button was drawn, so the icon and the digit shades are drawn from it again.
   function redraw () {
     const icon = document.querySelector(`${BUTTON} .icon`)
-    if (icon) icon.outerHTML = iconHtml(mode, iconGroups(loadState()), readColor, digitGroups(loadState()))
+    const state = loadState()
+    if (icon) icon.outerHTML = iconHtml(mode, activeGroups(state), readColor, digitGroups(state))
     labelButton()
     showDigitColors()
   }
@@ -1523,7 +1522,7 @@
     const state = loadState()
     mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
-    installButton(Framework, app, mode, iconGroups(state), digitGroups(state), readColor)
+    installButton(Framework, app, mode, activeGroups(state), readColor, digitGroups(state))
     labelButton()
     installCellColoring(app)
     listenForButton(app, openEditor)

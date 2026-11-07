@@ -36,17 +36,14 @@ const layout = (p) => p.evaluate((row) => {
 }, ROW)
 const inside = (b) => b.left >= -EDGE_SLACK_PX && b.top >= -EDGE_SLACK_PX && b.right <= b.view.width + EDGE_SLACK_PX && b.bottom <= b.view.height + EDGE_SLACK_PX
 
-const ORDERS = [
-  { name: 'before', inject: (code) => addStandIns + code, after: false },
-  { name: 'after', inject: (code) => code, after: true }
-]
+const ORDERS = [{ name: 'before', after: false }, { name: 'after', after: true }]
 
 for (const viewport of VIEWPORTS) {
   for (const order of ORDERS) {
     describe(`with two other buttons added ${order.name} Color by Digit's, at ${viewport.width}x${viewport.height}`, { concurrency: false }, () => {
       let context, p
       before(async () => {
-        ({ context, p } = await openSession(browser, order.inject(script), { contextOptions: { viewport } }))
+        ({ context, p } = await openSession(browser, (order.after ? script : addStandIns + script), { contextOptions: { viewport } }))
         if (order.after) await addStandInsAfter(p)
       })
       after(async () => { await context?.close() })
@@ -54,7 +51,7 @@ for (const viewport of VIEWPORTS) {
       it('the row wraps five a row, with every control inside the viewport', async () => {
         const seen = await stable(() => layout(p))
         assert.deepEqual(seen.rows.map((r) => r.length), [PER_ROW, 2], JSON.stringify(seen.rows))
-        assert.equal(seen.rows.flat().includes('control-colorbydigit'), true)
+        assert.ok(seen.rows.flat().includes('control-colorbydigit'), JSON.stringify(seen.rows))
         assert.deepEqual(seen.boxes.filter((b) => !inside(b)).map((b) => b.id), [], JSON.stringify(seen.boxes))
       })
 
