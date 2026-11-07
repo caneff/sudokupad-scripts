@@ -1,0 +1,34 @@
+name: Watch SudokuPad
+
+# Nightly: checks SudokuPad's version with one request; a new version runs the full live suite and a red one files a
+# `bug` issue (live/watch.mjs). `workflow_dispatch` is the manual run.
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The recording is SudokuPad's own code: the Actions cache only, never the repo or an artifact. A cache entry
+      # cannot be overwritten, so each run saves under its own id and restores the newest by prefix.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/sudokupad-scripts/live
+          key: sudokupad-live-${{ github.run_id }}
+          restore-keys: sudokupad-live-
+      - run: npm run watch:live
+        env:
+          GH_TOKEN: ${{ github.token }}
