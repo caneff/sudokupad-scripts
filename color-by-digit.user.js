@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.18.3
+// @version      0.18.4
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.18.3'
+  const VERSION = '0.18.4'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -682,6 +682,148 @@
   const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
   /* eslint-enable no-unused-vars */
   // </lib:palette>
+  // <lib:color-picker>
+  // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
+  const HOLD_TO_EDIT_MS = 1000
+  // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
+  const SWATCH_PX = 34
+  const SWATCH_GAP_PX = 4
+  // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
+  const PICKER_INPUT_REM = 2.4
+  const PICKER_COLUMNS = 3
+  const PICKER_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
+
+  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // The dialog's color block: a pulldown above a grid of swatches, three to a row.
+  // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
+  // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
+  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '' }) {
+    const palette = picked !== undefined
+    const option = ({ value, label, selected, disabled }) =>
+      `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(label)}</option>`
+    const named = (swatch) => `aria-label="${escapeHtml(swatch.label)}" title="${escapeHtml(swatch.label)}"`
+    const swatch = (s) => {
+      const head = `class="${prefix}swatch" data-role="swatch"`
+      if (!s) return `<span ${head} data-empty="slot"></span>`
+      if (!palette) return `<input type="color" ${head} data-key="${escapeHtml(s.key)}" value="${escapeHtml(s.value)}" ${named(s)}>`
+      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${escapeHtml(s.value)}"></button>`
+    }
+    return `<div class="${prefix}color-block">` +
+      `<select class="${prefix}color-choice" data-role="color-choice" aria-label="${escapeHtml(label)}">${options.map(option).join('')}</select>` +
+      `<div class="${prefix}color-row"><div class="${prefix}swatches">${swatches.map(swatch).join('')}</div>${beside}</div></div>`
+  }
+
+  // `scope` is the dialog's own element (`#id`), so SudokuPad's rules for its dialogs' selects and buttons are outranked without !important.
+  function colorBlockCss (prefix, scope) {
+    const at = (selector) => `${scope} .${prefix}${selector}`
+    return [
+      `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
+      `${at('color-choice')} { box-sizing: border-box; max-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
+      `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
+      `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
+      `${at('swatch')} { box-sizing: border-box; display: block; width: ${SWATCH_PX}px; height: ${SWATCH_PX}px; margin: 0; padding: 0; border: 1px solid rgb(0 0 0 / .25); border-radius: 6px; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }`,
+      `${at('swatch')}[data-empty] { border: none; cursor: default; }`,
+      `${at('swatch')}[aria-pressed="true"] { border: 2px solid #fff; outline: 3px solid #000; }`,
+      `${at('swatch')}::-webkit-color-swatch-wrapper { padding: 0; }`,
+      `${at('swatch')}::-webkit-color-swatch { border: none; border-radius: 5px; }`,
+      `${at('swatch')}::-moz-color-swatch { border: none; border-radius: 5px; }`
+    ].join('\n')
+  }
+
+  // Edit mode's looks, for SudokuPad's tool `tool` (its panel carries `tool-<tool>`): each picker fills the grid cell of its button, whose own picture is hidden under it.
+  // A picker is out of the flow, so it takes no cell from the buttons the panel places itself.
+  function pickerCss (prefix, tool) {
+    const panel = `.tool-${tool} .controls-input`
+    const picker = (n) => `${panel} .${prefix}picker[data-key="${n}"]`
+    const rows = PICKER_NUMBERS.length / PICKER_COLUMNS
+    return [
+      `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
+      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
+      `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
+      ...PICKER_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
+      // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
+      ...[[[1, 2, 3], rows], [[7, 8, 9], 1]].flatMap(([keys, row]) => keys.map((n) => `.setting-flipkeypad ${picker(n)} { grid-row: ${row} / span 1; }`))
+    ].join('\n')
+  }
+
+  // Every open picker shows the color `colorOf(n)` gives now.
+  function refreshPickers (prefix, colorOf) {
+    document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
+  }
+
+  // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
+  // A second hold, or the panel leaving the tool, ends edit mode. `guard` runs each toggle, so a caller can report a failure its own way.
+  function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
+    const toolClass = `tool-${tool}`
+    const editing = `${prefix}editing`
+    const pickerClass = `${prefix}picker`
+    // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
+    const targets = `.${toolClass} .controls-input button[data-key], .${toolClass} .${pickerClass} input`
+    // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
+    let leaveWatch = null
+
+    function exit (panel) {
+      if (leaveWatch) leaveWatch.disconnect()
+      leaveWatch = null
+      panel.classList.remove(editing)
+      panel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
+    }
+
+    function enter (panel) {
+      // Every button is found before anything changes, so a missing one leaves no half edit mode.
+      const buttons = PICKER_NUMBERS.map((n) => {
+        const button = panel.querySelector(`.controls-input button[data-key="${n}"]`)
+        if (!button) throw new Error(`${prefix}color-picker: the ${tool} tool has no button for color ${n}`)
+        return button
+      })
+      panel.classList.add(editing)
+      buttons.forEach((button, i) => {
+        const n = PICKER_NUMBERS[i]
+        button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
+      })
+      leaveWatch = new window.MutationObserver(() => {
+        if (!panel.classList.contains(toolClass)) exit(panel)
+      })
+      leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
+    }
+
+    let timer
+    let holdDone = false
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    // Pointer events carry a mouse button of either kind.
+    document.addEventListener('pointerdown', (event) => {
+      cancel()
+      holdDone = false
+      const target = event.target.closest(targets)
+      if (!target) return
+      const panel = target.closest(`.${toolClass}`)
+      timer = setTimeout(() => {
+        timer = undefined
+        holdDone = true
+        if (!panel.classList.contains(toolClass)) return
+        guard(() => panel.classList.contains(editing) ? exit(panel) : enter(panel))
+      }, HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // The browser's menu would open over the picker during a right-click hold: when the press is still going (Linux opens it on press),
+    // or after the hold has run its course (Windows opens it on release, over the picker that appeared under the pointer).
+    // A quick right-click on a button, released before the delay, keeps its menu on Windows.
+    document.addEventListener('contextmenu', (event) => {
+      if ((timer !== undefined || holdDone) && event.target.closest(targets)) event.preventDefault()
+    }, true)
+    document.addEventListener('input', (event) => {
+      const input = event.target
+      if (input.matches(`.${pickerClass} input`)) save(input.dataset.key, input.value)
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-picker>
 
   // An entered digit's text element carries no digit attribute, so the script adds this one.
   const DIGIT_ATTR = 'data-color-by-digit'
@@ -833,18 +975,12 @@
     return pages.flatMap(pageSlots).filter(Boolean)
   }
 
-  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
-
-  const KEY_SIZE = '34px'
+  // A digit key is a swatch's size, so each row of the pad lines up with a row of swatches.
+  const KEY_SIZE = `${SWATCH_PX}px`
+  // The color picker's class prefix, which the paint editor's color block carries.
+  const PICKER_PREFIX = 'cbd-'
   // SudokuPad's own color for an entered digit, which a painted digit key shows on its group's color.
   const ENTERED_DIGIT_BLUE = 'rgb(29, 106, 229)'
-
-  // The brush is ringed twice (white inside, black outside) so it shows on any swatch color.
-  function renderSwatch (slot, brush) {
-    if (!slot) return '<span data-empty="slot"></span>'
-    return `<button type="button" data-act="color" data-key="${esc(slot.key)}" ` +
-      `title="${esc(slot.key)}" aria-pressed="${slot.key === brush}" style="background:${esc(slot.value)}"></button>`
-  }
 
   const pageLabel = (page) => `Page ${page.page + 1}${page.current ? ' (current)' : ''}`
 
@@ -862,33 +998,35 @@
     return first ? first.key : null
   }
 
-  function renderPageSelect (pages, page) {
-    const options = pages.map((p) => `<option value="${p.page}"${p === page ? ' selected' : ''}>${pageLabel(p)}</option>`).join('')
-    return `<select data-act="page" aria-label="Cell color page">${options}</select>`
-  }
-
   // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
-    const look = !key ? '' : color ? ` style="background:${esc(color.value)}"` : ' class="cbd-unset"'
-    return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${esc(key || '')}"${look}>${digit}</button>`
+    const look = !key ? '' : color ? ` style="background:${escapeHtml(color.value)}"` : ' class="cbd-unset"'
+    return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${escapeHtml(key || '')}"${look}>${digit}</button>`
   }
 
-  const emptyPage = { rows: [[null, null, null], [null, null, null], [null, null, null]], zero: null }
-
-  // One grid: each row has three swatches, a gap, and three digit keys, so a swatch row lines up with a pad row; 0 sits right of 9.
-  function renderPaint (groups, shown, brush, colors) {
+  // The digit keys in rows of three, 0 right of 9, beside the swatch grid.
+  function renderPad (groups, colors) {
     const keyOfDigit = keyOfDigitMap(groups)
     const digitKey = (d) => renderDigitKey(d, keyOfDigit[d], colors)
-    const gap = '<span data-empty="gap"></span>'
     const pad = '<span data-empty="pad"></span>'
+    const rows = Math.floor(NUMPAD_DIGITS.length / PAGE_COLUMNS)
     const zero = NUMPAD_DIGITS[NUMPAD_DIGITS.length - 1]
-    const rows = shown.rows.map((row, r) => {
-      const digits = NUMPAD_DIGITS.slice(r * 3, r * 3 + 3).map(digitKey).join('')
-      return row.map((slot) => renderSwatch(slot, brush)).join('') + gap + digits + (r === shown.rows.length - 1 ? digitKey(zero) : pad)
+    const lines = Array.from({ length: rows }, (_, r) =>
+      NUMPAD_DIGITS.slice(r * PAGE_COLUMNS, (r + 1) * PAGE_COLUMNS).map(digitKey).join('') + (r === rows - 1 ? digitKey(zero) : pad))
+    return `<div data-role="paint">${lines.join('')}</div>`
+  }
+
+  // The shown page's swatches in the shared color block, its index 0 color after 1 to 9, as the pad puts 0 after 9.
+  function renderPaint (groups, pages, shown, brush, colors) {
+    return renderColorBlock({
+      prefix: PICKER_PREFIX,
+      label: 'Cell color page',
+      options: pages.map((p) => ({ value: String(p.page), label: pageLabel(p), selected: p === shown })),
+      swatches: [...shown.rows.flat(), ...(shown.zero ? [shown.zero] : [])].map((slot) => slot && { ...slot, label: slot.key }),
+      picked: brush,
+      beside: renderPad(groups, colors)
     })
-    if (shown.zero) rows.push(renderSwatch(shown.zero, brush) + renderSwatch(null).repeat(2) + gap + pad.repeat(4))
-    return `<div data-role="paint">${rows.join('')}</div>`
   }
 
   // Each mode draws a cell the way it colors the board: the cell's fill and its digit's ink from the group color, and the run's line.
@@ -912,8 +1050,8 @@
     const { line } = CHIP_LOOKS[style]('')
     const cells = shown.map(({ key, digit }, i) => {
       const { fill, ink } = CHIP_LOOKS[style](colorOf(key))
-      return `<g data-role="chip" data-key="${esc(key)}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${esc(fill)}"/>` +
-        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${esc(ink)}">${esc(digit)}</text></g>`
+      return `<g data-role="chip" data-key="${escapeHtml(key)}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"/>` +
+        `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
     const dividers = shown.slice(1).map((_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" stroke="${line}" ${STROKE}/>`).join('')
     const place = x === undefined ? '' : ` x="${x}" y="${y}"`
@@ -949,11 +1087,11 @@
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const chosen = i === selected
-      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${esc(profile.name)}">` +
+      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
         `<span class="cbd-chips">${renderChips(profile.groups, colorOf, { size: CHIP_PX })}</span>` +
-        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${esc(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${esc(profile.name)}</span>`) +
-        `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
+        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
+        `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
     return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
@@ -968,13 +1106,13 @@
   const chipColumn = (groups, colorOf) =>
     `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(groups, colorOf, { size: CHIP_PX })}</span>`
   // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
-  const menuName = (name) => `<span data-role="name" title="${esc(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span>`
+  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
   const dotColumn = (role, html, align) => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}">${html}</span>`
   const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
 
   function menuDot (target, index, picked, name) {
     const on = index === picked
-    return dotColumn('dot-column', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${esc(name)}" ` +
+    return dotColumn('dot-column', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${escapeHtml(name)}" ` +
       `style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;cursor:pointer;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`, 'display:flex;justify-content:center')
   }
 
@@ -1000,7 +1138,7 @@
   }
 
   const optionHtml = (value, label, selected, index) =>
-    `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${esc(label)}</option>`
+    `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`
 
   function renderPulldowns (state, mode) {
     const shownMode = allowedMode(mode, usesDigitColors(state))
@@ -1018,12 +1156,12 @@
     const colors = layoutColors(pages)
     const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    const head = colors.length === 0
-      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>'
-      : `<div class="cbd-palette-head">${renderPageSelect(pages, shown)}</div>`
+    const paint = colors.length === 0
+      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
+      : renderPaint(groups, pages, shown, brush, colors)
     return `${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
-      `<div class="cbd-column">${heading('Digits', clear)}${head}${renderPaint(groups, shown || emptyPage, brush, colors)}</div></div>`
+      `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
   }
 
   // One stylesheet, every rule scoped to the editor, the dialog itself (its width), or the dialog's options row.
@@ -1031,8 +1169,6 @@
   const EDITOR = `#${EDITOR_ID}`
   const OPTIONS = `.dialog-options.${DIALOG_CLASS}`
   const TITLE = `.dialog.${DIALOG_CLASS} .cbd-title-row`
-  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
-  const PULLDOWN_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
   const STYLE_CSS = [
     ['.cbd-version', 'opacity: .6'],
     [TITLE, 'display: flex; align-items: center; gap: 12px'],
@@ -1053,15 +1189,12 @@
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
     [`${EDITOR} .cbd-column`, 'min-width: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
-    [`${EDITOR} .cbd-palette-head`, 'margin-bottom: 6px'],
-    [`${EDITOR} select[data-act="page"], ${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
+    [`${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
-    // The pad's columns: three swatches, a gap, three digit keys and the 0 key.
-    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: 4px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}) 12px repeat(4, ${KEY_SIZE}); touch-action: none; margin-top: 8px`],
+    // The pad's columns: three digit keys and the 0 key.
+    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS + 1}, ${KEY_SIZE}); touch-action: none`],
     [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
     [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
-    [`${EDITOR} [data-act="color"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888`],
-    [`${EDITOR} [data-act="color"][aria-pressed="true"]`, 'border: 2px solid #fff; outline: 3px solid #000'],
     [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
     [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 2px'],
     [`${EDITOR} .cbd-profile`, 'cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px; border-radius: 6px'],
@@ -1087,7 +1220,7 @@
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
     [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
     [`${OPTIONS} button[data-role="save"]`, 'background: #6b3fa0; color: #fff; border: 1px solid #5a3489; font-weight: 600']
-  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
+  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(PICKER_PREFIX, EDITOR)
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
@@ -1551,13 +1684,15 @@
     })
     box.addEventListener('change', (event) => {
       if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
+      const pageChoice = event.target.closest('select[data-role="color-choice"]')
+      if (pageChoice) {
+        page = Number(pageChoice.value)
+        draw()
+        box.querySelector('select[data-role="color-choice"]').focus()
+        return
+      }
       const pulldown = event.target.closest('select[data-role]')
-      if (pulldown) { choose(pulldown.dataset.role, pulldown.value); return }
-      const el = event.target.closest('select[data-act="page"]')
-      if (!el) return
-      page = Number(el.value)
-      draw()
-      box.querySelector('select[data-act="page"]').focus()
+      if (pulldown) choose(pulldown.dataset.role, pulldown.value)
     })
     const setGroups = (groups) => {
       if (sameGroups(groups, groupsShown())) return
@@ -1572,7 +1707,7 @@
       event.preventDefault()
       if (target.hasPointerCapture && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId)
       const pressed = target.closest('[data-act="digit"]')
-      if (!pressed && target.closest('[data-act]')) return
+      if (!pressed && target.closest('[data-act], [data-role="swatch"]')) return
       let paintKey
       const paint = (key) => {
         if (brush === null) return
@@ -1652,6 +1787,16 @@
         selectRow(Number(row.dataset.index), false)
         return
       }
+      const swatch = event.target.closest('button[data-role="swatch"]')
+      if (swatch) {
+        event.preventDefault()
+        event.stopPropagation()
+        brush = swatch.dataset.key
+        draw()
+        // The redraw replaced the swatch; a keyboard user keeps the focus on its successor.
+        if (event.detail === 0) box.querySelector(`button[data-role="swatch"][data-key="${swatch.dataset.key}"]`).focus()
+        return
+      }
       const el = event.target.closest('button[data-act]')
       if (!el) return
       event.preventDefault()
@@ -1663,8 +1808,6 @@
         const next = deleteProfile(draft, index)
         if (next === draft) return
         reshow(next, indexAfterDelete(selected, index, draft.profiles.length))
-      } else if (act === 'color') {
-        brush = el.dataset.key
       } else if (act === 'clear') {
         setGroups([])
       } else if (act === 'digit' && event.detail === 0 && brush !== null) {
@@ -1673,9 +1816,8 @@
       }
       draw()
       // The redraw replaced the button; a keyboard user keeps the focus on its successor.
-      const identity = { digit: 'digit', color: 'key' }[act]
-      if (event.detail === 0 && identity) {
-        const next = box.querySelector(`[data-act="${act}"][data-${identity}="${el.dataset[identity]}"]`)
+      if (event.detail === 0 && act === 'digit') {
+        const next = box.querySelector(`[data-act="digit"][data-digit="${el.dataset.digit}"]`)
         if (next) next.focus()
       }
     })

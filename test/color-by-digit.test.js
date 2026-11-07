@@ -1382,21 +1382,21 @@ test('renderEditor draws one page pulldown, labelled Page 1, Page 2 (current), w
   assert.equal(count(html, /<select/g), 1)
 })
 
-test('renderEditor draws only the shown page\'s swatches, each with data-act and data-key', () => {
+test('renderEditor draws only the shown page\'s swatches, as the shared color block\'s palette buttons, index 0 after 9', () => {
   const first = editor([], twoPages(), 0)
-  assert.equal(count(first, /data-act="color"/g), 10)
-  assert.equal(count(first, /data-act="color"[^>]*data-key="z"/g), 1)
+  const swatchKeys = (html) => [...html.matchAll(/<button [^>]*data-role="swatch" data-key="([^"]*)"/g)].map((m) => m[1])
+  assert.deepEqual(swatchKeys(first), ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9', 'z'])
   assert.equal(count(first, /data-key="b1"/g), 0)
   const second = editor([], twoPages(), 1)
-  assert.equal(count(second, /data-act="color"/g), 9)
+  assert.equal(swatchKeys(second).length, 9)
   assert.equal(count(second, /data-key="a1"/g), 0)
 })
 
 test('renderEditor draws an empty slot as a spacer with no button, so nothing shifts', () => {
   const pages = layoutPages([keys('clear a1 clear a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
   const html = editor([], pages, 0, 'a1')
-  assert.equal(count(html, /data-act="color"/g), 8)
-  assert.equal(count(html, /data-empty="slot"/g), 1)
+  assert.equal(count(html, /<button [^>]*data-role="swatch"/g), 8)
+  assert.match(html, /data-key="a1"[^>]*><\/button><span [^>]*data-empty="slot"><\/span><button [^>]*data-key="a3"/)
 })
 
 test('renderEditor marks only the brush as selected', () => {
@@ -1407,15 +1407,15 @@ test('renderEditor marks only the brush as selected', () => {
   assert.equal(count(editor([], twoPages(), 0, null), /aria-pressed="true"/g), 0)
 })
 
-test('renderEditor lays the swatches and the digit keys out as one grid, three swatch columns and the pad beside them with 0 right of 9', () => {
+test('renderEditor puts the digit pad beside the swatch grid, in rows of three keys the swatches\' size, with 0 right of 9', () => {
   const html = editor([], twoPages(), 0, 'a1')
-  assert.deepEqual([...html.matchAll(/data-act="digit"[^>]*data-digit="(\d)"/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
-  const cells = [...html.matchAll(/<(?:button|span)[^>]*(data-act="color"|data-act="digit"|data-empty="[a-z]+")[^>]*>/g)].map((m) => m[1].replace(/data-(act|empty)="|"/g, ''))
-  const rows = []
-  for (let i = 0; i < cells.length && rows.length < 3; i += 8) rows.push(cells.slice(i, i + 8))
-  assert.deepEqual(rows[0], ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit', 'pad'])
-  assert.deepEqual(rows[2], ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit', 'digit'])
-  assert.match(STYLE_CSS, /\[data-role="paint"\] \{[^}]*grid-template-columns: repeat\(3, [^)]*\) \d+px repeat\(4, /)
+  const pad = /<div class="cbd-swatches">.*?<\/div><div data-role="paint">(.*?)<\/div>/.exec(html)
+  assert.ok(pad, 'the pad follows the swatch grid in its row')
+  const cells = [...pad[1].matchAll(/<(?:button|span)[^>]*(?:data-digit="(\d)"|data-empty="pad")[^>]*>/g)].map((m) => m[1] || 'pad')
+  assert.deepEqual(cells, ['1', '2', '3', 'pad', '4', '5', '6', 'pad', '7', '8', '9', '0'])
+  const css = STYLE_CSS.replace(/\s+/g, ' ')
+  assert.match(css, /\[data-role="paint"\] \{ display: grid; gap: 4px; grid-template-columns: repeat\(4, 34px\);/)
+  assert.match(css, /\.cbd-swatches \{[^}]*grid-template-columns: repeat\(3, 34px\); gap: 4px;/)
 })
 
 test('renderEditor draws a digit key as a cell filled with its group\'s color, and a digit in no group blank', () => {
@@ -1448,7 +1448,7 @@ test('renderEditor has no group rows, no Add group and no ×, and keeps a Clear 
 test('renderEditor keeps the "No palette colors found" note, and draws no pulldown or swatch, when no page has a color', () => {
   const html = editor([], layoutPages([], 0, colorOf), 0)
   assert.match(html, /No palette colors found/)
-  assert.equal(count(html, /data-act="color"|<select/g), 0)
+  assert.equal(count(html, /data-role="swatch"|<select/g), 0)
   assert.equal(count(editor([], twoPages(), 0), /No palette colors found/g), 0)
 })
 
