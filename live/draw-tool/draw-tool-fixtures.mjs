@@ -16,8 +16,12 @@ export const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
 
 export const DRAW_BUTTON = '#control-draw'
 export const DIGIT_BUTTON = '#control-normal'
-// Anything in the notes' layer that is not a note, such as a stroke or shape an earlier version drew: none is drawn now.
-export const NOT_NOTES = '#draw-tool-layer > :not(.draw-tool-text)'
+// The layer's two groups of notes: those on the board, and the fixed ones.
+export const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
+// Anything in the notes' layer that is not a note or one of its groups, such as a stroke or shape an earlier version drew: none is drawn now.
+export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
+// Every element in the layer but the groups themselves.
+export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
@@ -66,12 +70,14 @@ export const puzzleKey = (p) => p.evaluate(() => String(Framework.app.puzzle.puz
 // The drawing saved for the puzzle on the page.
 export const saved = async (p) => p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p))
 
-// Each note drawn: its text, its computed color and its size in board units, its font size over the board's scale.
+// Each note drawn: its text, its computed color and its size in board units, its font size on the screen over the board's scale.
 export const noteLooks = (p) => p.evaluate((selector) => {
   const scale = Framework.app.svgRenderer.getElem().getScreenCTM().a
   return [...document.querySelectorAll(selector)].map((e) => {
     const style = window.getComputedStyle(e)
-    return { text: e.textContent, color: style.color, size: Math.round(parseFloat(style.fontSize) / scale * 10) / 10 }
+    // A note on the board sits in a group scaled by the board's transform.
+    const boxScale = new window.DOMMatrix(window.getComputedStyle(e.parentElement).transform).a
+    return { text: e.textContent, color: style.color, size: Math.round(parseFloat(style.fontSize) * boxScale / scale * 10) / 10 }
   })
 }, TEXTS)
 
