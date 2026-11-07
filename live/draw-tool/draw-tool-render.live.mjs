@@ -1,5 +1,5 @@
 // Live check of how little draw-tool.user.js redraws on sudokupad.app, with 30 notes on the board: a drag of two selected notes keeps each
-// pointer move's work under a frame and never recreates the notes it leaves still; with another tool current a mouse move measures no note;
+// pointer move's work under a frame and never recreates a note, during the drag or at its release; with another tool current a mouse move measures no note;
 // a board resize writes one container's style and touches no note; a class change that leaves the board where it was redraws nothing;
 // and a move, a selection rectangle, a resize and an erase each wait for the next frame and then show the last pointer move.
 // The pointer moves are dispatched from the page, so each one's work can be timed; the presses are real mouse input.
@@ -104,7 +104,7 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a drag of two selected notes among 30 keeps each pointer move\'s work under a frame, and recreates none of the notes it leaves still', async (t) => {
+  it('a drag of two selected notes among 30 keeps each pointer move\'s work under a frame, recreates none of the notes it leaves still, and after the release none at all', async (t) => {
     await p.mouse.click(...await gridPoint(p, atCell(MOVED[0])))
     await p.keyboard.down('Shift')
     await p.mouse.click(...await gridPoint(p, atCell(MOVED[1])))
@@ -119,7 +119,12 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
       return window.__notesBefore.filter((note) => !moved.includes(note.textContent) && !now.includes(note)).map((note) => note.textContent)
     }, [TEXTS, MOVED.map(NOTE_TEXT)])
     await p.mouse.up()
+    const recreatedByRelease = await read((selector) => {
+      const now = [...document.querySelectorAll(selector)]
+      return window.__notesBefore.filter((note) => !now.includes(note)).map((note) => note.textContent)
+    }, TEXTS)
     assert.deepEqual(recreated, [], 'every note left still is the element it was before the drag')
+    assert.deepEqual(recreatedByRelease, [], 'the redraw on release keeps every note\'s element, the moved ones too')
     const moved = (await draw.saved(p)).slice(0, 2).map((item) => item.at)
     assert.deepEqual(moved.map((at, i) => at.map((v, k) => Math.round((v - PLANTED[i].at[k]) / CELL * 10) / 10)), [[0.5, 0.5], [0.5, 0.5]], 'both notes moved by the drag')
     assert.ok(Math.max(...busy) < FRAME_MS, `each move's work under ${FRAME_MS} ms: ${summary(busy)}`)
