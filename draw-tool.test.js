@@ -452,6 +452,7 @@ test('a shape drag is exactly the drag box, whichever way it runs, to a tenth of
 
 test('a shape drag with no width or no height has no area', () => {
   assert.equal(hasArea(shapeBox([10, 20], [10, 50])), false)
+  assert.equal(hasArea(shapeBox([10, 20], [50, 20])), false)
   assert.equal(hasArea(shapeBox([10, 20], [14, 50])), true)
 })
 

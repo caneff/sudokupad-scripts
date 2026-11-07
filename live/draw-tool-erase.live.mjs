@@ -22,6 +22,8 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
   let context, p, errors
   // A right click on the board before the script runs: whether the page prevented its menu, and the cells selected.
   let stockRightClick
+  // The same for a middle click: which of its pointerdown, mousedown and auxclick the page prevented.
+  let stockMiddleClick
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const tool = () => draw.tool(p)
@@ -90,6 +92,9 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     await startPuzzle(p)
     await p.evaluate(() => Framework.app.deselect())
     stockRightClick = await rightClick()
+    await watchPrevented(MIDDLE_EVENTS, MIDDLE)
+    await middleClick([8.5, 1.5])
+    stockMiddleClick = await prevented()
     await p.addScriptTag({ content: script })
     await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
     await draw.forgetDrawings(p)
@@ -196,6 +201,8 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(await rightClick(), stockRightClick)
   })
 
+  const MIDDLE = 1
+  const MIDDLE_EVENTS = ['pointerdown', 'mousedown', 'auxclick']
   const middleDrag = (points) => mouseDrag(p, points, { button: 'middle' })
   const middleClick = async (at) => p.mouse.click(...await gridPoint(p, at), { button: 'middle' })
   const shapeCount = () => p.locator(SHAPES).count()
@@ -240,6 +247,18 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.deepEqual((await saved()).map((item) => item.kind), ['stroke'])
   })
 
+  it('a middle click where a text sits over a stroke deletes only the text, the topmost, and a second click deletes the stroke', async () => {
+    await drawLow()
+    await typeText([8.5, 4], '15')
+    const strokes = await strokePaths()
+    assert.equal(strokes.length, 2)
+    await middleClick([8.55, 4])
+    assert.deepEqual(await texts(), [])
+    assert.equal(await strokeCount(), 2, 'the stroke under the text is kept')
+    await middleClick([8.6, 4])
+    assert.equal(await strokeCount(), 1)
+  })
+
   it('a middle click on a shape deletes it', async () => {
     await pickDraw()
     await clickUntil(() => p.click(SHAPE_BUTTON), () => p.locator(SHAPE_BUTTON).getAttribute('data-mode'), 'rect', SETTLE_MS)
@@ -268,21 +287,21 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
 
   it('with Draw current a middle mousedown and auxclick over the board are prevented, so no autoscroll starts, and the pointerdown is not, so the tool still gets the press', async () => {
     await pickDraw()
-    await watchPrevented(['pointerdown', 'mousedown', 'auxclick'], 1)
+    await watchPrevented(MIDDLE_EVENTS, MIDDLE)
     await middleClick([8.5, 1.5])
     assert.deepEqual(await prevented(), { pointerdown: [false], mousedown: [true], auxclick: [true] })
   })
 
   it('with another tool current a middle press behaves as it does without the script', async () => {
     await pickDigit()
-    await watchPrevented(['pointerdown', 'mousedown', 'auxclick'], 1)
+    await watchPrevented(MIDDLE_EVENTS, MIDDLE)
     await middleClick([8.5, 1.5])
-    assert.deepEqual(await prevented(), { pointerdown: [false], mousedown: [false], auxclick: [false] })
+    assert.deepEqual(await prevented(), stockMiddleClick)
   })
 
   it('with Draw current a middle mousedown off the board is not prevented', async () => {
     await pickDraw()
-    await watchPrevented(['mousedown'], 1)
+    await watchPrevented(['mousedown'], MIDDLE)
     assert.equal(await read(() => { const b = Framework.app.svgRenderer.getElem().getBoundingClientRect(); return b.left > 5 && b.top > 5 }), true, '(5, 5) is off the board')
     await p.mouse.click(5, 5, { button: 'middle' })
     assert.deepEqual(await prevented(), { mousedown: [false] })

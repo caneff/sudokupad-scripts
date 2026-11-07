@@ -108,7 +108,7 @@
   const INDEX_KEY = 'DrawTool_index'
   // How far, in board units, a mouse point may stray from the simplified line before it is kept.
   const SIMPLIFY_TOLERANCE = 2.25
-  // How far, in board units, a right-drag may pass from a line's edge and still erase it.
+  // How far, in board units, an erase may pass from a line's edge and still erase it.
   const ERASE_TOLERANCE = 4
   // Straight pieces per curve when a stroke's drawn line is hit-tested.
   const CURVE_STEPS = 8
@@ -192,7 +192,7 @@
     ? 0
     : Math.min(distanceToSegment(a, c, d), distanceToSegment(b, c, d), distanceToSegment(c, a, b), distanceToSegment(d, a, b))
 
-  // Whether a right-drag from `from` to `to` passes within the tolerance of the edge of a line drawn `width` wide.
+  // Whether an erase from `from` to `to` passes within the tolerance of the edge of a line drawn `width` wide.
   function touchesLine (line, width, from, to) {
     const reach = ERASE_TOLERANCE + width / 2
     if (line.length === 1) return distanceToSegment(line[0], from, to) <= reach
@@ -233,7 +233,7 @@
     return -1
   }
 
-  // Whether a right-drag from `from` to `to` passes within the tolerance of the text's box.
+  // Whether an erase from `from` to `to` passes within the tolerance of the text's box.
   function touchesText (item, from, to) {
     const b = textBox(item)
     const box = { left: b.left - ERASE_TOLERANCE, right: b.right + ERASE_TOLERANCE, top: b.top - ERASE_TOLERANCE, bottom: b.bottom + ERASE_TOLERANCE }
@@ -991,7 +991,7 @@
   }
 
   // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
-  // `held` is whether Shift is held, which draws a free line straight.
+  // `straight` is whether Shift is held, which draws a free line straight.
   let drag = null
   // A right-drag or middle-drag in progress: the last point it reached, whether it has erased an item yet, and the `buttons` bit that holds it.
   let erasing = null
@@ -1158,9 +1158,9 @@
   }
 
   function endStroke () {
-    const { element: path, points, held, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = drag
+    const { element: path, points, straight, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = drag
     drag = null
-    const item = strokeItem(held ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
+    const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
     path.setAttribute('d', strokePath(item.points))
     drawing.push(item)
     save()
@@ -1204,16 +1204,26 @@
     renderDrawing()
   }
 
+  // A middle click deletes the topmost item at the point: the last drawn, which shows over the others.
+  function eraseTopmostAt (at) {
+    const index = drawing.findLastIndex((item) => touchesItem(item, at, at))
+    if (index < 0) return
+    drawing.splice(index, 1)
+    erasing.erased = true
+    renderDrawing()
+  }
+
   // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
   // release on Windows, so it is suppressed over the board for as long as Draw is current. On Windows a right-drag
   // that ends off the board still opens the menu there.
+  const overBoardWhileDrawing = (event) => Framework.app.tool === TOOL_NAME && onBoard(event)
   function suppressMenu (event) {
-    if (Framework.app.tool === TOOL_NAME && onBoard(event)) event.preventDefault()
+    if (overBoardWhileDrawing(event)) event.preventDefault()
   }
 
   // The browser's middle-click autoscroll and Linux's paste start on the mousedown and its auxclick. The pointerdown is left alone: preventing it makes the browser send no mousedown, which is how SudokuPad hands Draw the press.
   function suppressMiddle (event) {
-    if (event.button === MIDDLE_BUTTON && Framework.app.tool === TOOL_NAME && onBoard(event)) event.preventDefault()
+    if (event.button === MIDDLE_BUTTON && overBoardWhileDrawing(event)) event.preventDefault()
   }
 
   function confirmClear () {
@@ -1246,13 +1256,14 @@
       if (event.button in ERASE_HELD) {
         const at = toBoard(drawingLayer(), event)
         erasing = { last: at, erased: false, held: ERASE_HELD[event.button] }
-        eraseAlong(at, at)
+        if (event.button === MIDDLE_BUTTON) eraseTopmostAt(at)
+        else eraseAlong(at, at)
         return true
       }
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
       const shape = shapeMode === SHAPE_OFF ? null : shapeMode
-      drag = { layer, shape, element: null, color, width, opacity, held: false, points: [toBoard(layer, event)] }
+      drag = { layer, shape, element: null, color, width, opacity, straight: false, points: [toBoard(layer, event)] }
       // A shape shows only once the press moves, so a click that opens a text box flashes no box.
       if (!shape) {
         drag.element = newStroke(layer, color, width, opacity)
@@ -1274,12 +1285,12 @@
       }
       if (!drag) return false
       drag.points.push(toBoard(drag.layer, event))
-      drag.held = event.shiftKey
+      drag.straight = event.shiftKey
       if (drag.shape) {
         drag.element?.remove()
         drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape())
       } else {
-        drag.element.setAttribute('d', strokePath(drag.held ? straightLine(drag.points) : drag.points))
+        drag.element.setAttribute('d', strokePath(drag.straight ? straightLine(drag.points) : drag.points))
       }
       return true
     },
@@ -1296,7 +1307,7 @@
         openText(at)
         return true
       }
-      drag.held = event.shiftKey
+      drag.straight = event.shiftKey
       if (drag.shape) endShape()
       else endStroke()
       return true
