@@ -21,7 +21,8 @@
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
-  // The profiles: { profiles: [{ name, groups }], active: index }.
+  // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
+  // `digitActive` is saved only while digits are not synced with cells, and `useDigitColors` only while off, so a state saved before them reads as synced and on.
   const PROFILES_KEY = 'ColorByDigit_profiles'
   const MAX_PROFILES = 6
   const MAX_NAME_LENGTH = 24
@@ -30,6 +31,8 @@
   // Auto mode's on/off, saved before the mode existed: read only to choose the starting mode when no mode is saved.
   const AUTO_KEY = 'ColorByDigit_auto'
   const MODES = ['cell', 'digit', 'both', 'off']
+  const DIGITLESS_MODES = ['cell', 'off']
+  const DIGITLESS_FALLBACK = { digit: 'off', both: 'cell' }
   const MODE_LABELS = { cell: 'CELL', digit: 'DIGIT', both: 'BOTH', off: 'OFF' }
   const MODE_NAMES = { cell: 'Cell', digit: 'Digit', both: 'Both', off: 'Off' }
   // Each key is set once its preloads have been offered to an install that already had profiles, so deleting one keeps it deleted.
@@ -103,7 +106,12 @@
 
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
-  const nextMode = (mode) => MODES[(MODES.indexOf(mode) + 1) % MODES.length]
+  const modesFor = (useDigitColors) => (useDigitColors ? MODES : DIGITLESS_MODES)
+  const nextMode = (mode, useDigitColors) => {
+    const modes = modesFor(useDigitColors)
+    return modes[(modes.indexOf(mode) + 1) % modes.length]
+  }
+  const allowedMode = (mode, useDigitColors) => (useDigitColors ? mode : DIGITLESS_FALLBACK[mode] ?? mode)
   const colorsCells = (mode) => mode === 'cell' || mode === 'both'
   const colorsDigits = (mode) => mode === 'digit' || mode === 'both'
   const modeFromAuto = (auto) => (typeof auto === 'boolean' ? (auto ? 'cell' : 'off') : undefined)
@@ -206,8 +214,9 @@
     if (!data || !Array.isArray(data.profiles)) return null
     const kept = data.profiles.slice(0, MAX_PROFILES).map((profile, index) => ({ profile: normalizeProfile(profile), index })).filter((entry) => entry.profile)
     if (kept.length === 0) return null
-    const active = kept.findIndex((entry) => entry.index === data.active)
-    return { profiles: kept.map((entry) => entry.profile), active: Math.max(active, 0) }
+    const keptIndex = (index) => kept.findIndex((entry) => entry.index === index)
+    const digitActive = keptIndex(data.digitActive)
+    return makeState(kept.map((entry) => entry.profile), Math.max(keptIndex(data.active), 0), digitActive >= 0 ? digitActive : undefined, data.useDigitColors !== false)
   }
 
   const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -283,6 +292,18 @@
 
   const cloneProfile = (profile) => ({ name: profile.name, groups: cloneGroups(profile.groups) })
 
+  // An undefined `digitActive` is synced: the digits take the cell profile.
+  function makeState (profiles, active, digitActive, useDigitColors) {
+    const state = { profiles, active }
+    if (digitActive !== undefined) state.digitActive = digitActive
+    if (!useDigitColors) state.useDigitColors = false
+    return state
+  }
+
+  const isSynced = (state) => state.digitActive === undefined
+  const usesDigitColors = (state) => state.useDigitColors !== false
+  const withProfiles = (state, profiles, active, digitActive) => makeState(profiles, active, digitActive, usesDigitColors(state))
+
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
 
   // Groups saved before profiles existed become the active profile.
@@ -303,38 +324,51 @@
       const groups = PRELOADS[name]
       if (profiles.length < MAX_PROFILES && !profiles.some((p) => sameGroups(p.groups, groups))) profiles.push({ name, groups: cloneGroups(groups) })
     }
-    return { profiles, active: state.active }
+    return withProfiles(state, profiles, state.active, state.digitActive)
   }
 
   const activeGroups = (state) => state.profiles[state.active].groups
+  const digitGroups = (state) => state.profiles[isSynced(state) ? state.active : state.digitActive].groups
+  const iconGroups = (state, mode) => (mode === 'digit' ? digitGroups(state) : activeGroups(state))
 
   function addProfile (state, name) {
     const trimmed = cleanName(name)
     if (state.profiles.length >= MAX_PROFILES || trimmed === '') return state
     const copy = { name: trimmed, groups: cloneGroups(activeGroups(state)) }
-    return { profiles: [...state.profiles.map(cloneProfile), copy], active: state.active }
+    return withProfiles(state, [...state.profiles.map(cloneProfile), copy], state.active, state.digitActive)
   }
 
   function deleteProfile (state, index) {
     if (state.profiles.length <= 1 || !state.profiles[index]) return state
     const profiles = state.profiles.filter((_, i) => i !== index).map(cloneProfile)
     const active = index < state.active ? state.active - 1 : Math.min(state.active, profiles.length - 1)
-    return { profiles, active }
+    // Deleting the digit profile makes the digits follow the cell profile.
+    const digitActive = isSynced(state) || index === state.digitActive ? undefined : state.digitActive - (index < state.digitActive ? 1 : 0)
+    return withProfiles(state, profiles, active, digitActive)
   }
 
   function moveProfile (state, from, to) {
     if (from === to) return state
     const order = state.profiles.map((_, i) => i)
     order.splice(to, 0, ...order.splice(from, 1))
-    return { profiles: order.map((i) => cloneProfile(state.profiles[i])), active: order.indexOf(state.active) }
+    return withProfiles(state, order.map((i) => cloneProfile(state.profiles[i])), order.indexOf(state.active), isSynced(state) ? undefined : order.indexOf(state.digitActive))
   }
 
   function setActive (state, index) {
-    return state.profiles[index] ? { profiles: state.profiles.map(cloneProfile), active: index } : state
+    return state.profiles[index] ? withProfiles(state, state.profiles.map(cloneProfile), index, state.digitActive) : state
   }
 
+  function setDigitActive (state, index) {
+    return state.profiles[index] ? withProfiles(state, state.profiles.map(cloneProfile), state.active, index) : state
+  }
+
+  // Unticking starts the digit pick at the cell profile, so no color changes until another is picked.
+  const setSync = (state, synced) => withProfiles(state, state.profiles.map(cloneProfile), state.active, synced ? undefined : (state.digitActive ?? state.active))
+
+  const setUseDigitColors = (state, on) => makeState(state.profiles.map(cloneProfile), state.active, state.digitActive, on)
+
   function setActiveGroups (state, groups) {
-    return { profiles: state.profiles.map((p, i) => (i === state.active ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), active: state.active }
+    return withProfiles(state, state.profiles.map((p, i) => (i === state.active ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), state.active, state.digitActive)
   }
 
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
@@ -640,7 +674,10 @@
   const ACTIVE_INK = '#5b2a9a'
   const IDLE_RING = '#e2dcea'
 
+  const checkboxHtml = (role, on, label) => `<label class="cbd-check"><input type="checkbox" data-role="${role}"${on ? ' checked' : ''}> ${label}</label>`
+
   function renderProfiles (state, colorOf, newName) {
+    const sync = usesDigitColors(state) ? checkboxHtml('sync', isSynced(state), 'Sync digit profile with cell profile') : ''
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
@@ -651,27 +688,36 @@
         `<button type="button" class="cbd-button cbd-small" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
-    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
+    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) + sync +
       `<div role="radiogroup" aria-label="Active profile">${rows}</div>` +
       '<div class="cbd-add-row">' +
       `<input type="text" data-role="new-name" maxlength="${MAX_NAME_LENGTH}" placeholder="New profile name" value="${esc(newName)}" aria-label="New profile name">` +
       `<button type="button" class="cbd-button" data-act="add"${full ? ' disabled' : ''}>+ Add</button></div>`
   }
 
-  // Rows are not focusable, so the keyboard stays with the puzzle.
-  function renderMenu (state, colorOf) {
-    const rows = state.profiles.map((profile, i) => {
-      const active = i === state.active
-      return `<div role="menuitemradio" data-act="pick" data-index="${i}" aria-checked="${active}" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;` +
+  const menuHeading = (text, extra = '') => `<div style="font:600 11px/1 sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px${extra}">${text}</div>`
+
+  // Rows are not focusable, so the keyboard stays with the puzzle. A row's target says which pick it sets.
+  function renderMenuRows (profiles, picked, target, colorOf) {
+    return profiles.map((profile, i) => {
+      const active = i === picked
+      return `<div role="menuitemradio" data-act="pick" data-target="${target}" data-index="${i}" aria-checked="${active}" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;` +
         `${active ? `background:${ACTIVE_FILL};color:${ACTIVE_INK};font-weight:600` : ''}">` +
         `<span style="display:flex;gap:3px;width:92px">${renderChips(profile.groups, colorOf, 20)}</span><span data-role="name" style="flex:1">${esc(profile.name)}</span></div>`
     }).join('')
-    return `<div style="font:600 11px/1 sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px">Color by digit profile</div>${rows}` +
+  }
+
+  function renderMenu (state, colorOf) {
+    const cells = renderMenuRows(state.profiles, state.active, 'cells', colorOf)
+    const rows = usesDigitColors(state) && !isSynced(state)
+      ? `${menuHeading('Cells', ';letter-spacing:.04em')}${cells}${menuHeading('Digits', ';letter-spacing:.04em')}${renderMenuRows(state.profiles, state.digitActive, 'digits', colorOf)}`
+      : cells
+    return `${menuHeading('Color by digit profile')}${rows}` +
       '<div style="height:1px;background:#ece8f2;margin:4px 6px"></div>' +
       '<div role="menuitem" data-act="edit" style="padding:9px 10px;border-radius:8px;cursor:pointer;color:#5d5868">&#9881; Edit profiles…</div>'
   }
 
-  function renderEditor (groups, pages, shown, mode, profilesHtml) {
+  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors) {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
       const digits = NUMPAD_DIGITS.map((d) =>
@@ -683,10 +729,11 @@
         `<button type="button" class="cbd-button cbd-small" data-act="remove" data-group="${i}" title="Remove group" aria-label="Remove group">&#215;</button></div>`
     }).join('')
     const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
-    const modeChoice = `<div class="cbd-mode" role="radiogroup" aria-label="Mode">${MODES.map((m) =>
-      `<label><input type="radio" name="color-by-digit-mode" data-role="mode-draft" value="${m}"${m === mode ? ' checked' : ''}> ${MODE_NAMES[m]}</label>`).join('')}</div>`
+    const shownMode = allowedMode(mode, useDigitColors)
+    const modeChoice = `<div class="cbd-mode" role="radiogroup" aria-label="Mode">${modesFor(useDigitColors).map((m) =>
+      `<label><input type="radio" name="color-by-digit-mode" data-role="mode-draft" value="${m}"${m === shownMode ? ' checked' : ''}> ${MODE_NAMES[m]}</label>`).join('')}</div>`
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    return `${heading('Mode')}${modeChoice}<div class="cbd-divider">${profilesHtml}</div>` +
+    return `${checkboxHtml('use-digit-colors', useDigitColors, 'Use digit colors')}${heading('Mode')}${modeChoice}<div class="cbd-divider">${profilesHtml}</div>` +
       `<div class="cbd-divider">${heading('Groups of the active profile', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
       '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div>'
   }
@@ -706,6 +753,8 @@
     [`${EDITOR} .cbd-mode`, 'display: flex; align-items: center; gap: 18px; margin: 0 0 4px'],
     [`${EDITOR} .cbd-mode label`, 'display: flex; align-items: center; gap: 6px; width: auto; min-width: 0; margin: 0; text-align: left'],
     [`${EDITOR} .cbd-mode input`, 'margin: 0'],
+    [`${EDITOR} .cbd-check`, 'display: flex; align-items: center; gap: 6px; width: auto; min-width: 0; margin: 0 0 10px; text-align: left'],
+    [`${EDITOR} .cbd-check input`, 'margin: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-small`, `padding: 0 10px; height: ${SMALL_BUTTON_SIZE}px; line-height: ${SMALL_BUTTON_SIZE - 2}px`],
     [`${EDITOR} [data-act="remove"]`, `position: absolute; top: ${REMOVE_INSET}px; right: ${REMOVE_INSET}px; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
@@ -738,7 +787,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -938,14 +987,14 @@
       style.id = DIGIT_STYLE_ID
       document.head.appendChild(style)
     }
-    style.textContent = colorsDigits(mode) ? `${buildDigitCss(loadGroups(), readColor)}\n${CIRCLE_CSS}` : ''
+    style.textContent = colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : ''
     syncDigits()
   }
 
   // The palette can change after the button was drawn, so the icon and the digit shades are drawn from it again.
   function redraw () {
     const icon = document.querySelector(`${BUTTON} .icon`)
-    if (icon) icon.outerHTML = iconHtml(mode, loadGroups(), readColor)
+    if (icon) icon.outerHTML = iconHtml(mode, iconGroups(loadState(), mode), readColor)
     showDigitColors()
   }
 
@@ -1024,11 +1073,12 @@
     menu.style.top = `${Math.max(rect.top - menu.offsetHeight - 12, 4)}px`
   }
 
-  function switchProfile (app, index) {
+  // A digit pick changes only the digit stylesheet, so it is never an undo step.
+  function switchProfile (app, index, target) {
     const state = loadState()
     closeMenu()
-    if (index === state.active) return
-    const next = setActive(state, index)
+    if (index === (target === 'digits' ? state.digitActive : state.active)) return
+    const next = target === 'digits' ? setDigitActive(state, index) : setActive(state, index)
     saveState(next)
     if (colorsCells(mode)) recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
     redraw()
@@ -1066,7 +1116,7 @@
         closeMenu()
         openEditor()
       } else {
-        switchProfile(app, Number(row.dataset.index))
+        switchProfile(app, Number(row.dataset.index), row.dataset.target)
       }
     }, true)
     document.addEventListener('touchstart', (event) => {
@@ -1096,7 +1146,7 @@
         openMenu()
       }, HOLD_MS)
       const stop = (e) => {
-        if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode))
+        if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState())))
         endHold()
         document.removeEventListener('pointermove', watch)
         document.removeEventListener('pointerup', stop, true)
@@ -1116,10 +1166,11 @@
 
   function saveDialog (app, oldState, draft, draftMode) {
     saveState(draft)
+    const next = allowedMode(draftMode, usesDigitColors(draft))
     const oldGroups = activeGroups(oldState)
     const groups = activeGroups(draft)
-    if (colorsCells(draftMode) && !sameGroups(oldGroups, groups)) recolor(app, (plans) => planSwitch(plans, oldGroups, groups))
-    setMode(app, draftMode, groupKeys([...oldGroups, ...groups]))
+    if (colorsCells(next) && !sameGroups(oldGroups, groups)) recolor(app, (plans) => planSwitch(plans, oldGroups, groups))
+    setMode(app, next, groupKeys([...oldGroups, ...groups]))
   }
 
   function openDialog (app) {
@@ -1156,7 +1207,7 @@
     const draw = () => {
       const groups = activeGroups(draft)
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, newName))
+      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, newName), usesDigitColors(draft))
     }
     const reshow = (next) => { draft = next; shown = [] }
     const addProfileFromField = () => {
@@ -1188,6 +1239,9 @@
     box.addEventListener('change', (event) => {
       const choice = event.target.closest('input[data-role="mode-draft"]')
       if (choice) { draftMode = choice.value; return }
+      // The draft mode is kept as chosen: unticking "Use digit colors" shows its fallback, and ticking it again before Save shows the mode again.
+      if (event.target.matches('[data-role="use-digit-colors"]')) { draft = setUseDigitColors(draft, event.target.checked); draw(); return }
+      if (event.target.matches('[data-role="sync"]')) { draft = setSync(draft, event.target.checked); draw(); return }
       const el = event.target.closest('select[data-act="page"]')
       if (!el) return
       shown[Number(el.dataset.group)] = Number(el.value)
@@ -1270,8 +1324,9 @@
       handler: openEditor
     })
     addPreloadsOnce()
-    mode = startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY))
-    installButton(Framework, app, mode, loadGroups(), readColor)
+    const state = loadState()
+    mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))
+    installButton(Framework, app, mode, iconGroups(state, mode), readColor)
     installCellColoring(app)
     listenForButton(app, openEditor)
     watchBoard()
