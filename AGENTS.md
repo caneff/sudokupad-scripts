@@ -2,8 +2,8 @@
 
 Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
 script is one `*.user.js` file with no build step for users. Shared code lives in `lib/<name>.js` and `node sync-lib.js` copies it into each
-script between `// <lib:name>` and `// </lib:name>` markers (raising the version of every script it changes), so an installed script is still one file.
-After editing `lib/`, run `node sync-lib.js`: `test/sync-lib.test.js` fails on a stale copy. Never edit inside a marked block. `lib/*.test.js` tests each module.
+script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file. Never edit inside a marked block;
+`lib/*.test.js` tests each module.
 
 - **Pages**: `site/` is the static homepage and its Pen Tool Extras details page. GitHub Pages serves it from `main`
   (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
