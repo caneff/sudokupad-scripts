@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.3
+// @version      0.15.0
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.3'
+  const VERSION = '0.15.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -258,6 +258,25 @@
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
   const readShapeMode = (saved) => SHAPE_MODES.includes(saved) ? saved : SHAPE_OFF
   const nextShapeMode = (mode) => SHAPE_MODES[(SHAPE_MODES.indexOf(mode) + 1) % SHAPE_MODES.length]
+  // Pen Tool Extras' page button and swatches draw in a 24-unit box with a 3-unit round stroke; Draw's modes are drawn the same way.
+  const SHAPE_PAINT = "fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'"
+  const SHAPE_PICTURES = {
+    [SHAPE_OFF]: FREE_LINE_ICON,
+    [RECT]: "<rect x='3.5' y='7.5' width='17' height='11'/>",
+    [ELLIPSE]: "<ellipse cx='12' cy='13' rx='9.5' ry='5.5'/>"
+  }
+  // The swatch shows a straight line for free lines, the way every color button did before the modes had pictures of their own.
+  const SWATCH_PICTURES = { ...SHAPE_PICTURES, [SHAPE_OFF]: "<path d='M2 12H22'/>" }
+  const shapeSwatchSvg = (mode) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ${SHAPE_PAINT.replace('currentColor', 'black')}>${SWATCH_PICTURES[mode]}</svg>`
+  // The picture is the mode a press turns to, with a dot per mode under it filled for the current one, as Pen Tool Extras' page button has.
+  const shapeButtonIcon = (mode) => {
+    const dots = SHAPE_MODES.map((m, i) =>
+      `<circle cx='${20 - 3 * (SHAPE_MODES.length - i - 1)}' cy='3' r='1.1' data-shape-dot='${m === mode ? 'filled' : 'outline'}'${m === mode ? '' : " fill='none'"}/>`)
+    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' aria-hidden='true'><g ${SHAPE_PAINT}>${SHAPE_PICTURES[nextShapeMode(mode)]}</g>` +
+      `<g stroke='currentColor' fill='currentColor' stroke-width='0.5'>${dots.join('')}</g></svg>`
+  }
+  const SHAPE_NAMES = { [SHAPE_OFF]: 'off, free lines', [RECT]: 'rectangle', [ELLIPSE]: 'ellipse' }
+  const SHAPE_LABELS = Object.fromEntries(SHAPE_MODES.map((mode) => [mode, `Shape: ${SHAPE_NAMES[mode]}. Click for ${SHAPE_NAMES[nextShapeMode(mode)]}`]))
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
   // Board units, as a text's height: the line width's slider also sets the text size.
@@ -509,7 +528,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -598,7 +617,7 @@
 
   // Pen Tool Extras' pen panel, in the same sizes: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape button and the settings gear at the full 4rem, and the sliders across the rest. The tray
-  // sits behind the last two rows; it is placed in their area but takes no cell. Each color button shows a line in its draw color, cut out of the button so a recolor follows.
+  // sits behind the last two rows; it is placed in their area but takes no cell. Each color button shows the current mode (a line, a rectangle or an ellipse) in its draw color, cut out of the button so a recolor follows.
   const rem = (value) => Math.round(value * 100) / 100
   const PANEL_BUTTON_REM = 4
   const COLOR_BUTTON_REM = 2.5
@@ -619,8 +638,7 @@
   const SWATCH_REM = 2.4
   // The column of each control in its row.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SHAPE_BUTTON_CLASS]: 2, [SETTINGS_CLASS]: 3 }
-  const SWATCH_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2 12H22' stroke='black' stroke-width='3' stroke-linecap='round'/></svg>"
-  const SWATCH_MASK = `url("data:image/svg+xml,${encodeURIComponent(SWATCH_SVG).replace(/'/g, '%27')}") center / 100% no-repeat`
+  const swatchMask = (mode) => `url("data:image/svg+xml,${encodeURIComponent(shapeSwatchSvg(mode)).replace(/'/g, '%27')}") center / 100% no-repeat`
   // A CSS gradient cannot draw a slanted edge, so the wedge is a data-URI picture stretched over the track.
   const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
   const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
@@ -635,13 +653,14 @@
     `${PANEL} button[data-key="0"], ${PANEL} button[data-control="delete"] { display: none !important; }`,
     `${PANEL} button.digit { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
-    `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; -webkit-mask: ${SWATCH_MASK}; mask: ${SWATCH_MASK}; }`,
+    `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; }`,
+    ...SHAPE_MODES.map((mode) => `${PANEL}[data-draw-shape="${mode}"] button.digit::after { -webkit-mask: ${swatchMask(mode)}; mask: ${swatchMask(mode)}; }`),
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(${colorVar(n)}); }`),
     `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path', which would turn the icons' lines into blobs.
-    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse) { fill: none !important; }`,
+    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse):not([data-shape-dot="filled"]) { fill: none !important; }`,
     `.${TRAY_CLASS} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
     // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each '.button-row', which has no box here, so the rows are swapped by grid row.
     ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} :is(button[data-key="${key}"], .${PICKER_CLASS}[data-color="${key}"]) { grid-row: ${row} / span 1; }`)),
@@ -675,13 +694,6 @@
   // Clear all is a trash can.
   const CLEAR_LABEL = 'Clear all'
   const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
-  // The Shape button shows the mode in force: a free line, a rectangle or an ellipse.
-  const SHAPE_LABELS = { [SHAPE_OFF]: 'Shape: off, free lines', [RECT]: 'Shape: rectangle', [ELLIPSE]: 'Shape: ellipse' }
-  const SHAPE_ICONS = {
-    [SHAPE_OFF]: FREE_LINE_ICON,
-    [RECT]: '<rect x="4" y="5" width="16" height="14" rx="1"/>',
-    [ELLIPSE]: '<ellipse cx="12" cy="12" rx="9" ry="7"/>'
-  }
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
   let opacity = DEFAULT_OPACITY
@@ -894,7 +906,8 @@
     button.dataset.mode = shapeMode
     button.title = SHAPE_LABELS[shapeMode]
     button.setAttribute('aria-label', SHAPE_LABELS[shapeMode])
-    button.innerHTML = controlIcon(SHAPE_ICONS[shapeMode])
+    button.innerHTML = shapeButtonIcon(shapeMode)
+    keypad().dataset.drawShape = shapeMode
   }
 
   function showPanel () {
@@ -934,6 +947,7 @@
   function hidePanel () {
     exitEditMode()
     for (const part of panelParts) part.remove()
+    delete keypad().dataset.drawShape
     panelParts = []
   }
 
