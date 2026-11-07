@@ -4,12 +4,14 @@
 /* global Framework, getComputedStyle, Image, document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { openPenTool } from './pen.mjs'
 import { dialogButton, openExtrasEditor } from './settings.mjs'
 
+const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 // The panel's outer rectangle that SudokuPad gives it, measured on this recording at 1200x900: x, y, width, height of `.controls-input`.
@@ -194,6 +196,35 @@ describe('the pen panel layout', { concurrency: false }, () => {
       assert.deepEqual(await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-sliders'].map(rect)), before)
     } finally {
       await p.evaluate(() => Framework.setSetting('flipkeypad', false))
+    }
+  })
+
+  // Hold a color button and the pickers appear: they must leave the grid alone (#275).
+  it('in edit mode every color button keeps its box, and each picker sits over its own button', async () => {
+    const boxes = () => Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map(key))
+    const before = await boxes()
+    const panelBefore = await rect('.tool-pen .controls-input')
+    const target = before[0]
+    await p.mouse.move(target.x + target.width / 2, target.y + target.height / 2)
+    await p.mouse.down()
+    try {
+      await p.locator('.pen-tool-extras-picker input[data-pen="9"]').waitFor({ state: 'attached', timeout: HOLD_TO_EDIT_MS + 5000 })
+    } finally {
+      await p.mouse.up()
+    }
+    try {
+      assert.deepEqual(await boxes(), before, 'the color buttons')
+      assert.deepEqual(await rect('.tool-pen .controls-input'), panelBefore, 'the panel')
+      for (let n = 1; n <= 9; n++) {
+        const picker = await rect(`.pen-tool-extras-picker input[data-pen="${n}"]`)
+        const button = before[n - 1]
+        const inside = picker.x >= button.x - NEAR_PX && picker.y >= button.y - NEAR_PX && picker.right <= button.right + NEAR_PX && picker.bottom <= button.bottom + NEAR_PX
+        assert.equal(inside, true, `picker ${n} ${JSON.stringify(picker)} over button ${JSON.stringify(button)}`)
+      }
+    } finally {
+      await p.evaluate(() => document.querySelector('.tool-pen').classList.remove('tool-pen'))
+      await p.locator('.pen-tool-extras-picker').first().waitFor({ state: 'detached' })
+      await p.evaluate(() => document.querySelector('.controls-input').classList.add('tool-pen'))
     }
   })
 })

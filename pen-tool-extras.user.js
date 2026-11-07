@@ -618,8 +618,9 @@
   const PICKER = 'pen-tool-extras-picker'
   const EDIT_CSS = [
     `.${EDITING} button[data-value]::after { opacity: 0; }`,
-    `.${EDITING} .${PICKER} { width: 0; height: 0; overflow: visible; }`,
-    `.${EDITING} .${PICKER} input { position: absolute; width: 2.4rem; height: 2.4rem; margin-left: 0.95rem; margin-top: 0.95rem; z-index: 10; pointer-events: all; }`
+    // The panel is a grid, so a picker in the flow would take a cell: it is absolute, and `enterEditMode` gives it its button's box.
+    `.${EDITING} .${PICKER} { position: absolute; z-index: 10; }`,
+    `.${EDITING} .${PICKER} input { position: absolute; inset: 0; margin: auto; width: 2.4rem; height: 2.4rem; pointer-events: all; }`
   ].join('\n')
   // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
   const HOLD_TARGETS = `.tool-pen button[data-value], .tool-pen .${PICKER} input`
@@ -713,7 +714,7 @@
     panel.classList.add(EDITING)
     buttons.forEach((button, i) => {
       button.insertAdjacentHTML('beforebegin',
-        `<div class="${PICKER}"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active.colors[PEN_COLOR_NUMBERS[i]]}"></div>`)
+        `<div class="${PICKER}" style="left: ${button.offsetLeft}px; top: ${button.offsetTop}px; width: ${button.offsetWidth}px; height: ${button.offsetHeight}px"><input type="color" data-pen="${PEN_COLOR_NUMBERS[i]}" value="${active.colors[PEN_COLOR_NUMBERS[i]]}"></div>`)
     })
     leaveWatch = new window.MutationObserver(() => {
       if (!panel.classList.contains('tool-pen')) exitEditMode(panel)
