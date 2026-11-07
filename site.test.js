@@ -175,7 +175,15 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
   const m = read(HOME).match(/<h2>Pen Tool Extras<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Pen Tool Extras description`)
   assert.doesNotMatch(m[1], /slider/i)
-  assert.match(m[1], /^Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners\.$/)
+  assert.match(m[1], /^Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners\. <a href="pen-tool-extras\.html">Details<\/a>$/)
+})
+
+test(`${HOME} puts every Install button in a paragraph of its own that clears the picture`, () => {
+  const html = read(HOME)
+  assert.match(html, /section p:has\(\.install\)\s*\{[^}]*clear:\s*both/)
+  const installs = html.match(/<a class="install"/g) || []
+  const alone = html.match(/<p><a class="install" href="[^"]*">[^<]*<\/a><\/p>/g) || []
+  assert.equal(alone.length, installs.length)
 })
 
 test('netlify.toml publishes only site/', () => {
