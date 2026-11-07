@@ -1,5 +1,5 @@
 // Takes docs/research/pen-tool-extras-tour.gif, the tour animation at the top of site/pen-tool-extras.html, from the real script on the
-// live page, on a blank grid. Each frame is the board patch in use beside the pen panel, cropped tight, with a caption under the board (four rows of cells, three columns, as tall as the panel):
+// live page, on a blank grid. Each frame is the board patch in use beside the pen panel, cropped tight, with a caption under the board:
 //   1. a pen color recolored through edit mode: a hold on its button, the color set from the script with the picker's own input event
 //      (the browser's color dialog is drawn by the operating system and is not shown), the button and the line recoloring, a second hold
 //   2. a solid line, a dashed line and an arrow line (the page button turns the page between them, and is not shown)
@@ -28,13 +28,20 @@ const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta
 const VIEWPORT = { width: 900, height: 700 }
 const COLS = 3
 const ROWS = 4
+// Room around the board for a line's round ends, and the top and bottom margin, small so the board is no taller than the panel.
 const MARGIN = 8
+const MARGIN_Y = 2
+// The most the board's height may differ from the panel's, in page pixels, before the retake fails.
+const HEIGHT_SLACK_PX = 8
 // The board and panel gap and the caption's size, in pixels of the file, which is drawn at twice the page size.
 const GAP_PX = 16
 const CAPTION_PX = 28
 // The rows of the lines drawn in turn (in cells from the grid's top, a cell's middle at .5): along a cell's middle and its edges, half a cell apart. A line on an edge runs the full width, from corner to corner.
 const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
-const OUTLINE_ROW = 3.5
+const DARK_ROW = 3
+const OUTLINE_ROW = DARK_ROW + 0.5
+// The cell whose right edge takes the edge mark, and the grid corner (row, column) that takes the corner mark.
+const [EDGE_MARK_ROW, EDGE_MARK_COL, CORNER_MARK] = [2, 0, [3, 2]]
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -73,8 +80,10 @@ const frames = mkdtempSync(join(tmpdir(), 'pte-tour-'))
 const list = []
 const [, , cell] = await cellCentre(p, 0, 0)
 const [x0, y0] = await gridPoint(p, [0, 0])
-const patch = { x: x0 - MARGIN, y: y0 - MARGIN, width: COLS * cell + 2 * MARGIN, height: ROWS * cell + 2 * MARGIN }
+const patch = { x: x0 - MARGIN, y: y0 - MARGIN_Y, width: COLS * cell + 2 * MARGIN, height: ROWS * cell + 2 * MARGIN_Y }
 const panel = p.locator('.tool-pen .controls-input')
+const panelHeight = (await panel.boundingBox()).height
+if (Math.abs(panelHeight - patch.height) > HEIGHT_SLACK_PX) throw new Error(`the board is ${patch.height} px tall and the panel ${panelHeight}: change ROWS or VIEWPORT`)
 const frame = async (caption, ms) => {
   await p.waitForTimeout(SETTLE_MS)
   const i = list.length
@@ -146,14 +155,14 @@ await turnPage()
 
 // 3. One edge clicked over and over, then one grid corner.
 await pick(EDGE_PEN)
-const [ex, ey, ew] = await cellCentre(p, 2, 0)
+const [ex, ey, ew] = await cellCentre(p, EDGE_MARK_ROW, EDGE_MARK_COL)
 const edge = [ex + ew / 2 - EDGE_INSET_PX, ey]
 for (const caption of ['An edge mark: X', 'Click again: circle', 'Again: arrow', 'Again: the other arrow']) {
   await changing(caption, async () => { await p.mouse.click(...edge); await park() })
   await frame(caption, 1200)
 }
 await pick(CORNER_PEN)
-const corner = await gridPoint(p, [3, 2])
+const corner = await gridPoint(p, CORNER_MARK)
 for (const caption of ['A corner mark: X', 'Click again: circle']) {
   await changing(caption, async () => { await p.mouse.click(...corner); await park() })
   await frame(caption, 1200)
@@ -166,7 +175,7 @@ for (const [selector, value, caption] of [[THICKNESS, 12, 'Thickness up'], [THIC
 }
 
 // 5. A line across dark cells, White outlines off and then on.
-for (const col of [0, 1, 2]) await colorCell(3, col, DARK_CELL_KEY)
+for (const col of [0, 1, 2]) await colorCell(DARK_ROW, col, DARK_CELL_KEY)
 await line(OUTLINE_PEN, [[OUTLINE_ROW, 0.5], [OUTLINE_ROW, 2.5]])
 await setOutline(false)
 await frame('White outlines off', 1500)

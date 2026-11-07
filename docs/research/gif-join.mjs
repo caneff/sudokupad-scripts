@@ -1,9 +1,9 @@
 // Joins PNG frames into one looping GIF with Python's PIL (python3 with Pillow), for the site's animated pictures.
-// Each frame is `{ files, ms, caption, captionUnder }`: `files` are PNG paths put side by side, 40 px apart and centered
+// Each frame is `{ files, ms, caption, captionUnder }`: `files` are PNG paths put side by side, `gap` px apart (`FRAME_GAP` by default) and centered
 // on the tallest, on white. A `files` entry may instead be `{ stack: [paths], scale }`: the PNGs one above the next, 8 px apart and right
 // aligned (a `[width, height]` pair in place of a path is white space of that size), the whole shrunk by `scale` (1 by default); `caption` is a line of text centered under file number `captionUnder` (the last one by default).
 // One palette serves every frame, so a color only one frame has (a red circle, a darker shade) keeps its own entry.
-// `gap` (FRAME_GAP by default) is the pixels between two `files` and `captionPx` (36 by default) the caption's text size. `colors` (64 by default) sizes the palette and `dither` (off by default) spreads a color the palette lacks over neighbouring pixels, so a smooth gradient does not band.
+// `captionPx` (36 by default) the caption's text size. `colors` (64 by default) sizes the palette and `dither` (off by default) spreads a color the palette lacks over neighbouring pixels, so a smooth gradient does not band.
 // The last frame's `ms` is its pause before the loop restarts.
 import { spawnSync } from 'node:child_process'
 
@@ -15,7 +15,7 @@ import json, sys
 from PIL import Image, ImageDraw, ImageFont
 frames, target, colors, dither, GAP, CAPTION_PX = json.loads(sys.argv[1]), sys.argv[2], int(sys.argv[3]), sys.argv[4] == '1', int(sys.argv[5]), int(sys.argv[6])
 font = ImageFont.load_default(size=CAPTION_PX)
-CAPTION_GAP, STACK_GAP = 12, 8
+CAPTION_GAP, STACK_GAP, CAPTION_PAD = 12, 8, 8
 def load(entry):
     if isinstance(entry, str):
         return Image.open(entry).convert('RGB')
@@ -37,7 +37,7 @@ for frame in frames:
     captionTop = None
     if frame.get('caption'):
         captionTop = (height - images[under].height) // 2 + images[under].height + CAPTION_GAP
-        height = max(height, captionTop + CAPTION_PX + 8)
+        height = max(height, captionTop + CAPTION_PX + CAPTION_PAD)
     sheet = Image.new('RGB', (width, height), 'white')
     for x, im in zip(xs, images):
         sheet.paste(im, (x, (max(i.height for i in images) - im.height) // 2))
