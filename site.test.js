@@ -35,11 +35,15 @@ test('every picture of a repo file on every page carries a ?v= tag matching its 
   }
 })
 
-test('every *.user.js in the repo root has an install link on the homepage', () => {
+// Chris's ruling on #359: this script is for him only, so it is not on the site.
+const NOT_ON_SITE = 'no-tab-letters.user.js'
+
+test(`every *.user.js in the repo root except ${NOT_ON_SITE} has an install link on the homepage, and ${NOT_ON_SITE} has none anywhere on the site`, () => {
   const scripts = rootScripts()
-  assert.ok(scripts.length > 0, 'no userscripts found')
+  assert.ok(scripts.includes(NOT_ON_SITE), `${NOT_ON_SITE} is gone, so the exception is stale`)
   const links = scriptLinks(read(HOME))
-  for (const s of scripts) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of scripts.filter(f => f !== NOT_ON_SITE)) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const name of PAGES) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, `site/${name} names No Tab Letters`)
 })
 
 for (const name of PAGES) {
@@ -61,8 +65,10 @@ for (const name of PAGES) {
     for (const f of shots) assert.ok(tracked.includes(f), `site/${name} loads ${f}, which git does not track`)
   })
 
-  test(`${name} loads no script`, () => {
-    assert.doesNotMatch(page, /<script\b/i)
+  test(`${name} loads no script but the shared slideshow script`, () => {
+    const scripts = [...page.matchAll(/<script\b[^>]*>/gi)].map(m => m[0])
+    for (const tag of scripts) assert.equal(tag, '<script src="slides.js">')
+    assert.doesNotMatch(page, /<script\b[^>]*>\s*[^<\s]/i, 'a script tag holds code')
   })
 
   test(`every link from ${name} into the site is relative and names a file in site/`, () => {
@@ -94,7 +100,7 @@ for (const { page: file, script, name } of DETAIL_PAGES) {
     const page = read(file)
     assert.ok(siteLinks(page).includes(HOME), `site/${file} has no relative link back to ${HOME}`)
     assert.ok(scriptLinks(page).includes(RAW + script + SCRIPT_SUFFIX), `site/${file} has no ${name} install link`)
-    assert.match(page, /<p><a href="index\.html">&larr; All SudokuPad scripts<\/a> &middot; <a href="https:\/\/github\.com\/caneff\/sudokupad-scripts">Source on GitHub<\/a><\/p>\s*<\/body>/)
+    assert.match(page, /<(p|footer)><a href="index\.html">&larr; All SudokuPad scripts<\/a> &middot; <a href="https:\/\/github\.com\/caneff\/sudokupad-scripts">Source on GitHub<\/a><\/(p|footer)>\s*(<script src="slides\.js"><\/script>\s*)?<\/body>/)
   })
 }
 
@@ -124,7 +130,7 @@ for (const [name, text] of Object.entries(WARNINGS)) {
 // The details page text is pinned word for word: "What it adds" says what you can do.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
 const section = (file, heading) => {
-  const m = read(file).match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
+  const m = read(file).match(new RegExp(`<h2>${heading}</h2>\\s*<ul[^>]*>([\\s\\S]*?)</ul>`))
   assert.ok(m, `site/${file} has no <h2>${heading}</h2> followed by a list`)
   return items(m[1]).map(plain)
 }
@@ -133,63 +139,37 @@ const leadIn = li => (li.match(/^<strong>([^<]*)<\/strong>/) || [])[1]
 const leadIns = page => items(page).map(leadIn).filter(Boolean)
 
 test(`${DETAILS} intro says what the script adds`, () => {
-  const m = read(DETAILS).match(/<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>'s pen tool[\s\S]*?)<\/p>/)
+  const m = read(DETAILS).match(/<\/p>\s*<p class="lede">(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>'s pen tool[\s\S]*?)<\/p>/)
   assert.ok(m, `site/${DETAILS} has no intro paragraph starting "Adds to SudokuPad's pen tool", with SudokuPad linked`)
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-test(`${DETAILS} lists what the script adds to drawing, one item per feature`, () => {
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Marks on cell edges', 'Marks on grid corners', 'Erase a whole line', 'White outlines']
+
+test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
-    'Customizable pen colors. Hold a pen color button, or pick a preset in the settings.',
-    'Dashed lines and arrow lines. Two more pages of pens.',
-    'Marks on cell edges. Click an edge for an X, a circle or an arrow.',
-    'Marks on grid corners. Click near a corner for an X or a circle.',
-    'Erase a whole line. Right-click a line to remove all of it, or a mark to remove that.',
-    'White outlines. An outline keeps lines readable over colored cells.'
+    'Customizable pen colors Hold a pen color button, or pick a preset in the settings.',
+    'Dashed and arrow lines Two more pages of pens.',
+    'Marks on cell edges Click an edge for an X, a circle or an arrow.',
+    'Marks on grid corners Click near a corner for an X or a circle.',
+    'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
+    'White outlines An outline keeps lines readable over colored cells.'
   ])
+  const grid = read(DETAILS).match(/<ul class="features">([\s\S]*?)<\/ul>/)
+  assert.ok(grid, `site/${DETAILS} has no <ul class="features">`)
+  assert.deepEqual(leadIns(grid[1]), DETAILS_LEAD_INS)
+  assert.doesNotMatch(read(DETAILS), /middle/i, `site/${DETAILS} mentions the middle button`)
 })
 
-test(`${DETAILS} opens each item with its bold lead-in`, () => {
-  assert.deepEqual(leadIns(read(DETAILS)), [
-    'Customizable pen colors.',
-    'Dashed lines and arrow lines.',
-    'Marks on cell edges.',
-    'Marks on grid corners.',
-    'Erase a whole line.',
-    'White outlines.'
-  ])
-})
-
-// The items listed here have one picture inside them; every other item has none (a right click, for one, does not
-// show in a still picture). The pen panel section has its own one picture, tested below. The page has no figure.
-const PICTURES = {
-  'Customizable pen colors.': 'colors',
-  'Dashed lines and arrow lines.': 'lines',
-  'Marks on cell edges.': 'edges',
-  'Marks on grid corners.': 'corners'
-}
-const NO_PICTURE = 'Erase a whole line.'
 const altOf = img => (img.match(/alt="([^"]*)"/) || [])[1] || ''
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
 const withoutTag = img => img.replace(/\?v=[0-9a-f]{7}"/, '"')
 
-test(`${DETAILS} puts one picture with alt text on each item in PICTURES`, () => {
-  const byLeadIn = new Map(items(read(DETAILS)).map(li => [leadIn(li), li]))
-  for (const [leadIn, name] of Object.entries(PICTURES)) {
-    const found = imgs(byLeadIn.get(leadIn) || '')
-    assert.equal(found.length, 1, `"${leadIn}" has ${found.length} images, not 1`)
-    assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/pen-tool-extras-bullet-${name}.png"`), `"${leadIn}" does not show pen-tool-extras-bullet-${name}.png`)
-    assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${leadIn}" has an image with no alt text`)
-  }
-})
-
-test(`${DETAILS} has no picture on the erase item and no large example figure`, () => {
+test(`${DETAILS} has no picture inside its feature grid, and no figure but the pen panel`, () => {
   const page = read(DETAILS)
-  const erase = items(page).find(li => leadIn(li) === NO_PICTURE)
-  assert.ok(erase, `site/${DETAILS} has no "${NO_PICTURE}" item`)
-  assert.deepEqual(imgs(erase), [])
+  for (const li of items(page)) assert.deepEqual(imgs(li), [], `"${leadIn(li)}" has a picture`)
   assert.doesNotMatch(page, /<figure\b/)
-  assert.equal(imgs(page).length, Object.keys(PICTURES).length + 2, 'the page has the four item pictures, the tour animation and the pen panel picture')
+  assert.equal(imgs(page).length, PEN_SLIDES.length + 1, 'the page has the slides and the pen panel picture')
 })
 
 test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
@@ -200,15 +180,100 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
   const m = read(HOME).match(/<h2>Pen Tool Extras<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Pen Tool Extras description`)
   assert.doesNotMatch(m[1], /slider/i)
-  assert.match(m[1], /^Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners\. <a href="pen-tool-extras\.html">Details<\/a>$/)
+  assert.equal(m[1], "Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners.")
 })
 
-test(`${HOME} puts every Install button in a paragraph of its own that clears the picture`, () => {
-  const html = read(HOME)
-  assert.match(html, /section p:has\(\.install\)\s*\{[^}]*clear:\s*both/)
-  const installs = html.match(/<a class="install"/g) || []
-  const alone = html.match(/<p><a class="install" href="[^"]*">[^<]*<\/a><\/p>/g) || []
-  assert.equal(alone.length, installs.length)
+// One row per script, in this order; Details only where a details page exists.
+const ROWS = [
+  ['Color by Digit', CBD], ['Pen Tool Extras', DETAILS], ['Draw Tool', DRAW], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
+]
+const rowsOf = html => html.split('<section class="row">').slice(1)
+
+test(`${HOME} has one row per script in order, each with an Install button beside its Details link where there is one`, () => {
+  const rows = rowsOf(read(HOME))
+  assert.deepEqual(rows.map(r => (r.match(/<h2>([^<]*)<\/h2>/) || [])[1]), ROWS.map(([n]) => n))
+  rows.forEach((row, i) => {
+    const [name, details] = ROWS[i]
+    const script = name.toLowerCase().replace(/ /g, '-') + SCRIPT_SUFFIX
+    assert.match(row, new RegExp(`<p class="actions"><a class="install" href="${RAW.replace(/\./g, '\\.')}${script}">Install<span class="visually-hidden"> ${name}</span></a>${details ? `<a class="more" href="${details}">Details &rarr;</a>` : ''}</p>`), name)
+  })
+})
+
+test("the shared Install button's text size and icon size are set in style.css", () => {
+  const css = fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8')
+  const install = css.match(/\.install \{[^}]*\}/)[0]
+  assert.match(install, /font-size: 1\.05rem/)
+  assert.match(css, /\.install::before \{[^}]*width: 1\.3em/)
+})
+
+test(`${HOME}'s other rows show one picture and no pager`, () => {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Draw Tool</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
+    assert.equal(imgs(row).length, 1)
+    assert.doesNotMatch(row, /slide-caption|slideshow/)
+  }
+})
+
+// Each slideshow: its picture file's name (after the script's prefix) and its caption, in order.
+const CBD_SLIDES = [
+  ['1-start', 'Start'], ['2-type', 'Type a 1'], ['3-marks', 'Center marks 7 and 9'], ['4-add', 'Add a center mark 2'], ['5-digit', 'Digit'], ['6-both', 'Both'],
+  ['7-off', 'Off'], ['8-menu', 'Open the profile menu'], ['9-modular', 'Pick Modular'], ['10-split', 'Cells from one profile, digits from another']
+]
+const PEN_SLIDES = [
+  ['1-line', 'Draw a line'], ['2-hold', 'Hold a color button'], ['3-color', 'Pick a color'], ['4-solid', 'A solid line'], ['5-dashed', 'A dashed line'], ['6-arrow', 'An arrow line'],
+  ['7-edges', 'Marks on cell edges: click for an X, again for a circle, again for an arrow'], ['8-corner', 'A mark on a grid corner'], ['9-thickness', 'Thickness'], ['10-opacity', 'Opacity'],
+  ['11-outline-off', 'White outlines off'], ['12-outline-on', 'White outlines on'], ['13-erase', 'Right-click a line to delete it'], ['14-erased', 'The whole line is gone']
+]
+const DRAW_SLIDES = [
+  ['1-line', 'Draw a line'], ['2-straight', 'Hold Shift for a straight line'], ['3-opacity', 'Size and opacity'], ['4-rectangle', 'Shape: rectangle'], ['5-ellipse', 'Shape: ellipse'],
+  ['6-text', 'Type text, such as a cage sum'], ['7-colors', 'Your own colors: hold a color button'], ['8-erase', 'Erase: right-drag across a line']
+]
+const SHOWS = [
+  { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit-slide-', slides: CBD_SLIDES },
+  { heading: 'Pen Tool Extras', page: DETAILS, prefix: 'pen-tool-extras-slide-', slides: PEN_SLIDES },
+  { heading: 'Draw Tool', page: DRAW, prefix: 'draw-tool-slide-', slides: DRAW_SLIDES }
+]
+
+// A slideshow's own markup, from a homepage row or a details page (where it ends at "What it adds").
+const showOf = html => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
+const captionsOf = html => [...html.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)].map(m => ({ current: Boolean(m[1]), text: m[2] }))
+const homeShow = heading => showOf(rowsOf(read(HOME)).find(r => r.includes(`<h2>${heading}</h2>`)))
+
+for (const { heading, page: file, prefix, slides } of SHOWS) {
+  test(`${HOME}'s ${heading} row is a slideshow of ${slides.length} slides, each a tagged picture of its own file with a caption, the first showing without script`, () => {
+    const show = homeShow(heading)
+    const pictures = imgs(show)
+    const captions = captionsOf(show)
+    assert.deepEqual(captions.map(c => c.text), slides.map(([, caption]) => caption))
+    assert.equal(pictures.length, slides.length)
+    pictures.forEach((img, i) => {
+      assert.match(img, i === 0 ? /class="slide current"/ : /class="slide"/)
+      assert.match(img, new RegExp(`src="${RAW.replace(/\./g, '\\.')}docs/research/${prefix}${slides[i][0]}\\.png\\?v=[0-9a-f]{7}"`))
+      assert.match(img, /\balt="[^"]*[^"\s][^"]*"/)
+      assertDeclaredAtFileShape(img, `docs/research/${prefix}${slides[i][0]}.png`, `slide ${i + 1}`)
+    })
+    assert.deepEqual(captions.map(c => c.current), slides.map((_, i) => i === 0))
+    assert.doesNotMatch(plain(show), /middle/i)
+  })
+
+  test(`${file} opens with the homepage's ${heading} slideshow, picture for picture and caption for caption`, () => {
+    const onPage = showOf(read(file))
+    assert.deepEqual(imgs(onPage), imgs(homeShow(heading)))
+    assert.deepEqual(captionsOf(onPage), captionsOf(homeShow(heading)))
+    assert.equal(imgs(onPage).length, slides.length)
+  })
+}
+
+// Each details page's sections, in order: the page lays out the lede and Install, the slideshow, "What it adds", then its own sections.
+const assertSectionsInOrder = (file, markers) => {
+  const page = read(file)
+  assert.match(page, /<body class="details">/)
+  assert.match(page, /<script src="slides\.js"><\/script>/)
+  const order = markers.map(marker => { const i = page.indexOf(marker); assert.notEqual(i, -1, `site/${file} lacks ${marker}`); return i })
+  assert.deepEqual(order, [...order].sort((a, b) => a - b))
+}
+
+test(`${DETAILS} has the slideshow between the install link and "What it adds", then the pen panel with numbered steps and Good to know`, () => {
+  assertSectionsInOrder(DETAILS, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The pen panel</h2>', '<ol class="steps">', '<h2>Good to know</h2>'])
 })
 
 test('netlify.toml publishes only site/', () => {
@@ -224,7 +289,8 @@ test('the Pages workflow publishes only site/', () => {
 test(`${DETAILS} shows the pen panel as one annotated picture whose alt text names every label`, () => {
   const m = read(DETAILS).match(/<h2>The pen panel<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${DETAILS} has no <h2>The pen panel</h2>`)
-  assert.doesNotMatch(m[1], /<li\b/, 'the pen panel section is still a list')
+  assert.equal(m[1].match(/<ol class="steps">[\s\S]*?<\/ol>/)[0].match(/<li>/g).length, 5, 'the pen panel section has no five numbered steps')
+  assert.doesNotMatch(m[1].replace(/<ol class="steps">[\s\S]*?<\/ol>/, ''), /<li\b/, 'the pen panel section has a list besides its steps')
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the pen panel section is not one picture')
   assert.match(found[0], /pen-tool-extras-panel-annotated\.png/)
@@ -239,11 +305,9 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
   assert.doesNotMatch(page, /Digit Color|digit-color/)
 })
 
-// Checks shared by every details page: the header's @description, the intro, one picture per listed lead-in, and a screenshot script per picture.
-const SCRIPT_INTRO = /<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
-// A picture name with no extension is a PNG.
-const withExtension = (name) => /\.\w+$/.test(name) ? name : `${name}.png`
-const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, homePicture }) => {
+// Checks shared by the Draw Tool and Color by Digit details pages: the header's @description, the intro, no picture in the feature grid, and a screenshot script per picture.
+const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
+const shared = ({ page, script, name, summary, intro, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {
     const head = fs.readFileSync(path.join(__dirname, script + SCRIPT_SUFFIX), 'utf8')
     assert.equal((head.match(/^\/\/ @description\s+(.*)$/m) || [])[1], summary)
@@ -255,15 +319,10 @@ const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, 
     assert.equal(plain(m[1]), intro)
   })
 
-  test(`${page} puts one picture with alt text on each lead-in that has one, and none on the others`, () => {
-    const byLeadIn = new Map(items(read(page)).map(li => [leadIn(li), li]))
-    for (const lead of leads) {
-      const found = imgs(byLeadIn.get(lead) || '')
-      if (!pictures[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
-      assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
-      assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/${withExtension(pictures[lead])}"`), `"${lead}" does not show ${withExtension(pictures[lead])}`)
-      assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
-    }
+  test(`${page} has no picture inside its feature grid`, () => {
+    const grid = read(page).match(/<ul class="features">([\s\S]*?)<\/ul>/)
+    assert.ok(grid, `site/${page} has no <ul class="features">`)
+    assert.deepEqual(imgs(grid[1]), [])
   })
 
   // A script in docs/research/ takes a picture when its header names the picture's file.
@@ -281,17 +340,12 @@ const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, 
 
 // Color by Digit's entry and details page.
 const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
-const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Digit: Same as cell.', 'Digit: None.']
-// The lead-ins that carry one picture, and the picture each shows.
-const CBD_PICTURES = {
-  'Digit and mark shades.': 'color-by-digit-details-digit'
-}
+const CBD_LEAD_INS = ['Four modes', 'Kept in step as you solve', 'Digit and mark shades', 'Profiles', 'The profile menu', 'Cells and digits apart']
 
-test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside a picture of colored digits`, () => {
-  const m = read(HOME).match(/<img ([^>]*)>\s*<div>\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
-  assert.equal(m[2], `${CBD_SUMMARY} <a href="${CBD}">Details</a>`)
-  assert.match(altOf(m[1]), /digits/i)
+test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside its slideshow`, () => {
+  const m = read(HOME).match(/<\/div>\s*<div class="row-text">\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Color by Digit entry`)
+  assert.equal(m[1], CBD_SUMMARY)
 })
 
 // A picture's pixel size, from its file's header: a PNG's IHDR or a GIF's logical screen.
@@ -310,85 +364,21 @@ const assertDeclaredAtFileShape = (img, file, what) => {
   return [fileW, fileH]
 }
 
-// The homepage and Digit pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall.
-test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall, at their files' shape`, () => {
-  const examples = [
-    ['homepage picture', imgs(read(HOME)).find(t => t.includes('site-color-by-digit.png'))],
-    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))]
-  ]
-  for (const [what, img] of examples) {
-    assert.ok(img, `no ${what}`)
-    const file = (img.match(/src="[^"]*?(docs\/research\/[^"?]+)(?:\?v=[0-9a-f]{7})?"/) || [])[1]
-    const [fileW, fileH] = assertDeclaredAtFileShape(img, file, what)
-    if (what.endsWith('picture')) {
-      assert.match(img, /alt="[^"]*\btwo\b[^"]*\bboxes\b/i, `${what}'s alt text does not say two boxes`)
-      assert.ok(Math.abs(fileW - 2 * fileH) <= 2, `${what}'s file is ${fileW} by ${fileH}, not twice as wide as tall`)
-    }
-  }
+test(`${CBD} has the slideshow between the install link and "What it adds", then the settings dialog and four numbered steps`, () => {
+  assertSectionsInOrder(CBD, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<ol class="steps">', '<h2>Good to know</h2>'])
+  assert.equal(read(CBD).match(/<ol class="steps">[\s\S]*?<\/ol>/)[0].match(/<li>/g).length, 4)
 })
 
-const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === lead) || '')[0] || ''
-
-test(`${CBD}'s Four modes item is one sentence, and it and the Kept in step and profile menu items have no picture of their own`, () => {
-  const four = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
-  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off. The button\'s chips, a short run of board cells, are drawn the way the mode colors the board: filled cells, shaded digits, both, or plain white.')
-  for (const lead of ['Four modes.', 'Kept in step as you solve.', 'The profile menu.']) assert.equal(itemImg(CBD, lead), '', `"${lead}" has a picture`)
+test("Color by Digit's slide 5 shows the three marks that repeat the given 2, and its last slide splits the cell and digit profiles", () => {
+  const alts = homeShow('Color by Digit').match(/\balt="[^"]*"/g)
+  assert.match(alts[4], /three marks that repeat the given 2/)
+  assert.match(alts[9], /cells filled in the first profile's .*digits and marks shaded in Modular's/)
 })
 
-test(`${CBD} opens with a tour animation between the install link and What it adds, whose alt text lists the steps in order`, () => {
-  const m = read(CBD).match(/<p><a class="install"[^>]*>[^<]*<\/a><\/p>([\s\S]*?)<h2>What it adds<\/h2>/)
-  assert.ok(m, `site/${CBD} has no section between the install link and "What it adds"`)
-  const found = imgs(m[1])
-  assert.equal(found.length, 1, 'the tour is not one picture')
-  assert.match(found[0], /src="[^"]*color-by-digit-details-tour\.gif(\?v=[0-9a-f]{7})?"/)
-  const alt = altOf(found[0])
-  assert.match(alt, /^An animation/)
-  const steps = [/digit, 1, is typed/i, /center marks 7 and 9/i, /center mark 2 from another group/i, /Digit, Both, Off and Cell/, /profile menu opens/i, /Modular is picked/i, /recolor/i]
-  let at = 0
-  for (const step of steps) {
-    const found = alt.slice(at).search(step)
-    assert.ok(found >= 0, `the alt text does not mention ${step} after position ${at}`)
-    at += found
-  }
-  assertDeclaredAtFileShape(found[0], 'docs/research/color-by-digit-details-tour.gif', 'the tour')
-})
-
-// A GIF the site links stays small enough to load on a phone: the budget each animation was given.
-const GIF_BUDGETS = [
-  [CBD, 'color-by-digit-details-tour.gif', 1000],
-  [DETAILS, 'pen-tool-extras-tour.gif', 1000]
-]
-for (const [page, gif, kb] of GIF_BUDGETS) {
-  test(`site/${page}'s ${gif} is under ${kb} KB and loops`, () => {
-    assert.ok(read(page).includes(`${RAW}docs/research/${gif}`), `site/${page} does not show ${gif}`)
-    const bytes = fs.readFileSync(path.join(__dirname, 'docs', 'research', gif))
-    assert.ok(bytes.length < kb * 1000, `${gif} is ${bytes.length} bytes, over ${kb} KB`)
-    assert.ok(bytes.includes('NETSCAPE2.0'), `${gif} has no loop extension`)
-  })
-}
-
-test(`${DETAILS} opens with a tour animation between the install link and What it adds, whose alt text lists the steps in order`, () => {
-  const m = read(DETAILS).match(/<p><a class="install"[^>]*>[^<]*<\/a><\/p>([\s\S]*?)<h2>What it adds<\/h2>/)
-  assert.ok(m, `site/${DETAILS} has no section between the install link and "What it adds"`)
-  const found = imgs(m[1])
-  assert.equal(found.length, 1, 'the tour is not one picture')
-  assert.match(found[0], /src="[^"]*pen-tool-extras-tour\.gif(\?v=[0-9a-f]{7})?"/)
-  const alt = altOf(found[0])
-  assert.match(alt, /^An animation/)
-  assert.doesNotMatch(alt, /page button/i, 'the tour alt text names the page button')
-  const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /cell edge/i, /grid corner/i, /Thickness slider/i, /Opacity slider/i, /White outlines off and then on/i, /right.click/i, /erase/i]
-  let at = 0
-  for (const step of steps) {
-    const found = alt.slice(at).search(step)
-    assert.ok(found >= 0, `the alt text does not mention ${step} after position ${at}`)
-    at += found
-  }
-})
-
-// Chris's ruling on #317: the colors item shows short pen lines in colors SudokuPad's own pen cannot draw.
+// Chris's ruling on #317: the slides' pen colors are far from SudokuPad's nine, so they show colors its own pen cannot draw.
 const colorValues = (text) => [...text.matchAll(/#[0-9a-f]{6}/gi)].map(m => m[0])
 const rgb = (hex) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16))
-test(`${DETAILS}'s colors item names five pen colors far from SudokuPad's nine and shows a picture wider than tall, as declared`, () => {
+test("the slides' five pen colors are far from SudokuPad's nine", () => {
   const sudokupad = fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8').match(/const SUDOKUPAD_PEN_COLORS = Object\.freeze\(\{([^}]*)\}\)/)
   assert.ok(sudokupad, 'pen-tool-extras.user.js has no SUDOKUPAD_PEN_COLORS')
   const script = fs.readFileSync(path.join(__dirname, 'docs', 'research', 'pen-tool-extras-recolor.mjs'), 'utf8').match(/export const PICTURE_PEN_COLORS = \[([^\]]*)\]/)
@@ -401,22 +391,14 @@ test(`${DETAILS}'s colors item names five pen colors far from SudokuPad's nine a
       assert.ok(distance > 60, `${color} is within ${distance.toFixed(0)} of SudokuPad's ${other}`)
     }
   }
-  const img = itemImg(DETAILS, 'Customizable pen colors.')
-  const alt = altOf(img)
-  for (const name of ['teal', 'navy', 'dark red', 'purple', 'lime']) assert.match(alt, new RegExp(name, 'i'), `the alt text does not name ${name}`)
-  assert.match(alt, /short/i)
-  assert.doesNotMatch(alt, /pulldown|settings/i, 'the alt text still describes the settings dialog')
-  assert.doesNotMatch(alt, /\\/, 'the alt text holds a backslash')
-  const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
-  const [fileW, fileH] = pictureSize('docs/research/pen-tool-extras-bullet-colors.png')
-  assert.ok(fileW > fileH, `the colors picture is ${fileW} by ${fileH}, not wider than tall`)
-  assert.ok(Math.abs(w * fileH - h * fileW) <= fileW, `the colors picture is declared ${w} by ${h} but its file is ${fileW} by ${fileH}`)
 })
 
 test(`${CBD} lists what the script adds, one item per feature`, () => {
   const lines = section(CBD, 'What it adds')
   assert.equal(lines.length, CBD_LEAD_INS.length)
-  assert.deepEqual(leadIns(read(CBD)), CBD_LEAD_INS)
+  const grid = read(CBD).match(/<ul class="features">([\s\S]*?)<\/ul>/)
+  assert.ok(grid, `site/${CBD} has no <ul class="features">`)
+  assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
   // Chris's ruling on #279: text a reader sees says "center marks".
   assert.doesNotMatch(lines.join(' '), /centre/)
   for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(lines[0], new RegExp(`\\b${mode}\\b`), mode)
@@ -441,40 +423,39 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
   assert.deepEqual(section(CBD, 'Good to know'), [
     'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
     "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
-    "Where the button is: it sits in the bottom row with Undo, Redo, Check and Select. When that row already holds five or more buttons, as it can once other extensions add theirs, it goes in a second row under it. Color by Digit never moves another script's button."
+    "The button sits in the bottom row with Undo, Redo, Check and Select, or in a second row under it once that row holds five or more buttons. It never moves another script's button."
   ])
 })
 
 // Draw Tool's entry and details page.
 const DRAW_SUMMARY = 'Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.'
-const DRAW_LEAD_INS = ['Freehand lines.', 'Shapes.', 'Text.', 'Colors of its own.', 'Size and opacity.', 'Erasing.', 'Settings.', 'Stays on the cells.', 'Kept for each puzzle.']
-// The three animations on the details page: the lead-in each sits on, its file, and what its alt text must say.
-const DRAW_GIFS = {
-  'Shapes.': ['draw-tool-details-shapes.gif', /rectangle round the four cells/],
-  'Text.': ['draw-tool-details-text.gif', /Enter[^"]*\b15\b/],
-  'Erasing.': ['draw-tool-details-erasing.gif', /right-drag[^"]*removes/]
-}
-const GIF_LIMIT_BYTES = 300 * 1024
+const DRAW_LEAD_INS = ['Freehand lines', 'Shapes', 'Text', 'Colors of its own', 'Size and opacity', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Draw Tool description`)
-  assert.equal(m[1], `${DRAW_SUMMARY} <a href="${DRAW}">Details</a>`)
+  assert.equal(m[1], DRAW_SUMMARY)
 })
 
-test(`${DRAW} lists what the script adds, one item per feature`, () => {
+test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
-    'Shapes. The Shape button steps between Off, rectangle and ellipse. With a shape on, a drag draws it in exactly the box you drag.',
-    'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
-    'Colors of its own. Nine colors that belong to Draw Tool, not to SudokuPad\'s pen. A click on a color button or the digit keys 1 to 9 pick one, and a hold on a button puts a color picker over each to change it.',
-    'Size and opacity. The Size slider sets the width of the next line or shape and the size of the next text, and the Opacity slider how solid it is. A line, shape or text keeps the size and opacity it was drawn with.',
-    'Erasing. Drag with the right mouse button across a line, shape or text to erase it; a right click erases what is under the pointer. Clear all, which asks first, erases everything.',
-    'Settings. The gear, or the Experimental settings entry, opens a dialog with a list of color presets (the pen colors, three darker page sets and SudokuPad\'s colors), a color picker for each of the nine colors, and Copy settings and Paste settings to move the colors and both slider values to another browser.',
-    'Stays on the cells. Lines, shapes and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
-    'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'
+    'Freehand lines Drag on the puzzle to draw. Hold Shift for a straight line.',
+    'Shapes Rectangle or ellipse, drawn in exactly the box you drag.',
+    'Text Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
+    "Colors of its own Nine colors that belong to Draw Tool, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
+    'Size and opacity Two sliders. A line, shape or text keeps the size and opacity it was drawn with.',
+    'Erasing Drag with the right mouse button across a line, shape or text to erase it. Clear all, in the panel, erases everything.',
+    'Settings Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.',
+    'Stays on the cells Drawings stay put, and stay visible when you switch back to entering digits.',
+    'Kept for each puzzle A reload keeps the drawing, for the last 50 puzzles you drew on.'
   ])
-  assert.deepEqual(leadIns(read(DRAW)), DRAW_LEAD_INS)
+  const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
+  assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
+  assert.deepEqual(leadIns(grid[1]), DRAW_LEAD_INS)
+})
+
+test(`${DRAW} has the slideshow between the install link and "What it adds", then the panel with numbered steps`, () => {
+  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The Draw panel</h2>', '<ol class="steps">', '<h2>Good to know</h2>'])
 })
 
 test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names every label`, () => {
@@ -490,21 +471,8 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
   assert.match(alt, /press 1 to 9/)
 })
 
-test(`${DRAW}'s Text, Erasing and Shapes pictures are animations under 300 KB whose alt text says so`, () => {
-  const byLeadIn = new Map(items(read(DRAW)).map(li => [leadIn(li), li]))
-  for (const [lead, [file, what]] of Object.entries(DRAW_GIFS)) {
-    const [img] = imgs(byLeadIn.get(lead))
-    const alt = altOf(img)
-    assert.match(alt, /^An animation/, `"${lead}" alt text does not say it is an animation`)
-    assert.match(alt, what, `"${lead}" alt text does not describe its steps`)
-    const gifPath = `docs/research/${file}`
-    assert.ok(fs.statSync(path.join(__dirname, gifPath)).size < GIF_LIMIT_BYTES, `${file} is over 300 KB`)
-    assertDeclaredAtFileShape(img, gifPath, `"${lead}"`)
-  }
-})
-
-test(`${DRAW} good to know says the drawing stays in this browser`, () => {
-  assert.deepEqual(section(DRAW, 'Good to know'), ['The drawing is kept in this browser only, so another browser or device does not show it.'])
+test(`${DRAW} good to know says the drawing stays in this browser, and what clears it`, () => {
+  assert.deepEqual(section(DRAW, 'Good to know'), ['The drawing is kept in this browser only, so another browser or device does not show it.', 'Restart clears the drawing. If a drawing cannot be saved, a message says so.'])
 })
 
 // A script in docs/research/ takes a picture when its header names the picture's file.
@@ -528,10 +496,8 @@ shared({
   script: 'draw-tool',
   name: 'Draw Tool',
   summary: DRAW_SUMMARY,
-  intro: 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines or shapes, and click to type text, such as cage sums, in colors of its own.',
-  leadIns: DRAW_LEAD_INS,
-  pictures: { 'Freehand lines.': 'draw-tool-bullet-lines', 'Shapes.': 'draw-tool-details-shapes.gif', 'Text.': 'draw-tool-details-text.gif', 'Erasing.': 'draw-tool-details-erasing.gif' },
-  homePicture: 'site-draw-tool.png'
+  intro: 'Adds to SudokuPad a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own.',
+  homePicture: 'draw-tool-slide-1-line.png'
 })
 
 shared({
@@ -540,7 +506,5 @@ shared({
   name: 'Color by Digit',
   summary: CBD_SUMMARY,
   intro: `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`,
-  leadIns: CBD_LEAD_INS,
-  pictures: CBD_PICTURES,
-  homePicture: 'site-color-by-digit.png'
+  homePicture: 'color-by-digit-slide-1-start.png'
 })
