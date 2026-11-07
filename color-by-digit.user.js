@@ -64,8 +64,10 @@
       { key: '5', digits: ['2', '5', '8'] },
       { key: '8', digits: ['0', '3', '6', '9'] }
     ],
-    // Keys 1 to 9 are the nine colors of SudokuPad's first palette page.
-    'Each digit': ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => ({ key: d, digits: [d] }))
+    // Nine colors whose darker shades are all distinct and none black or grey, so an entered digit never looks like a
+    // given: 5 to 9 on their own keys of SudokuPad's first palette page, and 1 to 4 (whose first-page keys are grey,
+    // black and a green near 8's yellow) on purple, pink and brown from page 2 and green from page 3.
+    'Each digit': [['1', 'j'], ['2', 'e'], ['3', 'h'], ['4', 'm'], ['5', '5'], ['6', '6'], ['7', '7'], ['8', '8'], ['9', '9']].map(([d, key]) => ({ key, digits: [d] }))
   }
 
   const cloneGroups = (groups) => groups.map((g) => ({ key: g.key, digits: [...g.digits] }))

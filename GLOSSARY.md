@@ -48,7 +48,8 @@
   in the `conflict` state, in Digit and Both, only while SudokuPad shows conflicts.
 - **preload** — one of the five ready-made profiles a fresh install starts with: Low/5/High, Odd/Even,
   Entropic ({0,1,2,3}, {4,5,6}, {7,8,9}), Modular ({1,4,7}, {2,5,8}, {0,3,6,9}) and Each digit (each of 1 to 9
-  alone, on palette keys 1 to 9, 0 in no group). Entropic and Modular, and then Each digit, are appended once,
+  alone, 0 in no group: 5 to 9 on palette keys 5 to 9, and 1 to 4 on keys j, e, h and m of pages 2 and 3, so no
+  digit color is black or grey). Entropic and Modular, and then Each digit, are appended once,
   on load, to an install that already has profiles, each skipped when a profile with equal groups exists or
   six are taken; a saved flag for each records it, so a deleted one stays deleted. A migrated profile is named after the preload its groups equal.
 - **pen color** — one of the pen tool's nine colors, numbered 1 to 9. It is a

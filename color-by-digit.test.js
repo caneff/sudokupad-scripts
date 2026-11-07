@@ -119,9 +119,24 @@ test('Modular maps 1, 4, 7 to key 6, 2, 5, 8 to key 5, 0, 3, 6, 9 to key 8', () 
   assert.equal(byDigit(PRELOADS.Modular), '8658658658')
 })
 
-test('Each digit puts each of 1 to 9 alone in a group on its own palette color, and 0 in no group', () => {
-  assert.deepEqual(PRELOADS['Each digit'], ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => ({ key: d, digits: [d] })))
+// SudokuPad's default palette (tool-color.css): the colors Each digit's keys show, typed out as the independent source.
+const DEFAULT_PALETTE = { j: 'rgb(145, 30, 180)', e: 'rgb(238, 153, 170)', h: 'rgb(160, 90, 30)', m: 'rgb(76, 175, 80)', 5: 'rgb(232, 124, 241)', 6: 'rgb(228, 150, 50)', 7: 'rgb(245, 58, 55)', 8: 'rgb(252, 235, 63)', 9: 'rgb(61, 153, 245)' }
+
+test('Each digit puts each of 1 to 9 alone in a group, 5 to 9 on their own first-page keys and 1 to 4 on keys of pages 2 and 3, and 0 in no group', () => {
+  assert.deepEqual(PRELOADS['Each digit'], [['1', 'j'], ['2', 'e'], ['3', 'h'], ['4', 'm'], ['5', '5'], ['6', '6'], ['7', '7'], ['8', '8'], ['9', '9']].map(([d, key]) => ({ key, digits: [d] })))
   assert.deepEqual(plan(allDigits, PRELOADS['Each digit']).map((p) => p.index), [1, 2, 3, 4, 5, 6, 7, 8, 9])
+})
+
+test('Each digit\'s nine shades are colors, none black or grey, and no two alike, so an entered digit never looks like a given', () => {
+  const shades = PRELOADS['Each digit'].map((g) => oklch(darkenColor(parseColor(DEFAULT_PALETTE[g.key]))))
+  for (const { L, C } of shades) {
+    assert.ok(L >= 0.35, `lightness ${L}`)
+    assert.ok(C >= 0.09, `chroma ${C}`)
+  }
+  const lab = ({ L, C, h }) => [L, C * Math.cos(h * Math.PI / 180), C * Math.sin(h * Math.PI / 180)]
+  for (let i = 0; i < 9; i++) {
+    for (let j = i + 1; j < 9; j++) assert.ok(Math.hypot(...lab(shades[i]).map((x, k) => x - lab(shades[j])[k])) >= 0.1, `digits ${i + 1} and ${j + 1}`)
+  }
 })
 
 const LOW = PRELOADS['Low/5/High']
@@ -1104,6 +1119,14 @@ test('mode: leaving cell coloring keeps a hand color in no group on a cell that 
       assert.equal(app.puzzle.inGroup, false)
     }, { ColorByDigit_mode: 'both' })
   }
+})
+
+test('Each digit: an install already offered it keeps the Each digit it has, on the first page\'s keys, and gets no second one', async () => {
+  const oldEachDigit = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => ({ key: d, digits: [d] }))
+  const saved = { profiles: [{ name: 'Odd/Even', groups: ODD }, { name: 'Each digit', groups: oldEachDigit }], active: 0 }
+  await withScript(mockApp([{}]), async (app) => {
+    assert.deepEqual(app.stored.ColorByDigit_profiles, saved)
+  }, { ColorByDigit_profiles: saved, ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
 })
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.

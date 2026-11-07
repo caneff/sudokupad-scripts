@@ -194,7 +194,7 @@ describe('the one-time adds of Entropic and Modular, then Each digit, to an inst
   })
 
   it('a profile that already has Each digit\'s groups, under any name, keeps it from being added', async () => {
-    const nine = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => group(d, [d]))
+    const nine = [['1', 'j'], ['2', 'e'], ['3', 'h'], ['4', 'm'], ['5', '5'], ['6', '6'], ['7', '7'], ['8', '8'], ['9', '9']].map(([d, key]) => group(key, [d]))
     const mine = { profiles: [...OLD_TWO.profiles, { name: 'Mine', groups: nine }], active: 2 }
     await open({ [PROFILES_STORAGE_KEY]: mine, [ADDED_PRELOADS_STORAGE_KEY]: true }, async (p, t) => {
       assert.deepEqual(await watch(t.names), [['Low/5/High', 'Odd/Even', 'Mine']])
