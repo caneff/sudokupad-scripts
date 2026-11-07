@@ -12,6 +12,7 @@
 body { max-width: 68rem; margin: 0 auto; padding: 1rem; font: 1.0625rem/1.5 system-ui, sans-serif; }
 a { color: var(--accent); }
 h1, h2 { margin: 0 0 .5rem; }
+h1 { font-size: 2.1rem; letter-spacing: -.01em; }
 h2 { font-size: 1.2rem; }
 p { margin: 0 0 .5rem; }
 .install { display: inline-flex; align-items: center; gap: .55rem; padding: .6rem 1.4rem .6rem 1.1rem; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 1.05rem; font-weight: 600; text-decoration: none; box-shadow: 0 1px 3px rgb(0 0 0 / .3); }
@@ -44,7 +45,7 @@ p { margin: 0 0 .5rem; }
 
 /* The details layout (body.details): a back link, title, warning, lede and Install, then the slideshow, then sections divided by thin rules. */
 .details .back { font-size: .95rem; margin: .25rem 0 1rem; }
-.details h1 { font-size: 2.1rem; letter-spacing: -.01em; }
+.details .slide-caption { font-size: 1.25rem; }
 .details .lede { max-width: 44rem; font-size: 1.1rem; }
 .details .actions { margin: .75rem 0 1.5rem; }
 .details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }

@@ -7,7 +7,8 @@ const ARROW_ICON = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path 
 for (const show of document.querySelectorAll('.slideshow')) {
   const slides = [...show.querySelectorAll('.slide')]
   const captions = [...show.querySelectorAll('.slide-caption')]
-  if (slides.length < 2) continue
+  // A step announces its caption, which carries its meaning, as well as the counter.
+  show.querySelector('.slide-captions').setAttribute('aria-live', 'polite')
   const pager = document.createElement('div')
   pager.className = 'slide-pager'
   pager.innerHTML = `<button type="button" class="prev" aria-label="Previous">${ARROW_ICON('M15 5l-7 7 7 7')}</button>` +

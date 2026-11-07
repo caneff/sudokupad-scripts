@@ -1,5 +1,5 @@
 // Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Draw Tool), opened from disk: Next and Previous step
-// the slideshow's picture, caption and counter, both ends wrap, and the rows with one picture get no pager. The page's raw.githubusercontent.com
+// the slideshow's picture, caption and counter, and both ends wrap. The page's raw.githubusercontent.com
 // pictures are served from this checkout, since a branch is not on main yet.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -69,9 +69,10 @@ for (const [where, file] of [['the homepage', 'index.html'], ...SHOWS.map((show)
     describe(`${where} ${show.heading} slideshow`, { concurrency: false }, () => {
       before(() => page.goto(new URL(`site/${file}`, ROOT).href, { waitUntil: 'load' }))
 
-      it('starts on slide 1 with its caption, and the buttons are labelled', async () => {
+      it('starts on slide 1 with its caption, the buttons are labelled and a step announces its caption', async () => {
         assert.deepEqual(await shown(root), at(1, show.first, show.slides))
         assert.equal(await page.locator(`${root} button`).evaluateAll((bs) => bs.map((b) => b.getAttribute('aria-label')).join()), 'Previous,Next')
+        assert.equal(await page.locator(`${root} .slide-captions`).getAttribute('aria-live'), 'polite')
       })
 
       it('Next steps picture, caption and counter forward, and wraps from the last slide to the first', async () => {
@@ -90,9 +91,8 @@ for (const [where, file] of [['the homepage', 'index.html'], ...SHOWS.map((show)
         assert.deepEqual(await shown(root), at(show.slides - 1, show.beforeLast, show.slides))
       })
 
-      it('has a pager on each slideshow of the page, and on the homepage the other rows have one picture and no pager', async () => {
+      it('has a pager on each slideshow of the page', async () => {
         assert.equal(await page.locator('.slide-pager').count(), file === 'index.html' ? SHOWS.length : 1)
-        if (file === 'index.html') assert.equal(await page.locator('.row').count(), 5)
       })
     })
   }
