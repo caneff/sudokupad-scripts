@@ -11,6 +11,24 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
 - A saved current tool (`Framework.getData('tool')`) that names a tool not yet added falls back to the first tool at
   startup, so a reload with Draw current starts on Digit.
 
+## The button's place (#298)
+
+- `Framework.addToolButton(opts)` is `addControlButton` with `parent: '.controls-tool'`, which creates the `<button>`
+  and appends it; `addTool` calls it first. So a tool button's place is its arrival time. The pen tool's button
+  arrives when its setting turns on (`makeToolToggler` calls `addTool`), a moment after Start Puzzle on a saved
+  setting, so a script injected earlier has its button before the pen's.
+- The ▶▶ button is not SudokuPad's own: the recording's v0.611.0 scripts hold no such glyph, and a stock page has only
+  Digit, Corner, Centre, Color and, with the setting on, pen in `.controls-tool`. No script in this repo adds one. It
+  is another userscript's, which can only have joined the bar through `addToolButton` or `addControlButton` with that
+  parent, both of which append. Which script it is was not found (Chris's page was not read); the live check adds a
+  button both ways.
+- Draw Tool keeps its button last: after `addTool` it moves the button to the end of `.controls-tool` and watches the bar
+  with a `MutationObserver` (`childList`), appending the button again whenever another button lands after it. Only the
+  button moves. `app.tools` keeps its order, so the tool keys are unchanged (§ Tool keys). Clicking the moved button still selects Draw
+  (checked live). Run in `live/draw-tool-order.live.mjs`: the pen
+  tool on at startup (script injected at DOMContentLoaded, which gave Draw before pen without the move), the pen turned
+  off and on, a later `addTool` and a later `addToolButton`, Draw still selectable, and Z X C V B on the same tools.
+
 ## Tool keys
 
 - `App.toolHotkeys` is `['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM']`, and `handleKeydown` gives key *i* to
