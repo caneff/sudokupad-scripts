@@ -123,3 +123,22 @@ in headless Chromium on Linux.
 - `Framework.closeDialog` does nothing while `window.dialogJustShown` is set, which `showDialog` clears in a
   `setTimeout(0)`. On a page still busy after a reload, a scripted press came before it and the dialog stayed open; a
   live test waits for it to clear.
+
+## Typed text (#273)
+
+SudokuPad v0.611.0 (`script.js`, `framework.js`, `feature-*.js` in the live recording), run on the page in
+`live/draw-tool-text.live.mjs` and `live/draw-tool-erase.live.mjs` (2026-11-06).
+
+- **Where the keys go.** `App` listens for `keydown` on `document` in the capture phase, as do `feature-cellpaste.js`
+  and `feature-compactmarks.js`; `feature-markup.js` listens on `window` in the bubble phase, and `framework.js` on
+  `document`. A listener on `window` in the capture phase runs before every one of them, whatever order they were
+  added in. While a text box is open Draw takes every `keydown`, `keypress` and `keyup` there with
+  `stopImmediatePropagation`, so no digit reaches a cell, no tool key (Z X C V B N M) switches the tool and Shift does
+  not switch to Corner. Checked live with `15`, `Zx C` and Shift+Z typed into a box, Shift held.
+- **A click is a press and release within 2 board units.** Draw tells a click from a stroke at the release of its own
+  press, so a text box never opens on a release or a click alone. Clear all's dialog buttons and its overlay stop
+  their `mousedown` (§ The right button), so closing the dialog by a plain click over the board opens no box. Checked
+  live for a click on Cancel and on the overlay over r1c1.
+- **The text** is an SVG `text` in Draw's layer, anchored at its middle (`text-anchor: middle`,
+  `dominant-baseline: central`), so its point is the click point. Its hit box for a click and for erasing is estimated
+  at 0.6 of the text size per character, not measured, so the pure functions can test it.

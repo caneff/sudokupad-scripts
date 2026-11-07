@@ -91,8 +91,12 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
   it('keys that are tool keys or Shift in SudokuPad type into the box and switch no tool', async () => {
     await clickAt(SECOND_AT)
     await p.keyboard.type('Zx C')
+    await p.keyboard.down('Shift')
+    assert.equal(await tool(), 'draw', 'Shift held does not switch to Corner')
+    await p.keyboard.press('KeyZ')
+    await p.keyboard.up('Shift')
     await p.keyboard.press('Enter')
-    assert.deepEqual(await texts(), ['15', 'Zx C'])
+    assert.deepEqual(await texts(), ['15', 'Zx CZ'])
     assert.equal(await tool(), 'draw')
   })
 
@@ -104,9 +108,9 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     await clickAt(THIRD_AT)
     await p.keyboard.type('7')
     await clickAt(EMPTY_AT)
-    assert.deepEqual(await texts(), ['15', 'Zx C', '7'])
+    assert.deepEqual(await texts(), ['15', 'Zx CZ', '7'])
     assert.equal(await boxOpen(), false)
-    assert.deepEqual((await saved()).map((item) => item.text), ['15', 'Zx C', '7'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['15', 'Zx CZ', '7'])
   })
 
   it('Escape on a new box leaves no text', async () => {
@@ -114,27 +118,27 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     await p.keyboard.type('9')
     await p.keyboard.press('Escape')
     assert.equal(await boxOpen(), false)
-    assert.deepEqual(await texts(), ['15', 'Zx C', '7'])
+    assert.deepEqual(await texts(), ['15', 'Zx CZ', '7'])
   })
 
   it('a box finished empty leaves no text', async () => {
     await clickAt(EMPTY_AT)
     await p.keyboard.press('Enter')
     assert.equal(await boxOpen(), false)
-    assert.deepEqual(await texts(), ['15', 'Zx C', '7'])
+    assert.deepEqual(await texts(), ['15', 'Zx CZ', '7'])
     assert.equal((await saved()).length, 3)
   })
 
   it('a click on text reopens it with its text, and Enter saves the change', async () => {
     await clickAt(SUM_AT)
     assert.equal(await boxOpen(), true)
-    assert.deepEqual(await texts(), ['Zx C', '7', '15'], 'the open box shows the text, drawn last')
+    assert.deepEqual(await texts(), ['Zx CZ', '7', '15'], 'the open box shows the text, drawn last')
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Backspace')
     await p.keyboard.type('23')
     await p.keyboard.press('Enter')
-    assert.deepEqual(await texts(), ['23', 'Zx C', '7'])
-    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx C', '7'])
+    assert.deepEqual(await texts(), ['23', 'Zx CZ', '7'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx CZ', '7'])
   })
 
   it('Escape on a reopened box restores the text it had', async () => {
@@ -142,15 +146,15 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     await p.keyboard.press('Backspace')
     await p.keyboard.type('x')
     await p.keyboard.press('Escape')
-    assert.deepEqual(await texts(), ['23', 'Zx C', '7'])
+    assert.deepEqual(await texts(), ['23', 'Zx CZ', '7'])
   })
 
   it('clearing a reopened text removes it', async () => {
     await clickAt(THIRD_AT)
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Enter')
-    assert.deepEqual(await texts(), ['23', 'Zx C'])
-    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx C'])
+    assert.deepEqual(await texts(), ['23', 'Zx CZ'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx CZ'])
   })
 
   it('the text size control has three sizes, and a new text takes the one picked and the current pen color', async () => {
