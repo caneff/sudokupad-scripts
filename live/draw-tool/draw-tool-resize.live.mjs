@@ -114,7 +114,10 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
   })
 
   it('the box stops at about three characters wide and one line high, and a resize with no text typed is saved', async () => {
-    await p.mouse.dblclick(...await gridPoint(p, NOTE_AT))
+    // The resize kept the note's top left, so its middle has moved off NOTE_AT.
+    const { left, top, right, bottom } = await box(TEXTS)
+    await p.mouse.dblclick((left + right) / 2, (top + bottom) / 2)
+    assert.equal((await draw.texts(p)).length, 0, 'the note itself is open')
     await dragHandle(-1000, -1000)
     const smallest = await box(TEXT_BOX)
     assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em) && near(smallest.bottom - smallest.top, MIN_EM[1] * smallest.em), `${smallest.right - smallest.left} x ${smallest.bottom - smallest.top}`)
