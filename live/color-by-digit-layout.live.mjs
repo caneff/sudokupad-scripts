@@ -1,5 +1,5 @@
 // Live check of the Color by Digit dialog's layout (#304, #333) at 1200x900 and 390x800 on sudokupad.app in headless Chromium: the Mode, Cell
-// and Digit pulldowns in one row on a desktop and stacked on a phone, Copy and Paste settings as icons in the title row, two columns on a
+// and Digit pulldowns one per row with the label left of each, Copy and Paste settings as icons in the title row, two columns on a
 // desktop and one on a phone, with no sideways overflow. How it looks is judged by sight in the PR.
 /* global document */
 import { after, before, describe, it } from 'node:test'
@@ -29,15 +29,23 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
     })
     after(async () => { await context?.close() })
 
-    it(`lays the Mode, Cell and Digit pulldowns ${columns === 2 ? 'in one row' : 'one under another'}, with no checkbox and no mode button`, async () => {
-      const boxes = await p.locator(`${EDITOR} .cbd-pulldown select`).evaluateAll((es) => es.map((e) => { const r = e.getBoundingClientRect(); return { role: e.dataset.role, x: Math.round(r.x), y: Math.round(r.y), right: Math.round(r.right), width: Math.round(r.width) } }))
+    it('lays the Mode, Cell and Digit pulldowns one per row, each label left of its select in one label column, with no checkbox and no mode button', async () => {
+      const boxes = await p.locator(`${EDITOR} .cbd-pulldown`).evaluateAll((es) => es.map((e) => {
+        const label = e.querySelector('span').getBoundingClientRect(); const select = e.querySelector('select').getBoundingClientRect()
+        return { role: e.querySelector('select').dataset.role, labelX: Math.round(label.x), labelRight: Math.round(label.right), labelY: label.y + label.height / 2, selectX: Math.round(select.x), selectRight: Math.round(select.right), selectY: select.y + select.height / 2, top: Math.round(select.y) }
+      }))
       assert.deepEqual(boxes.map((b) => b.role), ['mode-draft', 'cell-profile', 'digit-profile'])
       assert.equal(await p.locator(`${EDITOR} input[type=checkbox], ${EDITOR} button[data-role="mode-draft"]`).count(), 0)
-      const rows = new Set(boxes.map((b) => b.y)).size
-      const columnsUsed = new Set(boxes.map((b) => b.x)).size
-      assert.deepEqual([rows, columnsUsed], columns === 2 ? [1, 3] : [3, 1], JSON.stringify(boxes))
+      assert.equal(new Set(boxes.map((b) => b.top)).size, 3, `one row each: ${JSON.stringify(boxes)}`)
+      assert.equal(new Set(boxes.map((b) => b.labelX)).size, 1, `labels share a left edge: ${JSON.stringify(boxes)}`)
+      assert.equal(new Set(boxes.map((b) => b.selectX)).size, 1, `selects line up: ${JSON.stringify(boxes)}`)
+      assert.equal(new Set(boxes.map((b) => b.selectRight)).size, 1, `selects share a width: ${JSON.stringify(boxes)}`)
       const dialog = await rect('.dialog')
-      for (const b of boxes) assert.equal(b.right <= dialog.right, true, `inside the dialog: ${JSON.stringify(boxes)}`)
+      for (const b of boxes) {
+        assert.equal(b.labelRight <= b.selectX, true, `label left of its select: ${JSON.stringify(b)}`)
+        assert.equal(Math.abs(b.labelY - b.selectY) <= NEAR_PX, true, `label centred on its row: ${JSON.stringify(b)}`)
+        assert.equal(b.selectRight <= dialog.right, true, `inside the dialog: ${JSON.stringify(b)}`)
+      }
     })
 
     it(`has ${columns} column${columns === 1 ? '' : 's'}, the list left of or above the editor, and no sideways overflow`, async () => {
