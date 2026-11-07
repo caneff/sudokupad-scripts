@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { gotoPuzzle, newPage, openPage, restartPuzzle, scaleOf, startPuzzle } from '../page.mjs'
+import { gotoPuzzle, newPage, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, dialogButton, effectiveOpacities, openExtrasEditor, openSettings } from '../settings.mjs'
 import { cellCentre, openPenTool, penValuesAt, plantUnchecked, setSlider } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
@@ -18,7 +18,6 @@ const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta
 const DATA_KEY = 'EdgeMarks_marks'
 const OPACITY_KEY = 'PenColor_opacity'
 const COLORS_KEY = 'PenColor_colors'
-const { SOLVER_REACH } = createRequire(import.meta.url)('../../dark-page.user.js')
 const { CORNER_RADIUS, MARK_VALUES, MARKS_LAYER_ID } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 const MARK_BOXES = ['x', 'directions', 'circle', 'cornerX', 'cornerCircle']
 const ALL_TICKED = Object.fromEntries(MARK_BOXES.map((mark) => [mark, true]))
@@ -364,52 +363,6 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   const setThickness = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
-  // How far the first pen mark's drawn extent, stroke included and scale applied, reaches past the grid's cells, in page pixels.
-  const reach = () => read(() => {
-    const mark = document.querySelector('.cell-pen')
-    if (!mark) return null
-    const style = window.getComputedStyle(mark)
-    const m = mark.getBoundingClientRect()
-    const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
-    const left = Math.min(...cells.map((r) => r.left))
-    const top = Math.min(...cells.map((r) => r.top))
-    const right = Math.max(...cells.map((r) => r.right))
-    const bottom = Math.max(...cells.map((r) => r.bottom))
-    // The box leaves the stroke out, which is measured in the caller: half of its width on screen lies beyond the box.
-    return {
-      beyond: Math.max(left - m.left, top - m.top, m.right - right, m.bottom - bottom),
-      strokeWidth: parseFloat(style.strokeWidth),
-      transform: style.transform,
-      pixelsPerUnit: document.querySelector('#svgrenderer').getScreenCTM().a
-    }
-  }).then((m) => m && m.beyond + m.strokeWidth * scaleOf(m.transform) / 2 * m.pixelsPerUnit)
-
-  it('every edge and corner mark on the outer edges and corners, stroke and growth included, reaches no farther past the cells than Dark Page keeps (SOLVER_REACH), at thickness 5, 10 and 16', async () => {
-    for (const thickness of [5, 10, 16]) {
-      await setThickness(thickness)
-      for (const [name, row, col, side] of [['top', 0, 3, 'top'], ['left', 3, 0, 'left'], ['right', 3, SIZE - 1, 'right'], ['bottom', SIZE - 1, 3, 'bottom']]) {
-        for (let step = 1; step <= 4; step++) {
-          await clickEdge(row, col, side)
-          await settle(async () => (await reach()) !== null, true)
-          const past = await reach()
-          assert.equal(typeof past, 'number', `mark ${step} on the outer ${name} edge`)
-          assert.equal(past <= SOLVER_REACH, true, `thickness ${thickness}: mark ${step} on the outer ${name} edge reaches ${past}px past the cells, more than ${SOLVER_REACH}`)
-        }
-        await clearMarks()
-      }
-      for (const corner of [[0, 0], [0, SIZE], [SIZE, 0], [SIZE, SIZE]]) {
-        for (let step = 1; step <= 2; step++) {
-          await clickCorner(...corner)
-          await settle(async () => (await reach()) !== null, true)
-          const past = await reach()
-          assert.equal(typeof past, 'number', `mark ${step} on corner ${corner}`)
-          assert.equal(past <= SOLVER_REACH, true, `thickness ${thickness}: mark ${step} on corner ${corner} reaches ${past}px past the cells, more than ${SOLVER_REACH}`)
-        }
-        await clearMarks()
-      }
-    }
-    await setThickness(5)
-  })
 
   it('edge and corner marks are about 1.27x at 10 and 1.6x at 16 of their size at 5, and stay centred', async () => {
     const boxOf = (selector) => read((sel) => {

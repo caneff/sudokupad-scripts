@@ -71,10 +71,10 @@ Run for Dark Page (`dark-page.user.js`, issue #14); the notes above were read fr
   "Changed" is pixels inside the rectangle that differ with the script off; "clipped" is
   pixels the page draws outside the rectangle that are not the page's white. `horse_pill` was
   checked once by hand, not in `live/dark-page/dark-page.live.mjs`, since its file lives in another repo.
-- `body.setting-darkmode` changes `--body-bg`; the rectangle takes `var(--body-bg)`, so with
+- `body.setting-darkmode` changes `--body-bg`; the `#svgrenderer` box takes `var(--body-bg)`, so with
   SudokuPad's dark mode on it is dark and unchanged from SudokuPad's own rendering.
-- With no `#svgrenderer` on the page the script leaves the page alone (its stylesheet is
-  disabled), so a page of a matched site that is not a puzzle keeps its white.
+- With no `#svgrenderer` on the page no rule applies (every selector starts `body:has(#svgrenderer)`), so a page of a
+  matched site that is not a puzzle keeps its white.
 - Screenshots at real size: `dark-page/dark-page.png` (the sample puzzle as it opens, retaken with
   `dark-page/dark-page-screenshot.mjs`) and `dark-page/dark-page-outside-text.png` (a 6x6 with clue text outside the grid).
 - Control buttons on a dark page (Dark Page 0.3.0, checked live on 2026-11-03): SudokuPad's
