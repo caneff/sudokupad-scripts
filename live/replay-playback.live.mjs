@@ -196,8 +196,12 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS), 'draw')
   })
 
-  it('the replay button comes before Draw\'s among the tool buttons, as it does without Draw', async () => {
-    const ids = (page) => page.evaluate(() => [...document.querySelectorAll('.controls-tool > button')].map((b) => b.id))
+  it('the replay button comes before Draw\'s among the tool buttons on screen, as it does without Draw', async () => {
+    // The order on screen: the tool bar is a grid, and Draw's CSS `order` puts its button last whatever its place in the DOM.
+    const ids = (page) => page.evaluate(() => [...document.querySelectorAll('.controls-tool > button')]
+      .map((b, i) => ({ id: b.id, order: Number(window.getComputedStyle(b).order), i }))
+      .sort((a, b) => a.order - b.order || a.i - b.i)
+      .map((b) => b.id))
     const [withIds, withoutIds] = [await ids(withDraw.p), await ids(without.p)]
     assert.equal(withIds.indexOf('control-replay') < withIds.indexOf('control-draw'), true, withIds.join())
     assert.deepEqual(withIds.filter((id) => id !== 'control-draw'), withoutIds)
