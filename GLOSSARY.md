@@ -158,7 +158,7 @@
   browser under `ToolLetter_letterMode`. The button and `/` toggle it; No Tab Letters makes Tab do nothing in play instead.
 - **Draw Tool** — the script `draw-tool.user.js`, and the tool it adds to SudokuPad's tool buttons as Draw. It takes no
   tool key.
-- **drawing** — everything Draw Tool has put on one puzzle: its strokes and texts, oldest first. Saved per puzzle (keyed by
+- **drawing** — everything Draw Tool has put on one puzzle: its strokes, texts and shapes, oldest first. Saved per puzzle (keyed by
   the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles drawn on last; it is not in the replay, Undo
   does not touch it, and Restart and Clear all empty it.
 - **draw color** — one of Draw's nine colors, numbered 1 to 9, saved under `DrawTool_colors`. With none saved, Draw copies the
@@ -171,8 +171,14 @@
 - **text** — a short string typed into a drawing, in a draw color, with its own size (2 x the width + 8) and opacity, centred on the
   point clicked. It is typed in the **text box**, an input over the board that a click on the board opens, and a click on
   a text reopens.
+- **shape** — a rectangle or an ellipse in a drawing, drawn as an outline by a drag in Shape mode, in a draw color, with its own
+  width and opacity. Its box runs out to the edges of the cells the drag starts and ends in, or follows the drag exactly with
+  Alt held. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
+- **Shape mode** — what a left-drag with Draw draws: free lines (Off), rectangles or ellipses. The **Shape button**, between
+  Clear all and the gear, steps Off, Rectangle, Ellipse and shows the one in force; it is saved under `DrawTool_shape`. A click
+  still opens the text box in every mode.
 - **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
   (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.
   Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
-- **erase** — Draw's right-drag: every stroke and text the drag passes near is removed whole. Clear all erases the whole
+- **erase** — Draw's right-drag: every stroke and text the drag passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
   drawing, after asking.

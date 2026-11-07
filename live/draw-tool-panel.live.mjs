@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's panel on sudokupad.app: Draw's nine colors copied from the pen colors on first use, the
-// short color buttons, the controls row and the sliders inside the keypad's height at 1200 px and 390 px, the digit keys,
+// short color buttons, the controls row (Clear all, Shape and the gear) and the sliders inside the keypad's height at 1200 px and 390 px, the digit keys,
 // a hold that opens the color pickers and a recolor of items already drawn, the choices kept over a reload, and SudokuPad's
 // own keypad back under another tool.
 import { after, before, describe, it } from 'node:test'
@@ -11,7 +11,7 @@ import { openPage } from './page.mjs'
 import { gridPoint, mouseDrag, plantUnchecked } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
-const { CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, OPACITY_KEY, OPACITY_SLIDER, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, SLIDERS, STROKES, WIDTH_KEY } = draw
+const { CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, OPACITY_KEY, OPACITY_SLIDER, PICKER, SETTINGS_BUTTON, SHAPE_BUTTON, SIZE_SLIDER, SLIDERS, STROKES, WIDTH_KEY } = draw
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../draw-tool.user.js')
 // The pickers appear only when the hold timer fires.
 const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
@@ -57,26 +57,27 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 390, height: 844 
         style.disabled = false
         added.forEach((e) => { e.style.display = '' })
         return height
-      }, ['draw-tool-style', '.draw-tool-tray, .draw-tool-clear, .draw-tool-settings, .draw-tool-sliders'])
+      }, ['draw-tool-style', '.draw-tool-tray, .draw-tool-clear, .draw-tool-shape-mode, .draw-tool-settings, .draw-tool-sliders'])
       const panel = await keypadBox(p)
       assert.equal(Math.abs(panel.height - own) <= NEAR_PX, true, `the panel is ${panel.height} px tall, SudokuPad's keypad ${own} px`)
       assert.equal(panel.partsTop >= panel.top - NEAR_PX, true, `the top part ${panel.partsTop} starts inside the panel's top ${panel.top}`)
       assert.equal(panel.partsBottom <= panel.bottom + NEAR_PX, true, `the bottom part ${panel.partsBottom} ends inside the panel's bottom ${panel.bottom}`)
     })
 
-    it('the color buttons are short, three to a row, and Clear all and the gear sit full height in the row under them, with the sliders under that', async () => {
+    it('the color buttons are short, three to a row, and Clear all, Shape and the gear sit full height in the row under them, with the sliders under that', async () => {
       const rect = (selector) => p.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom } })
       const keys = await Promise.all(NINE.map((n) => rect(`.controls-input button[data-key="${n}"]`)))
-      const [clear, gear, sliders] = await Promise.all([CLEAR_BUTTON, SETTINGS_BUTTON, SLIDERS].map(rect))
+      const [clear, shape, gear, sliders] = await Promise.all([CLEAR_BUTTON, SHAPE_BUTTON, SETTINGS_BUTTON, SLIDERS].map(rect))
       for (const [i, k] of keys.entries()) assert.equal(Math.abs(k.height / k.width - 2.5 / 4) < 0.01, true, `key ${i + 1} is 2.5 by 4: ${JSON.stringify(k)}`)
       assert.deepEqual([keys[1].y, keys[2].y], [keys[0].y, keys[0].y], 'keys 1 to 3 share a row')
       assert.equal(keys[3].y > keys[0].y && keys[6].y > keys[3].y, true, 'keys 4 and 7 start the next rows')
-      for (const control of [clear, gear]) {
+      for (const control of [clear, shape, gear]) {
         assert.equal(Math.abs(control.width - keys[0].width) <= NEAR_PX && Math.abs(control.height - keys[0].width) <= NEAR_PX, true, `a full-size square: ${JSON.stringify(control)}`)
         assert.equal(control.y > keys[8].bottom, true, 'under the colors')
       }
       assert.equal(Math.abs(clear.x - keys[6].x) <= NEAR_PX, true, 'Clear all is under key 7')
-      assert.equal(Math.abs(gear.x - keys[8].x) <= NEAR_PX, true, 'the gear is under key 9, the Shape slot between them')
+      assert.equal(Math.abs(shape.x - keys[7].x) <= NEAR_PX, true, 'Shape is under key 8')
+      assert.equal(Math.abs(gear.x - keys[8].x) <= NEAR_PX, true, 'the gear is under key 9')
       assert.equal(sliders.y >= clear.bottom, true, 'the sliders are under the controls')
     })
 
@@ -269,7 +270,7 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
   it('another tool gets SudokuPad\'s own keypad back, and its digit keys enter digits again', async () => {
     await selectEmptyCell()
     assert.equal(await p.locator(SIZE_SLIDER).count(), 0, 'no Size slider')
-    assert.equal(await p.locator(`${CLEAR_BUTTON}, ${SETTINGS_BUTTON}`).count(), 0, 'no Clear all or gear')
+    assert.equal(await p.locator(`${CLEAR_BUTTON}, ${SHAPE_BUTTON}, ${SETTINGS_BUTTON}`).count(), 0, 'no Clear all, Shape or gear')
     const buttons = await keypad()
     assert.deepEqual(buttons.map((b) => b.swatch), Array(9).fill(null), 'no color lines')
     assert.deepEqual(buttons.map((b) => b.current), Array(9).fill(false), 'no color marked')

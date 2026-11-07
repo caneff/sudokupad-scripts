@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.10.0
+// @version      0.11.0
 // @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,11 +16,20 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.10.0'
+  const VERSION = '0.11.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
-  // Board units: SudokuPad's board SVG draws a cell 64 wide. Test Markup's brush is 3.
+  // Board units: SudokuPad's board SVG draws a cell 64 wide, from (0, 0). Test Markup's brush is 3.
+  const CELL_SIZE = 64
+  // The shapes a drag can draw, as a shape item saves them.
+  const RECT = 'rect'
+  const ELLIPSE = 'ellipse'
+  const SHAPES = [RECT, ELLIPSE]
+  // The Shape button's modes in the order it steps through them: Off draws free lines.
+  const SHAPE_OFF = 'off'
+  const SHAPE_MODES = [SHAPE_OFF, ...SHAPES]
+  const SHAPE_KEY = 'DrawTool_shape'
   const MIN_WIDTH = 1
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
@@ -71,6 +80,8 @@
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
   const SETTINGS_CLASS = 'draw-tool-settings'
+  const SHAPE_BUTTON_CLASS = 'draw-tool-shape-mode'
+  const SHAPE_ITEM_CLASS = 'draw-tool-shape'
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
   const SLIDER_ROW_CLASS = 'draw-tool-slider'
@@ -97,11 +108,14 @@
   const ERASE_TOLERANCE = 4
   // Straight pieces per curve when a stroke's drawn line is hit-tested.
   const CURVE_STEPS = 8
+  // Straight pieces round an ellipse's outline when it is hit-tested.
+  const ELLIPSE_STEPS = 64
   const KEPT_PUZZLES = 50
   const PRIMARY_BUTTON = 0
   const SECONDARY_BUTTON = 2
-  const SHIFT_KEY = 'Shift'
-  const BUTTON_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/></svg>'
+  const HELD_KEYS = ['Shift', 'Alt']
+  const FREE_LINE_ICON = '<path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/>'
+  const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${FREE_LINE_ICON}</svg>`
 
   const distanceToSegment = ([px, py], [ax, ay], [bx, by]) => {
     const dx = bx - ax
@@ -174,16 +188,29 @@
     ? 0
     : Math.min(distanceToSegment(a, c, d), distanceToSegment(b, c, d), distanceToSegment(c, a, b), distanceToSegment(d, a, b))
 
-  // Whether a right-drag from `from` to `to` passes within the tolerance of the line's edge.
-  function touchesStroke (item, from, to) {
-    const reach = ERASE_TOLERANCE + item.width / 2
-    const line = drawnLine(item.points)
+  // Whether a right-drag from `from` to `to` passes within the tolerance of the edge of a line drawn `width` wide.
+  function touchesLine (line, width, from, to) {
+    const reach = ERASE_TOLERANCE + width / 2
     if (line.length === 1) return distanceToSegment(line[0], from, to) <= reach
     for (let i = 1; i < line.length; i++) {
       if (segmentsDistance(from, to, line[i - 1], line[i]) <= reach) return true
     }
     return false
   }
+
+  const touchesStroke = (item, from, to) => touchesLine(drawnLine(item.points), item.width, from, to)
+
+  // A shape's outline as a closed line of straight pieces; an ellipse's are close enough to its curve to hit-test.
+  function shapeOutline ({ shape, box: [left, top, right, bottom] }) {
+    if (shape === RECT) return [[left, top], [right, top], [right, bottom], [left, bottom], [left, top]]
+    const [cx, cy, rx, ry] = [(left + right) / 2, (top + bottom) / 2, (right - left) / 2, (bottom - top) / 2]
+    return Array.from({ length: ELLIPSE_STEPS + 1 }, (_, i) => {
+      const a = (2 * Math.PI * i) / ELLIPSE_STEPS
+      return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]
+    })
+  }
+
+  const touchesShape = (item, from, to) => touchesLine(shapeOutline(item), item.width, from, to)
 
   // The box a text takes on the board, centred on its point: the text is drawn anchored at its middle.
   function textBox (item) {
@@ -211,7 +238,8 @@
     return corners.some((corner, i) => segmentsCross(from, to, corner, corners[(i + 1) % 4]))
   }
 
-  const touchesItem = (item, from, to) => item.kind === 'text' ? touchesText(item, from, to) : touchesStroke(item, from, to)
+  const TOUCHES = { stroke: touchesStroke, text: touchesText, shape: touchesShape }
+  const touchesItem = (item, from, to) => TOUCHES[item.kind](item, from, to)
 
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
@@ -225,6 +253,8 @@
   const onSlider = (value, min, max, step) => isNumber(value) && value >= min && value <= max && Number.isInteger((value - min) / step)
   const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
+  const readShapeMode = (saved) => SHAPE_MODES.includes(saved) ? saved : SHAPE_OFF
+  const nextShapeMode = (mode) => SHAPE_MODES[(SHAPE_MODES.indexOf(mode) + 1) % SHAPE_MODES.length]
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
   // Board units, as a text's height: the line width's slider also sets the text size.
@@ -407,11 +437,19 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
+  // A shape's box as [left, top, right, bottom]: out to the edges of the cells `from` and `to` lie in, or the drag's own box when `exact`.
+  function shapeBox ([ax, ay], [bx, by], exact) {
+    const low = (a, b) => exact ? Math.min(a, b) : Math.floor(Math.min(a, b) / CELL_SIZE) * CELL_SIZE
+    const high = (a, b) => exact ? Math.max(a, b) : (Math.floor(Math.max(a, b) / CELL_SIZE) + 1) * CELL_SIZE
+    return [low(ax, bx), low(ay, by), high(ax, bx), high(ay, by)].map(roundToTenth)
+  }
+
   const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
 
-  // A drawing is a list of items, each with a kind: a stroke or a text. Their points are in board units.
+  // A drawing is a list of items, each with a kind: a stroke, a text or a shape. Their points and boxes are in board units.
   const strokeItem = (points, color, width, opacity) => ({ kind: 'stroke', color, width, opacity, points: points.map(([x, y]) => [roundToTenth(x), roundToTenth(y)]) })
   const textItem = ([x, y], text, color, size, opacity) => ({ kind: 'text', color, size, opacity, text, at: [roundToTenth(x), roundToTenth(y)] })
+  const shapeItem = (shape, box, color, width, opacity) => ({ kind: 'shape', shape, color, width, opacity, box })
 
   const isStroke = (item) => item !== null && typeof item === 'object' && item.kind === 'stroke' &&
     penColor(item.color) !== undefined && isWidth(item.width) && (item.opacity === undefined || isOpacity(item.opacity)) && Array.isArray(item.points) && item.points.length > 0 &&
@@ -419,11 +457,15 @@
   const isText = (item) => item !== null && typeof item === 'object' && item.kind === 'text' &&
     penColor(item.color) !== undefined && isTextSize(item.size) && (item.opacity === undefined || isOpacity(item.opacity)) && typeof item.text === 'string' && item.text.length > 0 &&
     Array.isArray(item.at) && item.at.length === 2 && item.at.every(isNumber)
+  // A shape is newer than opacity, so it always has one.
+  const isShape = (item) => item !== null && typeof item === 'object' && item.kind === 'shape' && SHAPES.includes(item.shape) &&
+    penColor(item.color) !== undefined && isWidth(item.width) && isOpacity(item.opacity) && Array.isArray(item.box) && item.box.length === 4 &&
+    item.box.every(isNumber) && item.box[0] <= item.box[2] && item.box[1] <= item.box[3]
 
   // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
   function readDrawing (saved) {
     if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((item) => isStroke(item) || isText(item))) throw new Error(`the saved drawing is not a list of strokes and texts: ${JSON.stringify(saved).slice(0, 200)}`)
+    if (!Array.isArray(saved) || !saved.every((item) => isStroke(item) || isText(item) || isShape(item))) throw new Error(`the saved drawing is not a list of strokes, texts and shapes: ${JSON.stringify(saved).slice(0, 200)}`)
     return saved
   }
 
@@ -467,7 +509,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -519,6 +561,23 @@
     return path
   }
 
+  function newShape (layer, item) {
+    const [left, top, right, bottom] = item.box
+    const element = document.createElementNS(SVG_NS, item.shape === RECT ? 'rect' : 'ellipse')
+    const geometry = item.shape === RECT
+      ? { x: left, y: top, width: right - left, height: bottom - top }
+      : { cx: (left + right) / 2, cy: (top + bottom) / 2, rx: (right - left) / 2, ry: (bottom - top) / 2 }
+    for (const [name, value] of Object.entries(geometry)) element.setAttribute(name, coordinate(value))
+    element.setAttribute('class', SHAPE_ITEM_CLASS)
+    element.setAttribute('fill', 'none')
+    element.setAttribute('stroke-width', String(item.width))
+    element.setAttribute('stroke-linejoin', 'round')
+    element.setAttribute('stroke-opacity', String(item.opacity / 100))
+    element.style.stroke = itemColor(item.color)
+    layer.appendChild(element)
+    return element
+  }
+
   function newText (layer, item) {
     const text = document.createElementNS(SVG_NS, 'text')
     text.setAttribute('class', 'draw-tool-text')
@@ -535,7 +594,7 @@
   }
 
   // Pen Tool Extras' pen panel, in the same sizes: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
-  // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape slot and the settings gear at the full 4rem, and the sliders across the rest. The tray
+  // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape button and the settings gear at the full 4rem, and the sliders across the rest. The tray
   // sits behind the last two rows; it is placed in their area but takes no cell. Each color button shows a line in its draw color, cut out of the button so a recolor follows.
   const rem = (value) => Math.round(value * 100) / 100
   const PANEL_BUTTON_REM = 4
@@ -555,8 +614,8 @@
   const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
   const SLIDER_ROW_HEIGHT_REM = 1.4
   const SWATCH_REM = 2.4
-  // The column of each control in its row; the Shape slot, column 2, is left empty.
-  const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SETTINGS_CLASS]: 3 }
+  // The column of each control in its row.
+  const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SHAPE_BUTTON_CLASS]: 2, [SETTINGS_CLASS]: 3 }
   const GREY = 'rgb(124, 124, 124)'
   const SWATCH_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2 12H22' stroke='black' stroke-width='3' stroke-linecap='round'/></svg>"
   const SWATCH_MASK = `url("data:image/svg+xml,${encodeURIComponent(SWATCH_SVG).replace(/'/g, '%27')}") center / 100% no-repeat`
@@ -579,9 +638,9 @@
     `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
     `${PANEL} button.${CLEAR_CLASS} { font-size: 0.85rem; line-height: 1.15; color: ${GREY}; }`,
-    `.${SETTINGS_CLASS} svg { width: 2.6rem; height: 2.6rem; }`,
-    // SudokuPad's CSS fills every 'svg path', which would turn the gear's lines into a blob.
-    `.${SETTINGS_CLASS} path, .${SETTINGS_CLASS} circle { fill: none !important; }`,
+    `:is(.${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
+    // SudokuPad's CSS fills every 'svg path', which would turn the icons' lines into blobs.
+    `:is(.${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse) { fill: none !important; }`,
     `.${TRAY_CLASS} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
     // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each '.button-row', which has no box here, so the rows are swapped by grid row.
     ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} :is(button[data-key="${key}"], .${PICKER_CLASS}[data-color="${key}"]) { grid-row: ${row} / span 1; }`)),
@@ -607,9 +666,17 @@
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   const SETTINGS_LABEL = 'Draw Tool settings'
+  // The Shape button shows the mode in force: a free line, a rectangle or an ellipse.
+  const SHAPE_LABELS = { [SHAPE_OFF]: 'Shape: off, free lines', [RECT]: 'Shape: rectangle', [ELLIPSE]: 'Shape: ellipse' }
+  const SHAPE_ICONS = {
+    [SHAPE_OFF]: FREE_LINE_ICON,
+    [RECT]: '<rect x="4" y="5" width="16" height="14" rx="1"/>',
+    [ELLIPSE]: '<ellipse cx="12" cy="12" rx="9" ry="7"/>'
+  }
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
   let opacity = DEFAULT_OPACITY
+  let shapeMode = SHAPE_OFF
   // Draw's nine colors, or null until they are first copied from the pen colors.
   let colors = null
   // The elements the panel adds to SudokuPad's keypad while Draw is current.
@@ -803,6 +870,13 @@
     })
   }
 
+  function showShapeMode (button) {
+    button.dataset.mode = shapeMode
+    button.title = SHAPE_LABELS[shapeMode]
+    button.setAttribute('aria-label', SHAPE_LABELS[shapeMode])
+    button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHAPE_ICONS[shapeMode]}</svg>`
+  }
+
   function showPanel () {
     const tray = document.createElement('div')
     tray.className = TRAY_CLASS
@@ -817,6 +891,14 @@
     settings.setAttribute('aria-label', SETTINGS_LABEL)
     settings.innerHTML = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
     settings.addEventListener('click', openDialog)
+    const shapeButton = document.createElement('button')
+    shapeButton.className = SHAPE_BUTTON_CLASS
+    showShapeMode(shapeButton)
+    shapeButton.addEventListener('click', () => {
+      shapeMode = nextShapeMode(shapeMode)
+      Framework.setData(SHAPE_KEY, shapeMode)
+      showShapeMode(shapeButton)
+    })
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
     sliders.append(
@@ -832,7 +914,7 @@
         Framework.setData(OPACITY_KEY, opacity)
       }
     })
-    panelParts = [tray, clear, settings, sliders]
+    panelParts = [tray, clear, shapeButton, settings, sliders]
     keypad().append(...panelParts)
   }
 
@@ -897,7 +979,8 @@
     })
   }
 
-  let stroke = null
+  // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
+  let drag = null
   // A right-drag in progress: the last point it reached, and whether it has erased an item yet.
   let erasing = null
   // The open text box: the index of the text it reopened, or -1 for a new one, the item, and the input the solver types in.
@@ -918,6 +1001,7 @@
     drawing.forEach((item, i) => {
       if (editing && editing.index === i) return
       if (item.kind === 'text') newText(layer, item)
+      else if (item.kind === 'shape') newShape(layer, item)
       else newStroke(layer, item.color, item.width, itemOpacity(item)).setAttribute('d', strokePath(item.points))
     })
   }
@@ -1028,14 +1112,34 @@
     finishText()
   }
 
-  // A stroke or erase in progress ends as a release ends it; a press that never moved opens no text box.
+  // A drag or erase in progress ends as a release ends it; a press that never moved opens no text box.
   function endGesture () {
     if (erasing) endErase()
-    if (!stroke) return
-    if (isClick(stroke.points)) {
-      stroke.path.remove()
-      stroke = null
-    } else endStroke(stroke.straight)
+    if (!drag) return
+    if (isClick(drag.points)) dropDrag()
+    else endDrag(drag.shape ? drag.exact : drag.straight)
+  }
+
+  function dropDrag () {
+    drag.element?.remove()
+    drag = null
+  }
+
+  // `exact` is Alt for a shape and Shift for a free line, as held at the release.
+  function endDrag (exact) {
+    if (drag.shape) endShape(exact)
+    else endStroke(exact)
+  }
+
+  const dragShape = (exact) => shapeItem(drag.shape, shapeBox(drag.points[0], drag.points[drag.points.length - 1], exact), drag.color, drag.width, drag.opacity)
+
+  function endShape (exact) {
+    const item = dragShape(exact)
+    drag.element?.remove()
+    newShape(drag.layer, item)
+    drag = null
+    drawing.push(item)
+    save()
   }
 
   function endErase () {
@@ -1045,8 +1149,8 @@
   }
 
   function endStroke (straight) {
-    const { path, points, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = stroke
-    stroke = null
+    const { element: path, points, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = drag
+    drag = null
     const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
     path.setAttribute('d', strokePath(item.points))
     drawing.push(item)
@@ -1054,7 +1158,7 @@
   }
 
   function cancelInput () {
-    stroke = null
+    drag = null
     erasing = null
     if (editing) editing.input.remove()
     editing = null
@@ -1116,10 +1220,10 @@
   const tool = {
     name: TOOL_NAME,
     isTool: true,
-    // A press that starts a stroke returns true, so SudokuPad starts no drag and selects no cell. A press that
+    // A press that starts a drag returns true, so SudokuPad starts no drag of its own and selects no cell. A press that
     // finished a text box does nothing else on the board.
     handleInputdown (event) {
-      if (event.type !== 'mousedown' || stroke || erasing) return false
+      if (event.type !== 'mousedown' || drag || erasing) return false
       if (pressFinishedText) return onBoard(event)
       if (!onBoard(event)) return false
       if (event.button === SECONDARY_BUTTON) {
@@ -1130,13 +1234,18 @@
       }
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
-      stroke = { layer, path: newStroke(layer, color, width, opacity), color, width, opacity, straight: false, points: [toBoard(layer, event)] }
-      stroke.path.setAttribute('d', strokePath(stroke.points))
+      const shape = shapeMode === SHAPE_OFF ? null : shapeMode
+      drag = { layer, shape, element: null, color, width, opacity, straight: false, exact: false, points: [toBoard(layer, event)] }
+      // A shape shows only once the press moves, so a click that opens a text box flashes no box.
+      if (!shape) {
+        drag.element = newStroke(layer, color, width, opacity)
+        drag.element.setAttribute('d', strokePath(drag.points))
+      }
       return true
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
     handleInputMove (event) {
-      if (event.type === 'mousemove' && (erasing || stroke) && !(event.buttons & (erasing ? SECONDARY_HELD : PRIMARY_HELD))) {
+      if (event.type === 'mousemove' && (erasing || drag) && !(event.buttons & (erasing ? SECONDARY_HELD : PRIMARY_HELD))) {
         endGesture()
         return false
       }
@@ -1146,10 +1255,16 @@
         erasing.last = at
         return true
       }
-      if (!stroke) return false
-      stroke.points.push(toBoard(stroke.layer, event))
-      stroke.straight = event.shiftKey
-      stroke.path.setAttribute('d', strokePath(stroke.straight ? straightLine(stroke.points) : stroke.points))
+      if (!drag) return false
+      drag.points.push(toBoard(drag.layer, event))
+      if (drag.shape) {
+        drag.exact = event.altKey
+        drag.element?.remove()
+        drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape(drag.exact))
+      } else {
+        drag.straight = event.shiftKey
+        drag.element.setAttribute('d', strokePath(drag.straight ? straightLine(drag.points) : drag.points))
+      }
       return true
     },
     handleInputup (event) {
@@ -1157,16 +1272,15 @@
         endErase()
         return true
       }
-      if (!stroke) return false
+      if (!drag) return false
       // A text box opens only on the release of Draw's own press, never on a release or click alone.
-      if (isClick(stroke.points)) {
-        const [at] = stroke.points
-        stroke.path.remove()
-        stroke = null
+      if (isClick(drag.points)) {
+        const [at] = drag.points
+        dropDrag()
         openText(at)
         return true
       }
-      endStroke(event.shiftKey)
+      endDrag(drag.shape ? event.altKey : event.shiftKey)
       return true
     },
     handleToolEnter () {
@@ -1188,8 +1302,9 @@
       return true
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch
-    // to Corner for as long as it is held (that tool's tempKey), and Shift+drag would never reach Draw.
-    handleKeydown (event) { return Framework.app.tool === TOOL_NAME && event.key === SHIFT_KEY }
+    // to Corner for as long as it is held (that tool's tempKey), and Alt to Letter or Corner by the Letter Tool Hotkey
+    // setting, and a drag with either held would never reach Draw.
+    handleKeydown (event) { return Framework.app.tool === TOOL_NAME && HELD_KEYS.includes(event.key) }
   }
 
   // Every tool button is appended to the bar when it is added (the pen tool's on its setting, a script's whenever it
@@ -1207,6 +1322,7 @@
     color = readColor(Framework.getData(COLOR_KEY))
     width = readWidth(Framework.getData(WIDTH_KEY))
     opacity = readOpacity(Framework.getData(OPACITY_KEY))
+    shapeMode = readShapeMode(Framework.getData(SHAPE_KEY))
     colors = readDrawColors(Framework.getData(COLORS_KEY))
     showColors()
     const style = document.createElement('style')
