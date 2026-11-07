@@ -55,8 +55,8 @@ const tools = (p) => {
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
   const rowNames = () => p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label')))
   const selectedRow = () => p.$$eval(ROWS, (es) => es.findIndex((e) => e.getAttribute('aria-checked') === 'true'))
-  // The row carrying a pressed tag of the given kind (`tag-cells` or `tag-digits`).
-  const taggedRow = (act) => p.$$eval(`${ROWS} [data-act=${act}]`, (es) => es.findIndex((e) => e.getAttribute('aria-pressed') === 'true'))
+  const cellProfile = () => p.locator(`${EDITOR} select[data-role=cell-profile]`).inputValue()
+  const pulldownNames = (role) => p.$$eval(`${EDITOR} select[data-role=${role}] option`, (es) => es.map((e) => e.textContent))
   const label = () => labelOn(p)
   const openMenuByArrow = async () => {
     await p.click(ARROW)
@@ -66,7 +66,7 @@ const tools = (p) => {
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
     await menu().waitFor({ state: 'detached' })
   }
-  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, openEditor, rowNames, selectedRow, taggedRow, label, openMenuByArrow, pick }
+  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, openEditor, rowNames, selectedRow, cellProfile, pulldownNames, label, openMenuByArrow, pick }
 }
 
 describe('profiles on a fresh install, injected after Start Puzzle', { concurrency: false }, () => {
@@ -437,11 +437,11 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
 
   // Real key presses into the name field: SudokuPad listens for keys on the page, and a digit or letter
   // must reach the field.
-  const NAME_BOX = `${EDITOR} [data-role=profile-name]`
+  const NAME_FIELD = `${EDITOR} [data-role=profile-name]`
   const typeName = async (text) => {
-    await p.locator(NAME_BOX).press('Control+a')
-    await p.locator(NAME_BOX).pressSequentially(text)
-    assert.equal(await p.inputValue(NAME_BOX), text)
+    await p.locator(NAME_FIELD).press('Control+a')
+    await p.locator(NAME_FIELD).pressSequentially(text)
+    assert.equal(await p.inputValue(NAME_FIELD), text)
   }
   const handle = (i) => p.locator(`${ROWS} [data-role=handle]`).nth(i)
   const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
@@ -474,38 +474,40 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await touch(cdp, 'touchEnd', start.x, start.y)
   }
 
-  it('the dialog lists each profile with its colors and shown digits (three at most), a count, the selected radio and an Active tag on the active profile', async () => {
+  it('the dialog lists each profile with its colors and shown digits (three at most), a count and the selected radio, with no tag, and the pulldowns name the same profiles', async () => {
     await t.openEditor()
     assert.deepEqual(await t.rowNames(), ['Odd/Even', 'Low/5/High', 'Four'])
     assert.equal(await t.selectedRow(), 0)
-    assert.equal(await t.taggedRow('tag-cells'), 0)
-    assert.deepEqual(await p.$$eval(`${ROWS} .cbd-tag`, (es) => es.map((e) => e.textContent)), ['Active', 'Active', 'Active'])
+    assert.equal(await t.cellProfile(), '0')
+    assert.equal(await p.locator(`${ROWS} button:not([data-act=delete])`).count(), 0)
+    assert.deepEqual(await t.pulldownNames('cell-profile'), ['Odd/Even', 'Low/5/High', 'Four'])
+    assert.deepEqual(await t.pulldownNames('digit-profile'), ['Same as cell', 'Odd/Even', 'Low/5/High', 'Four', 'None'])
     assert.match(await heading(), /3 of 6/)
-    assert.equal(await p.inputValue(NAME_BOX), 'Odd/Even')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Odd/Even')
     assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4', '1', '5', '9', '1', '3', '5'])
   })
 
   const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()
 
-  it('a click anywhere on a row but its handle, tags and × selects it without making it active: one row is highlighted, the name box and the groups follow it', async () => {
+  it('a click anywhere on a row but its handle, name field and × selects it without making it the cell profile: one row is highlighted, the name field and the groups follow it', async () => {
     assert.equal(await groupCount(), 2)
     await p.click(`${ROWS}:nth-child(2) [data-role=chip]`)
     assert.equal(await t.selectedRow(), 1)
     assert.equal(await p.locator(`${ROWS}[aria-checked=true]`).count(), 1)
     assert.equal(await groupCount(), 3)
-    assert.equal(await p.inputValue(NAME_BOX), 'Low/5/High')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Low/5/High')
     await p.click(`${ROWS}:nth-child(3)`, { position: { x: 4, y: 4 } })
     assert.equal(await t.selectedRow(), 2)
     assert.equal(await groupCount(), 4)
-    assert.equal(await t.taggedRow('tag-cells'), 0)
+    assert.equal(await t.cellProfile(), '0')
   })
 
-  it('an Active tag click makes that profile active without selecting its row', async () => {
-    await p.click(`${ROWS}:nth-child(2) [data-act=tag-cells]`)
-    assert.equal(await t.taggedRow('tag-cells'), 1)
+  it('the Cell pulldown makes a profile the cell profile without selecting its row', async () => {
+    await p.selectOption(`${EDITOR} select[data-role=cell-profile]`, '1')
+    assert.equal(await t.cellProfile(), '1')
     assert.equal(await t.selectedRow(), 2)
-    await p.click(`${ROWS}:nth-child(1) [data-act=tag-cells]`)
-    assert.equal(await t.taggedRow('tag-cells'), 0)
+    await p.selectOption(`${EDITOR} select[data-role=cell-profile]`, '0')
+    assert.equal(await t.cellProfile(), '0')
   })
 
   it('Enter on a focused row selects it, and the row keeps the focus', async () => {
@@ -531,9 +533,10 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.click(`${ROWS}:nth-child(1)`)
   })
 
-  it('the buttons row is Copy settings, Paste settings, Cancel then Save, Save filled purple, and the page pulldown has the dialog\'s own look', async () => {
+  it('the buttons row is Cancel then Save, Save filled purple, the title row holds the two settings icons, and the page pulldown has the dialog\'s own look', async () => {
     await openGroup(p, 0)
-    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Copy settings', 'Paste settings', 'Cancel', 'Save'])
+    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Cancel', 'Save'])
+    assert.deepEqual(await p.$$eval('.cbd-title-row button', (bs) => bs.map((b) => b.getAttribute('aria-label'))), ['Copy settings', 'Paste settings'])
     assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
     assert.match(await p.$eval(`${EDITOR} select[data-act=page]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
   })
@@ -584,8 +587,9 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await t.openEditor()
     await dragWithTouch(2, 0)
     assert.equal(await t.selectedRow(), 1)
-    assert.equal(await t.taggedRow('tag-cells'), 1)
+    assert.equal(await t.cellProfile(), '1')
     assert.deepEqual(await t.rowNames(), ['Four', 'Odd/Even', 'Low/5/High'])
+    assert.deepEqual(await t.pulldownNames('cell-profile'), ['Four', 'Odd/Even', 'Low/5/High'])
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await settle(t.names, ['Four', 'Odd/Even', 'Low/5/High']), ['Four', 'Odd/Even', 'Low/5/High'])
     assert.equal((await t.getState()).active, 1)
@@ -594,14 +598,15 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.keyboard.press('Escape')
   })
 
-  it('+ New profile copies the selected profile as "<name> copy", selects it and focuses its name box; Cancel drops it', async () => {
+  it('+ New profile copies the selected profile as "<name> copy", selects it and focuses the name in its row; Cancel drops it', async () => {
     await t.openEditor()
     await p.click(`${EDITOR} button[data-act=new-profile]`)
     assert.deepEqual(await t.rowNames(), ['Four', 'Odd/Even', 'Low/5/High', 'Odd/Even copy'])
     assert.equal(await t.selectedRow(), 3)
-    assert.equal(await t.taggedRow('tag-cells'), 1)
+    assert.equal(await t.cellProfile(), '1')
+    assert.deepEqual(await t.pulldownNames('cell-profile'), ['Four', 'Odd/Even', 'Low/5/High', 'Odd/Even copy'])
     assert.match(await heading(), /4 of 6/)
-    assert.equal(await p.inputValue(NAME_BOX), 'Odd/Even copy')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Odd/Even copy')
     assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-role')), 'profile-name')
     // A copy of Odd/Even: its shown digits are 5 and 4.
     assert.deepEqual(await p.$$eval(`${ROWS}:nth-child(4) [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4'])
@@ -609,20 +614,22 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.deepEqual(await t.names(), ['Four', 'Odd/Even', 'Low/5/High'])
   })
 
-  it('typing in the name box renames the selected profile and its row, a box emptied a key at a time keeps the old name, and Cancel drops it', async () => {
+  it('typing in the name in the selected row renames the profile, its row and the pulldowns\' options, a box emptied a key at a time keeps the old name, and Cancel drops it', async () => {
     await t.openEditor()
     await p.click(`${ROWS}:nth-child(1)`, { position: { x: 4, y: 4 } })
     await typeName('Mine')
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
+    assert.deepEqual(await t.pulldownNames('cell-profile'), ['Mine', 'Odd/Even', 'Low/5/High'])
+    assert.deepEqual(await t.pulldownNames('digit-profile'), ['Same as cell', 'Mine', 'Odd/Even', 'Low/5/High', 'None'])
     await p.click(`${ROWS}:nth-child(3)`, { position: { x: 4, y: 4 } })
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
     await p.click(`${ROWS}:nth-child(1)`, { position: { x: 4, y: 4 } })
-    await p.locator(NAME_BOX).press('End')
-    for (let i = 0; i < 'Mine'.length; i++) await p.locator(NAME_BOX).press('Backspace')
-    assert.equal(await p.inputValue(NAME_BOX), '')
+    await p.locator(NAME_FIELD).press('End')
+    for (let i = 0; i < 'Mine'.length; i++) await p.locator(NAME_FIELD).press('Backspace')
+    assert.equal(await p.inputValue(NAME_FIELD), '')
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
-    await p.locator(NAME_BOX).press('Enter')
-    assert.equal(await p.inputValue(NAME_BOX), 'Mine')
+    await p.locator(NAME_FIELD).press('Enter')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Mine')
     assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-role')), 'profile-name')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await t.names(), ['Four', 'Odd/Even', 'Low/5/High'])

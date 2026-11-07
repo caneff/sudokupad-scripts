@@ -41,11 +41,12 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
   const getMode = () => read((key) => Framework.getData(key), MODE_KEY)
   const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
-  const chooseProfile = (index) => p.click(`${EDITOR} [data-act=tag-cells][data-index="${index}"]`)
+  const chooseProfile = (index) => p.selectOption(`${EDITOR} select[data-role=cell-profile]`, String(index))
   const label = () => labelOn(p)
   const labelLook = () => p.locator(LABEL).evaluate((e) => `${window.getComputedStyle(e).color} ${window.getComputedStyle(e).fontWeight}`)
-  const modeChoice = (mode) => p.locator(`${EDITOR} button[data-role="mode-draft"][data-mode="${mode}"]`)
-  const modeIsChosen = async (mode) => (await modeChoice(mode).getAttribute('aria-checked')) === 'true'
+  const MODE_SELECT = `${EDITOR} select[data-role="mode-draft"]`
+  const chooseMode = (mode) => p.selectOption(MODE_SELECT, mode)
+  const modeIsChosen = async (mode) => (await p.locator(MODE_SELECT).inputValue()) === mode
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
   const paint = (r, c, key) => paintOn(p, r, c, key)
   const undo = () => p.click('#control-undo')
@@ -318,19 +319,14 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await givensColored(), GIVEN_COUNT)
   })
 
-  it('the dialog\'s mode choice is at the top, under "Use digit colors", offers the four modes, opens on the mode in force, and Cancel leaves the mode as it was', async () => {
+  it('the dialog\'s Mode pulldown is the first of the three at the top, offers the four modes, opens on the mode in force, and Cancel leaves the mode as it was', async () => {
     await openEditor()
-    const roles = await p.locator(`${EDITOR} input, ${EDITOR} button, ${EDITOR} [data-act]`).evaluateAll((es) => es.slice(0, 3).map((e) => e.dataset.role))
-    assert.deepEqual(roles, ['use-digit-colors', 'sync', 'mode-draft'])
-    assert.deepEqual(await p.locator(`${EDITOR} button[data-role="mode-draft"]`).evaluateAll((es) => es.map((e) => e.dataset.mode)), ['cell', 'digit', 'both', 'off'])
+    const roles = await p.locator(`${EDITOR} select`).evaluateAll((es) => es.slice(0, 3).map((e) => e.dataset.role))
+    assert.deepEqual(roles, ['mode-draft', 'cell-profile', 'digit-profile'])
+    assert.equal(await p.locator(`${EDITOR} input[type=checkbox], ${EDITOR} button[data-role="mode-draft"]`).count(), 0)
+    assert.deepEqual(await p.locator(`${MODE_SELECT} option`).evaluateAll((es) => es.map((e) => e.value)), ['cell', 'digit', 'both', 'off'])
     assert.equal(await modeIsChosen('cell'), true)
-    await modeChoice('off').click()
-    // One radio group: only the chosen mode is a tab stop, and an arrow key moves the choice.
-    assert.deepEqual(await p.locator(`${EDITOR} button[data-role="mode-draft"]`).evaluateAll((es) => es.map((e) => e.tabIndex)), [-1, -1, -1, 0])
-    await p.keyboard.press('ArrowLeft')
-    assert.equal(await modeIsChosen('both'), true)
-    assert.equal(await p.evaluate(() => document.activeElement.dataset.mode), 'both')
-    await p.keyboard.press('ArrowRight')
+    await chooseMode('off')
     assert.equal(await modeIsChosen('off'), true)
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.equal(await label(), 'CELL')
@@ -339,7 +335,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
 
   it('Save with Off chosen steps to Off as a press would: every group color comes off, in one undo step', async () => {
     await openEditor()
-    await modeChoice('off').click()
+    await chooseMode('off')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'OFF'), 'OFF')
     assert.equal(await getMode(), 'off')
@@ -360,7 +356,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
 
   it('Save with Cell chosen steps to Cell and colors the givens', async () => {
     await openEditor()
-    await modeChoice('cell').click()
+    await chooseMode('cell')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'CELL'), 'CELL')
     assert.equal(await settle(getMode, 'cell'), 'cell')
@@ -392,7 +388,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
     await openEditor()
     await chooseProfile(1)
-    await modeChoice('cell').click()
+    await chooseMode('cell')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'CELL'), 'CELL')
     assert.deepEqual(await settle(() => colorsAt(0, 6), ['9']), ['9'])
@@ -403,7 +399,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await colorsAt(0, 0), ['5'])
     await openEditor()
     await chooseProfile(0)
-    await modeChoice('off').click()
+    await chooseMode('off')
     await closeDialogWith(p, 'Save', EDITOR)
     assert.equal(await settle(label, 'OFF'), 'OFF')
     assert.equal(await settle(coloredCount, 0), 0)
