@@ -74,7 +74,7 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.equal(byDigit.indexAfterMove(1, 2, 0), 2)
   assert.equal(byDigit.indexAfterDelete(2, 0, 3), 1)
 
-  // Chips stop at three in the menu, the list and, since #354, the button's icon.
+  // Chips stop at three in the menu, the list and the button's icon.
   const eachRow = (html, marker) => html.split(marker).find((row) => row.includes('Each digit'))
   assert.equal(count(eachRow(renderProfiles(STATE, colorOf, 0), 'data-role="profile-row"'), /data-role="chip"/g), 3)
   assert.equal(count(eachRow(renderMenu(STATE, colorOf), 'data-role="menu-row"'), /data-role="chip"/g), 3)

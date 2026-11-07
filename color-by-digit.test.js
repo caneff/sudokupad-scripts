@@ -536,7 +536,7 @@ const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+
 // Each row of the menu, in order: its name, and the attributes of the elements in it that pick.
 const menuRows = (html) => html.split('data-role="menu-row"').slice(1).map((row) => ({
   name: /data-role="name"[^>]*>([^<]*)</.exec(row)[1],
-  picks: [...row.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`),
+  picks: menuPicks(row),
   chipWidth: /<span data-role="chip-column" style="([^"]*)"/.exec(row)[1]
 }))
 
@@ -553,11 +553,11 @@ test('sync: unsynced, the menu is one list whose rows each end in a Cell dot and
 
 test('sync: the menu\'s dot columns and their heads have one width, so each head sits centred over its dots', () => {
   const html = renderMenu(apart, colorFor)
-  const widths = [...html.matchAll(/data-role="(?:column-head|dot-cell)" style="[^"]*width:(\d+)px/g)].map((m) => m[1])
+  const widths = [...html.matchAll(/data-role="(?:column-head|dot-column)" style="[^"]*width:(\d+)px/g)].map((m) => m[1])
   assert.equal(widths.length, 2 + 2 * 3)
   assert.equal(new Set(widths).size, 1)
   assert.match(html, /data-role="column-head" style="[^"]*text-align:center/)
-  assert.match(html, /data-role="dot-cell" style="[^"]*justify-content:center/)
+  assert.match(html, /data-role="dot-column" style="[^"]*justify-content:center/)
 })
 
 test('sync: synced, or unsynced without digit colors, the menu is one list of rows that each pick the profile, with no dots and no column heads', () => {
@@ -565,7 +565,7 @@ test('sync: synced, or unsynced without digit colors, the menu is one list of ro
     const html = renderMenu(state, colorFor)
     assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2'])
     assert.equal(count(html, /data-role="menu-row" data-act="pick"/g), 3)
-    assert.doesNotMatch(html, />Cells?<|>Digits?<|data-role="column-head"|data-role="dot-cell"/)
+    assert.doesNotMatch(html, />Cells?<|>Digits?<|data-role="column-head"|data-role="dot-column"/)
   }
 })
 
@@ -1629,7 +1629,7 @@ test('digitOfText reads a single digit and nothing else', () => {
   for (const bad of ['', '12', 'x', '-1', null, undefined]) assert.equal(digitOfText(bad), null, String(bad))
 })
 
-// The run of cells: each cell's fill and digit, then the dividers and one outline over them.
+// Each cell of a run of chips, in order: its key, place, fill, digit color and digit.
 const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)"><rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
   .map((m) => ({ key: m[1], x: Number(m[2]), width: Number(m[3]), fill: m[4], ink: m[5], digit: m[6] }))
 
@@ -1670,8 +1670,11 @@ test('renderChips draws each mode the way it colors the board: Cell fills with b
   assert.deepEqual(look('off'), { cells: [['#fff', '#999'], ['#fff', '#999']], outline: '#aaa', dividers: ['#aaa'] })
 })
 
-test('renderChips gives a group whose palette color is unreadable a grey cell, so the cell still shows', () => {
-  assert.deepEqual(runCells(renderChips([{ key: 'q', digits: ['2'] }], () => '', { size: 16 })).map((c) => c.fill), ['#ccc'])
+test('renderChips gives a group whose palette color is unreadable a grey cell, and in Digit and Both SudokuPad\'s own digit color, as the board keeps it', () => {
+  const look = (style) => runCells(renderChips([{ key: 'q', digits: ['2'] }], () => '', { size: 16, style })).map((c) => [c.fill, c.ink])
+  assert.deepEqual(look('cell'), [['#ccc', 'rgb(29, 106, 229)']])
+  assert.deepEqual(look('digit'), [['#fff', 'rgb(29, 106, 229)']])
+  assert.deepEqual(look('both'), [['#ccc', 'rgb(29, 106, 229)']])
 })
 
 test('iconHtml draws the run of cells in the mode\'s look, with no word strip, and keeps the menu arrow box', () => {

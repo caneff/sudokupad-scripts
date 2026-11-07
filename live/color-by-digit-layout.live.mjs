@@ -142,7 +142,9 @@ for (const viewport of [DESKTOP, PHONE]) {
 }
 
 for (const viewport of [DESKTOP, PHONE]) {
-  for (const [sync, state] of [['synced', SEED], ['unsynced', { ...SEED, digitActive: 1 }]]) {
+  // The second profile has the longest name allowed, in the widest letter, so the menu must fit it on a phone.
+  const LONG = { ...SEED, profiles: [SEED.profiles[0], { ...SEED.profiles[1], name: 'W'.repeat(24) }] }
+  for (const [sync, state] of [['synced', LONG], ['unsynced', { ...LONG, digitActive: 1 }]]) {
     describe(`the profile menu, ${sync}, at ${viewport.width} px`, { concurrency: false }, () => {
       let context, p
       before(async () => {
@@ -169,6 +171,8 @@ for (const viewport of [DESKTOP, PHONE]) {
           return
         }
         assert.deepEqual(heads.map((h) => h.word), ['Cell', 'Digit'])
+        const right = await p.locator(`${MENU} [data-act="pick"][role="menuitemradio"]:not([data-role="menu-row"])`).evaluateAll((es) => Math.max(...es.map((e) => e.getBoundingClientRect().right)))
+        assert.equal(right <= viewport.width, true, `every dot inside the window: ${right}`)
         for (const [head, target] of [[heads[0], 'cells'], [heads[1], 'digits']]) {
           const column = dots.filter((d) => d.target === target)
           assert.equal(column.length, 2)

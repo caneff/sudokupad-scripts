@@ -94,12 +94,16 @@ export async function openSession (browser, script, { saved = SEEDED_OFF, force 
   return opened
 }
 
-// The mode, as the button's aria-label names it: Cell, Digit, Both or Off.
+// The button's aria-label for a mode (Cell, Digit, Both or Off), and the mode the label names now.
 const LABEL_PREFIX = 'Color by digit: '
+export const modeLabel = (mode) => `${LABEL_PREFIX}${mode}`
 export const labelOn = async (p) => {
   const label = await p.locator(BUTTON).getAttribute('aria-label')
   return label?.startsWith(LABEL_PREFIX) ? label.slice(LABEL_PREFIX.length) : label
 }
+
+// A profile row's top-left corner in the dialog, clear of its drag handle.
+export const ROW_CORNER = { position: { x: 2, y: 2 } }
 
 // The button's chips as drawn: each cell's [fill, digit color], and the outline's color.
 export const chipLookOn = (p) => p.locator(`${BUTTON} svg[data-role="chips"]`).evaluate((run) => ({

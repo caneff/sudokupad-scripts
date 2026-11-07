@@ -4,18 +4,16 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
 const ROWS = `${EDITOR} [data-role=profile-row]`
-// A row's top-left corner, clear of its drag handle.
-const CORNER = { position: { x: 2, y: 2 } }
 // A row's × shows only while its row is hovered or selected, so the pointer goes onto the row first.
 const deleteRow = async (p, n) => {
-  await p.hover(`${ROWS}:nth-child(${n})`, CORNER)
+  await p.hover(`${ROWS}:nth-child(${n})`, ROW_CORNER)
   await p.click(`${ROWS}:nth-child(${n}) button[data-act=delete]`)
 }
 const HOLD_MS = 500
@@ -505,7 +503,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal(await p.locator(`${ROWS}[aria-checked=true]`).count(), 1)
     assert.equal(await groupCount(), 3)
     assert.equal(await p.inputValue(NAME_FIELD), 'Low/5/High')
-    await p.click(`${ROWS}:nth-child(3)`, CORNER)
+    await p.click(`${ROWS}:nth-child(3)`, ROW_CORNER)
     assert.equal(await t.selectedRow(), 2)
     assert.equal(await groupCount(), 4)
     assert.equal(await t.cellProfile(), '0')
@@ -593,7 +591,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   it('a drag with a finger reorders the draft, and Save keeps the order, the active profile and shows it in the menu', async () => {
     await t.openEditor()
     // A finger has no hover, so a row's handle shows once the row is selected.
-    await p.click(`${ROWS}:nth-child(3)`, CORNER)
+    await p.click(`${ROWS}:nth-child(3)`, ROW_CORNER)
     await dragWithTouch(2, 0)
     assert.equal(await t.selectedRow(), 0)
     assert.equal(await t.cellProfile(), '1')
@@ -625,14 +623,14 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
 
   it('typing in the name in the selected row renames the profile, its row and the pulldowns\' options, a box emptied a key at a time keeps the old name, and Cancel drops it', async () => {
     await t.openEditor()
-    await p.click(`${ROWS}:nth-child(1)`, CORNER)
+    await p.click(`${ROWS}:nth-child(1)`, ROW_CORNER)
     await typeName('Mine')
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
     assert.deepEqual(await t.pulldownNames('cell-profile'), ['Mine', 'Odd/Even', 'Low/5/High'])
     assert.deepEqual(await t.pulldownNames('digit-profile'), ['Same as cell', 'Mine', 'Odd/Even', 'Low/5/High', 'None'])
-    await p.click(`${ROWS}:nth-child(3)`, CORNER)
+    await p.click(`${ROWS}:nth-child(3)`, ROW_CORNER)
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
-    await p.click(`${ROWS}:nth-child(1)`, CORNER)
+    await p.click(`${ROWS}:nth-child(1)`, ROW_CORNER)
     await p.locator(NAME_FIELD).press('End')
     for (let i = 0; i < 'Mine'.length; i++) await p.locator(NAME_FIELD).press('Backspace')
     assert.equal(await p.inputValue(NAME_FIELD), '')

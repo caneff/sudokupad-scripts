@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle } from './settle.mjs'
 
@@ -218,7 +218,7 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
     await t.openEditor()
     await t.chooseDigit('0')
     assert.equal(await p.locator(`${ROW(1)} button:not([data-act=delete])`).count(), 0)
-    await p.click(ROW(1), { position: { x: 2, y: 2 } }) // the row's corner, clear of its drag handle
+    await p.click(ROW(1), ROW_CORNER)
     assert.equal(await p.locator(`${ROW(1)}[aria-checked=true]`).count(), 1)
     assert.equal(await p.locator(CELL_SELECT).inputValue(), '0')
     assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '0')

@@ -5,14 +5,12 @@
 // is cut at the grid lines, so no part of a third box shows.
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../live/page.mjs'
-import { savedProfiles } from '../../live/color-by-digit-fixtures.mjs'
+import { modeLabel, savedProfiles } from '../../live/color-by-digit-fixtures.mjs'
 
 // The pixel density every picture is taken at.
 export const DEVICE_SCALE = 2
 export const BUTTON = '#control-colorbydigit'
 export const MODES = ['Cell', 'Digit', 'Both', 'Off']
-// The button's aria-label names its mode.
-const modeOf = (want) => `Color by digit: ${want}`
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
 // The demo profile is active; Modular (orange, pink, yellow) follows it for the menu picture. savedProfiles also sets the two flags that stop the script adding its
@@ -78,11 +76,11 @@ export const SETTLE_MS = 500
 export async function pressTo (p, want) {
   const button = p.locator(BUTTON)
   const label = () => button.getAttribute('aria-label')
-  for (let i = 0; i < MODES.length && await label() !== modeOf(want); i++) {
+  for (let i = 0; i < MODES.length && await label() !== modeLabel(want); i++) {
     const box = await button.boundingBox()
     await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
   }
-  await p.waitForFunction(([selector, label]) => document.querySelector(selector).getAttribute('aria-label') === label, [BUTTON, modeOf(want)])
+  await p.waitForFunction(([selector, label]) => document.querySelector(selector).getAttribute('aria-label') === label, [BUTTON, modeLabel(want)])
   await p.waitForTimeout(SETTLE_MS)
 }
 

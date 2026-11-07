@@ -698,16 +698,15 @@
     return `<div data-role="paint">${rows.join('')}</div>`
   }
 
-  // Each mode draws a cell the way it colors the board: the cell's fill, and its digit's ink, from the group color.
-  const OFF_INK = '#999'
-  const shadeOf = (color) => { const rgb = parseColor(color); return rgb ? darkenColor(rgb) : OFF_INK }
+  // Each mode draws a cell the way it colors the board: the cell's fill and its digit's ink from the group color, and the run's line.
+  // A group color that cannot be read keeps SudokuPad's own digit color, as the board does.
+  const shadeOf = (color) => { const rgb = parseColor(color); return rgb ? darkenColor(rgb) : ENTERED_DIGIT_BLUE }
   const CHIP_LOOKS = {
-    cell: (color) => [color, ENTERED_DIGIT_BLUE],
-    digit: (color) => ['#fff', shadeOf(color)],
-    both: (color) => [color, shadeOf(color)],
-    off: () => ['#fff', OFF_INK]
+    cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
+    digit: (color) => ({ fill: '#fff', ink: shadeOf(color), line: '#000' }),
+    both: (color) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(color), line: '#000' }),
+    off: () => ({ fill: '#fff', ink: '#999', line: '#aaa' })
   }
-  const OFF_LINE = '#aaa'
   // One cell of the run, in the run's own units; the strokes stay 1 px at any size.
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
@@ -717,9 +716,9 @@
   function renderChips (groups, colorOf, { size, style = 'cell', x, y }) {
     const shown = shownGroups(groups, CHIP_MAX_GROUPS)
     const width = shown.length * RUN_CELL
-    const line = style === 'off' ? OFF_LINE : '#000'
+    const { line } = CHIP_LOOKS[style]('')
     const cells = shown.map(({ key, digit }, i) => {
-      const [fill, ink] = CHIP_LOOKS[style](colorOf(key) || UNREADABLE_FILL)
+      const { fill, ink } = CHIP_LOOKS[style](colorOf(key))
       return `<g data-role="chip" data-key="${esc(key)}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${esc(fill)}"/>` +
         `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${esc(ink)}">${esc(digit)}</text></g>`
     }).join('')
@@ -743,9 +742,10 @@
   const STYLE_ID = 'color-by-digit-style'
 
   const MUTED = '#8a8496'
-  // One chip's size, in pixels, in the dialog's profile list and the profile menu.
-  const LIST_CHIP = 16
-  const MENU_CHIP = 16
+  // One chip's size in pixels, in the dialog's profile list and the profile menu, and the width of a column of three:
+  // a pixel more, for the outline's stroke, which straddles the run's edge.
+  const CHIP_PX = 16
+  const CHIP_COLUMN_PX = CHIP_MAX_GROUPS * CHIP_PX + 1
   const ACTIVE_FILL = '#f1ebfb'
   const ACTIVE_RING = '#b79be0'
   const ACTIVE_INK = '#5b2a9a'
@@ -758,7 +758,7 @@
       const chosen = i === selected
       return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${esc(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
-        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, { size: LIST_CHIP })}</span>` +
+        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, { size: CHIP_PX })}</span>` +
         (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${esc(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${esc(profile.name)}</span>`) +
         `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
@@ -773,14 +773,15 @@
   const MENU_DOT_COLUMN = 44
   const DOT_RING = '#cfc7da'
   const chipColumn = (groups, colorOf) =>
-    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_MAX_GROUPS * MENU_CHIP + 2}px">${renderChips(groups, colorOf, { size: MENU_CHIP })}</span>`
-  const menuName = (name) => `<span data-role="name" style="flex:1;white-space:nowrap">${esc(name)}</span>`
+    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(groups, colorOf, { size: CHIP_PX })}</span>`
+  // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
+  const menuName = (name) => `<span data-role="name" title="${esc(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span>`
   const dotColumn = (role, html, align) => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}">${html}</span>`
   const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
 
   function menuDot (target, index, picked, name) {
     const on = index === picked
-    return dotColumn('dot-cell', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${esc(name)}" ` +
+    return dotColumn('dot-column', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${esc(name)}" ` +
       `style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;cursor:pointer;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`, 'display:flex;justify-content:center')
   }
 
@@ -794,7 +795,8 @@
       : ''
     const rows = state.profiles.map((profile, i) => {
       const cells = chipColumn(profile.groups, colorOf) + menuName(profile.name)
-      if (split) return `<div data-role="menu-row" style="${MENU_ROW}">${cells}${menuDot('cells', i, state.active, profile.name)}${menuDot('digits', i, state.digitActive, profile.name)}</div>`
+      const picked = { cells: state.active, digits: state.digitActive }
+      if (split) return `<div data-role="menu-row" style="${MENU_ROW}">${cells}${Object.keys(TARGET_NAMES).map((target) => menuDot(target, i, picked[target], profile.name)).join('')}</div>`
       const active = i === state.active
       return `<div data-role="menu-row" data-act="pick" data-target="cells" data-index="${i}" aria-checked="${active}" style="${MENU_ROW};cursor:pointer` +
         `${active ? `;background:${ACTIVE_FILL};color:${ACTIVE_INK};font-weight:600` : ''}" role="menuitemradio">${cells}</div>`
@@ -877,7 +879,7 @@
     [`${EDITOR} .cbd-profile:hover [data-role="handle"], ${EDITOR} .cbd-profile:hover [data-act="delete"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-role="handle"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-act="delete"]`, 'visibility: visible'],
     [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
     // One width for every run, so the names line up.
-    [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_MAX_GROUPS * LIST_CHIP + 1}px`],
+    [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_COLUMN_PX}px`],
     // Its left padding is the name field's padding and border, so a name starts where the selected row's does.
     [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400`],
     [`${EDITOR} .cbd-text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
