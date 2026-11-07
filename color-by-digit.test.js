@@ -785,8 +785,11 @@ test('installButton: adds an aux-row icon button titled "Color by digit", then r
 
 // The parts of a page the script reads to draw the button: the palette variables and a probe element
 // that resolves a color. Every palette key is the color #3e63dd.
+// Its listeners are kept by event type, so a test can fire the button's own press.
 const pageDocument = (extra = {}) => ({
-  addEventListener: () => {},
+  listeners: {},
+  addEventListener (type, fn) { (this.listeners[type] ||= []).push(fn) },
+  removeEventListener (type, fn) { this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn) },
   querySelector: () => null,
   querySelectorAll: () => [],
   getElementById: () => null,
@@ -796,9 +799,18 @@ const pageDocument = (extra = {}) => ({
   createElement: () => ({ style: {}, remove: () => {} }),
   ...extra
 })
+// Fires one event at the page's listeners, from a target inside the elements `inside` names (selector to element).
+function fire (type, inside = {}, extra = {}) {
+  const target = { closest: (selector) => inside[selector] ?? null }
+  ;[...(global.document.listeners[type] || [])].forEach((fn) => fn({ type, target, pointerType: 'mouse', button: 0, clientX: 0, clientY: 0, preventDefault () {}, stopPropagation () {}, ...extra }))
+}
+// A short press on the button proper, away from its arrow box, as listenForButton reads one.
+const BUTTON_SELECTOR = '#control-colorbydigit'
+const press = () => { fire('pointerdown', { [BUTTON_SELECTOR]: {} }); fire('pointerup', { [BUTTON_SELECTOR]: {} }) }
+
 const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '#3e63dd', color: 'rgb(62, 99, 221)' }), addEventListener: () => {}, MutationObserver: class { observe () {} } })
 
-test('entry point: wires the settings entry, the button, refreshControls, and routes a click to coloring', async () => {
+test('entry point: wires the settings entry, the button, refreshControls, and a press on the button steps the mode', async () => {
   const path = require.resolve('./color-by-digit.user.js')
   const saved = require.cache[path]
   delete require.cache[path]
@@ -816,8 +828,8 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
   global.Framework = {
     getApp: () => Promise.resolve(app),
     getData: () => null,
-    setData: () => {},
-    addAuxButton: (spec) => { calls.push(['button']); global.click = spec.onClick },
+    setData: (key, value) => calls.push(['save', key, value]),
+    addAuxButton: () => calls.push(['button']),
     addSetting: () => calls.push(['setting'])
   }
   try {
@@ -826,10 +838,12 @@ test('entry point: wires the settings entry, the button, refreshControls, and ro
     const order = calls.map((c) => c[0])
     assert.ok(order.includes('setting'), `no setting in ${order}`)
     assert.ok(order.indexOf('refresh') > order.indexOf('button'), `refresh before button in ${order}`)
-    global.click()
-    assert.ok(calls.some((c) => c[0] === 'act' && c[1] === 'colour'))
+    const savedModes = () => calls.filter((c) => c[0] === 'save' && c[1] === 'ColorByDigit_mode').map((c) => c[2])
+    assert.deepEqual(savedModes(), [])
+    press()
+    assert.deepEqual(savedModes(), ['digit'])
   } finally {
-    delete global.Framework; delete global.click; delete global.document; delete global.window
+    delete global.Framework; delete global.document; delete global.window
     delete require.cache[path]
     if (saved) require.cache[path] = saved
   }
@@ -910,16 +924,18 @@ function mockApp (cellDefs, { single = false } = {}) {
 }
 
 // `stored` is what Framework.getData answers besides the Odd/Even profile; nothing stored starts the mode at Cell.
+// Framework.setData writes to the same store, which the test reads as `app.stored`.
 async function withScript (app, fn, stored = {}) {
   const path = require.resolve('./color-by-digit.user.js')
   const saved = require.cache[path]
   delete require.cache[path]
+  app.stored = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 }, ...stored }
   global.document = pageDocument()
   global.window = pageWindow()
   global.Framework = {
     getApp: () => Promise.resolve(app),
-    getData: (key) => ({ ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 }, ...stored }[key] ?? null),
-    setData: () => {},
+    getData: (key) => app.stored[key] ?? null,
+    setData: (key, value) => { app.stored[key] = value },
     addAuxButton: (spec) => { app.buttonContent = spec.content },
     addSetting: () => {}
   }
@@ -1368,6 +1384,7 @@ test('darkenColor keeps the hue, lowers OKLCH lightness by the named factor, and
 // The palette the puzzle shows, as readColor resolves it: key b unreadable.
 const SHOWN = { a: 'rgb(61, 153, 245)', c: 'rgb(245, 58, 55)', b: '' }
 const shownColor = (key) => SHOWN[key] ?? ''
+const digitsNamed = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m[1]))]
 const fillOf = (css, selector) => (new RegExp(`${selector.replace(/[[\]().*]/g, '\\$&')}\\s*{\\s*fill:\\s*(#[0-9a-f]{6})`).exec(css) || [])[1]
 
 test('buildDigitCss gives each grouped digit the darker shade of its group\'s shown color, on entered digits, corner marks and centre marks', () => {
@@ -1385,11 +1402,17 @@ test('buildDigitCss reads the palette it is given, so a puzzle\'s own palette ge
   assert.equal(fillOf(own, `#cell-values [${DIGIT_ATTR}="1"]`), darkenColor([232, 124, 241]))
 })
 
-test('buildDigitCss leaves out a digit in no group and a group whose color is unreadable, so those keep SudokuPad\'s color, and never names givens', () => {
+test('buildDigitCss leaves out a group whose color is unreadable, so its digits keep SudokuPad\'s color, and never names givens', () => {
   const css = buildDigitCss([{ key: 'a', digits: ['1'] }, { key: 'b', digits: ['3'] }], shownColor)
-  for (const digit of ['0', '2', '3', '9']) assert.doesNotMatch(css, new RegExp(`"${digit}"`), digit)
+  assert.match(css, /"1"/)
+  assert.doesNotMatch(css, /"3"/)
   assert.doesNotMatch(css, /cell-given/)
-  assert.equal(buildDigitCss([], shownColor), '')
+})
+
+test('buildDigitCss leaves out a digit in no group, even where every key, an absent one included, reads as a color', () => {
+  const css = buildDigitCss([{ key: 'a', digits: ['1'] }], () => 'rgb(61, 153, 245)')
+  assert.deepEqual(digitsNamed(css), ['1'])
+  assert.equal(buildDigitCss([], () => 'rgb(61, 153, 245)'), '')
 })
 
 test('buildDigitCss keeps a conflicting mark on its shade: no rule outlines it or names the conflict state', () => {
