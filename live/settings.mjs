@@ -1,5 +1,5 @@
 // Shared by the live checks: opening SudokuPad's settings dialog the way a user finds a script's
-// entry, and the version in a script's header. Not a check itself, so `live/*.live.mjs` skips it.
+// entry, and the version in a script's header. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import { createRequire } from 'node:module'
 

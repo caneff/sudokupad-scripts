@@ -1,5 +1,5 @@
 // Draw Tool's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that boot
-// it after Start Puzzle, reload it and pick Draw. Not a check itself, so `live/*.live.mjs` skips it.
+// it after Start Puzzle, reload it and pick Draw. Not a check itself, so `live/**/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
 import { readFileSync } from 'node:fs'
