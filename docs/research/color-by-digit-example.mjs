@@ -23,7 +23,8 @@ const ROWS = 3
 const COLS = 6
 
 // Opens the live page, at twice the pixel density, on the example puzzle with Color by Digit installed in Cell mode, the entries in, the mascot hidden.
-export async function openExample (browser) {
+// `leave` is a list of [row, column] cells whose entries are left out, for a picture that fills them in itself.
+export async function openExample (browser, { leave = [] } = {}) {
   const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
   await startPuzzle(p)
   await p.evaluate(() => Framework.app.loadCompactClassicSudoku('5' + '0'.repeat(80)))
@@ -33,7 +34,7 @@ export async function openExample (browser) {
   await p.locator(BUTTON).waitFor({ state: 'visible' })
   const enter = async (tool, list) => {
     await p.click(tool)
-    for (const [row, col, digits] of list) {
+    for (const [row, col, digits] of list.filter(([row, col]) => !leave.some(([r, c]) => r === row && c === col))) {
       await p.evaluate(([row, col]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)) }, [row, col])
       for (const d of digits) await p.keyboard.press(d)
     }
