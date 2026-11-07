@@ -3,7 +3,7 @@
 // on the tallest, on white. A `files` entry may instead be `{ stack: [paths], scale }`: the PNGs one above the next, 8 px apart and right
 // aligned (a `[width, height]` pair in place of a path is white space of that size), the whole shrunk by `scale` (1 by default); `caption` is a line of text centered under file number `captionUnder` (the last one by default).
 // One palette serves every frame, so a color only one frame has (a red circle, a darker shade) keeps its own entry.
-// `colors` (64 by default) sizes the palette and `dither` (off by default) spreads a color the palette lacks over neighbouring pixels, so a smooth gradient does not band.
+// `gap` (FRAME_GAP by default) is the pixels between two `files` and `captionPx` (36 by default) the caption's text size. `colors` (64 by default) sizes the palette and `dither` (off by default) spreads a color the palette lacks over neighbouring pixels, so a smooth gradient does not band.
 // The last frame's `ms` is its pause before the loop restarts.
 import { spawnSync } from 'node:child_process'
 
@@ -13,9 +13,9 @@ export const FRAME_GAP = 40
 const JOIN = `
 import json, sys
 from PIL import Image, ImageDraw, ImageFont
-frames, target, colors, dither = json.loads(sys.argv[1]), sys.argv[2], int(sys.argv[3]), sys.argv[4] == '1'
-font = ImageFont.load_default(size=36)
-GAP, CAPTION_GAP, STACK_GAP = ${FRAME_GAP}, 12, 8
+frames, target, colors, dither, GAP, CAPTION_PX = json.loads(sys.argv[1]), sys.argv[2], int(sys.argv[3]), sys.argv[4] == '1', int(sys.argv[5]), int(sys.argv[6])
+font = ImageFont.load_default(size=CAPTION_PX)
+CAPTION_GAP, STACK_GAP = 12, 8
 def load(entry):
     if isinstance(entry, str):
         return Image.open(entry).convert('RGB')
@@ -37,7 +37,7 @@ for frame in frames:
     captionTop = None
     if frame.get('caption'):
         captionTop = (height - images[under].height) // 2 + images[under].height + CAPTION_GAP
-        height = max(height, captionTop + 44)
+        height = max(height, captionTop + CAPTION_PX + 8)
     sheet = Image.new('RGB', (width, height), 'white')
     for x, im in zip(xs, images):
         sheet.paste(im, (x, (max(i.height for i in images) - im.height) // 2))
@@ -60,7 +60,7 @@ padded = [im.quantize(palette=palette, dither=mode) for im in padded]
 padded[0].save(target, save_all=True, append_images=padded[1:], duration=[f['ms'] for f in frames], loop=0, optimize=True)
 `
 
-export function joinGif (frames, target, { colors = 64, dither = false } = {}) {
-  const joined = spawnSync('python3', ['-I', '-c', JOIN, JSON.stringify(frames), target, String(colors), dither ? '1' : '0'], { encoding: 'utf8' })
+export function joinGif (frames, target, { colors = 64, dither = false, gap = FRAME_GAP, captionPx = 36 } = {}) {
+  const joined = spawnSync('python3', ['-I', '-c', JOIN, JSON.stringify(frames), target, String(colors), dither ? '1' : '0', String(gap), String(captionPx)], { encoding: 'utf8' })
   if (joined.status !== 0) throw new Error(`joining the frames failed: ${joined.error ?? joined.stderr}`)
 }
