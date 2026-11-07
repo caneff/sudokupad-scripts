@@ -1366,6 +1366,15 @@
     window.addEventListener('contextmenu', suppressMenu)
     installHoldToEdit()
     window.addEventListener('blur', endGesture)
+    // SudokuPad cancels (`preventDefault`) every mouse move on the page, and a cancelled move stops the browser dragging a slider's thumb. A move over a slider is kept from
+    // SudokuPad's handlers. A drag leaves the focus on the slider, where the arrow keys would move it, so the focus goes back to the page on release.
+    document.addEventListener('mousemove', (event) => {
+      if (event.target.closest(`.${SLIDERS_CLASS}`)) event.stopPropagation()
+    }, true)
+    window.addEventListener('pointerup', () => {
+      const focused = document.activeElement
+      if (focused && focused.matches(`.${SLIDERS_CLASS} input`)) focused.blur()
+    }, true)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
     for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
