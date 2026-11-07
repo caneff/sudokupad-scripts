@@ -63,6 +63,30 @@ const shown = (root) => page.evaluate((root) => {
 }, root)
 const at = (n, [picture, caption], slides) => ({ count: `${n} / ${slides}`, captions: [caption], pictures: [picture], visible: 1 })
 
+// The inset the details-page frame leaves round its picture, in px (.6rem at the default 16 px root).
+const INSET = 0.6 * 16
+// Each slide's gap to the frame, on all four sides, when it is the one showing.
+const gaps = (root) => page.evaluate((root) => [...document.querySelectorAll(`${root} .slide`)].map((img) => {
+  const f = img.closest('.slide-frame').getBoundingClientRect()
+  const i = img.getBoundingClientRect()
+  return { left: i.left - f.left - 1, right: f.right - i.right - 1, top: i.top - f.top - 1, bottom: f.bottom - i.bottom - 1 }
+}), root)
+
+for (const show of SHOWS) {
+  for (const [width, height] of [[1280, 720], [1600, 900]]) {
+    describe(`${show.heading}'s details page at ${width}x${height}`, () => {
+      it('every slide fills its frame to the inset on each side', async () => {
+        await page.setViewportSize({ width, height })
+        await page.goto(new URL(`site/${show.details}`, ROOT).href, { waitUntil: 'load' })
+        await page.waitForFunction(() => [...document.images].every((i) => i.complete))
+        const all = await gaps('.slideshow')
+        assert.equal(all.length, show.slides)
+        for (const g of all) for (const side of ['left', 'right', 'top', 'bottom']) assert.ok(Math.abs(g[side] - INSET) <= 1, `${side} gap ${g[side]} px, want ${INSET} px: ${JSON.stringify(g)}`)
+      })
+    })
+  }
+}
+
 for (const [where, file] of [['the homepage', 'index.html'], ...SHOWS.map((show) => [`${show.heading}'s details page`, show.details])]) {
   for (const show of SHOWS.filter((show) => file === 'index.html' || file === show.details)) {
     const root = file === 'index.html' ? `section.row:nth-of-type(${show.row}) .slideshow` : '.slideshow'

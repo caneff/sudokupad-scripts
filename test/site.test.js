@@ -523,3 +523,9 @@ shared({
   intro: `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`,
   homePicture: 'color-by-digit-slide-1-start.png'
 })
+
+test('a details page frame takes its slides\' own shape: no fixed aspect ratio, pictures scaled to its width', () => {
+  const css = fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8')
+  assert.match(css, /\.details \.slide-frame \{[^}]*aspect-ratio: auto;[^}]*padding: \.6rem;/)
+  assert.match(css, /\.details \.slide-frame img \{[^}]*position: static;[^}]*width: 100%;[^}]*max-height: none;/)
+})
