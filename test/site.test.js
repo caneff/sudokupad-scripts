@@ -438,7 +438,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
   assert.deepEqual(section(CBD, 'Good to know'), [
     'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
     "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
-    "The button sits in the bottom row with Undo, Redo, Check and Select, or in a second row under it once that row holds five or more buttons. It never moves another script's button."
+    'The button sits in the bottom row with Undo, Redo, Check and Select. That row holds five buttons, and any more, from this script or another, wrap onto a second row under it.'
   ])
 })
 
