@@ -14,6 +14,8 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
   show it, with their scripts in `docs/research/` (`*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `site.test.js` fails until you do. README pictures, if added, follow the same rule.
+- **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
+  demonstrated at a phone or tablet size, and no ticket or PR asks for it.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
   2026-11-06). A dark page means Dark Page.
 
