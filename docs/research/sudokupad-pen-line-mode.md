@@ -13,7 +13,7 @@ kind:
 | `edgeonly` | an edge line (snapped to the corners) | an edge line |
 
 The values are the `LINE_PATHS` keys in `pen-tool-extras.user.js`. A drag from an edge midpoint to another edge midpoint
-stored nothing in any mode. `live/pen-tool-extras-panel.live.mjs` checks the table through the line mode button.
+stored nothing in any mode. `live/pen-tool-extras/pen-tool-extras-panel.live.mjs` checks the table through the line mode button.
 
-SudokuPad cancels the touch events on its panel buttons, so a tap gives no `click` (see `color-by-digit-profiles-notes.md`).
+SudokuPad cancels the touch events on its panel buttons, so a tap gives no `click` (see `color-by-digit/color-by-digit-profiles-notes.md`).
 The line mode button therefore steps the mode at `touchstart` as well as at `click`.

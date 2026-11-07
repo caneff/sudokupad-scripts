@@ -1,5 +1,5 @@
 // Shared by the live checks: opening SudokuPad's puzzle page and getting it past Start Puzzle, with a script
-// injected at any of the three times a userscript can load. Not a check itself, so `live/*.live.mjs` skips it.
+// injected at any of the three times a userscript can load. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
 
