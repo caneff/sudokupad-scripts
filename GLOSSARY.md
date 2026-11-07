@@ -23,18 +23,24 @@
 - **settings pulldowns** — the three drafts at the top of Color by Digit's settings dialog: **Mode** (Cell, Digit,
   Both, Off; only Cell and Off while Digit is None), **Cell** (the cell profile, by name) and **Digit** (Same as
   cell, a profile by name, or None). They apply at Save; Cancel drops them.
-- **shown digit** — the one digit that stands for a group on its colored cell in the Color by Digit icon,
-  the profile menu and the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
+- **chips** — a profile's colors in Color by Digit, drawn as a run of joined square board cells: one per group,
+  the first three groups at most, one outline with single dividers, no gaps or rounded corners, each cell with its
+  group's **shown digit**. The button draws them in the **mode**'s look; the profile menu and the dialog's profile
+  list draw them as Cell does.
+- **shown digit** — the one digit that stands for a group on its cell of the Color by Digit **chips**, on
+  the button, in the profile menu and in the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
   are below 5, the highest if all are above 5, else the middle (the lower of the two middle ones on an even
   count). A group of only 0 shows 0; a group with no digits shows none.
 - **profile menu** — the menu above the Color by Digit button, opened by its arrow box, a right click or a
-  hold: one row per profile, the active one highlighted, and Edit profiles…; with the Digit pulldown on a profile's name,
-  a Cells section and a Digits section, each with its own pick highlighted. Picking a row makes that profile
+  hold: one dense row per profile, its **chips** then its name, the active one highlighted, and Edit profiles…; with the
+  Digit pulldown on a profile's name, each row instead ends in a Cell dot and a Digit dot, under the words Cell and
+  Digit, each column with its own pick marked. Picking a row makes that profile
   active: in Cell and Both it recolors the cells (planSwitch), as one undo step, and in Digit and Both the
-  digits take their new **digit colors** at once. With separate picks, a Cells row does only the first and a Digits row,
+  digits take their new **digit colors** at once. With separate picks, a Cell dot does only the first and a Digit dot,
   which picks the digit profile, only the second.
-- **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off, shown on the button's top strip (CELL,
-  DIGIT and BOTH in bold purple, OFF in grey) and stepped by a short press on the button, Cell → Digit → Both →
+- **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off, shown by the button's **chips** (Cell: group
+  colors with SudokuPad's blue digits; Digit: white with the darker shades; Both: group colors with the shades; Off:
+  white, grey digits and a grey outline), named in the button's tooltip, and stepped by a short press on the button, Cell → Digit → Both →
   Off → Cell. Cell and Both color cells; Digit and Both color digits with their **digit color**. In Cell and Both, a cell's color keeps in step with
   its digit and centre marks as they change: a pure cell gets its group's color and loses any other
   group's, and a cell that is not pure loses every group's color. Colors in no group are left alone, except that with SudokuPad's Multi-color setting off, adding a group color replaces whatever color the cell held.
@@ -52,12 +58,12 @@
   the circle too. It is a stylesheet, not SudokuPad state, so it is never an undo step.
 - **digit profile** — the profile whose groups give the **digit colors**. While the Digit pulldown says Same as
   cell (the default) it is the active profile; on a profile's name, it is a second pick from the same list,
-  saved as `digitActive`, picked too in the profile menu's Digits section. Deleting it makes the digits follow the
+  saved as `digitActive`, picked too by the profile menu's Digit dots. Deleting it makes the digits follow the
   active profile again (Same as cell). The button's icon shows it in Digit, and the active profile in every other mode.
 - **Use digit colors** — whether Color by Digit colors digits at all, saved as `useDigitColors` (on by default) and
   set by the Digit pulldown: None is off, Same as cell and a profile's name are on. Off, the **mode** is only Cell or
-  Off (Digit falls back to Off, Both to Cell), the profile menu's Digits section hides, and nothing is drawn for
-  digits. The **digit profile** pick is kept.
+  Off (Digit falls back to Off, Both to Cell), the profile menu drops its Cell and Digit dots, and nothing is drawn
+  for digits. The **digit profile** pick is kept.
 - **conflict circle** — the small pale red circle Color by Digit draws behind a corner or centre mark
   in the `conflict` state, in Digit and Both, only while SudokuPad shows conflicts.
 - **preload** — one of the five ready-made profiles a fresh install starts with: Low/5/High, Odd/Even,
@@ -85,7 +91,7 @@
   character in the pen value of the cell that stores the edge.
 - **edge cycle** — the order a left click on an edge steps through its marks: X,
   circle, first direction, second direction, empty, skipping any type unticked in
-  the settings dialog. A right click steps the same cycle backwards.
+  the settings dialog.
 - **grid-corner mark** — a pen mark Pen Tool Extras draws centred on a corner of the grid, inner or outer: an
   X or a circle, the same shapes as the edge marks. The dialog's Marks table has a Corner row for them; SudokuPad's own
   "corner marks" are the small digits in a cell's corners, which this is not. Stored as one character in the pen
@@ -96,7 +102,8 @@
   grid-corner mark click, decided before SudokuPad's own edge-or-cell test; with both boxes of the Marks table's Corner row unticked
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
-  type. A right click steps it backwards.
+  type.
+- **pen erase** — Pen Tool Extras' right or middle click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Draw's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle and
   cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark

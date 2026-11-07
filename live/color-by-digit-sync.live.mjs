@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, ROW_CORNER, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle } from './settle.mjs'
 
@@ -49,13 +49,13 @@ const tools = (p) => {
     await p.keyboard.press('Escape')
     await p.locator(MENU).waitFor({ state: 'detached' })
   }
-  // Each pick row as `<target><index>`, with `*` on the marked one, and the menu's section headings.
+  // Each pick as `<target><index>`, with `*` on the marked one, the cell picks before the digit picks, and the menu's column heads.
   const menu = async () => {
     await openMenu()
-    const rows = await p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => `${e.dataset.target}${e.dataset.index}${e.getAttribute('aria-checked') === 'true' ? '*' : ''}`))
-    const text = await p.locator(MENU).innerText()
+    const picks = await p.$$eval(`${MENU} [data-act=pick]`, (es) => es.map((e) => `${e.dataset.target}${e.dataset.index}${e.getAttribute('aria-checked') === 'true' ? '*' : ''}`))
+    const heads = await p.$$eval(`${MENU} [data-role=column-head]`, (es) => es.map((e) => e.textContent))
     await closeMenu()
-    return { rows, sections: ['Cells', 'Digits'].filter((s) => new RegExp(`^${s}$`, 'im').test(text)) }
+    return { rows: [...picks.filter((r) => r.startsWith('cells')), ...picks.filter((r) => r.startsWith('digits'))], heads }
   }
   const pick = async (target, index) => {
     await openMenu()
@@ -87,14 +87,14 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   after(async () => { await context.close() })
 
   it('synced, the menu is one list and the dialog\'s Digit pulldown says Same as cell', async () => {
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], sections: [] })
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
     await t.openEditor()
     assert.equal(await p.locator(DIGIT_SELECT).inputValue(), 'same')
     assert.equal(await p.locator(DIGIT_SELECT).evaluate((e) => e.selectedOptions[0].textContent), 'Same as cell')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('picking the cell profile in Digit and saving changes no color on the board, and the menu shows Cells and Digits, each on Split', async () => {
+  it('picking the cell profile in Digit and saving changes no color on the board, and the menu shows a Cell dot and a Digit dot on each row, each picking Split', async () => {
     assert.deepEqual(await settle(t.cells, SPLIT_CELLS), SPLIT_CELLS)
     assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
     await t.openEditor()
@@ -103,10 +103,10 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.equal((await t.getState()).digitActive, 0)
     assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
     assert.deepEqual(await watch(fill('4')), [[SHADE[4]]])
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0*', 'digits1'], sections: ['Cells', 'Digits'] })
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0*', 'digits1'], heads: ['Cell', 'Digit'] })
   })
 
-  it('a Cells pick recolors the cells, not the digits, as one undo step', async () => {
+  it('a Cell dot pick recolors the cells, not the digits, as one undo step', async () => {
     // Opening and closing the menu first takes SudokuPad's own deselect step, so the one undo below is the pick's.
     await t.menu()
     await t.pick('cells', 1)
@@ -116,10 +116,10 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.deepEqual(await settle(t.cells, SPLIT_CELLS), SPLIT_CELLS)
     await t.redo()
     assert.deepEqual(await settle(t.cells, ODD_EVEN_CELLS), ODD_EVEN_CELLS)
-    assert.deepEqual(await t.menu(), { rows: ['cells0', 'cells1*', 'digits0*', 'digits1'], sections: ['Cells', 'Digits'] })
+    assert.deepEqual(await t.menu(), { rows: ['cells0', 'cells1*', 'digits0*', 'digits1'], heads: ['Cell', 'Digit'] })
   })
 
-  it('a Digits pick recolors the digits, not the cells, and adds no undo step', async () => {
+  it('a Digit dot pick recolors the digits, not the cells, and adds no undo step', async () => {
     await t.pick('cells', 0)
     assert.deepEqual(await settle(t.cells, SPLIT_CELLS), SPLIT_CELLS)
     const steps = await t.undoSteps()
@@ -129,7 +129,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.equal(await t.undoSteps(), steps)
   })
 
-  it('a Digits pick leaves alone a cell painted or unpainted by hand, and a pending redo', async () => {
+  it('a Digit dot pick leaves alone a cell painted or unpainted by hand, and a pending redo', async () => {
     // A group color painted by hand on the empty (4,4), and the group color taken off the given 5 at (0,0) by hand.
     const HAND = [[4, 4], [0, 0]]
     const handColors = () => t.read((list) => list.map(([r, c]) => [...(Framework.app.grid.getCell(r, c).colours || [])]), HAND)
@@ -158,18 +158,18 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   })
 
   it('in Both, cells on Split and digits on Odd/Even, the icon shows the cell profile', async () => {
-    assert.equal(await t.label(), 'BOTH')
+    assert.equal(await t.label(), 'Both')
     assert.deepEqual(await t.cells(), SPLIT_CELLS)
     assert.deepEqual(await fill('4')(), [SHADE[2]])
     assert.deepEqual(await t.icon(), SPLIT_ICON)
   })
 
   it('in Digit, the icon shows the digit profile, and in Cell and Off the cell profile', async () => {
-    await pressTo(p, 'OFF')
+    await pressTo(p, 'Off')
     assert.deepEqual(await t.icon(), SPLIT_ICON)
-    await pressTo(p, 'CELL')
+    await pressTo(p, 'Cell')
     assert.deepEqual(await t.icon(), SPLIT_ICON)
-    await pressTo(p, 'DIGIT')
+    await pressTo(p, 'Digit')
     assert.deepEqual(await t.icon(), ODD_EVEN_ICON)
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.equal(await settle(t.coloredCount, 0), 0)
@@ -178,9 +178,9 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   it('a reload keeps both picks', async () => {
     await p.reload({ waitUntil: 'load' })
     await startInjected(p, script)
-    assert.equal(await t.label(), 'DIGIT')
+    assert.equal(await t.label(), 'Digit')
     assert.deepEqual(await t.icon(), ODD_EVEN_ICON)
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], sections: ['Cells', 'Digits'] })
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], heads: ['Cell', 'Digit'] })
   })
 
   it('picking Same as cell again makes the digits take the cell profile, and the menu is one list again', async () => {
@@ -191,7 +191,7 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.equal('digitActive' in await t.getState(), false)
     assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
     assert.deepEqual(await t.icon(), SPLIT_ICON)
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], sections: [] })
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
   })
 
   it('no uncaught page errors', () => {
@@ -218,7 +218,7 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
     await t.openEditor()
     await t.chooseDigit('0')
     assert.equal(await p.locator(`${ROW(1)} button:not([data-act=delete])`).count(), 0)
-    await p.click(ROW(1), { position: { x: 4, y: 4 } })
+    await p.click(ROW(1), ROW_CORNER)
     assert.equal(await p.locator(`${ROW(1)}[aria-checked=true]`).count(), 1)
     assert.equal(await p.locator(CELL_SELECT).inputValue(), '0')
     assert.equal(await p.locator(DIGIT_SELECT).inputValue(), '0')
@@ -298,28 +298,28 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
   })
 
   it('saved off from Both: the mode is Cell, cells keep their colors, and no digit color or conflict circle shows', async () => {
-    assert.equal(await settle(t.label, 'CELL'), 'CELL')
+    assert.equal(await settle(t.label, 'Cell'), 'Cell')
     assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
     assert.deepEqual(await settle(fill('4'), [DEFAULT_FILL]), [DEFAULT_FILL])
     assert.equal(await settle(t.shownCircles, 0), 0)
   })
 
-  it('off, the menu is one list with no Digits section', async () => {
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], sections: [] })
+  it('off, the menu is one list with no Cell and Digit dots', async () => {
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
   })
 
   it('off, a press steps Cell to Off and back to Cell', async () => {
-    await pressTo(p, 'OFF')
-    await pressTo(p, 'CELL')
-    await pressTo(p, 'OFF')
-    await pressTo(p, 'CELL')
+    await pressTo(p, 'Off')
+    await pressTo(p, 'Cell')
+    await pressTo(p, 'Off')
+    await pressTo(p, 'Cell')
   })
 
   it('a reload keeps it off', async () => {
     await p.reload({ waitUntil: 'load' })
     await startInjected(p, script)
-    assert.equal(await t.label(), 'CELL')
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], sections: [] })
+    assert.equal(await t.label(), 'Cell')
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], heads: [] })
     assert.deepEqual(await watch(fill('4')), [[DEFAULT_FILL]])
   })
 
@@ -330,8 +330,8 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
     assert.deepEqual(await t.modeChoice(), ['cell*', 'digit', 'both', 'off'])
     assert.equal(await p.locator(CELL_SELECT).inputValue(), '0')
     await t.save()
-    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], sections: ['Cells', 'Digits'] })
-    await pressTo(p, 'DIGIT')
+    assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], heads: ['Cell', 'Digit'] })
+    await pressTo(p, 'Digit')
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.equal(await settle(t.shownCircles, 1), 1)
   })
@@ -341,7 +341,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
     await t.chooseDigit('none')
     assert.deepEqual(await t.modeChoice(), ['cell', 'off*'])
     await t.save()
-    assert.equal(await settle(t.label, 'OFF'), 'OFF')
+    assert.equal(await settle(t.label, 'Off'), 'Off')
     assert.deepEqual(await settle(fill('4'), [DEFAULT_FILL]), [DEFAULT_FILL])
     assert.equal(await settle(t.shownCircles, 0), 0)
     assert.equal(await t.coloredCount(), 0)

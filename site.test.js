@@ -148,9 +148,9 @@ test(`${DETAILS} lists what the script adds to drawing, one item per feature`, (
   assert.deepEqual(section(DETAILS, 'What it adds'), [
     'Customizable pen colors. Hold a pen color button, or pick a preset in the settings.',
     'Dashed lines and arrow lines. Two more pages of pens.',
-    'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
+    'Marks on cell edges. Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
-    'Erase a whole line. Middle-click a line to remove all of it.',
+    'Erase a whole line. Right-click or middle-click a line to remove all of it, or a mark to remove that.',
     'White outlines. An outline keeps lines readable over colored cells.'
   ])
 })
@@ -380,7 +380,7 @@ const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === l
 
 test(`${CBD}'s Four modes item is one sentence, and it and the Kept in step and profile menu items have no picture of their own`, () => {
   const four = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
-  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
+  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off. The button\'s chips, a short run of board cells, are drawn the way the mode colors the board: filled cells, shaded digits, both, or plain white.')
   for (const lead of ['Four modes.', 'Kept in step as you solve.', 'The profile menu.']) assert.equal(itemImg(CBD, lead), '', `"${lead}" has a picture`)
 })
 
@@ -486,10 +486,11 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const word of ['profiles', 'groups', 'pulldowns', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
 })
 
-test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, () => {
+test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
   assert.deepEqual(section(CBD, 'Good to know'), [
     'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
-    "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had."
+    "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
+    "Where the button is: it sits in the bottom row with Undo, Redo, Check and Select. When that row already holds five or more buttons, as it can once other extensions add theirs, it goes in a second row under it. Color by Digit never moves another script's button."
   ])
 })
 
