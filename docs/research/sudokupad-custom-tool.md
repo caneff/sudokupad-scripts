@@ -1,0 +1,51 @@
+# A custom tool in SudokuPad: Draw Tool's findings (#269)
+
+SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the live recording, and run on the page in
+`live/draw-tool.live.mjs` (2026-11-06).
+
+## Registering
+
+- `Framework.addTool({button, tool})` adds the button to `.controls-tool` (id `control-<name>`), calls
+  `app.addTool(tool)` and `refreshControls()`. A tool needs `name` and `isTool: true`; `changeTool` then puts
+  `tool-<name>` on `.controls-main`.
+- A saved current tool (`Framework.getData('tool')`) that names a tool not yet added falls back to the first tool at
+  startup, so a reload with Draw current starts on Digit.
+
+## Tool keys
+
+- `App.toolHotkeys` is `['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM']`, and `handleKeydown` gives key *i* to
+  `getToolNames()[i]`. `getToolNames()` is the insertion order of `app.tools`, filtered by `isTool`.
+- On the page the tools are `normal, corner, centre, colour`, plus `pen` when its setting is on (the letter tool is
+  not an `isTool` tool). So Draw, added after them, gets **B**, or **N** with the pen tool on. Worse, a pen tool turned
+  on after Draw comes after it and moves from B to N.
+- Draw Tool's fix: it wraps the app's `getToolNames` so that while a keydown is being dispatched (`app.currentEvent`
+  is a keydown whose `eventPhase` is not 0) the list leaves Draw out. No key lands on Draw, and every other tool keeps
+  the key it has without the script, the late pen tool's B included. Checked live.
+- Side effect: Space, Shift+Space, PageUp and PageDown, which step through the tools in the same keydown, skip Draw.
+  From Draw they step to the first tool.
+
+## Input
+
+- `App.handleInputdown` (mousedown and touchstart on `window`) calls the current tool's `handleInputdown` first; true
+  returns before the double/long-press timers and `handleDragStart`, so no cell is selected.
+- Moves call `handleDragMove` (inert when no drag started) and then the tool's `handleInputMove`, capital M.
+- `App.handleInputup` calls the tool's `handleInputup`; true skips `handleDragEnd`.
+- Shift keydown switches to Corner for as long as it is held (Corner's `tempKey`). `handleKeydown` first calls every
+  tool's `handleKeydown` (`handleToolEventForwarding`), and true ends the keydown, so Draw returns true for Shift while
+  it is current and Shift+drag reaches it.
+- A digit key or keypad button runs the current tool's `handleToolButton`; without one it would act with
+  `Puzzle.ToolToAction['draw']`, which is undefined.
+
+## The board
+
+- The board SVG is `#svgrenderer`, viewBox `-16 -16 608 608` for a 9x9: a cell is 64 board units from (0, 0). Its
+  children run `background … cell-givens, cell-pen, cell-pencilmarks, cell-candidates, cell-values`; a group appended
+  last draws above the digits and scales with the board on a resize.
+- `--puzzle-pencolor-1` is set on the root element (`rgb(31, 128, 32)` by default); a stroke styled
+  `stroke: var(--puzzle-pencolor-1)` follows it.
+
+## For Restart (#270)
+
+`App.restartPuzzle` acts `{type: 'clear', arg: <tool>}` for every key of `app.tools`, Draw included. For `draw`,
+`Cell.clear` logs `Cell.clear > Invalid tool: draw` once per filled cell, and `actionToString` writes `cl:-1` into the
+replay (`Puzzle.Tools.indexOf('draw')`). Read, not run.
