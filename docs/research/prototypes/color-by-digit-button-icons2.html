@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE, throwaway: Color by Digit button mode shown without the word strip.
+     (e) the profile chips themselves take the mode's style; (f) one small corner badge. -->
+<html><head><meta charset="utf-8"><title>PROTOTYPE: button mode, take 2</title>
+<style>
+ body { margin: 0; padding: 30px; font: 14px system-ui; background: #fafafa; }
+ .row { display: flex; gap: 22px; align-items: flex-end; margin-bottom: 26px; }
+ .btn { width: 64px; height: 64px; border-radius: 8px; background: #f1eef5; border: 1px solid #ddd; position: relative; }
+ .arrow { position: absolute; right: 4px; bottom: 4px; border: 1px solid #6a1b9a; border-radius: 3px; font-size: 9px; padding: 0 2px; color: #6a1b9a; }
+ .cap { text-align: center; font-size: 12px; color: #555; margin-top: 4px; }
+ h3 { margin: 0 0 8px; font-size: 13px; color: #888; text-transform: uppercase; }
+</style></head><body>
+<script>
+const SP_BLUE = 'rgb(29, 106, 229)'
+const G = [['#d6d6d6', '#919191', '1'], ['#e87ff0', '#a943b2', '5'], ['#3e9df5', '#0068b5', '9']]
+const cellSq = (x, y, s, fill, text, digit, line = '#000') => `<rect x="${x}" y="${y}" width="${s}" height="${s}" fill="${fill}" stroke="${line}" stroke-width="1.3"/><text x="${x + s / 2}" y="${y + s * 0.74}" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="${s * 0.68}" fill="${text}">${digit}</text>`
+function chipsE (mode) {
+  // A run of three cells: fills and digits per cell, then one outline and single dividers, so no line is doubled.
+  const s = 18; const n = G.length; const w = n * s; let svg = ''
+  const line = mode === 'Off' ? '#aaa' : '#000'
+  G.forEach(([c, d, digit], i) => {
+    const fill = mode === 'Cell' || mode === 'Both' ? c : '#fff'
+    const text = mode === 'Cell' ? SP_BLUE : mode === 'Off' ? '#999' : d
+    svg += `<rect x="${1 + i * s}" y="1" width="${s}" height="${s}" fill="${fill}"/><text x="${1 + i * s + s / 2}" y="${1 + s * 0.74}" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="${s * 0.68}" fill="${text}">${digit}</text>`
+  })
+  for (let i = 1; i < n; i++) svg += `<line x1="${1 + i * s}" y1="1" x2="${1 + i * s}" y2="${1 + s}" stroke="${line}" stroke-width="1"/>`
+  svg += `<rect x="1" y="1" width="${w}" height="${s}" fill="none" stroke="${line}" stroke-width="1.6"/>`
+  return `<svg width="${w + 2}" height="${s + 2}" style="position:absolute;left:5px;top:18px">${svg}</svg>`
+}
+const flatChips = '<div style="position:absolute;left:6px;top:22px;display:flex;gap:2px">' + G.map(([c, , n]) => `<span style="width:14px;height:14px;border-radius:3px;font:700 10px/14px sans-serif;text-align:center;border:1px solid rgba(0,0,0,.25);background:${c};color:${c === '#3e9df5' ? '#fff' : '#000'}">${n}</span>`).join('') + '</div>'
+const badge = (mode) => {
+  const s = 15; const cell = (fill, text, line = '#000') => `<svg width="${s}" height="${s}" viewBox="0 0 28 28"><rect x="1" y="1" width="26" height="26" fill="${fill}" stroke="${line}" stroke-width="2.5"/><text x="14" y="19" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="13" fill="${text}">#</text></svg>`
+  const icon = { Cell: cell('#c9a4ef', SP_BLUE), Digit: cell('#fff', '#8c69af'), Both: cell('#c9a4ef', '#8c69af'), Off: cell('#fff', '#bbb', '#bbb') }[mode]
+  return `<div style="position:absolute;left:4px;top:4px">${icon}</div>`
+}
+const modes = ['Cell', 'Digit', 'Both', 'Off']
+let html = '<h3>(e) The chips show the mode</h3><div class="row">' + modes.map((m) => `<div><div class="btn">${chipsE(m)}<span class="arrow">▾</span></div><div class="cap">${m}</div></div>`).join('') + '</div>'
+html += '<h3>(f) One corner badge</h3><div class="row">' + modes.map((m) => `<div><div class="btn">${badge(m)}${flatChips}<span class="arrow">▾</span></div><div class="cap">${m}</div></div>`).join('') + '</div>'
+document.body.innerHTML = html
+</script></body></html>

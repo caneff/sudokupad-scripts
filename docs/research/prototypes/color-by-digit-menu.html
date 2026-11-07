@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE, throwaway. Question: how compact can Color by Digit's profile menu (the one that opens from the
+     button's arrow box, right click or hold) be? Four variants via ?variant=A..D, the bottom bar or the arrow keys.
+     The "Digits follow cells" box toggles the unsynced case, where today's menu shows two stacked sections. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE: Color by Digit profile menu</title>
+<style>
+  :root { --accent: #6a1b9a; --fill: #f1ebfb; --ink: #5b2a9a; --muted: #8a8496; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px system-ui, sans-serif; color: #222; background: #fafafa; }
+  .stage { display: flex; gap: 40px; padding: 300px 30px 90px; align-items: flex-end; }
+  .keypad { position: relative; display: grid; grid-template-columns: repeat(4, 64px); gap: 8px; }
+  .key { height: 64px; border-radius: 8px; background: #6a1b9a; color: #fff; font: 700 26px/64px sans-serif; text-align: center; }
+  .key.light { background: #f1eef5; color: var(--accent); }
+  .cbd { height: 64px; border-radius: 8px; background: #f1eef5; border: 1px solid #ddd; position: relative; font-size: 10px; padding: 4px; }
+  .cbd .lab { color: var(--accent); font-weight: 700; } .cbd .arrow { position: absolute; right: 4px; bottom: 4px; border: 1px solid var(--accent); border-radius: 3px; font-size: 9px; padding: 0 2px; color: var(--accent); }
+  .menu { position: absolute; right: 0; bottom: 74px; background: #fff; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.22); padding: 6px; z-index: 3; }
+  .chip { display: inline-block; border-radius: 3px; font: 700 11px/16px sans-serif; text-align: center; border: 1px solid rgba(0,0,0,.25); width: 16px; height: 16px; }
+  .chips { display: inline-flex; gap: 2px; }
+  .side { width: 300px; background: #fff; border-radius: 10px; padding: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.08); align-self: flex-start; }
+  .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #111; color: #fff; border-radius: 999px; padding: 8px 10px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.35); font: 600 14px system-ui; z-index: 10; }
+  .switcher button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 34px; height: 34px; font-size: 16px; }
+  .switcher span { min-width: 300px; text-align: center; }
+  .row { display: flex; align-items: center; gap: 8px; border-radius: 6px; cursor: pointer; }
+  .row:hover { background: #f6f3f9; }
+  .on { background: var(--fill); color: var(--ink); font-weight: 600; }
+  .edit { color: #5d5868; cursor: pointer; border-radius: 6px; }
+  .edit:hover { background: #f6f3f9; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #cfc7da; display: inline-block; cursor: pointer; }
+  .dot.sel { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
+  .tile { border: 1px solid transparent; border-radius: 7px; padding: 5px; cursor: pointer; text-align: center; }
+  .tile:hover { background: #f6f3f9; } .tile.on { border-color: #b79be0; }
+  .sec { font: 600 10px/1 sans-serif; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 6px 6px 4px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="keypad">
+    <div class="key">1</div><div class="key">2</div><div class="key">3</div><div class="key light">⌫</div>
+    <div class="key">4</div><div class="key">5</div><div class="key">6</div><div class="key light">↶</div>
+    <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+    <div class="cbd" id="btn"><div class="lab">CELL</div><div id="btnChips" style="margin-top:6px"></div><span class="arrow">▾</span>
+      <div class="menu" id="menu"></div></div>
+  </div>
+  <div class="side"><label><input type="checkbox" id="sync" checked> Digits follow cells (synced)</label>
+    <p>Column symbols: <select id="sym"><option value="0">Words</option><option value="1">1: filled cell / colored digit</option><option value="2">2: cell with digit / digit only</option><option value="3">3: paint bucket / text color A</option><option value="4">4: grid square / digit in circle</option><option value="5">5: # sign</option><option value="6">6: 123</option><option value="7">7: generic numeral stroke</option><option value="8">8: text line bar</option><option value="9">9: dot</option><option value="10">10: 123, light purple cell</option><option value="11">11: 123, light grey cell</option><option value="12">12: 123, solid purple cell</option><option value="13">13: 123, light blue cell</option><option value="14">14: blue 123, light grey cell</option><option value="15">15: blue 123, light purple cell</option><option value="16">16: blue 123, light green cell</option><option value="17">17: grey, black outline</option><option value="18">18: purple, black outline</option><option value="19">19: green, black outline</option><option value="20">20: digit = white cell, plain green 123</option><option value="21">21: digit = white cell, darker green 123</option><option value="28">28: orange cell, darker digit</option><option value="29">29: pink cell, darker digit</option><option value="30">30: red cell, darker digit</option><option value="31">31: yellow cell, darker digit</option><option value="32">32: lightpurple cell, darker digit</option><option value="33">33: lightred cell, darker digit</option><option value="22">22: same orange</option><option value="23">23: same magenta</option><option value="24">24: same red</option><option value="25">25: same purple</option><option value="26">26: same mid green</option><option value="27">27: same teal</option></select></p><p style="color:#555">Click profiles in the menu. Today's menu, for comparison, is about 260 px tall synced and 470 px unsynced.</p>
+    <div id="dump" style="font-family:monospace"></div><div id="size" style="font-family:monospace;color:#555;margin-top:6px"></div></div>
+</div>
+<div class="switcher"><button id="prev">←</button><span id="vlabel"></span><button id="next">→</button></div>
+<script>
+const COLOR = { 1: '#d6d6d6', 2: '#7f7f7f', 4: '#b4e86c', 5: '#e87ff0', 6: '#e5962f', 7: '#f2423d', 8: '#fae84a', 9: '#3e9df5', b: '#9b2fb5', c: '#f0a3ad', d: '#99582d' }
+const ink = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 140 ? '#000' : '#fff' }
+const profiles = [
+  { name: 'Low/5/High', chips: [['1', '1'], ['5', '5'], ['9', '9']] },
+  { name: 'Odd/Even', chips: [['1', '5'], ['2', '4']] },
+  { name: 'Entropic', chips: [['7', '1'], ['4', '5'], ['8', '9']] },
+  { name: 'Modular', chips: [['6', '4'], ['5', '5'], ['8', '6']] },
+  { name: 'Each digit', chips: [['b', '1'], ['c', '2'], ['d', '3']] }
+]
+
+// Symbol pairs for the Cells and Digits columns. Each is an 18px SVG.
+const P = '#6a1b9a'
+const SYMBOLS = {
+  1: ['Filled cell / colored digit',
+    `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" rx="2" fill="#b4e86c" stroke="${P}" stroke-width="1.5"/></svg>`,
+    `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" rx="2" fill="#fff" stroke="${P}" stroke-width="1.5"/><text x="9" y="13.5" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="12" fill="#4a8a12">7</text></svg>`],
+  2: ['Filled cell with digit / digit only',
+    `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" rx="2" fill="#e87ff0" stroke="${P}" stroke-width="1.5"/><text x="9" y="13.5" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="12" fill="#222">7</text></svg>`,
+    `<svg width="18" height="18" viewBox="0 0 18 18"><text x="9" y="15" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="17" fill="#b02bbd">7</text></svg>`],
+  3: ['Paint bucket / text color A',
+    `<svg width="18" height="18" viewBox="0 0 18 18"><path d="M3 8 L9 2 L15 8 L9 14 Z" fill="none" stroke="${P}" stroke-width="1.6"/><path d="M3.8 8 L14.2 8 L9 13.2 Z" fill="#3e9df5"/><path d="M15.5 10 q1.5 2.5 0 3.5 q-1.5 -1 0 -3.5" fill="#3e9df5"/></svg>`,
+    `<svg width="18" height="18" viewBox="0 0 18 18"><text x="9" y="12" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="13" fill="${P}">A</text><rect x="3" y="14" width="12" height="3" rx="1" fill="#3e9df5"/></svg>`],
+  4: ['Grid square / digit in a circle',
+    `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1" y="1" width="16" height="16" fill="none" stroke="#999" stroke-width="1"/><rect x="5" y="5" width="8" height="8" fill="#f2423d"/><path d="M9 1V17M1 9H17" stroke="#999" stroke-width="0.8"/></svg>`,
+    `<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5" fill="none" stroke="${P}" stroke-width="1.5"/><text x="9" y="13" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="11" fill="#f2423d">7</text></svg>`]
+}
+
+// Pair 2 with an abstract glyph instead of a specific digit.
+const glyphs = {
+  5: ['# sign', (c, size) => `<text x="9" y="${size > 13 ? 15 : 13.5}" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="${size}" fill="${c}">#</text>`],
+  6: ['123', (c, size) => `<text x="9" y="${size > 13 ? 13.5 : 12.5}" text-anchor="middle" font-family="sans-serif" font-weight="700" font-size="${size > 13 ? 9 : 7.5}" letter-spacing="-0.3" fill="${c}">123</text>`],
+  7: ['Generic numeral strokes', (c, size) => size > 13 ? `<path d="M6 4.5 q3 -2.5 6 0 q1 2.5 -5.5 9 h6" fill="none" stroke="${c}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>` : `<path d="M6.5 6 q2.5 -2 5 0 q0.8 2 -4.5 7 h5" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`],
+  8: ['Text line bar', (c, size) => size > 13 ? `<rect x="3" y="7.5" width="12" height="3.5" rx="1.7" fill="${c}"/>` : `<rect x="5" y="7.6" width="8" height="2.8" rx="1.4" fill="${c}"/>`],
+  9: ['Dot', (c, size) => `<circle cx="9" cy="9" r="${size > 13 ? 5 : 3.5}" fill="${c}"/>`]
+}
+for (const [n, [name, g]] of Object.entries(glyphs)) {
+  SYMBOLS[n] = [`Cell with ${name} / ${name} only`,
+    `<svg width="18" height="18" viewBox="0 0 18 18"><rect x="1.5" y="1.5" width="15" height="15" rx="2" fill="#e87ff0" stroke="${P}" stroke-width="1.5"/>${g('#222', 12)}</svg>`,
+    `<svg width="18" height="18" viewBox="0 0 18 18">${g('#b02bbd', 17)}</svg>`]
+}
+
+// 10: "123" made bigger: a 24px cell with 123 on it, and 123 alone at about the size of a menu name.
+const sq = (fill, text) => `<svg width="28" height="28" viewBox="0 0 28 28"><rect x="1" y="1" width="26" height="26" fill="${fill}" stroke="${P}" stroke-width="1.5"/><text x="14" y="18.3" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="12" letter-spacing="-0.3" fill="${text}">123</text></svg>`
+const bare = (text) => `<svg width="28" height="28" viewBox="0 0 28 28"><text x="14" y="18.3" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="12" letter-spacing="-0.3" fill="${text}">123</text></svg>`
+SYMBOLS[10] = ['123, light purple cell', sq('#e3d6f3', '#222'), bare(P)]
+SYMBOLS[11] = ['123, light grey cell', sq('#d6d6d6', '#222'), bare(P)]
+SYMBOLS[12] = ['123, solid purple cell', sq(P, '#fff'), bare(P)]
+SYMBOLS[13] = ['123, light blue cell', sq('#cfe5fb', '#222'), bare('#1565c0')]
+const SP_BLUE = 'rgb(29, 106, 229)'
+SYMBOLS[14] = ['Blue 123 on light grey cell', sq('#d6d6d6', SP_BLUE), bare(P)]
+SYMBOLS[15] = ['Blue 123 on light purple cell', sq('#e3d6f3', SP_BLUE), bare(P)]
+SYMBOLS[16] = ['Blue 123 on light green cell', sq('#b4e86c', SP_BLUE), bare(P)]
+const sqBlack = (fill, text) => sq(fill, text).replace(`stroke="${P}"`, 'stroke="#000"')
+SYMBOLS[17] = ['Blue 123, light grey cell, black outline', sqBlack('#d6d6d6', SP_BLUE), bare(P)]
+SYMBOLS[18] = ['Blue 123, light purple cell, black outline', sqBlack('#e3d6f3', SP_BLUE), bare(P)]
+SYMBOLS[19] = ['Blue 123, light green cell, black outline', sqBlack('#b4e86c', SP_BLUE), bare(P)]
+SYMBOLS[20] = ['Digit: white cell, plain green 123', sqBlack('#b4e86c', SP_BLUE), sqBlack('#fff', '#b4e86c')]
+SYMBOLS[22] = ['Same orange for cell fill and digit text', sqBlack('#e5962f', SP_BLUE), sqBlack('#fff', '#e5962f')]
+SYMBOLS[23] = ['Same magenta for cell fill and digit text', sqBlack('#d659e0', SP_BLUE), sqBlack('#fff', '#d659e0')]
+SYMBOLS[24] = ['Same red for cell fill and digit text', sqBlack('#f2423d', SP_BLUE), sqBlack('#fff', '#f2423d')]
+SYMBOLS[25] = ['Same purple for cell fill and digit text', sqBlack('#9b2fb5', SP_BLUE), sqBlack('#fff', '#9b2fb5')]
+SYMBOLS[26] = ['Same mid green for cell fill and digit text', sqBlack('#4caf50', SP_BLUE), sqBlack('#fff', '#4caf50')]
+SYMBOLS[27] = ['Same teal for cell fill and digit text', sqBlack('#26a69a', SP_BLUE), sqBlack('#fff', '#26a69a')]
+SYMBOLS[28] = ['orange: cell fill, darker digit', sqBlack('#e5962f', SP_BLUE), sqBlack('#fff', '#a06200')]
+SYMBOLS[29] = ['pink: cell fill, darker digit', sqBlack('#e87ff0', SP_BLUE), sqBlack('#fff', '#a943b2')]
+SYMBOLS[30] = ['red: cell fill, darker digit', sqBlack('#f2423d', SP_BLUE), sqBlack('#fff', '#b20012')]
+SYMBOLS[31] = ['yellow: cell fill, darker digit', sqBlack('#fae84a', SP_BLUE), sqBlack('#fff', '#ad9e00')]
+SYMBOLS[32] = ['lightpurple: cell fill, darker digit', sqBlack('#c9a4ef', SP_BLUE), sqBlack('#fff', '#8c69af')]
+SYMBOLS[33] = ['lightred: cell fill, darker digit', sqBlack('#f7a1a0', SP_BLUE), sqBlack('#fff', '#b46465')]
+SYMBOLS[21] = ['Digit: white cell, Digit-mode shade 123', sqBlack('#b4e86c', SP_BLUE), sqBlack('#fff', '#72a119')]
+let symbolSet = Number(new URLSearchParams(location.search).get('symbols')) || 0
+const colHead = (which) => symbolSet ? `<span title="${which}">${SYMBOLS[symbolSet][which === 'Cells' ? 1 : 2]}</span>` : `<span class="sec" style="padding:0">${which}</span>`
+let cellP = 0; let digitP = 2
+const synced = () => document.getElementById('sync').checked
+const chips = (p, s = 16) => `<span class="chips">${p.chips.map(([k, l]) => `<span class="chip" style="width:${s}px;height:${s}px;line-height:${s}px;font-size:${Math.round(s * 0.68)}px;background:${COLOR[k]};color:${ink(COLOR[k])}">${l}</span>`).join('')}</span>`
+const edit = (style = '') => `<div class="edit" style="${style}" title="Edit profiles…">⚙ Edit profiles…</div>`
+
+// A: dense rows in one grid: a fixed-width chip column so names line up on the left; unsynced adds a Cells and a
+// Digits column of dots, each headed by its label right above it.
+function A (m) {
+  const two = !synced()
+  const cols = `56px auto${two ? ' 44px 44px' : ''}`
+  const cell = (html, extra = '') => `<div style="display:flex;align-items:center;height:26px;${extra}">${html}</div>`
+  const head = two ? `<div></div><div></div>${cell(colHead('Cells'), 'justify-content:center;height:32px')}${cell(colHead('Digits'), 'justify-content:center;height:32px')}` : ''
+  const rows = profiles.map((p, i) => {
+    const on = !two && i === cellP
+    const bg = on ? 'background:var(--fill);color:var(--ink);font-weight:600;' : ''
+    return `<div class="row" data-c="${two ? '' : i}" style="display:contents">` +
+      cell(chips(p, 14), `padding-left:6px;${bg}border-radius:6px 0 0 6px;cursor:pointer`).replace('<div', `<div data-c="${two ? '' : i}"`) +
+      cell(p.name, `padding-right:10px;${bg}${two ? '' : 'border-radius:0 6px 6px 0;'}cursor:pointer`).replace('<div', `<div data-c="${two ? '' : i}"`) +
+      (two ? cell(`<span class="dot${i === cellP ? ' sel' : ''}" data-c="${i}"></span>`, 'justify-content:center') + cell(`<span class="dot${i === digitP ? ' sel' : ''}" data-d="${i}"></span>`, 'justify-content:center') : '') +
+      '</div>'
+  }).join('')
+  m.innerHTML = `<div style="display:grid;grid-template-columns:${cols};row-gap:2px">${head}${rows}</div>` +
+    `<div style="height:1px;background:#ece8f2;margin:4px"></div>${edit('padding:4px 6px;font-size:13px')}`
+}
+// B: icon tiles only, names as tooltips; unsynced shows two tile rows labelled Cells and Digits
+function B (m) {
+  const grid = (sel, attr) => `<div style="display:grid;grid-template-columns:repeat(3,auto);gap:4px">${profiles.map((p, i) => `<div class="tile${i === sel ? ' on' : ''}" ${attr}="${i}" title="${p.name}">${chips(p, 16)}</div>`).join('')}
+      <div class="tile edit" title="Edit profiles…" style="font-size:16px;line-height:18px">⚙</div></div>`
+  m.innerHTML = synced() ? grid(cellP, 'data-c') : `<div class="sec">Cells</div>${grid(cellP, 'data-c')}<div class="sec">Digits</div>${grid(digitP, 'data-d')}`
+}
+// C: a table, profile names once, with a Cells column and a Digits column of radio dots (one column when synced)
+function C (m) {
+  const two = !synced()
+  m.innerHTML = `<table style="border-collapse:collapse">${two ? '<tr><td></td><td class="sec" style="text-align:center">Cells</td><td class="sec" style="text-align:center">Digits</td></tr>' : ''}
+    ${profiles.map((p, i) => `<tr class="row${!two && i === cellP ? ' on' : ''}" ${two ? '' : `data-c="${i}"`}><td style="padding:4px 8px 4px 6px;white-space:nowrap">${chips(p, 14)} <span style="margin-left:4px">${p.name}</span></td>
+      ${two ? `<td style="text-align:center;padding:0 8px"><span class="dot${i === cellP ? ' sel' : ''}" data-c="${i}"></span></td><td style="text-align:center;padding:0 8px"><span class="dot${i === digitP ? ' sel' : ''}" data-d="${i}"></span></td>` : ''}</tr>`).join('')}
+    </table><div style="height:1px;background:#ece8f2;margin:4px"></div>${edit('padding:4px 6px;font-size:13px')}`
+}
+// D: one horizontal strip of icons right above the button, the hovered or picked name under it
+function D (m) {
+  const strip = (sel, attr, label) => `<div style="display:flex;align-items:center;gap:2px">${label ? `<span class="sec" style="width:44px;padding:0">${label}</span>` : ''}${profiles.map((p, i) => `<div class="tile${i === sel ? ' on' : ''}" ${attr}="${i}" data-name="${p.name}" style="padding:4px">${chips(p, 14)}</div>`).join('')}</div>`
+  m.innerHTML = (synced() ? strip(cellP, 'data-c') : strip(cellP, 'data-c', 'Cells') + strip(digitP, 'data-d', 'Digits')) +
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px 0"><span id="nm" style="font-weight:600;color:var(--ink)">${profiles[cellP].name}</span>${edit('font-size:16px;padding:0 4px')}</div>`
+  m.querySelectorAll('[data-name]').forEach((t) => { t.onmouseenter = () => { m.querySelector('#nm').textContent = t.dataset.name }; t.onmouseleave = () => { m.querySelector('#nm').textContent = profiles[cellP].name } })
+  m.querySelector('.edit').textContent = '⚙'
+}
+const VARIANTS = { A: ['Dense rows, Cells/Digits dots when unsynced', A], B: ['Icon tiles, names on hover', B], C: ['One table, Cells and Digits columns', C], D: ['One strip of icons above the button', D] }
+const keys = Object.keys(VARIANTS)
+let current = new URLSearchParams(location.search).get('variant') || 'A'; if (!VARIANTS[current]) current = 'A'
+function draw () {
+  const m = document.getElementById('menu'); VARIANTS[current][1](m)
+  m.querySelectorAll('[data-c]').forEach((el) => { if (el.dataset.c === '') return; el.addEventListener('click', (e) => { e.stopPropagation(); cellP = Number(el.dataset.c); if (synced()) digitP = cellP; draw() }) })
+  m.querySelectorAll('[data-d]').forEach((el) => { el.addEventListener('click', (e) => { e.stopPropagation(); digitP = Number(el.dataset.d); draw() }) })
+  document.getElementById('btnChips').innerHTML = chips(profiles[cellP], 14)
+  document.getElementById('vlabel').textContent = `${current} (${VARIANTS[current][0]})`
+  document.getElementById('dump').textContent = `cells: ${profiles[cellP].name}\ndigits: ${synced() ? 'same as cell' : profiles[digitP].name}`
+  const r = m.getBoundingClientRect(); document.getElementById('size').textContent = `menu: ${Math.round(r.width)} × ${Math.round(r.height)} px`
+}
+function go (step) { current = keys[(keys.indexOf(current) + step + keys.length) % keys.length]; const u = new URL(location.href); u.searchParams.set('variant', current); history.replaceState(null, '', u); draw() }
+document.getElementById('prev').onclick = () => go(-1); document.getElementById('next').onclick = () => go(1)
+if (new URLSearchParams(location.search).get('sync') === '0') document.getElementById('sync').checked = false
+document.getElementById('sym').value = String(symbolSet)
+document.getElementById('sym').onchange = (e) => { symbolSet = Number(e.target.value); const u = new URL(location.href); u.searchParams.set('symbols', e.target.value); history.replaceState(null, '', u); draw() }
+document.getElementById('sync').onchange = () => { const u = new URL(location.href); u.searchParams.set('sync', synced() ? '1' : '0'); history.replaceState(null, '', u); draw() }
+document.addEventListener('keydown', (e) => { if (e.target.closest('input')) return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1) })
+draw()
+</script>
+</body>
+</html>

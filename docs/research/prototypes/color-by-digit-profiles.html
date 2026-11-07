@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE, throwaway. Question: how compact can Color by Digit's dialog profile list be? Assumption: "profile
+     selector" means the dialog's profile list (select a profile to edit, reorder, add, delete, rename), not the
+     button's menu. Four variants via ?variant=A..D, the bottom bar or the arrow keys. State is in memory only. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE: Color by Digit profile list</title>
+<style>
+  :root { --accent: #6a1b9a; --ring: #b79be0; --fill: #f1ebfb; --idle: #e2dcea; --muted: #8a8496; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px system-ui, sans-serif; color: #222; background: #e9e6ee; }
+  .stage { padding: 24px 24px 90px; display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .dialog { background: #fff; border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.15); padding: 18px 20px; width: 640px; user-select: none; }
+  .title { display: flex; justify-content: space-between; align-items: baseline; }
+  .title b { font-size: 18px; } .title small { color: var(--muted); }
+  .pd { display: grid; grid-template-columns: 70px 1fr; gap: 6px 10px; align-items: center; margin: 12px 0; }
+  .pd b { font-size: 15px; } .pd select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid #c9c2d3; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; border-top: 1px solid #ece8f2; padding-top: 12px; }
+  .h { font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .h small { color: var(--muted); font-weight: 400; }
+  .chip { display: inline-block; border-radius: 4px; font: 700 12px/18px sans-serif; text-align: center; border: 1px solid rgba(0,0,0,.25); width: 18px; height: 18px; }
+  .chips { display: inline-flex; gap: 3px; }
+  button { font: inherit; cursor: pointer; }
+  .btn { border: 1px solid var(--idle); background: #f6f3f9; border-radius: 8px; padding: 5px 10px; }
+  .icon { border: 0; background: none; color: var(--muted); padding: 2px 6px; border-radius: 6px; }
+  .icon:hover { background: #f1eef5; color: #222; }
+  .name-in { font: inherit; font-weight: 700; border: 1px solid transparent; border-radius: 4px; padding: 1px 4px; background: transparent; width: 100%; min-width: 0; }
+  .name-in:focus { border-color: var(--ring); background: #fff; outline: none; }
+  .editor { display: grid; grid-template-columns: repeat(3,34px) 10px repeat(4,34px); gap: 5px; }
+  .sw, .dg { width: 34px; height: 34px; border-radius: 6px; border: 1px solid rgba(0,0,0,.2); }
+  .dg { font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .foot { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid #ece8f2; margin-top: 14px; padding-top: 12px; }
+  .save { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .side { width: 260px; background: #fff; border-radius: 10px; padding: 14px; font-size: 13px; color: #444; box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+  .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #111; color: #fff; border-radius: 999px; padding: 8px 10px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.35); font: 600 14px system-ui; z-index: 10; }
+  .switcher button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 34px; height: 34px; font-size: 16px; }
+  .switcher span { min-width: 280px; text-align: center; }
+  /* A dense rows */
+  .ra { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px; border-radius: 6px; cursor: pointer; }
+  .ra:hover { background: #f6f3f9; } .ra.sel { background: var(--fill); }
+  .ra .grip, .ra .del { visibility: hidden; } .ra:hover .grip, .ra:hover .del, .ra.sel .del { visibility: visible; }
+  .grip { color: #bbb; cursor: grab; font-size: 12px; }
+  /* C pills */
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--idle); border-radius: 999px; padding: 3px 8px 3px 5px; background: #fff; cursor: pointer; }
+  .pill.sel { border-color: var(--ring); background: var(--fill); }
+  /* D tiles */
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .tile { border: 1px solid var(--idle); border-radius: 8px; padding: 6px 4px; text-align: center; cursor: pointer; position: relative; }
+  .tile.sel { border-color: var(--ring); background: var(--fill); }
+  .tile .nm { font-size: 12px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="dialog">
+    <div class="title"><div><b>Color by Digit</b> <small>v0.15.0</small></div><div style="color:var(--muted)">⧉ 📋</div></div>
+    <div class="pd"><b>Mode</b><select><option>Cell</option></select><b>Cell</b><select id="cellSel"></select><b>Digit</b><select><option>Same as cell</option></select></div>
+    <div class="cols">
+      <div id="list"></div>
+      <div><div class="h">Colors <button class="btn" style="font-size:13px">Clear all</button></div><div class="editor" id="editor"></div></div>
+    </div>
+    <div class="foot"><button class="btn">Cancel</button><button class="btn save">Save</button></div>
+  </div>
+  <div class="side"><b>Try:</b> click a profile to select it, rename the selected one in place, add with +, delete, and reorder by dragging where the variant allows. The right column is a static stand-in for the paint editor (#347).<div id="dump" style="margin-top:10px;font-family:monospace;white-space:pre-wrap"></div></div>
+</div>
+<div class="switcher"><button id="prev">←</button><span id="vlabel"></span><button id="next">→</button></div>
+<script>
+const COLOR = { 1: '#d6d6d6', 2: '#7f7f7f', 3: '#000', 4: '#b4e86c', 5: '#e87ff0', 6: '#e5962f', 7: '#f2423d', 8: '#fae84a', 9: '#3e9df5', b: '#9b2fb5', c: '#f0a3ad', d: '#99582d', e: '#4caf50' }
+const ink = (hex) => { const h = hex.length === 4 ? hex.replace(/#(.)(.)(.)/, '#$1$1$2$2$3$3') : hex; const n = parseInt(h.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 140 ? '#000' : '#fff' }
+let profiles = [
+  { name: 'Low/5/High', chips: [['1', '1'], ['5', '5'], ['9', '9']] },
+  { name: 'Odd/Even', chips: [['1', '5'], ['2', '4']] },
+  { name: 'Entropic', chips: [['7', '1'], ['4', '5'], ['9', '9']] },
+  { name: 'Modular', chips: [['6', '4'], ['5', '5'], ['8', '6']] },
+  { name: 'Each digit', chips: [['b', '1'], ['c', '2'], ['d', '3']] }
+]
+let sel = 0; let cell = 0
+const chips = (p, size = 18) => `<span class="chips">${p.chips.map(([k, l]) => `<span class="chip" style="width:${size}px;height:${size}px;line-height:${size}px;background:${COLOR[k]};color:${ink(COLOR[k])}">${l}</span>`).join('')}</span>`
+const nameField = (i) => `<input class="name-in" data-i="${i}" value="${profiles[i].name}">`
+function add () { if (profiles.length >= 6) return; profiles.splice(sel + 1, 0, { name: profiles[sel].name + ' copy', chips: [...profiles[sel].chips] }); sel++; draw(); const f = document.querySelector('.name-in'); if (f) { f.focus(); f.select() } }
+function del (i) { if (profiles.length <= 1) return; profiles.splice(i, 1); if (sel >= profiles.length) sel = profiles.length - 1; if (cell >= profiles.length) cell = 0; draw() }
+function move (from, to) { const [p] = profiles.splice(from, 1); profiles.splice(to, 0, p); if (sel === from) sel = to; draw() }
+function wireCommon (root) {
+  root.querySelectorAll('[data-sel]').forEach((el) => { el.addEventListener('click', (e) => { if (e.target.closest('input,.del')) return; sel = Number(el.dataset.sel); draw() }) })
+  root.querySelectorAll('.name-in').forEach((f) => { f.onchange = () => { profiles[Number(f.dataset.i)].name = f.value || profiles[Number(f.dataset.i)].name; draw() }; f.onclick = (e) => e.stopPropagation() })
+  root.querySelectorAll('.del').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); del(Number(b.dataset.i)) } })
+  root.querySelectorAll('[data-add]').forEach((b) => { b.onclick = add })
+  root.querySelectorAll('[draggable=true]').forEach((el) => {
+    el.ondragstart = (e) => e.dataTransfer.setData('text', el.dataset.sel)
+    el.ondragover = (e) => e.preventDefault()
+    el.ondrop = (e) => { e.preventDefault(); move(Number(e.dataTransfer.getData('text')), Number(el.dataset.sel)) }
+  })
+}
+const head = (extra = '') => `<div class="h">Profiles <small>${profiles.length} of 6 ${extra}</small></div>`
+
+// A: dense one-line rows, grip and × only on hover or selection, name editable in place on the selected row
+function A (root) {
+  root.innerHTML = head() + profiles.map((p, i) => `<div class="ra${i === sel ? ' sel' : ''}" data-sel="${i}" draggable="true">
+      <span class="grip">⋮⋮</span>${chips(p, 16)}<span style="flex:1;min-width:0">${i === sel ? nameField(i) : `<span style="padding:0 5px">${p.name}</span>`}</span>
+      <button class="icon del" data-i="${i}" title="Delete">×</button></div>`).join('') +
+    `<button class="icon" data-add style="margin-top:4px">+ New profile</button>`
+  wireCommon(root)
+}
+// B: one pulldown to choose which profile to edit, with the name, add, delete and move buttons on one line
+function B (root) {
+  root.innerHTML = head() + `<div style="display:flex;gap:6px;align-items:center">
+      <select id="pick" style="font:inherit;padding:4px 6px;border-radius:6px;border:1px solid #c9c2d3;flex:1">${profiles.map((p, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>${p.name}</option>`).join('')}</select>
+      <button class="icon" id="up" title="Move up">↑</button><button class="icon" id="dn" title="Move down">↓</button>
+      <button class="icon" data-add title="New profile">+</button><button class="icon del" data-i="${sel}" title="Delete">×</button></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px">${chips(profiles[sel], 22)}<span style="flex:1">${nameField(sel)}</span></div>`
+  wireCommon(root)
+  root.querySelector('#pick').onchange = (e) => { sel = Number(e.target.value); draw() }
+  root.querySelector('#up').onclick = () => { if (sel > 0) move(sel, sel - 1) }
+  root.querySelector('#dn').onclick = () => { if (sel < profiles.length - 1) move(sel, sel + 1) }
+}
+// C: pills that wrap, the selected pill's name editable below
+function C (root) {
+  root.innerHTML = head() + `<div class="pills">${profiles.map((p, i) => `<span class="pill${i === sel ? ' sel' : ''}" data-sel="${i}" draggable="true">${chips(p, 14)}<span style="font-size:13px">${p.name}</span></span>`).join('')}
+      <span class="pill" data-add style="padding:3px 10px">+</span></div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:10px"><span style="flex:1">${nameField(sel)}</span><button class="icon del" data-i="${sel}" title="Delete">Delete</button></div>`
+  wireCommon(root)
+}
+// D: tiles like the button icon, three across, name under
+function D (root) {
+  root.innerHTML = head() + `<div class="tiles">${profiles.map((p, i) => `<div class="tile${i === sel ? ' sel' : ''}" data-sel="${i}" draggable="true">${chips(p, 18)}<div class="nm">${p.name}</div></div>`).join('')}
+      <div class="tile" data-add style="color:var(--muted);display:flex;align-items:center;justify-content:center">+ New</div></div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:10px"><span style="flex:1">${nameField(sel)}</span><button class="icon del" data-i="${sel}" title="Delete">Delete</button></div>`
+  wireCommon(root)
+}
+const VARIANTS = { A: ['Dense rows, controls on hover', A], B: ['One pulldown plus buttons', B], C: ['Wrapping pills', C], D: ['Icon tiles, three across', D] }
+const keys = Object.keys(VARIANTS)
+let current = new URLSearchParams(location.search).get('variant') || 'A'; if (!VARIANTS[current]) current = 'A'
+function draw () {
+  VARIANTS[current][1](document.getElementById('list'))
+  document.getElementById('cellSel').innerHTML = profiles.map((p, i) => `<option${i === cell ? ' selected' : ''}>${p.name}</option>`).join('')
+  const pal = ['1', '2', '3', '4', '5', '6', '7', '8', '9']; const ed = []
+  for (let r = 0; r < 3; r++) { pal.slice(r * 3, r * 3 + 3).forEach((k) => ed.push(`<span class="sw" style="background:${COLOR[k]}"></span>`)); ed.push('<span></span>'); pal.slice(r * 3, r * 3 + 3).forEach((d) => ed.push(`<span class="dg">${d}</span>`)); ed.push(r === 2 ? '<span class="dg">0</span>' : '<span></span>') }
+  document.getElementById('editor').innerHTML = ed.join('')
+  document.getElementById('vlabel').textContent = `${current} (${VARIANTS[current][0]})`
+  document.getElementById('dump').textContent = `selected: ${profiles[sel].name}\norder: ${profiles.map((p) => p.name).join(', ')}`
+}
+function go (step) { current = keys[(keys.indexOf(current) + step + keys.length) % keys.length]; const u = new URL(location.href); u.searchParams.set('variant', current); history.replaceState(null, '', u); draw() }
+document.getElementById('prev').onclick = () => go(-1); document.getElementById('next').onclick = () => go(1)
+document.addEventListener('keydown', (e) => { if (e.target.closest('input,select')) return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1) })
+draw()
+</script>
+</body>
+</html>
