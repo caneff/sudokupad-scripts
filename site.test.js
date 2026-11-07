@@ -231,6 +231,8 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
 
 // Checks shared by every details page: the header's @description, the intro, one picture per listed lead-in, and a screenshot script per picture.
 const SCRIPT_INTRO = /<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
+// A picture name with no extension is a PNG.
+const withExtension = (name) => /\.\w+$/.test(name) ? name : `${name}.png`
 const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {
     const head = fs.readFileSync(path.join(__dirname, script + SCRIPT_SUFFIX), 'utf8')
@@ -249,7 +251,7 @@ const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, 
       const found = imgs(byLeadIn.get(lead) || '')
       if (!pictures[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
       assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
-      assert.ok(found[0].includes(`src="${RAW}docs/research/${pictures[lead]}.png"`), `"${lead}" does not show ${pictures[lead]}.png`)
+      assert.ok(found[0].includes(`src="${RAW}docs/research/${withExtension(pictures[lead])}"`), `"${lead}" does not show ${withExtension(pictures[lead])}`)
       assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
     }
   })
@@ -272,7 +274,7 @@ const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, wi
 const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Sync digit profile with cell profile.', 'Use digit colors.']
 // The lead-ins that carry one picture, and the picture each shows.
 const CBD_PICTURES = {
-  'Four modes.': 'color-by-digit-mode-labels',
+  'Four modes.': 'color-by-digit-details-modes.gif',
   'Kept in step as you solve.': 'color-by-digit-details-cell',
   'Digit and mark shades.': 'color-by-digit-details-digit',
   'The profile menu.': 'color-by-digit-details-menu'
@@ -283,6 +285,47 @@ test(`${HOME} describes Color by Digit in a short summary ending in a Details li
   assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
   assert.equal(m[2], `${CBD_SUMMARY} <a href="${CBD}">Details</a>`)
   assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
+})
+
+// A picture's pixel size, from its file's header: a PNG's IHDR or a GIF's logical screen.
+const pictureSize = (file) => {
+  const bytes = fs.readFileSync(path.join(__dirname, file))
+  if (bytes.subarray(1, 4).toString() === 'PNG') return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)]
+  assert.equal(bytes.subarray(0, 3).toString(), 'GIF', `${file} is neither a PNG nor a GIF`)
+  return [bytes.readUInt16LE(6), bytes.readUInt16LE(8)]
+}
+
+// The three example pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall; the Four modes
+// animation adds the button beside them, and its declared size keeps its own shape.
+test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall, at their files' shape`, () => {
+  const examples = [
+    ['homepage picture', imgs(read(HOME)).find(t => t.includes('site-color-by-digit.png'))],
+    ['Cell picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-cell.png'))],
+    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))],
+    ['Four modes animation', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-modes.gif'))]
+  ]
+  for (const [what, img] of examples) {
+    assert.ok(img, `no ${what}`)
+    const file = (img.match(/src="[^"]*?(docs\/research\/[^"]+)"/) || [])[1]
+    const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
+    const [fileW, fileH] = pictureSize(file)
+    assert.ok(Math.abs(w * fileH - h * fileW) <= fileW, `${what} is declared ${w} by ${h} but its file is ${fileW} by ${fileH}`)
+    if (what.endsWith('picture')) {
+      assert.match(img, /alt="[^"]*\btwo\b[^"]*\bboxes\b/i, `${what}'s alt text does not say two boxes`)
+      assert.ok(Math.abs(fileW - 2 * fileH) <= 2, `${what}'s file is ${fileW} by ${fileH}, not twice as wide as tall`)
+    }
+  }
+})
+
+test(`${CBD}'s Four modes item is one sentence beside an animation whose alt text names the four modes`, () => {
+  const li = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
+  const text = plain(li.replace(/<img[^>]*>/g, '')).replace(/^Four modes\.\s*/, '')
+  assert.equal(text, 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
+  const [img] = imgs(li)
+  assert.match(img, /src="[^"]*\.gif"/)
+  const alt = (img.match(/alt="([^"]*)"/) || [])[1] || ''
+  assert.match(alt, /^An animation/)
+  for (const label of ['CELL', 'DIGIT', 'BOTH', 'OFF']) assert.ok(alt.includes(label), `the alt text does not name ${label}`)
 })
 
 test(`${CBD} lists what the script adds, one item per feature`, () => {
