@@ -67,4 +67,4 @@ Before you write or review code: read `CODING_STANDARDS.md`.
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`. Run it before you hand off a change:
 `land.testcmd` runs only the tests, and no hook runs the linter. GitHub does: `.github/workflows/ci.yml` runs `npm ci`, `npm test`
-and `npm run lint` on every push and pull request (no Playwright browser; the live suite stays out).
+and `npm run lint` on every push and pull request, lint even when a test fails (no Playwright browser; the live suite stays out).
