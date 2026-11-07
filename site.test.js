@@ -169,6 +169,7 @@ const PICTURES = {
   'Marks on grid corners.': 'corners'
 }
 const NO_PICTURE = 'Erase a whole line.'
+const altOf = img => (img.match(/alt="([^"]*)"/) || [])[1] || ''
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
 const withoutTag = img => img.replace(/\?v=[0-9a-f]{7}"/, '"')
 
@@ -188,7 +189,7 @@ test(`${DETAILS} has no picture on the erase item and no large example figure`, 
   assert.ok(erase, `site/${DETAILS} has no "${NO_PICTURE}" item`)
   assert.deepEqual(imgs(erase), [])
   assert.doesNotMatch(page, /<figure\b/)
-  assert.equal(imgs(page).length, Object.keys(PICTURES).length + 1)
+  assert.equal(imgs(page).length, Object.keys(PICTURES).length + 2, 'the page has the four item pictures, the tour animation and the pen panel picture')
 })
 
 test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
@@ -227,7 +228,7 @@ test(`${DETAILS} shows the pen panel as one annotated picture whose alt text nam
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the pen panel section is not one picture')
   assert.match(found[0], /pen-tool-extras-panel-annotated\.png/)
-  const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
+  const alt = altOf(found[0])
   for (const label of ['Pen color buttons', 'Line mode button', 'Line type button', 'Settings button', 'Thickness and Opacity sliders']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
@@ -284,16 +285,16 @@ const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and ma
 // The lead-ins that carry one picture, and the picture each shows.
 const CBD_PICTURES = {
   'Four modes.': 'color-by-digit-details-modes.gif',
-  'Kept in step as you solve.': 'color-by-digit-details-cell',
+  'Kept in step as you solve.': 'color-by-digit-details-cell.gif',
   'Digit and mark shades.': 'color-by-digit-details-digit',
-  'The profile menu.': 'color-by-digit-details-menu'
+  'The profile menu.': 'color-by-digit-details-menu.gif'
 }
 
 test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside a picture of colored digits`, () => {
   const m = read(HOME).match(/<img ([^>]*)>\s*<div>\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
   assert.equal(m[2], `${CBD_SUMMARY} <a href="${CBD}">Details</a>`)
-  assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
+  assert.match(altOf(m[1]), /digits/i)
 })
 
 // A picture's pixel size, from its file's header: a PNG's IHDR or a GIF's logical screen.
@@ -304,12 +305,12 @@ const pictureSize = (file) => {
   return [bytes.readUInt16LE(6), bytes.readUInt16LE(8)]
 }
 
-// The three example pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall; the Four modes
-// animation adds the button beside them, and its declared size keeps its own shape.
+// The homepage and Digit pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall; the animations
+// add a button, a menu or a caption, and their declared sizes keep their files' shapes.
 test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall, at their files' shape`, () => {
   const examples = [
     ['homepage picture', imgs(read(HOME)).find(t => t.includes('site-color-by-digit.png'))],
-    ['Cell picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-cell.png'))],
+    ['Kept in step animation', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-cell.gif'))],
     ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))],
     ['Four modes animation', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-modes.gif'))]
   ]
@@ -332,9 +333,92 @@ test(`${CBD}'s Four modes item is one sentence beside an animation whose alt tex
   assert.equal(text, 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
   const [img] = imgs(li)
   assert.match(img, /src="[^"]*\.gif(\?v=[0-9a-f]{7})?"/)
-  const alt = (img.match(/alt="([^"]*)"/) || [])[1] || ''
+  const alt = altOf(img)
   assert.match(alt, /^An animation/)
   for (const label of ['CELL', 'DIGIT', 'BOTH', 'OFF']) assert.ok(alt.includes(label), `the alt text does not name ${label}`)
+})
+
+const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === lead) || '')[0] || ''
+
+test(`${CBD}'s Kept in step item is an animation whose alt text describes its three steps`, () => {
+  const img = itemImg(CBD, 'Kept in step as you solve.')
+  assert.match(img, /src="[^"]*color-by-digit-details-cell\.gif(\?v=[0-9a-f]{7})?"/)
+  const alt = altOf(img)
+  assert.match(alt, /^An animation/)
+  assert.match(alt, /\btwo\b[^.]*\bboxes\b/i)
+  assert.match(alt, /digit[^.]*typed/i, 'the alt text does not name typing a digit')
+  assert.match(alt, /center marks/i)
+  assert.match(alt, /another group/i, 'the alt text does not name a center mark from another group')
+})
+
+test(`${CBD}'s profile menu item is an animation whose alt text describes the menu opening and Odd/Even picked`, () => {
+  const img = itemImg(CBD, 'The profile menu.')
+  assert.match(img, /src="[^"]*color-by-digit-details-menu\.gif(\?v=[0-9a-f]{7})?"/)
+  const alt = altOf(img)
+  assert.match(alt, /^An animation/)
+  assert.match(alt, /arrow box/i)
+  assert.match(alt, /Odd\/Even/)
+  assert.match(alt, /recolor/i)
+})
+
+// A GIF the site links stays small enough to load on a phone: the budget each animation was given.
+const GIF_BUDGETS = [
+  [CBD, 'color-by-digit-details-cell.gif', 300],
+  [CBD, 'color-by-digit-details-menu.gif', 300],
+  [DETAILS, 'pen-tool-extras-tour.gif', 1000]
+]
+for (const [page, gif, kb] of GIF_BUDGETS) {
+  test(`site/${page}'s ${gif} is under ${kb} KB and loops`, () => {
+    assert.ok(read(page).includes(`${RAW}docs/research/${gif}`), `site/${page} does not show ${gif}`)
+    const bytes = fs.readFileSync(path.join(__dirname, 'docs', 'research', gif))
+    assert.ok(bytes.length < kb * 1000, `${gif} is ${bytes.length} bytes, over ${kb} KB`)
+    assert.ok(bytes.includes('NETSCAPE2.0'), `${gif} has no loop extension`)
+  })
+}
+
+test(`${DETAILS} opens with a tour animation between the install link and What it adds, whose alt text lists the steps in order`, () => {
+  const m = read(DETAILS).match(/<p><a class="install"[^>]*>[^<]*<\/a><\/p>([\s\S]*?)<h2>What it adds<\/h2>/)
+  assert.ok(m, `site/${DETAILS} has no section between the install link and "What it adds"`)
+  const found = imgs(m[1])
+  assert.equal(found.length, 1, 'the tour is not one picture')
+  assert.match(found[0], /src="[^"]*pen-tool-extras-tour\.gif(\?v=[0-9a-f]{7})?"/)
+  const alt = altOf(found[0])
+  assert.match(alt, /^An animation/)
+  const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /edge marks?/i, /grid.corner mark/i, /middle.click/i, /erase/i]
+  let at = 0
+  for (const step of steps) {
+    const found = alt.slice(at).search(step)
+    assert.ok(found >= 0, `the alt text does not mention ${step} after position ${at}`)
+    at += found
+  }
+})
+
+// Chris's ruling on #317: the colors item shows short pen lines in colors SudokuPad's own pen cannot draw.
+const colorValues = (text) => [...text.matchAll(/#[0-9a-f]{6}/gi)].map(m => m[0])
+const rgb = (hex) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16))
+test(`${DETAILS}'s colors item names five pen colors far from SudokuPad's nine and shows a picture wider than tall, as declared`, () => {
+  const sudokupad = fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 'utf8').match(/const SUDOKUPAD_PEN_COLORS = Object\.freeze\(\{([^}]*)\}\)/)
+  assert.ok(sudokupad, 'pen-tool-extras.user.js has no SUDOKUPAD_PEN_COLORS')
+  const script = fs.readFileSync(path.join(__dirname, 'docs', 'research', 'pen-tool-extras-recolor.mjs'), 'utf8').match(/export const PICTURE_PEN_COLORS = \[([^\]]*)\]/)
+  assert.ok(script, 'pen-tool-extras-recolor.mjs has no PICTURE_PEN_COLORS')
+  const ours = colorValues(script[1])
+  assert.equal(ours.length, 5)
+  for (const color of ours) {
+    for (const other of colorValues(sudokupad[1])) {
+      const distance = Math.hypot(...rgb(color).map((v, i) => v - rgb(other)[i]))
+      assert.ok(distance > 60, `${color} is within ${distance.toFixed(0)} of SudokuPad's ${other}`)
+    }
+  }
+  const img = itemImg(DETAILS, 'Customizable pen colors.')
+  const alt = altOf(img)
+  for (const name of ['teal', 'navy', 'dark red', 'purple', 'lime']) assert.match(alt, new RegExp(name, 'i'), `the alt text does not name ${name}`)
+  assert.match(alt, /short/i)
+  assert.doesNotMatch(alt, /pulldown|settings/i, 'the alt text still describes the settings dialog')
+  assert.doesNotMatch(alt, /\\/, 'the alt text holds a backslash')
+  const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
+  const [fileW, fileH] = pictureSize('docs/research/pen-tool-extras-bullet-colors.png')
+  assert.ok(fileW > fileH, `the colors picture is ${fileW} by ${fileH}, not wider than tall`)
+  assert.ok(Math.abs(w * fileH - h * fileW) <= fileW, `the colors picture is declared ${w} by ${h} but its file is ${fileW} by ${fileH}`)
 })
 
 test(`${CBD} lists what the script adds, one item per feature`, () => {
@@ -389,7 +473,7 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the Draw panel section is not one picture')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool-panel-annotated.png"`))
-  const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
+  const alt = altOf(found[0])
   for (const label of ['Pen color buttons', 'Width buttons', 'Text size buttons', 'Clear all']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
