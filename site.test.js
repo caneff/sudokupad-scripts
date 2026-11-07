@@ -287,18 +287,33 @@ test(`${HOME} describes Color by Digit in a short summary ending in a Details li
   assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
 })
 
-// The three example pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall.
-test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall`, () => {
+// A picture's pixel size, from its file's header: a PNG's IHDR or a GIF's logical screen.
+const pictureSize = (file) => {
+  const bytes = fs.readFileSync(path.join(__dirname, file))
+  if (bytes.subarray(1, 4).toString() === 'PNG') return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)]
+  assert.equal(bytes.subarray(0, 3).toString(), 'GIF', `${file} is neither a PNG nor a GIF`)
+  return [bytes.readUInt16LE(6), bytes.readUInt16LE(8)]
+}
+
+// The three example pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall; the Four modes
+// animation adds the button beside them, and its declared size keeps its own shape.
+test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall, at their files' shape`, () => {
   const examples = [
     ['homepage picture', imgs(read(HOME)).find(t => t.includes('site-color-by-digit.png'))],
     ['Cell picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-cell.png'))],
-    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))]
+    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))],
+    ['Four modes animation', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-modes.gif'))]
   ]
   for (const [what, img] of examples) {
     assert.ok(img, `no ${what}`)
-    assert.match(img, /alt="[^"]*\btwo\b[^"]*\bboxes\b/i, `${what}'s alt text does not say two boxes`)
+    const file = (img.match(/src="[^"]*?(docs\/research\/[^"]+)"/) || [])[1]
     const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
-    assert.ok(w > 0 && Math.abs(w - 2 * h) <= 1, `${what} is ${w} by ${h}, not twice as wide as tall`)
+    const [fileW, fileH] = pictureSize(file)
+    assert.ok(Math.abs(w * fileH - h * fileW) <= fileW, `${what} is declared ${w} by ${h} but its file is ${fileW} by ${fileH}`)
+    if (what.endsWith('picture')) {
+      assert.match(img, /alt="[^"]*\btwo\b[^"]*\bboxes\b/i, `${what}'s alt text does not say two boxes`)
+      assert.ok(Math.abs(fileW - 2 * fileH) <= 2, `${what}'s file is ${fileW} by ${fileH}, not twice as wide as tall`)
+    }
   }
 })
 
