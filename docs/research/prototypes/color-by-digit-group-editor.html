@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<!-- PROTOTYPE, throwaway. Question: what is the most intuitive way to assign digits to color groups in
+     Color by Digit's settings? Four variants of the selected profile's editor, switchable via ?variant=A..D
+     and the bottom bar (or the arrow keys). State is in memory only; every change shows the saved groups. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PROTOTYPE: Color by Digit group editor</title>
+<style>
+  :root { --accent: #6a1b9a; --ring: #b79be0; --fill: #f1ebfb; --idle: #e2dcea; --muted: #8a8496; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px system-ui, sans-serif; color: #222; background: #e9e6ee; }
+  .stage { display: flex; gap: 24px; padding: 24px 24px 90px; align-items: flex-start; flex-wrap: wrap; }
+  #variant { user-select: none; -webkit-user-select: none; }
+  .dialog { background: #fff; border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.15); padding: 18px 20px; width: 420px; }
+  .dialog h2 { margin: 0 0 4px; font-size: 18px; }
+  .dialog .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .label { font-weight: 700; margin: 12px 0 6px; }
+  .side { width: 300px; }
+  .card { background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 10px rgba(0,0,0,.08); margin-bottom: 16px; }
+  .card h3 { margin: 0 0 8px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  pre { margin: 0; font-size: 12px; white-space: pre-wrap; }
+  button { font: inherit; cursor: pointer; }
+  .sw { width: 44px; height: 44px; border-radius: 6px; border: 1px solid rgba(0,0,0,.2); padding: 0; }
+  .sw.on { outline: 3px solid #222; outline-offset: 2px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 44px); gap: 8px; }
+  .digit { width: 34px; height: 40px; border-radius: 7px; border: 1px solid #c9c2d3; background: #fff; font-weight: 700; font-size: 17px; }
+  .chips { display: flex; gap: 4px; }
+  .chip { width: 22px; height: 22px; border-radius: 4px; font: 700 13px/22px sans-serif; text-align: center; border: 1px solid rgba(0,0,0,.25); }
+  .btn { border: 1px solid var(--idle); background: #f6f3f9; border-radius: 8px; padding: 6px 12px; }
+  select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid #c9c2d3; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  /* switcher, deliberately not part of the design */
+  .switcher { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #111; color: #fff; border-radius: 999px; padding: 8px 10px; display: flex; gap: 10px; align-items: center; box-shadow: 0 6px 20px rgba(0,0,0,.35); font: 600 14px system-ui; z-index: 10; }
+  .switcher button { background: #333; color: #fff; border: 0; border-radius: 999px; width: 34px; height: 34px; font-size: 16px; }
+  .switcher span { min-width: 260px; text-align: center; }
+  /* B popover */
+  .pop { position: absolute; background: #fff; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.25); padding: 10px; z-index: 5; }
+  /* C buckets */
+  .bucket { border: 2px dashed #cfc7da; border-radius: 10px; padding: 8px; margin-bottom: 8px; min-height: 58px; }
+  .bucket .tiles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 40px; }
+  .tile { width: 34px; height: 40px; border-radius: 7px; font: 700 17px/40px sans-serif; text-align: center; cursor: grab; border: 1px solid rgba(0,0,0,.2); user-select: none; }
+  .bucket.over { border-color: var(--accent); background: var(--fill); }
+  /* D matrix */
+  table.m { border-collapse: collapse; }
+  table.m td, table.m th { width: 30px; height: 32px; text-align: center; padding: 0; }
+  table.m th { font-size: 15px; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #cfc7da; background: #fff; }
+  .dot.on { border-color: rgba(0,0,0,.35); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="dialog">
+    <h2>Color by Digit <small style="color:var(--muted);font-weight:400">prototype</small></h2>
+    <div class="sub">Selected profile: <b>Entropic</b>. Only the group editor is prototyped.</div>
+    <div id="variant"></div>
+  </div>
+  <div class="side">
+    <div class="card"><h3>Button icon and menu chips</h3><div id="preview" class="chips"></div>
+      <div class="hint">Group order: by each group's lowest digit, 0 counting last.</div></div>
+    <div class="card"><h3>Saved groups</h3><pre id="state"></pre></div>
+    <div class="card"><button class="btn" id="reset">Reset to Entropic</button></div>
+  </div>
+</div>
+<div class="switcher"><button id="prev">←</button><span id="vlabel"></span><button id="next">→</button></div>
+
+<script>
+// SudokuPad's default cell palette, approximated, two pages of nine.
+const PAGES = [
+  [['1', '#d6d6d6'], ['2', '#7f7f7f'], ['3', '#000000'], ['4', '#b4e86c'], ['5', '#e87ff0'], ['6', '#e5962f'], ['7', '#f2423d'], ['8', '#fae84a'], ['9', '#3e9df5']],
+  [['b', '#9b2fb5'], ['c', '#f0a3ad'], ['d', '#99582d'], ['e', '#4caf50'], ['f', '#1a237e'], ['g', '#00897b'], ['h', '#ad1457'], ['i', '#c0ca33'], ['j', '#6d4c41']]
+]
+const COLOR = Object.fromEntries(PAGES.flat())
+const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+const ENTROPIC = { 0: '7', 1: '7', 2: '7', 3: '7', 4: '4', 5: '4', 6: '4', 7: '8', 8: '8', 9: '8' }
+let assign = { ...ENTROPIC } // digit -> palette key; a missing digit is in no group
+
+const rank = (d) => d === '0' ? 10 : Number(d)
+const ink = (hex) => { const n = parseInt(hex.slice(1), 16); const l = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); return l > 140 ? '#000' : '#fff' }
+function groups () {
+  const by = {}
+  for (const d of DIGITS) if (assign[d]) (by[assign[d]] ||= []).push(d)
+  return Object.entries(by).map(([key, digits]) => ({ key, digits: digits.sort((a, b) => rank(a) - rank(b)) }))
+    .sort((a, b) => rank(a.digits[0]) - rank(b.digits[0]))
+}
+function shown (digits) { const n = digits.filter((d) => d !== '0'); if (!n.length) return '0'; if (n.every((d) => d < 5)) return n[0]; if (n.every((d) => d > 5)) return n[n.length - 1]; return n[Math.floor((n.length - 1) / 2)] }
+function chip (key, label) { const c = COLOR[key]; return `<span class="chip" style="background:${c};color:${ink(c)}">${label}</span>` }
+function refresh () {
+  const g = groups()
+  document.getElementById('state').textContent = JSON.stringify(g.map((x) => ({ key: x.key, digits: x.digits.join('') })), null, 1)
+  document.getElementById('preview').innerHTML = g.slice(0, 3).map((x) => chip(x.key, shown(x.digits))).join('')
+  render()
+}
+const set = (d, key) => { if (key) assign[d] = key; else delete assign[d]; refresh() }
+
+// ---- A family: brush, with drag-painting -----------------------------------------------------------
+let brush = '7'; let pageA = 0
+let paintMode = null // 'paint' or 'clear' while a drag is down
+function digitBtn (d, size) {
+  const k = assign[d]; const c = k ? COLOR[k] : '#fff'
+  return `<button class="digit" data-d="${d}" style="width:${size}px;height:${size}px;background:${c};color:${k ? ink(c) : '#999'};touch-action:none">${d}</button>`
+}
+function palette (size) {
+  return `<select id="pg">${PAGES.map((_, i) => `<option value="${i}"${i === pageA ? ' selected' : ''}>Page ${i + 1}</option>`).join('')}</select>
+    <div style="display:grid;grid-template-columns:repeat(3,${size}px);gap:6px;margin-top:8px">${PAGES[pageA].map(([k, c]) => `<button class="sw${k === brush ? ' on' : ''}" data-k="${k}" style="width:${size}px;height:${size}px;background:${c}"></button>`).join('')}</div>`
+}
+function wireA (v) {
+  v.querySelector('#pg').onchange = (e) => { pageA = Number(e.target.value); render() }
+  v.querySelectorAll('.sw[data-k]').forEach((b) => { b.onclick = () => { brush = b.dataset.k; render() } })
+  v.querySelectorAll('.digit').forEach((b) => {
+    b.onpointerdown = (e) => { e.preventDefault(); const d = b.dataset.d; paintMode = assign[d] === brush ? 'clear' : 'paint'; set(d, paintMode === 'paint' ? brush : null) }
+  })
+}
+document.addEventListener('pointermove', (e) => {
+  if (!paintMode && !armed) return
+  const el = document.elementFromPoint(e.clientX, e.clientY)
+  const b = el && el.closest('.digit'); if (!b) return
+  if (!paintMode) { armed = false; paintMode = assign[b.dataset.d] === brush ? 'clear' : 'paint' }
+  const d = b.dataset.d; const want = paintMode === 'paint' ? brush : undefined
+  if (assign[d] !== want) set(d, want || null)
+})
+document.addEventListener('pointerup', () => { paintMode = null; armed = false })
+// A press that starts beside a button (in a gap) must not start a text selection or a drag of the page.
+let armed = false // a press that began in a gap: the first digit the drag reaches decides paint or clear
+document.getElementById('variant').addEventListener('pointerdown', (e) => {
+  if (e.target.closest('select,input')) return
+  e.preventDefault()
+  if (!e.target.closest('.digit, .sw')) armed = true
+})
+const HINT = '<div class="hint">Press on a digit and drag across others to paint them all. Start on a digit already in the picked color to clear instead.</div>'
+// A: number pad beside the palette, same size squares
+function A () {
+  const v = document.getElementById('variant')
+  const pad = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+  // One grid: palette columns 1-3, a gap column, digit columns 5-8, so every row lines up. 0 sits right of 9.
+  const sw = (k, c) => `<button class="sw${k === brush ? ' on' : ''}" data-k="${k}" style="width:40px;height:40px;background:${c}"></button>`
+  const cells = []
+  for (let r = 0; r < 3; r++) {
+    PAGES[pageA].slice(r * 3, r * 3 + 3).forEach(([k, c]) => cells.push(sw(k, c)))
+    cells.push('<span></span>')
+    pad.slice(r * 3, r * 3 + 3).forEach((d) => cells.push(digitBtn(d, 40)))
+    cells.push(r === 2 ? digitBtn('0', 40) : '<span></span>')
+  }
+  v.innerHTML = `<div class="row" style="justify-content:space-between;width:${40 * 7 + 6 * 6 + 14}px;margin-bottom:8px">
+      <select id="pg">${PAGES.map((_, i) => `<option value="${i}"${i === pageA ? ' selected' : ''}>Page ${i + 1}</option>`).join('')}</select></div>
+    <div style="display:grid;grid-template-columns:repeat(3,40px) 14px repeat(4,40px);gap:6px">${cells.join('')}</div>${HINT}`
+  wireA(v)
+}
+// A2: two rows of five digits under a compact palette row
+function A2 () {
+  const v = document.getElementById('variant')
+  v.innerHTML = `<div class="label" style="margin-top:0">Color</div>
+    <div class="row"><select id="pg">${PAGES.map((_, i) => `<option value="${i}"${i === pageA ? ' selected' : ''}>Page ${i + 1}</option>`).join('')}</select>
+      ${PAGES[pageA].map(([k, c]) => `<button class="sw${k === brush ? ' on' : ''}" data-k="${k}" style="width:26px;height:26px;background:${c}"></button>`).join('')}</div>
+    <div class="label">Digits</div>
+    <div style="display:grid;grid-template-columns:repeat(5,40px);gap:6px">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].map((d) => digitBtn(d, 40)).join('')}</div>${HINT}`
+  wireA(v)
+}
+// A3: the palette is the brush and the pad at once: digits sit under their color's swatch? No: one 3x3 pad whose
+// keys show their color, with the palette as a thin strip of brush chips above it.
+function A3 () {
+  const v = document.getElementById('variant')
+  const pad = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
+  v.innerHTML = `<div class="row" style="gap:6px;flex-wrap:wrap"><select id="pg">${PAGES.map((_, i) => `<option value="${i}"${i === pageA ? ' selected' : ''}>Page ${i + 1}</option>`).join('')}</select>
+      ${PAGES[pageA].map(([k, c]) => `<button class="sw${k === brush ? ' on' : ''}" data-k="${k}" style="width:22px;height:22px;border-radius:50%;background:${c}"></button>`).join('')}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,52px);gap:6px;margin-top:12px">${pad.map((d) => digitBtn(d, 52)).join('')}<span></span>${digitBtn('0', 52)}</div>${HINT}`
+  wireA(v)
+}
+
+// ---- B: color per digit (click a digit, pick its color in a popover) -----------------------------
+let openB = null; let pageB = 0
+function B () {
+  const v = document.getElementById('variant')
+  const used = [...new Set(groups().map((g) => g.key))]
+  v.innerHTML = `<div class="label">Each digit's color</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">${DIGITS.map((d) => { const k = assign[d]; const c = k ? COLOR[k] : '#fff'; return `<button data-d="${d}" style="border:1px solid #c9c2d3;border-radius:10px;background:#fff;padding:6px 0;position:relative">
+      <div style="font-weight:700;font-size:18px">${d}</div><div style="margin:4px auto 0;width:36px;height:14px;border-radius:4px;background:${c};border:1px solid rgba(0,0,0,.2)"></div></button>` }).join('')}</div>
+    <div class="hint">Click a digit to choose its color. Digits with the same color are one group.</div>
+    <div id="popB"></div>`
+  v.querySelectorAll('button[data-d]').forEach((b) => { b.onclick = (e) => { openB = openB === b.dataset.d ? null : b.dataset.d; render(); e.stopPropagation() } })
+  if (openB) {
+    const host = v.querySelector(`button[data-d="${openB}"]`).getBoundingClientRect()
+    const pop = document.createElement('div'); pop.className = 'pop'
+    pop.style.left = `${host.left + window.scrollX}px`; pop.style.top = `${host.bottom + window.scrollY + 6}px`
+    pop.innerHTML = `<div style="font-size:13px;color:var(--muted);margin-bottom:6px">Digit ${openB}: same as</div>
+      <div class="row" style="margin-bottom:8px">${used.map((k) => `<button class="sw" data-k="${k}" style="width:30px;height:30px;background:${COLOR[k]}"></button>`).join('')}
+      <button class="btn" data-k="">None</button></div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">or a new color <select id="pgB">${PAGES.map((_, i) => `<option value="${i}"${i === pageB ? ' selected' : ''}>Page ${i + 1}</option>`).join('')}</select></div>
+      <div class="grid3">${PAGES[pageB].map(([k, c]) => `<button class="sw${assign[openB] === k ? ' on' : ''}" data-k="${k}" style="background:${c}"></button>`).join('')}</div>`
+    document.body.appendChild(pop)
+    pop.onclick = (e) => e.stopPropagation()
+    pop.querySelector('#pgB').onchange = (e) => { pageB = Number(e.target.value); render() }
+    pop.querySelectorAll('[data-k]').forEach((b) => { b.onclick = () => { const d = openB; openB = null; set(d, b.dataset.k || null) } })
+  }
+}
+document.addEventListener('click', () => { if (openB) { openB = null; render() } })
+
+// ---- C: buckets (drag digit tiles between color groups) -------------------------------------------
+let newKey = null
+function C () {
+  const v = document.getElementById('variant')
+  const g = groups()
+  const tile = (d) => { const k = assign[d]; const c = k ? COLOR[k] : '#fff'; return `<div class="tile" draggable="true" data-d="${d}" style="background:${c};color:${k ? ink(c) : '#555'}">${d}</div>` }
+  const bucket = (key, digits, title) => `<div class="bucket" data-k="${key}"><div class="row">${key ? `<span class="chip" style="background:${COLOR[key]}"></span>` : ''}<b style="font-size:13px">${title}</b></div><div class="tiles">${digits.map(tile).join('')}</div></div>`
+  const free = DIGITS.filter((d) => !assign[d])
+  v.innerHTML = `<div class="label">Drag digits into a color</div>
+    ${g.map((x) => bucket(x.key, x.digits, '')).join('')}
+    ${newKey ? bucket(newKey, [], 'New color: drop digits here') : ''}
+    ${bucket('', free, 'No color')}
+    <div class="row" style="margin-top:6px"><span style="font-size:13px;color:var(--muted)">New color:</span>
+      ${PAGES[0].map(([k, c]) => `<button class="sw" data-new="${k}" style="width:26px;height:26px;background:${c}"></button>`).join('')}</div>
+    <div class="hint">An emptied color disappears.</div>`
+  v.querySelectorAll('.tile').forEach((t) => { t.ondragstart = (e) => e.dataTransfer.setData('text', t.dataset.d) })
+  v.querySelectorAll('.bucket').forEach((b) => {
+    b.ondragover = (e) => { e.preventDefault(); b.classList.add('over') }
+    b.ondragleave = () => b.classList.remove('over')
+    b.ondrop = (e) => { e.preventDefault(); const d = e.dataTransfer.getData('text'); if (b.dataset.k === newKey) newKey = null; set(d, b.dataset.k || null) }
+  })
+  v.querySelectorAll('[data-new]').forEach((b) => { b.onclick = () => { newKey = b.dataset.new; render() } })
+}
+
+// ---- D: matrix (rows are colors, columns are digits, one dot per column) --------------------------
+let extraRows = []
+function D () {
+  const v = document.getElementById('variant')
+  const rows = [...new Set([...groups().map((g) => g.key), ...extraRows])]
+  v.innerHTML = `<div class="label">One color per digit</div>
+    <table class="m"><tr><th></th>${DIGITS.map((d) => `<th>${d}</th>`).join('')}</tr>
+    ${rows.map((k) => `<tr><td><span class="chip" style="background:${COLOR[k]};display:inline-block"></span></td>${DIGITS.map((d) => `<td><button class="dot${assign[d] === k ? ' on' : ''}" data-d="${d}" data-k="${k}" style="${assign[d] === k ? `background:${COLOR[k]}` : ''}"></button></td>`).join('')}</tr>`).join('')}
+    <tr><td style="font-size:11px;color:var(--muted)">none</td>${DIGITS.map((d) => `<td><button class="dot${!assign[d] ? ' on' : ''}" data-d="${d}" data-k="" style="${!assign[d] ? 'background:#ddd' : ''}"></button></td>`).join('')}</tr></table>
+    <div class="row" style="margin-top:10px"><span style="font-size:13px;color:var(--muted)">Add a color row:</span>
+      ${PAGES[0].filter(([k]) => !rows.includes(k)).map(([k, c]) => `<button class="sw" data-row="${k}" style="width:24px;height:24px;background:${c}"></button>`).join('')}</div>
+    <div class="hint">Click a dot to put that digit in that color. Each column has one dot.</div>`
+  v.querySelectorAll('.dot').forEach((b) => { b.onclick = () => set(b.dataset.d, b.dataset.k || null) })
+  v.querySelectorAll('[data-row]').forEach((b) => { b.onclick = () => { extraRows.push(b.dataset.row); render() } })
+}
+
+const VARIANTS = { A: ['Pad beside palette', A], A2: ['Palette strip, 2 rows of 5', A2], A3: ['Color chips over a big pad', A3], B: ['Per digit: click a digit, pick its color', B], C: ['Buckets: drag digits into colors', C], D: ['Matrix: one dot per digit column', D] }
+const keys = Object.keys(VARIANTS)
+let current = new URLSearchParams(location.search).get('variant') || 'A'
+if (!VARIANTS[current]) current = 'A'
+function render () {
+  document.querySelectorAll('.pop').forEach((p) => p.remove())
+  VARIANTS[current][1]()
+  document.getElementById('vlabel').textContent = `${current} (${VARIANTS[current][0]})`
+}
+function go (step) {
+  current = keys[(keys.indexOf(current) + step + keys.length) % keys.length]
+  const u = new URL(location.href); u.searchParams.set('variant', current); history.replaceState(null, '', u)
+  openB = null; render()
+}
+document.getElementById('prev').onclick = () => go(-1)
+document.getElementById('next').onclick = () => go(1)
+document.addEventListener('keydown', (e) => { if (e.target.closest('input,textarea,select,[contenteditable]')) return; if (e.key === 'ArrowLeft') go(-1); if (e.key === 'ArrowRight') go(1) })
+document.getElementById('reset').onclick = () => { assign = { ...ENTROPIC }; extraRows = []; newKey = null; refresh() }
+refresh()
+</script>
+</body>
+</html>
