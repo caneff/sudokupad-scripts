@@ -499,11 +499,13 @@ test('each pulldown option that names a profile carries its index, so a rename c
   assert.equal(count(renderPulldowns(hostile, 'cell'), /<option value="\d" data-index="\d"/g), 6)
 })
 
-test('the pulldowns sit above the profile list and the groups, in a grid that wraps by a minimum column width', () => {
+test('the pulldowns sit above the profile list and the groups, one per row, each label in a fixed-width column left of its select', () => {
   const html = renderEditor({ groups: [], pages: [], shown: [], pulldownsHtml: '<div id="pulldowns"></div>', profilesHtml: '<div id="mark-profiles"></div>' })
   assert.equal(html.indexOf('id="pulldowns"') < html.indexOf('mark-profiles'), true)
   const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\.cbd-pulldowns \{ display: grid; gap: [\d px]+; grid-template-columns: repeat\(auto-fit, minmax\(\d+px, 1fr\)\)/)
+  assert.match(css, /\.cbd-pulldowns \{ display: grid; gap: \d+px; margin: 0 0 10px; \}/)
+  assert.match(css, /\.cbd-pulldown \{ display: grid; grid-template-columns: \d+px minmax\(0, 1fr\); align-items: center;/)
+  assert.doesNotMatch(css, /\.cbd-pulldowns \{[^}]*auto-fit/)
 })
 
 test('the dialog has the profile list and the groups editor as two columns of one grid, the list first', () => {

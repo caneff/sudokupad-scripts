@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.0
+// @version      0.15.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.14.0'
+  const VERSION = '0.15.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -728,8 +728,8 @@
   const SMALL_BUTTON_SIZE = 28
   // Two columns need this much room each; the dialog's 640 px gives them two, a phone gives one.
   const COLUMN_MIN = 270
-  // Three pulldowns fit one row of the 640 px dialog; at phone width they stack.
-  const PULLDOWN_MIN = 180
+  // Wide enough for the longest of Mode, Cell and Digit, so the three pulldowns start at one edge.
+  const PULLDOWN_LABEL_WIDTH = 64
   const DIALOG_WIDTH = 640
   const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
   const SAVE_LABEL = 'Save'
@@ -859,8 +859,8 @@
     [`.dialog.${DIALOG_CLASS}`, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
-    [`${EDITOR} .cbd-pulldowns`, `display: grid; gap: 8px 12px; grid-template-columns: repeat(auto-fit, minmax(${PULLDOWN_MIN}px, 1fr)); margin: 0 0 10px`],
-    [`${EDITOR} .cbd-pulldown`, 'display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left'],
+    [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
+    [`${EDITOR} .cbd-pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
     [`${EDITOR} .cbd-column`, 'min-width: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],

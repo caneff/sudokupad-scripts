@@ -53,6 +53,8 @@ const dialog = await box('.dialog')
 const parts = {
   icons: union(await Promise.all(['copy-settings', 'paste-settings'].map((a) => box(`.dialog button[data-act=${a}]`)))),
   pulldowns: await box(`${E} .cbd-pulldowns`),
+  modeSelect: await box(`${E} select[data-role=mode-draft]`),
+  cellSelect: await box(`${E} select[data-role=cell-profile]`),
   profiles: await box(`${E} .cbd-profile:nth-child(2)`),
   newProfile: await box(`${E} button[data-act=new-profile]`),
   name: await box(`${E} input[type=text]`),
@@ -69,10 +71,12 @@ const r = Object.fromEntries(Object.entries(parts).map(([k, b]) => [k, rel(b)]))
 // and under the profile list for the open group.
 const iconGap = r.icons.y - 6
 const nameGap = r.name.y - 6
+// The pulldowns' line runs in the gap between the Mode and Cell rows, so it crosses no label.
+const pulldownGap = (r.modeSelect.y + r.modeSelect.h + r.cellSelect.y) / 2
 const openY = r.newProfile.y + r.newProfile.h + 30
 const labels = [
   { text: 'Copy or paste all settings', y: iconGap, to: [[r.icons.cx, iconGap], [r.icons.cx, r.icons.y + 4]] },
-  { text: 'Mode, cell and digit profiles', y: r.pulldowns.cy, to: [[r.pulldowns.x + 6, r.pulldowns.cy]] },
+  { text: 'Mode, cell and digit profiles', y: pulldownGap, to: [[r.modeSelect.x - 6, pulldownGap]] },
   { text: 'Rename the selected profile', y: nameGap, to: [[r.name.cx, nameGap], [r.name.cx, r.name.y + 6]] },
   { text: 'Click a profile to edit its colors', y: r.profiles.cy, to: [[r.profiles.x + 6, r.profiles.cy]] },
   { text: 'Click a group to open it', y: r.rows.cy, to: [[r.rows.x + 6, r.rows.cy]] },
