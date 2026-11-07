@@ -152,7 +152,7 @@ async function scene () {
   await s.p.mouse.up()
   const pickers = '.draw-tool-picker input[type=color]'
   if ((await s.p.locator(pickers).count()) !== 9) throw new Error('the hold did not show nine pickers')
-  await s.p.locator(`.draw-tool-picker input[data-color="${ORANGE}"]`).fill('#0d8f8f')
+  await s.p.locator(`.draw-tool-picker input[data-key="${ORANGE}"]`).fill('#0d8f8f')
   await s.p.mouse.move(0, 0)
   const line = await s.p.locator('#draw-tool-layer path').first().evaluate((el) => getComputedStyle(el).stroke)
   if (line !== 'rgb(13, 143, 143)') throw new Error(`the line did not take the new color: ${line}`)
