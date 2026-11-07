@@ -5,7 +5,7 @@ const { execFileSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
+const { RAW, pictureTags, tagOf } = require('./tag-pictures.js')
 const SCRIPT_SUFFIX = '.user.js'
 const SITE_DIR = path.join(__dirname, 'site')
 // The two places the site is served from; a link to either by its full address breaks on the other.
@@ -21,11 +21,19 @@ const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(
 const plain = html => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim()
 const targets = page => [...page.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m => m[1])
 const scriptLinks = page => targets(page).filter(t => t.endsWith(SCRIPT_SUFFIX))
-const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length))
+const screenshots = page => targets(page).filter(t => t.startsWith(RAW) && !t.endsWith(SCRIPT_SUFFIX)).map(t => t.slice(RAW.length).replace(/\?.*$/, ''))
 const rootScripts = () => fs.readdirSync(__dirname).filter(f => f.endsWith(SCRIPT_SUFFIX))
 // A link into the site itself: not a URL with a scheme and not a fragment. The site is served from a
 // subpath on GitHub Pages and from the root on Netlify, so these must be relative.
 const siteLinks = page => targets(page).filter(t => !/^([a-z][a-z0-9+.-]*:|#)/i.test(t))
+
+test('every picture of a repo file on every page carries a ?v= tag matching its file', () => {
+  for (const name of PAGES) {
+    for (const { file, tag } of pictureTags(read(name))) {
+      assert.equal(tag, tagOf(file), `site/${name}: ${file} has tag ${tag}, its file hashes to ${tagOf(file)}; run: node tag-pictures.js`)
+    }
+  }
+})
 
 test('every *.user.js in the repo root has an install link on the homepage', () => {
   const scripts = rootScripts()
@@ -162,13 +170,14 @@ const PICTURES = {
 }
 const NO_PICTURE = 'Erase a whole line.'
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
+const withoutTag = img => img.replace(/\?v=[0-9a-f]{7}"/, '"')
 
 test(`${DETAILS} puts one picture with alt text on each item in PICTURES`, () => {
   const byLeadIn = new Map(items(read(DETAILS)).map(li => [leadIn(li), li]))
   for (const [leadIn, name] of Object.entries(PICTURES)) {
     const found = imgs(byLeadIn.get(leadIn) || '')
     assert.equal(found.length, 1, `"${leadIn}" has ${found.length} images, not 1`)
-    assert.ok(found[0].includes(`src="${RAW}docs/research/pen-tool-extras-bullet-${name}.png"`), `"${leadIn}" does not show pen-tool-extras-bullet-${name}.png`)
+    assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/pen-tool-extras-bullet-${name}.png"`), `"${leadIn}" does not show pen-tool-extras-bullet-${name}.png`)
     assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${leadIn}" has an image with no alt text`)
   }
 })
@@ -251,7 +260,7 @@ const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, 
       const found = imgs(byLeadIn.get(lead) || '')
       if (!pictures[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
       assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
-      assert.ok(found[0].includes(`src="${RAW}docs/research/${withExtension(pictures[lead])}"`), `"${lead}" does not show ${withExtension(pictures[lead])}`)
+      assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/${withExtension(pictures[lead])}"`), `"${lead}" does not show ${withExtension(pictures[lead])}`)
       assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
     }
   })
@@ -306,7 +315,7 @@ test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, tw
   ]
   for (const [what, img] of examples) {
     assert.ok(img, `no ${what}`)
-    const file = (img.match(/src="[^"]*?(docs\/research\/[^"]+)"/) || [])[1]
+    const file = (img.match(/src="[^"]*?(docs\/research\/[^"?]+)(?:\?v=[0-9a-f]{7})?"/) || [])[1]
     const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
     const [fileW, fileH] = pictureSize(file)
     assert.ok(Math.abs(w * fileH - h * fileW) <= fileW, `${what} is declared ${w} by ${h} but its file is ${fileW} by ${fileH}`)
@@ -322,7 +331,7 @@ test(`${CBD}'s Four modes item is one sentence beside an animation whose alt tex
   const text = plain(li.replace(/<img[^>]*>/g, '')).replace(/^Four modes\.\s*/, '')
   assert.equal(text, 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
   const [img] = imgs(li)
-  assert.match(img, /src="[^"]*\.gif"/)
+  assert.match(img, /src="[^"]*\.gif(\?v=[0-9a-f]{7})?"/)
   const alt = (img.match(/alt="([^"]*)"/) || [])[1] || ''
   assert.match(alt, /^An animation/)
   for (const label of ['CELL', 'DIGIT', 'BOTH', 'OFF']) assert.ok(alt.includes(label), `the alt text does not name ${label}`)
@@ -379,7 +388,7 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
   assert.ok(m, `site/${DRAW} has no <h2>The Draw panel</h2>`)
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the Draw panel section is not one picture')
-  assert.ok(found[0].includes(`src="${RAW}docs/research/draw-tool-panel-annotated.png"`))
+  assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool-panel-annotated.png"`))
   const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
   for (const label of ['Pen color buttons', 'Width buttons', 'Text size buttons', 'Clear all']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
