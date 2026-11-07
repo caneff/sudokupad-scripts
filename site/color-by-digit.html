@@ -5,47 +5,70 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Color by Digit: SudokuPad scripts</title>
 <link rel="stylesheet" href="style.css">
-<style>
-  ul { margin: 0 0 .75rem; padding-left: 1.25rem; }
-  li { margin-bottom: .25rem; }
-  li img { display: block; max-width: min(100%, 20rem); height: auto; margin: .35rem 0 .5rem; }
-  img.panel { display: block; max-width: 100%; height: auto; margin: .35rem 0 .75rem; }
-  img.tour { display: block; max-width: 100%; height: auto; margin: .5rem 0 1rem; }
-</style>
 </head>
-<body>
-  <p><a href="index.html">&larr; All SudokuPad scripts</a></p>
+<body class="details">
+  <p class="back"><a href="index.html">&larr; All SudokuPad scripts</a></p>
   <h1>Color by Digit</h1>
   <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad.</p>
-  <p>Adds to <a href="https://sudokupad.app">SudokuPad</a> a button that colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.</p>
-  <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
+  <p class="lede">Adds to <a href="https://sudokupad.app">SudokuPad</a> a button that colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.</p>
+  <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
 
-  <img class="tour" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-tour.gif?v=4aae9ae" alt="An animation of two sudoku boxes with the Color by Digit button under them, captioned step by step. In Cell mode a digit, 1, is typed into an empty cell and the cell fills with its group's color. Center marks 7 and 9, both in one group, are typed into another cell and it fills with that group's color. A center mark 2 from another group is added and the fill goes. Then presses on the button step the modes Digit, Both, Off and Cell: Digit shows darker shades and the red circles, Both shows the fills and the shades, Off shows the plain boxes. Last, the profile menu opens from the button's arrow box, Modular is picked, and the boxes recolor at once" width="450" height="223">
+  <div class="slideshow">
+    <div class="slide-frame">
+      <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-1-start.png?v=f6a94da" alt="The two boxes in Cell mode, with the Color by Digit button under them" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-2-type.png?v=f38cd81" alt="A 1 typed in an empty cell, which fills with the red of its group" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-3-marks.png?v=031739b" alt="Center marks 7 and 9 typed into the next cell, which fills with the yellow of their group" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-4-add.png?v=8175133" alt="A center mark 2 added to the same cell, from another group, so the fill goes" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-5-digit.png?v=586f108" alt="Digit mode: no cell is filled, digits and marks are in darker shades of their group colors, and the three marks that repeat the given 2 each have a red circle" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-6-both.png?v=f35be18" alt="Both mode: the cells filled and the digits and marks in darker shades" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-7-off.png?v=3bd156e" alt="Off mode: the plain boxes" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-8-menu.png?v=41bdb9f" alt="The profile menu open beside the boxes, listing Entropic, no blue and Modular and Edit profiles" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-9-modular.png?v=8cf8e46" alt="Modular picked: the boxes recolored in its orange, pink and yellow groups" width="900" height="391">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-slide-10-split.png?v=b930a39" alt="Both mode with the cells filled in the first profile's red, green and yellow, and the digits and marks shaded in Modular's olive, purple and brown" width="900" height="391">
+    </div>
+    <div class="slide-bar">
+      <div class="slide-captions">
+      <p class="slide-caption current">Start</p>
+      <p class="slide-caption">Type a 1</p>
+      <p class="slide-caption">Center marks 7 and 9</p>
+      <p class="slide-caption">Add a center mark 2</p>
+      <p class="slide-caption">Digit</p>
+      <p class="slide-caption">Both</p>
+      <p class="slide-caption">Off</p>
+      <p class="slide-caption">Open the profile menu</p>
+      <p class="slide-caption">Pick Modular</p>
+      <p class="slide-caption">Cells from one profile, digits from another</p>
+      </div>
+    </div>
+  </div>
 
   <h2>What it adds</h2>
-  <ul>
-    <li><strong>Four modes.</strong> A press on the button steps the mode Cell → Digit → Both → Off. The button's chips, a short run of board cells, are drawn the way the mode colors the board: filled cells, shaded digits, both, or plain white.</li>
-    <li><strong>Kept in step as you solve.</strong> A cell holding one group's digit, or with center marks that all fall in one group, takes that group's color, and loses it when the digit or marks change.</li>
-    <li><strong>Digit and mark shades.</strong> In Digit and Both, entered digits, corner marks and center marks take a darker shade of their group's color. A mark that conflicts keeps its shade and gets a small red circle.
-      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-digit.png?v=cef94bd" alt="The same two boxes in Digit mode: no cell is filled, and entered digits and marks are in darker shades of their group's colors, and three marks that repeat the given 5 in their row or column each have a red circle behind them" width="400" height="200">
-    </li>
-    <li><strong>Profiles.</strong> A profile is a list of groups of digits, each group with a palette color, and you can keep up to six profiles. Five come preloaded: Low/5/High, Odd/Even, Entropic, Modular and Each digit. The button, the profile menu and the profile list show each profile's colors as the same run of cells.</li>
-    <li><strong>The profile menu.</strong> It opens from the arrow box on the button, a right click or a hold. Pick a profile and it takes effect at once.</li>
-    <li><strong>Digit: Same as cell.</strong> The settings dialog's Digit pulldown starts here: one profile colors both the cells and the digits. Pick a profile by name to color the cells from one profile and the digits from another; each menu row then ends in a Cell dot and a Digit dot.</li>
-    <li><strong>Digit: None.</strong> Pick it to drop digit coloring: the button steps only between Cell and Off.</li>
+  <ul class="features">
+    <li><strong>Four modes</strong> <p>A press on the button steps Cell, Digit, Both and Off. Its chips show how the mode colors the board.</p></li>
+    <li><strong>Kept in step as you solve</strong> <p>A cell takes its group's color when its digit, or all its center marks, fall in one group, and loses it when they change.</p></li>
+    <li><strong>Digit and mark shades</strong> <p>In Digit and Both, digits and marks take a darker shade of their group's color. A conflicting mark keeps its shade and gets a red circle.</p></li>
+    <li><strong>Profiles</strong> <p>A profile is a list of digit groups, each with a color. Keep up to six; five come preloaded.</p></li>
+    <li><strong>The profile menu</strong> <p>Right click or hold the button's arrow box. Pick a profile and it takes effect at once.</p></li>
+    <li><strong>Cells and digits apart</strong> <p>The Digit pulldown follows the cell profile, takes another profile, or is None to drop digit coloring.</p></li>
   </ul>
 
   <h2>The settings dialog</h2>
-  <p>Edit profiles in the menu opens it. At the top are three pulldowns, one per row with its label on the left: Mode, Cell (the profile that colors the cells) and Digit (Same as cell, a profile, or None). Under them, on a desktop, are two columns, the profile list on the left and a painting grid for the selected profile on the right: the palette's swatches beside a pad of digit keys, 1 to 9 and 0 right of 9. On a phone the two columns stack.</p>
-  <img class="panel" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-dialog-annotated.png?v=2050607" alt="The Color by Digit settings dialog with each part labelled on its left. Settings icons: copy or paste all settings. Pulldowns: mode, cell and digit profiles. Selected profile: rename it in its row. Profile list: click a profile to edit its colors. Palette and digits: click a color, then click or drag across digits to paint them. Bottom row: cancel or save the changes." width="966" height="507">
-  <p>The profile list is only for editing: click a row to edit that profile's colors, rename it in its row, reorder, delete, or add a copy of it. The pulldowns pick which profile colors the cells and which the digits. To give digits a color, click a swatch and then the digits: a digit takes the picked color, and a click on a digit already in that color clears it. Press on a digit and drag across others to paint them all; start on one already in the color to clear instead. The groups of a profile are the digits that share a color. The two icons at the right end of the title row, Copy settings and Paste settings, move all of it to another browser. Save applies every change at once; Cancel drops them.</p>
+  <p class="prose">Edit profiles, in the profile menu, opens it.</p>
+  <div class="figure"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-dialog-annotated.png?v=2050607" alt="The Color by Digit settings dialog with each part labelled on its left. Settings icons: copy or paste all settings. Pulldowns: mode, cell and digit profiles. Selected profile: rename it in its row. Profile list: click a profile to edit its colors. Palette and digits: click a color, then click or drag across digits to paint them. Bottom row: cancel or save the changes." width="966" height="507"></div>
+  <ol class="steps">
+    <li><strong>Choose what colors what.</strong> The pulldowns set the Mode, the Cell profile and the Digit profile.</li>
+    <li><strong>Pick a profile to edit.</strong> Click a row in the list. You can also rename, reorder, delete or copy it.</li>
+    <li><strong>Paint the groups.</strong> Click a swatch, then click or drag across digits to give them its color. A click on a digit already in that color clears it.</li>
+    <li><strong>Save.</strong> Save applies every change at once. Cancel drops them. Copy settings and Paste settings, top right, move everything to another browser.</li>
+  </ol>
 
   <h2>Good to know</h2>
-  <ul>
+  <ul class="notes">
     <li>A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.</li>
     <li>With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.</li>
-    <li>Where the button is: it sits in the bottom row with Undo, Redo, Check and Select. When that row already holds five or more buttons, as it can once other extensions add theirs, it goes in a second row under it. Color by Digit never moves another script's button.</li>
+    <li>The button sits in the bottom row with Undo, Redo, Check and Select, or in a second row under it once that row holds five or more buttons. It never moves another script's button.</li>
   </ul>
-  <p><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
+  <footer><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
+  <script src="slides.js"></script>
 </body>
 </html>

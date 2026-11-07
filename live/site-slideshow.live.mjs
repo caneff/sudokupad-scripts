@@ -1,4 +1,4 @@
-// Live check of site/slides.js on the homepage and on each details page with a slideshow (Pen Tool Extras, Draw Tool), opened from disk: Next and Previous step
+// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Draw Tool), opened from disk: Next and Previous step
 // the slideshow's picture, caption and counter, both ends wrap, and the rows with one picture get no pager. The page's raw.githubusercontent.com
 // pictures are served from this checkout, since a branch is not on main yet.
 import { after, before, describe, it } from 'node:test'
@@ -10,6 +10,16 @@ const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const ROOT = new URL('../', import.meta.url)
 // The slideshows: the homepage row heading and its place among the rows, the details page, the slide count and the first, second, last and second-last picture and caption.
 const SHOWS = [
+  {
+    heading: 'Color by Digit',
+    row: 1,
+    details: 'color-by-digit.html',
+    slides: 10,
+    first: ['color-by-digit-slide-1-start.png', 'Start'],
+    second: ['color-by-digit-slide-2-type.png', 'Type a 1'],
+    last: ['color-by-digit-slide-10-split.png', 'Cells from one profile, digits from another'],
+    beforeLast: ['color-by-digit-slide-9-modular.png', 'Pick Modular']
+  },
   {
     heading: 'Pen Tool Extras',
     row: 2,
