@@ -327,7 +327,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   // SudokuPad's replay encodes its undo stack, so the string is not the same after an undo and a
-  // redo; this checks that it still encodes the moves, not that playback works (playback stays owed).
+  // redo; this checks that it still encodes the moves. Playback is live/replay-playback.live.mjs's.
   it('SudokuPad\'s own undo and replay are unaffected: the replay still encodes the moves and tracks undo', async () => {
     const replay = () => read(() => Framework.app.getReplay())
     await markMode('#control-corner', async () => { await enter(0, 6, '5') })
