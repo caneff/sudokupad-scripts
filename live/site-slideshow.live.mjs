@@ -73,6 +73,16 @@ const gaps = (root) => page.evaluate((root) => {
   }
   return { inset: 0.6 * parseFloat(window.getComputedStyle(document.documentElement).fontSize), gaps: [...frame.querySelectorAll('.slide')].map(gap) }
 }, root)
+// The shown width of every slide against its `width` attribute, and the left edges and widths of the lede above the slideshow, the frame and the bar under it.
+const sizes = () => page.evaluate(() => {
+  const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, width: r.width } }
+  return {
+    slides: [...document.querySelectorAll('.slideshow .slide')].map((i) => ({ shown: i.getBoundingClientRect().width, own: Number(i.getAttribute('width')) })),
+    lede: box(document.querySelector('.lede')),
+    frame: box(document.querySelector('.slide-frame')),
+    bar: box(document.querySelector('.slide-bar'))
+  }
+})
 const DEFAULT_VIEWPORT = { width: 1280, height: 720 }
 
 for (const show of SHOWS) {
@@ -87,6 +97,15 @@ for (const show of SHOWS) {
         const { inset, gaps: all } = await gaps('.slideshow')
         assert.equal(all.length, show.slides)
         for (const g of all) for (const side of ['left', 'right', 'top', 'bottom']) assert.ok(Math.abs(g[side] - inset) <= 1, `${side} gap ${g[side]} px, want ${inset} px: ${JSON.stringify(g)}`)
+      })
+      it('no slide is shown wider than its own width, and the frame, left-aligned with the text, takes the bar at its width', async () => {
+        await page.setViewportSize({ width, height })
+        await page.goto(new URL(`site/${show.details}`, ROOT).href, { waitUntil: 'load' })
+        await page.waitForFunction(() => [...document.images].every((i) => i.complete))
+        const { slides, lede, frame, bar } = await sizes()
+        for (const { shown, own } of slides) assert.ok(shown <= own + 1, `slide shown ${shown} px wide, its own width is ${own} px`)
+        assert.ok(Math.abs(frame.left - lede.left) <= 1, `frame left ${frame.left} px, text left ${lede.left} px`)
+        assert.ok(Math.abs(bar.width - frame.width) <= 1, `bar ${bar.width} px wide, frame ${frame.width} px`)
       })
     })
   }

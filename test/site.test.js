@@ -469,15 +469,16 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
   assert.deepEqual(leadIns(grid[1]), DRAW_LEAD_INS)
 })
 
-test(`${DRAW} has the slideshow between the install link and "What it adds", then the panel with numbered steps`, () => {
-  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The Draw panel</h2>', '<ol class="steps">', '<h2>Good to know</h2>'])
+test(`${DRAW} has the slideshow between the install link and "What it adds", then the panel`, () => {
+  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The Draw panel</h2>', '<h2>Good to know</h2>'])
 })
 
-test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names every label`, () => {
+test(`${DRAW} shows the Draw panel as an intro and one annotated picture whose alt text names every label`, () => {
   const m = read(DRAW).match(/<h2>The Draw panel<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${DRAW} has no <h2>The Draw panel</h2>`)
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the Draw panel section is not one picture')
+  assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the Draw panel section is the intro and the picture only')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool/draw-tool-panel-annotated.png"`))
   const alt = altOf(found[0])
   for (const label of ['Color buttons', 'Clear all', 'Shape', 'Settings', 'Size slider', 'Opacity slider']) {

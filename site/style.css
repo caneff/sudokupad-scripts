@@ -46,9 +46,12 @@ p { margin: 0 0 .5rem; }
 /* The details layout (body.details): a back link, title, warning, lede and Install, then the slideshow, then sections divided by thin rules. */
 .details .back { font-size: .95rem; margin: .25rem 0 1rem; }
 .details .slide-caption { font-size: 1.25rem; }
-/* On a details page the frame takes the slides' own shape: the pictures stack in one grid cell, each scaled to the frame's width less the inset, so the frame is as tall as the tallest. */
+/* On a details page the frame takes the slides' own shape: the pictures stack in one grid cell at their own width (never larger), shrinking to fit a narrow window, so the frame is as wide and tall as the biggest. */
+.details .slideshow { display: grid; width: fit-content; max-width: 100%; }
 .details .slide-frame { display: grid; aspect-ratio: auto; padding: var(--slide-inset); }
-.details .slide-frame img { position: static; grid-area: 1 / 1; margin: 0; width: 100%; max-width: none; max-height: none; }
+.details .slide-frame img { position: static; grid-area: 1 / 1; margin: 0; max-width: 100%; max-height: none; }
+/* The bar adds nothing to the slideshow's width, so the caption and pager sit under the frame at its width. */
+.details .slide-bar { contain: inline-size; }
 .details .lede { max-width: 44rem; font-size: 1.1rem; }
 .details .actions { margin: .75rem 0 1.5rem; }
 .details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }
