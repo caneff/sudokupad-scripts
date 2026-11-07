@@ -1591,11 +1591,6 @@
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
     const guarded = (handler) => (event) => steps.lineErase.run(() => handler(event), () => { erase = null; menuOwed = false })
     window.addEventListener('pointerdown', guarded((event) => {
-      // A second button pressed during a drag joins it: the drag ends when its own button is released.
-      if (erase !== null && erasePress(event)) {
-        event.preventDefault()
-        return
-      }
       erase = null
       menuOwed = false
       if (!erasePress(event)) return
@@ -1611,6 +1606,7 @@
       if (event.buttons & BUTTON_BIT[erase.button]) crossTo(marksAtPoint, erase, pointOf(event))
     }), true)
     window.addEventListener('pointerup', guarded((event) => {
+      // With two buttons held, the `pointerup` is the last button's, whichever it is, so the drag ends when its own button is no longer held.
       if (erase === null || (event.buttons & BUTTON_BIT[erase.button])) return
       const done = erase
       erase = null

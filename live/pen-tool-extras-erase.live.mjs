@@ -263,19 +263,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undoAll()
   })
 
-  for (const button of ['right', 'middle']) {
-    it(`a second button pressed and released during a ${button}-drag does not end it, and the drag erases when its own button is released`, async () => {
+  for (const [button, other] of [['right', 'middle'], ['middle', 'right']]) {
+    it(`a ${button}-drag still erases when a ${other} button pressed during it outlasts it`, async () => {
       await undoAll()
       await selectPenOnPage(1, 3)
       await drag(p, [[1.5, 1.5], [1.5, 3.5]])
-      const other = button === 'right' ? 'middle' : 'right'
       await p.mouse.move(...await gridPoint(p, [3.5, 2.0]))
       await p.mouse.down({ button })
-      await p.mouse.move(...await gridPoint(p, [2.5, 2.0]), { steps: 4 })
+      await p.mouse.move(...await gridPoint(p, [0.5, 2.0]), { steps: 8 })
       await p.mouse.down({ button: other })
-      await p.mouse.up({ button: other })
-      await p.mouse.move(...await gridPoint(p, [0.5, 2.0]), { steps: 6 })
       await p.mouse.up({ button })
+      await p.mouse.up({ button: other }) // the only `pointerup`, and it is the other button's
       assert.deepEqual(await settle(() => penEntries(p), []), [], 'the line the drag crossed is erased')
       await p.mouse.click(5, 5) // as after any middle press: a click off the grid, or the next drag draws nothing
       await undoAll()
