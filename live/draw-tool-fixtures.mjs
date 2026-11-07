@@ -23,7 +23,9 @@ export const DRAWING_PREFIX = 'DrawTool_drawing_'
 export const INDEX_KEY = 'DrawTool_index'
 export const COLOR_KEY = 'DrawTool_color'
 export const WIDTH_KEY = 'DrawTool_width'
-export const TEXT_SIZE_KEY = 'DrawTool_textsize'
+export const OPACITY_KEY = 'DrawTool_opacity'
+export const SIZE_SLIDER = '#draw-tool-size'
+export const OPACITY_SLIDER = '#draw-tool-opacity'
 
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)

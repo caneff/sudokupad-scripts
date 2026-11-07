@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.0
+// @version      0.8.0
 // @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,23 +16,26 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.7.0'
+  const VERSION = '0.8.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
   // Board units: SudokuPad's board SVG draws a cell 64 wide. Test Markup's brush is 3.
-  const WIDTHS = [3, 6, 10]
-  const DEFAULT_WIDTH = WIDTHS[1]
-  const STROKE_OPACITY = 0.75
+  const MIN_WIDTH = 1
+  const MAX_WIDTH = 16
+  const WIDTH_STEP = 0.5
+  const DEFAULT_WIDTH = 6
+  // Percent. An item saved before opacity existed has none and reads as the default.
+  const MIN_OPACITY = 20
+  const MAX_OPACITY = 100
+  const OPACITY_STEP = 5
+  const DEFAULT_OPACITY = 100
   // A stroke's color is the number of a SudokuPad pen color, 1 to 9; its color is the CSS variable --puzzle-pencolor-<n>.
   const PEN_COLORS = 9
   const DEFAULT_COLOR = 1
   const COLOR_KEY = 'DrawTool_color'
   const WIDTH_KEY = 'DrawTool_width'
-  // Board units, as a text's height. Separate from the line widths.
-  const TEXT_SIZES = [14, 20, 28]
-  const DEFAULT_TEXT_SIZE = TEXT_SIZES[1]
-  const TEXT_SIZE_KEY = 'DrawTool_textsize'
+  const OPACITY_KEY = 'DrawTool_opacity'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
   // How far, in board units, the mouse may move between press and release and the press still be a click.
@@ -40,6 +43,16 @@
   const PANEL_BOX_CLASS = 'draw-tool-panel-box'
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
+  const TRAY_CLASS = 'draw-tool-tray'
+  const SLIDER_ROW_CLASS = 'draw-tool-slider'
+  const SIZE_SLIDER = 'draw-tool-size'
+  const OPACITY_SLIDER = 'draw-tool-opacity'
+  // Pen Tool Extras' slider tray: the same purple tray, wedge track for size and fade track for opacity.
+  const PANEL_COLOR = '#6a1b9a'
+  const TRAY_COLOR = '#efeaf4'
+  const SLIDER_TRACK_REM = 0.8
+  const SLIDER_THUMB_REM = 1.1
+  const SLIDER_THUMB_RING_REM = 0.2
   const CLEAR_QUESTION = 'Clear the drawing?'
   const CLEAR_OK = 'OK'
   const CLEAR_CANCEL = 'Cancel'
@@ -176,21 +189,29 @@
     return Number.isInteger(n) && n >= 1 && n <= PEN_COLORS ? n : undefined
   }
   const readColor = (saved) => penColor(saved) ?? DEFAULT_COLOR
-  const readWidth = (saved) => WIDTHS.includes(saved) ? saved : DEFAULT_WIDTH
-  const readTextSize = (saved) => TEXT_SIZES.includes(saved) ? saved : DEFAULT_TEXT_SIZE
+  const onSlider = (value, min, max, step) => isNumber(value) && value >= min && value <= max && Number.isInteger((value - min) / step)
+  const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
+  const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
+  const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
+  const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
+  // Board units, as a text's height: the line width's slider also sets the text size.
+  const textSizeFor = (width) => 2 * width + 8
+  const isTextSize = (value) => Number.isInteger(value) && isWidth((value - 8) / 2)
+  const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
+
+  const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
 
   const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
 
   // A drawing is a list of items, each with a kind: a stroke or a text. Their points are in board units.
-  const strokeItem = (points, color, width) => ({ kind: 'stroke', color, width, points: points.map(([x, y]) => [roundToTenth(x), roundToTenth(y)]) })
-  const textItem = ([x, y], text, color, size) => ({ kind: 'text', color, size, text, at: [roundToTenth(x), roundToTenth(y)] })
+  const strokeItem = (points, color, width, opacity) => ({ kind: 'stroke', color, width, opacity, points: points.map(([x, y]) => [roundToTenth(x), roundToTenth(y)]) })
+  const textItem = ([x, y], text, color, size, opacity) => ({ kind: 'text', color, size, opacity, text, at: [roundToTenth(x), roundToTenth(y)] })
 
-  const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   const isStroke = (item) => item !== null && typeof item === 'object' && item.kind === 'stroke' &&
-    penColor(item.color) !== undefined && WIDTHS.includes(item.width) && Array.isArray(item.points) && item.points.length > 0 &&
+    penColor(item.color) !== undefined && isWidth(item.width) && (item.opacity === undefined || isOpacity(item.opacity)) && Array.isArray(item.points) && item.points.length > 0 &&
     item.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(isNumber))
   const isText = (item) => item !== null && typeof item === 'object' && item.kind === 'text' &&
-    penColor(item.color) !== undefined && TEXT_SIZES.includes(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+    penColor(item.color) !== undefined && isTextSize(item.size) && (item.opacity === undefined || isOpacity(item.opacity)) && typeof item.text === 'string' && item.text.length > 0 &&
     Array.isArray(item.at) && item.at.length === 2 && item.at.every(isNumber)
 
   // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
@@ -240,7 +261,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP }
+    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP }
   }
   if (typeof document === 'undefined') return
 
@@ -278,20 +299,19 @@
 
   const penColorVar = (n) => `var(--puzzle-pencolor-${n})`
 
-  function newStroke (layer, color, width) {
+  function newStroke (layer, color, width, opacity) {
     const path = document.createElementNS(SVG_NS, 'path')
     path.setAttribute('class', 'draw-tool-stroke')
     path.setAttribute('fill', 'none')
     path.setAttribute('stroke-width', String(width))
     path.setAttribute('stroke-linecap', 'round')
     path.setAttribute('stroke-linejoin', 'round')
-    path.setAttribute('stroke-opacity', String(STROKE_OPACITY))
+    path.setAttribute('stroke-opacity', String(opacity / 100))
     path.style.stroke = penColorVar(color)
     layer.appendChild(path)
     return path
   }
 
-  // Solid, unlike a stroke, so a typed sum reads like one of the puzzle's own.
   function newText (layer, item) {
     const text = document.createElementNS(SVG_NS, 'text')
     text.setAttribute('class', 'draw-tool-text')
@@ -301,6 +321,7 @@
     text.setAttribute('text-anchor', 'middle')
     text.setAttribute('dominant-baseline', 'central')
     text.style.fill = penColorVar(item.color)
+    text.setAttribute('fill-opacity', String(itemOpacity(item) / 100))
     text.textContent = item.text
     layer.appendChild(text)
     return text
@@ -309,6 +330,12 @@
   // The keypad with Draw current, in the style of SudokuPad's tool-pen.css: each digit button a pen color swatch,
   // 0 and delete covered by the panel box. The swatches read the pen color variables, so a changed one shows.
   const GREY = 'rgb(124, 124, 124)'
+  // A CSS gradient cannot draw a slanted edge, so the wedge is a data-URI picture stretched over the track.
+  const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
+  const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
+  const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
+  const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
+  const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
   const PANEL_CSS = `
 .tool-draw .controls-input { position: relative; }
 .tool-draw .controls-input button.digit { position: relative; text-indent: -999em; overflow: hidden; }
@@ -316,19 +343,24 @@
 .tool-draw .controls-input button.digit:after { content: ""; position: absolute; width: 60%; height: 60%; left: 20%; top: 20%; }
 ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input button[data-key="${i + 1}"]:after { background-color: ${penColorVar(i + 1)}; }`).join('\n')}
 .tool-draw .controls-input button[data-key="0"], .tool-draw .controls-input button[data-control="delete"] { visibility: hidden; }
-.${PANEL_BOX_CLASS} { position: absolute; left: 0; right: 0; top: 13rem; height: 4rem; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 1fr 1fr; gap: 0.25rem 0.4rem; }
-.tool-draw .controls-input .${PANEL_BOX_CLASS} button { width: auto; height: auto; min-height: 0; margin: 0; padding: 0; }
-.tool-draw .controls-input .${PANEL_BOX_CLASS} button:not(.current) { background-color: var(--body-bg); color: ${GREY}; }
-.${PANEL_BOX_CLASS} svg { width: 100%; height: 100%; pointer-events: none; }
-.tool-draw .controls-input .${PANEL_BOX_CLASS} button.${CLEAR_CLASS} { grid-column: 4; grid-row: 1 / span 2; font-size: 0.85rem; line-height: 1.15; color: ${GREY}; background-color: var(--body-bg); }
+.${PANEL_BOX_CLASS} { position: absolute; left: 0; right: 0; top: 13rem; height: 4rem; display: grid; grid-template-columns: minmax(0, 1fr) 4rem; gap: 0.4rem; }
+.${TRAY_CLASS} { box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-evenly; padding: 0 0.8rem; background: ${TRAY_COLOR}; border-radius: 14px; color: ${PANEL_COLOR}; }
+.${SLIDER_ROW_CLASS} { display: flex; align-items: center; height: 1.4rem; }
+.${SLIDER_ROW_CLASS} input { flex: 1; min-width: 0; margin: 0; height: 1.4rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }
+.${SLIDER_ROW_CLASS} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }
+.${SLIDER_ROW_CLASS} input::-moz-range-track { ${TRACK_SHAPE} }
+#${SIZE_SLIDER}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }
+#${SIZE_SLIDER}::-moz-range-track { background: ${WEDGE_PICTURE}; }
+#${OPACITY_SLIDER}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }
+#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }
+.${SLIDER_ROW_CLASS} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }
+.${SLIDER_ROW_CLASS} input::-moz-range-thumb { ${THUMB_SHAPE} }
+.tool-draw .controls-input .${PANEL_BOX_CLASS} button.${CLEAR_CLASS} { width: auto; height: auto; min-height: 0; margin: 0; padding: 0; font-size: 0.85rem; line-height: 1.15; color: ${GREY}; background-color: var(--body-bg); }
 .${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }
 `
-  const widthIcon = (width) => `<svg viewBox="0 0 48 32"><line x1="10" y1="16" x2="38" y2="16" stroke="currentColor" stroke-linecap="round" stroke-width="${width}"/></svg>`
-  const textSizeIcon = (size) => `<svg viewBox="0 0 48 32"><text x="24" y="16" text-anchor="middle" dominant-baseline="central" fill="currentColor" font-size="${size}">15</text></svg>`
-
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
-  let textSize = DEFAULT_TEXT_SIZE
+  let opacity = DEFAULT_OPACITY
   let panelBox = null
 
   const keypad = () => document.querySelector('.controls-input')
@@ -340,57 +372,49 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     keypad().querySelector(`button[data-key="${color}"]`).classList.add('current')
   }
 
-  function markPanelBox () {
-    if (!panelBox) return
-    for (const button of panelBox.querySelectorAll('button[data-width]')) button.classList.toggle('current', Number(button.dataset.width) === width)
-    for (const button of panelBox.querySelectorAll('button[data-text-size]')) button.classList.toggle('current', Number(button.dataset.textSize) === textSize)
-  }
-
   function pickColor (next) {
     color = next
     Framework.setData(COLOR_KEY, color)
     markColor()
   }
 
-  function pickWidth (next) {
-    width = next
-    Framework.setData(WIDTH_KEY, width)
-    markPanelBox()
-  }
-
-  function pickTextSize (next) {
-    textSize = next
-    Framework.setData(TEXT_SIZE_KEY, textSize)
-    markPanelBox()
+  // A slider sets only the next item and is saved for the next visit.
+  function sliderRow (id, label, min, max, step, value) {
+    const row = document.createElement('div')
+    row.className = SLIDER_ROW_CLASS
+    row.title = label
+    const input = document.createElement('input')
+    Object.assign(input, { type: 'range', id, min, max, step, value, tabIndex: -1 })
+    input.setAttribute('aria-label', label)
+    row.appendChild(input)
+    return row
   }
 
   function showPanelBox () {
     panelBox = document.createElement('div')
     panelBox.className = PANEL_BOX_CLASS
-    const choices = [[WIDTHS, 'width', 'Line width', widthIcon], [TEXT_SIZES, 'textSize', 'Text size', textSizeIcon]]
-    for (const [values, data, label, icon] of choices) {
-      values.forEach((value, i) => {
-        const button = document.createElement('button')
-        button.dataset[data] = String(value)
-        button.title = `${label} ${i + 1} of ${values.length}`
-        button.innerHTML = icon(value)
-        panelBox.appendChild(button)
-      })
-    }
+    const tray = document.createElement('div')
+    tray.className = TRAY_CLASS
+    tray.append(
+      sliderRow(SIZE_SLIDER, 'Size', MIN_WIDTH, MAX_WIDTH, WIDTH_STEP, width),
+      sliderRow(OPACITY_SLIDER, 'Opacity (%)', MIN_OPACITY, MAX_OPACITY, OPACITY_STEP, opacity)
+    )
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.title = 'Clear the whole drawing'
     clear.innerHTML = 'Clear<br>all'
-    panelBox.appendChild(clear)
-    panelBox.addEventListener('click', (event) => {
-      const button = event.target.closest('button')
-      if (!button) return
-      if (button === clear) confirmClear()
-      else if (button.dataset.textSize) pickTextSize(Number(button.dataset.textSize))
-      else pickWidth(Number(button.dataset.width))
+    panelBox.append(tray, clear)
+    tray.addEventListener('input', (event) => {
+      if (event.target.id === SIZE_SLIDER) {
+        width = readWidth(Number(event.target.value))
+        Framework.setData(WIDTH_KEY, width)
+      } else {
+        opacity = readOpacity(Number(event.target.value))
+        Framework.setData(OPACITY_KEY, opacity)
+      }
     })
+    clear.addEventListener('click', confirmClear)
     keypad().querySelector('.button-row:last-child').appendChild(panelBox)
-    markPanelBox()
   }
 
   let stroke = null
@@ -414,7 +438,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     drawing.forEach((item, i) => {
       if (editing && editing.index === i) return
       if (item.kind === 'text') newText(layer, item)
-      else newStroke(layer, item.color, item.width).setAttribute('d', strokePath(item.points))
+      else newStroke(layer, item.color, item.width, itemOpacity(item)).setAttribute('d', strokePath(item.points))
     })
   }
 
@@ -459,7 +483,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
 
   function openText (at) {
     const index = textAt(drawing, at)
-    const item = index === -1 ? textItem(at, '', color, textSize) : { ...drawing[index] }
+    const item = index === -1 ? textItem(at, '', color, textSizeFor(width), opacity) : { ...drawing[index] }
     const input = document.createElement('input')
     input.className = TEXT_BOX_CLASS
     input.type = 'text'
@@ -541,9 +565,9 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   }
 
   function endStroke (straight) {
-    const { path, points, color: strokeColor, width: strokeWidth } = stroke
+    const { path, points, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = stroke
     stroke = null
-    const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth)
+    const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
     path.setAttribute('d', strokePath(item.points))
     drawing.push(item)
     save()
@@ -626,7 +650,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       }
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
-      stroke = { layer, path: newStroke(layer, color, width), color, width, straight: false, points: [toBoard(layer, event)] }
+      stroke = { layer, path: newStroke(layer, color, width, opacity), color, width, opacity, straight: false, points: [toBoard(layer, event)] }
       stroke.path.setAttribute('d', strokePath(stroke.points))
       return true
     },
@@ -702,7 +726,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
     width = readWidth(Framework.getData(WIDTH_KEY))
-    textSize = readTextSize(Framework.getData(TEXT_SIZE_KEY))
+    opacity = readOpacity(Framework.getData(OPACITY_KEY))
     const style = document.createElement('style')
     style.textContent = PANEL_CSS
     document.head.appendChild(style)
