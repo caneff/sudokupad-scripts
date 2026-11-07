@@ -39,6 +39,28 @@
   .notes { max-width: 44rem; padding-left: 1.25rem; }
   .notes li { margin-bottom: .3rem; }
   footer { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid light-dark(#e2dde9, #3b3446); font-size: .95rem; color: inherit; opacity: .85; }
+
+  /* arrow variants */
+  .nav svg, .pg svg { display: block; }
+  .pg svg { width: 36px; height: 36px; }
+  .pager .num { font-size: 1.05rem; }
+  .a-1 .nav svg { display: none; } .a-1 .pg { display: none; }
+  .a-2 .nav .g, .a-3 .nav .g, .a-4 .nav .g { display: none; }
+  .a-2 .pg { display: none; }
+  .a-2 .frame .nav { padding: .5rem .2rem; }
+  .a-3 .frame .nav, .a-4 .frame .nav { display: none; }
+  .a-3 .frame.slides, .a-4 .frame.slides { margin-inline: 0; }
+  .a-3 .capline, .a-4 .capline { margin-inline: 0; }
+  .pager { display: flex; align-items: center; gap: .15rem; margin-left: auto; flex: none; }
+  .pager .num { margin: 0; min-width: 3.2em; text-align: center; }
+  .pg { border: 0; background: none; color: var(--accent); cursor: pointer; padding: .2rem; border-radius: 6px; transition: transform .12s ease, color .12s ease; }
+  .pg:hover, .pg:focus-visible { color: light-dark(#3d0a5c, #f0dcff); }
+  .pg.prev:hover { transform: translateX(-2px) scale(1.15); } .pg.next:hover { transform: translateX(2px) scale(1.15); }
+  .a-4 .capline { flex-direction: column-reverse; align-items: center; gap: .1rem; }
+  .a-4 .pager { margin: .5rem 0 0; }
+  .a-4 .cap { margin-top: .1rem; text-align: center; }
+  #abar { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); background: #222; color: #fff; padding: 6px 10px; border-radius: 999px; font: 14px system-ui; display: flex; gap: 6px; z-index: 9; }
+  #abar a { color: #fff; text-decoration: none; padding: 2px 10px; border-radius: 999px; } #abar a.on { background: #6a1b9a; }
 </style>
 </head>
 <body>
@@ -48,8 +70,8 @@
   <p class="lede">A button that colors cells, or the digits and marks in them, by groups of digits you choose, and keeps the colors in step as you solve.</p>
   <div class="actions"><a class="install" href="#">Install Color by Digit</a></div>
 
-  <div class="frame slides"><img id="slide" src="" alt=""><button class="nav prev" aria-label="Previous">&#8249;</button><button class="nav next" aria-label="Next">&#8250;</button></div>
-  <div class="capline"><p class="cap" id="cap"></p><span class="num" id="num"></span></div>
+  <div class="frame slides"><img id="slide" src="" alt=""><button class="nav prev" aria-label="Previous"><span class="g">&#8249;</span><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button><button class="nav next" aria-label="Next"><span class="g">&#8250;</span><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></button></div>
+  <div class="capline"><p class="cap" id="cap"></p><span class="pager"><button class="pg prev" aria-label="Previous"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5 8 12l7 7"/></svg></button><span class="num" id="num"></span><button class="pg next" aria-label="Next"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg></button></span></div>
 
   <h2>What it adds</h2>
   <ul class="features">
@@ -81,8 +103,11 @@
 const S = [['001','Start: two boxes in Cell mode'],['002','Type a 1: the cell takes its group\'s color'],['003','Center marks 7 and 9, both in one group: the cell takes that color'],['004','Add a center mark 2 from another group: the color goes'],['005','Digit mode: digits and marks in darker shades, conflicts circled'],['006','Both: fills and shades'],['007','Off'],['009','Open the profile menu from the button\'s arrow'],['010','Pick Modular: the boxes recolor at once']]
 let i = 0
 const show = () => { document.getElementById('slide').src = 'slides/cbdnc/cbd-' + S[i][0] + '.png'; document.getElementById('cap').textContent = S[i][1]; document.getElementById('num').textContent = `${i + 1} / ${S.length}` }
-document.querySelector('.prev').onclick = () => { i = (i + S.length - 1) % S.length; show() }
-document.querySelector('.next').onclick = () => { i = (i + 1) % S.length; show() }
+document.querySelectorAll('.prev').forEach(b => { b.onclick = () => { i = (i + S.length - 1) % S.length; show() } })
+document.querySelectorAll('.next').forEach(b => { b.onclick = () => { i = (i + 1) % S.length; show() } })
+const av = new URLSearchParams(location.search).get('arrows') || '2'
+document.body.classList.add('a-' + av)
+document.body.insertAdjacentHTML('beforeend', '<div id="abar">' + [['1','1 glyphs'],['2','2 drawn chevrons'],['3','3 pager right'],['4','4 pager centred']].map(([k,l]) => `<a href="?arrows=${k}" class="${k===av?'on':''}">${l}</a>`).join('') + '</div>')
 show()
 </script>
 </body>
