@@ -5,9 +5,9 @@
 /* global Framework */
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { GIVENS, SEED, savedProfiles, startInjected, MODE_STORAGE_KEY } from '../../../live/color-by-digit/color-by-digit-fixtures.mjs'
+import { buttonPoint, GIVENS, SEED, savedProfiles, startInjected, MODE_STORAGE_KEY } from '../../../live/color-by-digit/color-by-digit-fixtures.mjs'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
-import { PROBE_INIT, PROBE_TAG, startProbe, stopProbe, summarize, tagged } from '../../../live/redraw-probe.mjs'
+import { combine, PROBE_INIT, PROBE_TAG, round, startProbe, stopProbe, sum, summarize, tagged, worstEventMs } from '../../../live/redraw-probe.mjs'
 
 const script = readFileSync(new URL('../../../color-by-digit.user.js', import.meta.url), 'utf8')
 const EMPTY = [...GIVENS].flatMap((d, i) => (d === '0' ? [[Math.floor(i / 9), i % 9]] : []))
@@ -43,11 +43,8 @@ async function entries (browser, mode) {
     actMs.push(await enter(p, cell, String((i % 9) + 1)))
     rows.push(await stopProbe(p))
   }
-  const merged = { handlerMs: rows.flatMap((r) => r.handlerMs), mutations: rows.flatMap((r) => r.mutations) }
-  const worstEvent = Math.max(...rows.map((r) => r.handlerMs.reduce((a, h) => a + h.ms, 0)))
-  const mean = (list) => Math.round((list.reduce((a, b) => a + b, 0) / list.length) * 1000) / 1000
   await p.context().close()
-  return { mode, ...summarize(merged, EMPTY.length), worstEventHandlerMs: Math.round(worstEvent * 1000) / 1000, actMeanMs: mean(actMs), actMaxMs: Math.round(Math.max(...actMs) * 1000) / 1000 }
+  return { mode, ...summarize(combine(rows), EMPTY.length), worstEventHandlerMs: worstEventMs(rows), actMeanMs: round(sum(actMs) / actMs.length), actMaxMs: round(Math.max(...actMs)) }
 }
 
 // One corner mark per empty cell, each of a digit its row already holds as a given, so every mark is in the conflict state and
@@ -65,31 +62,27 @@ async function conflictingMarks (browser, mode) {
     rows.push(await stopProbe(p))
     circles.push(await p.evaluate(() => document.querySelectorAll('#color-by-digit-circles circle').length))
   }
-  const merged = { handlerMs: rows.flatMap((r) => r.handlerMs), mutations: rows.flatMap((r) => r.mutations) }
-  const worstEvent = Math.max(...rows.map((r) => r.handlerMs.reduce((a, h) => a + h.ms, 0)))
   const circleNodes = rows.map((r) => r.mutations.filter((m) => m.where.endsWith('#color-by-digit-circles')).reduce((a, m) => a + m.added + m.removed, 0))
   await p.context().close()
-  return { scenario: 'conflicting corner marks', mode, ...summarize(merged, EMPTY.length), worstEventHandlerMs: Math.round(worstEvent * 1000) / 1000, circlesAfterEachEvent: circles, circleNodesChangedPerEvent: circleNodes }
+  return { scenario: 'conflicting corner marks', mode, ...summarize(combine(rows), EMPTY.length), worstEventHandlerMs: worstEventMs(rows), circlesAfterEachEvent: circles, circleNodesChangedPerEvent: circleNodes }
 }
 
-// The fill: every cell holding one digit is colored at once by switching to Cell mode on a board that holds entries.
+// The fill: every entry on a full board is colored at once by one press on the button, which steps Digit to Both.
 async function fill (browser) {
   const p = await session(browser, 'digit')
   for (const [i, cell] of EMPTY.entries()) await enter(p, cell, String((i % 9) + 1))
   await startProbe(p)
-  const switchMs = await p.evaluate(async () => {
-    const start = performance.now()
-    document.querySelector('#control-colorbydigit').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 5, clientY: 5 }))
-    return performance.now() - start
-  })
+  const { x, y } = await buttonPoint(p)
+  await p.mouse.click(x, y)
   const recorded = await stopProbe(p)
+  const colored = await p.evaluate(() => Framework.app.puzzle.cells.filter((c) => (c.colours || []).length).length)
   await p.context().close()
-  return { scenario: 'press on the button', pressMs: Math.round(switchMs * 1000) / 1000, ...summarize(recorded, 1) }
+  return { scenario: 'one press, Digit to Both, on a board with 51 entries', cellsColored: colored, ...summarize(recorded, 1) }
 }
 
 const browser = await chromium.launch()
 try {
-  const result = { baseline: await entries(browser, 'baseline'), off: await entries(browser, 'off'), cell: await entries(browser, 'cell'), digit: await entries(browser, 'digit'), both: await entries(browser, 'both'), marksBaseline: await conflictingMarks(browser, 'baseline'), marksDigit: await conflictingMarks(browser, 'digit') }
+  const result = { baseline: await entries(browser, 'baseline'), off: await entries(browser, 'off'), cell: await entries(browser, 'cell'), digit: await entries(browser, 'digit'), both: await entries(browser, 'both'), marksBaseline: await conflictingMarks(browser, 'baseline'), marksDigit: await conflictingMarks(browser, 'digit'), fill: await fill(browser) }
   console.log(JSON.stringify(result, null, 2))
 } finally {
   await browser.close()

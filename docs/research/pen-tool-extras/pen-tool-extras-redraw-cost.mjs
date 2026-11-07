@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
 import { cellCentre, goToPenPage, openPenTool, PAGE_THREE } from '../../../live/pen.mjs'
-import { PROBE_INIT, PROBE_TAG, startProbe, stopProbe, summarize, tagged } from '../../../live/redraw-probe.mjs'
+import { PROBE_INIT, PROBE_TAG, round, startProbe, stopProbe, sum, summarize, tagged } from '../../../live/redraw-probe.mjs'
 
 const script = readFileSync(new URL('../../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const MOVES = 400
@@ -61,8 +61,7 @@ async function drag (browser, variant, page) {
   const render = await p.evaluate(() => window.__renderPen)
   const strokes = await p.evaluate(() => document.querySelectorAll('#cell-pen .cell-pen').length)
   await p.context().close()
-  const sum = (list) => list.reduce((a, b) => a + b, 0)
-  return { variant, page, ...summarize(recorded, moves), strokes, renderPenCalls: render.length, renderPenMsPerCall: Math.round((sum(render) / Math.max(1, render.length)) * 1000) / 1000, renderPenMaxMs: Math.round(Math.max(0, ...render) * 1000) / 1000 }
+  return { variant, page, ...summarize(recorded, moves), strokes, renderPenCalls: render.length, renderPenMsPerCall: round(sum(render) / Math.max(1, render.length)), renderPenMaxMs: round(Math.max(0, ...render)) }
 }
 
 const browser = await chromium.launch()

@@ -9,8 +9,8 @@ export const PROBE_TAG = 'redraw-probe-script.js'
 export const tagged = (code) => `${code}\n//# sourceURL=${PROBE_TAG}`
 
 // Runs before the page's own scripts. Records into `window.__probe`: `handlerMs` (one entry per timed handler call),
-// `mutations` (one entry per record of a native observer on the page: type, added, removed, the target's tag and its
-// closest ancestor with an id, and the tag and class of each node added or removed).
+// `mutations` (one entry per record of a native observer on the page: type, added, removed, and the target's tag and its
+// closest ancestor with an id).
 export const PROBE_INIT = (tag) => {
   const probe = { handlerMs: [], mutations: [], on: false }
   window.__probe = probe
@@ -41,16 +41,15 @@ export const PROBE_INIT = (tag) => {
     const anchor = el && el.closest('[id]')
     return `${el ? el.localName : '?'}${el && el.id ? '#' + el.id : ''} in ${anchor ? '#' + anchor.id : 'no id'}`
   }
-  const kind = (node) => `${node.localName || '#text'}${node.getAttribute && node.getAttribute('class') ? '.' + node.getAttribute('class').replace(/\s+/g, '.') : ''}`
   new NativeObserver((records) => {
     if (!probe.on) return
     for (const r of records) {
-      probe.mutations.push({ type: r.type, added: r.addedNodes.length, removed: r.removedNodes.length, where: where(r.target), kinds: [...r.addedNodes].map((n) => 'add ' + kind(n)).concat([...r.removedNodes].map((n) => 'remove ' + kind(n))) })
+      probe.mutations.push({ type: r.type, added: r.addedNodes.length, removed: r.removedNodes.length, where: where(r.target) })
     }
   }).observe(document, { subtree: true, childList: true, attributes: true, characterData: true })
 }
 
-// Starts a fresh recording after `frames` animation frames, so mutations already queued are not counted.
+// Starts a fresh recording after two animation frames, so mutations already queued are not counted.
 export const startProbe = (page) => page.evaluate(async () => {
   await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
   window.__probe.handlerMs.length = 0
@@ -65,9 +64,9 @@ export const stopProbe = (page) => page.evaluate(async () => {
   return { handlerMs: window.__probe.handlerMs.slice(), mutations: window.__probe.mutations.slice() }
 })
 
-const sum = (list) => list.reduce((a, b) => a + b, 0)
+export const sum = (list) => list.reduce((a, b) => a + b, 0)
 const percentile = (sorted, q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0
-const round = (n) => Math.round(n * 1000) / 1000
+export const round = (n) => Math.round(n * 1000) / 1000
 
 // One summary row for a recording over `events` events: handler calls and time, the worst call, and the nodes added and
 // removed in total and under each region (`where` ends in `in #<id>`).
@@ -94,3 +93,7 @@ export function summarize ({ handlerMs, mutations }, events) {
     regions
   }
 }
+
+// The recordings of several events as one, and the most handler time any one of them spent.
+export const combine = (recordings) => ({ handlerMs: recordings.flatMap((r) => r.handlerMs), mutations: recordings.flatMap((r) => r.mutations) })
+export const worstEventMs = (recordings) => round(Math.max(...recordings.map((r) => sum(r.handlerMs.map((h) => h.ms)))))
