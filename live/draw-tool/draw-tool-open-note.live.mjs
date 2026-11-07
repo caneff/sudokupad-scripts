@@ -59,7 +59,7 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
     await p.click(key(RED))
     assert.equal(await boxOpen(), true, 'the note is still open')
     assert.deepEqual(await currentKeys(), [RED])
-    assert.equal(await boxColor(), await read((c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = getComputedStyle(d).color; d.remove(); return v }, await penColor(RED)))
+    assert.equal(await boxColor(), await read((c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = window.getComputedStyle(d).color; d.remove(); return v }, await penColor(RED)))
     assert.equal(await stored(COLOR_KEY), BLACK, 'the next-note color is unchanged')
     await p.keyboard.type('X')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'aXb', 'the caret was where it was')
