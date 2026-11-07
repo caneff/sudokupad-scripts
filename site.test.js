@@ -212,5 +212,7 @@ test(`${HOME} describes Color by Digit's four modes beside a picture of colored 
   const text = plain(m[2])
   for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(text, new RegExp(`\\b${mode}\\b`), mode)
   assert.match(text, /darker shade/)
+  // Chris's ruling on #279: text a reader sees says "center marks".
+  assert.doesNotMatch(text, /centre/)
   assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
 })
