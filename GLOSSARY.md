@@ -91,7 +91,7 @@
   character in the pen value of the cell that stores the edge.
 - **edge cycle** — the order a left click on an edge steps through its marks: X,
   circle, first direction, second direction, empty, skipping any type unticked in
-  the settings dialog. A right click steps the same cycle backwards.
+  the settings dialog.
 - **grid-corner mark** — a pen mark Pen Tool Extras draws centred on a corner of the grid, inner or outer: an
   X or a circle, the same shapes as the edge marks. The dialog's Marks table has a Corner row for them; SudokuPad's own
   "corner marks" are the small digits in a cell's corners, which this is not. Stored as one character in the pen
@@ -102,7 +102,8 @@
   grid-corner mark click, decided before SudokuPad's own edge-or-cell test; with both boxes of the Marks table's Corner row unticked
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
-  type. A right click steps it backwards.
+  type.
+- **pen erase** — Pen Tool Extras' right or middle click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Draw's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle and
   cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark

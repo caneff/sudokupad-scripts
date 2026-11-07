@@ -65,6 +65,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const editor = () => p.locator('#pen-tool-extras-editor')
 
   const penCount = () => read(() => document.querySelectorAll('.cell-pen').length)
+  const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
 
   // A point 2 px inside the cell, next to the given side: a real click there is an edge click.
   const edgePoint = (row, col, side) => read(([r, c, s]) => {
@@ -152,64 +153,59 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   for (const [name, edge] of Object.entries(EDGES)) {
-    it(`${name}: right clicks cycle the other way, other direction, direction, circle, X, empty, and one undo reverses each`, async () => {
+    it(`${name}: a right click removes the mark at each step of the cycle, and one undo brings it back`, async () => {
       const [sr, sc] = edge.stored
-      const backwards = [...edge.cycle.slice(0, -1).reverse(), null]
-      const want = (value) => value === null ? [] : [value]
-      for (const value of backwards) {
+      for (const [i, value] of edge.cycle.slice(0, -1).entries()) {
+        for (let k = 0; k <= i; k++) await clickEdge(edge.row, edge.col, edge.side)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), [value]), [value], `${name} before the right click`)
+        const depth = await undoDepth()
         await clickEdge(edge.row, edge.col, edge.side, 'right')
-        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after a right click`)
-        const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
-        assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
-        assert.equal(drawn.length, value === null ? 0 : 1)
-      }
-      // each undo restores the step before it
-      for (const value of [...backwards.slice(0, -1).reverse(), null]) {
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), []), [], `${name} ${value} after a right click`)
+        assert.ok(await undoDepth() > depth, 'an undo step')
+        assert.equal(await penCount(), 0, 'the drawn mark is gone')
         await p.click('#control-undo')
-        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after an undo`)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), [value]), [value], `${name} after an undo`)
+        await clearMarks()
       }
-      await clearMarks()
     })
   }
 
-  it('a left click after a right click goes forward again, and a right click after it comes back', async () => {
-    await clickEdge(3, 3, 'right', 'right')
-    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['i']), ['i'])
+  it('a left click steps forward from the empty edge a right click left, and a right click on an empty edge does nothing', async () => {
     await clickEdge(3, 3, 'right')
+    await clickEdge(3, 3, 'right', 'right')
     assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), []), [])
     await clickEdge(3, 3, 'right')
     assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), ['3']), ['3'])
-    await clickEdge(3, 3, 'right', 'right')
-    assert.deepEqual(await settle(() => penValuesAt(p, 3, 3), []), [])
     await clearMarks()
+    const depth = await undoDepth()
+    await clickEdge(3, 3, 'right', 'right')
+    await sleep(150) // "nothing happened in 150 ms" check
+    assert.deepEqual(await penValuesAt(p, 3, 3), [])
+    assert.equal(await undoDepth(), depth, 'no undo step')
   })
 
-  it('a right click on an edge keeps the browser menu closed, and one off the grid, in a cell middle or with another tool does not', async () => {
+  it('a right click over the grid in the pen tool keeps the browser menu closed, wherever it lands; off the grid and with another tool the menu is left alone', async () => {
     const before = (await menuLog()).length
     await clickEdge(3, 3, 'right', 'right')
     await clickEdge(0, 3, 'top', 'right')
-    assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true])), [true, true], 'edge right clicks')
-    // a right click in a cell middle stays as SudokuPad has it: a cell mark, and the menu opens
     const [cx, cy] = await cellCentre(p, ...CELL_MARK)
     await p.mouse.click(cx, cy, { button: 'right' })
-    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['5']), ['5'], 'a right click in a cell middle makes the cell mark')
+    assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), []), [], 'a right click in a cell middle makes no cell mark')
     // a right click off the grid
     await p.mouse.click(5, 5, { button: 'right' })
-    assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false])), [true, true, false, false], 'cell middle, then off the grid')
-    // the pointer last pressed on an edge, but the menu is asked for by something outside the grid
-    await clickEdge(3, 3, 'right', 'right')
+    assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, true, false])), [true, true, true, false], 'edge, edge, cell middle, then off the grid')
+    // the menu is asked for by something outside the grid
     const outside = await read(() => {
       const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
       document.body.dispatchEvent(event)
       return event.defaultPrevented
     })
     assert.equal(outside, false, 'a menu asked for outside the grid')
-    await clearMarks()
     // another tool: turn the pen tool off, then right click the same edge point
     await p.click('#control-normal')
     assert.equal(await settle(() => read(() => Framework.app.tool), 'normal'), 'normal')
     await clickEdge(3, 3, 'right', 'right')
-    assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, false, false, true, false, false])), [true, true, false, false, true, false, false], 'other tool')
+    assert.deepEqual((await settle(async () => (await menuLog()).slice(before), [true, true, true, false, false, false])), [true, true, true, false, false, false], 'other tool')
     await openPenTool(p)
     await clearMarks()
   })
@@ -242,17 +238,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await clearMarks()
     })
 
-    it(`${name}: right clicks cycle the other way, circle, X, empty, and one undo reverses each`, async () => {
-      const backwards = [...cycle.slice(0, -1).reverse(), null]
-      for (const value of backwards) {
+    it(`${name}: a right click removes the mark at each step of the cycle, and one undo brings it back`, async () => {
+      for (const [i, value] of cycle.slice(0, -1).entries()) {
+        for (let k = 0; k <= i; k++) await clickCorner(...corner)
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} before the right click`)
+        const depth = await undoDepth()
         await clickCorner(...corner, 'right')
-        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after a right click`)
-      }
-      for (const value of [...backwards.slice(0, -1).reverse(), null]) {
+        assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), []), [], `${name} ${value} after a right click`)
+        assert.ok(await undoDepth() > depth, 'an undo step')
         await p.click('#control-undo')
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after an undo`)
+        await clearMarks()
       }
-      await clearMarks()
     })
   }
 
@@ -288,24 +285,31 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await clearMarks()
   })
 
-  it('a right click on a corner keeps the browser menu closed', async () => {
+  it('a right click on a corner keeps the browser menu closed and removes the corner mark', async () => {
     const before = (await menuLog()).length
+    await clickCorner(3, 3)
+    await clickCorner(3, 3, 'left', 0.1, 0.1)
+    await clickCorner(0, 0)
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['x']), ['x'])
     await clickCorner(3, 3, 'right')
     await clickCorner(0, 0, 'right')
     assert.deepEqual(await settle(async () => (await menuLog()).slice(before), [true, true]), [true, true])
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), []), [])
+    assert.deepEqual(await penValuesAt(p, 0, 0), [])
     await clearMarks()
   })
 
-  it('a right click inside the corner zone where SudokuPad sees neither an edge nor a cell keeps the browser menu closed', async () => {
-    // The pointer is read in whole pixels, so the point is found by moving the mouse along the diagonal
-    // from corner (3,3) and applying SudokuPad's own arithmetic (tool-pen.js `clickCell`) to what the page
-    // reads: a point inside the 0.2 zone that is neither an edge click nor a cell click.
+  it('a right click inside the corner zone where SudokuPad sees neither an edge nor a cell keeps the browser menu closed and removes the corner mark', async () => {
+    // SudokuPad reads the pointer in whole pixels and the script reads the press exactly, so the point is found by
+    // moving the mouse along the diagonal from corner (3,3) and applying SudokuPad's own arithmetic (tool-pen.js
+    // `clickCell`) to the event's own position: a point inside the 0.2 zone that is neither an edge click nor a cell click.
+    await read(() => window.addEventListener('pointermove', (e) => { window.__pointer = [e.clientX, e.clientY] }, true))
     let found = null
     for (let offset = 0.12; offset < 0.16 && found === null; offset += 0.002) {
       const [x, y] = await cornerPoint(3, 3, offset, offset)
       await p.mouse.move(x, y)
       const point = await read(() => {
-        const { r, c } = ToolPen.tool.getInputRc()
+        const { r, c } = Framework.app.xyToRCExact(...window.__pointer)
         const [cellR, cellC] = [Math.floor(r), Math.floor(c)]
         const [dx, dy] = [c - (cellC + 0.5), r - (cellR + 0.5)]
         const [sx, sy] = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]
@@ -317,10 +321,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       if (point.neither && point.cornerDist < CORNER_RADIUS) found = [x, y]
     }
     assert.notEqual(found, null, 'no pixel near the corner is in the zone and neither an edge nor a cell to SudokuPad')
+    await clickCorner(3, 3)
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
     const before = (await menuLog()).length
     await p.mouse.click(found[0], found[1], { button: 'right' })
     assert.deepEqual(await settle(async () => (await menuLog()).slice(before), [true]), [true])
-    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['x']), ['x'], 'the corner mark, stepped backwards from empty')
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), []), [], 'the corner mark is removed')
     await clearMarks()
   })
 

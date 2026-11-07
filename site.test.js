@@ -142,9 +142,9 @@ test(`${DETAILS} lists what the script adds to drawing, one item per feature`, (
   assert.deepEqual(section(DETAILS, 'What it adds'), [
     'Customizable pen colors. Hold a pen color button, or pick a preset in the settings.',
     'Dashed lines and arrow lines. Two more pages of pens.',
-    'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
+    'Marks on cell edges. Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
-    'Erase a whole line. Middle-click a line to remove all of it.',
+    'Erase a whole line. Right-click or middle-click a line to remove all of it, or a mark to remove that.',
     'White outlines. An outline keeps lines readable over colored cells.'
   ])
 })
