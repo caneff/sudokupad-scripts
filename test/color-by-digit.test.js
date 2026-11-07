@@ -513,7 +513,7 @@ test('the dialog has the profile list and the paint editor as two columns of one
 
 test('the dialog is 640 px wide on a desktop and never wider than the window', () => {
   const css = STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\.dialog\.color-by-digit-dialog \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
+  assert.match(css, /\.dialog:has\(#color-by-digit-editor\) \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
 })
 
 test('Copy settings and Paste settings are two icon buttons at the right end of the title row, with the status between', () => {
@@ -1457,7 +1457,7 @@ test('the editor and the profile list carry inline only the styles that depend o
 test('the stylesheet scopes every rule to the editor, the dialog and its options row, or Color by Digit\'s own classes', () => {
   const selectors = [...STYLE_CSS.matchAll(/^([^{}\n]+) \{/gm)].flatMap((m) => m[1].split(', '))
   assert.ok(selectors.length > 20)
-  const scope = /^(#color-by-digit-editor|#color-by-digit-menu|\.dialog\.color-by-digit-dialog|\.dialog-options\.color-by-digit-dialog|\.cbd-)/
+  const scope = /^(#color-by-digit-editor|#color-by-digit-menu|\.dialog:has\(#color-by-digit-editor\)|\.cbd-)/
   assert.deepEqual(selectors.filter((s) => !scope.test(s)), [])
 })
 

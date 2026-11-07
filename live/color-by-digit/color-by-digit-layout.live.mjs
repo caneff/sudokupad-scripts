@@ -182,3 +182,18 @@ for (const viewport of [DESKTOP, PHONE]) {
     })
   }
 }
+
+describe('the dialog at 1280x720', { concurrency: false }, () => {
+  it('is styled from SudokuPad\'s own elements: no class is stamped on them, it is 640 px wide, and its button row is flex with a purple Save', async () => {
+    const { context, p } = await openSession(browser, script, { contextOptions: { viewport: { width: 1280, height: 720 } } })
+    try {
+      await openScriptDialog(p, 'Color by Digit', EDITOR)
+      assert.deepEqual(await p.evaluate(() => [[...document.querySelector('.dialog').classList], [...document.querySelector('.dialog-options').classList]]), [['dialog'], ['dialog-options']])
+      assert.equal(await p.locator('.dialog').evaluate((el) => Math.round(el.getBoundingClientRect().width)), DESKTOP_DIALOG_PX)
+      assert.equal(await p.locator('.dialog-options').evaluate((el) => window.getComputedStyle(el).display), 'flex')
+      assert.equal(await p.locator('.dialog-options button[data-role="save"]').evaluate((el) => window.getComputedStyle(el).backgroundColor), 'rgb(107, 63, 160)')
+    } finally {
+      await context.close()
+    }
+  })
+})

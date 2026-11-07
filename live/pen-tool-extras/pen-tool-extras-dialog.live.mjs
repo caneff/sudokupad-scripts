@@ -218,18 +218,32 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
-  it('Dash length and Arrow spacing are indented under their style names, each hidden at once while its own box is unticked', async () => {
+  it('Dash length, Arrow spacing and Outline width are hidden by the stylesheet while their own box is unticked (Dash length and Arrow spacing indented under their style names)', async () => {
     await openSettledEditor(p)
     const label = (key) => editor().locator(`[data-row="${key}"] label`)
     assert.equal(await label('dash').evaluate((el) => parseFloat(window.getComputedStyle(el).paddingLeft)) > 0, true)
     assert.equal(await left(editor().locator('input[data-box="lineStyles.dashed"]')) <= await left(label('dash')), true)
-    for (const [style, row] of [['dashed', 'dash'], ['arrows', 'arrowSpacing']]) {
-      await editor().locator(`input[data-box="lineStyles.${style}"]`).uncheck()
+    for (const [style, row] of [['lineStyles.dashed', 'dash'], ['lineStyles.arrows', 'arrowSpacing'], ['outline', 'outlineWidth']]) {
+      await editor().locator(`input[data-box="${style}"]`).uncheck()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), false, `${row} hidden`)
-      await editor().locator(`input[data-box="lineStyles.${style}"]`).check()
+      await editor().locator(`input[data-box="${style}"]`).check()
       assert.equal(await editor().locator(`[data-row="${row}"]`).isVisible(), true, `${row} back`)
     }
     await closeExtrasEditorWith(p, 'Cancel')
+  })
+
+  it('at 1280x720 the dialog is styled from SudokuPad\'s own elements: no class is stamped on them, the button row is flex and a ticked box shows its slider row', async () => {
+    await p.setViewportSize({ width: 1280, height: 720 })
+    try {
+      await openSettledEditor(p)
+      assert.deepEqual(await p.evaluate(() => [[...document.querySelector('.dialog').classList], [...document.querySelector('.dialog-options').classList]]), [['dialog'], ['dialog-options']])
+      assert.equal(await p.locator('.dialog-options').evaluate((el) => window.getComputedStyle(el).display), 'flex')
+      assert.equal(await p.locator('.dialog').evaluate((el) => el.getBoundingClientRect().width < window.innerWidth), true)
+      assert.equal(await editor().locator('[data-row="dash"]').isVisible(), await editor().locator('input[data-box="lineStyles.dashed"]').isChecked())
+      await closeExtrasEditorWith(p, 'Cancel')
+    } finally {
+      await p.setViewportSize({ width: 1200, height: 1000 })
+    }
   })
 
   it('the buttons are one row at the bottom: Restore defaults at the left, Cancel and Save at the right', async () => {

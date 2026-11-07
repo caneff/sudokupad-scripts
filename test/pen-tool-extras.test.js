@@ -1241,15 +1241,15 @@ test('Line styles: each style\'s box sits before its label, with no Enable capti
   assert.match(rowOf(html, 'dash'), /<label [^>]*class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(rowOf(html, 'arrowSpacing'), /<label [^>]*class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
-  assert.doesNotMatch(rowOf(html, 'dash'), /display:none/)
+  assert.doesNotMatch(html, /display:none/)
 })
 
-test('an unticked line style is drawn unticked and its slider row is hidden, the other is untouched; the slider keeps its value', () => {
+test('an unticked line style is drawn unticked and the stylesheet hides its slider row while its box is unticked; the slider keeps its value', () => {
   const html = renderEditor(editorState({ dash: 6, lineStyles: { dashed: false, arrows: true } }))
   assert.doesNotMatch(html, /data-box="lineStyles.dashed"[^>]* checked/)
-  assert.match(rowOf(html, 'dash'), /display:none/)
   assert.match(rowOf(html, 'dash'), /value="6"/)
-  assert.doesNotMatch(rowOf(html, 'arrowSpacing'), /display:none/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.dashed"\]:checked\)\) \[data-row="dash"\] \{ display: none; \}/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.arrows"\]:checked\)\) \[data-row="arrowSpacing"\] \{ display: none; \}/)
 })
 
 test('Marks to cycle is one 2 by 3 table: headings X, circle, an up arrow head and a down arrow head; rows Edge (three boxes) and Corner (X and circle)', () => {
@@ -1289,10 +1289,9 @@ test('Other: the White outlines box has its own line with Outline width under it
   assert.match(rowOf(html, 'outlineWidth'), /class="pen-tool-extras-label pen-tool-extras-under"/)
   assert.match(DIALOG_CSS, /\.pen-tool-extras-label\.pen-tool-extras-under \{ padding-left: 1\.2em;/, 'the indent')
   assert.match(rowOf(html, 'outlineWidth'), /<label for="pen-tool-extras-setting-outlineWidth"[^>]*>Outline width<\/label>/)
-  assert.doesNotMatch(rowOf(html, 'outlineWidth'), /display:none/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="outline"\]:checked\)\) \[data-row="outlineWidth"\] \{ display: none; \}/)
   const off = renderEditor(editorState({ outline: false, outlineWidth: 5 }))
   assert.doesNotMatch(off, /data-box="outline" checked/)
-  assert.match(rowOf(off, 'outlineWidth'), /display:none/)
   assert.match(rowOf(off, 'outlineWidth'), /value="5"/)
 })
 
@@ -2516,4 +2515,10 @@ test('pasteReport: says how many were pasted and how many skipped, and when the 
 test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
   assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
   assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
+})
+
+test('the dialog and its button row are styled through the editor inside the dialog', () => {
+  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options \{ display: flex !important;/)
+  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options button\[data-role="save"\]/)
+  assert.doesNotMatch(DIALOG_CSS, /pen-tool-extras-dialog/)
 })
