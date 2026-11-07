@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.12.0
+// @version      0.13.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.12.0'
+  const VERSION = '0.13.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -190,6 +190,7 @@
     switch (act) {
       case 'color': return { groups: groups.map((g, j) => (j === group ? { key, digits: g.digits } : g)), shown }
       case 'digit': return { groups: assignDigit(groups, group, digit), shown }
+      case 'open': return { groups, shown }
       case 'remove': return { groups: groups.filter((_, j) => j !== group), shown: shown.filter((_, j) => j !== group) }
       case 'clear': return { groups: [], shown: [] }
       case 'add-group': {
@@ -197,6 +198,17 @@
         const free = colors.find((c) => !used.includes(c.key)) || colors[0]
         return { groups: free ? [...groups, { key: free.key, digits: [] }] : groups, shown }
       }
+    }
+  }
+
+  // The one group whose pickers show, as an index or null. A group Add group made opens; one before a removed group keeps its place.
+  function openGroupAfter (open, act, group, countBefore, countAfter) {
+    switch (act) {
+      case 'open': return open === group ? null : group
+      case 'add-group': return countAfter > countBefore ? countAfter - 1 : open
+      case 'remove': return open === group || open === null ? null : (open > group ? open - 1 : open)
+      case 'clear': return null
+      default: return open
     }
   }
 
@@ -671,9 +683,9 @@
     return found ? found.page : 0
   }
 
-  function renderChosen (colors, key) {
+  function renderChosen (colors, key, role = 'chosen') {
     const color = colors.find((c) => c.key === key)
-    return color ? `<span data-role="chosen" title="${esc(key)}" style="background:${esc(color.value)}"></span>` : `<span data-role="chosen" class="cbd-unset" title="${esc(key)}"></span>`
+    return color ? `<span data-role="${role}" title="${esc(key)}" style="background:${esc(color.value)}"></span>` : `<span data-role="${role}" class="cbd-unset" title="${esc(key)}"></span>`
   }
 
   function renderPalette (pages, colors, groupIndex, key, shownPage) {
@@ -700,9 +712,6 @@
   // Two columns need this much room each; the dialog's 640 px gives them two, a phone gives one.
   const COLUMN_MIN = 270
   const DIALOG_WIDTH = 640
-  // REMOVE_ROOM keeps the × off the pulldown and the numpad.
-  const REMOVE_INSET = 8
-  const REMOVE_ROOM = `${SMALL_BUTTON_SIZE + REMOVE_INSET + 4}px`
   const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
   const SAVE_LABEL = 'Save'
   const EDITOR_ID = 'color-by-digit-editor'
@@ -769,17 +778,35 @@
       '<div role="menuitem" data-act="edit" style="padding:9px 10px;border-radius:8px;cursor:pointer;color:#5d5868">&#9881; Edit profiles…</div>'
   }
 
-  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors, synced, selectedName = '') {
-    const colors = layoutColors(pages)
-    const rows = groups.map((g, i) => {
-      const digits = NUMPAD_DIGITS.map((d) =>
-        `<button type="button" class="cbd-button" data-act="digit" data-group="${i}" data-digit="${d}" ` +
-        `style="font-weight:${g.digits.includes(d) ? 'bold' : 'normal'};opacity:${g.digits.includes(d) ? 1 : 0.4}">${d}</button>`).join('')
-      return '<div class="cbd-group">' +
-        `<div>${renderPalette(pages, colors, i, g.key, shown[i])}</div>` +
-        `<div data-role="numpad">${digits}</div>` +
-        `<button type="button" class="cbd-button cbd-small" data-act="remove" data-group="${i}" title="Remove group" aria-label="Remove group">&#215;</button></div>`
+  // A digit another group holds shows that group's color as a dot; a click on it moves the digit here.
+  function renderNumpad (groups, colors, groupIndex) {
+    const holderOf = (d) => groups.findIndex((g, i) => i !== groupIndex && g.digits.includes(d))
+    return NUMPAD_DIGITS.map((d) => {
+      const own = groups[groupIndex].digits.includes(d)
+      const holder = holderOf(d)
+      const dot = holder < 0 ? '' : renderChosen(colors, groups[holder].key, 'holder')
+      return `<button type="button" class="cbd-button" data-act="digit" data-group="${groupIndex}" data-digit="${d}" ` +
+        `style="font-weight:${own ? 'bold' : 'normal'};opacity:${own ? 1 : 0.4}">${d}${dot}</button>`
     }).join('')
+  }
+
+  function renderGroup (groups, colors, pages, shown, groupIndex, isOpen) {
+    const g = groups[groupIndex]
+    const chips = g.digits.map((d) => `<span data-role="digit-chip" class="cbd-digit-chip">${esc(d)}</span>`).join('') || '<span class="cbd-note">no digits</span>'
+    const head = '<div class="cbd-group-head">' +
+      `<button type="button" class="cbd-row" data-act="open" data-group="${groupIndex}" aria-expanded="${isOpen}">` +
+      `${renderChosen(colors, g.key, 'swatch')}<span class="cbd-digit-chips">${chips}</span></button>` +
+      `<button type="button" class="cbd-button cbd-small" data-act="remove" data-group="${groupIndex}" title="Remove group" aria-label="Remove group">&#215;</button></div>`
+    const body = isOpen
+      ? `<div class="cbd-group-body"><div>${renderPalette(pages, colors, groupIndex, g.key, shown[groupIndex])}</div>` +
+        `<div data-role="numpad">${renderNumpad(groups, colors, groupIndex)}</div></div>`
+      : ''
+    return `<div class="cbd-group">${head}${body}</div>`
+  }
+
+  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors, synced, selectedName = '', open = null) {
+    const colors = layoutColors(pages)
+    const rows = groups.map((_, i) => renderGroup(groups, colors, pages, shown, i, i === open)).join('')
     const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
     const shownMode = allowedMode(mode, useDigitColors)
     const modeChoice = `<div class="cbd-mode" role="radiogroup" aria-label="Mode">${modesFor(useDigitColors).map((m) =>
@@ -819,10 +846,17 @@
     [`${EDITOR} .cbd-check input`, 'flex: none; width: auto; min-width: 0; margin: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-small`, `padding: 0 10px; height: ${SMALL_BUTTON_SIZE}px; line-height: ${SMALL_BUTTON_SIZE - 2}px`],
-    [`${EDITOR} [data-act="remove"]`, `position: absolute; top: ${REMOVE_INSET}px; right: ${REMOVE_INSET}px; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
-    [`${EDITOR} [data-act="digit"]`, `width: ${NUMPAD_KEY}; padding: 0`],
+    [`${EDITOR} [data-act="remove"]`, `flex: none; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
     [`${EDITOR} [data-digit="0"]`, 'grid-column: 2'],
-    [`${EDITOR} .cbd-group`, `position: relative; margin: 8px 0; padding: 8px ${REMOVE_ROOM} 8px 8px; border: 1px solid ${RULE_COLOR}; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start`],
+    [`${EDITOR} .cbd-group`, `margin: 6px 0; padding: 4px 8px; border: 1px solid ${RULE_COLOR}; border-radius: 8px`],
+    [`${EDITOR} .cbd-group-head`, 'display: flex; align-items: center; gap: 8px'],
+    [`${EDITOR} .cbd-row`, 'flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: none; border: 0; margin: 0; padding: 2px 0; height: auto; cursor: pointer; text-align: left'],
+    [`${EDITOR} [data-role="swatch"]`, 'flex: none; display: inline-block; box-sizing: border-box; width: 1.6em; height: 1.6em; border-radius: 3px; border: 1px solid #888'],
+    [`${EDITOR} .cbd-digit-chips`, 'display: flex; flex-wrap: wrap; gap: 3px; min-width: 0'],
+    [`${EDITOR} .cbd-digit-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 20px; height: 20px; border-radius: 4px; background: #f1eff5; box-shadow: inset 0 0 0 1px #cfc9db; font-size: 12px; font-weight: 600; line-height: 1; color: #333'],
+    [`${EDITOR} .cbd-group-body`, 'display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; padding: 8px 0 4px'],
+    [`${EDITOR} [data-act="digit"]`, `position: relative; width: ${NUMPAD_KEY}; padding: 0`],
+    [`${EDITOR} [data-role="holder"]`, 'position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1px #fff, 0 0 0 2px #000'],
     [`${EDITOR} [data-role="numpad"]`, `display: grid; grid-template-columns: repeat(3, ${NUMPAD_KEY}); gap: 4px`],
     [`${EDITOR} .cbd-palette-head`, 'margin-bottom: 6px'],
     [`${EDITOR} select[data-act="page"]`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
@@ -857,7 +891,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, openGroupAfter, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1270,12 +1304,13 @@
       row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     }
     let shown = []
+    let open = null
     const draw = () => {
       const { groups, name } = draft.profiles[selected]
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, selected), usesDigitColors(draft), isSynced(draft), name)
+      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, selected), usesDigitColors(draft), isSynced(draft), name, open)
     }
-    const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; shown = [] }
+    const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; shown = []; open = null }
     const newProfile = () => {
       const before = draft
       reshow(copyProfile(draft, selected), draft.profiles.length)
@@ -1380,9 +1415,12 @@
         const index = Number(el.dataset.index)
         reshow(deleteProfile(draft, index), indexAfterDelete(selected, index, draft.profiles.length))
       } else {
-        const edit = editGroupsFor(draft.profiles[selected].groups, shown, act, { group: Number(el.dataset.group), key: el.dataset.key, digit: el.dataset.digit }, colors)
+        const before = draft.profiles[selected].groups
+        const group = Number(el.dataset.group)
+        const edit = editGroupsFor(before, shown, act, { group, key: el.dataset.key, digit: el.dataset.digit }, colors)
         draft = setProfileGroups(draft, selected, edit.groups)
         shown = edit.shown
+        open = openGroupAfter(open, act, group, before.length, edit.groups.length)
       }
       draw()
     })

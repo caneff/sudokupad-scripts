@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, openGroupAfter, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -1232,7 +1232,7 @@ test('Each digit: an install already offered it keeps the Each digit it has, on 
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
 // The editor without a profile list.
-const editor = (groups, pages, shown, mode = 'cell') => renderEditor(groups, pages, shown, mode, '', true)
+const editor = (groups, pages, shown, mode = 'cell', open = 0) => renderEditor(groups, pages, shown, mode, '', true, true, '', open)
 const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
 const keys = (names) => names.split(' ')
 const slotKeys = (slots) => slots.map((s) => (s ? s.key : null))
@@ -1322,10 +1322,13 @@ test('renderEditor draws only the shown page of a group, keeping data-act and da
 })
 
 test('renderEditor shows each group on its own page', () => {
-  const html = editor([{ key: 'a2', digits: [] }, { key: 'b2', digits: [] }], twoPages(), [0, 1])
-  assert.equal(count(html, /data-group="0"[^>]*data-key="a1"/g), 1)
-  assert.equal(count(html, /data-group="1"[^>]*data-key="b1"/g), 1)
-  assert.equal(count(html, /data-group="0"[^>]*data-key="b1"/g), 0)
+  const groups = [{ key: 'a2', digits: [] }, { key: 'b2', digits: [] }]
+  const first = editor(groups, twoPages(), [0, 1], 'cell', 0)
+  assert.equal(count(first, /data-group="0"[^>]*data-key="a1"/g), 1)
+  assert.equal(count(first, /data-key="b1"/g), 0)
+  const second = editor(groups, twoPages(), [0, 1], 'cell', 1)
+  assert.equal(count(second, /data-group="1"[^>]*data-key="b1"/g), 1)
+  assert.equal(count(second, /data-key="a1"/g), 0)
 })
 
 test('renderEditor shows the group\'s color beside the pulldown even when its page is not shown', () => {
@@ -1384,8 +1387,8 @@ test('renderEditor keeps the in-group digits bold and full opacity and the other
   assert.match(html, /data-digit="4"[^>]*opacity:0.4/)
 })
 
-test('renderEditor gives each group a red × in its box\'s upper right corner, named "Remove group", and no Remove text button', () => {
-  const html = editor([{ key: 'a', digits: [] }, { key: 'b', digits: [] }], [], [0, 0])
+test('renderEditor gives each group a red × at the end of its row, named "Remove group", and no Remove text button', () => {
+  const html = editor([{ key: 'a', digits: [] }, { key: 'b', digits: [] }], [], [0, 0], 'cell', null)
   assert.doesNotMatch(html, />Remove</)
   const buttons = [...html.matchAll(/<button[^>]*data-act="remove"[^>]*>(.*?)<\/button>/g)]
   assert.equal(buttons.length, 2)
@@ -1394,7 +1397,6 @@ test('renderEditor gives each group a red × in its box\'s upper right corner, n
   const tag = buttons[0][0]
   assert.match(tag, /aria-label="Remove group"/)
   assert.match(tag, /title="Remove group"/)
-  assert.match(STYLE_CSS, /\[data-act="remove"\] \{[^}]*position: absolute;\s+top: \d+px;\s+right: \d+px/)
   assert.match(STYLE_CSS, /\[data-act="remove"\] \{[^}]*color: #c0392b/)
 })
 
@@ -1414,6 +1416,56 @@ test('the stylesheet scopes every rule to the editor, the dialog and its options
   assert.ok(selectors.length > 20)
   const scope = /^(#color-by-digit-editor|#color-by-digit-menu|\.dialog\.color-by-digit-dialog|\.dialog-options\.color-by-digit-dialog|\.cbd-)/
   assert.deepEqual(selectors.filter((s) => !scope.test(s)), [])
+})
+
+test('renderEditor draws every group as a compact row with its swatch, its digits as chips and ×, and no picker while closed', () => {
+  const html = editor([{ key: 'a2', digits: ['1', '3'] }, { key: 'b2', digits: [] }], twoPages(), [0, 0], 'cell', null)
+  assert.equal(count(html, /data-act="open"/g), 2)
+  assert.equal(count(html, /data-role="swatch"/g), 2)
+  assert.deepEqual([...html.matchAll(/data-role="digit-chip"[^>]*>(\d)</g)].map((m) => m[1]), ['1', '3'])
+  assert.equal(count(html, /data-act="remove"/g), 2)
+  assert.equal(count(html, /<select|data-act="color"|data-act="digit"|data-role="numpad"/g), 0)
+  assert.equal(count(html, /aria-expanded="false"/g), 2)
+})
+
+test('renderEditor opens only the group it is told to: its pickers show and the others stay rows', () => {
+  const groups = [{ key: 'a2', digits: [] }, { key: 'b2', digits: [] }, { key: 'a1', digits: [] }]
+  const html = editor(groups, twoPages(), [0, 0, 0], 'cell', 1)
+  assert.equal(count(html, /<select/g), 1)
+  assert.equal(count(html, /data-act="page" data-group="1"/g), 1)
+  assert.equal(count(html, /data-role="numpad"/g), 1)
+  assert.equal(count(html, /aria-expanded="true"/g), 1)
+  assert.match(html, /data-act="open" data-group="1" aria-expanded="true"/)
+})
+
+test('renderEditor marks a digit another group holds with that group\'s color, and none on the open group\'s own digits or free ones', () => {
+  const groups = [{ key: 'a2', digits: ['1'] }, { key: 'b2', digits: ['2', '3'] }]
+  const html = editor(groups, twoPages(), [0, 0], 'cell', 0)
+  const holders = [...html.matchAll(/data-digit="(\d)"[^>]*>\d<span data-role="holder" title="([^"]*)" style="background:([^"]*)"/g)].map((m) => [m[1], m[2], m[3]])
+  assert.deepEqual(holders, [['2', 'b2', '#b2'], ['3', 'b2', '#b2']])
+})
+
+test('renderEditor marks a holder whose color is not on any page with the unset swatch', () => {
+  const html = editor([{ key: 'a2', digits: [] }, { key: 'gone', digits: ['5'] }], twoPages(), [0, 0], 'cell', 0)
+  assert.match(html, /data-digit="5"[^>]*>5<span data-role="holder" class="cbd-unset" title="gone"/)
+})
+
+test('openGroupAfter toggles a row, opens an added group, keeps the open group through a removal before it, and closes on clear', () => {
+  assert.equal(openGroupAfter(null, 'open', 2, 4, 4), 2)
+  assert.equal(openGroupAfter(2, 'open', 2, 4, 4), null)
+  assert.equal(openGroupAfter(2, 'open', 0, 4, 4), 0)
+  assert.equal(openGroupAfter(0, 'add-group', undefined, 3, 4), 3)
+  assert.equal(openGroupAfter(1, 'add-group', undefined, 3, 3), 1)
+  assert.equal(openGroupAfter(2, 'remove', 0, 4, 3), 1)
+  assert.equal(openGroupAfter(2, 'remove', 3, 4, 3), 2)
+  assert.equal(openGroupAfter(2, 'remove', 2, 4, 3), null)
+  assert.equal(openGroupAfter(null, 'remove', 2, 4, 3), null)
+  assert.equal(openGroupAfter(2, 'clear', undefined, 4, 0), null)
+  assert.equal(openGroupAfter(2, 'digit', 2, 4, 4), 2)
+})
+
+test('editGroupsFor open changes nothing', () => {
+  assert.deepEqual(editGroupsFor(THREE_GROUPS, [0, 1, 2], 'open', { group: 1 }, COLORS), { groups: THREE_GROUPS, shown: [0, 1, 2] })
 })
 
 const THREE_GROUPS = [{ key: 'a', digits: ['1'] }, { key: 'b', digits: ['2'] }, { key: 'c', digits: [] }]
