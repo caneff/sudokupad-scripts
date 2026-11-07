@@ -320,7 +320,7 @@ What the library option would cost, if chosen anyway:
   `gh/...@<sha>` if Greasy Fork is ever a target.
 - An `@require` line, kept in step, in four headers.
 - Library loading in every unit and live test, plus a case in
-  `site.test.js` or a check that the pinned sha exists.
+  `test/site.test.js` or a check that the pinned sha exists.
 - An AGENTS.md and rule 9 rewrite: "one `*.user.js` file with no ties"
   would no longer hold.
 

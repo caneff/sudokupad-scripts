@@ -214,7 +214,7 @@ injected into the page. No script exists yet.
 
 Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #10. Not run through
 Tampermonkey or on `crackingthecryptic.com`. Screenshot at real size, 1200x900 viewport, with
-the puzzle in `live/puzzle-url.txt`: `docs/research/digit-color-conflict-outline.png` (two 5
+the puzzle in `live/puzzle-url.txt`: `docs/research/color-by-digit/digit-color-conflict-outline.png` (two 5
 marks in conflict with a given 5, in the corner at row 1 and the centre at row 2).
 
 - The fill needs no `!important`. The corner rule `#cell-pencilmarks .cell-pencilmark[data-val]`
@@ -237,7 +237,7 @@ marks in conflict with a given 5, in the corner at row 1 and the centre at row 2
 
 Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #13, which replaces #10's
 outline. Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshot at real size,
-1200x900 viewport, same puzzle: `docs/research/digit-color-conflict-circle.png` (conflicting
+1200x900 viewport, same puzzle: `docs/research/color-by-digit/digit-color-conflict-circle.png` (conflicting
 corner 5s, 4 and a centre 1 and 5), to be read beside `digit-color-conflict-outline.png`.
 
 - Chris ruled the 2px outline a muddy fringe at real size. SVG text has no background, so the
@@ -277,10 +277,10 @@ Not run through Tampermonkey or on `crackingthecryptic.com`.
   `ToolColor_page` reads `0` by default.
 - `setPalette` with a palette of fewer pages clamps `currentPage` and saves it to `ToolColor_page`.
 - `Framework.removeData(name)` removes a saved value; `getData` then reads `null`.
-- `docs/research/pen-color-match.png`: pen strokes in the nine derived pen colors (cols 2-4) beside
+- `docs/research/pen-tool-extras/pen-color-match.png`: pen strokes in the nine derived pen colors (cols 2-4) beside
   cells in the matching cell colors (col 7), default first page, 1200x900 viewport. The cells
   show lighter than their raw colors because of `--cell-color-opacity: 0.6`; the pen is darkened
-  from the raw value. Made by `docs/research/pen-color-screenshot.mjs`.
+  from the raw value. Made by `docs/research/pen-tool-extras/pen-color-screenshot.mjs`.
 - The cell color buttons are laid out by index: `updateButtonPad` (`tool-color.js`) sets the
   button with `data-key` K to `pages[currentPage][K]`, for K 0-9, so a page whose index 0 holds a
   color shows it on button 0 and every other color stays on its own number. A button's
@@ -289,9 +289,9 @@ Not run through Tampermonkey or on `crackingthecryptic.com`.
 
 ## Color by Digit's dialog by page (2026-11-03)
 
-Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #31, by `live/color-by-digit.live.mjs`.
+Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #31, by `live/color-by-digit/color-by-digit.live.mjs`.
 Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshots from
-`docs/research/color-by-digit-dialog-screenshot.mjs`: `color-by-digit-dialog-{before,after}-{desktop,phone}.png`.
+`docs/research/color-by-digit/color-by-digit-dialog-screenshot.mjs`: `color-by-digit-dialog-{before,after}-{desktop,phone}.png`.
 
 - `tools.colour.setPalette(p)` with a fourth page and new keys (`u`, `v`, `w` in `colors`) shows
   them at once: the dialog reads `tool.palette.pages` and `--cell-color-<key>` when it opens.

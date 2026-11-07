@@ -2,8 +2,8 @@
   "name": "sudokupad-scripts",
   "private": true,
   "scripts": {
-    "test": "node --test",
-    "test:live": "node --test --test-concurrency=4 \"live/*.live.mjs\"",
+    "test": "node --test \"test/**/*.test.*\" \"live/*.test.mjs\"",
+    "test:live": "node --test --test-concurrency=4 \"live/**/*.live.mjs\"",
     "watch:live": "node live/watch.mjs",
     "lint": "standard"
   },

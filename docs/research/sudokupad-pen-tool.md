@@ -103,9 +103,9 @@ drew real mouse drags.
 
 ## The second page of pens, built and run live 2026-11-04 (#71, SudokuPad 0.612.0, headless Chromium)
 
-What `pen-tool-extras.user.js` 1.5.0 does, and what running it found. Live checks: `live/pen-tool-extras-pages.live.mjs`
+What `pen-tool-extras.user.js` 1.5.0 does, and what running it found. Live checks: `live/pen-tool-extras/pen-tool-extras-pages.live.mjs`
 (paging by button, Tab and wheel, drawing, undo, replay, reload, at the three injection times, and with No Tab Letters
-installed too) and `live/pen-tool-extras-panel.live.mjs`.
+installed too) and `live/pen-tool-extras/pen-tool-extras-panel.live.mjs`.
 
 - **Pages.** Page 1 is `1` to `9`, page 2 is the color characters `a` to `i`. Each color button keeps its `data-key`
   and takes the page's character as `data-value` and title, as `ToolColor.setButtonPad` does. Page 2 strokes draw
@@ -217,7 +217,7 @@ Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras-che
 So a click with a modifier held doesn't reach the pen tool unless the script stops the temporary switch (`App.changeTool` with
 `tempChange`, found through each tool's `tempKey`). Only the key press was run, not a click with it held.
 
-## Middle click (run on the page 2026-11-04, SudokuPad 0.612.0, headless Chromium, `live/pen-tool-extras-erase.live.mjs`)
+## Middle click (run on the page 2026-11-04, SudokuPad 0.612.0, headless Chromium, `live/pen-tool-extras/pen-tool-extras-erase.live.mjs`)
 
 - A real middle press raises `pointerdown`, `pointerup` and `auxclick` with button 1 and, when `pointerdown` is not prevented, `mousedown`
   and `mouseup`, which end in `clickCell` as for a left click.
