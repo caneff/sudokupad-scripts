@@ -33,11 +33,7 @@ export async function openExample (browser, { leave = [] } = {}) {
   await p.addScriptTag({ content: script })
   await p.locator(BUTTON).waitFor({ state: 'visible' })
   const enter = async (tool, list) => {
-    await p.click(tool)
-    for (const [row, col, digits] of list.filter(([row, col]) => !leave.some(([r, c]) => r === row && c === col))) {
-      await p.evaluate(([row, col]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)) }, [row, col])
-      for (const d of digits) await p.keyboard.press(d)
-    }
+    for (const [row, col, digits] of list.filter(([row, col]) => !leave.some(([r, c]) => r === row && c === col))) await typeInto(p, tool, row, col, digits)
   }
   await enter('#control-normal', DIGITS)
   await enter('#control-corner', CORNER)
@@ -47,8 +43,18 @@ export async function openExample (browser, { leave = [] } = {}) {
   return p
 }
 
-// Presses the button until its label reads `want`, then waits for the colors to settle. The script gives no signal that its
-// styles are applied, so the wait is a fixed 500 ms.
+// Selects the cell at [row, col] in the tool `tool` (a control's selector), types `keys` into it and deselects.
+export async function typeInto (p, tool, row, col, keys) {
+  await p.click(tool)
+  await p.evaluate(([row, col]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)) }, [row, col])
+  for (const key of keys) await p.keyboard.press(key)
+  await p.evaluate(() => Framework.app.deselect())
+}
+
+// Color by Digit gives no signal that its styles are applied, so a change gets this long to show.
+export const SETTLE_MS = 500
+
+// Presses the button until its label reads `want`, then waits for the colors to settle.
 export async function pressTo (p, want) {
   const button = p.locator(BUTTON)
   const label = () => p.evaluate((selector) => document.querySelector(selector).textContent, MODE_LABEL)
@@ -57,7 +63,7 @@ export async function pressTo (p, want) {
     await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
   }
   await p.waitForFunction(([selector, want]) => document.querySelector(selector).textContent === want, [MODE_LABEL, want])
-  await p.waitForTimeout(500)
+  await p.waitForTimeout(SETTLE_MS)
 }
 
 // Throws when the conflict circles are not drawn within the timeout.

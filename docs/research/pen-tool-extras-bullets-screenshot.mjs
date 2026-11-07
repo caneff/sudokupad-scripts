@@ -1,7 +1,7 @@
 // Takes the four small pictures on site/pen-tool-extras.html, one per "What it adds" bullet a still picture can
 // show, from the current pen-tool-extras.user.js on sudokupad.app. Each is cropped close and taken at 3x so it
 // reads at about 14rem wide:
-//   pen-tool-extras-bullet-colors.png   five short pen lines side by side, each in a color SudokuPad's own pen cannot draw (PICTURE_PEN_COLORS)
+//   pen-tool-extras-bullet-colors.png   five short pen lines side by side, each in a color SudokuPad's own pen cannot draw (PICTURE_PEN_COLORS in pen-tool-extras-recolor.mjs)
 //   pen-tool-extras-bullet-lines.png    a dashed line and an arrow line on the grid, and the page button
 //   pen-tool-extras-bullet-edges.png    cells with an edge X, an edge circle and the two direction arrows
 //   pen-tool-extras-bullet-corners.png  two grid corners, one with an X and one with a circle
@@ -13,7 +13,7 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { holdPenButton, pickPenColor } from './pen-tool-extras-recolor.mjs'
+import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 // Taken pictures wait here until every one is taken.
 const taken = new Map()
 
@@ -22,8 +22,6 @@ const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta
 const out = (name) => new URL(`./pen-tool-extras-bullet-${name}.png`, import.meta.url).pathname
 const save = (name, buffer) => taken.set(name, buffer)
 
-// Pens 1 to 5 take these for the colors picture: a teal, a navy, a dark red, a purple and a lime, each far from all nine of SudokuPad's own pen colors.
-const PICTURE_PEN_COLORS = ['#00897b', '#1a237e', '#8b1a1a', '#6a1b9a', '#8bc34a']
 const DASH_KEY = 'PenColor_dash'
 // Page 2 dash length in line widths; the script's own default is dots (0).
 const DASH_LENGTH = 3

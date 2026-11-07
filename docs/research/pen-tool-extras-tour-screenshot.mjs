@@ -6,7 +6,8 @@
 //   3. edge marks, then grid-corner marks, back on page 1
 //   4. one middle click on the first line, which erases the whole of it
 // Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the middle click lands,
-// since a screenshot draws no pointer. The last state holds for 2.6 s. Needs python3 with Pillow for the GIF.
+// since a screenshot draws no pointer. Each line, mark and hold is checked to have landed, and the last state holds longer than the rest.
+// Needs python3 with Pillow for the GIF.
 // Run from the repo root: node docs/research/pen-tool-extras-tour-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
@@ -15,7 +16,7 @@ import { join } from 'node:path'
 import { openPage, startPuzzle } from '../../live/page.mjs'
 import { cellCentre, gridPoint, mouseDrag, openPenTool, PAGE_BUTTON } from '../../live/pen.mjs'
 import { joinGif } from './gif-join.mjs'
-import { holdPenButton, pickPenColor } from './pen-tool-extras-recolor.mjs'
+import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 
 const target = new URL('./pen-tool-extras-tour.gif', import.meta.url).pathname
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
@@ -25,8 +26,9 @@ const MARGIN = 12
 const CLICK_PAUSE_MS = 150
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
-const NEW_COLOR = '#00897b'
+const [NEW_COLOR] = PICTURE_PEN_COLORS
 const RING = 'tour-ring'
+const SETTLE_TIMEOUT_MS = 5000
 
 const browser = await chromium.launch()
 const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
@@ -42,6 +44,13 @@ await openPenTool(p)
 await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
 await p.evaluate(() => { ToolPen.tool.lineMode = 'centeronly' })
 
+const penCount = () => p.evaluate(() => Framework.app.puzzle.cells.reduce((n, c) => n + c.pen.length, 0))
+// Throws when `act` leaves the grid with no more pen values than before it, so a line or mark that missed fails the run.
+const landing = async (what, act) => {
+  const before = await penCount()
+  await act()
+  if (await penCount() <= before) throw new Error(`${what} did not land`)
+}
 const frames = mkdtempSync(join(tmpdir(), 'pte-tour-'))
 const list = []
 const [, , cell] = await cellCentre(p, 0, 0)
@@ -77,16 +86,15 @@ const holdWithRing = async (key) => {
   await ring(...await buttonCentre(key))
   await holdPenButton(p, key)
 }
-const line = async (key, points) => { await pick(key); await mouseDrag(p, points); await park() }
+const line = async (key, points) => { await pick(key); await landing(`the line from ${points[0]}`, () => mouseDrag(p, points)); await park() }
 const turnPage = async () => { await p.locator(PAGE_BUTTON).click(); await park() }
 const clickTimes = async (x, y, n) => { for (let i = 0; i < n; i++) { await p.mouse.click(x, y); await p.waitForTimeout(CLICK_PAUSE_MS) } }
 const edgeClicks = async (row, col, side, n, key) => {
   await pick(key)
   const [cx, cy, w] = await cellCentre(p, row, col)
   const [x, y] = side === 'right' ? [cx + w / 2 - EDGE_INSET_PX, cy] : [cx, cy + w / 2 - EDGE_INSET_PX]
-  await clickTimes(x, y, n)
+  await landing(`the edge mark at ${row},${col} ${side}`, () => clickTimes(x, y, n))
 }
-const penCount = () => p.evaluate(() => Framework.app.puzzle.cells.reduce((n, c) => n + c.pen.length, 0))
 
 // 1. Recolor pen 1 in edit mode.
 await frame('The pen tool', 1000)
@@ -121,9 +129,9 @@ await edgeClicks(4, 3, 'right', 2, 4)
 await park()
 await frame('Edge marks', 1600)
 await pick(5)
-await clickTimes(...await gridPoint(p, [5, 1]), 1)
+await landing('the corner X', async () => clickTimes(...await gridPoint(p, [5, 1]), 1))
 await pick(9)
-await clickTimes(...await gridPoint(p, [5, 4]), 2)
+await landing('the corner circle', async () => clickTimes(...await gridPoint(p, [5, 4]), 2))
 await park()
 await frame('Grid-corner marks', 1600)
 
@@ -135,7 +143,7 @@ await frame('Middle-click a line', 1200)
 await p.mouse.click(lx, ly, { button: 'middle' })
 await unring()
 await park()
-if (await penCount() >= before) throw new Error('the middle click erased nothing')
+await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })
 await frame('The whole line is gone', 2600)
 
 joinGif(list, target)

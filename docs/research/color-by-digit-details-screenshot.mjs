@@ -3,24 +3,22 @@
 //   color-by-digit-details-digit.png  the boxes in Digit, with the red circles of its marks that conflict with the given 5
 //   color-by-digit-details-modes.gif  an animation: the boxes and the button stepping Cell, Digit, Both and Off by real presses, 1.5 s a frame
 //   color-by-digit-details-cell.gif   an animation in Cell: a 2 typed into an empty cell fills it, center marks 7 and 8 in another fill it,
-//                                     and a center mark 2 from the other group takes the fill away; the last state holds for 3 s
+//                                     and a center mark 2 from the other group takes the fill away; the last state holds longer
 //   color-by-digit-details-menu.gif   an animation: the boxes and, beside them, the profile menu opened from the button's arrow box,
-//                                     Odd/Even picked by a real click, and the boxes recolored; the last state holds for 3 s
+//                                     Odd/Even picked by a real click, and the boxes recolored; the last state holds longer
 // Every change is real input on the real script; a frame is taken once the page has settled. The mascot is hidden.
 // Needs python3 with Pillow for the GIFs. Run from the repo root: node docs/research/color-by-digit-details-screenshot.mjs
 import { chromium } from 'playwright'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { BUTTON, exampleClip, MODES, openExample, pressTo, waitForCircles } from './color-by-digit-example.mjs'
+import { BUTTON, exampleClip, MODES, openExample, pressTo, SETTLE_MS, typeInto, waitForCircles } from './color-by-digit-example.mjs'
 import { joinGif } from './gif-join.mjs'
 
 const out = (name, ext = 'png') => new URL(`./color-by-digit-details-${name}.${ext}`, import.meta.url).pathname
 const FRAME_MS = 1500
 const HOLD_MS = 3000
 const OPEN_MS = 2000
-// Color by Digit gives no signal that its styles are applied, so a change gets this long to show.
-const SETTLE_MS = 500
 const MENU = '#color-by-digit-menu'
 const MENU_ARROW = `${BUTTON} [data-role="menu"]`
 
@@ -48,21 +46,14 @@ const shot = (p, name, clip) => p.screenshot({ path: join(frames, `${name}.png`)
 // Kept in step: cells (2, 4) and (2, 5) start empty; a digit, then center marks, then a center mark from the other group.
 {
   const p = await openExample(browser, { leave: [[2, 5]] })
-  await pressTo(p, 'CELL')
   const entries = [
     ['Start', null],
-    ['Type 2', ['#control-normal', [2, 4], '2']],
-    ['Center marks 7 and 8', ['#control-centre', [2, 5], '78']],
-    ['Add a center mark 2', ['#control-centre', [2, 5], '2']]
+    ['Type 2', ['#control-normal', 2, 4, '2']],
+    ['Center marks 7 and 8', ['#control-centre', 2, 5, '78']],
+    ['Add a center mark 2', ['#control-centre', 2, 5, '2']]
   ]
   for (const [i, [, entry]] of entries.entries()) {
-    if (entry) {
-      const [tool, [row, col], keys] = entry
-      await p.click(tool)
-      await p.evaluate(([row, col]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)) }, [row, col])
-      for (const key of keys) await p.keyboard.press(key)
-      await p.evaluate(() => Framework.app.deselect())
-    }
+    if (entry) await typeInto(p, ...entry)
     await p.mouse.move(0, 0)
     await p.waitForTimeout(SETTLE_MS)
     await shot(p, `cell-${i}`, await exampleClip(p))
@@ -74,7 +65,6 @@ const shot = (p, name, clip) => p.screenshot({ path: join(frames, `${name}.png`)
 // The profile menu: shut, open, Odd/Even picked.
 {
   const p = await openExample(browser)
-  await pressTo(p, 'CELL')
   const button = p.locator(BUTTON)
   const oddEven = () => p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Odd/Even' })
   await p.click(MENU_ARROW)
@@ -88,18 +78,18 @@ const shot = (p, name, clip) => p.screenshot({ path: join(frames, `${name}.png`)
   await p.click(MENU_ARROW)
   await p.locator(MENU).waitFor({ state: 'hidden' })
   const steps = [
-    ['shut', async () => {}, FRAME_MS],
-    ['open', async () => { await p.click(MENU_ARROW); await p.locator(MENU).waitFor({ state: 'visible' }) }, OPEN_MS],
-    ['picked', async () => { await oddEven().click(); await p.locator(MENU).waitFor({ state: 'hidden' }); await p.mouse.move(0, 0) }, HOLD_MS]
+    [async () => {}, FRAME_MS],
+    [async () => { await p.click(MENU_ARROW); await p.locator(MENU).waitFor({ state: 'visible' }) }, OPEN_MS],
+    [async () => { await oddEven().click(); await p.locator(MENU).waitFor({ state: 'hidden' }); await p.mouse.move(0, 0) }, HOLD_MS]
   ]
-  for (const [i, [, act]] of steps.entries()) {
-    if (i > 0) await act()
-    else await p.mouse.move(0, 0)
+  await p.mouse.move(0, 0)
+  for (const [i, [act]] of steps.entries()) {
+    await act()
     await p.waitForTimeout(SETTLE_MS)
     await shot(p, `menu-${i}-grid`, await exampleClip(p))
     await shot(p, `menu-${i}-menu`, menuClip)
   }
-  joinGif(steps.map(([, , ms], i) => ({ files: [join(frames, `menu-${i}-grid.png`), join(frames, `menu-${i}-menu.png`)], ms })), out('menu', 'gif'))
+  joinGif(steps.map(([, ms], i) => ({ files: [join(frames, `menu-${i}-grid.png`), join(frames, `menu-${i}-menu.png`)], ms })), out('menu', 'gif'))
   await p.context().close()
 }
 

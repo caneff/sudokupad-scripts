@@ -8,7 +8,7 @@ import { spawnSync } from 'node:child_process'
 const JOIN = `
 import json, sys
 from PIL import Image, ImageDraw, ImageFont
-frames, target, colors = json.loads(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+frames, target = json.loads(sys.argv[1]), sys.argv[2]
 font = ImageFont.load_default(size=36)
 GAP, CAPTION_GAP = 40, 12
 sheets = []
@@ -38,12 +38,12 @@ for s in sheets:
 strip = Image.new('RGB', (w, h * len(padded)))
 for i, im in enumerate(padded):
     strip.paste(im, (0, i * h))
-palette = strip.quantize(colors=colors)
+palette = strip.quantize(colors=64)
 padded = [im.quantize(palette=palette, dither=Image.Dither.NONE) for im in padded]
 padded[0].save(target, save_all=True, append_images=padded[1:], duration=[f['ms'] for f in frames], loop=0, optimize=True)
 `
 
-export function joinGif (frames, target, { colors = 64 } = {}) {
-  const joined = spawnSync('python3', ['-I', '-c', JOIN, JSON.stringify(frames), target, String(colors)], { encoding: 'utf8' })
+export function joinGif (frames, target) {
+  const joined = spawnSync('python3', ['-I', '-c', JOIN, JSON.stringify(frames), target], { encoding: 'utf8' })
   if (joined.status !== 0) throw new Error(`joining the frames failed: ${joined.error ?? joined.stderr}`)
 }
