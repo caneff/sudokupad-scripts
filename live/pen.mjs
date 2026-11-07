@@ -1,6 +1,6 @@
 // Shared by the live checks of the pen tool: opening it, reading what it drew and which pen page is up, drawing with
 // the real mouse, setting its sliders, planting saved values and probing keydowns. Not a check itself, so
-// `live/*.live.mjs` skips it.
+// `live/**/*.live.mjs` skips it.
 
 import assert from 'node:assert/strict'
 import { clickUntil, SETTLE_MS, settle } from './settle.mjs'

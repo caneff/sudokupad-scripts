@@ -11,7 +11,7 @@ seam. These come from `twitch-rules-scroller` and
    The `Framework` API gives no error when a call has no effect, and the seam
    cannot see it. A button added after `Start Puzzle` looked installed and ignored
    every click until `refreshControls` ran
-   (`docs/research/color-by-digit-live-check/README.md`). Name what was run, and
+   (`docs/research/color-by-digit/color-by-digit-live-check/README.md`). Name what was run, and
    name what stays owed.
 
 ## Failure

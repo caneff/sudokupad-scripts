@@ -1,5 +1,5 @@
 // Shared by the live checks: SudokuPad served from a recording (a HAR) instead of sudokupad.app on every
-// page load. Test code only; no userscript reads it, and it is not a check, so `live/*.live.mjs` skips it.
+// page load. Test code only; no userscript reads it, and it is not a check, so `live/**/*.live.mjs` skips it.
 //
 // `routeSudokuPad(page or context)` aborts the trackers and serves everything else from a recording of
 // SudokuPad's app. The first call with no recording or with `LIVE_REFRESH=1` records it from sudokupad.app,
