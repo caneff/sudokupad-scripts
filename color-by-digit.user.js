@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.2
+// @version      0.22.3
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.2'
+  const VERSION = '0.22.3'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1441,19 +1441,32 @@
     return group
   }
 
-  // Rebuilt each time, so a circle never outlives its mark, its conflict or a mode that colors digits.
+  // Each conflicting mark keeps its own circle, so a change touches only the circles that came or went.
+  const circleOf = new WeakMap()
+
+  function setAttributes (element, values) {
+    Object.entries(values).forEach(([name, value]) => {
+      if (element.getAttribute(name) !== String(value)) element.setAttribute(name, value)
+    })
+  }
+
+  // A circle never outlives its mark, its conflict or a mode that colors digits.
   function syncCircles () {
     const group = circlesGroup()
     if (!group) return
     const conflicts = colorsDigits(mode) ? document.querySelectorAll(MARK_SELECTORS.map((s) => `${s}.conflict`).join(',')) : []
-    group.replaceChildren(...[...conflicts].map((mark) => {
-      const { cx, cy, r } = circleFor(markMiddle(mark, group))
-      const circle = document.createElementNS(SVG_NS, 'circle')
-      circle.setAttribute('cx', cx)
-      circle.setAttribute('cy', cy)
-      circle.setAttribute('r', r)
-      return circle
-    }))
+    const wanted = new Set()
+    conflicts.forEach((mark) => {
+      let circle = circleOf.get(mark)
+      if (!circle || circle.parentNode !== group) {
+        circle = document.createElementNS(SVG_NS, 'circle')
+        circleOf.set(mark, circle)
+        group.appendChild(circle)
+      }
+      setAttributes(circle, circleFor(markMiddle(mark, group)))
+      wanted.add(circle)
+    })
+    ;[...group.children].filter((circle) => !wanted.has(circle)).forEach((circle) => circle.remove())
   }
 
   function syncDigits () {
