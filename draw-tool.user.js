@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.8.0
+// @version      0.9.0
 // @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.8.0'
+  const VERSION = '0.9.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -30,21 +30,45 @@
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
   const DEFAULT_OPACITY = 100
-  // A stroke's color is the number of a SudokuPad pen color, 1 to 9; its color is the CSS variable --puzzle-pencolor-<n>.
+  // An item saves its color as a number, 1 to 9, the number of one of Draw's nine colors, so a recolor recolors it.
   const PEN_COLORS = 9
+  const COLOR_NUMBERS = Array.from({ length: PEN_COLORS }, (_, i) => i + 1)
   const DEFAULT_COLOR = 1
   const COLOR_KEY = 'DrawTool_color'
+  const COLORS_KEY = 'DrawTool_colors'
+  // Copied from Pen Tool Extras: SudokuPad's own pen colors, for a color that cannot be read.
+  const SUDOKUPAD_PEN_COLORS = Object.freeze({
+    1: '#1f8020',
+    2: '#e87cf1',
+    3: '#e49632',
+    4: '#f53a37',
+    5: '#d2be32',
+    6: '#3d99f5',
+    7: '#d6d6d6',
+    8: '#7c7c7c',
+    9: '#000000'
+  })
+  const HEX_COLOR = /^#([0-9a-f]{6})$/
+  const SHORT_HEX_COLOR = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/
+  const RGB_TEXT = /^rgba?\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+)\s*)?\)$/
+  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs), as Pen Tool Extras' pen buttons do.
+  const HOLD_TO_EDIT_MS = 1000
   const WIDTH_KEY = 'DrawTool_width'
   const OPACITY_KEY = 'DrawTool_opacity'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
   // How far, in board units, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
-  const PANEL_BOX_CLASS = 'draw-tool-panel-box'
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
+  const SETTINGS_CLASS = 'draw-tool-settings'
   const TRAY_CLASS = 'draw-tool-tray'
+  const SLIDERS_CLASS = 'draw-tool-sliders'
   const SLIDER_ROW_CLASS = 'draw-tool-slider'
+  const EDITING_CLASS = 'draw-tool-editing'
+  const PICKER_CLASS = 'draw-tool-picker'
+  const COLORS_STYLE_ID = 'draw-tool-colors'
+  const PANEL_STYLE_ID = 'draw-tool-style'
   const SIZE_SLIDER = 'draw-tool-size'
   const OPACITY_SLIDER = 'draw-tool-opacity'
   // Pen Tool Extras' slider tray: the same purple tray, wedge track for size and fade track for opacity.
@@ -200,6 +224,40 @@
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+
+  // A color picker takes only #rrggbb, so every draw color is kept as one. A transparent color has none to keep.
+  function hexColor (text) {
+    if (typeof text !== 'string') return undefined
+    const value = text.trim().toLowerCase()
+    if (HEX_COLOR.test(value)) return value
+    const short = SHORT_HEX_COLOR.exec(value)
+    if (short) return `#${short.slice(1).map((c) => c + c).join('')}`
+    const rgb = RGB_TEXT.exec(value)
+    if (!rgb || (rgb[4] !== undefined && Number(rgb[4]) === 0)) return undefined
+    return `#${rgb.slice(1, 4).map((x) => Math.round(Math.max(0, Math.min(255, Number(x)))).toString(16).padStart(2, '0')).join('')}`
+  }
+
+  // null when nothing usable is saved, which means the first-use copy of the pen colors is still owed.
+  function readDrawColors (saved) {
+    if (!isPlainObject(saved)) return null
+    const hex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
+    if (!COLOR_NUMBERS.some((n) => hex(saved[n]))) return null
+    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hex(saved[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+  }
+
+  // `readPenColor(n)` reads pen color n as the browser computes it.
+  const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
+
+  function editedColor (colors, n, value) {
+    if (penColor(n) === undefined) throw new RangeError(`draw-tool: ${n} is not a color number`)
+    const hex = hexColor(value)
+    if (!hex) throw new RangeError(`draw-tool: ${value} is not a color`)
+    return { ...colors, [n]: hex }
+  }
+
+  // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
+  const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  --draw-tool-color-${n}: ${colors[n]};`), '}'].join('\n')
 
   const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
 
@@ -261,7 +319,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP }
+    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -297,7 +355,8 @@
     return [p.x, p.y]
   }
 
-  const penColorVar = (n) => `var(--puzzle-pencolor-${n})`
+  // Until Draw is first made current its colors are not copied yet, so an item drawn by an older version shows in the pen color.
+  const itemColor = (n) => `var(--draw-tool-color-${n}, var(--puzzle-pencolor-${n}))`
 
   function newStroke (layer, color, width, opacity) {
     const path = document.createElementNS(SVG_NS, 'path')
@@ -307,7 +366,7 @@
     path.setAttribute('stroke-linecap', 'round')
     path.setAttribute('stroke-linejoin', 'round')
     path.setAttribute('stroke-opacity', String(opacity / 100))
-    path.style.stroke = penColorVar(color)
+    path.style.stroke = itemColor(color)
     layer.appendChild(path)
     return path
   }
@@ -320,48 +379,93 @@
     text.setAttribute('font-size', String(item.size))
     text.setAttribute('text-anchor', 'middle')
     text.setAttribute('dominant-baseline', 'central')
-    text.style.fill = penColorVar(item.color)
+    text.style.fill = itemColor(item.color)
     text.setAttribute('fill-opacity', String(itemOpacity(item) / 100))
     text.textContent = item.text
     layer.appendChild(text)
     return text
   }
 
-  // The keypad with Draw current, in the style of SudokuPad's tool-pen.css: each digit button a pen color swatch,
-  // 0 and delete covered by the panel box. The swatches read the pen color variables, so a changed one shows.
+  // Pen Tool Extras' pen panel, in the same sizes: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
+  // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape slot and the settings gear at the full 4rem, and the sliders across the rest. The tray
+  // sits behind the last two rows; it is placed in their area but takes no cell. Each color button shows a line in its draw color, cut out of the button so a recolor follows.
+  const rem = (value) => Math.round(value * 100) / 100
+  const PANEL_BUTTON_REM = 4
+  const COLOR_BUTTON_REM = 2.5
+  const PANEL_BUTTON_MARGIN_REM = 0.15
+  const PANEL_CELL_REM = rem(PANEL_BUTTON_REM + 2 * PANEL_BUTTON_MARGIN_REM)
+  const COLOR_CELL_REM = rem(COLOR_BUTTON_REM + 2 * PANEL_BUTTON_MARGIN_REM)
+  const PANEL_HEIGHT_REM = 4 * PANEL_CELL_REM
+  const PANEL_COLUMNS = 3
+  const COLOR_ROWS = 3
+  const CONTROLS_ROW = COLOR_ROWS + 1
+  const SLIDERS_ROW = CONTROLS_ROW + 1
+  const CONTROLS_GAP_REM = 0.75
+  const TRAY_RADIUS_PX = 14
+  const TRAY_REACH_REM = 0.25
+  const TRAY_PADDING_REM = 0.4
+  const TRAY_TOP_REM = rem(CONTROLS_GAP_REM + PANEL_BUTTON_MARGIN_REM - TRAY_PADDING_REM)
+  const SLIDER_ROW_HEIGHT_REM = 1.4
+  const SWATCH_REM = 2.4
+  // The column of each control in its row; the Shape slot, column 2, is left empty.
+  const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SETTINGS_CLASS]: 3 }
   const GREY = 'rgb(124, 124, 124)'
+  const SWATCH_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2 12H22' stroke='black' stroke-width='3' stroke-linecap='round'/></svg>"
+  const SWATCH_MASK = `url("data:image/svg+xml,${encodeURIComponent(SWATCH_SVG).replace(/'/g, '%27')}") center / 100% no-repeat`
   // A CSS gradient cannot draw a slanted edge, so the wedge is a data-URI picture stretched over the track.
   const WEDGE_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 10' preserveAspectRatio='none'><polygon points='0,4.5 100,1.5 100,8.5 0,5.5' fill='${PANEL_COLOR}'/></svg>`
   const WEDGE_PICTURE = `url("data:image/svg+xml,${encodeURIComponent(WEDGE_SVG)}") center / 100% 100% no-repeat`
   const FADE_PICTURE = `linear-gradient(to right, color-mix(in srgb, ${PANEL_COLOR} 8%, transparent), ${PANEL_COLOR})`
   const TRACK_SHAPE = `height: ${SLIDER_TRACK_REM}rem; border: none; border-radius: ${SLIDER_TRACK_REM / 2}rem;`
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
-  const PANEL_CSS = `
-.tool-draw .controls-input { position: relative; }
-.tool-draw .controls-input button.digit { position: relative; text-indent: -999em; overflow: hidden; }
-.tool-draw .controls-input button.digit:not(.current) { color: transparent; background-color: var(--body-bg); }
-.tool-draw .controls-input button.digit:after { content: ""; position: absolute; width: 60%; height: 60%; left: 20%; top: 20%; }
-${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input button[data-key="${i + 1}"]:after { background-color: ${penColorVar(i + 1)}; }`).join('\n')}
-.tool-draw .controls-input button[data-key="0"], .tool-draw .controls-input button[data-control="delete"] { visibility: hidden; }
-.${PANEL_BOX_CLASS} { position: absolute; left: 0; right: 0; top: 13rem; height: 4rem; display: grid; grid-template-columns: minmax(0, 1fr) 4rem; gap: 0.4rem; }
-.${TRAY_CLASS} { box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-evenly; padding: 0 0.8rem; background: ${TRAY_COLOR}; border-radius: 14px; color: ${PANEL_COLOR}; }
-.${SLIDER_ROW_CLASS} { display: flex; align-items: center; height: 1.4rem; }
-.${SLIDER_ROW_CLASS} input { flex: 1; min-width: 0; margin: 0; height: 1.4rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }
-.${SLIDER_ROW_CLASS} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }
-.${SLIDER_ROW_CLASS} input::-moz-range-track { ${TRACK_SHAPE} }
-#${SIZE_SLIDER}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }
-#${SIZE_SLIDER}::-moz-range-track { background: ${WEDGE_PICTURE}; }
-#${OPACITY_SLIDER}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }
-#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }
-.${SLIDER_ROW_CLASS} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }
-.${SLIDER_ROW_CLASS} input::-moz-range-thumb { ${THUMB_SHAPE} }
-.tool-draw .controls-input .${PANEL_BOX_CLASS} button.${CLEAR_CLASS} { width: auto; height: auto; min-height: 0; margin: 0; padding: 0; font-size: 0.85rem; line-height: 1.15; color: ${GREY}; background-color: var(--body-bg); }
-.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }
-`
+  const PANEL = '.tool-draw .controls-input'
+  const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
+  const PANEL_CSS = [
+    `${PANEL} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
+    `${PANEL} > .button-row { display: contents !important; }`,
+    `${PANEL} button[data-key="0"], ${PANEL} button[data-control="delete"] { display: none !important; }`,
+    `${PANEL} button.digit { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; text-indent: -999em; overflow: hidden; color: transparent; }`,
+    `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
+    `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; -webkit-mask: ${SWATCH_MASK}; mask: ${SWATCH_MASK}; }`,
+    ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(--draw-tool-color-${n}); }`),
+    `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
+    ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
+    `${PANEL} button.${CLEAR_CLASS} { font-size: 0.85rem; line-height: 1.15; color: ${GREY}; }`,
+    `.${SETTINGS_CLASS} svg { width: 2.6rem; height: 2.6rem; }`,
+    // SudokuPad's CSS fills every 'svg path', which would turn the gear's lines into a blob.
+    `.${SETTINGS_CLASS} path, .${SETTINGS_CLASS} circle { fill: none !important; }`,
+    `.${TRAY_CLASS} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
+    // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each '.button-row', which has no box here, so the rows are swapped by grid row.
+    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} :is(button[data-key="${key}"], .${PICKER_CLASS}[data-color="${key}"]) { grid-row: ${row} / span 1; }`)),
+    ...COLOR_NUMBERS.map((n) => `${PANEL} .${PICKER_CLASS}[data-color="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
+    // Edit mode: a color picker sits over each color button, with the button's line hidden under it, in the sizes SudokuPad's color tool uses for the same job.
+    `.${EDITING_CLASS} button.digit::after { opacity: 0; }`,
+    `.${EDITING_CLASS} .${PICKER_CLASS} { position: relative; justify-self: stretch; align-self: stretch; z-index: 10; }`,
+    `.${EDITING_CLASS} .${PICKER_CLASS} input { position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; padding: 0; pointer-events: all; }`,
+    `.${SLIDERS_CLASS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
+    `.${SLIDER_ROW_CLASS} { display: flex; align-items: center; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
+    `.${SLIDER_ROW_CLASS} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
+    `.${SLIDER_ROW_CLASS} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
+    `.${SLIDER_ROW_CLASS} input::-moz-range-track { ${TRACK_SHAPE} }`,
+    `#${SIZE_SLIDER}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
+    `#${SIZE_SLIDER}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
+    `#${OPACITY_SLIDER}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
+    `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
+    `.${SLIDER_ROW_CLASS} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
+    `.${SLIDER_ROW_CLASS} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
+    `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`
+  ].join('\n')
+  // Pen Tool Extras' gear, at its viewBox.
+  const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
+  const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
+  const SETTINGS_LABEL = 'Draw Tool settings'
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
   let opacity = DEFAULT_OPACITY
-  let panelBox = null
+  // Draw's nine colors, or null until they are first copied from the pen colors.
+  let colors = null
+  // The elements the panel adds to SudokuPad's keypad while Draw is current.
+  let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
 
@@ -378,6 +482,36 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     markColor()
   }
 
+  function showColors () {
+    let style = document.getElementById(COLORS_STYLE_ID)
+    if (!style) {
+      style = document.createElement('style')
+      style.id = COLORS_STYLE_ID
+      document.head.appendChild(style)
+    }
+    style.textContent = colors ? colorsCss(colors) : ''
+  }
+
+  function saveColors (next) {
+    colors = next
+    Framework.setData(COLORS_KEY, colors)
+    showColors()
+  }
+
+  // The browser turns a pen color of any CSS form into rgb() text. A value it rejects, or none, reads as unreadable.
+  function readPenColor (n) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()
+    const probe = document.createElement('span')
+    probe.style.color = value
+    if (!probe.style.color) return undefined
+    document.documentElement.appendChild(probe)
+    try {
+      return window.getComputedStyle(probe).color
+    } finally {
+      probe.remove()
+    }
+  }
+
   // A slider sets only the next item and is saved for the next visit.
   function sliderRow (id, label, min, max, step, value) {
     const row = document.createElement('div')
@@ -390,21 +524,26 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     return row
   }
 
-  function showPanelBox () {
-    panelBox = document.createElement('div')
-    panelBox.className = PANEL_BOX_CLASS
+  function showPanel () {
     const tray = document.createElement('div')
     tray.className = TRAY_CLASS
-    tray.append(
-      sliderRow(SIZE_SLIDER, 'Size', MIN_WIDTH, MAX_WIDTH, WIDTH_STEP, width),
-      sliderRow(OPACITY_SLIDER, 'Opacity (%)', MIN_OPACITY, MAX_OPACITY, OPACITY_STEP, opacity)
-    )
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.title = 'Clear the whole drawing'
     clear.innerHTML = 'Clear<br>all'
-    panelBox.append(tray, clear)
-    tray.addEventListener('input', (event) => {
+    clear.addEventListener('click', confirmClear)
+    const settings = document.createElement('button')
+    settings.className = SETTINGS_CLASS
+    settings.title = SETTINGS_LABEL
+    settings.setAttribute('aria-label', SETTINGS_LABEL)
+    settings.innerHTML = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
+    const sliders = document.createElement('div')
+    sliders.className = SLIDERS_CLASS
+    sliders.append(
+      sliderRow(SIZE_SLIDER, 'Size', MIN_WIDTH, MAX_WIDTH, WIDTH_STEP, width),
+      sliderRow(OPACITY_SLIDER, 'Opacity (%)', MIN_OPACITY, MAX_OPACITY, OPACITY_STEP, opacity)
+    )
+    sliders.addEventListener('input', (event) => {
       if (event.target.id === SIZE_SLIDER) {
         width = readWidth(Number(event.target.value))
         Framework.setData(WIDTH_KEY, width)
@@ -413,8 +552,69 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
         Framework.setData(OPACITY_KEY, opacity)
       }
     })
-    clear.addEventListener('click', confirmClear)
-    keypad().querySelector('.button-row:last-child').appendChild(panelBox)
+    panelParts = [tray, clear, settings, sliders]
+    keypad().append(...panelParts)
+  }
+
+  function hidePanel () {
+    exitEditMode()
+    for (const part of panelParts) part.remove()
+    panelParts = []
+  }
+
+  // Edit mode: a hold on a color button puts a color picker over each one, and another hold takes them away.
+  function exitEditMode () {
+    const panel = keypad()
+    panel.classList.remove(EDITING_CLASS)
+    for (const picker of panel.querySelectorAll(`.${PICKER_CLASS}`)) picker.remove()
+  }
+
+  function enterEditMode () {
+    const panel = keypad()
+    panel.classList.add(EDITING_CLASS)
+    for (const n of COLOR_NUMBERS) {
+      const picker = document.createElement('div')
+      picker.className = PICKER_CLASS
+      picker.dataset.color = n
+      const input = document.createElement('input')
+      Object.assign(input, { type: 'color', value: colors[n] })
+      input.dataset.color = n
+      picker.appendChild(input)
+      panel.appendChild(picker)
+    }
+  }
+
+  const toggleEditMode = () => keypad().classList.contains(EDITING_CLASS) ? exitEditMode() : enterEditMode()
+
+  const HOLD_TARGETS = `.tool-draw .controls-input button.digit, .tool-draw .${PICKER_CLASS} input`
+
+  // As Pen Tool Extras' hold on a pen button: either mouse button, and touch, through pointer events.
+  function installHoldToEdit () {
+    let timer
+    let holdDone = false
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    document.addEventListener('pointerdown', (event) => {
+      cancel()
+      holdDone = false
+      if (!event.target.closest(HOLD_TARGETS)) return
+      timer = setTimeout(() => {
+        timer = undefined
+        holdDone = true
+        if (Framework.app.tool === TOOL_NAME) toggleEditMode()
+      }, HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // The browser's menu would open over the picker during a right-click hold: Linux opens it on the press, Windows on the release, over the picker
+    // that appeared under the pointer. A quick right-click on a button, released before the delay, keeps its menu on Windows.
+    document.addEventListener('contextmenu', (event) => {
+      if ((timer !== undefined || holdDone) && event.target.closest(HOLD_TARGETS)) event.preventDefault()
+    }, true)
+    // Every item in that color number reads the variable, so the recolor shows on them at once.
+    document.addEventListener('input', (event) => {
+      const input = event.target
+      if (input.matches(`.${PICKER_CLASS} input`)) saveColors(editedColor(colors, Number(input.dataset.color), input.value))
+    })
   }
 
   let stroke = null
@@ -488,7 +688,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     input.className = TEXT_BOX_CLASS
     input.type = 'text'
     input.value = item.text
-    input.style.color = penColorVar(item.color)
+    input.style.color = itemColor(item.color)
     input.style.fontFamily = window.getComputedStyle(drawingLayer()).fontFamily
     // As SudokuPad's own buttons do: a press in the box is the box's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) input.addEventListener(type, (event) => event.stopPropagation())
@@ -690,17 +890,17 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       return true
     },
     handleToolEnter () {
-      showPanelBox()
+      if (!colors) saveColors(copiedPenColors(readPenColor))
+      showPanel()
       markColor()
     },
     handleToolExit () {
       endGesture()
       if (editing) finishText()
-      panelBox?.remove()
-      panelBox = null
+      hidePanel()
       unmarkColor()
     },
-    // A digit key or keypad button gets the button's data-value. With Draw current it picks a pen color, and no key
+    // A digit key or keypad button gets the button's data-value. With Draw current it picks a draw color, and no key
     // or button enters anything in a cell.
     handleToolButton (value) {
       const picked = penColor(value)
@@ -727,7 +927,10 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     color = readColor(Framework.getData(COLOR_KEY))
     width = readWidth(Framework.getData(WIDTH_KEY))
     opacity = readOpacity(Framework.getData(OPACITY_KEY))
+    colors = readDrawColors(Framework.getData(COLORS_KEY))
+    showColors()
     const style = document.createElement('style')
+    style.id = PANEL_STYLE_ID
     style.textContent = PANEL_CSS
     document.head.appendChild(style)
     const names = app.getToolNames
@@ -740,6 +943,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
+    installHoldToEdit()
     window.addEventListener('blur', endGesture)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
