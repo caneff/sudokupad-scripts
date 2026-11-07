@@ -11,17 +11,23 @@ const RUN = 'node sync-lib.js'
 const SCRIPT_VERSION = /^(\/\/ @version\s+)(\d+)\.(\d+)\.(\d+)(\s*)$/m
 const CONST_VERSION = /^(\s*const VERSION = ')(\d+)\.(\d+)\.(\d+)(')$/m
 
-// A lib file's first line may silence the linter for names only the scripts use; the copy leaves it out.
+// A lib file's first line may silence the linter for names only the scripts use. A script may use only part of a module, so the copy
+// keeps the silence, scoped to the block.
 const LINT_HEADER = /^\/\* eslint-disable no-unused-vars \*\/\n/
 
 const generatedLine = (name) => `// Generated from lib/${name}.js; edit that file and run ${RUN}.`
 
-const blockLines = (name, module, indent) => [
-  `${indent}// <lib:${name}>`,
-  `${indent}${generatedLine(name)}`,
-  ...module.replace(LINT_HEADER, '').replace(/\n$/, '').split('\n').map((line) => line === '' ? '' : indent + line),
-  `${indent}// </lib:${name}>`
-]
+const blockLines = (name, module, indent) => {
+  const silenced = LINT_HEADER.test(module)
+  return [
+    `${indent}// <lib:${name}>`,
+    `${indent}${generatedLine(name)}`,
+    ...(silenced ? [`${indent}/* eslint-disable no-unused-vars */`] : []),
+    ...module.replace(LINT_HEADER, '').replace(/\n$/, '').split('\n').map((line) => line === '' ? '' : indent + line),
+    ...(silenced ? [`${indent}/* eslint-enable no-unused-vars */`] : []),
+    `${indent}// </lib:${name}>`
+  ]
+}
 
 const bumpPatch = (source) => [SCRIPT_VERSION, CONST_VERSION].reduce(
   (text, pattern) => text.replace(pattern, (_, head, major, minor, patch, tail) => `${head}${major}.${minor}.${Number(patch) + 1}${tail}`),

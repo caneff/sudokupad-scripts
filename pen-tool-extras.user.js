@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.26.1
+// @version      1.26.2
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.26.1'
+  const VERSION = '1.26.2'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -50,8 +50,10 @@
 
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   const rem = (value) => Math.round(value * 100) / 100
+  /* eslint-enable no-unused-vars */
   // </lib:plain>
 
   function wrapIndex (index, delta, count) {
@@ -393,9 +395,6 @@
     [CUSTOM]: 'Custom',
     [UNSAVED]: 'SudokuPad (unsaved)'
   }
-  // The share of its OKLCH lightness a cell color keeps as a pen color: low enough to read against cell colors drawn at 60% opacity, high enough that the
-  // lightest still show as 5px lines on white and the nine stay apart.
-  const LIGHTNESS_FACTOR = 0.75
   // The OKLCH chroma under which a darkened color counts as grey: SudokuPad's greys are 0, a tinted dark grey such as rgb(10, 20, 30) is about 0.024, and the
   // least saturated darkened default colors are above 0.08.
   const GREY_CHROMA = 0.04
@@ -499,26 +498,53 @@
     return { ...colors, [pen]: value.toLowerCase() }
   }
 
+  // <lib:color-math>
+  // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
-  const RGB_TEXT = /^rgba?\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+)\s*)?\)$/
 
-  // A page lists `transparent` or an `rgba()` with alpha 0 to leave a slot empty (key 0 of each default page).
+  // The share of its OKLCH lightness a cell color keeps when darkened: low enough to read against cell colors drawn at 60% opacity, high enough that the lightest still show as 5px lines on white and the nine stay apart.
+  const LIGHTNESS_FACTOR = 0.75
+  const GAMUT_EDGE = 1e-6
+  const LIGHT_TEXT = '#dddddd'
+  const DARK_TEXT = '#222222'
+
+  const RGB_FUNCTION = /^rgba?\(([^)]*)\)$/
+  const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+
+  // The channels and alpha of an rgb() or rgba() text with comma, space or slash separators, or null for any other text.
+  function rgbFunction (value) {
+    const fn = RGB_FUNCTION.exec(value)
+    if (!fn) return null
+    const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
+    const numbers = parts.map(Number)
+    if (parts.length < 3 || numbers.some(Number.isNaN)) return null
+    return { channels: numbers.slice(0, 3), alpha: numbers[3] }
+  }
+
+  // A page lists `transparent` or an rgba() with alpha 0 to leave a slot empty (key 0 of each default page).
   function isTransparent (text) {
     if (typeof text !== 'string') return false
     const value = text.trim().toLowerCase()
-    const rgba = RGB_TEXT.exec(value)
-    return value === 'transparent' || Boolean(rgba && rgba[4] !== undefined && Number(rgba[4]) <= 0)
+    const fn = rgbFunction(value)
+    return value === 'transparent' || Boolean(fn && fn.alpha !== undefined && fn.alpha <= 0)
   }
 
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
   // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
   function parseColor (text) {
     if (typeof text !== 'string' || isTransparent(text)) return null
     const value = text.trim().toLowerCase()
-    const hex = /^#([0-9a-f]{6})$/.exec(value)
-    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
-    const rgb = RGB_TEXT.exec(value)
-    return rgb ? rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x)))) : null
+    const hex = HEX_DIGITS.exec(value)
+    if (hex) {
+      const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
+      return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
+    }
+    const fn = rgbFunction(value)
+    return fn ? fn.channels.map((x) => Math.round(clamp255(x))) : null
   }
+
+  const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
 
   const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
   const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
@@ -547,28 +573,45 @@
     ]
   }
 
-  const EDGE = 1e-6
-  const inGamut = (linear) => linear.every((x) => x >= -EDGE && x <= 1 + EDGE)
+  const inGamut = (linear) => linear.every((x) => x >= -GAMUT_EDGE && x <= 1 + GAMUT_EDGE)
 
   // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
   function darkenColor (rgb) {
     const [L, a, b] = toOklab(rgb.map(clamp255))
     const target = L * LIGHTNESS_FACTOR
-    let low = 0
-    let high = 1
+    let low = 1
     if (!inGamut(fromOklabLinear([target, a, b]))) {
+      low = 0
+      let high = 1
       for (let i = 0; i < 30; i++) {
         const mid = (low + high) / 2
         if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
         else high = mid
       }
-    } else {
-      low = 1
     }
     const out = fromOklabLinear([target, a * low, b * low])
-    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
-      .toString(16).padStart(2, '0')).join('')
+    return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
+
+  // WCAG relative luminance of [r, g, b] channels.
+  function wcagLuminance (rgb) {
+    const [r, g, b] = rgb.map((c) => {
+      const x = c / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+
+  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background) {
+    const rgb = parseColor(background)
+    if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
+    const page = wcagLuminance(rgb) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-math>
 
   // Pen color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the pen buttons line up with the cell buttons.
   // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest pen is black as in SudokuPad's own set.
@@ -2305,7 +2348,7 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle, parseColor, isTransparent, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, LIGHTNESS_FACTOR, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, presetOptions, presetColors, PRESET_LABELS, renderTitle, parseColor, darkenColor, derivedPenColors, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return

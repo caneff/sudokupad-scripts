@@ -26,21 +26,6 @@ test('the page background is the color given', () => {
   assert.equal(given, 'body { background-color: #336699 !important }')
 })
 
-test('textColorFor gives light text on a dark page and dark text on a light one, switching where their contrast with the page color is equal', () => {
-  assert.equal(textColorFor('#000000'), '#dddddd')
-  assert.equal(textColorFor('#333333'), '#dddddd')
-  assert.equal(textColorFor('#0000ff'), '#dddddd')
-  assert.equal(textColorFor('#ffffff'), '#222222')
-  assert.equal(textColorFor('#cccccc'), '#222222')
-  assert.equal(textColorFor('#ffff00'), '#222222')
-  // Mid greys either side of the contrast crossover, where a plain half-way split on lightness differs.
-  assert.equal(textColorFor('#777777'), '#222222')
-  assert.equal(textColorFor('#707070'), '#dddddd')
-  // The switch falls between these two neighbouring greys.
-  assert.equal(textColorFor('#747474'), '#dddddd')
-  assert.equal(textColorFor('#757575'), '#222222')
-})
-
 test('readSavedColor reads the saved color through the Framework, and reports a Framework it cannot read as nothing saved', () => {
   assert.equal(readSavedColor({ getData: (key) => (key === DATA_KEY ? '#ABCDEF' : null) }), '#abcdef')
   assert.equal(readSavedColor({ getData: () => null }), null)

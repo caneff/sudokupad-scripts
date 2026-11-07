@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.3
+// @version      0.14.4
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.3'
+  const VERSION = '0.14.4'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -67,12 +67,8 @@
     ...Object.fromEntries(PAGE_PRESETS.map((id, i) => [id, `Darker page ${i + 1}`])),
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
-  // The share of its OKLCH lightness a cell color keeps as a Darker page color, and the OKLCH chroma under which a darkened color counts as grey (Pen Tool Extras' values).
-  const LIGHTNESS_FACTOR = 0.75
+  // The OKLCH chroma under which a darkened color counts as grey (Pen Tool Extras' value).
   const GREY_CHROMA = 0.04
-  const GAMUT_EDGE = 1e-6
-  const SHORT_HEX_COLOR = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/
-  const RGB_TEXT = /^rgba?\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+)\s*)?\)$/
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs), as Pen Tool Extras' pen buttons do.
   const HOLD_TO_EDIT_MS = 1000
   const WIDTH_KEY = 'DrawTool_width'
@@ -270,55 +266,59 @@
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   // <lib:plain>
   // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
   const rem = (value) => Math.round(value * 100) / 100
+  /* eslint-enable no-unused-vars */
   // </lib:plain>
 
+  // <lib:color-math>
+  // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
 
-  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
-  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black. Copied from Pen Tool Extras.
-  function parseColor (text) {
-    if (typeof text !== 'string') return null
+  // The share of its OKLCH lightness a cell color keeps when darkened: low enough to read against cell colors drawn at 60% opacity, high enough that the lightest still show as 5px lines on white and the nine stay apart.
+  const LIGHTNESS_FACTOR = 0.75
+  const GAMUT_EDGE = 1e-6
+  const LIGHT_TEXT = '#dddddd'
+  const DARK_TEXT = '#222222'
+
+  const RGB_FUNCTION = /^rgba?\(([^)]*)\)$/
+  const HEX_DIGITS = /^#([0-9a-f]{3}|[0-9a-f]{6})$/
+
+  // The channels and alpha of an rgb() or rgba() text with comma, space or slash separators, or null for any other text.
+  function rgbFunction (value) {
+    const fn = RGB_FUNCTION.exec(value)
+    if (!fn) return null
+    const parts = fn[1].split(/[,/\s]+/).filter(Boolean)
+    const numbers = parts.map(Number)
+    if (parts.length < 3 || numbers.some(Number.isNaN)) return null
+    return { channels: numbers.slice(0, 3), alpha: numbers[3] }
+  }
+
+  // A page lists `transparent` or an rgba() with alpha 0 to leave a slot empty (key 0 of each default page).
+  function isTransparent (text) {
+    if (typeof text !== 'string') return false
     const value = text.trim().toLowerCase()
-    const short = SHORT_HEX_COLOR.exec(value)
-    const hex = HEX_COLOR.exec(short ? `#${short.slice(1).map((c) => c + c).join('')}` : value)
-    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
-    const rgb = RGB_TEXT.exec(value)
-    if (!rgb || (rgb[4] !== undefined && Number(rgb[4]) <= 0)) return null
-    return rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x))))
+    const fn = rgbFunction(value)
+    return value === 'transparent' || Boolean(fn && fn.alpha !== undefined && fn.alpha <= 0)
+  }
+
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
+  function parseColor (text) {
+    if (typeof text !== 'string' || isTransparent(text)) return null
+    const value = text.trim().toLowerCase()
+    const hex = HEX_DIGITS.exec(value)
+    if (hex) {
+      const digits = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
+      return [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16))
+    }
+    const fn = rgbFunction(value)
+    return fn ? fn.channels.map((x) => Math.round(clamp255(x))) : null
   }
 
   const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
-
-  // A color picker takes only #rrggbb, so every draw color is kept as one. A transparent color has none to keep.
-  const hexColor = (text) => {
-    const rgb = parseColor(text)
-    return rgb ? toHex(rgb) : undefined
-  }
-
-  const savedHex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
-
-  // null when nothing is saved, which means the first-use copy of the pen colors is still owed. A saved value that is not
-  // nine colors still counts as saved, so the copy never writes over it: each color it lacks shows SudokuPad's own.
-  function readDrawColors (saved) {
-    if (saved === null || saved === undefined) return null
-    const entries = isPlainObject(saved) ? saved : {}
-    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(entries[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
-  }
-
-  // `readPenColor(n)` reads pen color n as the browser computes it.
-  const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
-
-  function editedColor (colors, n, value) {
-    if (drawColor(n) === undefined) throw new RangeError(`draw-tool: ${n} is not a color number`)
-    const hex = hexColor(value)
-    if (!hex) throw new RangeError(`draw-tool: ${value} is not a color`)
-    return { ...colors, [n]: hex }
-  }
-
-  // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
-  const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
 
   const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
   const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
@@ -353,20 +353,68 @@
   function darkenColor (rgb) {
     const [L, a, b] = toOklab(rgb.map(clamp255))
     const target = L * LIGHTNESS_FACTOR
-    let low = 0
-    let high = 1
+    let low = 1
     if (!inGamut(fromOklabLinear([target, a, b]))) {
+      low = 0
+      let high = 1
       for (let i = 0; i < 30; i++) {
         const mid = (low + high) / 2
         if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
         else high = mid
       }
-    } else {
-      low = 1
     }
     const out = fromOklabLinear([target, a * low, b * low])
     return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
+
+  // WCAG relative luminance of [r, g, b] channels.
+  function wcagLuminance (rgb) {
+    const [r, g, b] = rgb.map((c) => {
+      const x = c / 255
+      return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4
+    })
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+
+  // LIGHT_TEXT or DARK_TEXT, whichever contrasts more with the background color (any parseColor text).
+  function textColorFor (background) {
+    const rgb = parseColor(background)
+    if (!rgb) throw new RangeError(`color-math: ${background} is not a color`)
+    const page = wcagLuminance(rgb) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(LIGHT_TEXT) >= contrast(DARK_TEXT) ? LIGHT_TEXT : DARK_TEXT
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-math>
+
+  // A color picker takes only #rrggbb, so every draw color is kept as one. A transparent color has none to keep.
+  const hexColor = (text) => {
+    const rgb = parseColor(text)
+    return rgb ? toHex(rgb) : undefined
+  }
+
+  const savedHex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
+
+  // null when nothing is saved, which means the first-use copy of the pen colors is still owed. A saved value that is not
+  // nine colors still counts as saved, so the copy never writes over it: each color it lacks shows SudokuPad's own.
+  function readDrawColors (saved) {
+    if (saved === null || saved === undefined) return null
+    const entries = isPlainObject(saved) ? saved : {}
+    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(entries[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+  }
+
+  // `readPenColor(n)` reads pen color n as the browser computes it.
+  const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
+
+  function editedColor (colors, n, value) {
+    if (drawColor(n) === undefined) throw new RangeError(`draw-tool: ${n} is not a color number`)
+    const hex = hexColor(value)
+    if (!hex) throw new RangeError(`draw-tool: ${value} is not a color`)
+    return { ...colors, [n]: hex }
+  }
+
+  // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
+  const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
 
   // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the buttons line up.
   // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
