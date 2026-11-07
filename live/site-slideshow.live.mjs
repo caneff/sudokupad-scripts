@@ -34,11 +34,11 @@ const SHOWS = [
     heading: 'Text Annotation',
     row: 3,
     details: 'draw-tool.html',
-    slides: 7,
+    slides: 8,
     first: ['draw-tool-slide-1-type.png', 'Left click to type a note'],
     second: ['draw-tool-slide-2-size.png', 'One size slider'],
-    last: ['draw-tool-slide-7-erased.png', 'The note is gone'],
-    beforeLast: ['draw-tool-slide-6-erase.png', 'Erase: right-click a note']
+    last: ['draw-tool-slide-8-erased.png', 'The note is gone'],
+    beforeLast: ['draw-tool-slide-7-erase.png', 'Erase: right-click a note']
   }
 ]
 

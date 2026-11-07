@@ -19,9 +19,10 @@
       <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-2-size.png?v=24f68ae" alt="A small blue 17 and a large blue 23, with the text size slider moved up" width="777" height="382">
       <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-3-background.png?v=c2f6901" alt="A red 17 over a digit with no box, and a red 23 in a page-colored box that hides the digit under it, with the Background button on" width="777" height="382">
       <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-4-colors.png?v=539d38e" alt="A color picker over each of the nine color buttons, with the note recolored from orange to teal" width="777" height="382">
-      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-5-move.png?v=b583e1b" alt="An orange 17 dragged off the grid to the space beside it, its old place dashed, with a ring on the point it is held by" width="777" height="382">
-      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-6-erase.png?v=1fd6644" alt="A red ring on a green 17, where a right click lands" width="777" height="382">
-      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-7-erased.png?v=e7995d9" alt="The board with the green 17 gone" width="777" height="382">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-5-move.png?v=d655baa" alt="An orange 17 dragged off the grid to the space beside it, its old place dashed, with a ring on the point it is held by" width="777" height="382">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-6-select.png?v=2bcb6d8" alt="Three notes selected with a drag on empty space, each with a dashed purple outline and the dragged box shown dashed, recolored from orange to blue together" width="777" height="382">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-7-erase.png?v=1fd6644" alt="A red ring on a green 17, where a right click lands" width="777" height="382">
+      <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-8-erased.png?v=e7995d9" alt="The board with the green 17 gone" width="777" height="382">
     </div>
     <div class="slide-bar">
       <div class="slide-captions">
@@ -30,6 +31,7 @@
       <p class="slide-caption">Background: a box behind the next note</p>
       <p class="slide-caption">Your own colors: hold a color button</p>
       <p class="slide-caption">Move: drag a note, on or off the grid</p>
+      <p class="slide-caption">Select: drag a box round notes, then change them together</p>
       <p class="slide-caption">Erase: right-click a note</p>
       <p class="slide-caption">The note is gone</p>
     </div>
@@ -38,12 +40,13 @@
 
   <h2>What it adds</h2>
   <ul class="features">
-    <li><strong>Typed notes</strong> <p>Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad's controls. Enter or a click elsewhere finishes the note, Escape drops it, and a click on a note changes it.</p></li>
+    <li><strong>Typed notes</strong> <p>Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad's controls. Enter or a click elsewhere finishes the note, Escape drops it, and a double-click on a note changes it.</p></li>
     <li><strong>Colors of its own</strong> <p>Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.</p></li>
-    <li><strong>Text size</strong> <p>One slider, from small to large. A note keeps the size it was typed with.</p></li>
-    <li><strong>Background</strong> <p>Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing.</p></li>
-    <li><strong>Move</strong> <p>Drag a note to move it, on the board or off it. A click on a note still changes it.</p></li>
-    <li><strong>Erasing</strong> <p>Right-click a note to erase it. Clear all, in the panel, erases every note.</p></li>
+    <li><strong>Text size</strong> <p>One slider, from small to large. A note keeps the size it was typed with until you select it and move the slider.</p></li>
+    <li><strong>Background</strong> <p>Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.</p></li>
+    <li><strong>Select</strong> <p>Click a note to select it, Shift+click to add or remove one, or drag a box round several from empty space. The colors, the size slider and Background then change the selected notes, and Escape or a click on empty space ends the selection.</p></li>
+    <li><strong>Move</strong> <p>Drag a note to move it, on the board or off it. Drag one of the selected notes and they all move.</p></li>
+    <li><strong>Erasing</strong> <p>Right-click a note to erase it. Delete, or the trash button in the panel, deletes the selected notes; with none selected the trash button erases every note.</p></li>
     <li><strong>Settings</strong> <p>Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.</p></li>
     <li><strong>Stays on the cells</strong> <p>A note on the board stays on its cells when the board resizes, and one beside it stays where you put it on the screen. Both stay visible when you switch back to entering digits.</p></li>
     <li><strong>Kept for each puzzle</strong> <p>A reload keeps the notes, for the last 50 puzzles you made notes on.</p></li>
@@ -51,7 +54,7 @@
 
   <h2>The Text Annotation panel</h2>
   <p class="prose">Pick the Text tool among SudokuPad's tool buttons and its panel opens beside the puzzle. It holds every control.</p>
-  <div class="figure"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-panel-annotated.png?v=71df5d7" alt="The Text Annotation panel with each part labelled on its left. Color buttons: click or press 1 to 9, and hold to edit. Background: a box behind the next note. Clear all: erases every note. Settings: opens the settings. Size slider: text size, small to large." width="519" height="304"></div>
+  <div class="figure"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-panel-annotated.png?v=42503ef" alt="The Text Annotation panel with each part labelled on its left. Color buttons: click or press 1 to 9, and hold to edit. Background: boxes new or selected notes. Clear all: deletes the selected notes, or all. Settings: opens the settings. Size slider: text size, small to large." width="519" height="304"></div>
 
   <h2>Good to know</h2>
   <ul class="notes">
