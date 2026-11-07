@@ -5,6 +5,7 @@
 // is cut at the grid lines, so no part of a third box shows.
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../live/page.mjs'
+import { savedProfiles } from '../../live/color-by-digit-fixtures.mjs'
 
 // The pixel density every picture is taken at.
 export const DEVICE_SCALE = 2
@@ -13,9 +14,9 @@ export const MODES = ['CELL', 'DIGIT', 'BOTH', 'OFF']
 const MODE_LABEL = `${BUTTON} [data-role="mode"]`
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
-// The demo profile is active; Modular (orange, pink, yellow) follows it for the menu picture. The two flags stop the script adding its
-// own preloads, so the menu lists exactly these two. SudokuPad stores a script's data under the site's own prefix.
-export const DEMO_PROFILE = 'Entropic, no blue'
+// The demo profile is active; Modular (orange, pink, yellow) follows it for the menu picture. savedProfiles also sets the two flags that stop the script adding its
+// own preloads, so the menu lists exactly these two.
+const DEMO_PROFILE = 'Entropic, no blue'
 const PROFILES = {
   profiles: [
     { name: DEMO_PROFILE, groups: [{ key: '7', digits: ['0', '1', '2', '3'] }, { key: '4', digits: ['4', '5', '6'] }, { key: '8', digits: ['7', '8', '9'] }] },
@@ -23,7 +24,7 @@ const PROFILES = {
   ],
   active: 0
 }
-const SAVED = { svencodes_ColorByDigit_profiles: PROFILES, svencodes_ColorByDigit_addedPreloads: true, svencodes_ColorByDigit_addedEachDigit: true }
+const SAVED = savedProfiles(PROFILES)
 
 // [row, column, digits], 0-based. The given 5 is at (0, 0).
 // Big digits: Color by Digit circles only marks, so none has a circle.
@@ -38,10 +39,10 @@ const ROWS = 3
 const COLS = 6
 
 // Opens the live page, at `DEVICE_SCALE`, on the example puzzle with Color by Digit installed in Cell mode on the demo profile, the entries in, the mascot hidden.
-// `leave` is a list of [row, column] cells whose entries are left out, for a picture that fills them in itself; `viewport` is the window's size.
-export async function openExample (browser, { leave = [], viewport } = {}) {
+// `leave` is a list of [row, column] cells whose entries are left out, for a picture that fills them in itself.
+export async function openExample (browser, { leave = [] } = {}) {
   const { p } = await openPage(browser, {
-    contextOptions: { deviceScaleFactor: DEVICE_SCALE, ...(viewport && { viewport }) },
+    contextOptions: { deviceScaleFactor: DEVICE_SCALE },
     seed: (page) => page.addInitScript((saved) => Object.entries(saved).forEach(([key, value]) => window.localStorage.setItem(key, JSON.stringify(value))), SAVED)
   })
   await startPuzzle(p)

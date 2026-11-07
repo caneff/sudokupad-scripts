@@ -329,7 +329,7 @@ test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, tw
 
 const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === lead) || '')[0] || ''
 
-test(`${CBD}'s Four modes, Kept in step and profile menu items are one sentence each, with no picture of their own`, () => {
+test(`${CBD}'s Four modes item is one sentence, and it and the Kept in step and profile menu items have no picture of their own`, () => {
   const four = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
   assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
   for (const lead of ['Four modes.', 'Kept in step as you solve.', 'The profile menu.']) assert.equal(itemImg(CBD, lead), '', `"${lead}" has a picture`)
@@ -375,7 +375,7 @@ test(`${DETAILS} opens with a tour animation between the install link and What i
   assert.match(found[0], /src="[^"]*pen-tool-extras-tour\.gif(\?v=[0-9a-f]{7})?"/)
   const alt = altOf(found[0])
   assert.match(alt, /^An animation/)
-  assert.doesNotMatch(alt, /page button/i, 'the tour no longer shows the page button')
+  assert.doesNotMatch(alt, /page button/i, 'the tour alt text names the page button')
   const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /cell edge/i, /grid corner/i, /Thickness slider/i, /Opacity slider/i, /White outlines off and then on/i, /middle.click/i, /erase/i]
   let at = 0
   for (const step of steps) {

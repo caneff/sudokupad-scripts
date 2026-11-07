@@ -7,12 +7,15 @@
 // The last frame's `ms` is its pause before the loop restarts.
 import { spawnSync } from 'node:child_process'
 
+// The pixels between two `files` of a frame, after any scaling.
+export const FRAME_GAP = 40
+
 const JOIN = `
 import json, sys
 from PIL import Image, ImageDraw, ImageFont
 frames, target, colors, dither = json.loads(sys.argv[1]), sys.argv[2], int(sys.argv[3]), sys.argv[4] == '1'
 font = ImageFont.load_default(size=36)
-GAP, CAPTION_GAP, STACK_GAP = 40, 12, 8
+GAP, CAPTION_GAP, STACK_GAP = ${FRAME_GAP}, 12, 8
 def load(entry):
     if isinstance(entry, str):
         return Image.open(entry).convert('RGB')

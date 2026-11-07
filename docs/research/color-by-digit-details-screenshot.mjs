@@ -14,14 +14,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { BUTTON, DEVICE_SCALE, exampleClip, openExample, pressTo, SETTLE_MS, typeInto, waitForCircles } from './color-by-digit-example.mjs'
-import { joinGif } from './gif-join.mjs'
+import { FRAME_GAP, joinGif } from './gif-join.mjs'
 
 const out = (name, ext = 'png') => new URL(`./color-by-digit-details-${name}.${ext}`, import.meta.url).pathname
 const FRAME_MS = 1300
 const HOLD_MS = 3000
-// The tour's width in pixels, the width the page shows it at (450 px) at two pixels to one.
+// The tour's width in pixels: the page shows it at half that, 450 px, at two pixels to one.
 const TOUR_WIDTH = 900
-const GAP = 40
 const MENU = '#color-by-digit-menu'
 const MENU_ARROW = `${BUTTON} [data-role="menu"]`
 
@@ -56,7 +55,8 @@ const browser = await chromium.launch()
   await p.locator(MENU).waitFor({ state: 'hidden' })
   const boardBox = await exampleClip(p)
   const buttonBox = await button.boundingBox()
-  const scale = TOUR_WIDTH / (Math.max(boardBox.width, buttonBox.width) * DEVICE_SCALE + GAP + menuBox.width * DEVICE_SCALE)
+  // The gap between the boards and the menu is added after scaling, so it comes off the width the scaled pictures share.
+  const scale = (TOUR_WIDTH - FRAME_GAP) / ((Math.max(boardBox.width, buttonBox.width) + menuBox.width) * DEVICE_SCALE)
   const menuSize = [Math.round(menuBox.width * DEVICE_SCALE), Math.round(menuBox.height * DEVICE_SCALE)]
   await hideOthers(false)
   const list = []

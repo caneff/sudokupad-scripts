@@ -23,12 +23,10 @@ import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extr
 
 const target = new URL('./pen-tool-extras-tour.gif', import.meta.url).pathname
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-// A smaller window than the default makes the board's cells smaller, so the whole picture is narrower.
-const VIEWPORT = { width: 1000, height: 680 }
-const COLS = 4
-const ROWS = 7
-const MARGIN = 6
-const CLICK_PAUSE_MS = 150
+// Three columns and six rows of cells at their full size, so the picture is about 460 px wide on the page.
+const COLS = 3
+const ROWS = 6
+const MARGIN = 10
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -36,7 +34,7 @@ const RING = 'tour-ring'
 const SETTLE_TIMEOUT_MS = 5000
 
 const browser = await chromium.launch()
-const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2, viewport: VIEWPORT } })
+const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
 await startPuzzle(p)
 await p.evaluate(() => Framework.app.loadCompactClassicSudoku('0'.repeat(81)))
 await p.waitForFunction(() => Framework.app.puzzle.cells.every((c) => !c.given))
@@ -99,8 +97,9 @@ const holdWithRing = async (key) => {
 }
 const line = async (key, points) => { await pick(key); await landing(`the line from ${points[0]}`, () => mouseDrag(p, points)); await park() }
 const turnPage = async () => { await p.locator(PAGE_BUTTON).click(); await park() }
-const clickTimes = async (x, y, n) => { for (let i = 0; i < n; i++) { await p.mouse.click(x, y); await p.waitForTimeout(CLICK_PAUSE_MS) } }
-const [NEW_PEN_COLOR_KEY, EDGE_PEN, CORNER_PEN, OUTLINE_PEN] = [1, 9, 5, 8]
+const [NEW_PEN_COLOR_KEY, SOLID_PEN, EDGE_PEN, CORNER_PEN, OUTLINE_PEN] = [1, 6, 9, 5, 8]
+// SudokuPad's cell color key for the dark grey the outline picture draws on.
+const DARK_CELL_KEY = '3'
 const sliderValue = async (selector, value) => { await setInputValue(p.locator(selector), value); await park() }
 const setOutline = async (on) => {
   await openExtrasEditor(p)
@@ -114,7 +113,7 @@ const OPACITY = '#pen-tool-extras-opacity'
 
 // 1. Recolor pen 1 in edit mode.
 await frame('The pen tool', 1000)
-await line(NEW_PEN_COLOR_KEY, [[0.5, 0.5], [0.5, 3.5]])
+await line(NEW_PEN_COLOR_KEY, [[0.5, 0.5], [0.5, 2.5]])
 await frame('Draw a line', 1200)
 await holdWithRing(NEW_PEN_COLOR_KEY)
 await frame('Hold a color button', 1500)
@@ -126,13 +125,13 @@ await unring()
 await frame('Hold again to finish', 1200)
 
 // 2. A solid line, then dashed and arrow lines on the next pages.
-await line(6, [[1.5, 0.5], [1.5, 3.5]])
+await line(SOLID_PEN, [[1.5, 0.5], [1.5, 2.5]])
 await frame('A solid line', 1200)
 await turnPage()
-await line(6, [[2.5, 0.5], [2.5, 3.5]])
+await line(SOLID_PEN, [[2.5, 0.5], [2.5, 2.5]])
 await frame('A dashed line', 1200)
 await turnPage()
-await line(6, [[3.5, 0.5], [3.5, 3.5]])
+await line(SOLID_PEN, [[3.5, 0.5], [3.5, 2.5]])
 await frame('An arrow line', 1300)
 await turnPage()
 
@@ -145,7 +144,7 @@ for (const caption of ['An edge mark: X', 'Click again: circle', 'Again: arrow',
   await frame(caption, 1200)
 }
 await pick(CORNER_PEN)
-const corner = await gridPoint(p, [5, 2])
+const corner = await gridPoint(p, [5, 1])
 for (const caption of ['A corner mark: X', 'Click again: circle']) {
   await changing(caption, async () => { await p.mouse.click(...corner); await park() })
   await frame(caption, 1200)
@@ -158,8 +157,8 @@ for (const [selector, value, caption] of [[THICKNESS, 12, 'Thickness up'], [THIC
 }
 
 // 5. A line across dark cells, White outlines off and then on.
-for (const [col, key] of [[0, '3'], [1, '3'], [2, '3'], [3, '3']]) await colorCell(6, col, key)
-await line(OUTLINE_PEN, [[6.5, 0.5], [6.5, 3.5]])
+for (const col of [0, 1, 2]) await colorCell(5, col, DARK_CELL_KEY)
+await line(OUTLINE_PEN, [[5.5, 0.5], [5.5, 2.5]])
 await setOutline(false)
 await frame('White outlines off', 1500)
 await setOutline(true)
