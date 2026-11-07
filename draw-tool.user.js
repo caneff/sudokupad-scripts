@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.6.1
+// @version      0.7.0
 // @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.6.1'
+  const VERSION = '0.7.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -688,6 +688,17 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     handleKeydown (event) { return Framework.app.tool === TOOL_NAME && event.key === SHIFT_KEY }
   }
 
+  // Every tool button is appended to the bar when it is added (the pen tool's on its setting, a script's whenever it
+  // runs), so Draw's moves back to the end each time one lands after it.
+  function keepButtonLast () {
+    const bar = document.querySelector('.controls-tool')
+    const button = bar?.querySelector(`#control-${TOOL_NAME}`)
+    if (!button) return
+    const moveToEnd = () => { if (bar.lastElementChild !== button) bar.appendChild(button) }
+    moveToEnd()
+    new window.MutationObserver(moveToEnd).observe(bar, { childList: true })
+  }
+
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
     width = readWidth(Framework.getData(WIDTH_KEY))
@@ -701,6 +712,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       button: { name: TOOL_NAME, title: 'Draw', content: `<div class="icon">${BUTTON_ICON}</div>Draw` },
       tool
     })
+    keepButtonLast()
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
