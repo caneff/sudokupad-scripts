@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -533,20 +533,39 @@ test('the bottom row keeps no style rule for the copy and paste buttons', () => 
 
 const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)
 
-test('sync: unsynced, the menu has a Cells section and a Digits section, each listing every profile with its own pick marked', () => {
+// Each row of the menu, in order: its name, and the attributes of the elements in it that pick.
+const menuRows = (html) => html.split('data-role="menu-row"').slice(1).map((row) => ({
+  name: /data-role="name"[^>]*>([^<]*)</.exec(row)[1],
+  picks: [...row.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`),
+  chipWidth: /<span data-role="chip-column" style="([^"]*)"/.exec(row)[1]
+}))
+
+test('sync: unsynced, the menu is one list whose rows each end in a Cell dot and a Digit dot, under the words Cell and Digit, each pick marked in its own column', () => {
   const html = renderMenu(apart, colorFor)
-  assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2', 'digits0', 'digits1', 'digits2*'])
-  assert.equal(html.indexOf('>Cells<') < html.indexOf('data-target="cells"'), true)
-  assert.equal(html.indexOf('>Digits<') > html.lastIndexOf('data-target="cells"'), true)
-  assert.equal(html.indexOf('>Digits<') < html.indexOf('data-target="digits"'), true)
+  assert.deepEqual(menuRows(html).map((r) => r.picks), [['cells0', 'digits0'], ['cells1*', 'digits1'], ['cells2', 'digits2*']])
+  assert.deepEqual(menuRows(html).map((r) => r.name), ['A', 'B', 'C'])
+  const head = html.slice(0, html.indexOf('data-role="menu-row"'))
+  assert.match(head, /data-role="column-head"[^>]*>Cell<\/span><span data-role="column-head"[^>]*>Digit</)
+  assert.equal(count(html, />Cells?<|>Digits?</g), 2)
+  assert.doesNotMatch(html, /data-role="menu-row"[^>]*data-act=/)
   assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
 })
 
-test('sync: synced, or unsynced without digit colors, the menu is one list with no sections', () => {
+test('sync: the menu\'s dot columns and their heads have one width, so each head sits centred over its dots', () => {
+  const html = renderMenu(apart, colorFor)
+  const widths = [...html.matchAll(/data-role="(?:column-head|dot-cell)" style="[^"]*width:(\d+)px/g)].map((m) => m[1])
+  assert.equal(widths.length, 2 + 2 * 3)
+  assert.equal(new Set(widths).size, 1)
+  assert.match(html, /data-role="column-head" style="[^"]*text-align:center/)
+  assert.match(html, /data-role="dot-cell" style="[^"]*justify-content:center/)
+})
+
+test('sync: synced, or unsynced without digit colors, the menu is one list of rows that each pick the profile, with no dots and no column heads', () => {
   for (const state of [synced, setUseDigitColors(apart, false)]) {
     const html = renderMenu(state, colorFor)
     assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2'])
-    assert.doesNotMatch(html, />Cells<|>Digits</)
+    assert.equal(count(html, /data-role="menu-row" data-act="pick"/g), 3)
+    assert.doesNotMatch(html, />Cells?<|>Digits?<|data-role="column-head"|data-role="dot-cell"/)
   }
 })
 
@@ -560,20 +579,8 @@ test('dropIndex gives the position the dragged row lands in, counting the rows a
   assert.equal(dropIndex(mids, 1, 31), 1)
 })
 
-test('iconLayout shows at most four groups: up to three in one row, four as 2 by 2', () => {
-  const g = (n) => Array.from({ length: n }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1), '9'] }))
-  const rows = (n) => new Set(iconLayout(g(n)).map((c) => c.y)).size
-  assert.deepEqual(iconLayout(g(0)), [])
-  assert.equal(ICON_MAX_GROUPS, 4)
-  assert.equal(CHIP_MAX_GROUPS, 3)
-  for (const n of [1, 2, 3]) assert.equal(rows(n), 1, `${n} groups`)
-  assert.equal(rows(4), 2)
-  assert.equal(rows(6), 2)
-  assert.deepEqual(iconLayout(g(6)).map((c) => c.key), ['k0', 'k1', 'k2', 'k3'])
-})
-
-test('iconLayout labels each cell with its group\'s shown digit: the lowest if all are below 5, the highest if all are above 5, else the middle', () => {
-  const digitOf = (digits) => iconLayout([{ key: 'a', digits }])[0].digit
+test('renderChips labels each cell with its group\'s shown digit: the lowest if all are below 5, the highest if all are above 5, else the middle', () => {
+  const digitOf = (digits) => runCells(renderChips([{ key: 'a', digits }], colorFor, { size: 16 }))[0].digit
   assert.equal(digitOf(['0', '1', '2', '3', '4']), '1')
   assert.equal(digitOf(['5']), '5')
   assert.equal(digitOf(['6', '7', '8', '9']), '9')
@@ -583,29 +590,9 @@ test('iconLayout labels each cell with its group\'s shown digit: the lowest if a
   assert.equal(digitOf(['6', '7', '9']), '9')
 })
 
-test('iconLayout labels a group of only 0 with 0 and a group with no digits with none', () => {
-  const layout = iconLayout([{ key: 'a', digits: ['0'] }, { key: 'b', digits: [] }, { key: 'c', digits: ['5', '0'] }])
-  assert.deepEqual(layout.map((c) => c.digit), ['0', '', '5'])
-})
-
-test('iconLayout puts every cell inside the icon and clear of the corner boxes, whatever the group count', () => {
-  for (let n = 1; n <= 6; n++) {
-    const cells = iconLayout(Array.from({ length: n }, (_, i) => ({ key: 'k' + i, digits: [String(i)] })))
-    cells.forEach((c) => {
-      assert.equal(c.x >= 0 && c.y >= ICON_TOP && c.x + c.size <= 100 && c.y + c.size <= 100, true, `cell of ${n} outside the icon: ${JSON.stringify(c)}`)
-      assert.equal(c.x + c.size > ARROW_START && c.y + c.size > ARROW_START, false, `a cell of ${n} reaches the arrow box: ${JSON.stringify(c)}`)
-    })
-  }
-})
-
-test('inkFor picks white on a dark color and black on a light one, from rgb, rgba or hex', () => {
-  assert.equal(inkFor('rgb(0, 0, 0)'), '#fff')
-  assert.equal(inkFor('rgb(255, 255, 255)'), '#000')
-  assert.equal(inkFor('rgba(62, 99, 221, 1)'), '#fff')
-  assert.equal(inkFor('#e5e5e5'), '#000')
-  assert.equal(inkFor('#222'), '#fff')
-  assert.equal(inkFor(''), '#000')
-  assert.equal(inkFor('not a color'), '#000')
+test('renderChips labels a group of only 0 with 0 and a group with no digits with none', () => {
+  const cells = runCells(renderChips([{ key: 'a', digits: ['0'] }, { key: 'b', digits: [] }, { key: 'c', digits: ['5', '0'] }], colorFor, { size: 16 }))
+  assert.deepEqual(cells.map((c) => c.digit), ['0', '', '5'])
 })
 
 const manyCells = [
@@ -758,25 +745,6 @@ test('mode: the starting mode is the saved mode, else Cell unless auto mode was 
   assert.equal(startingMode(null, 'yes'), 'cell')
 })
 
-test('mode: the button label reads CELL, DIGIT or BOTH in bold purple, or OFF in light grey, and lets a press through to the button', () => {
-  for (const [mode, label] of [['cell', 'CELL'], ['digit', 'DIGIT'], ['both', 'BOTH']]) {
-    const html = modeLabelHtml(mode)
-    assert.match(html, new RegExp(`^<span data-role="mode"[^>]*>${label}</span>$`))
-    assert.match(html, /font:700[^"]*color:#6a1b9a/)
-    assert.match(html, /pointer-events:none/)
-  }
-  const off = modeLabelHtml('off')
-  assert.match(off, /^<span data-role="mode"[^>]*>OFF<\/span>$/)
-  assert.match(off, /font:400[^"]*color:#b3acbf/)
-})
-
-test('mode: installButton draws the label of the mode it is given, and no AUTO box', () => {
-  const content = (mode) => { let spec; installButton({ addAuxButton: (x) => { spec = x } }, { refreshControls: () => {} }, mode, ODD, colorFor); return spec.content }
-  assert.match(content('cell'), />CELL</)
-  assert.match(content('off'), />OFF</)
-  assert.doesNotMatch(content('cell'), /AUTO|data-role="auto"|role="checkbox"/)
-})
-
 test('mode: planClear takes every listed group color off every cell, digit or not, and leaves colors in no group', () => {
   assert.deepEqual(planClear([{ value: '1', colours: ['a'] }, { colours: ['a', 'z'] }, { value: '3', colours: ['b'] }, { colours: ['z'] }, {}], groupKeys(groups)), [
     { action: 'remove', key: 'a', indices: [0, 1] },
@@ -802,27 +770,6 @@ test('mode: the Mode pulldown offers all four modes and selects the draft mode i
   assert.doesNotMatch(html, /auto-draft/)
 })
 
-test('iconHtml draws one cell per group, at most four, each with its shown digit in the ink that reads on its color', () => {
-  const html = iconHtml('off', [{ key: 'a', digits: ['3', '4'] }, { key: 'b', digits: ['7'] }], colorFor)
-  assert.equal(count(html, /<rect data-role="cell"/g), 2)
-  assert.match(html, /data-key="a"[^>]*fill="rgb\(10, 10, 10\)"/)
-  assert.match(html, /<text[^>]*fill="#fff"[^>]*>3<\/text>/)
-  assert.match(html, /<text[^>]*fill="#000"[^>]*>7<\/text>/)
-  const six = Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i)] }))
-  assert.equal(count(iconHtml('cell', six, colorFor), /<rect data-role="cell"/g), 4)
-})
-
-test('iconHtml draws the mode label in the upper left and the menu arrow box in the lower right', () => {
-  const html = iconHtml('cell', ODD, colorFor)
-  assert.match(html, /data-role="mode"[^>]*left:[^;"]*;top:/)
-  assert.match(html, /data-role="menu"[^>]*aria-haspopup="menu"[^>]*right:[^;"]*;bottom:/)
-  assert.equal(html.indexOf('data-role="mode"') < html.indexOf('data-role="menu"'), true)
-})
-
-test('iconHtml gives a group whose palette color is unreadable a grey cell, so the cell still shows', () => {
-  assert.match(iconHtml('off', [{ key: 'q', digits: ['2'] }], () => ''), /data-key="q"[^>]*fill="#ccc"/)
-})
-
 const profileState = { profiles: [{ name: 'Low <b>', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 1 }
 
 test('renderProfiles lists each profile as a radio row with its handle, colors with shown digits, name and delete button', () => {
@@ -846,7 +793,7 @@ test('renderProfiles lists each profile as a radio row with its handle, colors w
 test('renderProfiles marks the selected row by aria-checked, not the active one, and the stylesheet gives that row the highlight and a bold name', () => {
   assert.match(renderProfiles(profileState, colorFor, 0), /data-act="select" data-index="0"[^>]*aria-checked="true"/)
   const html = renderProfiles(profileState, colorFor, 0)
-  assert.doesNotMatch(html, /#f1ebfb|font-weight/)
+  assert.doesNotMatch(html, /#f1ebfb|font-weight:/)
   assert.match(STYLE_CSS, /\[aria-checked="true"\] \{[^}]*background: #f1ebfb/)
 })
 
@@ -883,16 +830,21 @@ test('renderProfiles has no Add button', () => {
   assert.doesNotMatch(renderProfiles(profileState, colorFor, 0), /new-name|data-act="add"/)
 })
 
-test('renderProfiles and renderMenu show at most three chips for a profile of six groups, while the icon keeps four', () => {
+test('the button, renderProfiles and renderMenu all show a profile of six groups as a run of three cells', () => {
   const each = { profiles: [{ name: 'Each', groups: Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] })) }], active: 0 }
-  assert.equal(count(renderProfiles(each, colorFor, 0), /data-role="chip"/g), 3)
-  assert.equal(count(renderMenu(each, colorFor), /data-role="chip"/g), 3)
-  assert.equal(iconLayout(each.profiles[0].groups).length, 4)
+  for (const html of [renderProfiles(each, colorFor, 0), renderMenu(each, colorFor), iconHtml('cell', each.profiles[0].groups, colorFor)]) {
+    assert.equal(count(html, /data-role="chip"/g), 3)
+    assert.equal(count(html, /<line /g), 2)
+  }
 })
 
-test('renderMenu has the heading, one row per profile in order with the active one marked, then Edit profiles', () => {
+test('renderMenu has no heading: one dense row per profile in order with the active one marked and highlighted, then Edit profiles', () => {
   const html = renderMenu(profileState, colorFor)
-  assert.match(html, /Color by digit profile/)
+  assert.doesNotMatch(html, /Color by digit profile/i)
+  assert.equal(html.indexOf('data-role="menu-row"') < html.indexOf('>'), true)
+  assert.match(html, /data-index="1" aria-checked="true" style="[^"]*height:26px[^"]*background:#f1ebfb/)
+  assert.match(html, /data-index="0" aria-checked="false" style="[^"]*height:26px/)
+  assert.doesNotMatch(html, /data-index="0" aria-checked="false" style="[^"]*background/)
   assert.deepEqual([...html.matchAll(/data-act="pick" data-target="cells" data-index="(\d)"/g)].map((m) => m[1]), ['0', '1'])
   assert.equal(count(html, /aria-checked="true"/g), 1)
   assert.match(html, /data-index="1"[^>]*aria-checked="true"/)
@@ -912,8 +864,8 @@ test('installButton: adds an aux-row icon button titled "Color by digit", then r
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
-  assert.equal(spec.title, 'Color by digit')
-  assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="mode"[\s\S]*<span data-role="menu"[\s\S]*<\/span><\/div>$/)
+  assert.equal(spec.title, 'Color by digit: Off')
+  assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="menu"[\s\S]*<\/span><\/div>$/)
   assert.equal(typeof spec.onClick, 'function')
 })
 
@@ -1077,7 +1029,7 @@ async function withScript (app, fn, stored = {}) {
     getApp: () => Promise.resolve(app),
     getData: (key) => app.stored[key] ?? null,
     setData: (key, value) => { app.stored[key] = value },
-    addAuxButton: (spec) => { app.buttonContent = spec.content },
+    addAuxButton: (spec) => { app.buttonTitle = spec.title },
     addSetting: () => {}
   }
   try {
@@ -1173,9 +1125,9 @@ test('mode: in Cell, nothing saved or auto mode saved on, loading colors the giv
 
 test('use digit colors: saved off, a saved Both loads as Cell and colors the givens, and a saved Digit loads as Off and colors nothing', async () => {
   const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
-  for (const [savedMode, label, colours] of [['both', 'CELL', [['1'], ['2']]], ['digit', 'OFF', [[], []]]]) {
+  for (const [savedMode, label, colours] of [['both', 'Cell', [['1'], ['2']]], ['digit', 'Off', [[], []]]]) {
     await withScript(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
-      assert.match(app.buttonContent, new RegExp(`>${label}<`), savedMode)
+      assert.equal(app.buttonTitle, `Color by digit: ${label}`, savedMode)
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
     }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
   }
@@ -1675,4 +1627,113 @@ test('digitOfText reads a single digit and nothing else', () => {
   assert.equal(digitOfText('5'), '5')
   assert.equal(digitOfText(' 5 '), '5')
   for (const bad of ['', '12', 'x', '-1', null, undefined]) assert.equal(digitOfText(bad), null, String(bad))
+})
+
+// The run of cells: each cell's fill and digit, then the dividers and one outline over them.
+const runCells = (svg) => [...svg.matchAll(/<g data-role="chip" data-key="([^"]*)"><rect x="([\d.]+)" y="0" width="([\d.]+)" height="[\d.]+" fill="([^"]*)"\/><text[^>]*fill="([^"]*)"[^>]*>([^<]*)<\/text><\/g>/g)]
+  .map((m) => ({ key: m[1], x: Number(m[2]), width: Number(m[3]), fill: m[4], ink: m[5], digit: m[6] }))
+
+test('renderChips draws a joined run of square cells: one outer outline, n-1 single dividers, no rounded corners and no gaps', () => {
+  for (const n of [1, 2, 3]) {
+    const groups = Array.from({ length: n }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] }))
+    const svg = renderChips(groups, colorFor, { size: 16 })
+    assert.equal(count(svg, /<rect [^>]*fill="none"/g), 1, `${n} cells: ${svg}`)
+    assert.equal(count(svg, /<line /g), n - 1)
+    assert.doesNotMatch(svg, /rx=/)
+    const cells = runCells(svg)
+    assert.deepEqual(cells.map((c) => c.digit), groups.map((g) => g.digits[0]))
+    cells.forEach((c, i) => assert.equal(c.x, i === 0 ? 0 : cells[i - 1].x + cells[i - 1].width, `cell ${i} of ${n} leaves a gap`))
+    assert.match(svg, new RegExp(`^<svg data-role="chips" width="${16 * n}" height="16" `))
+  }
+})
+
+test('renderChips shows at most three cells, so a profile of six groups draws three cells and two dividers', () => {
+  const six = Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i + 1)] }))
+  const svg = renderChips(six, colorFor, { size: 16 })
+  assert.deepEqual(runCells(svg).map((c) => c.key), ['k0', 'k1', 'k2'])
+  assert.equal(count(svg, /<line /g), 2)
+})
+
+test('renderChips draws each mode the way it colors the board: Cell fills with blue digits, Digit white with shades, Both fills with shades, Off white and grey', () => {
+  const groups = [{ key: 'a', digits: ['3'] }, { key: 'b', digits: ['7'] }]
+  const shadeA = darkenColor([10, 10, 10])
+  const shadeB = darkenColor([240, 240, 240])
+  const look = (style) => {
+    const svg = renderChips(groups, colorFor, { size: 16, style })
+    const outline = /<rect [^>]*fill="none" stroke="([^"]*)"/.exec(svg)[1]
+    const dividers = [...svg.matchAll(/<line [^>]*stroke="([^"]*)"/g)].map((m) => m[1])
+    return { cells: runCells(svg).map((c) => [c.fill, c.ink]), outline, dividers }
+  }
+  assert.deepEqual(look('cell'), { cells: [['rgb(10, 10, 10)', 'rgb(29, 106, 229)'], ['rgb(240, 240, 240)', 'rgb(29, 106, 229)']], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('digit'), { cells: [['#fff', shadeA], ['#fff', shadeB]], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('both'), { cells: [['rgb(10, 10, 10)', shadeA], ['rgb(240, 240, 240)', shadeB]], outline: '#000', dividers: ['#000'] })
+  assert.deepEqual(look('off'), { cells: [['#fff', '#999'], ['#fff', '#999']], outline: '#aaa', dividers: ['#aaa'] })
+})
+
+test('renderChips gives a group whose palette color is unreadable a grey cell, so the cell still shows', () => {
+  assert.deepEqual(runCells(renderChips([{ key: 'q', digits: ['2'] }], () => '', { size: 16 })).map((c) => c.fill), ['#ccc'])
+})
+
+test('iconHtml draws the run of cells in the mode\'s look, with no word strip, and keeps the menu arrow box', () => {
+  const groups = [{ key: 'a', digits: ['3'] }, { key: 'b', digits: ['7'] }]
+  for (const mode of ['cell', 'digit', 'both', 'off']) {
+    const html = iconHtml(mode, groups, colorFor)
+    const run = /<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]
+    assert.deepEqual(runCells(run), runCells(renderChips(groups, colorFor, { size: 1, style: mode })), mode)
+    assert.doesNotMatch(html, /data-role="mode"|CELL|DIGIT|BOTH|OFF/)
+    assert.match(html, /data-role="menu"[^>]*aria-haspopup="menu"[^>]*right:[^;"]*;bottom:/)
+  }
+})
+
+test('the button is titled and labelled with its mode in words', () => {
+  assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
+  let spec
+  installButton({ addAuxButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor)
+  assert.equal(spec.title, 'Color by digit: Both')
+})
+
+test('renderMenu puts every row\'s chips, a run of cells in the Cell look, in a column of one fixed width, so the names line up', () => {
+  for (const state of [synced, apart]) {
+    const rows = menuRows(renderMenu(state, colorFor))
+    assert.equal(new Set(rows.map((r) => r.chipWidth)).size, 1)
+    assert.match(rows[0].chipWidth, /width:\d+px/)
+  }
+  const html = renderMenu(profileState, colorFor)
+  assert.deepEqual(runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]), runCells(renderChips(LOW, colorFor, { size: 16 })))
+})
+
+// The declarations of every STYLE_CSS rule whose selector list holds `selector`, joined.
+const declarationsOf = (selector) => [...STYLE_CSS.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+  .filter((m) => m[1].split(',').map((x) => x.trim()).includes(selector)).map((m) => m[2].replace(/\s+/g, ' ').trim()).join(' ')
+
+test('renderProfiles draws each row\'s chips as a run of cells in the Cell look', () => {
+  const html = renderProfiles(profileState, colorFor, 0)
+  const runs = [...html.matchAll(/<svg data-role="chips"[\s\S]*?<\/svg>/g)].map((m) => runCells(m[0]))
+  assert.deepEqual(runs, [runCells(renderChips(LOW, colorFor, { size: 16 })), runCells(renderChips(ODD, colorFor, { size: 16 }))])
+})
+
+test('the profile list is dense one-line rows of 30 px with no ring, the selected row filled', () => {
+  const row = declarationsOf('#color-by-digit-editor .cbd-profile')
+  assert.match(row, /height: 30px/)
+  assert.doesNotMatch(row, /box-shadow|border:/)
+  assert.match(declarationsOf('#color-by-digit-editor .cbd-profile[aria-checked="true"]'), /background: #f1ebfb/)
+  assert.doesNotMatch(declarationsOf('#color-by-digit-editor .cbd-profile[aria-checked="true"]'), /box-shadow/)
+})
+
+test('the profile list shows a row\'s drag handle and delete button only on hover or on the selected row', () => {
+  for (const part of ['[data-role="handle"]', '[data-act="delete"]']) {
+    assert.match(declarationsOf(`#color-by-digit-editor .cbd-profile ${part}`), /visibility: hidden/, part)
+    assert.match(declarationsOf(`#color-by-digit-editor .cbd-profile:hover ${part}`), /visibility: visible/, part)
+    assert.match(declarationsOf(`#color-by-digit-editor .cbd-profile[aria-checked="true"] ${part}`), /visibility: visible/, part)
+  }
+})
+
+test('the profile list\'s delete and + New profile are plain text buttons, not boxed ones', () => {
+  const html = renderProfiles(profileState, colorFor, 0)
+  assert.match(html, /<button type="button" class="cbd-text-button" data-act="delete"/)
+  assert.match(html, /<button type="button" class="cbd-text-button" data-act="new-profile"[^>]*>\+ New profile</)
+  assert.doesNotMatch(html, /cbd-button/)
+  const plain = declarationsOf('#color-by-digit-editor .cbd-text-button')
+  assert.match(plain, /background: none/)
+  assert.match(plain, /border: none/)
 })
