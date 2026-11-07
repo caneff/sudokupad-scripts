@@ -81,3 +81,41 @@ export async function openSession (browser, script, { saved = SEEDED_OFF, force 
   await startInjected(opened.p, script, mode)
   return opened
 }
+
+// SudokuPad's own color for an entered digit or a mark, read off the page with no script installed.
+export const DEFAULT_FILL = 'rgb(29, 106, 229)'
+
+const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
+
+// The page's own resolved color for palette key `key`.
+export const paletteColorOn = (p, key) => p.evaluate((key) => {
+  const probe = document.createElement('span')
+  probe.style.color = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
+  document.body.appendChild(probe)
+  const color = window.getComputedStyle(probe).color
+  probe.remove()
+  return color
+}, key)
+// The shade a digit of a group on a color shows (`shadeOf`), and on palette key `key` (`shadeOn`). The shade's math is the
+// unit tests'; the caller passes the script's own `darkenColor` and `parseColor`, since these fixtures import nothing
+// from the script (ADR 0001).
+export function shadeReaders ({ darkenColor, parseColor }) {
+  const shadeOf = (color) => rgbOf(darkenColor(parseColor(color)))
+  return { shadeOf, shadeOn: async (p, key) => shadeOf(await paletteColorOn(p, key)) }
+}
+
+// One computed style property of the elements that show `digit`, per place on the board.
+// `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
+export const styleOn = (p, property, place, digit, conflict = false) => p.evaluate(([property, place, digit, conflict]) => {
+  const sel = {
+    given: '#cell-givens text.cell-given',
+    entered: '#cell-values text.cell-value',
+    corner: '#cell-pencilmarks text.cell-pencilmark',
+    centre: '#cell-candidates tspan'
+  }[place]
+  return [...document.querySelectorAll(sel)]
+    .filter((e) => (place === 'given' || place === 'entered' ? e.textContent.trim() : e.dataset.val) === digit)
+    .filter((e) => e.classList.contains('conflict') === conflict)
+    .map((e) => window.getComputedStyle(e)[property])
+}, [property, place, digit, conflict])
+export const allFillsOn = (p, place, digit, conflict) => async () => [...new Set(await styleOn(p, 'fill', place, digit, conflict))]

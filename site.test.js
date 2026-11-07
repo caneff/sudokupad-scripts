@@ -216,3 +216,11 @@ test(`${HOME} describes Color by Digit's four modes beside a picture of colored 
   assert.doesNotMatch(text, /centre/)
   assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
 })
+
+test(`${HOME} names Color by Digit's two digit options: the digit profile sync and turning digit colors off`, () => {
+  const m = read(HOME).match(/<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Color by Digit entry`)
+  const text = plain(m[1])
+  assert.match(text, /Sync digit profile with cell profile/)
+  assert.match(text, /Use digit colors/)
+})

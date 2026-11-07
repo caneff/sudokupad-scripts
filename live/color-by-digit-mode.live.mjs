@@ -320,10 +320,10 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.equal(await givensColored(), GIVEN_COUNT)
   })
 
-  it('the dialog\'s mode choice is at the top, offers the four modes, opens on the mode in force, and Cancel leaves the mode as it was', async () => {
+  it('the dialog\'s mode choice is at the top, under "Use digit colors", offers the four modes, opens on the mode in force, and Cancel leaves the mode as it was', async () => {
     await openEditor()
-    const first = await p.locator(`${EDITOR} input, ${EDITOR} button, ${EDITOR} [data-act]`).first().getAttribute('data-role')
-    assert.equal(first, 'mode-draft')
+    const roles = await p.locator(`${EDITOR} input, ${EDITOR} button, ${EDITOR} [data-act]`).evaluateAll((es) => es.slice(0, 2).map((e) => e.dataset.role))
+    assert.deepEqual(roles, ['use-digit-colors', 'mode-draft'])
     assert.deepEqual(await p.locator(`${EDITOR} input[data-role="mode-draft"]`).evaluateAll((es) => es.map((e) => e.value)), ['cell', 'digit', 'both', 'off'])
     assert.equal(await modeChoice('cell').isChecked(), true)
     await modeChoice('off').check()

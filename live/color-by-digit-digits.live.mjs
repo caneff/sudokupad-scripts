@@ -4,17 +4,15 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { BUTTON, GIVENS, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, BUTTON, DEFAULT_FILL, GIVENS, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, PUZZLE_URL } from './page.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
-// The shade's math is the unit tests' (color-by-digit.test.js); these checks are about which digit takes which shade, live.
-const { darkenColor, parseColor } = createRequire(import.meta.url)('../color-by-digit.user.js')
+const { shadeOf, shadeOn } = shadeReaders(createRequire(import.meta.url)('../color-by-digit.user.js'))
 
-// SudokuPad's own colors, read off the page with no script installed.
+// SudokuPad's own color for a given, read off the page with no script installed.
 const GIVEN_FILL = 'rgb(0, 0, 0)'
-const DEFAULT_FILL = 'rgb(29, 106, 229)'
 // SudokuPad's red for a mark in the conflict state.
 const CONFLICT_RED = 'rgb(179, 58, 58)'
 // The active profile: 1 to 5 on palette key 4, 8 and 9 on key 6; 0, 6 and 7 in no group, so they keep SudokuPad's color.
@@ -45,38 +43,9 @@ const STYLE = '#color-by-digit-digits'
 const LABEL = `${BUTTON} [data-role="mode"]`
 const MENU = '#color-by-digit-menu'
 
-const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
-
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
-
-// The page's own resolved color for palette key `key`, and the shade a digit of that key's group shows.
-const paletteColorOn = (p, key) => p.evaluate((key) => {
-  const probe = document.createElement('span')
-  probe.style.color = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
-  document.body.appendChild(probe)
-  const color = window.getComputedStyle(probe).color
-  probe.remove()
-  return color
-}, key)
-const shadeOn = async (p, key) => rgbOf(darkenColor(parseColor(await paletteColorOn(p, key))))
-
-// One computed style property of the elements that show `digit`, per place on the board.
-// `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
-const styleOn = (p, property, place, digit, conflict = false) => p.evaluate(([property, place, digit, conflict]) => {
-  const sel = {
-    given: '#cell-givens text.cell-given',
-    entered: '#cell-values text.cell-value',
-    corner: '#cell-pencilmarks text.cell-pencilmark',
-    centre: '#cell-candidates tspan'
-  }[place]
-  return [...document.querySelectorAll(sel)]
-    .filter((e) => (place === 'given' || place === 'entered' ? e.textContent.trim() : e.dataset.val) === digit)
-    .filter((e) => e.classList.contains('conflict') === conflict)
-    .map((e) => window.getComputedStyle(e)[property])
-}, [property, place, digit, conflict])
-const allFillsOn = (p, place, digit, conflict) => async () => [...new Set(await styleOn(p, 'fill', place, digit, conflict))]
 
 describe('digit colors, saved in Digit, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, decoder, errors
@@ -551,7 +520,7 @@ describe('digit colors from the palette the page shows, injected after Start Puz
     assert.equal(await paletteColorOn(p, '4'), PINK)
     await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
     await p.keyboard.press('4')
-    const shade = rgbOf(darkenColor(parseColor(PINK)))
+    const shade = shadeOf(PINK)
     assert.deepEqual(await settle(allFillsOn(p, 'entered', '4'), [shade]), [shade])
   })
 

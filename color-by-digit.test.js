@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -296,6 +296,144 @@ test('setActiveGroups replaces only the active profile\'s groups', () => {
   assert.deepEqual(next.profiles.map((p) => p.groups), [LOW, [{ key: 'z', digits: ['1'] }], []])
 })
 
+// The digit profile: "Sync digit profile with cell profile" and "Use digit colors".
+const synced = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD }, { name: 'C', groups: ENTROPIC }], active: 1 }
+const apart = setDigitActive(setSync(synced, false), 2)
+
+test('sync: a state saved before the digit profile is synced and uses digit colors, and digits take the cell profile', () => {
+  const state = stateFromStored(synced, null)
+  assert.deepEqual(state, synced)
+  assert.equal(isSynced(state), true)
+  assert.equal(usesDigitColors(state), true)
+  assert.deepEqual(digitGroups(state), ODD)
+  assert.equal(isSynced(stateFromStored(null, null)), true)
+  assert.equal(usesDigitColors(stateFromStored(null, null)), true)
+})
+
+test('sync: unticking starts the digit pick at the cell profile, so the digits keep their groups', () => {
+  const unticked = setSync(synced, false)
+  assert.equal(isSynced(unticked), false)
+  assert.equal(unticked.digitActive, 1)
+  assert.deepEqual(digitGroups(unticked), ODD)
+  assert.deepEqual(activeGroups(unticked), ODD)
+})
+
+test('sync: unsynced, a cell pick moves only the cells and a digit pick moves only the digits', () => {
+  assert.deepEqual(activeGroups(apart), ODD)
+  assert.deepEqual(digitGroups(apart), ENTROPIC)
+  const cells = setActive(apart, 0)
+  assert.deepEqual(activeGroups(cells), LOW)
+  assert.deepEqual(digitGroups(cells), ENTROPIC)
+  assert.deepEqual(setDigitActive(apart, 9), apart)
+})
+
+test('sync: synced, a cell pick moves the digits with it', () => {
+  assert.deepEqual(digitGroups(setActive(synced, 2)), ENTROPIC)
+})
+
+test('sync: ticking again makes the digits take the cell profile', () => {
+  const ticked = setSync(apart, true)
+  assert.equal(isSynced(ticked), true)
+  assert.deepEqual(digitGroups(ticked), ODD)
+  assert.equal('digitActive' in ticked, false)
+})
+
+test('sync: the button icon shows the cell profile in Cell, Both and Off, and the digit profile in Digit', () => {
+  assert.deepEqual(iconGroups(apart, 'cell'), ODD)
+  assert.deepEqual(iconGroups(apart, 'both'), ODD)
+  assert.deepEqual(iconGroups(apart, 'off'), ODD)
+  assert.deepEqual(iconGroups(apart, 'digit'), ENTROPIC)
+})
+
+test('sync: deleting the digit profile makes digits follow the cell profile; deleting another keeps the digit pick on its profile', () => {
+  const gone = deleteProfile(apart, 2)
+  assert.equal(isSynced(gone), true)
+  assert.deepEqual(digitGroups(gone), activeGroups(gone))
+  const earlier = deleteProfile(apart, 0)
+  assert.deepEqual(digitGroups(earlier), ENTROPIC)
+  assert.deepEqual(activeGroups(earlier), ODD)
+  const cellGone = deleteProfile(apart, 1)
+  assert.deepEqual(digitGroups(cellGone), ENTROPIC)
+})
+
+test('sync: the digit pick follows its own profile through a move, an add, a groups edit and an added preload', () => {
+  assert.deepEqual(digitGroups(moveProfile(apart, 2, 0)), ENTROPIC)
+  assert.deepEqual(digitGroups(moveProfile(apart, 0, 2)), ENTROPIC)
+  assert.deepEqual(digitGroups(addProfile(apart, 'D')), ENTROPIC)
+  assert.deepEqual(digitGroups(setActiveGroups(apart, [])), ENTROPIC)
+  assert.deepEqual(digitGroups(withAddedPreloads(apart, ['Modular'])), ENTROPIC)
+  assert.equal(isSynced(moveProfile(synced, 0, 2)), true)
+})
+
+test('sync: a saved digit pick is read like the active one, and a pick that is no profile reads as synced', () => {
+  const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }], active: 0, digitActive: 2 }
+  assert.deepEqual(digitGroups(stateFromStored(saved, null)), LOW)
+  for (const digitActive of [1, 9, -1, 1.5, '2', null]) assert.equal(isSynced(stateFromStored({ ...saved, digitActive }, null)), true, String(digitActive))
+})
+
+test('use digit colors: off is saved as false and kept through every edit; anything but false reads as on', () => {
+  const off = setUseDigitColors(apart, false)
+  assert.equal(usesDigitColors(off), false)
+  assert.equal(off.useDigitColors, false)
+  for (const next of [setActive(off, 0), setSync(off, true), deleteProfile(off, 0), moveProfile(off, 0, 1), addProfile(off, 'D'), setActiveGroups(off, []), setDigitActive(off, 0), withAddedPreloads(off, ['Modular'])]) {
+    assert.equal(usesDigitColors(next), false)
+  }
+  assert.equal(usesDigitColors(stateFromStored(off, null)), false)
+  assert.equal(usesDigitColors(stateFromStored({ ...synced, useDigitColors: 'no' }, null)), true)
+  const on = setUseDigitColors(off, true)
+  assert.equal('useDigitColors' in on, false)
+  assert.deepEqual(on, apart)
+})
+
+test('use digit colors: off, a press steps Cell and Off only; Digit falls back to Off and Both to Cell', () => {
+  assert.equal(nextMode('cell', false), 'off')
+  assert.equal(nextMode('off', false), 'cell')
+  assert.deepEqual(['cell', 'digit', 'both', 'off'].map((m) => allowedMode(m, false)), ['cell', 'off', 'cell', 'off'])
+  assert.deepEqual(['cell', 'digit', 'both', 'off'].map((m) => allowedMode(m, true)), ['cell', 'digit', 'both', 'off'])
+})
+
+const checkbox = (html, role) => new RegExp(`<input type="checkbox" data-role="${role}"`).test(html)
+const checked = (html, role) => new RegExp(`<input type="checkbox" data-role="${role}"[^>]* checked`).test(html)
+
+test('use digit colors: the dialog has the checkbox first, above the mode, ticked as the draft is, and offers only Cell and Off when it is off', () => {
+  const on = renderEditor([], [], [], 'digit', '', true)
+  assert.equal(checked(on, 'use-digit-colors'), true)
+  assert.match(on, /data-role="use-digit-colors"[^>]*> Use digit colors</)
+  assert.equal(on.indexOf('data-role="use-digit-colors"') < on.indexOf('data-role="mode-draft"'), true)
+  const off = renderEditor([], [], [], 'digit', '', false)
+  assert.equal(checkbox(off, 'use-digit-colors'), true)
+  assert.equal(checked(off, 'use-digit-colors'), false)
+  assert.deepEqual([...off.matchAll(/data-role="mode-draft" value="(\w+)"/g)].map((m) => m[1]), ['cell', 'off'])
+  assert.match(off, /value="off" checked/)
+})
+
+test('sync: the dialog\'s profile list has the sync checkbox, ticked while synced, and hides it without digit colors', () => {
+  assert.equal(checked(renderProfiles(synced, colorFor, ''), 'sync'), true)
+  assert.match(renderProfiles(synced, colorFor, ''), /data-role="sync"[^>]*> Sync digit profile with cell profile</)
+  assert.equal(checkbox(renderProfiles(apart, colorFor, ''), 'sync'), true)
+  assert.equal(checked(renderProfiles(apart, colorFor, ''), 'sync'), false)
+  assert.equal(checkbox(renderProfiles(setUseDigitColors(apart, false), colorFor, ''), 'sync'), false)
+})
+
+const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)
+
+test('sync: unsynced, the menu has a Cells section and a Digits section, each listing every profile with its own pick marked', () => {
+  const html = renderMenu(apart, colorFor)
+  assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2', 'digits0', 'digits1', 'digits2*'])
+  assert.equal(html.indexOf('>Cells<') < html.indexOf('data-target="cells"'), true)
+  assert.equal(html.indexOf('>Digits<') > html.lastIndexOf('data-target="cells"'), true)
+  assert.equal(html.indexOf('>Digits<') < html.indexOf('data-target="digits"'), true)
+  assert.ok(html.indexOf('data-act="edit"') > html.lastIndexOf('data-act="pick"'))
+})
+
+test('sync: synced, or unsynced without digit colors, the menu is one list with no sections', () => {
+  for (const state of [synced, setUseDigitColors(apart, false)]) {
+    const html = renderMenu(state, colorFor)
+    assert.deepEqual(menuPicks(html), ['cells0', 'cells1*', 'cells2'])
+    assert.doesNotMatch(html, />Cells<|>Digits</)
+  }
+})
+
 test('dropIndex gives the position the dragged row lands in, counting the rows above the pointer', () => {
   const mids = [10, 30, 50]
   assert.equal(dropIndex(mids, 0, 5), 0)
@@ -500,10 +638,10 @@ test('auto: changedIndices lists the positions whose signature differs', () => {
 const colorFor = (key) => (key === 'a' ? 'rgb(10, 10, 10)' : 'rgb(240, 240, 240)')
 
 test('mode: a press steps Cell to Digit to Both to Off and back to Cell', () => {
-  assert.equal(nextMode('cell'), 'digit')
-  assert.equal(nextMode('digit'), 'both')
-  assert.equal(nextMode('both'), 'off')
-  assert.equal(nextMode('off'), 'cell')
+  assert.equal(nextMode('cell', true), 'digit')
+  assert.equal(nextMode('digit', true), 'both')
+  assert.equal(nextMode('both', true), 'off')
+  assert.equal(nextMode('off', true), 'cell')
 })
 
 test('mode: the starting mode is the saved mode, else Cell unless auto mode was saved off', () => {
@@ -545,14 +683,14 @@ test('mode: planClear takes every listed group color off every cell, digit or no
 })
 
 test('mode: the dialog opens with the mode choice at the top, on the draft it is given', () => {
-  const html = renderEditor([], [], [], 'off', '<div id="mark-profiles"></div>')
+  const html = renderEditor([], [], [], 'off', '<div id="mark-profiles"></div>', true)
   assert.equal(html.indexOf('data-role="mode-draft"') < html.indexOf('mark-profiles'), true)
   assert.match(html, /<input type="radio"[^>]*data-role="mode-draft" value="off" checked/)
   assert.doesNotMatch(html, /value="cell" checked/)
   assert.match(editor([], [], [], 'cell'), /value="cell" checked/)
   assert.deepEqual([...html.matchAll(/data-role="mode-draft" value="(\w+)"/g)].map((m) => m[1]), ['cell', 'digit', 'both', 'off'])
   assert.match(html, /value="digit"[^>]*> Digit</)
-  assert.doesNotMatch(html, /type="checkbox"|auto-draft/)
+  assert.doesNotMatch(html, /auto-draft/)
 })
 
 test('iconHtml draws one cell per group, at most four, each with its shown digit in the ink that reads on its color', () => {
@@ -582,7 +720,6 @@ test('renderProfiles lists each profile as a radio row with its handle, colors w
   const html = renderProfiles(profileState, colorFor, '')
   assert.equal(count(html, /data-role="profile-row"/g), 2)
   assert.equal(count(html, /data-role="handle"/g), 2)
-  assert.doesNotMatch(html, /type="checkbox"/)
   assert.match(html, /role="radiogroup"/)
   assert.equal(count(html, /role="radio"/g), 2)
   assert.equal(count(html, /aria-checked="true"/g), 1)
@@ -622,7 +759,7 @@ test('renderProfiles keeps the typed name in the name field, escaped', () => {
 test('renderMenu has the heading, one row per profile in order with the active one marked, then Edit profiles', () => {
   const html = renderMenu(profileState, colorFor)
   assert.match(html, /Color by digit profile/)
-  assert.deepEqual([...html.matchAll(/data-act="pick" data-index="(\d)"/g)].map((m) => m[1]), ['0', '1'])
+  assert.deepEqual([...html.matchAll(/data-act="pick" data-target="cells" data-index="(\d)"/g)].map((m) => m[1]), ['0', '1'])
   assert.equal(count(html, /aria-checked="true"/g), 1)
   assert.match(html, /data-index="1"[^>]*aria-checked="true"/)
   assert.match(html, /Low &lt;b&gt;/)
@@ -783,7 +920,7 @@ async function withAutoMode (app, fn, stored = {}) {
     getApp: () => Promise.resolve(app),
     getData: (key) => ({ ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 }, ...stored }[key] ?? null),
     setData: () => {},
-    addAuxButton: () => {},
+    addAuxButton: (spec) => { app.buttonContent = spec.content },
     addSetting: () => {}
   }
   try {
@@ -877,6 +1014,16 @@ test('mode: in Cell, nothing saved or auto mode saved on, loading colors the giv
   }
 })
 
+test('use digit colors: saved off, a saved Both loads as Cell and colors the givens, and a saved Digit loads as Off and colors nothing', async () => {
+  const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
+  for (const [savedMode, label, colours] of [['both', 'CELL', [['1'], ['2']]], ['digit', 'OFF', [[], []]]]) {
+    await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+      assert.match(app.buttonContent, new RegExp(`>${label}<`), savedMode)
+      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
+    }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
+  }
+})
+
 test('auto wrapper: a restart colors the givens again', async () => {
   await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
     app.handlers.restarted()
@@ -887,7 +1034,7 @@ test('auto wrapper: a restart colors the givens again', async () => {
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
 // The editor without a profile list.
-const editor = (groups, pages, shown, mode = 'cell') => renderEditor(groups, pages, shown, mode, '')
+const editor = (groups, pages, shown, mode = 'cell') => renderEditor(groups, pages, shown, mode, '', true)
 const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
 const keys = (names) => names.split(' ')
 const slotKeys = (slots) => slots.map((s) => (s ? s.key : null))
@@ -1012,7 +1159,7 @@ test('renderEditor keeps the "No palette colors found" note, and draws no pulldo
 })
 
 test('the editor has no Preload buttons, keeps a Clear all button, and shows the profile list it is given above the groups', () => {
-  const html = renderEditor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0], 'cell', '<div id="mark-profiles"></div>')
+  const html = renderEditor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0], 'cell', '<div id="mark-profiles"></div>', true)
   assert.doesNotMatch(html, /data-act="preload"|Preload/)
   assert.equal(count(html, /data-act="clear"[^>]*>Clear all</g), 1)
   assert.ok(html.indexOf('mark-profiles') < html.indexOf('data-act="clear"'))
@@ -1150,6 +1297,18 @@ test('pastedSettings: settings copied before the mode, with auto mode and no mod
   assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'off' }, skipped: 0 })
   assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: 'yes' })), { values: {}, skipped: 1 })
   assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_mode: 'cell', ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
+})
+
+test('copiedSettings and pastedSettings carry the digit pick and "Use digit colors", and settings without them paste as synced and on', () => {
+  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'A', groups }, { name: 'B', groups: [] }], active: 0, digitActive: 1, useDigitColors: false } }
+  const copied = copiedSettings({ getData: (key) => saved[key] ?? null })
+  assert.deepEqual(JSON.parse(copied).ColorByDigit_profiles, saved.ColorByDigit_profiles)
+  const pasted = pastedSettings(copied).values.ColorByDigit_profiles
+  assert.equal(pasted.digitActive, 1)
+  assert.equal(usesDigitColors(pasted), false)
+  const old = pastedSettings(JSON.stringify({ ColorByDigit_profiles: { profiles: [{ name: 'A', groups }], active: 0 } })).values.ColorByDigit_profiles
+  assert.equal(isSynced(old), true)
+  assert.equal(usesDigitColors(old), true)
 })
 
 test('pastedSettings: throws on text that is not a JSON object', () => {
