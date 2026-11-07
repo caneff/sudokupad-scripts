@@ -46,9 +46,16 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
 
 ## For Restart (#270)
 
-`App.restartPuzzle` acts `{type: 'clear', arg: <tool>}` for every key of `app.tools`, Draw included. For `draw`,
-`Cell.clear` logs `Cell.clear > Invalid tool: draw` once per filled cell, and `actionToString` writes `cl:-1` into the
-replay (`Puzzle.Tools.indexOf('draw')`). Read, not run.
+`App.restartPuzzle` acts `{type: 'clear', arg: <tool>}` for every key of `app.tools`, Draw included, inside a group,
+when the replay is not empty. `Puzzle.act` logs an action into the replay only when `exec` reports a change, and a
+`clear` for `draw` changes nothing, so no `cl:-1` is written.
+
+Run on the live page (2026-11-06, `live/` recording, v0.611.0 scripts), with and without Draw Tool injected after Start
+Puzzle: a digit, a corner mark, a centre mark and a colour entered, then the confirm dialog's Restart. Both runs gave
+the same actions, in `getReplay()` (empty) and in `app.preRestartSavedProgress` (what Undo right after Restart brings
+back): the entries, then `gs/6`, `sl:r1c3r1c4/0`, `cl:0/0`, `cl:1/0`, `cl:2/0`, `ds:r1c5r1c3r1c4/0`, `ge/0`. No
+`cl:-1`, and no `Cell.clear > Invalid tool: draw` on the console or as a page error. With nothing entered, Restart
+acts nothing and both replays stay empty.
 
 ## Saving the drawing (#270)
 
