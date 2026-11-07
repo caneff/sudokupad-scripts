@@ -287,8 +287,8 @@ const assertSectionsInOrder = (file, markers) => {
   assert.deepEqual(order, [...order].sort((a, b) => a - b))
 }
 
-test(`${DETAILS} has the slideshow between the install link and "What it adds", then the pen panel with numbered steps and Good to know`, () => {
-  assertSectionsInOrder(DETAILS, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The pen panel</h2>', '<ol class="steps">', '<h2>Good to know</h2>'])
+test(`${DETAILS} has the slideshow between the install link and "What it adds", then the pen panel and Good to know`, () => {
+  assertSectionsInOrder(DETAILS, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The pen panel</h2>', '<h2>Good to know</h2>'])
 })
 
 test('netlify.toml publishes only site/', () => {
@@ -304,8 +304,7 @@ test('the Pages workflow publishes only site/', () => {
 test(`${DETAILS} shows the pen panel as one annotated picture whose alt text names every label`, () => {
   const m = read(DETAILS).match(/<h2>The pen panel<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${DETAILS} has no <h2>The pen panel</h2>`)
-  assert.equal(m[1].match(/<ol class="steps">[\s\S]*?<\/ol>/)[0].match(/<li>/g).length, 5, 'the pen panel section has no five numbered steps')
-  assert.doesNotMatch(m[1].replace(/<ol class="steps">[\s\S]*?<\/ol>/, ''), /<li\b/, 'the pen panel section has a list besides its steps')
+  assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the pen panel section is the intro and the picture only')
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the pen panel section is not one picture')
   assert.match(found[0], /pen-tool-extras-panel-annotated\.png/)
@@ -321,7 +320,7 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
 })
 
 // Checks shared by the Draw Tool and Color by Digit details pages: the header's @description, the intro, no picture in the feature grid, and a screenshot script per picture.
-const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
+const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds (?:a button )?to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
 const shared = ({ page, script, name, summary, intro, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {
     const head = fs.readFileSync(path.join(ROOT, script + SCRIPT_SUFFIX), 'utf8')
@@ -355,7 +354,7 @@ const shared = ({ page, script, name, summary, intro, homePicture }) => {
 
 // Color by Digit's entry and details page.
 const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
-const CBD_LEAD_INS = ['Four modes', 'Kept in step as you solve', 'Digit and mark shades', 'Profiles', 'The profile menu', 'Cells and digits apart']
+const CBD_LEAD_INS = ['Four modes', 'Updates as you solve', 'Colored digits', 'Profiles', 'Quick switching', 'A separate digit profile']
 
 test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside its slideshow`, () => {
   const m = read(HOME).match(/<\/div>\s*<div class="row-text">\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -379,9 +378,11 @@ const assertDeclaredAtFileShape = (img, file, what) => {
   return [fileW, fileH]
 }
 
-test(`${CBD} has the slideshow between the install link and "What it adds", then the settings dialog and four numbered steps`, () => {
-  assertSectionsInOrder(CBD, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<ol class="steps">', '<h2>Good to know</h2>'])
-  assert.equal(read(CBD).match(/<ol class="steps">[\s\S]*?<\/ol>/)[0].match(/<li>/g).length, 4)
+test(`${CBD} has the slideshow between the install link and "What it adds", then the settings dialog and its one sentence`, () => {
+  assertSectionsInOrder(CBD, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'])
+  const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
+  assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the settings dialog section has a list')
+  assert.match(m[1].replace(/<div class="figure">[\s\S]*?<\/div>/, ''), /<p class="prose">A click on a digit already in the chosen color clears it\.<\/p>\s*$/)
 })
 
 test("Color by Digit's slide 5 shows the three marks that repeat the given 2, and its last slide splits the cell and digit profiles", () => {
@@ -410,17 +411,22 @@ test("the slides' five pen colors are far from SudokuPad's nine", () => {
 
 test(`${CBD} lists what the script adds, one item per feature`, () => {
   const lines = section(CBD, 'What it adds')
-  assert.equal(lines.length, CBD_LEAD_INS.length)
+  assert.deepEqual(lines, [
+    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The chips on the button preview the mode.',
+    'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
+    'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
+    'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
+    'Quick switching Click the arrow on the button, or right-click or hold the button, to open the profile list. A pick applies at once.',
+    'A separate digit profile Digits can follow the cell profile, use another profile, or go uncolored.'
+  ])
   const grid = read(CBD).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${CBD} has no <ul class="features">`)
   assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
   // Chris's ruling on #279: text a reader sees says "center marks".
   assert.doesNotMatch(lines.join(' '), /centre/)
-  for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(lines[0], new RegExp(`\\b${mode}\\b`), mode)
-  assert.match(lines[2], /red circle/)
 })
 
-test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its text`, () => {
+test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and one sentence`, () => {
   const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
   const found = imgs(m[1])
@@ -430,8 +436,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  const text = plain(m[1])
-  for (const word of ['profiles', 'groups', 'pulldowns', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
@@ -521,7 +526,7 @@ shared({
   script: 'color-by-digit',
   name: 'Color by Digit',
   summary: CBD_SUMMARY,
-  intro: `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`,
+  intro: 'Adds a button to SudokuPad that colors cells, or the digits in them, by which group each digit is in, and keeps the colors up to date as you solve.',
   homePicture: 'color-by-digit-slide-1-start.png'
 })
 
