@@ -14,7 +14,7 @@ Browse them with pictures at <https://caneff.github.io/sudokupad-scripts/>.
 
 | Script | What it does | Install |
 | --- | --- | --- |
-| Color by Digit | Adds a button that colors cells, or the digits and marks in them, by digit, from groups of colors you set, and keeps the colors in step as you solve. [Details](https://caneff.github.io/sudokupad-scripts/color-by-digit.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js) |
+| Color by Digit | Adds a button that colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve. [Details](https://caneff.github.io/sudokupad-scripts/color-by-digit.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js) |
 | Pen Tool Extras | Adds pen colors, solid, dashed and arrow pens, sliders, and edge and corner marks. [Details](docs/pen-tool-extras.md) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js) |
 | Draw Tool | Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing. [Details](https://caneff.github.io/sudokupad-scripts/draw-tool.html) | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/draw-tool.user.js) |
 | Dark Page | Makes the page black around the puzzle, or a color you pick. | [Install](https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js) |

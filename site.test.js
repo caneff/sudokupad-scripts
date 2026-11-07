@@ -229,8 +229,46 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
   assert.doesNotMatch(page, /Digit Color|digit-color/)
 })
 
+// Checks shared by every details page: the header's @description, the intro, one picture per listed lead-in, and a screenshot script per picture.
+const SCRIPT_INTRO = /<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
+const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, homePicture }) => {
+  test(`${script}.user.js's @description is the homepage summary`, () => {
+    const head = fs.readFileSync(path.join(__dirname, script + SCRIPT_SUFFIX), 'utf8')
+    assert.equal((head.match(/^\/\/ @description\s+(.*)$/m) || [])[1], summary)
+  })
+
+  test(`${page} intro says what the script adds, with SudokuPad linked`, () => {
+    const m = read(page).match(SCRIPT_INTRO)
+    assert.ok(m, `site/${page} has no intro paragraph starting "Adds to SudokuPad", with SudokuPad linked`)
+    assert.equal(plain(m[1]), intro)
+  })
+
+  test(`${page} puts one picture with alt text on each lead-in that has one, and none on the others`, () => {
+    const byLeadIn = new Map(items(read(page)).map(li => [leadIn(li), li]))
+    for (const lead of leads) {
+      const found = imgs(byLeadIn.get(lead) || '')
+      if (!pictures[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
+      assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
+      assert.ok(found[0].includes(`src="${RAW}docs/research/${pictures[lead]}.png"`), `"${lead}" does not show ${pictures[lead]}.png`)
+      assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
+    }
+  })
+
+  // A script in docs/research/ takes a picture when its header names the picture's file.
+  test(`every ${name} picture the site links is in the repo and named by a screenshot script in docs/research/`, () => {
+    const research = path.join(__dirname, 'docs', 'research')
+    const scripts = fs.readdirSync(research).filter(f => f.endsWith('-screenshot.mjs')).map(f => fs.readFileSync(path.join(research, f), 'utf8'))
+    const found = [...screenshots(read(page)), ...screenshots(read(HOME)).filter(t => t.endsWith(homePicture))]
+    assert.ok(found.length > 0, `no ${name} pictures found`)
+    for (const shot of found) {
+      assert.ok(fs.existsSync(path.join(__dirname, shot)), `${shot} is not in the repo`)
+      assert.ok(scripts.some(text => text.includes(path.basename(shot))), `no screenshot script in docs/research/ names ${shot}`)
+    }
+  })
+}
+
 // Color by Digit's entry and details page.
-const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, from groups of colors you set, and keeps the colors in step as you solve.'
+const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
 const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Sync digit profile with cell profile.', 'Use digit colors.']
 // The lead-ins that carry one picture, and the picture each shows.
 const CBD_PICTURES = {
@@ -247,19 +285,6 @@ test(`${HOME} describes Color by Digit in a short summary ending in a Details li
   assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
 })
 
-test('color-by-digit.user.js\'s @description is the homepage summary', () => {
-  const head = fs.readFileSync(path.join(__dirname, 'color-by-digit.user.js'), 'utf8')
-  assert.equal((head.match(/^\/\/ @description\s+(.*)$/m) || [])[1], CBD_SUMMARY)
-  const version = (head.match(/^\/\/ @version\s+(\S+)$/m) || [])[1]
-  assert.equal((head.match(/const VERSION = '([^']*)'/) || [])[1], version)
-})
-
-test(`${CBD} intro says what the script adds, with SudokuPad linked`, () => {
-  const m = read(CBD).match(/<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${CBD} has no intro paragraph starting "Adds to SudokuPad", with SudokuPad linked`)
-  assert.equal(plain(m[1]), `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`)
-})
-
 test(`${CBD} lists what the script adds, one item per feature`, () => {
   const lines = section(CBD, 'What it adds')
   assert.equal(lines.length, CBD_LEAD_INS.length)
@@ -268,17 +293,6 @@ test(`${CBD} lists what the script adds, one item per feature`, () => {
   assert.doesNotMatch(lines.join(' '), /centre/)
   for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(lines[0], new RegExp(`\\b${mode}\\b`), mode)
   assert.match(lines[2], /red circle/)
-})
-
-test(`${CBD} puts one picture with alt text on each item in CBD_PICTURES, and none on the others`, () => {
-  const byLeadIn = new Map(items(read(CBD)).map(li => [leadIn(li), li]))
-  for (const lead of CBD_LEAD_INS) {
-    const found = imgs(byLeadIn.get(lead) || '')
-    if (!CBD_PICTURES[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
-    assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
-    assert.ok(found[0].includes(`src="${RAW}docs/research/${CBD_PICTURES[lead]}.png"`), `"${lead}" does not show ${CBD_PICTURES[lead]}.png`)
-    assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
-  }
 })
 
 test(`${CBD} describes the settings dialog in text, with no picture`, () => {
@@ -290,11 +304,10 @@ test(`${CBD} describes the settings dialog in text, with no picture`, () => {
 })
 
 test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, () => {
-  const lines = section(CBD, 'Good to know')
-  assert.equal(lines.length, 2)
-  assert.match(lines[0], /one undo step/)
-  assert.match(lines[0], /never color/)
-  assert.match(lines[1], /Multi-color/)
+  assert.deepEqual(section(CBD, 'Good to know'), [
+    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
+    "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had, and undoing a profile switch does not bring that color back."
+  ])
 })
 
 // Draw Tool's entry and details page.
@@ -307,17 +320,6 @@ test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, 
   assert.equal(m[1], `${DRAW_SUMMARY} <a href="${DRAW}">Details</a>`)
 })
 
-test('draw-tool.user.js\'s @description is the homepage summary', () => {
-  const head = fs.readFileSync(path.join(__dirname, 'draw-tool.user.js'), 'utf8')
-  assert.equal((head.match(/^\/\/ @description\s+(.*)$/m) || [])[1], DRAW_SUMMARY)
-})
-
-test(`${DRAW} intro says what the script adds, with SudokuPad linked`, () => {
-  const m = read(DRAW).match(/<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${DRAW} has no intro paragraph starting "Adds to SudokuPad", with SudokuPad linked`)
-  assert.equal(plain(m[1]), 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines, and click to type text, such as cage sums, in the pen colors.')
-})
-
 test(`${DRAW} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
@@ -327,18 +329,6 @@ test(`${DRAW} lists what the script adds, one item per feature`, () => {
     'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'
   ])
   assert.deepEqual(leadIns(read(DRAW)), DRAW_LEAD_INS)
-})
-
-test(`${DRAW} puts one picture with alt text on Freehand lines and on Text, and none on the others`, () => {
-  const byLeadIn = new Map(items(read(DRAW)).map(li => [leadIn(li), li]))
-  const expected = { 'Freehand lines.': 'lines', 'Text.': 'text' }
-  for (const lead of DRAW_LEAD_INS) {
-    const found = imgs(byLeadIn.get(lead) || '')
-    if (!expected[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
-    assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
-    assert.ok(found[0].includes(`src="${RAW}docs/research/draw-tool-bullet-${expected[lead]}.png"`), `"${lead}" does not show draw-tool-bullet-${expected[lead]}.png`)
-    assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
-  }
 })
 
 test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names every label`, () => {
@@ -359,31 +349,11 @@ test(`${DRAW} good to know says the drawing stays in this browser`, () => {
 })
 
 // A script in docs/research/ takes a picture when its header names the picture's file.
-test('every Draw Tool picture the site links is named by a screenshot script in docs/research/', () => {
-  const research = path.join(__dirname, 'docs', 'research')
-  const scripts = fs.readdirSync(research).filter(f => f.endsWith('-screenshot.mjs')).map(f => fs.readFileSync(path.join(research, f), 'utf8'))
-  const pictures = [...screenshots(read(DRAW)), ...screenshots(read(HOME)).filter(t => /site-draw-tool\.png$/.test(t))]
-  assert.ok(pictures.length > 0, 'no Draw Tool pictures found')
-  for (const shot of pictures) {
-    assert.ok(scripts.some(text => text.includes(path.basename(shot))), `no screenshot script in docs/research/ names ${shot}`)
-  }
-})
 
 test('the README has a Draw Tool row with a Details link, and the Settings sentence names Draw Tool', () => {
   const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8')
   assert.match(readme, /^\| Draw Tool \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
   assert.match(readme, /Each script except No Tab Letters and Draw Tool adds an entry to SudokuPad's settings/)
-})
-
-test('every Color by Digit picture the site links is named by a screenshot script in docs/research/', () => {
-  const research = path.join(__dirname, 'docs', 'research')
-  const scripts = fs.readdirSync(research).filter(f => f.endsWith('-screenshot.mjs')).map(f => fs.readFileSync(path.join(research, f), 'utf8'))
-  const pictures = [...screenshots(read(CBD)), ...screenshots(read(HOME)).filter(t => /site-color-by-digit\.png$/.test(t))]
-  assert.ok(pictures.length > 0, 'no Color by Digit pictures found')
-  for (const shot of pictures) {
-    assert.ok(fs.existsSync(path.join(__dirname, shot)), `${shot} is not in the repo`)
-    assert.ok(scripts.some(text => text.includes(path.basename(shot))), `no screenshot script in docs/research/ names ${shot}`)
-  }
 })
 
 test('the README has a Color by Digit row with the short summary and a Details link', () => {
@@ -392,4 +362,26 @@ test('the README has a Color by Digit row with the short summary and a Details l
   assert.ok(row, 'the README has no Color by Digit row')
   assert.ok(row[0].includes(` ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)} [Details](https://caneff.github.io/sudokupad-scripts/${CBD}) `), row[0])
   assert.match(row[0], /\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/color-by-digit\.user\.js\)/)
+})
+
+shared({
+  page: DRAW,
+  script: 'draw-tool',
+  name: 'Draw Tool',
+  summary: DRAW_SUMMARY,
+  intro: 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines, and click to type text, such as cage sums, in the pen colors.',
+  leadIns: DRAW_LEAD_INS,
+  pictures: { 'Freehand lines.': 'draw-tool-bullet-lines', 'Text.': 'draw-tool-bullet-text' },
+  homePicture: 'site-draw-tool.png'
+})
+
+shared({
+  page: CBD,
+  script: 'color-by-digit',
+  name: 'Color by Digit',
+  summary: CBD_SUMMARY,
+  intro: `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`,
+  leadIns: CBD_LEAD_INS,
+  pictures: CBD_PICTURES,
+  homePicture: 'site-color-by-digit.png'
 })

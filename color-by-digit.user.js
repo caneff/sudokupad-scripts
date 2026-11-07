@@ -2,7 +2,7 @@
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      0.10.1
-// @description  Colors cells, or the digits and marks in them, by digit, from groups of colors you set, and keeps the colors in step as you solve.
+// @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
