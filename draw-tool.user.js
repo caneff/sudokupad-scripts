@@ -355,19 +355,21 @@
   // The gap left to the window's edge and to a control, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
   const REACH_MARGIN_PX = 1
 
-  // The middle nearest `middle` for a note box of `size` (width, height) that lies wholly inside `win` and overlaps none of the `blockers`, all screen pixels.
-  // A box too big for the window is centred on it; with no free point the box is kept inside the window alone.
+  // The point nearest `[x, y]` for the middle of a note box `width` by `height` that lies wholly inside `win` and overlaps none of the `blockers`, all in screen pixels.
+  // A box too big for the window is centred on it; with no free point it is kept inside the window alone; a window with no area leaves the point as it is.
   function reachablePoint ([x, y], [width, height], win, blockers) {
+    if (win.right <= win.left || win.bottom <= win.top) return [x, y]
     const [halfWidth, halfHeight] = [width / 2, height / 2]
     const clamp = (value, low, high) => low > high ? (low + high) / 2 : Math.min(high, Math.max(low, value))
-    const inside = ([px, py]) => [clamp(px, win.left + halfWidth + REACH_MARGIN_PX, win.right - halfWidth - REACH_MARGIN_PX), clamp(py, win.top + halfHeight + REACH_MARGIN_PX, win.bottom - halfHeight - REACH_MARGIN_PX)]
+    const [spanX, spanY] = [halfWidth + REACH_MARGIN_PX, halfHeight + REACH_MARGIN_PX]
+    const inside = ([px, py]) => [clamp(px, win.left + spanX, win.right - spanX), clamp(py, win.top + spanY, win.bottom - spanY)]
     const blocked = ([px, py]) => blockers.some((b) => px + halfWidth > b.left && px - halfWidth < b.right && py + halfHeight > b.top && py - halfHeight < b.bottom)
     const start = inside([x, y])
     if (!blocked(start)) return start
-    const free = blockers
-      .flatMap((b) => [[b.left - halfWidth - REACH_MARGIN_PX, start[1]], [b.right + halfWidth + REACH_MARGIN_PX, start[1]], [start[0], b.top - halfHeight - REACH_MARGIN_PX], [start[0], b.bottom + halfHeight + REACH_MARGIN_PX]])
-      .map(inside)
-      .filter((point) => !blocked(point))
+    // Every edge of every control is a place to rest against, in either direction, and the two directions combine to clear controls that meet at a corner.
+    const xs = [start[0], ...blockers.flatMap((b) => [b.left - spanX, b.right + spanX])]
+    const ys = [start[1], ...blockers.flatMap((b) => [b.top - spanY, b.bottom + spanY])]
+    const free = xs.flatMap((px) => ys.map((py) => inside([px, py]))).filter((point) => !blocked(point))
     const distance = (point) => Math.hypot(point[0] - start[0], point[1] - start[1])
     return free.reduce((best, point) => distance(point) < distance(best) ? point : best, free[0] ?? start)
   }
@@ -935,12 +937,15 @@
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
-  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the control panel, the top bar, the menu drawer and an open dialog.
-  const CONTROLS = '#controls, .topbar, #appmenu, .dialog-overlay, button, a, input, select, textarea'
-  const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
-
+  // The parts of SudokuPad's layout a fixed note must stay clear of; the menu drawer and dialogs are open only for a while, so a note is not moved for them.
+  const LAYOUT_CONTROLS = '#controls, .topbar'
   // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
   const ABOVE_NOTES = '.dialog-overlay, #appmenu'
+
+  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the control panel, the top bar, the menu drawer and an open dialog.
+  const CONTROLS = `${LAYOUT_CONTROLS}, ${ABOVE_NOTES}, button, a, input, select, textarea`
+  const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
+
   // The notes' layer covers the page, above the board's digits and SudokuPad's clock and rules copy (z-index 10) and below its dialogs and menu drawer (1000).
   const LAYER_Z = 20
 
@@ -1473,16 +1478,13 @@
       const box = contentBox(note)
       item[DRAWN_SIZE] = [box.right - box.left, box.bottom - box.top].map((side) => side / map.scale)
     }
-    if (keepFixedReachable(notes, map)) save()
+    if (!drag?.move && keepFixedReachable(notes, map)) save()
     if (editing) showEditing(map)
     showHover()
   }
 
-  // The parts of SudokuPad's layout a fixed note must stay clear of; the menu drawer and dialogs are open only for a while, so a note is not moved for them.
-  const LAYOUT_CONTROLS = '#controls, .topbar'
-
   // A fixed note the window or the layout has put out of reach is moved, and its new point kept, to the nearest point inside the window and clear of the
-  // controls. Whether any note moved.
+  // controls. Whether any note moved. A dragged note is left to its drag, which ends at the nearest such point.
   function keepFixedReachable (notes, map) {
     const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
     const blockers = [...document.querySelectorAll(LAYOUT_CONTROLS)].map((element) => element.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)

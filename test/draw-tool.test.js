@@ -519,5 +519,14 @@ test('a note under a control is moved to the nearest point a pixel clear of it, 
 
 test('a note too big for the window is centred on it, and a control that leaves no free point leaves the note inside the window', () => {
   assert.deepEqual(reachablePoint([10, 10], [1200, 40], WINDOW, []), [500, 21])
-  assert.deepEqual(reachablePoint([500, 400], [100, 40], WINDOW, [WINDOW]), [500, 400])
+  assert.deepEqual(reachablePoint([1500, 400], [100, 40], WINDOW, [WINDOW]), [949, 400])
+})
+
+test('a note under two controls that meet at a corner is moved to the nearest point clear of both', () => {
+  const topbar = { left: 0, top: 0, right: 1000, bottom: 50 }
+  assert.deepEqual(reachablePoint([900, 60], [100, 40], WINDOW, [topbar, { ...PANEL, top: 50 }]), [749, 71])
+})
+
+test('a window with no area leaves a note where it is', () => {
+  assert.deepEqual(reachablePoint([900, 60], [100, 40], { left: 0, top: 0, right: 0, bottom: 0 }, [PANEL]), [900, 60])
 })

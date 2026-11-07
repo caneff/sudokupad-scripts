@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
-import { settle } from '../settle.mjs'
+import { settle, stable } from '../settle.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const WIDE = { width: 1600, height: 900 }
@@ -26,7 +26,6 @@ describe('Text Annotation\'s fixed note after the window changes', { concurrency
   const saved = () => draw.saved(p)
   const resizeTo = async (size) => {
     await p.setViewportSize(size)
-    await p.evaluate(() => Framework.app.resize())
   }
   // The note's box and the panel's, on the screen.
   const boxes = () => read((selector) => {
@@ -58,11 +57,18 @@ describe('Text Annotation\'s fixed note after the window changes', { concurrency
     await resizeTo(WIDE)
     const moved = await settle(async () => clearOfPanel(await boxes()), true)
     assert.equal(moved, true, 'clear of the panel')
-    const { note } = await boxes()
-    const middle = [note.x + note.width / 2, note.y + note.height / 2]
+    await stable(async () => (await boxes()).note.x)
+    const middle = draw.middleOf((await boxes()).note)
     await p.mouse.dblclick(...middle)
-    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'a double-click opens the note')
+    assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click opens the note itself')
     await p.keyboard.press('Escape')
+    const dropAt = [middle[0] + 60, middle[1] + 80]
+    await p.mouse.move(...middle)
+    await p.mouse.down()
+    await p.mouse.move(...dropAt, { steps: 8 })
+    await p.mouse.up()
+    const dropped = (await saved())[0].fixed
+    assert.equal(Math.abs(dropped[0] - dropAt[0]) <= 1.5 && Math.abs(dropped[1] - dropAt[1]) <= 1.5, true, `dragged to ${dropAt}, stored at ${dropped}`)
     const [stored] = await saved()
     assert.notDeepEqual(stored.fixed, RIGHT_OF_PANEL, 'the new point is saved')
     await reload()
@@ -73,7 +79,7 @@ describe('Text Annotation\'s fixed note after the window changes', { concurrency
     assert.notDeepEqual(restored.fixed, RIGHT_OF_PANEL, 'not the old point, with the window restored')
     const homeNote = await boxes()
     assert.equal(clearOfPanel(homeNote) && insideWindow(homeNote), true, 'reachable with the window restored')
-    const there = [homeNote.note.x + homeNote.note.width / 2, homeNote.note.y + homeNote.note.height / 2]
+    const there = draw.middleOf(homeNote.note)
     await p.mouse.move(...there)
     await p.mouse.down({ button: 'right' })
     await p.mouse.move(there[0] + 2, there[1] + 2, { steps: 3 })
