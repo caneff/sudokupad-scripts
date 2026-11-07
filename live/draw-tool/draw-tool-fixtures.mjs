@@ -16,8 +16,8 @@ export const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
 
 export const DRAW_BUTTON = '#control-draw'
 export const DIGIT_BUTTON = '#control-normal'
-// Anything in the notes' layer that is not a note, such as a stroke or shape an earlier version drew: none is drawn now.
-export const NOT_NOTES = '#draw-tool-layer > :not(.draw-tool-text)'
+// Anything in the notes' layer that is not a note or one of its two boxes of notes, such as a stroke or shape an earlier version drew: none is drawn now.
+export const NOT_NOTES = '#draw-tool-layer > :not(.draw-tool-text, .draw-tool-board, .draw-tool-screen), :is(.draw-tool-board, .draw-tool-screen) > :not(.draw-tool-text)'
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
@@ -66,12 +66,14 @@ export const puzzleKey = (p) => p.evaluate(() => String(Framework.app.puzzle.puz
 // The drawing saved for the puzzle on the page.
 export const saved = async (p) => p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p))
 
-// Each note drawn: its text, its computed color and its size in board units, its font size over the board's scale.
+// Each note drawn: its text, its computed color and its size in board units, its font size on the screen over the board's scale.
 export const noteLooks = (p) => p.evaluate((selector) => {
   const scale = Framework.app.svgRenderer.getElem().getScreenCTM().a
   return [...document.querySelectorAll(selector)].map((e) => {
     const style = window.getComputedStyle(e)
-    return { text: e.textContent, color: style.color, size: Math.round(parseFloat(style.fontSize) / scale * 10) / 10 }
+    // A note on the board sits in a box scaled by the board's transform.
+    const boxScale = new window.DOMMatrix(window.getComputedStyle(e.parentElement).transform).a
+    return { text: e.textContent, color: style.color, size: Math.round(parseFloat(style.fontSize) * boxScale / scale * 10) / 10 }
   })
 }, TEXTS)
 

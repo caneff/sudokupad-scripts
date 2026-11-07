@@ -78,7 +78,7 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     assert.deepEqual(await texts(), ['15'])
     const endBox = await p.locator(TEXTS).boundingBox()
-    assert.deepEqual([duringBox.x, duringBox.y], [endBox.x, endBox.y], 'the note followed the pointer before the release')
+    assert.equal(Math.hypot(duringBox.x - endBox.x, duringBox.y - endBox.y) <= draw.NEAR_PX, true, `the note followed the pointer before the release: at ${[duringBox.x, duringBox.y]}, placed at ${[endBox.x, endBox.y]}`)
     await reload()
     assert.deepEqual(await settle(textAts, [after]), [after])
   })
