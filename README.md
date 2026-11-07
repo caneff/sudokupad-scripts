@@ -51,7 +51,7 @@ Colors entered digits, corner marks and centre marks. It starts from default col
 - The page's own text turns dark on a light color.
 - On a dark color, the control buttons go dark gray with light purple icons. On a light color, they stay as SudokuPad draws them.
 - A rectangle around everything the puzzle draws, and the cells you write in, stays as SudokuPad renders it.
-- It is not SudokuPad's dark mode.
+- Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 
 ### No Tab Letters
 
