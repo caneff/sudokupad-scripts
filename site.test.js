@@ -510,7 +510,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Text Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
     "Colors of its own Nine colors that belong to Draw Tool, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
     'Size and opacity Two sliders. A line, shape or text keeps the size and opacity it was drawn with.',
-    'Erasing Drag with the right or middle mouse button across a line, shape or text, or click one with the middle button.',
+    'Erasing Drag with the right mouse button across a line, shape or text to erase it. Clear all, in the panel, erases everything.',
     'Settings Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.',
     'Stays on the cells Drawings stay put, and stay visible when you switch back to entering digits.',
     'Kept for each puzzle A reload keeps the drawing, for the last 50 puzzles you drew on.'
