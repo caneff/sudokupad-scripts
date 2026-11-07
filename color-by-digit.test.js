@@ -383,11 +383,8 @@ test('sync: ticking again makes the digits take the cell profile', () => {
   assert.equal('digitActive' in ticked, false)
 })
 
-test('sync: the button icon shows the cell profile in Cell, Both and Off, and the digit profile in Digit', () => {
-  assert.deepEqual(iconGroups(apart, 'cell'), ODD)
-  assert.deepEqual(iconGroups(apart, 'both'), ODD)
-  assert.deepEqual(iconGroups(apart, 'off'), ODD)
-  assert.deepEqual(iconGroups(apart, 'digit'), ENTROPIC)
+test('sync: the button icon always takes its numbers from the cell profile', () => {
+  assert.deepEqual(iconGroups(apart), ODD)
 })
 
 test('sync: deleting the digit profile makes digits follow the cell profile; deleting another keeps the digit pick on its profile', () => {
@@ -860,7 +857,7 @@ test('installButton: adds an icon button titled "Color by digit" in the row it i
     addAppButton: () => calls.push(['wrong row'])
   }
   const app = { refreshControls: () => calls.push(['refresh']) }
-  installButton(framework, app, 'off', ODD, colorFor, '.controls-aux-extensions')
+  installButton(framework, app, 'off', ODD, ODD, colorFor, '.controls-aux-extensions')
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
@@ -1729,10 +1726,22 @@ test('iconHtml draws the run of cells in the mode\'s look, with no word strip, a
   }
 })
 
+test('iconHtml with a separate digit profile shows the cell profile\'s numbers in Cell, Digit and Both, the Digit ink from the digit profile', () => {
+  const palette = { 1: 'rgb(200, 0, 0)', 5: 'rgb(0, 200, 0)', 9: 'rgb(0, 0, 200)', 7: 'rgb(200, 200, 0)', 4: 'rgb(200, 0, 200)' }
+  const colorOf = (key) => palette[key]
+  const shade = (key) => darkenColor(parseColor(palette[key]))
+  const cells = (mode) => runCells(/<svg data-role="chips"[\s\S]*?<\/svg>/.exec(iconHtml(mode, LOW, colorOf, ENTROPIC))[0])
+  // LOW's chips are 1, 5, 9; ENTROPIC gives those digits the keys 7, 4, 9.
+  for (const mode of ['cell', 'digit', 'both']) assert.deepEqual(cells(mode).map((c) => c.digit), ['1', '5', '9'], mode)
+  assert.deepEqual(cells('digit').map((c) => c.ink), [shade('7'), shade('4'), shade('9')])
+  assert.deepEqual(cells('both').map((c) => [c.fill, c.ink]), [[palette[1], shade('7')], [palette[5], shade('4')], [palette[9], shade('9')]])
+  assert.deepEqual(cells('digit').map((c) => c.fill), ['#fff', '#fff', '#fff'])
+})
+
 test('the button is titled and labelled with its mode in words', () => {
   assert.deepEqual(['cell', 'digit', 'both', 'off'].map(buttonLabel), ['Color by digit: Cell', 'Color by digit: Digit', 'Color by digit: Both', 'Color by digit: Off'])
   let spec
-  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, colorFor, '.controls-aux')
+  installButton({ addControlButton: (x) => { spec = x } }, { refreshControls: () => {} }, 'both', ODD, ODD, colorFor, '.controls-aux')
   assert.equal(spec.title, 'Color by digit: Both')
 })
 
