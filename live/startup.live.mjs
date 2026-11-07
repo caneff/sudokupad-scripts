@@ -12,7 +12,7 @@ import { chromium } from 'playwright'
 import { MODES, openPage, START, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
 import { keydownDefaults, openPenTool, penEntries } from './pen.mjs'
-import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
+import { settle } from './settle.mjs'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
@@ -44,10 +44,15 @@ const SCRIPTS = [
     file: 'color-by-digit.user.js',
     ready: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'attached' }),
     control: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'visible' }),
-    // The button colors the board's givens.
+    // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Off, which takes them off.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
-      assert.equal(await clickUntil(() => p.click('#control-colorbydigit'), colored, true, SETTLE_MS), true, 'the button colored a cell')
+      const label = () => p.locator('#control-colorbydigit [data-role="mode"]').textContent()
+      assert.equal(await settle(colored, true), true, 'Cell colored a cell')
+      assert.equal(await label(), 'CELL')
+      await p.click('#control-colorbydigit')
+      assert.equal(await settle(label, 'OFF'), 'OFF')
+      assert.equal(await settle(colored, false), false, 'Off took the colors off')
     }
   },
   {
