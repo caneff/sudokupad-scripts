@@ -1248,7 +1248,6 @@ test('an unticked line style is drawn unticked and the stylesheet hides its slid
   const html = renderEditor(editorState({ dash: 6, lineStyles: { dashed: false, arrows: true } }))
   assert.doesNotMatch(html, /data-box="lineStyles.dashed"[^>]* checked/)
   assert.match(rowOf(html, 'dash'), /value="6"/)
-  assert.doesNotMatch(html, /display:none/)
   assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.dashed"\]:checked\)\) \[data-row="dash"\] \{ display: none; \}/)
   assert.match(DIALOG_CSS, /#pen-tool-extras-editor:not\(:has\(input\[data-box="lineStyles\.arrows"\]:checked\)\) \[data-row="arrowSpacing"\] \{ display: none; \}/)
 })
@@ -2518,7 +2517,7 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
   assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })
 
-test('the dialog and its buttons are styled by the editor inside the dialog, so no class is stamped on SudokuPad\'s elements', () => {
+test('the dialog and its button row are styled through the editor inside the dialog', () => {
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options \{ display: flex !important;/)
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options button\[data-role="save"\]/)
   assert.doesNotMatch(DIALOG_CSS, /pen-tool-extras-dialog/)

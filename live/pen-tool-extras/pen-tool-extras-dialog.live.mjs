@@ -232,6 +232,20 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     await closeExtrasEditorWith(p, 'Cancel')
   })
 
+  it('at 1280x720 the dialog is styled from SudokuPad\'s own elements: no class is stamped on them, the button row is flex and a ticked box shows its slider row', async () => {
+    await p.setViewportSize({ width: 1280, height: 720 })
+    try {
+      await openSettledEditor(p)
+      assert.deepEqual(await p.evaluate(() => [[...document.querySelector('.dialog').classList], [...document.querySelector('.dialog-options').classList]]), [['dialog'], ['dialog-options']])
+      assert.equal(await p.locator('.dialog-options').evaluate((el) => window.getComputedStyle(el).display), 'flex')
+      assert.equal(await p.locator('.dialog').evaluate((el) => el.getBoundingClientRect().width < window.innerWidth), true)
+      assert.equal(await editor().locator('[data-row="dash"]').isVisible(), await editor().locator('input[data-box="lineStyles.dashed"]').isChecked())
+      await closeExtrasEditorWith(p, 'Cancel')
+    } finally {
+      await p.setViewportSize({ width: 1200, height: 1000 })
+    }
+  })
+
   it('the buttons are one row at the bottom: Restore defaults at the left, Cancel and Save at the right', async () => {
     await openSettledEditor(p)
     const [restore, cancel, save] = await p.evaluate(() => ['restore', 'cancel', 'save'].map((role) => { const { x, y, width, height } = document.querySelector(`.dialog-options button[data-role="${role}"]`).getBoundingClientRect(); return { x, y, width, height } }))

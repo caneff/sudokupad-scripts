@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.26.0
+// @version      1.27.0
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.26.0'
+  const VERSION = '1.27.0'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -100,7 +100,6 @@
   const SETTING_NAMES = Object.keys(SETTINGS)
 
   // A dialog box and a row `under` one name a setting by its path: `<setting>` for a flag, `<setting>.<flag>` for one of a set of flags.
-
   function draftWithBox (draft, path, checked) {
     const [name, flagName, ...rest] = path.split('.')
     const fallback = Object.hasOwn(SETTINGS, name) ? SETTINGS[name].fallback : undefined
@@ -2175,7 +2174,7 @@ ${EDITOR} .pen-tool-extras-pen-grid, ${EDITOR} select[data-pen-preset] { max-wid
     }, true)
   }
 
-  // A dialog whose buttons are not the three of this one's is left with SudokuPad's own stacked buttons.
+  // The buttons are reordered only when all three of this dialog's are there; the stylesheet's row and button styles apply either way.
   function arrangeButtons (editor) {
     const dialog = editor.closest('.dialog')
     const options = dialog && dialog.querySelector('.dialog-options')
