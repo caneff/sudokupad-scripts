@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.2
+// @version      0.3.3
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.2'
+  const VERSION = '0.3.3'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -73,58 +73,6 @@
   function copiedSettings (store) {
     const { maxWidth, maxHeight } = readLimits(store)
     return JSON.stringify({ [MAX_WIDTH_KEY]: maxWidth, [MAX_HEIGHT_KEY]: maxHeight })
-  }
-
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
-  function pastedSettings (text) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(READERS)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
-    '<button type="button" data-act="copy-settings">Copy settings</button>' +
-    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
-    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
-
-  function wireCopyPaste (root, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copiedSettings(Framework))
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          if (Object.keys(values).length > 0) apply(values)
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
-      }
-    })
   }
 
   function rulesRoom ({ rulesTop, containerBottom, viewportBottom, paddingBottom }) {
@@ -435,8 +383,62 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
+  // <lib:settings-transfer>
+  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+      READERS,
       VERSION,
       MAX_WIDTH_KEY,
       copiedSettings,
@@ -627,13 +629,12 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: TITLE_PREFIX, name: 'Rules Resizer', version: VERSION }) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: TITLE_PREFIX, name: 'Rules Resizer', version: VERSION, icons: renderCopyPasteIcons(TITLE_PREFIX) }) },
         {
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
             row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
-            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>' +
-            COPY_PASTE_HTML
+            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
         },
         {
           tag: 'options',
@@ -659,7 +660,7 @@
     const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
     const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
     if (!widthInput || !heightInput) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
-    wireCopyPaste(widthInput.closest('.dialog'), (values) => {
+    wireCopyPaste(widthInput.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
       saveLimits(Framework, limits)
       if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''

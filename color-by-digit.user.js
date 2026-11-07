@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.18.6
+// @version      0.18.7
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.18.6'
+  const VERSION = '0.18.7'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -245,61 +245,13 @@
   }
   const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
   const READERS = { [PROFILES_KEY]: readPastedProfiles, [MODE_KEY]: readPastedMode, ...Object.fromEntries(ADDED_PRELOADS.map(({ key }) => [key, readPastedFlag])) }
+  // Settings copied before the mode existed carry auto mode's on/off in its place.
+  const withModeFromAuto = (data) => (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY) ? { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) } : data)
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
   function copiedSettings (store) {
     const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
     ADDED_PRELOADS.forEach(({ key }) => { if (store.getData(key) === true) copied[key] = true })
     return JSON.stringify(copied)
-  }
-
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
-  function pastedSettings (text) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    // Settings copied before the mode existed carry auto mode's on/off in its place.
-    if (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY)) data = { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) }
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(READERS)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  // The icons are Pen Tool Extras' copy and paste pictures; the scripts share no code.
-  function wireCopyPaste (root, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copiedSettings(Framework))
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          if (Object.keys(values).length > 0) apply(values)
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
-      }
-    })
   }
 
   const sameGroups = (a, b) => JSON.stringify(a) === JSON.stringify(b)
@@ -1285,8 +1237,61 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
+  // <lib:settings-transfer>
+  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1722,7 +1727,7 @@
       nameBox.select()
     }
     draw()
-    wireCopyPaste(box.closest('.dialog'), (values) => {
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS, upgrade: withModeFromAuto }, (values) => {
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()

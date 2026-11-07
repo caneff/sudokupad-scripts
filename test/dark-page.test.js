@@ -4,7 +4,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY, copiedSettings, pastedSettings, pasteReport } = require('../dark-page.user.js')
+const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const readPaste = (text) => pastedSettings(text, READERS)
 
 function rules () {
   return buildCss(DEFAULT_COLOR).split('\n').map((line) => {
@@ -255,24 +256,12 @@ test('copiedSettings: the color in force, the default when none is saved', () =>
 })
 
 test('pastedSettings: a valid color is kept lower-case, a bad one is skipped and counted, other keys are ignored', () => {
-  assert.deepEqual(pastedSettings(JSON.stringify({ [DATA_KEY]: '#ABCDEF', ColorByDigit_auto: true })), { values: { [DATA_KEY]: '#abcdef' }, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ [DATA_KEY]: 'red' })), { values: {}, skipped: 1 })
-})
-
-test('pastedSettings: throws on text that is not a JSON object', () => {
-  assert.throws(() => pastedSettings('{'), /not JSON/)
-  assert.throws(() => pastedSettings('"#ffffff"'), /not a settings object/)
-})
-
-test('pasteReport: says how many were pasted and how many skipped, and when the text held nothing', () => {
-  assert.equal(pasteReport(2, 0), 'Pasted 2 settings.')
-  assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
-  assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
-  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+  assert.deepEqual(readPaste(JSON.stringify({ [DATA_KEY]: '#ABCDEF', ColorByDigit_auto: true })), { values: { [DATA_KEY]: '#abcdef' }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [DATA_KEY]: 'red' })), { values: {}, skipped: 1 })
 })
 
 test('pastedSettings: text with none of this script\'s keys pastes and skips nothing; an array is no settings object', () => {
-  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: true })), { values: {}, skipped: 0 })
-  assert.throws(() => pastedSettings('[{"DarkPage_color":"#ffffff"}]'), /not a settings object/)
+  assert.deepEqual(readPaste('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: true })), { values: {}, skipped: 0 })
+  assert.throws(() => readPaste('[{"DarkPage_color":"#ffffff"}]'), /not a settings object/)
 })

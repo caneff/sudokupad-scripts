@@ -66,9 +66,9 @@ test('spec 301: Draw Tool has its own colors, Size and Opacity sliders, Shape mo
   // Copy carries the colors and both sliders and no drawing; Paste keeps Draw's own values, skips bad ones and counts them.
   const copied = JSON.parse(draw.copiedSettings(storeOf({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_opacity: 45, DrawTool_drawing_x: [stroke] })))
   assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_opacity: 45 })
-  const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_opacity: 7, PenToolExtras_x: 1 }))
+  const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_opacity: 7, PenToolExtras_x: 1 }), draw.READERS)
   assert.deepEqual(pasted, { values: { DrawTool_colors: PEN, DrawTool_width: 3.5 }, skipped: 1 })
-  assert.throws(() => draw.pastedSettings('not settings'))
+  assert.throws(() => draw.pastedSettings('not settings', draw.READERS))
 
   // The site: the homepage summary and @description name shapes and Draw's own colors, the details page has a bullet for
   // each new part, and the README no longer says Draw Tool has no settings entry.

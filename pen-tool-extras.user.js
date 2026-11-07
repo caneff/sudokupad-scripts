@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.26.8
+// @version      1.26.9
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.26.8'
+  const VERSION = '1.26.9'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -533,53 +533,6 @@
     const colors = readPenColors(store.getData(COLORS_KEY))
     if (colors) copied[COLORS_KEY] = storedPenColors(colors)
     return JSON.stringify(copied)
-  }
-
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
-  function pastedSettings (text) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(READERS)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  function wireCopyPaste (root, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copiedSettings(Framework))
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          if (Object.keys(values).length > 0) apply(values)
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
-      }
-    })
   }
 
   // Only the install save (`wait`, then page 1 darkened, or `save` with no color tool at all) changes the colors without the user.
@@ -2339,7 +2292,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     })
     draw()
     arrangeButtons(box)
-    wireCopyPaste(box.closest('.dialog'), (values) => {
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       const pasted = SETTING_NAMES.filter((name) => SETTINGS[name].key in values)
       const next = { ...inForce, ...Object.fromEntries(pasted.map((name) => [name, values[SETTINGS[name].key]])) }
       saveSettings(next)
@@ -2477,8 +2430,61 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
+  // <lib:settings-transfer>
+  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return

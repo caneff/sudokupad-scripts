@@ -7,8 +7,9 @@ const { headerVersion } = require('./header-version.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, pasteReport, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag
 } = require('../auto-rules-resizer.user.js')
+const readPaste = (text) => pastedSettings(text, READERS)
 
 test('largestSize: the biggest integer in [min, max] the predicate accepts, min when none does', () => {
   assert.equal(largestSize((n) => n <= 37, 8, 200), 37)
@@ -437,25 +438,12 @@ test('copiedSettings: both limits in force, null for no limit', () => {
 })
 
 test('pastedSettings: a whole number of pixels or null is kept, anything else is skipped and counted, other keys are ignored', () => {
-  assert.deepEqual(pastedSettings(JSON.stringify({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null, DarkPage_color: '#ffffff' })), { values: { [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null }, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ [MAX_WIDTH_KEY]: 700.4, [MAX_HEIGHT_KEY]: 'tall' })), { values: {}, skipped: 2 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: {}, skipped: 2 })
-})
-
-test('pastedSettings: throws on text that is not a JSON object', () => {
-  assert.throws(() => pastedSettings('hello'), /not JSON/)
-  assert.throws(() => pastedSettings('[1]'), /not a settings object/)
-  assert.throws(() => pastedSettings('null'), /not a settings object/)
-})
-
-test('pasteReport: says how many were pasted and how many skipped, and when the text held nothing', () => {
-  assert.equal(pasteReport(2, 0), 'Pasted 2 settings.')
-  assert.equal(pasteReport(1, 3), 'Pasted 1 setting; skipped 3 that did not check out.')
-  assert.equal(pasteReport(0, 1), 'Pasted 0 settings; skipped 1 that did not check out.')
-  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+  assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null, DarkPage_color: '#ffffff' })), { values: { [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: null }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: 700.4, [MAX_HEIGHT_KEY]: 'tall' })), { values: {}, skipped: 2 })
+  assert.deepEqual(readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: true, [MAX_HEIGHT_KEY]: -3 })), { values: {}, skipped: 2 })
 })
 
 test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
-  assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
+  assert.deepEqual(readPaste('{}'), { values: {}, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })
