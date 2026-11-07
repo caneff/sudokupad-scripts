@@ -1494,8 +1494,8 @@ test('every page has a measured icon viewBox, so the line type button never show
   PEN_PAGES.forEach((_, page) => assert.doesNotMatch(renderPageIcon(page, 3, BOTH_STYLES), /viewBox="undefined"/, `page ${page + 1}`))
 })
 
-test('Keypad Flipped swaps the rows of colors by grid row, since its transform on each button row has no box here', () => {
-  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input button\\[data-key="${key}"\\] \\{ grid-row: (\\d); \\}`).exec(PANEL_CSS)[1]
+test('Keypad Flipped swaps the rows of colors by grid row, for the buttons and the edit mode pickers over them, since its transform on each button row has no box here', () => {
+  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input :is\\(button\\[data-key="${key}"\\], \\.pen-tool-extras-picker\\[data-pen="${key}"\\]\\) \\{ grid-row: (\\d) / span 1; \\}`).exec(PANEL_CSS)[1]
   assert.deepEqual([1, 2, 3, 7, 8, 9].map(rule), ['3', '3', '3', '1', '1', '1'])
 })
 
