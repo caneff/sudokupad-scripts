@@ -110,9 +110,11 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
     return { width: style.strokeWidth, opacity: style.strokeOpacity }
   }, STROKES)
   const strokeColors = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => window.getComputedStyle(e).stroke), STROKES)
+  // Each stroke takes its own row: a drag that starts on an earlier stroke moves it and draws nothing.
   const drawStroke = async () => {
     const before = await p.locator(STROKES).count()
-    await mouseDrag(p, [[4.5, 1.5], [5.2, 3], [4.4, 4.5]])
+    const row = 0.5 + (before % 8)
+    await mouseDrag(p, [[row, 1.5], [row + 0.7, 3], [row - 0.1, 4.5]])
     assert.equal(await p.locator(STROKES).count(), before + 1, 'the drag drew a stroke')
   }
   const selectEmptyCell = async () => {
