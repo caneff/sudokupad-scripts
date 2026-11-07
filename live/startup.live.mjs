@@ -19,8 +19,6 @@ const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'u
 const CONCURRENCY = 5
 
 const BLACK = 'rgb(0, 0, 0)'
-// The color Digit Color gives an entered 4.
-const DIGIT_COLOR_FOUR = 'rgb(27, 122, 47)'
 const DIGITS = '1234567890'
 const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
@@ -34,8 +32,6 @@ const settingsEntry = async (p, text) => {
 // Prepended to a before-start injection: records whether the Start Puzzle button shows as the script runs.
 const RECORD_START_SHOWN = `window.__startShownAtInjection = [...document.querySelectorAll('button')].some((b) => ${START}.test(b.textContent) && b.getClientRects().length > 0);\n`
 
-const select = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-
 // Per script: its file, what shows it has started (`ready`), its control (`control`) and one representative action (`act`).
 // `ready` runs after Start Puzzle and the injection, `act` and then `control` after `ready`.
 const SCRIPTS = [
@@ -44,29 +40,15 @@ const SCRIPTS = [
     file: 'color-by-digit.user.js',
     ready: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'attached' }),
     control: (p) => p.locator('#control-colorbydigit').waitFor({ state: 'visible' }),
-    // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Off, which takes them off.
+    // A fresh install starts in Cell, which colors the board's givens, and a press steps it to Digit, which takes them off.
     act: async (p) => {
       const colored = () => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).some((c) => (c.colours || []).length > 0))
       const label = () => p.locator('#control-colorbydigit [data-role="mode"]').textContent()
       assert.equal(await settle(colored, true), true, 'Cell colored a cell')
       assert.equal(await label(), 'CELL')
       await p.click('#control-colorbydigit')
-      assert.equal(await settle(label, 'OFF'), 'OFF')
-      assert.equal(await settle(colored, false), false, 'Off took the colors off')
-    }
-  },
-  {
-    name: 'Digit Color',
-    file: 'digit-color.user.js',
-    ready: (p) => p.locator('#digit-color-style').waitFor({ state: 'attached' }),
-    control: (p) => settingsEntry(p, 'Digit Color'),
-    // An entered digit takes its digit's default color.
-    act: async (p) => {
-      await select(p, 0, 2)
-      await p.keyboard.press('4')
-      const fills = () => p.evaluate(() => [...new Set([...document.querySelectorAll('#cell-values text.cell-value')]
-        .filter((e) => e.textContent.trim() === '4').map((e) => window.getComputedStyle(e).fill))])
-      assert.deepEqual(await settle(fills, [DIGIT_COLOR_FOUR]), [DIGIT_COLOR_FOUR])
+      assert.equal(await settle(label, 'DIGIT'), 'DIGIT')
+      assert.equal(await settle(colored, false), false, 'Digit took the colors off')
     }
   },
   {

@@ -1,22 +1,27 @@
-// Live check of digit-color.user.js on sudokupad.app, in headless Chromium.
+// Live check of Color by Digit's digit colors (the Digit and Both modes) on sudokupad.app, in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { openPage, PUZZLE_URL, startPuzzle } from './page.mjs'
-import { closeDialogWith, dialogButton, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
-import { plantSaved } from './pen.mjs'
+import { BUTTON, GIVENS, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { gotoPuzzle, PUZZLE_URL } from './page.mjs'
 import { settle } from './settle.mjs'
 
-const script = readFileSync(new URL('../digit-color.user.js', import.meta.url), 'utf8')
+const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
+// The shade's math is the unit tests' (color-by-digit.test.js); these checks are about which digit takes which shade, live.
+const { darkenColor, parseColor } = createRequire(import.meta.url)('../color-by-digit.user.js')
 
-const DATA_KEY = 'DigitColor_colors'
-const EDITOR = '#digit-color-editor'
 // SudokuPad's own colors, read off the page with no script installed.
 const GIVEN_FILL = 'rgb(0, 0, 0)'
 const DEFAULT_FILL = 'rgb(29, 106, 229)'
-// SudokuPad's red for a mark in the conflict state, which a digit on SudokuPad's own color keeps.
+// SudokuPad's red for a mark in the conflict state.
 const CONFLICT_RED = 'rgb(179, 58, 58)'
+// The active profile: 1 to 5 on palette key 4, 8 and 9 on key 6; 0, 6 and 7 in no group, so they keep SudokuPad's color.
+const SPLIT = [group('4', ['1', '2', '3', '4', '5']), group('6', ['8', '9'])]
+// The givens Split colors: those of a digit in one of its groups.
+const GROUPED_GIVENS = [...GIVENS].filter((d) => SPLIT.some((g) => g.digits.includes(d))).length
+const SEEDED_DIGIT = { ...savedProfiles({ profiles: [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }), [MODE_STORAGE_KEY]: 'digit' }
 // How far from a mark's box, in screen pixels, a circle may sit and still be that mark's circle. This
 // tells which circle belongs to which mark; INK_TOLERANCE is what judges the centring.
 const NEAR = 6
@@ -28,58 +33,70 @@ const CLIP_BEFORE = 3
 const CLIP_AFTER = 5
 // A pixel is ink when it differs between the two screenshots by at least this fraction of the largest difference.
 const INK_FRACTION = 0.5
-const INK_PROBE_CSS = '#cell-pencilmarks text, #cell-candidates text, #cell-candidates tspan { visibility: hidden !important } #digit-color-circles { display: none !important } #cell-pencilmarks [data-ink-probe], #cell-candidates [data-ink-probe] { visibility: visible !important }'
+const CIRCLES = '#color-by-digit-circles'
+const INK_PROBE_CSS = `#cell-pencilmarks text, #cell-candidates text, #cell-candidates tspan { visibility: hidden !important } ${CIRCLES} { display: none !important } #cell-pencilmarks [data-ink-probe], #cell-candidates [data-ink-probe] { visibility: visible !important }`
 // Per digit, a row with that digit given and two empty cells in it that no other check here fills with a digit, so a mark of the digit
 // in either cell is in SudokuPad's conflict state: [row, corner mark's column, centre mark's column].
 const CONFLICT_CELLS = {
   1: [1, 1, 2], 2: [5, 1, 2], 3: [4, 6, 7], 4: [4, 1, 2], 5: [7, 0, 1], 6: [2, 0, 3], 7: [8, 5, 6], 8: [3, 1, 2], 9: [1, 7, 8]
 }
-const CIRCLES = '#digit-color-circles'
 const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
-// The default colors (issue #7), as the dialog's #rrggbb. The map is the independent source
-// the saved value is compared with; RGB is the same colors as the page computes them.
-const DEFAULTS = {
-  0: '#4b5563', 1: '#b0125b', 2: '#b04a00', 3: '#7a6200', 4: '#1b7a2f', 5: '#00736f', 6: '#0059c9', 7: '#3d2bb8', 8: '#8a1fa8', 9: '#5e3a1a'
-}
-const DEFAULT_RGB = { 2: 'rgb(176, 74, 0)', 4: 'rgb(27, 122, 47)', 5: 'rgb(0, 115, 111)', 6: 'rgb(0, 89, 201)' }
-const FOUR = { hex: '#ff00ff', rgb: 'rgb(255, 0, 255)' }
-const EIGHT = { hex: '#00cccc', rgb: 'rgb(0, 204, 204)' }
+const STYLE = '#color-by-digit-digits'
+const LABEL = `${BUTTON} [data-role="mode"]`
+const MENU = '#color-by-digit-menu'
 
-const STYLE = '#digit-color-style'
+const rgbOf = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('injected after Start Puzzle', { concurrency: false }, () => {
+// The page's own resolved color for palette key `key`, and the shade a digit of that key's group shows.
+const paletteColorOn = (p, key) => p.evaluate((key) => {
+  const probe = document.createElement('span')
+  probe.style.color = window.getComputedStyle(document.documentElement).getPropertyValue(`--cell-color-${key}`).trim()
+  document.body.appendChild(probe)
+  const color = window.getComputedStyle(probe).color
+  probe.remove()
+  return color
+}, key)
+const shadeOn = async (p, key) => rgbOf(darkenColor(parseColor(await paletteColorOn(p, key))))
+
+// One computed style property of the elements that show `digit`, per place on the board.
+// `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
+const styleOn = (p, property, place, digit, conflict = false) => p.evaluate(([property, place, digit, conflict]) => {
+  const sel = {
+    given: '#cell-givens text.cell-given',
+    entered: '#cell-values text.cell-value',
+    corner: '#cell-pencilmarks text.cell-pencilmark',
+    centre: '#cell-candidates tspan'
+  }[place]
+  return [...document.querySelectorAll(sel)]
+    .filter((e) => (place === 'given' || place === 'entered' ? e.textContent.trim() : e.dataset.val) === digit)
+    .filter((e) => e.classList.contains('conflict') === conflict)
+    .map((e) => window.getComputedStyle(e)[property])
+}, [property, place, digit, conflict])
+const allFillsOn = (p, place, digit, conflict) => async () => [...new Set(await styleOn(p, 'fill', place, digit, conflict))]
+
+describe('digit colors, saved in Digit, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, decoder, errors
+  // The shades of palette keys 4 and 6 (Split's groups) and 1 and 2 (Odd/Even's), read once the page is up.
+  const SHADE = {}
 
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const editor = () => p.locator(EDITOR)
-
-  // One computed style property of the elements that show `digit`, per place on the board.
-  // `conflict` picks marks in SudokuPad's conflict state; entered digits never get one.
-  const styleOf = (property, place, digit, conflict = false) => read(([property, place, digit, conflict]) => {
-    const sel = {
-      given: '#cell-givens text.cell-given',
-      entered: '#cell-values text.cell-value',
-      corner: '#cell-pencilmarks text.cell-pencilmark',
-      centre: '#cell-candidates tspan'
-    }[place]
-    return [...document.querySelectorAll(sel)]
-      .filter((e) => (place === 'given' || place === 'entered' ? e.textContent.trim() : e.dataset.val) === digit)
-      .filter((e) => e.classList.contains('conflict') === conflict)
-      .map((e) => window.getComputedStyle(e)[property])
-  }, [property, place, digit, conflict])
-  const fills = (place, digit, conflict) => styleOf('fill', place, digit, conflict)
-  const allOf = (property) => (place, digit, conflict) => async () => [...new Set(await styleOf(property, place, digit, conflict))]
-  const allFills = allOf('fill')
+  const fills = (place, digit, conflict) => styleOn(p, 'fill', place, digit, conflict)
+  const allFills = (place, digit, conflict) => allFillsOn(p, place, digit, conflict)
+  const coloredCount = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
+  const givensColored = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
+  const undoSteps = () => read(() => Framework.app.puzzle.undoStack.length)
+  const label = () => p.locator(LABEL).textContent()
 
   // Every circle in the group, as it is drawn: its centre in screen pixels and radius, and whether it paints at all.
   const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
     const centre = new window.DOMPoint(Number(c.getAttribute('cx')), Number(c.getAttribute('cy'))).matrixTransform(c.getScreenCTM())
     return { cx: centre.x, cy: centre.y, r: Number(c.getAttribute('r')), shown: window.getComputedStyle(c.parentNode).display !== 'none' }
   }), CIRCLES)
+  const shownCircles = async () => (await circles()).filter((c) => c.shown).length
   // Circles drawn beyond one per conflicting mark on the board: zero when each mark has its own and no other stands.
   const extraCircles = () => read(([circles, conflicting]) => document.querySelectorAll(circles + ' circle').length - document.querySelectorAll(conflicting).length, [CIRCLES, Object.values(CONFLICTING).join(',')])
   // The middle of each conflicting mark of `digit` in `place` and the middle of every circle, both
@@ -152,82 +169,68 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  const saved = () => read((k) => Framework.getData(k), DATA_KEY)
-
-  const boot = async () => {
-    await startPuzzle(p)
-    await p.addScriptTag({ content: script })
-    await p.locator(STYLE).waitFor({ state: 'attached' })
+  // A short press on the button, away from the arrow box.
+  const pressTo = async (want) => {
+    const box = await p.locator(BUTTON).boundingBox()
+    await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
+    assert.equal(await settle(label, want), want)
   }
-  const reload = async () => { await p.reload({ waitUntil: 'load' }); await boot() }
-  const openEditor = () => openScriptDialog(p, 'Digit Color', EDITOR)
-  const pick = (digit, hex) => editor().locator(`input[data-digit="${digit}"]`).fill(hex)
+  const pickProfile = async (index) => {
+    await p.click(`${BUTTON} [data-role="menu"]`)
+    await p.locator(`${MENU} [data-act=pick][data-index="${index}"]`).click()
+    await p.locator(MENU).waitFor({ state: 'detached' })
+  }
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser))
+    ;({ context, p, errors } = await openSession(browser, script, { saved: SEEDED_DIGIT }))
     // A blank page decodes the screenshots: the board's page may refuse a `data:` fetch.
     decoder = await context.newPage()
-    await boot()
+    await p.locator(STYLE).waitFor({ state: 'attached' })
+    for (const key of ['1', '2', '4', '6']) SHADE[key] = await shadeOn(p, key)
   })
   after(async () => { await context.close() })
 
-  it('a fresh install has nothing saved, and entered digits show the default colors', async () => {
-    assert.equal(await saved(), null)
+  it('the button shows DIGIT in bold purple', async () => {
+    assert.equal(await label(), 'DIGIT')
+    assert.equal(await p.locator(LABEL).evaluate((e) => `${window.getComputedStyle(e).color} ${window.getComputedStyle(e).fontWeight}`), 'rgb(106, 27, 154) 700')
+  })
+
+  it('the shades differ from SudokuPad\'s own color and from each other', async () => {
+    assert.equal(new Set([DEFAULT_FILL, ...Object.values(SHADE)]).size, 5)
+  })
+
+  it('an entered digit of a group shows its group\'s shade, and in Digit no cell is colored', async () => {
     await enter(0, 2, '4')
-    assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
+    assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
+    assert.deepEqual(await watch(coloredCount), [0])
   })
 
-  it('givens keep their color on a fresh install', async () => {
-    assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
+  it('an entered digit in no group keeps SudokuPad\'s color', async () => {
+    await enter(0, 3, '6')
+    assert.deepEqual(await settle(allFills('entered', '6'), [DEFAULT_FILL]), [DEFAULT_FILL])
+    await undo()
   })
 
-  it('the dialog has a Digit Color entry in settings with a picker for each digit, set to the defaults', async () => {
-    await openEditor()
-    const values = await editor().locator('input[type=color]').evaluateAll((es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.value])))
-    assert.deepEqual(values, DEFAULTS)
-    await closeDialogWith(p, 'Cancel', EDITOR)
+  it('givens keep their color, with a shade set for the same digit', async () => {
+    for (const digit of ['5', '4', '8']) assert.deepEqual(await allFills('given', digit)(), [GIVEN_FILL], digit)
   })
 
-  it('Cancel saves nothing and changes no color', async () => {
-    await openEditor()
-    await pick('4', FOUR.hex)
-    await closeDialogWith(p, 'Cancel', EDITOR)
-    assert.equal(await saved(), null)
-    assert.deepEqual(await allFills('entered', '4')(), [DEFAULT_RGB[4]])
-  })
-
-  it('Save colors an entered digit, and each digit has its color saved', async () => {
-    await openEditor()
-    await pick('4', FOUR.hex)
-    await pick('8', EIGHT.hex)
-    await editor().locator('button[data-act=own][data-digit="6"]').click()
-    await editor().locator('button[data-act=own][data-digit="7"]').click()
-    await closeDialogWith(p, 'Save', EDITOR)
-    assert.deepEqual(await saved(), { ...DEFAULTS, 4: FOUR.hex, 8: EIGHT.hex, 6: null, 7: null })
-    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-  })
-
-  it('givens keep their color, with a color set for the same digit', async () => {
-    assert.deepEqual(await allFills('given', '4')(), [GIVEN_FILL])
-    assert.deepEqual(await allFills('given', '8')(), [GIVEN_FILL])
-  })
-
-  it('corner marks and centre marks take the digit\'s color; a digit on SudokuPad\'s own color keeps it', async () => {
+  it('corner marks and centre marks take their group\'s shade; a digit in no group keeps SudokuPad\'s color', async () => {
     // Cells chosen so none of these marks conflicts with a given: (0,5) takes 8 and 6, (1,6) takes 8 and 7.
     await markMode('#control-corner', async () => { await enter(0, 5, '8'); await enter(0, 5, '6') })
     await markMode('#control-centre', async () => { await enter(1, 6, '8'); await enter(1, 6, '7') })
-    assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
-    assert.deepEqual(await settle(allFills('centre', '8'), [EIGHT.rgb]), [EIGHT.rgb])
+    assert.deepEqual(await settle(allFills('corner', '8'), [SHADE[6]]), [SHADE[6]])
+    assert.deepEqual(await settle(allFills('centre', '8'), [SHADE[6]]), [SHADE[6]])
     assert.deepEqual(await settle(allFills('corner', '6'), [DEFAULT_FILL]), [DEFAULT_FILL])
     assert.deepEqual(await settle(allFills('centre', '7'), [DEFAULT_FILL]), [DEFAULT_FILL])
   })
 
-  it('conflicting marks keep the digit color and get a red circle beside them', async () => {
+  it('conflicting marks keep their shade and get a red circle beside them', async () => {
     await markMode('#control-corner', async () => { await enter(0, 5, '5') })
     await markMode('#control-centre', async () => { await enter(1, 6, '5') })
     // 5 conflicts with the given 5 in row 1, so both marks are in the conflict state.
     for (const place of ['corner', 'centre']) {
-      assert.deepEqual(await settle(allFills(place, '5', true), [DEFAULT_RGB[5]]), [DEFAULT_RGB[5]], place)
+      assert.deepEqual(await settle(allFills(place, '5', true), [SHADE[4]]), [SHADE[4]], place)
       assert.deepEqual(await settle(circleState(place, '5'), circled(1)), circled(1), place)
     }
   })
@@ -296,12 +299,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(extraAfterToggle, [0, 0])
   })
 
-  it('no circle shows while SudokuPad\'s check pencil marks setting is off, and the marks keep their color', async () => {
+  it('no circle shows while SudokuPad\'s check pencil marks setting is off, and the marks keep their shade', async () => {
     await read(() => Framework.setSetting('checkpencilmarks', false))
     try {
       for (const place of ['corner', 'centre']) {
-        assert.deepEqual(await settle(async () => (await circles()).filter((c) => c.shown).length, 0), 0, place)
-        assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
+        assert.deepEqual(await settle(shownCircles, 0), 0, place)
+        assert.deepEqual(await allFills(place, '5', true)(), [SHADE[4]], place)
       }
     } finally {
       await read(() => Framework.setSetting('checkpencilmarks', true))
@@ -353,6 +356,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(circleState('corner', '1'), circled(0)), circled(0))
   })
 
+  // (0,5) holds corner 8, 6 and 5; a corner 7 there conflicts with the given 7 in row 1, and 7 is in no group.
+  it('a conflicting mark of a digit in no group keeps SudokuPad\'s red fill and still gets the circle', async () => {
+    await markMode('#control-corner', async () => { await enter(0, 5, '7') })
+    assert.deepEqual(await settle(circleState('corner', '7'), circled(1)), circled(1))
+    assert.deepEqual(await allFills('corner', '7', true)(), [CONFLICT_RED])
+    await undo()
+    assert.deepEqual(await settle(circleState('corner', '7'), circled(0)), circled(0))
+  })
+
   // SudokuPad's replay encodes its undo stack, so the string is not the same after an undo and a
   // redo; this checks that it still encodes the moves, not that playback works (playback stays owed).
   it('SudokuPad\'s own undo and replay are unaffected: the replay still encodes the moves and tracks undo', async () => {
@@ -373,85 +385,75 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
   })
 
-  it('undo, redo and a changed digit keep the colors right', async () => {
+  it('undo, redo and a changed digit keep the shades right', async () => {
     const count = (digit) => async () => (await fills('entered', digit)).length
     await enter(0, 8, '4')
-    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
+    assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
     assert.equal(await settle(count('4'), 2), 2)
     await undo()
     assert.equal(await settle(count('4'), 1), 1)
     await redo()
     assert.equal(await settle(count('4'), 2), 2)
-    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-    await enter(0, 8, '2')
-    assert.deepEqual(await settle(allFills('entered', '2'), [DEFAULT_RGB[2]]), [DEFAULT_RGB[2]])
+    assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
+    await enter(0, 8, '9')
+    assert.deepEqual(await settle(allFills('entered', '9'), [SHADE[6]]), [SHADE[6]])
     assert.equal(await settle(count('4'), 1), 1)
   })
 
-  // (7,1) shares no row, column or box with a given 8 or another 8 mark, so the new mark is not in conflict.
-  it('undo and redo keep a corner mark\'s color right', async () => {
-    const count = async () => (await fills('corner', '8')).length
-    const before = await count()
-    await markMode('#control-corner', async () => { await enter(7, 1, '8') })
-    assert.equal(await settle(count, before + 1), before + 1)
-    assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
-    await undo()
-    assert.equal(await settle(count, before), before)
-    await redo()
-    assert.equal(await settle(count, before + 1), before + 1)
-    assert.deepEqual(await settle(allFills('corner', '8'), [EIGHT.rgb]), [EIGHT.rgb])
-  })
-
-  const expectColorsAfterEntry = async () => {
-    assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
-    assert.deepEqual(await allFills('entered', '2')(), [DEFAULT_RGB[2]])
-    assert.deepEqual(await allFills('corner', '8')(), [EIGHT.rgb])
-    assert.deepEqual(await allFills('centre', '8')(), [EIGHT.rgb])
+  const expectShadesAfterEntry = async () => {
+    assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
+    assert.deepEqual(await allFills('entered', '9')(), [SHADE[6]])
+    assert.deepEqual(await allFills('corner', '8')(), [SHADE[6]])
+    assert.deepEqual(await allFills('centre', '8')(), [SHADE[6]])
     assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_FILL])
     assert.deepEqual(await allFills('centre', '7')(), [DEFAULT_FILL])
     for (const place of ['corner', 'centre']) {
-      assert.deepEqual(await allFills(place, '5', true)(), [DEFAULT_RGB[5]], place)
+      assert.deepEqual(await allFills(place, '5', true)(), [SHADE[4]], place)
       assert.deepEqual(await settle(circleState(place, '5'), circled(1)), circled(1), place)
     }
     assert.deepEqual(await allFills('given', '5')(), [GIVEN_FILL])
   }
 
-  it('the colors survive a reload', async () => {
-    await reload()
-    await expectColorsAfterEntry()
+  it('the shades survive a reload', async () => {
+    await gotoPuzzle(p)
+    await startInjected(p, script)
+    await expectShadesAfterEntry()
   })
 
   describe('cases beyond the plain board', { concurrency: false }, () => {
-    it('outlines on digits: the colors still apply', async () => {
+    it('outlines on digits: the shades still apply', async () => {
       await read(() => Framework.setSetting('outlinesondigits', true))
       try {
-        await expectColorsAfterEntry()
+        await expectShadesAfterEntry()
       } finally {
         await read(() => Framework.setSetting('outlinesondigits', false))
       }
     })
 
-    it('dark mode (prefers-color-scheme: dark): the colors still apply', async () => {
+    it('dark mode (prefers-color-scheme: dark): the shades still apply', async () => {
       await p.emulateMedia({ colorScheme: 'dark' })
       try {
-        await expectColorsAfterEntry()
+        await expectShadesAfterEntry()
       } finally {
         await p.emulateMedia({ colorScheme: 'light' })
       }
     })
 
-    it('a digit on a colored cell keeps its color', async () => {
-      await read(() => {
+    it('a digit on a colored cell keeps its shade', async () => {
+      const toggle = () => read(() => {
         const a = Framework.app
         a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'colour', arg: '3' }); a.deselect()
       })
+      await toggle()
       assert.equal(await settle(() => read(() => Framework.app.grid.getCell(0, 2).colours.length), 1), 1)
-      assert.deepEqual(await allFills('entered', '4')(), [FOUR.rgb])
+      assert.deepEqual(await allFills('entered', '4')(), [SHADE[4]])
+      await toggle()
+      assert.equal(await settle(coloredCount, 0), 0)
     })
 
     // Loads through the page's own loader (fetchPuzzle, parsePuzzleData, loadCTCPuzzle), which
     // rebuilds the board in place. The repo holds one puzzle URL, so it is the same puzzle again.
-    it('the board rebuilt in the page without a reload still gets the colors', async () => {
+    it('the board rebuilt in the page without a reload still gets the shades', async () => {
       // PuzzleLoader is a top-level binding of the page's script, not a window property.
       await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
       await read(() => document.querySelectorAll('#cell-givens text').forEach((e) => e.setAttribute('data-old-board', '')))
@@ -462,7 +464,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // The old givens are gone once the new board is drawn.
       await p.waitForFunction(() => document.querySelectorAll('#cell-givens text:not([data-old-board])').length > 0)
       await enter(0, 3, '4')
-      assert.deepEqual(await settle(allFills('entered', '4'), [FOUR.rgb]), [FOUR.rgb])
+      assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
       assert.equal(await p.locator(STYLE).count(), 1)
       // The rebuilt board gets one circle group, and a conflicting mark on it gets its circle.
       await markMode('#control-corner', async () => { await enter(0, 7, '5') })
@@ -470,54 +472,87 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(circleState('corner', '5'), circled(2)), circled(2))
       assert.equal(await p.locator(CIRCLES).count(), 1)
       await undo()
+      await undo()
     })
   })
 
-  it('a digit can be set back to SudokuPad\'s own color from the dialog', async () => {
-    await openEditor()
-    await editor().locator('button[data-act=own][data-digit="4"]').click()
-    await closeDialogWith(p, 'Save', EDITOR)
-    assert.deepEqual(await saved(), { ...DEFAULTS, 4: null, 8: EIGHT.hex, 6: null, 7: null })
+  it('switching profiles recolors the digits at once, adds no undo step and colors no cell', async () => {
+    // A click off the board is SudokuPad's own deselect step, so the steps are counted after one.
+    await p.click(`${BUTTON} [data-role="menu"]`)
+    await p.keyboard.press('Escape')
+    await p.locator(MENU).waitFor({ state: 'detached' })
+    const steps = await undoSteps()
+    await pickProfile(1)
+    // Odd/Even: 4 is even (key 2), 9 and 5 odd (key 1); 6 and 7, in no group of Split, now take a shade too.
+    assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[2]]), [SHADE[2]])
+    assert.deepEqual(await allFills('entered', '9')(), [SHADE[1]])
+    assert.deepEqual(await allFills('corner', '6')(), [SHADE[2]])
+    assert.deepEqual(await allFills('centre', '7')(), [SHADE[1]])
+    assert.deepEqual(await allFills('corner', '5', true)(), [SHADE[1]])
+    assert.equal(await undoSteps(), steps)
+    assert.deepEqual(await watch(coloredCount), [0])
+    await pickProfile(0)
+    assert.deepEqual(await settle(allFills('entered', '4'), [SHADE[4]]), [SHADE[4]])
+  })
+
+  it('a press steps Digit to Both: cells take their group colors and the digits keep their shades and circles', async () => {
+    await pressTo('BOTH')
+    assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
+    await expectShadesAfterEntry()
+  })
+
+  it('a press steps Both to Off: the cells\' group colors come off, the digits take SudokuPad\'s color, and no circle shows', async () => {
+    await pressTo('OFF')
+    assert.equal(await settle(coloredCount, 0), 0)
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
+    assert.deepEqual(await allFills('corner', '8')(), [DEFAULT_FILL])
+    assert.deepEqual(await allFills('corner', '5', true)(), [CONFLICT_RED])
+    assert.equal(await settle(shownCircles, 0), 0)
   })
 
-  // The given 4 at row 5 makes a 4 mark at (4,1) conflict; the fill stays SudokuPad's red.
-  it('a conflicting mark of a digit on SudokuPad\'s own color keeps the red fill and still gets the circle', async () => {
-    await markMode('#control-corner', async () => { await enter(4, 1, '4') })
-    assert.deepEqual(await settle(circleState('corner', '4'), circled(1)), circled(1))
-    assert.deepEqual(await allFills('corner', '4', true)(), [CONFLICT_RED])
-    await undo()
-    assert.deepEqual(await settle(circleState('corner', '4'), circled(0)), circled(0))
+  it('in Cell, cells are colored, the digits keep SudokuPad\'s color, and a conflict shows as SudokuPad draws it', async () => {
+    await pressTo('CELL')
+    assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
+    assert.deepEqual(await watch(allFills('entered', '4')), [[DEFAULT_FILL]])
+    assert.deepEqual(await allFills('centre', '8')(), [DEFAULT_FILL])
+    assert.deepEqual(await allFills('centre', '5', true)(), [CONFLICT_RED])
+    assert.deepEqual(await watch(shownCircles), [0])
   })
 
-  it('Restore defaults brings back every default color', async () => {
-    await openEditor()
-    await dialogButton(p, 'Restore defaults').click()
-    await closeDialogWith(p, 'Save', EDITOR)
-    assert.deepEqual(await saved(), DEFAULTS)
-    assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]])
-    assert.deepEqual(await allFills('corner', '6')(), [DEFAULT_RGB[6]])
+  it('a press steps Cell to Digit: the group colors come off the cells and the shades and circles come back', async () => {
+    await pressTo('DIGIT')
+    assert.equal(await settle(coloredCount, 0), 0)
+    await expectShadesAfterEntry()
   })
 
-  it('corrupt saved settings fall back to the default colors with no thrown error', async () => {
-    const errorsBefore = errors.length
-    for (const bad of ['{not json', '"red"', '[1,2]', '{"4":"url(x)"}']) {
-      await plantSaved(p, DATA_KEY, bad)
-      await reload()
-      assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_RGB[4]]), [DEFAULT_RGB[4]], bad)
-    }
-    assert.deepEqual(errors.slice(errorsBefore), [])
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
   })
+})
 
-  it('the settings entry sits in the Experimental group under its plain name, and its dialog shows the version from the script header as small text', async () => {
-    const group = await openSettings(p)
-    const entry = group.locator('button').filter({ hasText: 'Digit Color' })
-    assert.equal((await entry.textContent()).trim(), 'Digit Color')
-    await entry.click()
-    await editor().waitFor({ state: 'visible' })
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Digit Color')
-    assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
-    await closeDialogWith(p, 'Cancel', EDITOR)
+// A palette saved on the page (as a puzzle's own palette or SudokuPad's Import Color Palette leaves it): key 4 is a pink.
+describe('digit colors from the palette the page shows, injected after Start Puzzle', { concurrency: false }, () => {
+  const PINK = 'rgb(232, 124, 241)'
+  let context, p, errors
+
+  before(async () => {
+    ;({ context, p, errors } = await openSession(browser, script, { saved: SEEDED_DIGIT }))
+    await p.evaluate((pink) => {
+      const palette = JSON.parse(JSON.stringify(Framework.app.tools.colour.palette))
+      palette.colors['4'] = pink
+      Framework.app.tools.colour.savePalette(palette)
+    }, PINK)
+    await gotoPuzzle(p)
+    await startInjected(p, script)
+  })
+  after(async () => { await context.close() })
+
+  it('a digit takes the shade of its group\'s color as the page shows it', async () => {
+    assert.equal(await paletteColorOn(p, '4'), PINK)
+    await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
+    await p.keyboard.press('4')
+    const shade = rgbOf(darkenColor(parseColor(PINK)))
+    assert.deepEqual(await settle(allFillsOn(p, 'entered', '4'), [shade]), [shade])
   })
 
   it('no uncaught page errors', () => {

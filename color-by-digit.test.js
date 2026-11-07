@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -119,14 +119,20 @@ test('Modular maps 1, 4, 7 to key 6, 2, 5, 8 to key 5, 0, 3, 6, 9 to key 8', () 
   assert.equal(byDigit(PRELOADS.Modular), '8658658658')
 })
 
+test('Each digit puts each of 1 to 9 alone in a group on its own palette color, and 0 in no group', () => {
+  assert.deepEqual(PRELOADS['Each digit'], ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => ({ key: d, digits: [d] })))
+  assert.deepEqual(plan(allDigits, PRELOADS['Each digit']).map((p) => p.index), [1, 2, 3, 4, 5, 6, 7, 8, 9])
+})
+
 const LOW = PRELOADS['Low/5/High']
 const ODD = PRELOADS['Odd/Even']
 const ENTROPIC = PRELOADS.Entropic
 const MODULAR = PRELOADS.Modular
-const ALL_PRELOAD_NAMES = ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular']
+const EACH_DIGIT = PRELOADS['Each digit']
+const ALL_PRELOAD_NAMES = ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']
 const names = (state) => state.profiles.map((p) => p.name)
 
-test('a fresh install has the four preloads, with Low/5/High active', () => {
+test('a fresh install has the five preloads, with Low/5/High active', () => {
   const state = stateFromStored(null, null)
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
   assert.equal(state.active, 0)
@@ -148,9 +154,9 @@ test('saved groups equal to a preload make that preload the active profile, besi
   assert.equal(stateFromStored(undefined, cloneOf(LOW)).active, 0)
 })
 
-test('saved groups that equal no preload become the active profile named Custom, first, beside the four preloads, even when empty', () => {
+test('saved groups that equal no preload become the active profile named Custom, first, beside the five preloads, even when empty', () => {
   const mine = [{ key: '3', digits: ['1', '2'] }]
-  assert.deepEqual(stateFromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }, { name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }, { name: 'Entropic', groups: ENTROPIC }, { name: 'Modular', groups: MODULAR }], active: 0 })
+  assert.deepEqual(stateFromStored(null, mine), { profiles: [{ name: 'Custom', groups: mine }, { name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }, { name: 'Entropic', groups: ENTROPIC }, { name: 'Modular', groups: MODULAR }, { name: 'Each digit', groups: EACH_DIGIT }], active: 0 })
   assert.deepEqual(stateFromStored(null, []).profiles[0], { name: 'Custom', groups: [] })
 })
 
@@ -192,29 +198,32 @@ test('an active index that is no profile becomes the first: out of range, negati
   assert.equal(stateFromStored({ profiles: two, active: 1 }, null).active, 1)
 })
 
-test('withAddedPreloads appends Entropic and Modular after the saved profiles and leaves the active profile alone', () => {
+test('withAddedPreloads appends the named preloads after the saved profiles and leaves the active profile alone', () => {
   const saved = { profiles: [{ name: 'Low/5/High', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 1 }
-  const next = withAddedPreloads(saved)
+  const next = withAddedPreloads(saved, ['Entropic', 'Modular'])
   assert.deepEqual(names(next), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular'])
   assert.deepEqual(next.profiles[2].groups, ENTROPIC)
   assert.deepEqual(next.profiles[3].groups, MODULAR)
   assert.equal(next.active, 1)
+  assert.deepEqual(withAddedPreloads(next, ['Each digit']), { profiles: [...next.profiles, { name: 'Each digit', groups: EACH_DIGIT }], active: 1 })
 })
 
 test('withAddedPreloads skips a preload whose groups a profile already has, whatever its name', () => {
   const saved = { profiles: [{ name: 'Mine', groups: cloneOf(MODULAR) }, { name: 'Custom', groups: [] }, { name: 'Odd/Even', groups: ODD }, { name: 'Z', groups: [] }], active: 3 }
-  const next = withAddedPreloads(saved)
+  const next = withAddedPreloads(saved, ['Entropic', 'Modular'])
   assert.deepEqual(names(next), ['Mine', 'Custom', 'Odd/Even', 'Z', 'Entropic'])
   assert.equal(next.active, 3)
-  assert.deepEqual(withAddedPreloads(next), next)
+  assert.deepEqual(withAddedPreloads(next, ['Entropic', 'Modular']), next)
+  const digits = { profiles: [{ name: 'Nine', groups: cloneOf(EACH_DIGIT) }], active: 0 }
+  assert.deepEqual(withAddedPreloads(digits, ['Each digit']), digits)
 })
 
 test('withAddedPreloads stops at the profile limit and never changes the state it is given', () => {
   const full = { profiles: ['a', 'b', 'c', 'd', 'e'].map((name) => ({ name, groups: [] })), active: 0 }
   const before = cloneOf(full)
-  assert.deepEqual(names(withAddedPreloads(full)), ['a', 'b', 'c', 'd', 'e', 'Entropic'])
+  assert.deepEqual(names(withAddedPreloads(full, ['Entropic', 'Modular'])), ['a', 'b', 'c', 'd', 'e', 'Entropic'])
   assert.deepEqual(full, before)
-  const next = withAddedPreloads(full)
+  const next = withAddedPreloads(full, ['Entropic', 'Modular'])
   next.profiles[5].groups[0].digits.push('x')
   assert.deepEqual(PRELOADS.Entropic[0].digits, ['0', '1', '2', '3'])
 })
@@ -490,8 +499,10 @@ test('auto: changedIndices lists the positions whose signature differs', () => {
 
 const colorFor = (key) => (key === 'a' ? 'rgb(10, 10, 10)' : 'rgb(240, 240, 240)')
 
-test('mode: a press steps Cell to Off and Off back to Cell', () => {
-  assert.equal(nextMode('cell'), 'off')
+test('mode: a press steps Cell to Digit to Both to Off and back to Cell', () => {
+  assert.equal(nextMode('cell'), 'digit')
+  assert.equal(nextMode('digit'), 'both')
+  assert.equal(nextMode('both'), 'off')
   assert.equal(nextMode('off'), 'cell')
 })
 
@@ -501,18 +512,22 @@ test('mode: the starting mode is the saved mode, else Cell unless auto mode was 
   assert.equal(startingMode(null, false), 'off')
   assert.equal(startingMode('off', true), 'off')
   assert.equal(startingMode('cell', false), 'cell')
+  assert.equal(startingMode('digit', false), 'digit')
+  assert.equal(startingMode('both', false), 'both')
   assert.equal(startingMode('sideways', false), 'off')
   assert.equal(startingMode(null, 'yes'), 'cell')
 })
 
-test('mode: the button label reads CELL in bold purple or OFF in light grey, and lets a press through to the button', () => {
-  const cell = modeLabelHtml('cell')
+test('mode: the button label reads CELL, DIGIT or BOTH in bold purple, or OFF in light grey, and lets a press through to the button', () => {
+  for (const [mode, label] of [['cell', 'CELL'], ['digit', 'DIGIT'], ['both', 'BOTH']]) {
+    const html = modeLabelHtml(mode)
+    assert.match(html, new RegExp(`^<span data-role="mode"[^>]*>${label}</span>$`))
+    assert.match(html, /font:700[^"]*color:#6a1b9a/)
+    assert.match(html, /pointer-events:none/)
+  }
   const off = modeLabelHtml('off')
-  assert.match(cell, /^<span data-role="mode"[^>]*>CELL<\/span>$/)
   assert.match(off, /^<span data-role="mode"[^>]*>OFF<\/span>$/)
-  assert.match(cell, /font:700[^"]*color:#6a1b9a/)
   assert.match(off, /font:400[^"]*color:#b3acbf/)
-  assert.match(cell, /pointer-events:none/)
 })
 
 test('mode: installButton draws the label of the mode it is given, and no AUTO box', () => {
@@ -535,7 +550,8 @@ test('mode: the dialog opens with the mode choice at the top, on the draft it is
   assert.match(html, /<input type="radio"[^>]*data-role="mode-draft" value="off" checked/)
   assert.doesNotMatch(html, /value="cell" checked/)
   assert.match(editor([], [], [], 'cell'), /value="cell" checked/)
-  assert.equal(count(html, /data-role="mode-draft"/g), 2)
+  assert.deepEqual([...html.matchAll(/data-role="mode-draft" value="(\w+)"/g)].map((m) => m[1]), ['cell', 'digit', 'both', 'off'])
+  assert.match(html, /value="digit"[^>]*> Digit</)
   assert.doesNotMatch(html, /type="checkbox"|auto-draft/)
 })
 
@@ -635,12 +651,15 @@ test('installButton: adds an aux-row icon button titled "Color by digit", then r
 const pageDocument = (extra = {}) => ({
   addEventListener: () => {},
   querySelector: () => null,
+  querySelectorAll: () => [],
+  getElementById: () => null,
   documentElement: {},
+  head: { appendChild: () => {} },
   body: { appendChild: () => {} },
   createElement: () => ({ style: {}, remove: () => {} }),
   ...extra
 })
-const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '#3e63dd', color: 'rgb(62, 99, 221)' }), addEventListener: () => {} })
+const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '#3e63dd', color: 'rgb(62, 99, 221)' }), addEventListener: () => {}, MutationObserver: class { observe () {} } })
 
 test('entry point: wires the settings entry, the button, refreshControls, and routes a click to coloring', async () => {
   const path = require.resolve('./color-by-digit.user.js')
@@ -1102,7 +1121,7 @@ test('rowAfterKey: Enter and Space stay, the arrows step and wrap at both ends, 
 })
 
 test('copiedSettings: the profiles and the mode in force, groups saved before profiles included, and no auto mode', () => {
-  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_mode: 'off', ColorByDigit_addedPreloads: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], ColorByDigit_auto: true, Other_key: 1 }
+  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_mode: 'digit', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], ColorByDigit_auto: true, Other_key: 1 }
   const { ColorByDigit_groups: _legacy, ColorByDigit_auto: _auto, Other_key: _other, ...ours } = saved
   assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null })), JSON.parse(JSON.stringify(ours)))
   const legacyOnly = { ColorByDigit_groups: [{ key: '3', digits: ['1', '2'] }] }
@@ -1112,16 +1131,17 @@ test('copiedSettings: the profiles and the mode in force, groups saved before pr
   assert.equal(copied.ColorByDigit_mode, 'cell')
   assert.equal('ColorByDigit_auto' in copied, false)
   assert.equal('ColorByDigit_addedPreloads' in copied, false)
+  assert.equal('ColorByDigit_addedEachDigit' in copied, false)
   assert.equal(JSON.parse(copiedSettings({ getData: (key) => ({ ColorByDigit_auto: false }[key] ?? null) })).ColorByDigit_mode, 'off')
 })
 
 test('pastedSettings: a state that keeps every profile is kept, one that loses a profile is skipped and counted, other keys are ignored', () => {
   const profiles = { profiles: [{ name: ' Odd/Even ', groups }], active: 0 }
-  const pasted = pastedSettings(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_mode: 'sideways', ColorByDigit_addedPreloads: true, DarkPage_color: '#ffffff' }))
-  assert.deepEqual(pasted.values, { ColorByDigit_profiles: stateFromStored(profiles), ColorByDigit_addedPreloads: true })
+  const pasted = pastedSettings(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_mode: 'sideways', ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true, DarkPage_color: '#ffffff' }))
+  assert.deepEqual(pasted.values, { ColorByDigit_profiles: stateFromStored(profiles), ColorByDigit_addedPreloads: true, ColorByDigit_addedEachDigit: true })
   assert.equal(pasted.skipped, 1)
   const oneBad = { profiles: [{ name: 'Odd/Even', groups }, { name: 'bad' }], active: 0 }
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_mode: 'off' })), { values: { ColorByDigit_mode: 'off' }, skipped: 1 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_mode: 'both' })), { values: { ColorByDigit_mode: 'both' }, skipped: 1 })
   assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: { profiles: [] } })), { values: {}, skipped: 1 })
 })
 
@@ -1147,4 +1167,115 @@ test('pasteReport: says how many were pasted and how many skipped, and when the 
 test('pastedSettings: text with none of this script\'s keys pastes and skips nothing', () => {
   assert.deepEqual(pastedSettings('{}'), { values: {}, skipped: 0 })
   assert.deepEqual(pastedSettings(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
+})
+
+// An independent sRGB -> OKLCH (Ottosson's published matrices), so the tests do not lean on
+// the script's own conversion. Returns { L, C, h } with h in degrees.
+function oklch (hex) {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  })
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+  return { L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, C: Math.hypot(A, B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 }
+}
+const hueGap = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b))
+
+test('parseColor reads rgb(), rgba() and #rrggbb, clamping out-of-range channels, and gives null for transparent or unreadable values', () => {
+  assert.deepEqual(parseColor('rgb(61, 153, 245)'), [61, 153, 245])
+  assert.deepEqual(parseColor('rgba(0, 0, 255, 0.5)'), [0, 0, 255])
+  assert.deepEqual(parseColor('#3d99f5'), [61, 153, 245])
+  assert.deepEqual(parseColor('#fff'), [255, 255, 255])
+  assert.deepEqual(parseColor('rgb(-36, -36, -36)'), [0, 0, 0])
+  for (const bad of ['transparent', '', 'banana', 'rgb(1, 2)', undefined, null, 'rgba(0, 0, 0, 0)', 'red']) assert.equal(parseColor(bad), null, String(bad))
+})
+
+test('darkenColor keeps the hue, lowers OKLCH lightness by the named factor, and gives #rrggbb', () => {
+  for (const rgb of [[61, 153, 245], [245, 58, 55], [232, 124, 241], [228, 150, 50], [179, 229, 106]]) {
+    const hex = '#' + rgb.map((c) => c.toString(16).padStart(2, '0')).join('')
+    const out = darkenColor(rgb)
+    assert.match(out, /^#[0-9a-f]{6}$/)
+    assert.ok(hueGap(oklch(hex).h, oklch(out).h) < 3, `${hex} -> ${out}`)
+    assert.ok(Math.abs(oklch(out).L - oklch(hex).L * LIGHTNESS_FACTOR) < 0.02, `${hex} -> ${out}`)
+  }
+  assert.equal(darkenColor([0, 0, 0]), '#000000')
+  for (const rgb of [[255, 255, 255], [-36, -36, -36], [999, -5, 40]]) assert.match(darkenColor(rgb), /^#[0-9a-f]{6}$/, JSON.stringify(rgb))
+})
+
+// The palette the puzzle shows, as readColor resolves it: key b unreadable.
+const SHOWN = { a: 'rgb(61, 153, 245)', c: 'rgb(245, 58, 55)', b: '' }
+const shownColor = (key) => SHOWN[key] ?? ''
+const fillOf = (css, selector) => (new RegExp(`${selector.replace(/[[\]().*]/g, '\\$&')}\\s*{\\s*fill:\\s*(#[0-9a-f]{6})`).exec(css) || [])[1]
+
+test('buildDigitCss gives each grouped digit the darker shade of its group\'s shown color, on entered digits, corner marks and centre marks', () => {
+  const css = buildDigitCss([{ key: 'a', digits: ['1', '7'] }, { key: 'c', digits: ['2'] }], shownColor)
+  for (const [digit, color] of [['1', 'rgb(61, 153, 245)'], ['7', 'rgb(61, 153, 245)'], ['2', 'rgb(245, 58, 55)']]) {
+    const shade = darkenColor(parseColor(color))
+    assert.equal(fillOf(css, `#cell-values [${DIGIT_ATTR}="${digit}"]`), shade, digit)
+    assert.equal(fillOf(css, `#svgrenderer #cell-pencilmarks .cell-pencilmark[data-val="${digit}"]`), shade, digit)
+    assert.equal(fillOf(css, `#svgrenderer #cell-candidates tspan[data-val="${digit}"]`), shade, digit)
+  }
+})
+
+test('buildDigitCss reads the palette it is given, so a puzzle\'s own palette gets its own shades', () => {
+  const own = buildDigitCss([{ key: 'a', digits: ['1'] }], () => 'rgb(232, 124, 241)')
+  assert.equal(fillOf(own, `#cell-values [${DIGIT_ATTR}="1"]`), darkenColor([232, 124, 241]))
+})
+
+test('buildDigitCss leaves out a digit in no group and a group whose color is unreadable, so those keep SudokuPad\'s color, and never names givens', () => {
+  const css = buildDigitCss([{ key: 'a', digits: ['1'] }, { key: 'b', digits: ['3'] }], shownColor)
+  for (const digit of ['0', '2', '3', '9']) assert.doesNotMatch(css, new RegExp(`"${digit}"`), digit)
+  assert.doesNotMatch(css, /cell-given/)
+  assert.equal(buildDigitCss([], shownColor), '')
+})
+
+test('buildDigitCss keeps a conflicting mark on its shade: no rule outlines it or names the conflict state', () => {
+  const css = buildDigitCss([{ key: 'a', digits: ['7'] }], shownColor)
+  assert.equal(css.split('}').filter((r) => r.includes('data-val')).length, 2)
+  assert.doesNotMatch(css, /stroke|conflict/)
+})
+
+test('the circle CSS shows the circles only while SudokuPad shows conflicts, never takes a pointer event, and fills with a translucent color', () => {
+  assert.match(CIRCLE_CSS, /#color-by-digit-circles\s*{[^}]*display:\s*none/)
+  assert.match(CIRCLE_CSS, /\.setting-checkpencilmarks #color-by-digit-circles\s*{[^}]*display:\s*inline/)
+  assert.match(CIRCLE_CSS, /#color-by-digit-circles\s*{[^}]*pointer-events:\s*none/)
+  assert.match(CIRCLE_CSS, /#color-by-digit-circles circle\s*{[^}]*fill:\s*#[0-9a-f]{6}/i)
+  assert.match(CIRCLE_CSS, /#color-by-digit-circles circle\s*{[^}]*fill-opacity:\s*0?\.\d/)
+})
+
+test('circleFor centres on the mark\'s middle and is sized by its width', () => {
+  // A corner mark measured on sudokupad.app: a digit 10 units wide, middle at (352, 35.8).
+  const c = circleFor({ x: 352, y: 35.8, width: 10 })
+  assert.equal(c.cx, 352)
+  assert.equal(c.cy, 35.8)
+  assert.ok(c.r >= 7 && c.r <= 10, `r ${c.r}`)
+  assert.equal(circleFor({ x: 352, y: 35.8, width: 20 }).r, 2 * c.r)
+})
+
+test('inkMiddle centres on the digit\'s ink, not on its advance box or its font\'s em box', () => {
+  // A character whose advance box starts at x 100 and whose em box starts at y 20, with a font
+  // ascent of 10: the baseline is at y 30. The ink starts 1 right of the origin and reaches 5 right of it, and 7
+  // above and 0 below the baseline.
+  const middle = inkMiddle({ x: 100, y: 20 }, { left: -1, right: 5, ascent: 7, descent: 0, fontAscent: 10 })
+  assert.equal(middle.x, 103)
+  assert.equal(middle.y, 26.5)
+  assert.equal(inkMiddle({ x: 100, y: 20 }, { left: -1, right: 5, ascent: 7, descent: 1, fontAscent: 10 }).y, 27)
+  assert.equal(inkMiddle({ x: 100, y: 20 }, { left: 1, right: 5, ascent: 7, descent: 0, fontAscent: 10 }).x, 102)
+})
+
+test('inkMiddle throws when the browser lacks a measure, instead of giving NaN', () => {
+  const whole = { left: -1, right: 5, ascent: 7, descent: 0, fontAscent: 10 }
+  for (const key of Object.keys(whole)) {
+    assert.throws(() => inkMiddle({ x: 100, y: 20 }, { ...whole, [key]: undefined }), new RegExp(`no ${key} measure`), key)
+  }
+})
+
+test('digitOfText reads a single digit and nothing else', () => {
+  assert.equal(digitOfText('5'), '5')
+  assert.equal(digitOfText(' 5 '), '5')
+  for (const bad of ['', '12', 'x', '-1', null, undefined]) assert.equal(digitOfText(bad), null, String(bad))
 })

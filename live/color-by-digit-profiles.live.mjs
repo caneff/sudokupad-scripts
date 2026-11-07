@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { BUTTON, EDITOR, group, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, BUTTON, EDITOR, group, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
@@ -85,9 +85,9 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
   })
   after(async () => { await context.close() })
 
-  it('the menu lists the four preloads, Low/5/High highlighted, under its heading', async () => {
+  it('the menu lists the five preloads, Low/5/High highlighted, under its heading', async () => {
     await t.openMenuByArrow()
-    assert.deepEqual(await t.menuRows(), [{ name: 'Low/5/High', active: true }, { name: 'Odd/Even', active: false }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }])
+    assert.deepEqual(await t.menuRows(), [{ name: 'Low/5/High', active: true }, { name: 'Odd/Even', active: false }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }, { name: 'Each digit', active: false }])
     assert.match(await t.menu().innerText(), /color by digit profile/i)
     assert.match(await t.menu().innerText(), /Edit profiles…/)
     await p.keyboard.press('Escape')
@@ -103,7 +103,7 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
     assert.equal(await t.getState(), null)
     await t.openMenuByArrow()
     await t.pick('Odd/Even')
-    assert.deepEqual((await t.getState()).profiles.map((x) => x.name), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular'])
+    assert.deepEqual((await t.getState()).profiles.map((x) => x.name), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
     assert.equal((await t.getState()).active, 1)
   })
 
@@ -131,15 +131,15 @@ describe('migration from saved groups, injected after Start Puzzle', { concurren
   }
 
   it('saved groups equal to a preload make that preload the active profile, beside the other preloads', async () => {
-    await migrate(ODD_EVEN, [{ name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: true }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }], ['5', '4'])
+    await migrate(ODD_EVEN, [{ name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: true }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }, { name: 'Each digit', active: false }], ['5', '4'])
   })
 
-  it('saved groups equal to no preload become the active profile named Custom, first, beside the four preloads', async () => {
-    await migrate([group('3', ['2', '4']), group('7', ['9'])], [{ name: 'Custom', active: true }, { name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: false }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }], ['2', '9'])
+  it('saved groups equal to no preload become the active profile named Custom, first, beside the five preloads', async () => {
+    await migrate([group('3', ['2', '4']), group('7', ['9'])], [{ name: 'Custom', active: true }, { name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: false }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }, { name: 'Each digit', active: false }], ['2', '9'])
   })
 })
 
-describe('the one-time add of Entropic and Modular to an install with saved profiles', { concurrency: false }, () => {
+describe('the one-time adds of Entropic and Modular, then Each digit, to an install with saved profiles', { concurrency: false }, () => {
   const OLD_TWO = { profiles: [{ name: 'Low/5/High', groups: LOW_FIVE_HIGH }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 1 }
   const open = async (saved, body) => {
     const { context, p, errors } = await openProfiles(saved)
@@ -151,16 +151,16 @@ describe('the one-time add of Entropic and Modular to an install with saved prof
     }
   }
 
-  it('appends Entropic and Modular after the old two, leaves the active profile alone, and saves them', async () => {
+  it('appends Entropic, Modular and Each digit after the old two, leaves the active profile alone, and saves them', async () => {
     await open({ [PROFILES_STORAGE_KEY]: OLD_TWO }, async (p, t) => {
       await t.openMenuByArrow()
-      assert.deepEqual(await t.menuRows(), [{ name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: true }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }])
-      assert.deepEqual((await t.getState()).profiles.map((x) => x.name), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular'])
+      assert.deepEqual(await t.menuRows(), [{ name: 'Low/5/High', active: false }, { name: 'Odd/Even', active: true }, { name: 'Entropic', active: false }, { name: 'Modular', active: false }, { name: 'Each digit', active: false }])
+      assert.deepEqual((await t.getState()).profiles.map((x) => x.name), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
       assert.equal((await t.getState()).active, 1)
     })
   })
 
-  it('an install with Custom and a fourth profile of its own gets both added after them, to six', async () => {
+  it('an install with Custom and a fourth profile of its own gets Entropic and Modular added after them, to six, and no room is left for Each digit', async () => {
     const custom = { profiles: [{ name: 'Custom', groups: [group('3', ['2'])] }, ...OLD_TWO.profiles, { name: 'Four', groups: FOUR }], active: 0 }
     await open({ [PROFILES_STORAGE_KEY]: custom }, async (p, t) => {
       assert.deepEqual(await t.names(), ['Custom', 'Low/5/High', 'Odd/Even', 'Four', 'Entropic', 'Modular'])
@@ -170,7 +170,7 @@ describe('the one-time add of Entropic and Modular to an install with saved prof
 
   it('picking Modular colors the grid\'s digits in its three groups', async () => {
     await open({ [PROFILES_STORAGE_KEY]: OLD_TWO }, async (p, t) => {
-      await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular'])
+      await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit'])
       await t.openMenuByArrow()
       await t.pick('Modular')
       const modular = [group('6', ['1', '4', '7']), group('5', ['2', '5', '8']), group('8', ['0', '3', '6', '9'])]
@@ -181,14 +181,32 @@ describe('the one-time add of Entropic and Modular to an install with saved prof
 
   it('a profile deleted afterwards stays deleted across a reload', async () => {
     await open({ [PROFILES_STORAGE_KEY]: OLD_TWO }, async (p, t) => {
-      assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular']), ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular'])
+      const all = ['Low/5/High', 'Odd/Even', 'Entropic', 'Modular', 'Each digit']
+      assert.deepEqual(await settle(t.names, all), all)
       await t.openEditor()
       await p.click(`${ROWS}:nth-child(3) button[data-act=delete]`)
+      await p.click(`${ROWS}:nth-child(4) button[data-act=delete]`)
       await closeDialogWith(p, 'Save', EDITOR)
       assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Modular']), ['Low/5/High', 'Odd/Even', 'Modular'])
       await p.reload({ waitUntil: 'load' })
       await startInjected(p, script)
       assert.deepEqual(await t.names(), ['Low/5/High', 'Odd/Even', 'Modular'])
+    })
+  })
+
+  // An install that already had Entropic and Modular offered, from before Each digit existed.
+  it('an install that had Entropic and Modular offered gets Each digit appended once, alone', async () => {
+    await open({ [PROFILES_STORAGE_KEY]: OLD_TWO, [ADDED_PRELOADS_STORAGE_KEY]: true }, async (p, t) => {
+      assert.deepEqual(await settle(t.names, ['Low/5/High', 'Odd/Even', 'Each digit']), ['Low/5/High', 'Odd/Even', 'Each digit'])
+      assert.equal((await t.getState()).active, 1)
+    })
+  })
+
+  it('a profile that already has Each digit\'s groups, under any name, keeps it from being added', async () => {
+    const nine = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => group(d, [d]))
+    const mine = { profiles: [...OLD_TWO.profiles, { name: 'Mine', groups: nine }], active: 2 }
+    await open({ [PROFILES_STORAGE_KEY]: mine, [ADDED_PRELOADS_STORAGE_KEY]: true }, async (p, t) => {
+      assert.deepEqual(await watch(t.names), [['Low/5/High', 'Odd/Even', 'Mine']])
     })
   })
 })
@@ -272,19 +290,19 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.deepEqual(await t.iconShownDigits(), ['1', '5', '9'])
   })
 
-  it('stepping to Off takes off the active profile\'s colors only, and a pick in Off then recolors as one undo step', async () => {
+  it('stepping to Digit takes off the active profile\'s colors only, and a pick in Digit changes no cell\'s color', async () => {
     // The undo above left Odd/Even's colors on the board under the active Low/5/High: its 2 is in no group of Low/5/High.
     const lowKeys = () => t.read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).some((k) => ['1', '5', '9'].includes(k))).length)
-    await t.pressTo('OFF')
+    await t.pressTo('DIGIT')
     assert.equal(await settle(lowKeys, 0), 0)
     assert.notEqual(await t.coloredCount(), 0)
     const before = await t.coloursOf()
     await t.openMenuByArrow()
     await t.pick('Odd/Even')
+    assert.equal((await t.getState()).active, 0)
+    assert.deepEqual(await watch(t.coloursOf), [before])
+    await t.pressTo('BOTH')
     assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
-    await t.undo()
-    assert.equal(await settle(t.coloursOf, before), before)
-    await t.pressTo('CELL')
   })
 
   it('with Multi-color off, a pick that takes one color off a cell holding two leaves it its group color', async () => {
@@ -327,8 +345,11 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.equal(await settle(() => t.valueAt(8, 1), '3'), '3')
   })
 
-  it('the mode label, at its widest so far (CELL), and the arrow box overlap no cell of the icon, for profiles of 2, 3, 4 and 6 groups', async () => {
-    assert.equal(await t.label(), 'CELL')
+  it('the mode label at its widest (DIGIT) and the arrow box overlap no cell of the icon, for profiles of 2, 3, 4 and 6 groups', async () => {
+    assert.equal(await t.label(), 'BOTH')
+    await t.pressTo('OFF')
+    await t.pressTo('CELL')
+    await t.pressTo('DIGIT')
     const overlaps = () => p.evaluate(({ button, label, arrow }) => {
       const rect = (e) => e.getBoundingClientRect()
       const cells = [...document.querySelectorAll(`${button} svg rect[data-role=cell]`)].map(rect)

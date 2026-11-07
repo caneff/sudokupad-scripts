@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.8.0
-// @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A press on the button switches the mode between Cell, which keeps the colors in step as digits and centre marks change, and Off; a menu on it switches profile, and a settings dialog edits the profiles.
+// @version      0.9.0
+// @description  Colors by digit from groups of palette colors in the active profile: cells holding a digit, or centre marks that all belong to one group, take the group's color, and entered digits, corner marks and centre marks take a darker shade of it. A press on the button steps the mode Cell, Digit, Both, Off; a menu on it switches profile, and a settings dialog edits the profiles.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.8.0'
+  const VERSION = '0.9.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -29,12 +29,14 @@
   const MODE_KEY = 'ColorByDigit_mode'
   // Auto mode's on/off, saved before the mode existed: read only to choose the starting mode when no mode is saved.
   const AUTO_KEY = 'ColorByDigit_auto'
-  const MODES = ['cell', 'off']
-  const MODE_LABELS = { cell: 'CELL', off: 'OFF' }
-  const MODE_NAMES = { cell: 'Cell', off: 'Off' }
-  // Set once Entropic and Modular have been offered to an install that already had profiles, so deleting one keeps it deleted.
-  const ADDED_PRELOADS_KEY = 'ColorByDigit_addedPreloads'
-  const ADDED_PRELOAD_NAMES = ['Entropic', 'Modular']
+  const MODES = ['cell', 'digit', 'both', 'off']
+  const MODE_LABELS = { cell: 'CELL', digit: 'DIGIT', both: 'BOTH', off: 'OFF' }
+  const MODE_NAMES = { cell: 'Cell', digit: 'Digit', both: 'Both', off: 'Off' }
+  // Each key is set once its preloads have been offered to an install that already had profiles, so deleting one keeps it deleted.
+  const ADDED_PRELOADS = [
+    { key: 'ColorByDigit_addedPreloads', names: ['Entropic', 'Modular'] },
+    { key: 'ColorByDigit_addedEachDigit', names: ['Each digit'] }
+  ]
   // SudokuPad's numpad order: 1 to 9 in rows of three, then 0 alone in the middle column.
   const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
   const NUMPAD_KEY = '2.4em'
@@ -59,7 +61,9 @@
       { key: '6', digits: ['1', '4', '7'] },
       { key: '5', digits: ['2', '5', '8'] },
       { key: '8', digits: ['0', '3', '6', '9'] }
-    ]
+    ],
+    // Keys 1 to 9 are the nine colors of SudokuPad's first palette page.
+    'Each digit': ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => ({ key: d, digits: [d] }))
   }
 
   const cloneGroups = (groups) => groups.map((g) => ({ key: g.key, digits: [...g.digits] }))
@@ -100,7 +104,8 @@
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
   const nextMode = (mode) => MODES[(MODES.indexOf(mode) + 1) % MODES.length]
-  const colorsCells = (mode) => mode === 'cell'
+  const colorsCells = (mode) => mode === 'cell' || mode === 'both'
+  const colorsDigits = (mode) => mode === 'digit' || mode === 'both'
   const modeFromAuto = (auto) => (typeof auto === 'boolean' ? (auto ? 'cell' : 'off') : undefined)
   const startingMode = (savedMode, savedAuto) => (MODES.includes(savedMode) ? savedMode : modeFromAuto(savedAuto) ?? 'cell')
 
@@ -212,11 +217,11 @@
     return state && state.profiles.length === data.profiles.length ? state : undefined
   }
   const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
-  const READERS = { [PROFILES_KEY]: readPastedProfiles, [MODE_KEY]: readPastedMode, [ADDED_PRELOADS_KEY]: readPastedFlag }
+  const READERS = { [PROFILES_KEY]: readPastedProfiles, [MODE_KEY]: readPastedMode, ...Object.fromEntries(ADDED_PRELOADS.map(({ key }) => [key, readPastedFlag])) }
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
   function copiedSettings (store) {
     const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
-    if (store.getData(ADDED_PRELOADS_KEY) === true) copied[ADDED_PRELOADS_KEY] = true
+    ADDED_PRELOADS.forEach(({ key }) => { if (store.getData(key) === true) copied[key] = true })
     return JSON.stringify(copied)
   }
 
@@ -292,9 +297,9 @@
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
   }
 
-  function withAddedPreloads (state) {
+  function withAddedPreloads (state, names) {
     const profiles = state.profiles.map(cloneProfile)
-    for (const name of ADDED_PRELOAD_NAMES) {
+    for (const name of names) {
       const groups = PRELOADS[name]
       if (profiles.length < MAX_PROFILES && !profiles.some((p) => sameGroups(p.groups, groups))) profiles.push({ name, groups: cloneGroups(groups) })
     }
@@ -362,20 +367,134 @@
     return shown.map((c, i) => ({ ...c, x: start + i * (size + gap), y: ICON_TOP + 10, size }))
   }
 
-  function inkFor (color) {
-    const v = String(color).trim().toLowerCase()
-    let channels
+  const clamp255 = (x) => Math.max(0, Math.min(255, x))
+
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
+  function parseColor (color) {
+    const v = String(color ?? '').trim().toLowerCase()
+    if (!isVisibleColor(v)) return null
     const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(v)
     if (hex) {
       const h = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
-      channels = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
-    } else {
-      const fn = /^rgba?\(([^)]*)\)$/.exec(v)
-      channels = fn ? fn[1].split(/[,/\s]+/).filter(Boolean).slice(0, 3).map(Number) : []
+      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
     }
-    if (channels.length !== 3 || channels.some(Number.isNaN)) return '#000'
+    const fn = /^rgba?\(([^)]*)\)$/.exec(v)
+    const channels = fn ? fn[1].split(/[,/\s]+/).filter(Boolean).slice(0, 3).map(Number) : []
+    return channels.length === 3 && !channels.some(Number.isNaN) ? channels.map((x) => Math.round(clamp255(x))) : null
+  }
+
+  function inkFor (color) {
+    const channels = parseColor(color)
+    if (!channels) return '#000'
     const [r, g, b] = channels
     return 0.299 * r + 0.587 * g + 0.114 * b < 140 ? '#fff' : '#000'
+  }
+
+  // The digit shade is Pen Tool Extras' pen color from a cell color, copied since the scripts share no code: the share of its OKLCH lightness a cell color keeps.
+  const LIGHTNESS_FACTOR = 0.75
+  const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
+  const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
+
+  // Ottosson's published matrices. The way back returns the unclamped linear channels, so a caller can tell an out-of-gamut color.
+  function toOklab ([r, g, b]) {
+    const [lr, lg, lb] = [r, g, b].map(toLinear)
+    const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+    const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+    const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+    ]
+  }
+
+  function fromOklabLinear ([L, a, b]) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+    return [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+    ]
+  }
+
+  const EDGE = 1e-6
+  const inGamut = (linear) => linear.every((x) => x >= -EDGE && x <= 1 + EDGE)
+
+  // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
+  function darkenColor (rgb) {
+    const [L, a, b] = toOklab(rgb.map(clamp255))
+    const target = L * LIGHTNESS_FACTOR
+    let low = 0
+    let high = 1
+    if (!inGamut(fromOklabLinear([target, a, b]))) {
+      for (let i = 0; i < 30; i++) {
+        const mid = (low + high) / 2
+        if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
+        else high = mid
+      }
+    } else {
+      low = 1
+    }
+    const out = fromOklabLinear([target, a * low, b * low])
+    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
+      .toString(16).padStart(2, '0')).join('')
+  }
+
+  // An entered digit's text element carries no digit attribute, so the script adds this one.
+  const DIGIT_ATTR = 'data-color-by-digit'
+  // Corner marks are `text`; centre marks are `tspan` inside one `text`.
+  const MARK_SELECTORS = ['#cell-pencilmarks .cell-pencilmark', '#cell-candidates tspan']
+
+  function digitOfText (text) {
+    const t = String(text ?? '').trim()
+    return DIGITS.includes(t) ? t : null
+  }
+
+  // The `#svgrenderer` prefix outranks SudokuPad's red rule for a conflicting mark. Marks carry their digit in
+  // `data-val`; givens sit in `#cell-givens`, which no rule names.
+  function buildDigitCss (groups, colorOf) {
+    const keyOfDigit = keyOfDigitMap(groups)
+    return DIGITS.flatMap((digit) => {
+      const rgb = keyOfDigit[digit] === undefined ? null : parseColor(colorOf(keyOfDigit[digit]))
+      if (!rgb) return []
+      const shade = darkenColor(rgb)
+      return [`#cell-values [${DIGIT_ATTR}="${digit}"] { fill: ${shade} }`, ...MARK_SELECTORS.map((selector) => `#svgrenderer ${selector}[data-val="${digit}"] { fill: ${shade} }`)]
+    }).join('\n')
+  }
+
+  const CIRCLES_ID = 'color-by-digit-circles'
+  // Pale enough that every shade stays readable on it.
+  const CIRCLE_FILL = '#ff6b6b'
+  const CIRCLE_OPACITY = 0.4
+  const CIRCLE_RADIUS_PER_WIDTH = 0.8
+  // SudokuPad adds this class to the page while it shows conflicting marks in red.
+  const CHECK_MARKS_CLASS = '.setting-checkpencilmarks'
+
+  // No pointer events, so a click on a circle reaches the board.
+  const CIRCLE_CSS = [
+    `#${CIRCLES_ID} { display: none; pointer-events: none }`,
+    `${CHECK_MARKS_CLASS} #${CIRCLES_ID} { display: inline }`,
+    `#${CIRCLES_ID} circle { fill: ${CIRCLE_FILL}; fill-opacity: ${CIRCLE_OPACITY} }`
+  ].join('\n')
+
+  function circleFor (mark) {
+    return { cx: mark.x, cy: mark.y, r: mark.width * CIRCLE_RADIUS_PER_WIDTH }
+  }
+
+  // The canvas reports `left` positive going left; the character's origin is on the baseline at
+  // `extent.x`, its em box starts at `extent.y`.
+  function inkMiddle (extent, measure) {
+    // A browser that lacks a measure gives `undefined`, which would draw no circle and say nothing.
+    for (const key of ['left', 'right', 'ascent', 'descent', 'fontAscent']) {
+      if (!Number.isFinite(measure[key])) throw new Error(`color-by-digit: the browser gave no ${key} measure for a mark's digit`)
+    }
+    const baseline = extent.y + measure.fontAscent
+    return {
+      x: extent.x + (measure.right - measure.left) / 2,
+      y: baseline + (measure.descent - measure.ascent) / 2
+    }
   }
 
   function planSwitch (cells, oldGroups, newGroups) {
@@ -619,7 +738,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -639,11 +758,13 @@
   const loadState = () => stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
 
   function addPreloadsOnce () {
-    if (Framework.getData(ADDED_PRELOADS_KEY) === true) return
-    const state = loadState()
-    const added = withAddedPreloads(state)
-    if (added.profiles.length !== state.profiles.length) saveState(added)
-    Framework.setData(ADDED_PRELOADS_KEY, true)
+    for (const { key, names } of ADDED_PRELOADS) {
+      if (Framework.getData(key) === true) continue
+      const state = loadState()
+      const added = withAddedPreloads(state, names)
+      if (added.profiles.length !== state.profiles.length) saveState(added)
+      Framework.setData(key, true)
+    }
   }
   const loadGroups = () => activeGroups(loadState())
 
@@ -723,9 +844,109 @@
     else app.puzzle.addEventListener('progressloaded', fn, { once: true })
   }
 
-  function showButton () {
+  const DIGIT_STYLE_ID = 'color-by-digit-digits'
+  const SVG_NS = 'http://www.w3.org/2000/svg'
+
+  // An entered digit's text element has no digit attribute; marks have `data-val`.
+  function stampEnteredDigits () {
+    document.querySelectorAll('#cell-values .cell-value').forEach((el) => {
+      const digit = digitOfText(el.textContent)
+      if (digit === null) el.removeAttribute(DIGIT_ATTR)
+      else if (el.getAttribute(DIGIT_ATTR) !== digit) el.setAttribute(DIGIT_ATTR, digit)
+    })
+  }
+
+  let measuring = null
+
+  // SudokuPad sizes its fonts in the board's units, which a canvas takes as pixels.
+  function measureInk (mark) {
+    if (!measuring) measuring = document.createElement('canvas').getContext('2d')
+    const style = window.getComputedStyle(mark)
+    measuring.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    const m = measuring.measureText(mark.textContent)
+    return { left: m.actualBoundingBoxLeft, right: m.actualBoundingBoxRight, ascent: m.actualBoundingBoxAscent, descent: m.actualBoundingBoxDescent, fontAscent: m.fontBoundingBoxAscent }
+  }
+
+  // The ink is centred, not the advance box or the `dominant-baseline: middle` point, which sit off
+  // the digit's shape. A corner mark carries a CSS translate its attributes omit, so the point goes
+  // through the `text`'s CTM; `space` holds a translation and a scale only.
+  function markMiddle (mark, space) {
+    const text = mark.localName === 'tspan' ? mark.parentNode : mark
+    const extent = mark.getExtentOfChar(0)
+    const ink = inkMiddle(extent, measureInk(mark))
+    const toSpace = space.getCTM().inverse().multiply(text.getCTM())
+    const point = new window.DOMPoint(ink.x, ink.y).matrixTransform(toSpace)
+    return { x: point.x, y: point.y, width: extent.width * toSpace.a }
+  }
+
+  // Just before the corner marks: behind every mark, above the cells' colors.
+  function circlesGroup () {
+    let group = document.getElementById(CIRCLES_ID)
+    const anchor = document.getElementById('cell-pencilmarks')
+    if (!anchor) return null
+    if (!group || group.nextSibling !== anchor) {
+      if (group) group.remove()
+      group = document.createElementNS(SVG_NS, 'g')
+      group.id = CIRCLES_ID
+      anchor.parentNode.insertBefore(group, anchor)
+    }
+    return group
+  }
+
+  // Rebuilt each time, so a circle never outlives its mark, its conflict or a mode that colors digits.
+  function syncCircles () {
+    const group = circlesGroup()
+    if (!group) return
+    const conflicts = colorsDigits(mode) ? document.querySelectorAll(MARK_SELECTORS.map((s) => `${s}.conflict`).join(',')) : []
+    group.replaceChildren(...[...conflicts].map((mark) => {
+      const { cx, cy, r } = circleFor(markMiddle(mark, group))
+      const circle = document.createElementNS(SVG_NS, 'circle')
+      circle.setAttribute('cx', cx)
+      circle.setAttribute('cy', cy)
+      circle.setAttribute('r', r)
+      return circle
+    }))
+  }
+
+  function syncDigits () {
+    stampEnteredDigits()
+    syncCircles()
+  }
+
+  // A mark's `class` change is how it enters or leaves `conflict`. Stamping `DIGIT_ATTR` and drawing
+  // circles must trigger nothing.
+  function isBoardChange (record) {
+    if (record.target.closest && record.target.closest(`#${CIRCLES_ID}`)) return false
+    return record.type !== 'attributes' || MARK_SELECTORS.some((s) => record.target.matches(s))
+  }
+
+  // The whole page: SudokuPad swaps the board's elements when a puzzle loads.
+  function watchBoard () {
+    let queued = false
+    new window.MutationObserver((records) => {
+      if (queued || !colorsDigits(mode) || !records.some(isBoardChange)) return
+      queued = true
+      window.requestAnimationFrame(() => { queued = false; syncDigits() })
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] })
+  }
+
+  // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
+  function showDigitColors () {
+    let style = document.getElementById(DIGIT_STYLE_ID)
+    if (!style) {
+      style = document.createElement('style')
+      style.id = DIGIT_STYLE_ID
+      document.head.appendChild(style)
+    }
+    style.textContent = colorsDigits(mode) ? `${buildDigitCss(loadGroups(), readColor)}\n${CIRCLE_CSS}` : ''
+    syncDigits()
+  }
+
+  // The palette can change after the button was drawn, so the icon and the digit shades are drawn from it again.
+  function redraw () {
     const icon = document.querySelector(`${BUTTON} .icon`)
     if (icon) icon.outerHTML = iconHtml(mode, loadGroups(), readColor)
+    showDigitColors()
   }
 
   // Leaving cell coloring takes the colors of `keys` off every cell; a Save that also changed the groups passes the old ones too.
@@ -733,7 +954,7 @@
     const was = mode
     mode = next
     Framework.setData(MODE_KEY, next)
-    showButton()
+    redraw()
     if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
     if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
   }
@@ -786,8 +1007,7 @@
 
   function openMenu () {
     closeMenu()
-    // The palette can change after the button was drawn, so the icon is drawn again with the menu.
-    showButton()
+    redraw()
     const button = document.querySelector(BUTTON)
     if (!button) return
     addStyle()
@@ -810,8 +1030,8 @@
     if (index === state.active) return
     const next = setActive(state, index)
     saveState(next)
-    recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
-    showButton()
+    if (colorsCells(mode)) recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
+    redraw()
   }
 
   const HOLD_MS = 500
@@ -949,7 +1169,7 @@
     }
     draw()
     wireCopyPaste(box.closest('.dialog'), (values) => {
-      if (ADDED_PRELOADS_KEY in values) Framework.setData(ADDED_PRELOADS_KEY, values[ADDED_PRELOADS_KEY])
+      ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
       reshow(savedState)
@@ -1054,8 +1274,9 @@
     installButton(Framework, app, mode, loadGroups(), readColor)
     installCellColoring(app)
     listenForButton(app, openEditor)
-    // The puzzle's own palette is in the page's colors once it has loaded: the icon shows those.
-    whenProgressLoaded(app, showButton)
+    watchBoard()
+    // The puzzle's own palette is in the page's colors once it has loaded: the icon and the digit shades show those.
+    whenProgressLoaded(app, redraw)
     if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
   })
 })()
