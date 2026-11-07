@@ -6,7 +6,7 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 
-const { KEYPAD, NEAR_PX, NINE, PICKER_BOX, MENUS } = draw
+const { KEYPAD, NEAR_PX, NINE, PICKER_BOX, MENU_ROW } = draw
 // The tray behind the controls reaches past the keypad's sides on purpose.
 const TRAY = '.draw-tool-tray'
 
@@ -22,7 +22,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1600, height: 900
       ;({ context, p } = await openPage(browser, { contextOptions: { viewport } }))
       await draw.boot(p)
       await draw.pickDraw(p)
-      await p.locator(MENUS).waitFor({ state: 'visible' })
+      await p.locator(MENU_ROW).waitFor({ state: 'visible' })
       await draw.holdForPickers(p, `${KEYPAD} button[data-key="4"]`, 'left', 'visible')
     })
     after(async () => { await context.close() })

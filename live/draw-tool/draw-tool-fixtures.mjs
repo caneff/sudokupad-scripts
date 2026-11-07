@@ -26,8 +26,8 @@ export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GRO
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
-// The row of Size and Outline buttons under the controls, each button, the menu one opens and a menu's items.
-export const MENUS = '.draw-tool-menus'
+// The menu row of Size and Outline buttons under the controls, each button, the menu one opens and a menu's items.
+export const MENU_ROW = '.draw-tool-menu-row'
 export const SIZE_BUTTON = '.draw-tool-menu-button[data-menu="size"]'
 export const OUTLINE_BUTTON = '.draw-tool-menu-button[data-menu="outline"]'
 export const MENU = '.draw-tool-menu'

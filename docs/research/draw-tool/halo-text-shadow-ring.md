@@ -13,4 +13,7 @@ Chris, 2026-11-07: the halo "looks funky on some letters, like capital A".
   facets on Thick only; a 1px blur smooths them but also softens the Thin edge, and sixteen blurred shadows cost more to
   draw per note. Kept **no blur**.
 - **The check.** `live/draw-tool/draw-tool-menus.live.mjs` draws "AVWMk4" as letters and as the ring alone, and counts ring
-  pixels more than 1.5px past the radius from any letter pixel: none at Thin, Medium or Thick. The old stroke fails it.
+  pixels more than 1.5px past the radius from any letter pixel, the radius being the outline's reach typed into the test: none
+  at Thin, Medium or Thick. It applies the note's computed `text-shadow` to an overlay it builds, so it checks the ring, not
+  the note's other CSS; `live/draw-tool/draw-tool-text.live.mjs` checks the note has no `-webkit-text-stroke`. A ring with
+  every fourth shadow three times too far out fails it (Thin: 2142 pixels past the radius).

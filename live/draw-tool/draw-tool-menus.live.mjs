@@ -74,7 +74,7 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
     assert.equal(await menuOpen(), false, 'a second press on the button closes it')
   })
 
-  it('a menu closes on Escape and on a press elsewhere, which leaves the open note and the selection alone', async () => {
+  it('a menu closes on Escape and on a press elsewhere', async () => {
     await p.click(SIZE_BUTTON)
     await p.keyboard.press('Escape')
     assert.equal(await menuOpen(), false)
@@ -82,6 +82,15 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
     await p.mouse.click(5, 300)
     assert.equal(await menuOpen(), false)
     // The press also began an empty note at the page's edge; Escape drops it.
+    await p.keyboard.press('Escape')
+  })
+
+  it('a press on the open menu\'s own frame, between its items, is no press on the page: no note opens and the menu stays', async () => {
+    await p.click(SIZE_BUTTON)
+    const frame = await p.locator(MENU).boundingBox()
+    await p.mouse.click(frame.x + frame.width / 2, frame.y + 3)
+    assert.equal(await menuOpen(), true, 'the menu is still open')
+    assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no note opened behind it')
     await p.keyboard.press('Escape')
   })
 
@@ -179,9 +188,24 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
     await p.evaluate(([key, value]) => Framework.setData(key, value), [WIDTH_KEY, 7.5])
     await reload()
     assert.equal(await face(p, SIZE_BUTTON), '20', '23 is as near 20 as 26, and the smaller wins')
+    // The note made next has the menu's size, not the saved one the button's face is read from.
+    await typeText([7.5, 1.5], 'snap')
+    assert.equal((await savedNote('snap')).size, 20)
     await p.evaluate(([key, value]) => Framework.setData(key, value), [WIDTH_KEY, 9])
     await reload()
     assert.equal(await face(p, SIZE_BUTTON), '26')
+    await typeText([7.5, 3.5], 'snap2')
+    assert.equal((await savedNote('snap2')).size, 26)
+  })
+
+  it('a next-note outline saved as something else reads as Medium, and the note made with it is saved and loads', async () => {
+    await p.evaluate(([key, value]) => Framework.setData(key, value), [OUTLINE_KEY, 'huge'])
+    await reload()
+    assert.equal(await face(p, OUTLINE_BUTTON), 'Medium')
+    await typeText([7.5, 5.5], 'fine')
+    assert.equal((await savedNote('fine')).outline, undefined)
+    await reload()
+    assert.ok(await savedNote('fine'), 'the drawing still loads')
   })
 
   it('a pick while a note is open changes that note only and keeps it open', async () => {

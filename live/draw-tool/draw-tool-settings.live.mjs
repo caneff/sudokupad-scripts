@@ -112,6 +112,7 @@ describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
       assert.deepEqual(await dialogColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       // A size of 3.5 is a text size of 15, and the nearest the Size menu has is 14.
       assert.equal(await draw.face(other.p, draw.SIZE_BUTTON), '14')
+      assert.equal(await read(other.p, (key) => Framework.getData(key), WIDTH_KEY), 3, 'the pasted size is saved as the menu size\'s width')
       assert.equal(await dialogButton(other.p, 'Save').count(), 1)
       assert.deepEqual(other.errors, [])
     } finally {

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, haloEm } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -405,7 +405,7 @@ test('a mixed selection shows no color, size, outline or background state where 
   assert.deepEqual(panelLooks([withOutline(red20, 'thin'), withOutline(red14Boxed, 'thin')]).outline, 'thin')
 })
 
-test('the size menu has six sizes that cover the slider\'s range and include the default size', () => {
+test('the size menu has six sizes that run from the text size of the smallest width to the largest and include the default size', () => {
   assert.equal(SIZE_MENU.length, 6)
   assert.equal(SIZE_MENU[0], textSizeFor(MIN_WIDTH))
   assert.equal(SIZE_MENU.at(-1), textSizeFor(MAX_WIDTH))
@@ -450,18 +450,18 @@ test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline
       return [Number(match[1]), Number(match[2])]
     })
     // No shadow reaches past the outline's radius, and each is on the ring.
-    for (const [x, y] of offsets) assert.ok(Math.abs(Math.hypot(x, y) - haloEm(outline)) < 0.002, `${outline} ${x} ${y}`)
-    return haloEm(outline)
+    for (const [x, y] of offsets) assert.ok(Math.abs(Math.hypot(x, y) - OUTLINE_EM[outline]) < 0.002, `${outline} ${x} ${y}`)
+    return OUTLINE_EM[outline]
   })
   assert.deepEqual(radii, [...radii].sort((a, b) => a - b))
-  assert.equal(haloEm('medium'), 0.14)
-  assert.equal(haloEm('none'), 0)
+  assert.equal(OUTLINE_EM.medium, 0.14)
+  assert.equal(OUTLINE_EM.none, 0)
 })
 
 test('a note\'s padding is its outline\'s reach, none for none', () => {
   const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
   const box = (outline) => noteScreenBox(withOutline(textItem([100, 50], 'sum', 1, 20), outline), map)
-  assert.equal(Math.round((box('thick').right - box('none').right) * 1000) / 1000, Math.round(haloEm('thick') * 20 * 1000) / 1000)
+  assert.equal(Math.round((box('thick').right - box('none').right) * 1000) / 1000, Math.round(OUTLINE_EM.thick * 20 * 1000) / 1000)
   assert.equal(Math.round((box('medium').right - box('none').right) * 1000) / 1000, 2.8)
 })
 

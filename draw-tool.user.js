@@ -169,7 +169,7 @@
     [PEN_PRESET]: 'Pen colors',
     ...PALETTE_PRESET_LABELS
   }
-  // The next note's size keeps the width slider's name, range and key, so a size saved before the menus still reads.
+  // The next note's size is saved as a width, 1 to 16 in steps of 0.5, as it always was; a text size is 2 x the width + 8.
   const WIDTH_KEY = 'DrawTool_width'
   const OUTLINE_KEY = 'DrawTool_outline'
   const BACKGROUND_KEY = 'DrawTool_background'
@@ -206,7 +206,7 @@
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
   // The row under the controls: the Size and Outline buttons and an empty slot, and the menu a press on one opens.
-  const MENUS_CLASS = 'draw-tool-menus'
+  const MENU_ROW_CLASS = 'draw-tool-menu-row'
   const MENU_BUTTON_CLASS = 'draw-tool-menu-button'
   const MENU_CLASS = 'draw-tool-menu'
   const MENU_ITEM_CLASS = 'draw-tool-menu-item'
@@ -243,17 +243,17 @@
   const OUTLINE_LABELS = { none: 'None', thin: 'Thin', medium: 'Medium', thick: 'Thick' }
   const readOutline = (item) => item.outline ?? DEFAULT_OUTLINE
   const readSavedOutline = (saved) => OUTLINES.includes(saved) ? saved : DEFAULT_OUTLINE
-  const haloEm = (outline) => OUTLINE_EM[outline]
   // The medium outline is the absence of the field, so a note saved before outlines is the same as one given the medium outline.
   const withOutline = ({ outline, ...rest }, next) => next === DEFAULT_OUTLINE ? rest : { ...rest, outline: next }
   // text-shadow joins with round corners, which -webkit-text-stroke does not: its miters grow spikes on A, V, W, M and 4. The ring of shadows is in em, so it follows the font size.
   const HALO_SHADOWS = 16
   function haloShadow (outline, color) {
-    if (haloEm(outline) === 0) return 'none'
+    const reach = OUTLINE_EM[outline]
+    if (reach === 0) return 'none'
     const em = (value) => Math.round(value * 1000) / 1000
     return Array.from({ length: HALO_SHADOWS }, (_, k) => {
       const angle = 2 * Math.PI * k / HALO_SHADOWS
-      return `${em(haloEm(outline) * Math.cos(angle))}em ${em(haloEm(outline) * Math.sin(angle))}em 0 ${color}`
+      return `${em(reach * Math.cos(angle))}em ${em(reach * Math.sin(angle))}em 0 ${color}`
     }).join(', ')
   }
 
@@ -338,7 +338,10 @@
   }
 
   // The room round a note's text, in board units across and down: its background's, or its halo's reach.
-  const notePadding = (item) => (item.bg ? [BACKGROUND_PAD_X, BACKGROUND_PAD_Y] : [haloEm(readOutline(item)), haloEm(readOutline(item))]).map((share) => share * item.size)
+  function notePadding (item) {
+    const halo = OUTLINE_EM[readOutline(item)]
+    return (item.bg ? [BACKGROUND_PAD_X, BACKGROUND_PAD_Y] : [halo, halo]).map((share) => share * item.size)
+  }
 
   // What a note answers to: its text's box, and with a background the box drawn behind it.
   function noteBox (item) {
@@ -446,7 +449,7 @@
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readBackground = (saved) => saved === true
-  // Board units, as a text's height: the next note's width, as the size slider once set it, gives the text size.
+  // Board units, as a text's height.
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
@@ -456,7 +459,7 @@
   const isTextSize = (value) => Number.isInteger(value) && isWidth(widthFor(value))
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
 
-  // The sizes the Size menu offers: today's slider range, with its default, spaced so each step shows.
+  // The sizes the Size menu offers: the text sizes of widths 1 to 16, with the default 20, spaced so each step shows.
   const SIZE_MENU = [10, 14, 20, 26, 32, 40]
   const nearestMenuSize = (size) => SIZE_MENU.reduce((best, option) => Math.abs(option - size) < Math.abs(best - size) ? option : best)
 
@@ -979,7 +982,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, haloEm, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -998,7 +1001,7 @@
   const ABOVE_NOTES = '.dialog-overlay, #appmenu'
 
   // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the control panel, the top bar, the menu drawer and an open dialog.
-  const CONTROLS = `${LAYOUT_CONTROLS}, ${ABOVE_NOTES}, button, a, input, select, textarea`
+  const CONTROLS = `${LAYOUT_CONTROLS}, ${ABOVE_NOTES}, .${MENU_CLASS}, button, a, input, select, textarea`
   const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
 
   // The notes' layer covers the page, above the board's digits and SudokuPad's clock and rules copy (z-index 10) and below its dialogs and menu drawer (1000).
@@ -1129,8 +1132,9 @@
   const THUMB_SHAPE = `box-sizing: border-box; width: ${SLIDER_THUMB_REM}rem; height: ${SLIDER_THUMB_REM}rem; border-radius: 50%; background: #fff; border: ${SLIDER_THUMB_RING_REM}rem solid ${PANEL_COLOR};`
 
   // A panel with no slider rows (its fourth block holds buttons) leaves `sliderRow` out, and with it every rule that styles a slider.
-  function sliderRules (sliderRow, wedgeSlider, fadeSlider) {
+  function sliderRules (sliders, sliderRow, wedgeSlider, fadeSlider) {
     return [
+      `.${sliders} { padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
       `.${sliderRow} { display: flex; align-items: center; gap: 0.4rem; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
       `.${sliderRow} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
       `.${sliderRow} input::-webkit-slider-runnable-track { ${TRACK_SHAPE} }`,
@@ -1145,7 +1149,7 @@
 
   // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
   // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
-  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out. `sliders` names the block under the controls, which holds slider rows or buttons.
+  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out.
   function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     return [
@@ -1160,8 +1164,8 @@
       `${panel}:not(:has(.${sliders})) .${tray} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW}; margin-bottom: -${rem(TRAY_PADDING_REM - PANEL_BUTTON_MARGIN_REM)}rem; }`,
       // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
       ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
-      `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
-      ...(sliderRow ? sliderRules(sliderRow, wedgeSlider, fadeSlider) : [])
+      `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; }`,
+      ...(sliderRow ? sliderRules(sliders, sliderRow, wedgeSlider, fadeSlider) : [])
     ]
   }
 
@@ -1180,16 +1184,16 @@
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
-  // The column of each control in its row: Clear all, the Background button and the settings gear.
   // The Size and Outline buttons are as tall as the row under the controls leaves room for.
   const MENU_BUTTON_REM = 3
   const MENU_ITEM_REM = 2.2
+  // The column of each control in its row: Clear all, the Background button and the settings gear.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [BACKGROUND_CLASS]: 2, [SETTINGS_CLASS]: 3 }
   const PANEL = '.tool-draw .controls-input'
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
   // Each color button shows "Aa" in its draw color, so a recolor follows.
   const PANEL_CSS = [
-    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: MENUS_CLASS }),
+    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: MENU_ROW_CLASS }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
     `${PANEL} button.digit::after { content: "Aa"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-indent: 0; font-size: ${COLOR_LABEL_REM}rem; font-weight: 600; line-height: 1; }`,
@@ -1204,7 +1208,7 @@
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     pickerCss(CLASS_PREFIX, TOOL_NAME),
     // Three columns the width of the controls' above, so each button sits under its own control; an empty slot keeps its place.
-    `.${MENUS_CLASS} { display: grid; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); justify-items: center; align-items: stretch; margin-left: 0; margin-right: 0; padding: 0; }`,
+    `.${MENU_ROW_CLASS} { display: grid; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); justify-items: center; align-items: stretch; margin-left: 0; margin-right: 0; padding: 0; }`,
     `${PANEL} button.${MENU_BUTTON_CLASS} { box-sizing: border-box; width: ${PANEL_BUTTON_REM}rem; height: ${MENU_BUTTON_REM}rem; min-width: 0; min-height: 0; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1rem; background-color: var(--body-bg); color: ${PANEL_COLOR}; line-height: 1; }`,
     `${PANEL} button.${MENU_BUTTON_CLASS}[aria-expanded="true"] { outline: 2px solid ${PANEL_COLOR}; }`,
     `${PANEL} .${MENU_BUTTON_CLASS} span:first-child { font-size: 0.65rem; opacity: 0.75; }`,
@@ -1437,9 +1441,10 @@
 
   // The two menus the Size and Outline buttons open: each lists its options as [value, text], reads its value off the panel's looks, and says what its button's face shows.
   const MENUS = {
-    size: { label: 'Size', options: SIZE_MENU.map((size) => [size, String(size)]), value: (looks) => looks.size, face: (looks) => looks.size === null ? '' : String(looks.size), pick: (size) => pickLook('size', size) },
-    outline: { label: 'Outline', options: OUTLINES.map((name) => [name, OUTLINE_LABELS[name]]), value: (looks) => looks.outline, face: (looks) => looks.outline === null ? '' : OUTLINE_LABELS[looks.outline], pick: (name) => pickLook('outline', name) }
+    size: { label: 'Size', options: SIZE_MENU.map((size) => [size, String(size)]), value: (looks) => looks.size, face: (looks) => looks.size === null ? '' : String(looks.size), change: (size) => (item) => ({ ...item, size }), setNext: (size) => setSize(widthFor(size)) },
+    outline: { label: 'Outline', options: OUTLINES.map((name) => [name, OUTLINE_LABELS[name]]), value: (looks) => looks.outline, face: (looks) => looks.outline === null ? '' : OUTLINE_LABELS[looks.outline], change: (name) => (item) => withOutline(item, name), setNext: setOutline }
   }
+  const menuButtonOf = (kind) => document.querySelector(`.${MENU_BUTTON_CLASS}[data-menu="${kind}"]`)
   // The open menu: its kind and element, or null.
   let openMenu = null
 
@@ -1460,12 +1465,11 @@
 
   // A pick sets the open note's look, else the selected notes', else the next note's; a new open note's also becomes the next note's.
   function pickLook (kind, value) {
-    const change = kind === 'size' ? (item) => ({ ...item, size: value }) : (item) => withOutline(item, value)
-    const alsoNext = kind === 'size' ? () => setSize(widthFor(value)) : () => setOutline(value)
-    if (editing) changeOpen(change, alsoNext)
-    else if (selected.length) changeSelected(change)
+    const { change, setNext } = MENUS[kind]
+    if (editing) changeOpen(change(value), () => setNext(value))
+    else if (selected.length) changeSelected(change(value))
     else {
-      alsoNext()
+      setNext(value)
       showPanelValues()
     }
   }
@@ -1493,7 +1497,7 @@
     const { element, kind } = openMenu
     openMenu = null
     element.remove()
-    const button = document.querySelector(`.${MENU_BUTTON_CLASS}[data-menu="${kind}"]`)
+    const button = menuButtonOf(kind)
     if (button) button.setAttribute('aria-expanded', 'false')
   }
 
@@ -1501,7 +1505,7 @@
     const reopen = openMenu?.kind !== kind
     closeMenu()
     if (!reopen) return
-    const button = document.querySelector(`.${MENU_BUTTON_CLASS}[data-menu="${kind}"]`)
+    const button = menuButtonOf(kind)
     const element = document.createElement('div')
     element.className = MENU_CLASS
     element.setAttribute('role', 'menu')
@@ -1514,7 +1518,7 @@
       item.textContent = text
       item.addEventListener('click', () => {
         closeMenu()
-        MENUS[kind].pick(value)
+        pickLook(kind, value)
       })
       element.append(item)
     }
@@ -1555,12 +1559,12 @@
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
     backgroundButton.addEventListener('click', pressBackground)
-    const menus = document.createElement('div')
-    menus.className = MENUS_CLASS
+    const menuRow = document.createElement('div')
+    menuRow.className = MENU_ROW_CLASS
     const slot = document.createElement('span')
     slot.className = MENU_SLOT_CLASS
-    menus.append(...Object.keys(MENUS).map(menuButton), slot)
-    panelParts = [tray, clear, backgroundButton, settings, menus]
+    menuRow.append(...Object.keys(MENUS).map(menuButton), slot)
+    panelParts = [tray, clear, backgroundButton, settings, menuRow]
     keypad().append(...panelParts)
     showPanelValues()
   }
@@ -1570,7 +1574,7 @@
     const looks = panelValues()
     unmarkColor()
     if (looks.color !== null) keypad().querySelector(`button[data-key="${looks.color}"]`).classList.add('current')
-    for (const [kind, menu] of Object.entries(MENUS)) document.querySelector(`.${MENU_BUTTON_CLASS}[data-menu="${kind}"] span:last-child`).textContent = menu.face(looks)
+    for (const [kind, menu] of Object.entries(MENUS)) menuButtonOf(kind).querySelector('span:last-child').textContent = menu.face(looks)
     if (openMenu) markMenuItems(looks)
     showBackground()
     const clear = document.querySelector(`.${CLEAR_CLASS}`)
