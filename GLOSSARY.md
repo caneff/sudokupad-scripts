@@ -1,7 +1,13 @@
 # Glossary
 
-- **group** — one palette color plus the digits that get it. A digit is in at
-  most one group.
+- **group** — the digits that share one palette color. A digit is in at most one group, a color with no
+  digits is no group, and groups are ordered by their lowest digit, with 0 counting after 9. The dialog has
+  no group rows: a group exists because digits were painted with its color.
+- **brush** — the palette color picked in the dialog's palette, shown selected. A click on a digit key paints the
+  digit with it, or clears the digit when it already has that color. It starts as the color of the selected
+  profile's lowest group, else the first visible color of the current page.
+- **digit key** — one of the ten buttons in the dialog's pad (1 to 9, then 0 right of 9). It is filled with its
+  digit's group color, or blank when the digit is in no group.
 - **pure cell** — a cell that belongs to exactly one group: its given or entered digit is in that
   group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit
   and no centre marks, or a digit in no group, is not pure.
@@ -159,7 +165,7 @@
 - **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
   the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
   rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is the chosen page color (black by default) outside it.
-- **swatch** — also, in Pen Tool Extras, the picture on a pen color button: page 1 a solid line, page 2 a dashed line, page 3 a line and its arrows, cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, grouped by cell color page and laid out by index. An index with no visible color is an empty space of the same size.
+- **swatch** — also, in Pen Tool Extras, the picture on a pen color button: page 1 a solid line, page 2 a dashed line, page 3 a line and its arrows, cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, shown one cell color page at a time and laid out by index, beside the digit keys in one grid; a click sets the **brush**. An index with no visible color is an empty space of the same size.
 - **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per

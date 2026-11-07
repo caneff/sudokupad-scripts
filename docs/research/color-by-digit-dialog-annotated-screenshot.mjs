@@ -1,9 +1,9 @@
 // Takes the one annotated picture of the Color by Digit settings dialog on site/color-by-digit.html ("The settings dialog"), from
-// the real color-by-digit.user.js on the recorded puzzle, with the five preloaded profiles and the first group open:
+// the real color-by-digit.user.js on the recorded puzzle, with the five preloaded profiles and Low/5/High selected:
 //   color-by-digit-dialog-annotated.png
 // Each part is labelled by one short phrase, all on the left of the dialog, with a short line from the label to the part, in the
 // style of pen-tool-extras-panel-annotated-screenshot.mjs: the settings icons, the three pulldowns, the profile list, the selected
-// profile's name, the group rows, an open group and the bottom row. Labels are laid out from the parts' own boxes. The script fails
+// profile's name, the palette with the digit keys, and the bottom row. Labels are laid out from the parts' own boxes. The script fails
 // when a part is missing, and writes the file only when the picture is taken.
 // Run from the repo root with Playwright's Chromium installed: node docs/research/color-by-digit-dialog-annotated-screenshot.mjs
 // Not part of any test.
@@ -35,8 +35,9 @@ await page.locator('#control-colorbydigit').waitFor({ state: 'attached' })
 const group = await openSettings(page)
 await group.locator('button').filter({ hasText: 'Color by Digit' }).click()
 await page.locator('#color-by-digit-editor').waitFor({ state: 'visible' })
-await page.locator('#color-by-digit-editor button[data-act=open][data-group="0"]').click()
-await page.locator('#color-by-digit-editor .cbd-group-body').waitFor({ state: 'visible' })
+await page.locator('#color-by-digit-editor [data-role=paint]').waitFor({ state: 'visible' })
+// Hovering waits for the dialog's opening animation to end, so every box below is where the dialog rests.
+await page.locator('.dialog').hover()
 await page.mouse.move(5, 5)
 
 const box = async (selector) => {
@@ -57,8 +58,8 @@ const parts = {
   profiles: await box(`${E} .cbd-profile:nth-child(2)`),
   newProfile: await box(`${E} button[data-act=new-profile]`),
   name: await box(`${E} input[type=text]`),
-  rows: await box(`${E} button[data-act=open][data-group="1"]`),
-  open: await box(`${E} .cbd-group-body`),
+  palette: union(await page.locator(`${E} button[data-act=color]`).evaluateAll((es) => es.map((e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height } }))),
+  digits: union(await page.locator(`${E} button[data-act=digit]`).evaluateAll((es) => es.map((e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height } }))),
   bottom: union(await Promise.all(['Cancel', 'Save'].map((t) => box(`.dialog-options button:text-is("${t}")`))))
 }
 const dialogPng = (await page.screenshot({ clip: dialog })).toString('base64')
@@ -67,19 +68,18 @@ const r = Object.fromEntries(Object.entries(parts).map(([k, b]) => [k, rel(b)]))
 
 // Each label: its text, the y of its middle, and the line from the label to the part as points. Every label is on the left.
 // A line that would cross text runs in a gap instead: above the title row for the icons, above the selected row for its name,
-// and under the profile list for the open group.
+// and under the profile list for the palette and the digit keys.
 const iconGap = r.icons.y - 6
 const nameGap = r.name.y - 6
 // The pulldowns' line runs in the gap between the Mode and Cell rows, so it crosses no label.
 const pulldownGap = (r.modeSelect.y + r.modeSelect.h + r.cellSelect.y) / 2
-const openY = r.newProfile.y + r.newProfile.h + 30
+const paletteY = r.newProfile.y + r.newProfile.h + 24
 const labels = [
   { text: 'Copy or paste all settings', y: iconGap, to: [[r.icons.cx, iconGap], [r.icons.cx, r.icons.y + 4]] },
   { text: 'Mode, cell and digit profiles', y: pulldownGap, to: [[r.modeSelect.x - 6, pulldownGap]] },
   { text: 'Rename the selected profile', y: nameGap, to: [[r.name.cx, nameGap], [r.name.cx, r.name.y + 6]] },
   { text: 'Click a profile to edit its colors', y: r.profiles.cy, to: [[r.profiles.x + 6, r.profiles.cy]] },
-  { text: 'Click a group to open it', y: r.rows.cy, to: [[r.rows.x + 6, r.rows.cy]] },
-  { text: 'Its colors and digits', y: openY, to: [[r.open.x + 6, openY]] },
+  { text: 'Pick a color, click digits to paint', y: paletteY, to: [[r.palette.cx, paletteY], [r.palette.cx, r.palette.y + r.palette.h - 4]] },
   { text: 'Cancel or save the changes', y: r.bottom.cy, to: [[r.bottom.x + 6, r.bottom.cy]] }
 ]
 

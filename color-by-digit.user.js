@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.15.0
+// @version      0.16.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.15.0'
+  const VERSION = '0.16.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -39,9 +39,8 @@
     { key: 'ColorByDigit_addedPreloads', names: ['Entropic', 'Modular'] },
     { key: 'ColorByDigit_addedEachDigit', names: ['Each digit'] }
   ]
-  // SudokuPad's numpad order: 1 to 9 in rows of three, then 0 alone in the middle column.
+  // SudokuPad's numpad order: 1 to 9 in rows of three, then 0.
   const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
-  const NUMPAD_KEY = '2.4em'
   const DIGITS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
   const PRELOADS = {
@@ -176,41 +175,36 @@
     return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
-  function assignDigit (groups, groupIndex, digit) {
-    const had = groups[groupIndex].digits.includes(digit)
-    return groups.map((g, i) => {
-      const rest = g.digits.filter((d) => d !== digit)
-      if (i !== groupIndex) return { key: g.key, digits: rest }
-      const digits = had ? rest : [...rest, digit].sort()
-      return { key: g.key, digits }
-    })
+  // A group is the digits that share a color. 0 counts after 9 in the order of groups, and a group lists its digits as saved, 0 first.
+  const digitRank = (digit) => (digit === '0' ? 10 : Number(digit))
+  const lowestRank = (group) => Math.min(...group.digits.map(digitRank))
+
+  // Merges groups of one color, drops groups with no digits, and orders groups by their lowest digit.
+  function canonicalGroups (groups) {
+    const digitsOfKey = new Map()
+    groups.forEach((g) => digitsOfKey.set(g.key, [...(digitsOfKey.get(g.key) || []), ...g.digits]))
+    return [...digitsOfKey]
+      .map(([key, digits]) => ({ key, digits: [...new Set(digits)].sort() }))
+      .filter((g) => g.digits.length > 0)
+      .sort((a, b) => lowestRank(a) - lowestRank(b))
   }
 
-  function editGroupsFor (groups, shown, act, { group, key, digit }, colors) {
-    switch (act) {
-      case 'color': return { groups: groups.map((g, j) => (j === group ? { key, digits: g.digits } : g)), shown }
-      case 'digit': return { groups: assignDigit(groups, group, digit), shown }
-      case 'open': return { groups, shown }
-      case 'remove': return { groups: groups.filter((_, j) => j !== group), shown: shown.filter((_, j) => j !== group) }
-      case 'clear': return { groups: [], shown: [] }
-      case 'add-group': {
-        const used = groups.map((g) => g.key)
-        const free = colors.find((c) => !used.includes(c.key)) || colors[0]
-        return { groups: free ? [...groups, { key: free.key, digits: [] }] : groups, shown }
-      }
-    }
+  function canonicalState (state) {
+    const profiles = state.profiles.map((p) => ({ name: p.name, groups: canonicalGroups(p.groups) }))
+    return withProfiles(state, profiles, state.active, state.digitActive)
   }
 
-  // The one group whose pickers show, as an index or null. A group Add group made opens; one before a removed group keeps its place.
-  function openGroupAfter (open, act, group, countBefore, countAfter) {
-    switch (act) {
-      case 'open': return open === group ? null : group
-      case 'add-group': return countAfter > countBefore ? countAfter - 1 : open
-      case 'remove': return open === group || open === null ? null : (open > group ? open - 1 : open)
-      case 'clear': return null
-      default: return open
-    }
+  // A null key takes the digit out of every group.
+  function setDigitColor (groups, digit, key) {
+    const rest = groups.map((g) => ({ key: g.key, digits: g.digits.filter((d) => d !== digit) }))
+    if (key === null) return canonicalGroups(rest)
+    return canonicalGroups(rest.some((g) => g.key === key) ? rest.map((g) => (g.key === key ? { key, digits: [...g.digits, digit] } : g)) : [...rest, { key, digits: [digit] }])
   }
+
+  // The color a stroke starting on `digit` paints with: null (clear) when that digit already has the brush color.
+  const strokeKey = (groups, digit, brush) => (keyOfDigitMap(groups)[digit] === brush ? null : brush)
+
+  const paintDigit = (groups, digit, brush) => setDigitColor(groups, digit, strokeKey(groups, digit, brush))
 
   const ARROW_STEP = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }
   function rowAfterKey (key, index, count) {
@@ -683,13 +677,13 @@
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
-  const SWATCH_SIZE = '44px'
+  const KEY_SIZE = '34px'
 
-  // The group's color is ringed twice (white inside, black outside) so it shows on any swatch color.
-  function renderSwatch (slot, groupIndex, selectedKey) {
+  // The brush is ringed twice (white inside, black outside) so it shows on any swatch color.
+  function renderSwatch (slot, brush) {
     if (!slot) return '<span data-empty="slot"></span>'
-    return `<button type="button" data-act="color" data-group="${groupIndex}" data-key="${esc(slot.key)}" ` +
-      `title="${esc(slot.key)}" aria-pressed="${slot.key === selectedKey}" style="background:${esc(slot.value)}"></button>`
+    return `<button type="button" data-act="color" data-key="${esc(slot.key)}" ` +
+      `title="${esc(slot.key)}" aria-pressed="${slot.key === brush}" style="background:${esc(slot.value)}"></button>`
   }
 
   const pageLabel = (page) => `Page ${page.page + 1}${page.current ? ' (current)' : ''}`
@@ -700,20 +694,40 @@
     return found ? found.page : 0
   }
 
-  function renderChosen (colors, key, role = 'chosen') {
-    const color = colors.find((c) => c.key === key)
-    return color ? `<span data-role="${role}" title="${esc(key)}" style="background:${esc(color.value)}"></span>` : `<span data-role="${role}" class="cbd-unset" title="${esc(key)}"></span>`
+  function startingBrush (groups, pages) {
+    if (groups.length > 0) return groups[0].key
+    const page = pages.find((p) => p.current) || pages[0]
+    const first = page && [...page.rows.flat(), page.zero].find(Boolean)
+    return first ? first.key : null
   }
 
-  function renderPalette (pages, colors, groupIndex, key, shownPage) {
-    if (pages.length === 0) return ''
-    const page = pages[shownPage] || pages[0]
+  function renderPageSelect (pages, page) {
     const options = pages.map((p) => `<option value="${p.page}"${p === page ? ' selected' : ''}>${pageLabel(p)}</option>`).join('')
-    const swatches = page.rows.flat().map((slot) => renderSwatch(slot, groupIndex, key)).join('')
-    const zero = page.zero ? `<div class="cbd-swatches cbd-zero">${renderSwatch(page.zero, groupIndex, key)}</div>` : ''
-    return '<div class="cbd-palette-head">' +
-      `<select data-act="page" data-group="${groupIndex}" aria-label="Cell color page">${options}</select> ${renderChosen(colors, key)}</div>` +
-      `<div class="cbd-swatches">${swatches}</div>${zero}`
+    return `<select data-act="page" aria-label="Cell color page">${options}</select>`
+  }
+
+  // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
+  function renderDigitKey (digit, key, colors) {
+    const color = colors.find((c) => c.key === key)
+    const look = !key ? '' : color ? ` style="background:${esc(color.value)};color:${inkFor(color.value)}"` : ' class="cbd-unset"'
+    return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${esc(key || '')}"${look}>${digit}</button>`
+  }
+
+  const emptyPage = { rows: [[null, null, null], [null, null, null], [null, null, null]], zero: null }
+
+  // One grid: each row has three swatches, a gap, and three digit keys, so a swatch row lines up with a pad row; 0 sits right of 9.
+  function renderPaint (groups, shown, brush, colors) {
+    const keyOfDigit = keyOfDigitMap(groups)
+    const digitKey = (d) => renderDigitKey(d, keyOfDigit[d], colors)
+    const gap = '<span data-empty="gap"></span>'
+    const pad = '<span data-empty="pad"></span>'
+    const zero = NUMPAD_DIGITS[NUMPAD_DIGITS.length - 1]
+    const rows = shown.rows.map((row, r) => {
+      const digits = NUMPAD_DIGITS.slice(r * 3, r * 3 + 3).map(digitKey).join('')
+      return row.map((slot) => renderSwatch(slot, brush)).join('') + gap + digits + (r === shown.rows.length - 1 ? digitKey(zero) : pad)
+    })
+    if (shown.zero) rows.push(renderSwatch(shown.zero, brush) + '<span data-empty="slot"></span>'.repeat(2) + gap + pad.repeat(4))
+    return `<div data-role="paint">${rows.join('')}</div>`
   }
 
   function renderChips (groups, colorOf, size) {
@@ -784,32 +798,6 @@
       '<div role="menuitem" data-act="edit" style="padding:9px 10px;border-radius:8px;cursor:pointer;color:#5d5868">&#9881; Edit profiles…</div>'
   }
 
-  // A digit another group holds shows that group's color as a dot; a click on it moves the digit here.
-  function renderNumpad (groups, colors, groupIndex) {
-    const holderOf = (d) => groups.findIndex((g, i) => i !== groupIndex && g.digits.includes(d))
-    return NUMPAD_DIGITS.map((d) => {
-      const own = groups[groupIndex].digits.includes(d)
-      const holder = holderOf(d)
-      const dot = holder < 0 ? '' : renderChosen(colors, groups[holder].key, 'holder')
-      return `<button type="button" class="cbd-button" data-act="digit" data-group="${groupIndex}" data-digit="${d}" ` +
-        `style="font-weight:${own ? 'bold' : 'normal'};opacity:${own ? 1 : 0.4}">${d}${dot}</button>`
-    }).join('')
-  }
-
-  function renderGroup (groups, colors, pages, shown, groupIndex, isOpen) {
-    const g = groups[groupIndex]
-    const chips = g.digits.map((d) => `<span data-role="digit-chip" class="cbd-digit-chip">${esc(d)}</span>`).join('') || '<span class="cbd-note">no digits</span>'
-    const head = '<div class="cbd-group-head">' +
-      `<button type="button" class="cbd-row" data-act="open" data-group="${groupIndex}" aria-expanded="${isOpen}">` +
-      `${renderChosen(colors, g.key, 'swatch')}<span class="cbd-digit-chips">${chips}</span></button>` +
-      `<button type="button" class="cbd-button cbd-small" data-act="remove" data-group="${groupIndex}" title="Remove group" aria-label="Remove group">&#215;</button></div>`
-    const body = isOpen
-      ? `<div class="cbd-group-body"><div>${renderPalette(pages, colors, groupIndex, g.key, shown[groupIndex])}</div>` +
-        `<div data-role="numpad">${renderNumpad(groups, colors, groupIndex)}</div></div>`
-      : ''
-    return `<div class="cbd-group">${head}${body}</div>`
-  }
-
   const optionHtml = (value, label, selected, index) =>
     `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${esc(label)}</option>`
 
@@ -825,16 +813,16 @@
       '</div>'
   }
 
-  function renderEditor ({ groups, pages, shown, pulldownsHtml = '', profilesHtml = '', open = null }) {
+  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '' }) {
     const colors = layoutColors(pages)
-    const rows = groups.map((_, i) => renderGroup(groups, colors, pages, shown, i, i === open)).join('')
-    const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
+    const shown = pages[page] || pages[0]
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
+    const note = colors.length === 0
+      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>'
+      : `<div class="cbd-palette-head">${renderPageSelect(pages, shown)}</div>`
     return `${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
-      '<div class="cbd-column">' +
-      `${heading('Groups', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
-      '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div></div>'
+      `<div class="cbd-column">${heading('Digits', clear)}${note}${renderPaint(groups, shown || emptyPage, brush, colors)}</div></div>`
   }
 
   // One stylesheet, every rule scoped to the editor, the profile menu (for the chips), the dialog itself (its width), or the dialog's options row.
@@ -865,26 +853,14 @@
     [`${EDITOR} .cbd-column`, 'min-width: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-small`, `padding: 0 10px; height: ${SMALL_BUTTON_SIZE}px; line-height: ${SMALL_BUTTON_SIZE - 2}px`],
-    [`${EDITOR} [data-act="remove"]`, `flex: none; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
-    [`${EDITOR} [data-digit="0"]`, 'grid-column: 2'],
-    [`${EDITOR} .cbd-group`, `margin: 6px 0; padding: 4px 8px; border: 1px solid ${RULE_COLOR}; border-radius: 8px`],
-    [`${EDITOR} .cbd-group-head`, 'display: flex; align-items: center; gap: 8px'],
-    [`${EDITOR} .cbd-row`, 'flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-start; gap: 8px; background: none; border: 0; margin: 0; padding: 2px 0; height: auto; width: auto; font-size: .9rem; cursor: pointer; text-align: left'],
-    [`${EDITOR} [data-role="swatch"]`, 'flex: none; display: inline-block; box-sizing: border-box; width: 24px; height: 24px; border-radius: 3px; border: 1px solid #888'],
-    [`${EDITOR} .cbd-digit-chips`, 'display: flex; flex-wrap: wrap; gap: 3px; min-width: 0'],
-    [`${EDITOR} .cbd-digit-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 20px; height: 20px; border-radius: 4px; background: #f1eff5; box-shadow: inset 0 0 0 1px #cfc9db; font-size: 12px; font-weight: 600; line-height: 1; color: #333'],
-    [`${EDITOR} .cbd-group-body`, 'display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; padding: 8px 0 4px'],
-    [`${EDITOR} [data-act="digit"]`, `position: relative; width: ${NUMPAD_KEY}; padding: 0`],
-    [`${EDITOR} [data-role="holder"]`, 'position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1px #fff, 0 0 0 2px #000'],
-    [`${EDITOR} [data-role="numpad"]`, `display: grid; grid-template-columns: repeat(3, ${NUMPAD_KEY}); gap: 4px`],
     [`${EDITOR} .cbd-palette-head`, 'margin-bottom: 6px'],
     [`${EDITOR} select[data-act="page"], ${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
-    [`${EDITOR} .cbd-swatches`, `display: grid; gap: 6px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${SWATCH_SIZE})`],
-    [`${EDITOR} .cbd-zero`, 'margin-top: 6px'],
-    [`${EDITOR} [data-empty="slot"]`, `display: block; width: ${SWATCH_SIZE}; height: ${SWATCH_SIZE}`],
-    [`${EDITOR} [data-act="color"]`, `box-sizing: border-box; display: block; width: ${SWATCH_SIZE}; height: ${SWATCH_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888`],
+    [EDITOR, 'user-select: none; -webkit-user-select: none'],
+    // The pad's columns: three swatches, a gap, three digit keys and the 0 key.
+    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: 4px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}) 12px repeat(4, ${KEY_SIZE}); touch-action: none; margin-top: 8px`],
+    [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
+    [`${EDITOR} [data-act="color"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888`],
     [`${EDITOR} [data-act="color"][aria-pressed="true"]`, 'border: 2px solid #fff; outline: 3px solid #000'],
-    [`${EDITOR} [data-role="chosen"]`, 'display: inline-block; box-sizing: border-box; width: 1.6em; height: 1.6em; border-radius: 3px; vertical-align: middle; border: 1px solid #888'],
     [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
     [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 6px'],
     [`${EDITOR} .cbd-profile`, `cursor: pointer; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; box-shadow: inset 0 0 0 1px ${IDLE_RING}`],
@@ -894,7 +870,7 @@
     [`${EDITOR} .cbd-name`, 'flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400'],
     [`${EDITOR} .cbd-new`, 'margin: 8px 0'],
     // Looks like the row's name until focused: no border or fill, then the box shows.
-    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px 6px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit'],
+    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px 6px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text'],
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
     [`${EDITOR} .cbd-profile .cbd-small`, 'flex: none; padding: 0 8px'], [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
     [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
@@ -904,7 +880,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, openGroupAfter, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, canonicalState, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1285,9 +1261,8 @@
 
   function openDialog (app) {
     const pages = readPages()
-    const colors = layoutColors(pages)
     let savedState = loadState()
-    let draft = savedState
+    let draft = canonicalState(savedState)
     let draftMode = mode
     let selected = draft.active
     // The selected profile's name when it was selected: an emptied name field keeps it.
@@ -1316,14 +1291,20 @@
       row.classList.add(DIALOG_CLASS)
       row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     }
-    let shown = []
-    let open = null
+    let brush
+    let page
+    const groupsShown = () => draft.profiles[selected].groups
     const draw = () => {
-      const { groups } = draft.profiles[selected]
-      groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor({ groups, pages, shown, pulldownsHtml: renderPulldowns(draft, draftMode), profilesHtml: renderProfiles(draft, readColor, selected), open })
+      box.innerHTML = renderEditor({ groups: groupsShown(), pages, page, brush, pulldownsHtml: renderPulldowns(draft, draftMode), profilesHtml: renderProfiles(draft, readColor, selected) })
     }
-    const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; keptName = draft.profiles[selected].name; shown = []; open = null }
+    const reshow = (next, nextSelected = selected) => {
+      draft = next
+      selected = nextSelected
+      keptName = draft.profiles[selected].name
+      brush = startingBrush(groupsShown(), pages)
+      page = initialPage(pages, brush)
+    }
+    reshow(draft)
     const newProfile = () => {
       const next = copyProfile(draft, selected)
       if (next === draft) return
@@ -1338,7 +1319,7 @@
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
-      reshow(savedState, savedState.active)
+      reshow(canonicalState(savedState), savedState.active)
       draftMode = mode
       draw()
     })
@@ -1364,8 +1345,44 @@
       if (pulldown) { choose(pulldown.dataset.role, pulldown.value); return }
       const el = event.target.closest('select[data-act="page"]')
       if (!el) return
-      shown[Number(el.dataset.group)] = Number(el.value)
+      page = Number(el.value)
       draw()
+      box.querySelector('select[data-act="page"]').focus()
+    })
+    const setGroups = (groups) => {
+      if (sameGroups(groups, groupsShown())) return
+      draft = setProfileGroups(draft, selected, groups)
+      draw()
+    }
+    // A press on a digit paints it, and a drag paints each digit the pointer then passes over; the first digit decides paint or clear.
+    // A press in a gap (not on a control) paints from the first digit the drag reaches, so a slightly early press selects no text and drags no page.
+    box.addEventListener('pointerdown', (event) => {
+      const target = event.target
+      if (target.closest('select, input, [data-role="handle"]') || (event.pointerType === 'mouse' && event.button !== 0)) return
+      event.preventDefault()
+      if (target.hasPointerCapture && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId)
+      const pressed = target.closest('[data-act="digit"]')
+      if (!pressed && target.closest('[data-act]')) return
+      let paintKey
+      const paint = (key) => {
+        if (brush === null) return
+        if (paintKey === undefined) paintKey = strokeKey(groupsShown(), key, brush)
+        setGroups(setDigitColor(groupsShown(), key, paintKey))
+      }
+      if (pressed) paint(pressed.dataset.digit)
+      const move = (e) => {
+        const under = document.elementFromPoint(e.clientX, e.clientY)
+        const digit = under && box.contains(under) && under.closest('[data-act="digit"]')
+        if (digit) paint(digit.dataset.digit)
+      }
+      const finish = () => {
+        document.removeEventListener('pointermove', move)
+        document.removeEventListener('pointerup', finish)
+        document.removeEventListener('pointercancel', finish)
+      }
+      document.addEventListener('pointermove', move)
+      document.addEventListener('pointerup', finish)
+      document.addEventListener('pointercancel', finish)
     })
     box.addEventListener('pointerdown', (event) => {
       const handle = event.target.closest('[data-role="handle"]')
@@ -1435,15 +1452,21 @@
         const next = deleteProfile(draft, index)
         if (next === draft) return
         reshow(next, indexAfterDelete(selected, index, draft.profiles.length))
-      } else {
-        const before = draft.profiles[selected].groups
-        const group = Number(el.dataset.group)
-        const edit = editGroupsFor(before, shown, act, { group, key: el.dataset.key, digit: el.dataset.digit }, colors)
-        draft = setProfileGroups(draft, selected, edit.groups)
-        shown = edit.shown
-        open = openGroupAfter(open, act, group, before.length, edit.groups.length)
+      } else if (act === 'color') {
+        brush = el.dataset.key
+      } else if (act === 'clear') {
+        draft = setProfileGroups(draft, selected, [])
+      } else if (act === 'digit' && event.detail === 0 && brush !== null) {
+        // A mouse or touch press has already painted on pointerdown; only a keyboard click, which has no pointer, lands here.
+        draft = setProfileGroups(draft, selected, paintDigit(groupsShown(), el.dataset.digit, brush))
       }
       draw()
+      // The redraw replaced the button; a keyboard user keeps the focus on its successor.
+      const identity = { digit: 'digit', color: 'key' }[act]
+      if (event.detail === 0 && identity) {
+        const next = box.querySelector(`[data-act="${act}"][data-${identity}="${el.dataset[identity]}"]`)
+        if (next) next.focus()
+      }
     })
   }
 

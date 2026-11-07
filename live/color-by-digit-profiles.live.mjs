@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, LABEL, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openGroup, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, groupCountOn, LABEL, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
@@ -487,7 +487,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4', '1', '5', '9', '1', '3', '5'])
   })
 
-  const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()
+  const groupCount = () => groupCountOn(p)
 
   it('a click anywhere on a row but its handle, name field and × selects it without making it the cell profile: one row is highlighted, the name field and the groups follow it', async () => {
     assert.equal(await groupCount(), 2)
@@ -534,7 +534,6 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   })
 
   it('the buttons row is Cancel then Save, Save filled purple, the title row holds the two settings icons, and the page pulldown has the dialog\'s own look', async () => {
-    await openGroup(p, 0)
     assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Cancel', 'Save'])
     assert.deepEqual(await p.$$eval('.cbd-title-row button', (bs) => bs.map((b) => b.getAttribute('aria-label'))), ['Copy settings', 'Paste settings'])
     assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
@@ -561,17 +560,16 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal(await t.selectedRow(), 1)
   })
 
-  it('the numpad: 1 2 3 over 4 5 6 over 7 8 9, with 0 alone under 8', async () => {
-    await openGroup(p, 0)
-    const box = async (d) => p.locator(`${EDITOR} [data-act=digit][data-group="0"][data-digit="${d}"]`).boundingBox()
+  it('the pad: 1 2 3 over 4 5 6 over 7 8 9, with 0 right of 9', async () => {
+    const box = async (d) => p.locator(`${EDITOR} [data-act=digit][data-digit="${d}"]`).boundingBox()
     const at = {}
     for (const d of '0123456789') at[d] = await box(d)
     assert.ok(at[1].x < at[2].x && at[2].x < at[3].x)
     assert.equal(at[1].y, at[3].y)
     assert.ok(at[1].y < at[4].y && at[4].y < at[7].y)
     assert.deepEqual([at[4].x, at[7].x], [at[1].x, at[1].x])
-    assert.equal(at[0].x, at[8].x)
-    assert.ok(at[0].y > at[8].y, JSON.stringify([at[0], at[8]]))
+    assert.equal(at[0].y, at[9].y)
+    assert.ok(at[0].x > at[9].x, JSON.stringify([at[0], at[9]]))
   })
 
   it('a drag of the handle with the mouse reorders the draft, and Cancel drops it', async () => {
@@ -675,6 +673,35 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     const state = await settle(async () => (await t.getState()).profiles.length, 1)
     assert.equal(state, 1)
     assert.equal((await t.getState()).active, 0)
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('opening the editor and saving with no edit, injected after Start Puzzle', { concurrency: false }, () => {
+  const PRELOAD_PROFILES = {
+    profiles: [
+      { name: 'Low/5/High', groups: LOW_FIVE_HIGH },
+      { name: 'Odd/Even', groups: ODD_EVEN },
+      { name: 'Entropic', groups: [group('7', ['0', '1', '2', '3']), group('4', ['4', '5', '6']), group('9', ['7', '8', '9'])] },
+      { name: 'Modular', groups: [group('6', ['1', '4', '7']), group('5', ['2', '5', '8']), group('8', ['0', '3', '6', '9'])] },
+      { name: 'Each digit', groups: [['1', 'j'], ['2', 'e'], ['3', 'h'], ['4', 'm'], ['5', '5'], ['6', '6'], ['7', '7'], ['8', '8'], ['9', '9']].map(([d, key]) => group(key, [d])) }
+    ],
+    active: 3
+  }
+  let context, p, errors
+
+  before(async () => {
+    ({ context, p, errors } = await openProfiles(savedOff(savedProfiles(PRELOAD_PROFILES))))
+  })
+  after(async () => { await context.close() })
+
+  it('every preload comes back unchanged, in its order, with the active profile kept', async () => {
+    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    await closeDialogWith(p, 'Save', EDITOR)
+    assert.deepEqual(await settle(() => p.evaluate((key) => Framework.getData(key), PROFILES_KEY), PRELOAD_PROFILES), PRELOAD_PROFILES)
   })
 
   it('no uncaught page errors', () => {
