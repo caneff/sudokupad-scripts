@@ -701,18 +701,16 @@
 
   const emptyPage = { rows: [[null, null, null], [null, null, null], [null, null, null]], zero: null }
 
-  // One grid: each row has three swatches, a gap, and three digit keys, so a swatch row lines up with a pad row; 0 sits right of 9.
+  // One grid: each row has three swatches, a gap, and three digit keys, so a swatch row lines up with a pad row. A fourth row holds
+  // the 0 swatch, if the page has one, and the 0 key under 7, where SudokuPad's own pad puts 0.
   function renderPaint (groups, shown, brush, colors) {
     const keyOfDigit = keyOfDigitMap(groups)
     const digitKey = (d) => renderDigitKey(d, keyOfDigit[d], colors)
     const gap = '<span data-empty="gap"></span>'
     const pad = '<span data-empty="pad"></span>'
     const zero = NUMPAD_DIGITS[NUMPAD_DIGITS.length - 1]
-    const rows = shown.rows.map((row, r) => {
-      const digits = NUMPAD_DIGITS.slice(r * 3, r * 3 + 3).map(digitKey).join('')
-      return row.map((slot) => renderSwatch(slot, brush)).join('') + gap + digits + (r === shown.rows.length - 1 ? digitKey(zero) : pad)
-    })
-    if (shown.zero) rows.push(renderSwatch(shown.zero, brush) + renderSwatch(null).repeat(2) + gap + pad.repeat(4))
+    const rows = shown.rows.map((row, r) => row.map((slot) => renderSwatch(slot, brush)).join('') + gap + NUMPAD_DIGITS.slice(r * 3, r * 3 + 3).map(digitKey).join(''))
+    rows.push(renderSwatch(shown.zero, brush) + renderSwatch(null).repeat(2) + gap + digitKey(zero) + pad.repeat(2))
     return `<div data-role="paint">${rows.join('')}</div>`
   }
 
@@ -882,7 +880,7 @@
     [`${EDITOR} select[data-act="page"], ${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
     [EDITOR, 'user-select: none; -webkit-user-select: none'],
     // The pad's columns: three swatches, a gap, three digit keys and the 0 key.
-    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: 4px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}) 12px repeat(4, ${KEY_SIZE}); touch-action: none; margin-top: 8px`],
+    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: 4px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}) 12px repeat(3, ${KEY_SIZE}); touch-action: none; margin-top: 8px`],
     [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
     [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
     [`${EDITOR} [data-act="color"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 3px; border: 1px solid #888`],

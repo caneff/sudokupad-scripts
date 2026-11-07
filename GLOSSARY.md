@@ -6,7 +6,7 @@
 - **brush** — the palette color picked in the dialog's palette, shown selected. A click on a digit key paints the
   digit with it, or clears the digit when it already has that color. It starts as the color of the selected
   profile's lowest group, else the first visible color of the current page.
-- **digit key** — one of the ten buttons in the dialog's pad (1 to 9, then 0 right of 9). It is filled with its
+- **digit key** — one of the ten buttons in the dialog's pad (1 to 9, then 0 under 7). It is filled with its
   digit's group color, or blank when the digit is in no group.
 - **pure cell** — a cell that belongs to exactly one group: its given or entered digit is in that
   group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit

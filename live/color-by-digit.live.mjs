@@ -237,6 +237,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await background(digitKey('2')), await background(swatch('2')))
   })
 
+  it('the 0 key, on its own row under 7, paints and clears like any digit key', async () => {
+    await reopen()
+    await swatch('5').click()
+    await digitKey('0').click()
+    assert.equal(await keyOf('0'), '5')
+    await digitKey('0').click()
+    assert.equal(await keyOf('0'), '')
+  })
+
   it('the palette is read from the CSS variables: three pages of 9 visible swatches, 27 in all', async () => {
     const select = p.locator(`${EDITOR} select[data-act="page"]`)
     const seen = []
