@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -118,6 +118,33 @@ test('an index with no saved data is empty, and one that is not a list of keys t
   assert.deepEqual(readIndex(null), [])
   assert.deepEqual(readIndex(['a', 'b']), ['a', 'b'])
   for (const saved of ['oops', { a: 1 }, [1, 2]]) assert.throws(() => readIndex(saved), /saved index/, JSON.stringify(saved))
+})
+
+test('the three widths, middle first by default, and pen color 1 by default', () => {
+  assert.equal(WIDTHS.length, 3)
+  assert.deepEqual([...WIDTHS].sort((a, b) => a - b), WIDTHS)
+  assert.equal(DEFAULT_WIDTH, WIDTHS[1])
+  assert.equal(DEFAULT_WIDTH, 6, 'the width strokes had before the panel')
+  assert.equal(DEFAULT_COLOR, 1)
+})
+
+// A keypad button's data-value is text; Framework.getData parses a saved 3 back as the number 3.
+test('penColor reads 1 to 9, as text or a number, and nothing else', () => {
+  for (let n = 1; n <= 9; n++) {
+    assert.equal(penColor(String(n)), n)
+    assert.equal(penColor(n), n)
+  }
+  for (const value of ['0', 0, 10, '10', 'a', '1.5', 1.5, '', null, undefined, {}, [3]]) assert.equal(penColor(value), undefined, JSON.stringify(value))
+})
+
+test('a saved color reads back, and a missing or bad one reads as pen color 1', () => {
+  assert.equal(readColor(4), 4)
+  for (const saved of [null, undefined, 0, 12, 'red', '', {}]) assert.equal(readColor(saved), DEFAULT_COLOR, JSON.stringify(saved))
+})
+
+test('a saved width reads back, and a missing or bad one reads as the middle width', () => {
+  for (const width of WIDTHS) assert.equal(readWidth(width), width)
+  for (const saved of [null, undefined, 0, 5, 7, '6', 'wide', {}]) assert.equal(readWidth(saved), DEFAULT_WIDTH, JSON.stringify(saved))
 })
 
 test('VERSION matches the @version header', () => {

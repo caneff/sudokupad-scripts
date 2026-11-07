@@ -1,6 +1,8 @@
-// Takes docs/research/site-draw-tool.png, the homepage's Draw Tool picture: the grid's top left on the recorded puzzle,
-// with draw-tool.user.js injected, a freehand loop round two cells, a freehand arrow and a Shift+drag straight line.
-// Every stroke is a real mouse drag. It fails, writing nothing, when a stroke does not land.
+// Takes docs/research/site-draw-tool.png, the homepage's Draw Tool picture: the grid's right side on the recorded
+// puzzle, with draw-tool.user.js injected, and the Draw panel beside it. A thin blue Shift+drag straight line, a green
+// freehand loop round two cells at the middle width and a thick red freehand arrow, each color and width picked in the
+// panel, which is left showing the red and the thick line. Every stroke is a real mouse drag. It fails, writing
+// nothing, when a stroke does not land.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/site-draw-tool-screenshot.mjs
 // Not part of any test.
@@ -13,9 +15,11 @@ const out = new URL('./site-draw-tool.png', import.meta.url).pathname
 
 // Mouse moves per segment of a drag, so the drag reads as a hand-drawn stroke and not a jump.
 const DRAG_STEPS = 10
-// The picture's size in cells, from the grid's top left corner.
-const SHOWN_COLS = 6
-const SHOWN_ROWS = 4
+// The picture's left edge, in cells from the grid's left; it runs from there past the tool buttons, and from the
+// keypad's top to the grid's bottom.
+const FIRST_COL = 4
+// Page pixels kept round the picture's edges.
+const MARGIN = 4
 
 const browser = await chromium.launch()
 const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 1 } })
@@ -35,6 +39,10 @@ const [x0, y0, cell] = await p.evaluate(() => {
 // The page point of grid position (row, col) in cell units.
 const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
 const strokes = () => p.locator('#draw-tool-layer path').count()
+const pick = async (color, widthIndex) => {
+  await p.click(`.controls-input button[data-key="${color}"]`)
+  await p.click(`.draw-tool-widths button >> nth=${widthIndex}`)
+}
 const drag = async (points, shift = false) => {
   const before = await strokes()
   if (shift) await p.keyboard.down('Shift')
@@ -46,18 +54,28 @@ const drag = async (points, shift = false) => {
   if (await strokes() <= before) throw new Error(`the stroke from ${points[0]} did not land`)
 }
 
-// A loop round r2c2 and r2c3, a little uneven, as a hand draws one.
+// A thin blue straight line along row 6.
+await pick(6, 0)
+await drag([[5.6, 4.3], [5.4, 8.7]], true)
+// A loop round r5c7 and r5c8, a little uneven, as a hand draws one.
+await pick(1, 1)
 const loop = Array.from({ length: 25 }, (_, i) => {
   const a = (2 * Math.PI * i) / 24 - Math.PI / 2
-  return [1.5 + 0.62 * Math.sin(a) * (1 + 0.06 * Math.cos(3 * a)), 2.5 + 1.15 * Math.cos(a)]
+  return [4.5 + 0.62 * Math.sin(a) * (1 + 0.06 * Math.cos(3 * a)), 7 + 1.15 * Math.cos(a)]
 })
 await drag(loop)
-// An arrow from r3c5 curving up to r1c5, then its head.
-await drag([[2.6, 4.4], [2.1, 4.9], [1.3, 5.0], [0.65, 4.7]])
-await drag([[0.95, 4.35], [0.62, 4.68], [0.9, 5.05]])
-await drag([[3.3, 0.3], [3.7, 3.7]], true)
+// An arrow from r9c6 curving up to r7c6, then its head.
+await pick(4, 2)
+await drag([[8.6, 4.9], [8.1, 5.4], [7.3, 5.5], [6.65, 5.2]])
+await drag([[6.95, 4.85], [6.62, 5.18], [6.9, 5.55]])
 
+const [panelTop, panelRight] = await p.evaluate(() => [
+  document.querySelector('.controls-input').getBoundingClientRect().top,
+  document.querySelector('.controls-tool').getBoundingClientRect().right
+])
+const left = x0 + FIRST_COL * cell - MARGIN
+const top = panelTop - MARGIN
 await p.mouse.move(0, 0)
-await p.screenshot({ path: out, clip: { x: x0 - 4, y: y0 - 4, width: SHOWN_COLS * cell + 8, height: SHOWN_ROWS * cell + 8 } })
+await p.screenshot({ path: out, clip: { x: left, y: top, width: panelRight + MARGIN - left, height: y0 + 9 * cell + MARGIN - top } })
 console.log(`wrote ${out}`)
 await browser.close()
