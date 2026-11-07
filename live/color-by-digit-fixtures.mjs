@@ -43,6 +43,12 @@ export const LABEL = `${BUTTON} [data-role="mode"]`
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'
 
+// Opens a group's pickers in the editor; a group already open stays open (a second click on its row would close it).
+export async function openGroup (p, g) {
+  const row = p.locator(`${EDITOR} button[data-act=open][data-group="${g}"]`)
+  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+}
+
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
 

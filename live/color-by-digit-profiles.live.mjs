@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, LABEL, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, LABEL, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openGroup, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
@@ -532,6 +532,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   })
 
   it('the buttons row is Copy settings, Paste settings, Cancel then Save, Save filled purple, and the page pulldown has the dialog\'s own look', async () => {
+    await openGroup(p, 0)
     assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Copy settings', 'Paste settings', 'Cancel', 'Save'])
     assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
     assert.match(await p.$eval(`${EDITOR} select[data-act=page]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
@@ -558,6 +559,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
   })
 
   it('the numpad: 1 2 3 over 4 5 6 over 7 8 9, with 0 alone under 8', async () => {
+    await openGroup(p, 0)
     const box = async (d) => p.locator(`${EDITOR} [data-act=digit][data-group="0"][data-digit="${d}"]`).boundingBox()
     const at = {}
     for (const d of '0123456789') at[d] = await box(d)

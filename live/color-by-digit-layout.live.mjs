@@ -6,7 +6,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { EDITOR, openSession } from './color-by-digit-fixtures.mjs'
+import { EDITOR, group, openGroup, openSession, savedProfiles, SEEDED_OFF, MODE_STORAGE_KEY } from './color-by-digit-fixtures.mjs'
 import { openScriptDialog } from './settings.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
@@ -72,5 +72,41 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
         assert.equal(Math.abs(width - DESKTOP_DIALOG_PX) <= NEAR_PX, true, `width ${width}`)
       })
     }
+  })
+}
+
+const EACH_DIGIT = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d, i) => group(String(i + 1), [d]))
+
+for (const viewport of [DESKTOP, PHONE]) {
+  describe(`the nine groups of Each digit at ${viewport.width} px`, { concurrency: false }, () => {
+    let context, p
+    const heights = () => p.evaluate(() => ({ dialog: document.querySelector('.dialog').getBoundingClientRect().bottom, window: window.innerHeight }))
+    before(async () => {
+      const saved = { ...SEEDED_OFF, ...savedProfiles({ profiles: [{ name: 'Each digit', groups: EACH_DIGIT }], active: 0 }), [MODE_STORAGE_KEY]: 'off' }
+      ;({ context, p } = await openSession(browser, script, { saved, contextOptions: { viewport } }))
+      await openScriptDialog(p, 'Color by Digit', EDITOR)
+    })
+    after(async () => { await context?.close() })
+
+    it('shows nine one-line rows, none open, and the dialog stays inside the window', async () => {
+      assert.equal(await p.locator(`${EDITOR} button[data-act=open]`).count(), 9)
+      assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 0)
+      const rows = await p.locator(`${EDITOR} .cbd-group-head`).evaluateAll((es) => es.map((e) => e.getBoundingClientRect().height))
+      for (const h of rows) assert.equal(h <= 40, true, `a row is one short line: ${rows}`)
+      if (viewport === DESKTOP) {
+        const { dialog, window } = await heights()
+        assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)
+      }
+    })
+
+    it('opens one group at a time and the dialog still stays inside the window on a desktop', async () => {
+      await openGroup(p, 8)
+      await openGroup(p, 2)
+      assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 1)
+      if (viewport === DESKTOP) {
+        const { dialog, window } = await heights()
+        assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)
+      }
+    })
   })
 }
