@@ -73,12 +73,12 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
   assert.deepEqual(byDigit.withAddedPreloads(added, ['Each digit']), added)
 
   // The digit profile: synced by default; unticked it starts at the cell profile; a Digits pick moves only the digits;
-  // the icon shows the digit profile in Digit; the menu has Cell and Digit dot columns only while unsynced (#354).
+  // the icon's numbers stay the cell profile's (#377); the menu has Cell and Digit dot columns only while unsynced (#354).
   const two = { profiles: [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }], active: 0 }
   assert.equal(byDigit.isSynced(two), true)
   const apart = byDigit.setDigitActive(byDigit.setSync(two, false), 1)
   assert.deepEqual([byDigit.activeGroups(apart), byDigit.digitGroups(apart)], [SPLIT, ODD_EVEN])
-  assert.deepEqual([byDigit.iconGroups(apart, 'digit'), byDigit.iconGroups(apart, 'both')], [ODD_EVEN, SPLIT])
+  assert.deepEqual(byDigit.activeGroups(apart), SPLIT)
   assert.match(byDigit.renderMenu(apart, colorOf), />Cell<[\s\S]*>Digit<[\s\S]*data-target="digits"/)
   assert.doesNotMatch(byDigit.renderMenu(two, colorOf), />Cell<|>Digit<|data-target="digits"/)
 
