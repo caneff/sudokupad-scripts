@@ -1,7 +1,9 @@
 # sudokupad-scripts
 
 Standalone Tampermonkey userscripts for SudokuPad, written to be shared. Each
-script is one `*.user.js` file with no build step and no ties to any other repo.
+script is one `*.user.js` file with no build step for users. Shared code lives in `lib/<name>.js` and `node sync-lib.js` copies it into each
+script between `// <lib:name>` and `// </lib:name>` markers, so an installed script is still one file. Never edit inside a marked block;
+`lib/*.test.js` tests each module.
 
 - **Pages**: `site/` is the static homepage and its Pen Tool Extras details page. GitHub Pages serves it from `main`
   (`.github/workflows/pages.yml`, at `https://caneff.github.io/sudokupad-scripts/`).
@@ -18,6 +20,8 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
   show it, with their scripts (`docs/research/<script name>/*-screenshot.mjs` or `docs/research/site/*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
+- **Shared code**: after editing `lib/<name>.js`, run `node sync-lib.js`, as `node tag-pictures.js` is run after a picture: it rewrites each
+  marked block in the `*.user.js` and raises the version of every script it changed. `test/sync-lib.test.js` fails until you do.
 - **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
   demonstrated at a phone or tablet size, and no ticket or PR asks for it.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,

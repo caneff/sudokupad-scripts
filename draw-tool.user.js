@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.2
+// @version      0.14.3
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.2'
+  const VERSION = '0.14.3'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -268,7 +268,11 @@
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
   const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+  // </lib:plain>
 
   const clamp255 = (x) => Math.max(0, Math.min(255, x))
 
@@ -599,7 +603,6 @@
   // Pen Tool Extras' pen panel, in the same sizes: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape button and the settings gear at the full 4rem, and the sliders across the rest. The tray
   // sits behind the last two rows; it is placed in their area but takes no cell. Each color button shows a line in its draw color, cut out of the button so a recolor follows.
-  const rem = (value) => Math.round(value * 100) / 100
   const PANEL_BUTTON_REM = 4
   const COLOR_BUTTON_REM = 2.5
   const PANEL_BUTTON_MARGIN_REM = 0.15

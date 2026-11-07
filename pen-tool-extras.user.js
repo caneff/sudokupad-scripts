@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.26.0
+// @version      1.26.1
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.26.0'
+  const VERSION = '1.26.1'
   const SETTINGS_GROUP = 'experimental'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
@@ -48,7 +48,11 @@
   const ORTHOGONAL_LINES = FULL_WIDTH_VALUES.filter((v) => v !== '5' && v !== '6' && !DIAGONAL_LINES.includes(v))
   const CELL_UNITS = 64
 
-  const isPlainObject = (data) => Boolean(data) && typeof data === 'object' && !Array.isArray(data)
+  // <lib:plain>
+  // Generated from lib/plain.js; edit that file and run node sync-lib.js.
+  const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+  const rem = (value) => Math.round(value * 100) / 100
+  // </lib:plain>
 
   function wrapIndex (index, delta, count) {
     return (((index + delta) % count) + count) % count
@@ -1735,7 +1739,6 @@
   // SudokuPad draws `.penlinemode` as a box across the panel's last row, which is hidden here. The panel keeps SudokuPad's outer size (four rows of a 4rem button between 0.15rem margins)
   // and lays itself out as a grid: the nine color buttons shortened to 2.5rem, a gap, a row of the line mode, line type and settings buttons at the full 4rem on the color columns, and
   // the sliders across the rest. A tray sits behind the last two rows; it is placed in their area but takes no cell, so the buttons fill the row.
-  const rem = (value) => Math.round(value * 100) / 100
   const PANEL_BUTTON_REM = 4
   const COLOR_BUTTON_REM = 2.5
   const PANEL_BUTTON_MARGIN_REM = 0.15
