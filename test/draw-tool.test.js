@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -362,4 +362,42 @@ test('a note with a background answers to the box drawn behind it: a click and a
   assert.equal(textAt([boxed], [past, 50]), -1, 'past the box')
   assert.equal(touchesText(boxed, [past + ERASE_TOLERANCE - 0.2, 0], [past + ERASE_TOLERANCE - 0.2, 100]), true, 'an erase within the tolerance of the box')
   assert.deepEqual(noteBox(plain), textBox(plain))
+})
+
+// Three notes near the top left, one far off, and a hidden stroke across them: sum's box is 88 to 112 across and 40 to 60 down.
+const rectDrawing = [sum, textItem([30, 30], 'a', 1, 20), oldStroke, textItem([60, 90], 'b', 2, 20), textItem([400, 400], 'far', 3, 20)]
+
+test('a selection rectangle selects every note it touches, whichever way it was dragged, and never a hidden stroke', () => {
+  assert.deepEqual(notesTouched(rectDrawing, [0, 0], [150, 100]), [0, 1, 3])
+  assert.deepEqual(notesTouched(rectDrawing, [150, 100], [0, 0]), [0, 1, 3])
+  assert.deepEqual(notesTouched(rectDrawing, [0, 100], [150, 0]), [0, 1, 3])
+})
+
+test('a selection rectangle that only grazes a note\'s box selects it, and one that stops short does not', () => {
+  assert.deepEqual(notesTouched([sum], [111, 59], [130, 80]), [0])
+  assert.deepEqual(notesTouched([sum], [113, 0], [130, 80]), [])
+  assert.deepEqual(notesTouched([sum], [90, 61], [100, 80]), [])
+})
+
+test('a selection rectangle touches a note\'s background box, which reaches past its text', () => {
+  const boxed = textItem([100, 50], '15', 3, 20, true)
+  const justPast = [textBox(boxed).right + 3, 50]
+  assert.deepEqual(notesTouched([sum], justPast, [justPast[0] + 10, 55]), [])
+  assert.deepEqual(notesTouched([boxed], justPast, [justPast[0] + 10, 55]), [0])
+})
+
+// Size 20 is the slider's 6, and 14 its 3.
+const red20 = textItem([0, 0], 'a', 4, 20)
+const red14Boxed = textItem([0, 0], 'b', 4, 14, true)
+const blue20Boxed = textItem([0, 0], 'c', 6, 20, true)
+
+test('the panel shows a selection that agrees on everything as its color, size and background', () => {
+  assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, width: 6, bg: false })
+  assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, width: 6, bg: true })
+})
+
+test('a mixed selection shows no color and no background state, and the size of its first note', () => {
+  assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, width: 3, bg: true })
+  assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, width: 6, bg: null })
+  assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, width: 6, bg: null })
 })
