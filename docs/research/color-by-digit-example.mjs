@@ -5,6 +5,8 @@
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../live/page.mjs'
 
+// The pixel density every picture is taken at.
+export const DEVICE_SCALE = 2
 export const BUTTON = '#control-colorbydigit'
 export const MODES = ['CELL', 'DIGIT', 'BOTH', 'OFF']
 const MODE_LABEL = `${BUTTON} [data-role="mode"]`
@@ -22,10 +24,10 @@ const CONFLICTS = 3
 const ROWS = 3
 const COLS = 6
 
-// Opens the live page, at twice the pixel density, on the example puzzle with Color by Digit installed in Cell mode, the entries in, the mascot hidden.
+// Opens the live page, at `DEVICE_SCALE`, on the example puzzle with Color by Digit installed in Cell mode, the entries in, the mascot hidden.
 // `leave` is a list of [row, column] cells whose entries are left out, for a picture that fills them in itself.
 export async function openExample (browser, { leave = [] } = {}) {
-  const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
+  const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: DEVICE_SCALE } })
   await startPuzzle(p)
   await p.evaluate(() => Framework.app.loadCompactClassicSudoku('5' + '0'.repeat(80)))
   await p.waitForFunction(() => Framework.app.grid.getCell(0, 0).given)

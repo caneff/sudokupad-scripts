@@ -12,13 +12,16 @@ import { chromium } from 'playwright'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { BUTTON, exampleClip, MODES, openExample, pressTo, SETTLE_MS, typeInto, waitForCircles } from './color-by-digit-example.mjs'
+import { BUTTON, DEVICE_SCALE, exampleClip, MODES, openExample, pressTo, SETTLE_MS, typeInto, waitForCircles } from './color-by-digit-example.mjs'
 import { joinGif } from './gif-join.mjs'
 
 const out = (name, ext = 'png') => new URL(`./color-by-digit-details-${name}.${ext}`, import.meta.url).pathname
 const FRAME_MS = 1500
 const HOLD_MS = 3000
 const OPEN_MS = 2000
+// The board is shrunk beside the menu so the menu's text stays readable when the page scales the animation down.
+const BOARD_SCALE = 0.5
+const OPEN_STEP = 1
 const MENU = '#color-by-digit-menu'
 const MENU_ARROW = `${BUTTON} [data-role="menu"]`
 
@@ -65,16 +68,15 @@ const shot = (p, name, clip) => p.screenshot({ path: join(frames, `${name}.png`)
 // The profile menu: shut, open, Odd/Even picked.
 {
   const p = await openExample(browser)
+  // The menu has rounded corners over the number pad; the other buttons are hidden so no strip of one shows there.
+  await p.addStyleTag({ content: `button:not(${BUTTON}):not(${MENU} *) { visibility: hidden !important }` })
   const button = p.locator(BUTTON)
   const oddEven = () => p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Odd/Even' })
   await p.click(MENU_ARROW)
   await p.locator(MENU).waitFor({ state: 'visible' })
   await p.waitForTimeout(SETTLE_MS)
-  const b = await button.boundingBox()
-  const m = await p.locator(MENU).boundingBox()
-  const x = Math.max(Math.min(b.x, m.x) - 10, 0)
-  const y = Math.max(m.y - 10, 0)
-  const menuClip = { x, y, width: Math.max(b.x + b.width, m.x + m.width) + 10 - x, height: b.y + b.height + 10 - y }
+  const menuClip = await p.locator(MENU).boundingBox()
+  const openSize = [Math.round(menuClip.width * DEVICE_SCALE), Math.round(menuClip.height * DEVICE_SCALE)]
   await p.click(MENU_ARROW)
   await p.locator(MENU).waitFor({ state: 'hidden' })
   const steps = [
@@ -87,9 +89,11 @@ const shot = (p, name, clip) => p.screenshot({ path: join(frames, `${name}.png`)
     await act()
     await p.waitForTimeout(SETTLE_MS)
     await shot(p, `menu-${i}-grid`, await exampleClip(p))
-    await shot(p, `menu-${i}-menu`, menuClip)
+    if (i === OPEN_STEP) await shot(p, 'menu-open', menuClip)
+    await button.screenshot({ path: join(frames, `menu-${i}-button.png`) })
   }
-  joinGif(steps.map(([, ms], i) => ({ files: [join(frames, `menu-${i}-grid.png`), join(frames, `menu-${i}-menu.png`)], ms })), out('menu', 'gif'))
+  // The menu is cropped to its own box and the button to its own, so no neighbouring control is cut; the menu shows only while it is open.
+  joinGif(steps.map(([, ms], i) => ({ files: [{ stack: [join(frames, `menu-${i}-grid.png`)], scale: BOARD_SCALE }, { stack: [i === OPEN_STEP ? join(frames, 'menu-open.png') : openSize, join(frames, `menu-${i}-button.png`)] }], ms })), out('menu', 'gif'))
   await p.context().close()
 }
 
