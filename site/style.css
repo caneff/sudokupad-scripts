@@ -41,3 +41,19 @@ p { margin: 0 0 .5rem; }
 .slide-pager .next:hover, .slide-pager .next:focus-visible { transform: translateX(3px) scale(1.15); }
 .slide-pager button:active { transform: scale(.9); }
 .slide-pager button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+/* The details layout (body.details): a back link, title, warning, lede and Install, then the slideshow, then sections divided by thin rules. */
+.details .back { font-size: .95rem; margin: .25rem 0 1rem; }
+.details h1 { font-size: 2.1rem; letter-spacing: -.01em; }
+.details .lede { max-width: 44rem; font-size: 1.1rem; }
+.details .actions { margin: .75rem 0 1.5rem; }
+.details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }
+.details .prose, .details .steps, .details .notes { max-width: 44rem; }
+.details .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 2rem; margin: 0; padding: 0; list-style: none; }
+.details .features strong { display: block; margin-bottom: .15rem; }
+.details .features p { margin: 0; }
+.details .figure { margin: 1rem 0; }
+.details .figure img { display: block; max-width: 100%; height: auto; }
+.details .steps li, .details .notes li { margin-bottom: .45rem; }
+.details .steps, .details .notes { padding-left: 1.4rem; }
+.details footer { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--frame-edge); font-size: .95rem; }

@@ -100,7 +100,7 @@ for (const { page: file, script, name } of DETAIL_PAGES) {
     const page = read(file)
     assert.ok(siteLinks(page).includes(HOME), `site/${file} has no relative link back to ${HOME}`)
     assert.ok(scriptLinks(page).includes(RAW + script + SCRIPT_SUFFIX), `site/${file} has no ${name} install link`)
-    assert.match(page, /<p><a href="index\.html">&larr; All SudokuPad scripts<\/a> &middot; <a href="https:\/\/github\.com\/caneff\/sudokupad-scripts">Source on GitHub<\/a><\/p>\s*<\/body>/)
+    assert.match(page, /<(p|footer)><a href="index\.html">&larr; All SudokuPad scripts<\/a> &middot; <a href="https:\/\/github\.com\/caneff\/sudokupad-scripts">Source on GitHub<\/a><\/(p|footer)>\s*(<script src="slides\.js"><\/script>\s*)?<\/body>/)
   })
 }
 
@@ -130,7 +130,7 @@ for (const [name, text] of Object.entries(WARNINGS)) {
 // The details page text is pinned word for word: "What it adds" says what you can do.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
 const section = (file, heading) => {
-  const m = read(file).match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
+  const m = read(file).match(new RegExp(`<h2>${heading}</h2>\\s*<ul[^>]*>([\\s\\S]*?)</ul>`))
   assert.ok(m, `site/${file} has no <h2>${heading}</h2> followed by a list`)
   return items(m[1]).map(plain)
 }
@@ -289,7 +289,7 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
 })
 
 // Checks shared by every details page: the header's @description, the intro, one picture per listed lead-in, and a screenshot script per picture.
-const SCRIPT_INTRO = /<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
+const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
 // A picture name with no extension is a PNG.
 const withExtension = (name) => /\.\w+$/.test(name) ? name : `${name}.png`
 const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, homePicture }) => {
@@ -495,14 +495,7 @@ test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, (
 
 // Draw Tool's entry and details page.
 const DRAW_SUMMARY = 'Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.'
-const DRAW_LEAD_INS = ['Freehand lines.', 'Shapes.', 'Text.', 'Colors of its own.', 'Size and opacity.', 'Erasing.', 'Settings.', 'Stays on the cells.', 'Kept for each puzzle.']
-// The three animations on the details page: the lead-in each sits on, its file, and what its alt text must say.
-const DRAW_GIFS = {
-  'Shapes.': ['draw-tool-details-shapes.gif', /rectangle round the four cells/],
-  'Text.': ['draw-tool-details-text.gif', /Enter[^"]*\b15\b/],
-  'Erasing.': ['draw-tool-details-erasing.gif', /right-drag[^"]*removes/]
-}
-const GIF_LIMIT_BYTES = 300 * 1024
+const DRAW_LEAD_INS = ['Freehand lines', 'Shapes', 'Text', 'Colors of its own', 'Size and opacity', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -510,19 +503,48 @@ test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, 
   assert.equal(m[1], DRAW_SUMMARY)
 })
 
-test(`${DRAW} lists what the script adds, one item per feature`, () => {
+test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
-    'Shapes. The Shape button steps between Off, rectangle and ellipse. With a shape on, a drag draws it in exactly the box you drag.',
-    'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
-    'Colors of its own. Nine colors that belong to Draw Tool, not to SudokuPad\'s pen. A click on a color button or the digit keys 1 to 9 pick one, and a hold on a button puts a color picker over each to change it.',
-    'Size and opacity. The Size slider sets the width of the next line or shape and the size of the next text, and the Opacity slider how solid it is. A line, shape or text keeps the size and opacity it was drawn with.',
-    'Erasing. Drag with the right or middle mouse button across a line, shape or text to erase it, or click one with the middle button. Clear all, which asks first, erases everything.',
-    'Settings. The gear, or the Experimental settings entry, opens a dialog with a list of color presets (the pen colors, three darker page sets and SudokuPad\'s colors), a color picker for each of the nine colors, and Copy settings and Paste settings to move the colors and both slider values to another browser.',
-    'Stays on the cells. Lines, shapes and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
-    'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'
+    'Freehand lines Drag on the puzzle to draw. Hold Shift for a straight line.',
+    'Shapes Rectangle or ellipse, drawn in exactly the box you drag.',
+    'Text Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
+    "Colors of its own Nine colors that belong to Draw Tool, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
+    'Size and opacity Two sliders. A line, shape or text keeps the size and opacity it was drawn with.',
+    'Erasing Drag with the right or middle mouse button across a line, shape or text, or click one with the middle button.',
+    'Settings Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.',
+    'Stays on the cells Drawings stay put, and stay visible when you switch back to entering digits.',
+    'Kept for each puzzle A reload keeps the drawing, for the last 50 puzzles you drew on.'
   ])
-  assert.deepEqual(leadIns(read(DRAW)), DRAW_LEAD_INS)
+  const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
+  assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
+  assert.deepEqual(leadIns(grid[1]), DRAW_LEAD_INS)
+})
+
+test(`${DRAW} is in the details layout: a lede and Install, the slideshow before "What it adds", then the panel with numbered steps`, () => {
+  const page = read(DRAW)
+  assert.match(page, /<body class="details">/)
+  const at = marker => { const i = page.indexOf(marker); assert.notEqual(i, -1, `site/${DRAW} lacks ${marker}`); return i }
+  const order = [at('<p class="lede">'), at('class="install"'), at('<div class="slideshow">'), at('<h2>What it adds</h2>'), at('<h2>The Draw panel</h2>'), at('<ol class="steps">'), at('<h2>Good to know</h2>')]
+  assert.deepEqual(order, [...order].sort((x, y) => x - y))
+  assert.match(page, /<script src="slides\.js"><\/script>/)
+})
+
+test(`${DRAW}'s slideshow is the homepage's: the same eight slides and captions, the first showing without script`, () => {
+  const [onHome] = slideshows(rowsOf(read(HOME)).find(r => r.includes('<h2>Draw Tool</h2>')))
+  const [onPage] = slideshows(read(DRAW).replace('</footer>', '</section>').replace(/<h2>What it adds<\/h2>/, '</section>$&'))
+  const tidy = html => html.replace(/\s+/g, ' ').trim()
+  assert.equal(imgs(onPage).length, 8)
+  assert.deepEqual(imgs(onPage), imgs(onHome))
+  const captions = html => [...html.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)].map(m => m[0])
+  assert.deepEqual(captions(onPage), captions(onHome))
+  assert.match(tidy(onPage), /<p class="slide-caption current">Draw a line<\/p>/)
+})
+
+test('no page links a removed Draw Tool animation', () => {
+  for (const name of PAGES) assert.doesNotMatch(read(name), /draw-tool-(details-[a-z]+\.gif|bullet-lines)/, `site/${name} links a removed Draw Tool picture`)
+  for (const gone of ['draw-tool-details-shapes.gif', 'draw-tool-details-text.gif', 'draw-tool-details-erasing.gif', 'draw-tool-details-screenshot.mjs']) {
+    assert.equal(fs.existsSync(path.join(__dirname, 'docs', 'research', gone)), false, `${gone} is still in docs/research/`)
+  }
 })
 
 test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names every label`, () => {
@@ -538,21 +560,8 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
   assert.match(alt, /press 1 to 9/)
 })
 
-test(`${DRAW}'s Text, Erasing and Shapes pictures are animations under 300 KB whose alt text says so`, () => {
-  const byLeadIn = new Map(items(read(DRAW)).map(li => [leadIn(li), li]))
-  for (const [lead, [file, what]] of Object.entries(DRAW_GIFS)) {
-    const [img] = imgs(byLeadIn.get(lead))
-    const alt = altOf(img)
-    assert.match(alt, /^An animation/, `"${lead}" alt text does not say it is an animation`)
-    assert.match(alt, what, `"${lead}" alt text does not describe its steps`)
-    const gifPath = `docs/research/${file}`
-    assert.ok(fs.statSync(path.join(__dirname, gifPath)).size < GIF_LIMIT_BYTES, `${file} is over 300 KB`)
-    assertDeclaredAtFileShape(img, gifPath, `"${lead}"`)
-  }
-})
-
-test(`${DRAW} good to know says the drawing stays in this browser`, () => {
-  assert.deepEqual(section(DRAW, 'Good to know'), ['The drawing is kept in this browser only, so another browser or device does not show it.'])
+test(`${DRAW} good to know says the drawing stays in this browser, and what clears it`, () => {
+  assert.deepEqual(section(DRAW, 'Good to know'), ['The drawing is kept in this browser only, so another browser or device does not show it.', 'Restart clears the drawing. If a drawing cannot be saved, a message says so.'])
 })
 
 // A script in docs/research/ takes a picture when its header names the picture's file.
@@ -576,9 +585,9 @@ shared({
   script: 'draw-tool',
   name: 'Draw Tool',
   summary: DRAW_SUMMARY,
-  intro: 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines or shapes, and click to type text, such as cage sums, in colors of its own.',
+  intro: 'Adds to SudokuPad a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own.',
   leadIns: DRAW_LEAD_INS,
-  pictures: { 'Freehand lines.': 'draw-tool-bullet-lines', 'Shapes.': 'draw-tool-details-shapes.gif', 'Text.': 'draw-tool-details-text.gif', 'Erasing.': 'draw-tool-details-erasing.gif' },
+  pictures: {},
   homePicture: 'draw-tool-slide-1-line.png'
 })
 
