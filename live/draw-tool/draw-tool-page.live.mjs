@@ -1,6 +1,6 @@
 // Live check of draw-tool.user.js's notes off the board on sudokupad.app: a click anywhere on the page but a control starts a
-// note there, fixed on the screen; a click on a control starts none; a resize or a layout change leaves an off-board note
-// where it was and an on-board note over its cells; a right click beside the board erases with no browser menu, and one on a control keeps its menu; a drag across the board's edge stores the note as its drop point
+// note there, fixed on the screen; a click on a control starts none; a resize or a layout change that leaves an off-board note in reach leaves it
+// where it was (draw-tool-reach.live.mjs has the one put out of reach) and an on-board note over its cells; a right click beside the board erases with no browser menu, and one on a control keeps its menu; a drag across the board's edge stores the note as its drop point
 // requires, kept over a reload; notes saved before 0.18.0 load in their places; a dialog covers the notes. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -137,11 +137,11 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     assert.equal(await savedNote('R'), undefined)
   })
 
-  it('after a window resize an off-board note keeps its screen point and an on-board note stays over its cells', async () => {
+  it('after a window resize that leaves it in reach an off-board note keeps its screen point and an on-board note stays over its cells', async () => {
     await typeAt(await gridPoint(p, ON_AT), 'G')
     const below = await noteMiddle('B')
     const cells = await noteInCells('G')
-    await p.setViewportSize({ width: 1000, height: 800 })
+    await p.setViewportSize({ width: 1000, height: 900 })
     assert.deepEqual(await stable(() => noteInCells('G')), cells)
     assert.equal(near(await noteMiddle('B'), below), true, `the off-board note moved from ${below} to ${await noteMiddle('B')}`)
     await p.setViewportSize({ width: 1200, height: 900 })

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, reachablePoint, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -497,4 +497,36 @@ test('once a note is drawn its box is the size drawn, not the guess from its cha
   const long = textItem([100, 50], 'x'.repeat(40), 3, 20)
   assert.deepEqual(textBox({ ...long, [DRAWN_SIZE]: [300, 23] }), { left: -50, right: 250, top: 38.5, bottom: 61.5 })
   assert.deepEqual(textBox({ ...long, box: [200, 60], [DRAWN_SIZE]: [300, 23] }), { left: 0, right: 200, top: 20, bottom: 80 })
+})
+
+// A 1000x900 window with a panel down its right side from x=800.
+const WINDOW = { left: 0, top: 0, right: 1000, bottom: 900 }
+const PANEL = { left: 800, top: 100, right: 1000, bottom: 700 }
+
+test('a note whose box is inside the window and clear of the controls stays where it is', () => {
+  assert.deepEqual(reachablePoint([500, 400], [100, 40], WINDOW, [PANEL]), [500, 400])
+})
+
+test('a note whose box is past the window\'s edge is moved to the nearest point, a pixel in, that holds the whole box inside', () => {
+  assert.deepEqual(reachablePoint([1143, 800], [100, 40], WINDOW, []), [949, 800])
+  assert.deepEqual(reachablePoint([-20, -5], [100, 40], WINDOW, []), [51, 21])
+})
+
+test('a note under a control is moved to the nearest point a pixel clear of it, on the side it is nearest', () => {
+  assert.deepEqual(reachablePoint([850, 400], [100, 40], WINDOW, [PANEL]), [749, 400])
+  assert.deepEqual(reachablePoint([900, 120], [100, 40], WINDOW, [PANEL]), [900, 79])
+})
+
+test('a note too big for the window is centred on it, and a control that leaves no free point leaves the note inside the window', () => {
+  assert.deepEqual(reachablePoint([10, 10], [1200, 40], WINDOW, []), [500, 21])
+  assert.deepEqual(reachablePoint([1500, 400], [100, 40], WINDOW, [WINDOW]), [949, 400])
+})
+
+test('a note under two controls that meet at a corner is moved to the nearest point clear of both', () => {
+  const topbar = { left: 0, top: 0, right: 1000, bottom: 50 }
+  assert.deepEqual(reachablePoint([900, 60], [100, 40], WINDOW, [topbar, { ...PANEL, top: 50 }]), [749, 71])
+})
+
+test('a window with no area leaves a note where it is', () => {
+  assert.deepEqual(reachablePoint([900, 60], [100, 40], { left: 0, top: 0, right: 0, bottom: 0 }, [PANEL]), [900, 60])
 })

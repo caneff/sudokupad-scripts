@@ -55,6 +55,9 @@ export async function holdForPickers (p, selector, button, state) {
   }
 }
 
+// The middle of a Playwright bounding box.
+export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
+
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)
 
