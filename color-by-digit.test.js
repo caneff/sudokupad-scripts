@@ -505,7 +505,6 @@ test('the pulldowns sit above the profile list and the groups, one per row, each
   const css = STYLE_CSS.replace(/\s+/g, ' ')
   assert.match(css, /\.cbd-pulldowns \{ display: grid; gap: \d+px; margin: 0 0 10px; \}/)
   assert.match(css, /\.cbd-pulldown \{ display: grid; grid-template-columns: \d+px minmax\(0, 1fr\); align-items: center;/)
-  assert.doesNotMatch(css, /\.cbd-pulldowns \{[^}]*auto-fit/)
 })
 
 test('the dialog has the profile list and the groups editor as two columns of one grid, the list first', () => {

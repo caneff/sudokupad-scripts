@@ -52,7 +52,6 @@ const E = '#color-by-digit-editor'
 const dialog = await box('.dialog')
 const parts = {
   icons: union(await Promise.all(['copy-settings', 'paste-settings'].map((a) => box(`.dialog button[data-act=${a}]`)))),
-  pulldowns: await box(`${E} .cbd-pulldowns`),
   modeSelect: await box(`${E} select[data-role=mode-draft]`),
   cellSelect: await box(`${E} select[data-role=cell-profile]`),
   profiles: await box(`${E} .cbd-profile:nth-child(2)`),

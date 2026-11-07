@@ -32,17 +32,18 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
     it('lays the Mode, Cell and Digit pulldowns one per row, each label left of its select in one label column, with no checkbox and no mode button', async () => {
       const boxes = await p.locator(`${EDITOR} .cbd-pulldown`).evaluateAll((es) => es.map((e) => {
         const label = e.querySelector('span').getBoundingClientRect(); const select = e.querySelector('select').getBoundingClientRect()
-        return { role: e.querySelector('select').dataset.role, labelX: Math.round(label.x), labelRight: Math.round(label.right), labelY: Math.round(label.y + label.height / 2), selectX: Math.round(select.x), selectRight: Math.round(select.right), selectY: Math.round(select.y + select.height / 2), top: Math.round(select.y) }
+        return { role: e.querySelector('select').dataset.role, labelX: Math.round(label.x), labelRight: Math.round(label.right), labelY: label.y + label.height / 2, selectX: Math.round(select.x), selectRight: Math.round(select.right), selectY: select.y + select.height / 2, top: Math.round(select.y) }
       }))
       assert.deepEqual(boxes.map((b) => b.role), ['mode-draft', 'cell-profile', 'digit-profile'])
       assert.equal(await p.locator(`${EDITOR} input[type=checkbox], ${EDITOR} button[data-role="mode-draft"]`).count(), 0)
       assert.equal(new Set(boxes.map((b) => b.top)).size, 3, `one row each: ${JSON.stringify(boxes)}`)
+      assert.equal(new Set(boxes.map((b) => b.labelX)).size, 1, `labels share a left edge: ${JSON.stringify(boxes)}`)
       assert.equal(new Set(boxes.map((b) => b.selectX)).size, 1, `selects line up: ${JSON.stringify(boxes)}`)
       assert.equal(new Set(boxes.map((b) => b.selectRight)).size, 1, `selects share a width: ${JSON.stringify(boxes)}`)
       const dialog = await rect('.dialog')
       for (const b of boxes) {
         assert.equal(b.labelRight <= b.selectX, true, `label left of its select: ${JSON.stringify(b)}`)
-        assert.equal(Math.abs(b.labelY - b.selectY) <= 4, true, `label centred on its row: ${JSON.stringify(b)}`)
+        assert.equal(Math.abs(b.labelY - b.selectY) <= NEAR_PX, true, `label centred on its row: ${JSON.stringify(b)}`)
         assert.equal(b.selectRight <= dialog.right, true, `inside the dialog: ${JSON.stringify(b)}`)
       }
     })
