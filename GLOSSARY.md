@@ -187,13 +187,12 @@
   point clicked. It is typed in the **text box**, an input over the board that a click on the board opens, and a click on
   a text reopens.
 - **shape** — a rectangle or an ellipse in a drawing, drawn as an outline by a drag in Shape mode, in a draw color, with its own
-  width and opacity. Each corner of its box snaps to the nearest quarter-cell line of the drag's start and end, or follows the drag
-  exactly with Alt held. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
+  width and opacity. Its box is exactly the drag's own box. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
 - **Shape mode** — what a left-drag with Draw draws: free lines (Off), rectangles or ellipses. The **Shape button**, between
   Clear all and the gear, steps Off, Rectangle, Ellipse and shows the one in force; it is saved under `DrawTool_shape`. A click
   still opens the text box in every mode.
 - **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
   (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.
   Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
-- **erase** — Draw's right-drag: every stroke and text the drag passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
+- **erase** — Draw's right-drag or middle-drag: every stroke and text the drag passes near, and every shape whose outline it passes near, is removed whole. A middle click deletes only the topmost item at the point. Clear all erases the whole
   drawing, after asking.
