@@ -196,7 +196,14 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     const before = (await savedNote('N')).fixed
     const handle = await p.locator('#draw-tool-layer .draw-tool-resize').last().boundingBox()
     const [x, y] = [handle.x + handle.width / 2, handle.y + handle.height / 2]
-    await dragFromTo([x, y], [x + 150, y + 20])
+    const innerWidth = await read(() => window.innerWidth)
+    assert.equal(x + 150 > innerWidth - 10, true, `the drag's end ${x + 150} is past the window's edge ${innerWidth}`)
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(x + 150, y + 20, { steps: 8 })
+    await draw.frames(p)
+    assert.deepEqual((await savedNote('N')).fixed, before, 'the point is saved once, on the release, and does not follow the drag')
+    await p.mouse.up()
     const edges = await read((selector) => {
       const { right, bottom } = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'N').getBoundingClientRect()
       return { right, bottom, width: window.innerWidth, height: window.innerHeight }
@@ -204,7 +211,7 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     assert.equal(edges.right <= edges.width && edges.bottom <= edges.height, true, `the note ends at ${edges.right}, ${edges.bottom} in a ${edges.width} x ${edges.height} window`)
     const note = await savedNote('N')
     assert.equal(note.box.length, 2)
-    assert.notDeepEqual(note.fixed, before, 'the point moved with the resize')
+    assert.equal(near(note.fixed, await noteMiddle('N')), true, `saved at ${note.fixed}, drawn at ${await noteMiddle('N')}`)
     await p.keyboard.press('Escape')
   })
 

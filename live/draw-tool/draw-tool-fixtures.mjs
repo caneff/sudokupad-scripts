@@ -119,6 +119,8 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
   }
 }), TEXTS)
 
+// Two frames: the pointer's work waits for the next one.
+export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
 // Removes every saved drawing and the index.

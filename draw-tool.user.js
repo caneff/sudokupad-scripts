@@ -439,7 +439,7 @@
     return item.fixed ? { ...rest, box, fixed: roundPoint(middle) } : { ...rest, box, at: roundPoint(board.toBoard(middle)) }
   }
 
-  // The note back at its automatic size, on the point it has.
+  // The note back at its auto size, on the point it has.
   function autoSized (item) {
     const { box, ...rest } = item
     return rest
@@ -1051,7 +1051,7 @@
   const textColor = (item) => itemOpacity(item) === 100 ? itemColor(item.color) : `color-mix(in srgb, ${itemColor(item.color)} ${itemOpacity(item)}%, transparent)`
 
   // A note's style, centred on `point` and drawn at `scale` pixels of its box per board unit; a background is a page-colored rounded box around the text.
-  // A resized note is exactly its stored box; any other takes the stylesheet's automatic width and height. A note with no background is padded by its
+  // A resized note is exactly its stored box; any other takes the stylesheet's auto width and height. A note with no background is padded by its
   // halo's reach, since its box clips what overflows it.
   function noteStyle (item, [x, y], scale) {
     const px = (units) => `${roundToTenth(units * scale)}px`
@@ -1817,6 +1817,9 @@
     showHandles(editing.box)
   }
 
+  // The point of a screen box that corner `corner` of CORNERS names, or of the opposite corner with `opposite`.
+  const cornerPoint = (box, corner, opposite = false) => [0, 1].map((i) => (corner[i] < 0) !== opposite ? [box.left, box.top][i] : [box.right, box.bottom][i])
+
   // The screen box of the one selected note, or null when no note or several are selected.
   function selectedBox () {
     const element = selected.length === 1 ? drawing[selected[0]][NOTE_ELEMENT] : null
@@ -1843,8 +1846,9 @@
       })
     }
     for (const { element, corner } of handles) {
-      element.style.left = `${roundToTenth((corner[0] < 0 ? box.left : box.right) - HANDLE_PX / 2)}px`
-      element.style.top = `${roundToTenth((corner[1] < 0 ? box.top : box.bottom) - HANDLE_PX / 2)}px`
+      const [x, y] = cornerPoint(box, corner)
+      element.style.left = `${roundToTenth(x - HANDLE_PX / 2)}px`
+      element.style.top = `${roundToTenth(y - HANDLE_PX / 2)}px`
     }
   }
 
@@ -1869,8 +1873,8 @@
     const element = editing ? editing.element : item[NOTE_ELEMENT]
     const box = contentBox(element, editing || item.fixed ? 1 : boardMap().scale)
     const [x, y] = eventPoint(event)
-    const grabbed = [corner[0] < 0 ? box.left : box.right, corner[1] < 0 ? box.top : box.bottom]
-    const anchor = [corner[0] < 0 ? box.right : box.left, corner[1] < 0 ? box.bottom : box.top]
+    const grabbed = cornerPoint(box, corner)
+    const anchor = cornerPoint(box, corner, true)
     resizing = { index, item, corner, anchor, offset: [grabbed[0] - x, grabbed[1] - y], to: null }
   }
 
@@ -1912,7 +1916,7 @@
     save()
   }
 
-  // A double-click on a handle sends the note back to its automatic size.
+  // A double-click on a handle sends the note back to auto size.
   function resetSize () {
     const index = resizedIndex()
     if (index === null) return
