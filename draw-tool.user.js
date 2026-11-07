@@ -64,8 +64,8 @@
     return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
   }
 
-  // Ramer-Douglas-Peucker: the fewest points whose line stays within `tolerance` of every point given.
-  function simplifyPath (points, tolerance = SIMPLIFY_TOLERANCE) {
+  // Ramer-Douglas-Peucker: the fewest points whose line stays within SIMPLIFY_TOLERANCE of every point given.
+  function simplifyPath (points) {
     if (points.length <= 2) return points.slice()
     const first = points[0]
     const last = points[points.length - 1]
@@ -78,9 +78,9 @@
         farthestIndex = i
       }
     }
-    if (farthest <= tolerance) return [first, last]
-    const head = simplifyPath(points.slice(0, farthestIndex + 1), tolerance)
-    return head.slice(0, -1).concat(simplifyPath(points.slice(farthestIndex), tolerance))
+    if (farthest <= SIMPLIFY_TOLERANCE) return [first, last]
+    const head = simplifyPath(points.slice(0, farthestIndex + 1))
+    return head.slice(0, -1).concat(simplifyPath(points.slice(farthestIndex)))
   }
 
   const roundToTenth = (value) => Math.round(value * 10) / 10
@@ -186,10 +186,10 @@
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   const isStroke = (item) => item !== null && typeof item === 'object' && item.kind === 'stroke' &&
-    isNumber(item.color) && isNumber(item.width) && Array.isArray(item.points) && item.points.length > 0 &&
+    penColor(item.color) !== undefined && WIDTHS.includes(item.width) && Array.isArray(item.points) && item.points.length > 0 &&
     item.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(isNumber))
   const isText = (item) => item !== null && typeof item === 'object' && item.kind === 'text' &&
-    isNumber(item.color) && isNumber(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+    penColor(item.color) !== undefined && TEXT_SIZES.includes(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     Array.isArray(item.at) && item.at.length === 2 && item.at.every(isNumber)
 
   // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
@@ -214,6 +214,24 @@
     return { index: next.slice(-KEPT_PUZZLES), dropped: next.slice(0, Math.max(0, next.length - KEPT_PUZZLES)) }
   }
 
+  const drawingKey = (key) => DRAWING_PREFIX + key
+
+  // `store` has Framework's getData, setData and removeData. The drawing is written before the index, and the dropped
+  // puzzles' drawings are removed last, so a write that throws (a full localStorage) loses no drawing already saved.
+  // An index that cannot be read throws before anything is written.
+  function saveDrawingTo (store, key, drawing) {
+    const index = readIndex(store.getData(INDEX_KEY))
+    if (drawing.length === 0) {
+      store.removeData(drawingKey(key))
+      store.setData(INDEX_KEY, index.filter((k) => k !== key))
+      return
+    }
+    const touched = touchIndex(index, key)
+    store.setData(drawingKey(key), drawing)
+    store.setData(INDEX_KEY, touched.index)
+    for (const dropped of touched.dropped) store.removeData(drawingKey(dropped))
+  }
+
   // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Draw out of the
   // list while a keydown is dispatched gives Draw no key, and keeps every other tool's key where it is without Draw.
   const toolNamesFor = (names, event) => event && event.type === 'keydown' && event.eventPhase !== 0
@@ -221,7 +239,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP }
+    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP }
   }
   if (typeof document === 'undefined') return
 
@@ -402,7 +420,6 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   let savable = true
 
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
-  const drawingKey = (key) => DRAWING_PREFIX + key
 
   function renderDrawing () {
     const layer = drawingLayer()
@@ -471,25 +488,12 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     renderDrawing()
   }
 
-  // Writes the drawing, or removes the puzzle's entry when it is empty, and keeps the index to the newest puzzles.
   function saveDrawing () {
-    const key = currentPuzzleKey()
-    let index
     try {
-      index = readIndex(Framework.getData(INDEX_KEY))
+      saveDrawingTo(Framework, currentPuzzleKey(), drawing)
     } catch (err) {
-      console.warn(`${err.message}. It is left as it is, and the drawing is not saved.`)
-      return
+      console.warn(`${err.message}. The drawing is not saved.`)
     }
-    if (drawing.length === 0) {
-      Framework.removeData(drawingKey(key))
-      Framework.setData(INDEX_KEY, index.filter((k) => k !== key))
-      return
-    }
-    const touched = touchIndex(index, key)
-    for (const dropped of touched.dropped) Framework.removeData(drawingKey(dropped))
-    Framework.setData(INDEX_KEY, touched.index)
-    Framework.setData(drawingKey(key), drawing)
   }
 
   // Restart and Clear all, each confirmed first, empty the drawing, an unreadable saved one included.

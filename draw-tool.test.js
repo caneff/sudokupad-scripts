@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -85,7 +85,9 @@ test('a puzzle with no saved drawing starts empty', () => {
 
 // Framework.getData hands back the raw text when it is not JSON.
 test('saved data that is not a drawing throws, and is never read as an empty drawing', () => {
-  for (const saved of ['[{"kind":"stroke"', {}, 'text', [{ kind: 'stroke', color: 1, width: 6, points: [] }], [{ kind: 'blob' }]]) {
+  const stroke = { kind: 'stroke', color: 1, width: 6, points: [[0, 0]] }
+  assert.deepEqual(readDrawing([stroke]), [stroke])
+  for (const saved of ['[{"kind":"stroke"', {}, 'text', [{ ...stroke, points: [] }], [{ kind: 'blob' }], [{ ...stroke, color: 42 }], [{ ...stroke, color: 0 }], [{ ...stroke, width: -1 }], [{ ...stroke, width: 7 }]]) {
     assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
   }
 })
@@ -96,16 +98,49 @@ test('the key is the puzzle id, or the page URL for a puzzle with none', () => {
   assert.equal(puzzleKey('', 'https://sudokupad.app/'), 'https://sudokupad.app/')
 })
 
-const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
-
-test('drawings are kept for 50 puzzles', () => {
-  assert.equal(KEPT_PUZZLES, 50)
+// Framework's saved-data calls over a plain object, as spec-204-closing.test.js has them.
+const storeOf = (saved) => ({
+  getData: (key) => saved[key],
+  setData: (key, value) => { saved[key] = value },
+  removeData: (key) => { delete saved[key] }
 })
+const line = strokeItem([[0, 0], [64, 64]], 1, 6)
+const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
 
 test('saving a drawing for a 51st puzzle drops the oldest puzzle and keeps the other 50', () => {
   const { index, dropped } = touchIndex(puzzles(50), 'p51')
   assert.deepEqual(dropped, ['p1'])
   assert.deepEqual(index, puzzles(51).slice(1))
+})
+
+test('saving a drawing for a 51st puzzle keeps the drawings of the 50 newest and removes the oldest one', () => {
+  const saved = { [INDEX_KEY]: puzzles(50) }
+  for (const key of puzzles(50)) saved[DRAWING_PREFIX + key] = [line]
+  saveDrawingTo(storeOf(saved), 'p51', [line])
+  assert.deepEqual(saved[INDEX_KEY], puzzles(51).slice(1))
+  assert.deepEqual(Object.keys(saved).filter((k) => k !== INDEX_KEY).sort(), puzzles(51).slice(1).map((key) => DRAWING_PREFIX + key).sort())
+})
+
+test('a save whose write throws loses no saved drawing and leaves the index as it was', () => {
+  const saved = { [INDEX_KEY]: puzzles(50) }
+  for (const key of puzzles(50)) saved[DRAWING_PREFIX + key] = [line]
+  const before = structuredClone(saved)
+  const full = { ...storeOf(saved), setData: () => { throw new Error('QuotaExceededError') } }
+  assert.throws(() => saveDrawingTo(full, 'p51', [line]), /QuotaExceededError/)
+  assert.deepEqual(saved, before)
+})
+
+test('an index that cannot be read refuses the save, and nothing is written', () => {
+  const saved = { [INDEX_KEY]: 'oops', [DRAWING_PREFIX + 'p1']: [line] }
+  assert.throws(() => saveDrawingTo(storeOf(saved), 'p1', []), /saved index/)
+  assert.throws(() => saveDrawingTo(storeOf(saved), 'p2', [line]), /saved index/)
+  assert.deepEqual(saved, { [INDEX_KEY]: 'oops', [DRAWING_PREFIX + 'p1']: [line] })
+})
+
+test('saving an empty drawing removes the puzzle\'s drawing and takes it out of the index', () => {
+  const saved = { [INDEX_KEY]: ['p1', 'p2'], [DRAWING_PREFIX + 'p1']: [line], [DRAWING_PREFIX + 'p2']: [line] }
+  saveDrawingTo(storeOf(saved), 'p1', [])
+  assert.deepEqual(saved, { [INDEX_KEY]: ['p2'], [DRAWING_PREFIX + 'p2']: [line] })
 })
 
 test('saving a puzzle already in the index makes it the newest and drops nothing', () => {
@@ -124,7 +159,7 @@ test('the three widths, middle first by default, and pen color 1 by default', ()
   assert.equal(WIDTHS.length, 3)
   assert.deepEqual([...WIDTHS].sort((a, b) => a - b), WIDTHS)
   assert.equal(DEFAULT_WIDTH, WIDTHS[1])
-  assert.equal(DEFAULT_WIDTH, 6, 'the width strokes had before the panel')
+  assert.equal(DEFAULT_WIDTH, 6)
   assert.equal(DEFAULT_COLOR, 1)
 })
 
@@ -215,7 +250,7 @@ test('a drawing of strokes and text saved as JSON reads back equal, item for ite
 })
 
 test('saved text that is not a text item throws', () => {
-  for (const item of [{ ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, color: null }]) {
+  for (const item of [{ ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, size: 1e6 }, { ...sum, color: null }, { ...sum, color: 42 }]) {
     assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
   }
 })
