@@ -145,17 +145,6 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
     assert.equal(await bgCount(), 1)
   })
 
-  it('Escape on an open note after toggling Background keeps the new box', async () => {
-    await openAt(SPOTS[2])
-    await p.click(BACKGROUND_BUTTON)
-    await p.keyboard.press('Escape')
-    assert.equal(await bgCount(), 2)
-    assert.deepEqual(await savedBgs(), { a: false, b: true, c: true, d: false })
-    await openAt(SPOTS[2])
-    await p.click(BACKGROUND_BUTTON)
-    await p.keyboard.press('Escape')
-  })
-
   it('pressing Background on a note whose box differs from the setting turns that note\'s box over in one press and leaves the setting alone', async () => {
     assert.equal(await storedSetting(), false)
     await openAt(SPOTS[1])

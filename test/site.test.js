@@ -457,7 +457,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it.',
     'Bold, italic and strikethrough Write **bold**, *italic* (or _italic_) and ~~strikethrough~~ in a note, and nest them, such as **bold *and italic***. The markers show while you type and are hidden once the note is finished; a marker with no partner shows as typed.',
-    "Readable over digits Each note's letters have a thin outline in the page color, so a note reads over digits, pencil marks and colored cells.",
+    'Readable over digits Each note has a halo, a thin outline of its letters in the page color, so it reads over digits, pencil marks and colored cells.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
     'Text size One slider, from small to large. A note keeps the size it was typed with until you select it and move the slider.',
     'Background Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',

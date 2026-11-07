@@ -174,6 +174,8 @@
   const BACKGROUND_KEY = 'DrawTool_background'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
+  // A line's height as a share of the text size, in the font's own spacing, so a note's box is as tall as the note drawn.
+  const LINE_HEIGHT = 1.15
   // How far, in screen pixels, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
@@ -221,6 +223,7 @@
   const segmentsCross = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0
 
   // Markers in the order they are tried, each with the flag it sets. `**` comes before `*` so a bold marker is never read as two italic ones.
+  const FLAGS = ['bold', 'italic', 'strike']
   const MARKERS = [['**', 'bold'], ['~~', 'strike'], ['*', 'italic'], ['_', 'italic']]
   const isWordChar = (char) => char !== undefined && /\w/.test(char)
   const isSpace = (char) => char === undefined || /\s/.test(char)
@@ -231,7 +234,7 @@
     const memo = new Map()
     const add = (runs, run) => {
       const last = runs[runs.length - 1]
-      if (last && ['bold', 'italic', 'strike'].every((flag) => Boolean(last[flag]) === Boolean(run[flag]))) last.text += run.text
+      if (last && FLAGS.every((flag) => Boolean(last[flag]) === Boolean(run[flag]))) last.text += run.text
       else runs.push({ ...run })
     }
     // The runs from `at` up to the marker that closes `stop`, or to the end when `stop` is empty; `closed` says whether it was found.
@@ -265,14 +268,13 @@
   // A note's text as one list of runs per line; a marker does not reach across a line break.
   const parseMarkdown = (text) => text.split('\n').map(parseLine)
 
-  // The number of characters a line shows, markers left out.
   const shownLength = (runs) => runs.reduce((sum, run) => sum + run.text.length, 0)
 
   // The box a text takes on the board, centred on its point: the text is drawn anchored at its middle.
   function textBox (item) {
     const lines = parseMarkdown(item.text)
     const halfWidth = (Math.max(1, ...lines.map(shownLength)) * item.size * CHAR_WIDTH) / 2
-    const halfHeight = (lines.length * item.size) / 2
+    const halfHeight = (lines.length * item.size * LINE_HEIGHT) / 2
     const [x, y] = item.at
     return { left: x - halfWidth, right: x + halfWidth, top: y - halfHeight, bottom: y + halfHeight }
   }
@@ -938,14 +940,13 @@
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
   }
 
-  // A run with a flag set is a span carrying every flag it has, so nested markdown is one span; a plain run is bare text.
+  const FLAG_STYLES = (run) => ({ ...(run.bold && { fontWeight: 'bold' }), ...(run.italic && { fontStyle: 'italic' }), ...(run.strike && { textDecoration: 'line-through' }) })
+
   function runElement (run) {
-    if (!run.bold && !run.italic && !run.strike) return run.text
+    if (!FLAGS.some((flag) => run[flag])) return run.text
     const element = document.createElement('span')
     element.textContent = run.text
-    if (run.bold) element.style.fontWeight = 'bold'
-    if (run.italic) element.style.fontStyle = 'italic'
-    if (run.strike) element.style.textDecoration = 'line-through'
+    Object.assign(element.style, FLAG_STYLES(run))
     return element
   }
 
@@ -1069,8 +1070,8 @@
     `.${SLIDER_ROW_CLASS} span:first-child { font-size: ${SIZE_LABEL_REM[0]}rem; padding-left: 0.35rem; }`,
     `.${SLIDER_ROW_CLASS} span:last-child { font-size: ${SIZE_LABEL_REM[1]}rem; padding-right: 0.35rem; }`,
     `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
-    // The font's own line height, so a note's background box is as tall as a digit and covers one under it.
-    `.${TEXT_CLASS} { position: absolute; transform: translate(-50%, -50%); line-height: normal; white-space: pre; }`,
+    // A line as tall as the hit box, so a note's background box is as tall as a digit and covers one under it.
+    `.${TEXT_CLASS} { position: absolute; transform: translate(-50%, -50%); line-height: ${LINE_HEIGHT}; white-space: pre; }`,
     // A halo in the page's color, painted under the letters so only its outer half shows; a note with a background box already sits on that color.
     `.${TEXT_CLASS}:not(.${TEXT_BACKGROUND_CLASS}) { -webkit-text-stroke: ${HALO_EM * 2}em ${PAGE_COLOR}; paint-order: stroke fill; stroke-linejoin: round; }`,
     `.${SELECTED_CLASS} { outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,

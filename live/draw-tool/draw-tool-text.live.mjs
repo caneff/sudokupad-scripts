@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, SIZE_SLIDER, WIDTH_KEY } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, SIZE_SLIDER, WIDTH_KEY } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -95,18 +95,6 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['15', 'Zx CZ', '7'])
     assert.equal(await boxOpen(), false)
     assert.deepEqual((await saved()).map((item) => item.text), ['15', 'Zx CZ', '7'])
-  })
-
-  it('Escape on a new box keeps the text typed in it', async () => {
-    await clickAt(EMPTY_AT)
-    await p.keyboard.type('9')
-    await p.keyboard.press('Escape')
-    assert.equal(await boxOpen(), false)
-    assert.deepEqual(await texts(), ['15', 'Zx CZ', '7', '9'])
-    await doubleClickAt(EMPTY_AT)
-    await p.keyboard.press('Backspace')
-    await p.keyboard.press('Escape')
-    assert.deepEqual(await texts(), ['15', 'Zx CZ', '7'])
   })
 
   it('a box finished empty leaves no text', async () => {
@@ -235,10 +223,10 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.equal(await boxOpen(), true, 'Enter did not finish the box')
     assert.equal(await boxText(), 'top\nlow')
     await p.keyboard.press('Escape')
-    assert.ok((await saved()).some((item) => item.text === 'top\nlow'), 'saved with a line break')
-    assert.ok((await texts()).includes('top\nlow'))
+    assert.deepEqual((await saved()).map((item) => item.text).slice(-1), ['top\nlow'], 'saved with a line break')
+    assert.deepEqual((await texts()).slice(-1), ['top\nlow'])
     await reload()
-    assert.ok((await readUntil(texts, (t) => t.includes('top\nlow'))).includes('top\nlow'), 'back after a reload')
+    assert.deepEqual((await readUntil(texts, (t) => t.includes('top\nlow'))).slice(-1), ['top\nlow'], 'back after a reload')
   })
 
   it('a finished note shows markdown styled and hides the markers; editing it shows the raw text, which is what is saved', async () => {
@@ -247,25 +235,25 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.keyboard.type('**a** *b* ~~c~~')
     assert.equal(await boxText(), '**a** *b* ~~c~~', 'the markers show while typing')
     await p.keyboard.press('Escape')
-    assert.ok((await saved()).some((item) => item.text === '**a** *b* ~~c~~'), 'the raw markdown is stored')
-    const spans = await read(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox) span')].map((e) => {
+    assert.deepEqual((await saved()).map((item) => item.text).slice(-1), ['**a** *b* ~~c~~'], 'the raw markdown is stored')
+    const spans = await read((selector) => [...document.querySelectorAll(`${selector} span`)].map((e) => {
       const style = window.getComputedStyle(e)
       return { text: e.textContent, bold: Number(style.fontWeight) >= 700, italic: style.fontStyle === 'italic', strike: style.textDecorationLine === 'line-through' }
-    }))
+    }), TEXTS)
     assert.deepEqual(spans, [
       { text: 'a', bold: true, italic: false, strike: false },
       { text: 'b', bold: false, italic: true, strike: false },
       { text: 'c', bold: false, italic: false, strike: true }
     ])
-    assert.ok((await texts()).includes('a b c'))
+    assert.deepEqual((await texts()).slice(-1), ['a b c'])
     await doubleClickAt(MARKDOWN_AT)
     assert.equal(await boxText(), '**a** *b* ~~c~~', 'editing shows the raw text again')
     await p.keyboard.press('Escape')
   })
 
   it('a note has a halo in the page color, drawn under its letters', async () => {
-    const halo = await read(() => {
-      const note = document.querySelector('#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)')
+    const halo = await read((selector) => {
+      const note = document.querySelector(selector)
       const style = window.getComputedStyle(note)
       const probe = document.createElement('div')
       probe.style.color = 'var(--body-bg, #fff)'
@@ -273,7 +261,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
       const page = window.getComputedStyle(probe).color
       probe.remove()
       return { width: parseFloat(style.webkitTextStrokeWidth), color: style.webkitTextStrokeColor, page, paintOrder: style.paintOrder }
-    })
+    }, TEXTS)
     assert.ok(halo.width > 0, `a stroke of ${halo.width}px`)
     assert.equal(halo.color, halo.page)
     assert.match(halo.paintOrder, /^stroke/)

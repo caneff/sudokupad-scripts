@@ -279,11 +279,11 @@ test('the Background setting is on only when it was saved as true', () => {
   for (const saved of [false, null, undefined, 'true', 1, {}]) assert.equal(readBackground(saved), false, JSON.stringify(saved))
 })
 
-test('a text\'s box is centred on its point, as tall as its size and wider with more characters', () => {
+test('a text\'s box is centred on its point, as tall as its line and wider with more characters', () => {
   const box = textBox(sum)
   assert.equal((box.left + box.right) / 2, 100)
   assert.equal((box.top + box.bottom) / 2, 50)
-  assert.equal(box.bottom - box.top, 20)
+  assert.equal(box.bottom - box.top, 23)
   const longer = textBox(textItem([100, 50], '150', 3, 20))
   assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
 })
@@ -364,7 +364,7 @@ test('a note with a background answers to the box drawn behind it: a click and a
   assert.deepEqual(noteBox(plain), textBox(plain))
 })
 
-// Three notes near the top left, one far off, and a hidden stroke across them: sum's box is 88 to 112 across and 40 to 60 down.
+// Three notes near the top left, one far off, and a hidden stroke across them: sum's box is 88 to 112 across and 38.5 to 61.5 down.
 const rectDrawing = [sum, textItem([30, 30], 'a', 1, 20), oldStroke, textItem([60, 90], 'b', 2, 20), textItem([400, 400], 'far', 3, 20)]
 
 test('a selection rectangle selects every note it touches, whichever way it was dragged, and never a hidden stroke', () => {
@@ -377,7 +377,7 @@ test('a selection rectangle that only touches the corner of a note\'s box select
   const { right, bottom } = noteBox(sum)
   assert.deepEqual(notesTouched([sum], [right, bottom], [130, 80]), [0], 'a rectangle whose corner is the box\'s corner')
   assert.deepEqual(notesTouched([sum], [113, 0], [130, 80]), [])
-  assert.deepEqual(notesTouched([sum], [90, 61], [100, 80]), [])
+  assert.deepEqual(notesTouched([sum], [90, 62], [100, 80]), [])
 })
 
 test('a selection rectangle touches a note\'s background box, which reaches past its text', () => {
@@ -424,12 +424,15 @@ test('an unmatched marker, or one with a space inside it, shows as typed', () =>
   assert.deepEqual(runs('5 ** 2'), [{ text: '5 ** 2' }])
   assert.deepEqual(runs('**a *b**'), [{ text: '**a ' }, { text: 'b', italic: true }, { text: '*' }])
   assert.deepEqual(runs('*a *'), [{ text: '*a *' }], 'a closing marker after a space')
+  assert.deepEqual(runs('* a*'), [{ text: '* a*' }], 'an opening marker before a space')
   assert.deepEqual(runs('~~~'), [{ text: '~~~' }])
   assert.deepEqual(runs('****'), [{ text: '****' }])
 })
 
 test('an underscore inside a word is not italic', () => {
   assert.deepEqual(runs('snake_case_name'), [{ text: 'snake_case_name' }])
+  assert.deepEqual(runs('x_a_'), [{ text: 'x_a_' }], 'an opening underscore after a letter')
+  assert.deepEqual(runs('_a_b'), [{ text: '_a_b' }], 'a closing underscore before a letter')
 })
 
 test('each line is read on its own, so a marker does not reach across a line break', () => {
@@ -444,6 +447,6 @@ test('a note\'s box is as wide as its longest line shown, markers left out, and 
   assert.equal(width(textItem([100, 50], '**15**', 3, 20)), width(sum))
   const two = textItem([100, 50], '15\n150', 3, 20)
   assert.equal(width(two), width(textItem([100, 50], '150', 3, 20)))
-  assert.equal(height(two), 40)
+  assert.equal(height(two), 46)
   assert.equal((textBox(two).top + textBox(two).bottom) / 2, 50)
 })
