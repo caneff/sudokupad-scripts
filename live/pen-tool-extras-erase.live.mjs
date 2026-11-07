@@ -178,18 +178,23 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undoAll()
   })
 
-  // SudokuPad treats the middle button as the left one, so with nothing of the script's in the way it makes the mark a left click makes.
-  it('a middle click on an edge makes the mark a left click makes there', async () => {
+  // SudokuPad treats the middle button as the left one, so with nothing of the script's in the way it steps the same marks a left click steps:
+  // an X, then the next mark of the script's cycle, which SudokuPad's own click would not give.
+  it('two middle clicks on an edge step the marks two left clicks step there', async () => {
     await undoAll()
     await selectPenOnPage(1, 3)
-    await p.mouse.click(...(await gridPoint(p, [2.5, 3.0])))
-    const left = await settle(async () => (await penEntries(p)).length, 1)
-    const marks = await penEntries(p)
-    assert.equal(left, 1)
+    const left = []
+    for (let i = 0; i < 2; i++) {
+      await p.mouse.click(...(await gridPoint(p, [2.5, 3.0])))
+      left.push(await penEntries(p))
+    }
+    assert.notDeepEqual(left[0], left[1], 'the second click steps the mark')
     await undoAll()
-    await middleClick([2.5, 3.0])
-    assert.deepEqual(await settle(() => penEntries(p), marks), marks)
-    await p.mouse.click(5, 5)
+    for (const want of left) {
+      await middleClick([2.5, 3.0])
+      assert.deepEqual(await settle(() => penEntries(p), want), want)
+      await p.mouse.click(5, 5)
+    }
     await undoAll()
   })
 
