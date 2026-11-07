@@ -106,7 +106,7 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     assert.deepEqual(await settle(bgBoxes, [boxAfter]), [boxAfter])
   })
 
-  it('a drag that ends over the controls, or past the window, leaves the note where a press can still reach it', async () => {
+  it('a drag held, or ended, over the controls or past the window leaves the note where a press can still reach it', async () => {
     // The first note's middle on the screen, and whether it is clear of the controls and inside the window.
     const reachable = () => read((selector) => {
       const note = document.querySelector(selector).getBoundingClientRect()
@@ -121,8 +121,12 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
       await p.mouse.move(...point)
       await p.mouse.down()
       await p.mouse.move(...to, { steps: 8 })
+      // A held drag shows its last moves at the next frame.
+      await read(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+      const held = await reachable()
       await p.mouse.up()
       const after = await reachable()
+      assert.equal(held.reachable, true, `held at ${to}, the note is at ${held.point}`)
       assert.equal(after.reachable, true, `dragged to ${to}, the note is at ${after.point}`)
     }
   })

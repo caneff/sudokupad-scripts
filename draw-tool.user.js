@@ -191,10 +191,11 @@
   const TEXT_CLASS = 'draw-tool-text'
   const TEXT_BACKGROUND_CLASS = 'draw-tool-text-bg'
   const SELECTED_CLASS = 'draw-tool-selected'
-  // The notes' two boxes in the layer: the notes on the board, in board units under the board's own transform, and the fixed notes, in screen pixels.
+  // The notes' two groups in the layer: the notes on the board, in board units under the board's own transform, and the fixed notes, in screen pixels,
+  // drawn above them.
   const BOARD_NOTES_CLASS = 'draw-tool-board'
   const SCREEN_NOTES_CLASS = 'draw-tool-screen'
-  // One screen pixel in the units of a note's box, so a selected note's outline is as thin on the board as off it.
+  // One screen pixel in the units of a note's group, so a selected note's outline is as thin on the board as off it.
   const PIXEL_VAR = '--draw-tool-px'
   // A note whose text runs past its box, and the one such note under the pointer, which shows its scroll bar.
   const SCROLLS_CLASS = 'draw-tool-scrolls'
@@ -312,25 +313,24 @@
     return { left: x - halfWidth, right: x + halfWidth, top: y - halfHeight, bottom: y + halfHeight }
   }
 
+  // The room round a note's text, in board units across and down: its background's, or its halo's reach.
+  const notePadding = (item) => (item.bg ? [BACKGROUND_PAD_X, BACKGROUND_PAD_Y] : [HALO_EM, HALO_EM]).map((share) => share * item.size)
+
   // What a note answers to: its text's box, and with a background the box drawn behind it.
   function noteBox (item) {
     const box = textBox(item)
     if (!item.bg) return box
-    const [padX, padY] = [item.size * BACKGROUND_PAD_X, item.size * BACKGROUND_PAD_Y]
+    const [padX, padY] = notePadding(item)
     return { left: box.left - padX, right: box.right + padX, top: box.top - padY, bottom: box.bottom + padY }
   }
 
-  // The room round a note's text, in board units across and down: its background's, or its halo's reach.
-  const notePadding = (item) => (item.bg ? [BACKGROUND_PAD_X, BACKGROUND_PAD_Y] : [HALO_EM, HALO_EM]).map((share) => share * item.size)
-
   const inBox = ([x, y], box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
 
-  // The index of the text a click at `at` lands on, the one drawn last when texts overlap, or -1 for none.
+  // The index of the text a click at `at` lands on, or -1 for none. Where texts overlap it is the topmost: a fixed note is drawn above every note on the
+  // board, and of the rest the one drawn last.
   function textAt (drawing, at) {
-    for (let i = drawing.length - 1; i >= 0; i--) {
-      if (drawing[i].kind === TEXT_KIND && inBox(at, noteBox(drawing[i]))) return i
-    }
-    return -1
+    const under = drawing.flatMap((item, i) => item.kind === TEXT_KIND && inBox(at, noteBox(item)) ? [i] : [])
+    return under.findLast((i) => drawing[i].fixed) ?? under.at(-1) ?? -1
   }
 
   // The indices of the notes whose box the rectangle with opposite corners `a` and `b` touches.
@@ -367,13 +367,14 @@
 
   const screenPoint = (item, toScreen) => item.fixed ?? toScreen(item.at)
 
-  // The box a note's element takes on the screen, padding included, worked out from its item rather than measured: `map` has the board's scale and its
-  // map from board units to the screen.
+  // The box a note's element takes on the screen, padding included, worked out from its item rather than measured: `map` has the maps between board
+  // units and the screen.
   function noteScreenBox (item, map) {
-    const padding = notePadding(item)
-    const [halfWidth, halfHeight] = noteSize(item).map((side, i) => (side / 2 + padding[i]) * map.scale)
-    const [x, y] = screenPoint(item, map.toScreen)
-    return { left: x - halfWidth, right: x + halfWidth, top: y - halfHeight, bottom: y + halfHeight }
+    const box = textBox(boardView(item, map.toBoard))
+    const [padX, padY] = notePadding(item)
+    const [left, top] = map.toScreen([box.left - padX, box.top - padY])
+    const [right, bottom] = map.toScreen([box.right + padX, box.bottom + padY])
+    return { left, right, top, bottom }
   }
 
   // The gap left to the window's edge and to a control, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
@@ -1029,9 +1030,6 @@
     }
   }
 
-  // A note on the board is placed in board units, in the box that carries the board's transform; a fixed one is placed in screen pixels at the board's scale.
-  const notePlace = (item, map) => item.fixed ? [item.fixed, map.scale] : [item.at, 1]
-
   // The open note sits in the layer itself, in screen pixels, on the board or off it.
   function styleNote (element, item, map) {
     Object.assign(element.style, noteStyle(item, screenPoint(item, map.toScreen), map.scale))
@@ -1484,9 +1482,10 @@
   const SCROLL = Symbol('scroll')
   // What each drawn note's element shows now: its item, its text, its look, and what its size was last measured for.
   const shownNotes = new WeakMap()
-  // The layer's two boxes of notes, made at the first redraw, with the board transform the board box carries.
-  let noteBoxes = null
-  // Each drawn note's element with its box on the screen, in drawing order, as of the last redraw: a hover or a wheel tests these and measures nothing.
+  // The layer's two groups of notes, made at the first redraw, with the style the board group carries.
+  let groups = null
+  // Each drawn note's element with its box on the screen, bottom to top, as of the last redraw and the move in progress: a hover or a wheel tests these
+  // and measures nothing.
   let hitBoxes = []
   // The layer's font, and the board, window and controls as of the last redraw.
   let layerFont = ''
@@ -1533,29 +1532,29 @@
 
   const boardDrawing = (map) => drawing.map((item) => boardView(item, map.toBoard))
 
-  function layerBoxes (layer) {
-    if (noteBoxes?.board.parentNode !== layer) {
+  function noteGroups (layer) {
+    if (groups?.board.parentNode !== layer) {
       const [board, screen] = [BOARD_NOTES_CLASS, SCREEN_NOTES_CLASS].map((name) => Object.assign(document.createElement('div'), { className: name }))
       layer.prepend(board, screen)
-      noteBoxes = { board, screen, transform: '' }
+      groups = { board, screen, css: '' }
     }
-    return noteBoxes
+    return groups
   }
 
   // A board change is this one style write: the notes on the board keep their own styles in board units.
-  function placeBoardBox (boxes, map) {
-    const transform = `transform: matrix(${map.matrix.join(', ')}); ${PIXEL_VAR}: ${1 / map.scale}px;`
-    if (transform === boxes.transform) return
-    boxes.board.style.cssText = transform
-    boxes.transform = transform
+  function placeBoardGroup (map) {
+    const css = `transform: matrix(${map.matrix.join(', ')}); ${PIXEL_VAR}: ${1 / map.scale}px;`
+    if (css === groups.css) return
+    groups.board.style.cssText = css
+    groups.css = css
   }
 
-  // Writes only what changed since the element last showed: its text, its look, its selection.
+  // Writes only what changed since the element last showed: its text and its look. A note on the board is placed in board units, in the group that
+  // carries the board's transform; a fixed one in screen pixels at the board's scale.
   function showNote (element, item, map) {
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
-    const [point, scale] = notePlace(item, map)
-    const style = noteStyle(item, point, scale)
+    const style = item.fixed ? noteStyle(item, item.fixed, map.scale) : noteStyle(item, item.at, 1)
     const look = JSON.stringify(style)
     if (look !== shown.look) {
       Object.assign(element.style, style)
@@ -1564,28 +1563,28 @@
     shownNotes.set(element, { ...shown, item, text: item.text, look })
   }
 
-  // Puts each box's notes in drawing order, moving only the elements out of place. The elements it put back in the page.
-  function orderNotes (boxes, notes) {
+  // Puts each group's notes in drawing order, moving only the elements out of place. The elements it put back in the page.
+  function orderNotes (notes) {
     const kept = new Set(notes.map(({ element }) => element))
-    for (const box of [boxes.board, boxes.screen]) for (const child of [...box.children]) if (!kept.has(child)) child.remove()
+    for (const group of [groups.board, groups.screen]) for (const child of [...group.children]) if (!kept.has(child)) child.remove()
     const inserted = []
-    for (const box of [boxes.board, boxes.screen]) {
-      let next = box.firstChild
+    for (const group of [groups.board, groups.screen]) {
+      let next = group.firstChild
       for (const { element, item } of notes) {
-        if ((item.fixed ? boxes.screen : boxes.board) !== box) continue
+        if ((item.fixed ? groups.screen : groups.board) !== group) continue
         if (element === next) {
           next = next.nextSibling
           continue
         }
-        box.insertBefore(element, next)
+        group.insertBefore(element, next)
         inserted.push(element)
       }
     }
     return inserted
   }
 
-  // A note's size depends on these, and on the board's scale for a fixed note, which is drawn in screen pixels.
-  const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), item.fixed ? map.scale : null])
+  // A note's size depends on these, on the layer's font, and on the board's scale for a fixed note, which is drawn in screen pixels.
+  const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), layerFont, item.fixed ? map.scale : null])
 
   // Measures the notes whose size may have changed, every read before every write: whether its text runs past its box, then, with its scroll bar's
   // room settled, its text's size in board units.
@@ -1600,8 +1599,8 @@
     })
   }
 
-  // The open note's element and the selection rectangle stay in the layer, so the note keeps the focus. Each note keeps its element, and only what
-  // changed is written: a board change is one write to the board box.
+  // The open note's element, its handle and the selection rectangle sit in the layer beside the two groups, where a redraw leaves them, so the note
+  // keeps the focus. Each note keeps its element, and only what changed is written: a board change is one write to the board group.
   function renderDrawing () {
     const layer = drawingLayer()
     const svg = boardSvg()
@@ -1610,8 +1609,8 @@
     lastLayout = layoutKey(map)
     const font = window.getComputedStyle(svg).fontFamily
     if (font !== layerFont) layer.style.fontFamily = layerFont = font
-    const boxes = layerBoxes(layer)
-    placeBoardBox(boxes, map)
+    noteGroups(layer)
+    placeBoardGroup(map)
     const claimed = new Set()
     const notes = drawing.flatMap((item, index) => {
       if (item.kind !== TEXT_KIND || (editing && editing.index === index)) return []
@@ -1622,12 +1621,14 @@
       element.classList.toggle(SELECTED_CLASS, selected.includes(index))
       return [{ element, item, index }]
     })
-    const inserted = orderNotes(boxes, notes)
-    for (const text of parsedTexts.keys()) if (!notes.some(({ item }) => item.text === text)) parsedTexts.delete(text)
+    const inserted = orderNotes(notes)
+    const texts = new Set(notes.map(({ item }) => item.text))
+    for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
     measureNotes(notes, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
     if (!drag?.move && keepFixedReachable(notes, map)) save()
-    hitBoxes = notes.map(({ element }) => ({ element, box: noteScreenBox(shownNotes.get(element).item, map) }))
+    const onTop = [...notes.filter(({ item }) => !item.fixed), ...notes.filter(({ item }) => item.fixed)]
+    hitBoxes = onTop.map(({ element }) => ({ element, box: noteScreenBox(shownNotes.get(element).item, map) }))
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
     showHover()
@@ -1968,7 +1969,8 @@
     return [lastX - x, lastY - y]
   }
 
-  // While a move is in progress each moving note's element follows the pointer by a translation, in the units of its own box, and nothing is drawn again.
+  // While a move is in progress each moving note's element, and its hit box, follow the pointer by a translation, in the units of its own group, and
+  // nothing is drawn again.
   function showMove (d, map) {
     const [dx, dy] = dragOffset(d)
     for (const { item } of d.move) {
@@ -1977,6 +1979,10 @@
       const [x, y] = screenPoint(item, map.toScreen)
       const [tx, ty] = item.fixed ? [dx, dy] : map.toBoard([x + dx, y + dy]).map((v, i) => v - item.at[i])
       element.style.translate = `${tx}px ${ty}px`
+      const hit = hitBoxes.find((entry) => entry.element === element)
+      if (!hit) continue
+      const { left, right, top, bottom } = noteScreenBox(item, map)
+      hit.box = { left: left + dx, right: right + dx, top: top + dy, bottom: bottom + dy }
     }
   }
 

@@ -1,7 +1,8 @@
 // Live check of how little draw-tool.user.js redraws on sudokupad.app, with 30 notes on the board: a drag of two selected notes keeps each
-// pointer move's work under a frame and never recreates a note, during the drag or at its release; with another tool current a mouse move measures no note;
-// a board resize writes one container's style and touches no note; a class change that leaves the board where it was redraws nothing;
-// and a move, a selection rectangle, a resize and an erase each wait for the next frame and then show the last pointer move.
+// frame's pointer moves under a frame's work and never recreates a note, during the drag or at its release; with another tool current a mouse move
+// measures no note and shows no hover; a redraw that changes only the selection measures no note; a board resize writes one group's style and touches
+// no note; a class change that leaves the board where it was redraws nothing; and a move, a selection rectangle, a resize and an erase each wait for
+// the next frame and then show the last pointer move.
 // The pointer moves are dispatched from the page, so each one's work can be timed; the presses are real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -25,14 +26,15 @@ const PLANTED = Array.from({ length: NOTES }, (_, i) => {
 // The two notes dragged: r1c1 and r1c3, in cells from the grid's top left.
 const MOVED = [0, 1]
 const atCell = (i) => cellOf(i).map((v) => v + 0.5)
-// A drag of this many pointer moves, by this many cells down and right in all.
+// A drag of this many pointer moves, by this many cells down and right in all. A mouse sends several moves a frame; this many are sent in each.
 const MOVES = 40
+const MOVES_PER_FRAME = 4
 const DRAG_BY = [0.5, 0.5]
 // One frame at 60 Hz.
 const FRAME_MS = 16
 // A note's place and the rectangle's corner are kept to a tenth of a pixel or unit, so a point can land a pixel off the pointer's.
-const NEAR_PX = 1
-const near = (got, want) => got.every((v, i) => Math.abs(v - want[i]) <= NEAR_PX)
+const POINTER_NEAR_PX = 1
+const near = (got, want) => got.every((v, i) => Math.abs(v - want[i]) <= POINTER_NEAR_PX)
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -47,16 +49,20 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     await readUntil(() => draw.texts(p), (t) => t.length === NOTES)
     await draw.pickDraw(p)
   }
-  // Pointer moves to each screen point in turn, dispatched on what lies under it with `buttons` held. Each move's work is the time its dispatch
-  // took, plus the time from a frame callback asked for before it to one asked for after it, which forces the page's style and layout: the
-  // frame callbacks the script asked for during the dispatch run between the two. The page then waits for that frame before the next move.
-  const timedMoves = (points, buttons) => read(async ([all, held]) => {
+  // A pointer move to a screen point, dispatched on what lies under it with `buttons` held: a page helper, so every check sends the same event.
+  const installMove = () => read(() => {
+    window.__move = ([x, y], buttons) => document.elementFromPoint(x, y).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: x, clientY: y, buttons }))
+  })
+  // Pointer moves to each screen point in turn, MOVES_PER_FRAME to a frame. Each frame's work is the time its moves' dispatches took, plus the
+  // time from a frame callback asked for before them to one asked for after them, which forces the page's style and layout: the frame callbacks
+  // the script asked for during the dispatches run between the two. The page then waits for that frame before the next moves.
+  const timedFrames = (points, buttons) => read(async ([all, held, perFrame]) => {
     const busy = []
-    for (const [x, y] of all) {
+    for (let i = 0; i < all.length; i += perFrame) {
       let frameStart = 0
       window.requestAnimationFrame(() => { frameStart = window.performance.now() })
       const start = window.performance.now()
-      document.elementFromPoint(x, y).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: x, clientY: y, buttons: held }))
+      for (const point of all.slice(i, i + perFrame)) window.__move(point, held)
       const dispatch = window.performance.now() - start
       const frame = await new Promise((resolve) => window.requestAnimationFrame(() => {
         document.body.getBoundingClientRect()
@@ -65,12 +71,13 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
       busy.push(dispatch + frame)
     }
     return busy
-  }, [points, buttons])
-  // Moves dispatched in one task, with no frame between them: what the page shows straight after, and after the next frame.
+  }, [points, buttons, MOVES_PER_FRAME])
+  // Moves dispatched in one task, with no frame between them: what the page shows straight after, and after the next frame. Playwright passes no
+  // function into the page, so `look` goes as its source.
   const movesInOneTask = (points, buttons, look) => read(async ([all, held, lookSource]) => {
     // eslint-disable-next-line no-new-func
     const lookAt = new Function(`return (${lookSource})()`)
-    for (const [x, y] of all) document.elementFromPoint(x, y).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: x, clientY: y, buttons: held }))
+    for (const point of all) window.__move(point, held)
     const straightAfter = lookAt()
     await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)))
     return { straightAfter, afterFrame: lookAt() }
@@ -93,7 +100,9 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     return [...new Set(records.map((r) => r.target))].map((t) => t.className || t.id || t.nodeName)
   }, act.toString())
   const percentile = (values, share) => [...values].sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * share))]
-  const summary = (values) => `median ${percentile(values, 0.5).toFixed(2)} ms, 90th ${percentile(values, 0.9).toFixed(2)} ms, max ${Math.max(...values).toFixed(2)} ms over ${values.length} moves`
+  const summary = (values) => `median ${percentile(values, 0.5).toFixed(2)} ms, 90th ${percentile(values, 0.9).toFixed(2)} ms, max ${Math.max(...values).toFixed(2)} ms over ${values.length} frames of ${MOVES_PER_FRAME} moves`
+  const noteMeasures = () => read(() => window.__noteMeasures)
+  const hovered = () => read(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-hover')].map((note) => note.textContent))
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -101,10 +110,11 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     await draw.forgetDrawings(p)
     await draw.plantDrawing(p, PLANTED)
     await reload()
+    await installMove()
   })
   after(async () => { await context.close() })
 
-  it('a drag of two selected notes among 30 keeps each pointer move\'s work under a frame, recreates none of the notes it leaves still, and after the release none at all', async (t) => {
+  it('a drag of two selected notes among 30 keeps each frame\'s pointer moves under a frame\'s work, recreates none of the notes it leaves still, and after the release none at all', async (t) => {
     await p.mouse.click(...await gridPoint(p, atCell(MOVED[0])))
     await p.keyboard.down('Shift')
     await p.mouse.click(...await gridPoint(p, atCell(MOVED[1])))
@@ -112,7 +122,7 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     await read((selector) => { window.__notesBefore = [...document.querySelectorAll(selector)] }, TEXTS)
     await p.mouse.move(...await gridPoint(p, atCell(MOVED[0])))
     await p.mouse.down()
-    const busy = await timedMoves(await steps(atCell(MOVED[0]), DRAG_BY, MOVES), 1)
+    const busy = await timedFrames(await steps(atCell(MOVED[0]), DRAG_BY, MOVES), 1)
     t.diagnostic(`drag: ${summary(busy)}`)
     const recreated = await read(([selector, moved]) => {
       const now = [...document.querySelectorAll(selector)]
@@ -127,10 +137,10 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     assert.deepEqual(recreatedByRelease, [], 'the redraw on release keeps every note\'s element, the moved ones too')
     const moved = (await draw.saved(p)).slice(0, 2).map((item) => item.at)
     assert.deepEqual(moved.map((at, i) => at.map((v, k) => Math.round((v - PLANTED[i].at[k]) / CELL * 10) / 10)), [[0.5, 0.5], [0.5, 0.5]], 'both notes moved by the drag')
-    assert.ok(Math.max(...busy) < FRAME_MS, `each move's work under ${FRAME_MS} ms: ${summary(busy)}`)
+    assert.ok(Math.max(...busy) < FRAME_MS, `each frame's work under ${FRAME_MS} ms: ${summary(busy)}`)
   })
 
-  it('with another tool current, a mouse move over the notes measures no note', async (t) => {
+  it('with another tool current, a mouse move over the notes measures no note and shows no hover; with Text Annotation current it does show', async (t) => {
     await p.click(draw.DIGIT_BUTTON)
     await read(() => {
       window.__noteMeasures = 0
@@ -140,14 +150,31 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
         return measure.call(this)
       }
     })
-    const busy = await timedMoves(await steps([0.5, 0.5], [6, 6], MOVES), 0)
+    const busy = await timedFrames(await steps([0.5, 0.5], [6, 6], MOVES), 0)
     t.diagnostic(`another tool, hover: ${summary(busy)}`)
-    const measures = await read(() => window.__noteMeasures)
+    const measures = await noteMeasures()
+    // n5, at r2c3: the moves above ended past it.
+    const over = await gridPoint(p, atCell(5))
+    await read((point) => window.__move(point, 0), over)
+    await read(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+    const otherTool = await hovered()
     await draw.pickDraw(p)
-    assert.equal(measures, 0)
+    await read((point) => window.__move(point, 0), over)
+    await read(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+    assert.deepEqual({ measures, otherTool, textAnnotation: await hovered() }, { measures: 0, otherTool: [], textAnnotation: [NOTE_TEXT(5)] })
   })
 
-  it('a board resize writes one container\'s style and touches no note, and the notes stay over their cells', async () => {
+  it('a redraw that changes only the selection measures no note', async () => {
+    await read(() => { window.__noteMeasures = 0 })
+    await p.mouse.click(...await gridPoint(p, atCell(9)))
+    const selected = await read(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-selected')].map((note) => note.textContent))
+    // The pointer leaves the notes and the selection ends, so the board checks below see no hover or selection change of their own.
+    await p.keyboard.press('Escape')
+    await p.mouse.move(1, 899)
+    assert.deepEqual({ selected, measures: await noteMeasures() }, { selected: [NOTE_TEXT(9)], measures: 0 })
+  })
+
+  it('a board resize writes one group\'s style and touches no note, and the notes stay over their cells', async () => {
     const cells = await draw.noteInCells(p, NOTE_TEXT(5))
     const changed = await changedInLayer(() => {
       document.querySelector('.game').style.width = '800px'

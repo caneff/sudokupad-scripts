@@ -115,7 +115,7 @@ describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
     assert.equal(await p.locator(NOT_NOTES).count(), 0, 'the stroke and the shape are not drawn')
-    assert.equal(await p.locator('#draw-tool-layer > :not(.draw-tool-board, .draw-tool-screen), :is(.draw-tool-board, .draw-tool-screen) > *').count(), 1, 'the layer holds the note alone')
+    assert.equal(await p.locator(draw.IN_LAYER).count(), 1, 'the layer holds the note alone')
   })
 
   it('typing, moving and erasing a note leave the stored stroke and shape as they were', async () => {

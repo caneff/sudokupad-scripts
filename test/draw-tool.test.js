@@ -533,7 +533,7 @@ test('a window with no area leaves a note where it is', () => {
 
 test('a note\'s box on the screen is its text\'s box and its padding at the board\'s scale, round its screen point, on the board or off it', () => {
   // A board drawn at twice its units, from (10, 20) on the screen.
-  const map = { scale: 2, toScreen: ([x, y]) => [10 + 2 * x, 20 + 2 * y] }
+  const map = { scale: 2, toScreen: ([x, y]) => [10 + 2 * x, 20 + 2 * y], toBoard: ([x, y]) => [(x - 10) / 2, (y - 20) / 2] }
   const near = (box) => Object.fromEntries(Object.entries(box).map(([side, v]) => [side, Math.round(v * 1e6) / 1e6]))
   const pinned = { ...textItem([100, 50], 'sum', 1, 20), box: [40, 23] }
   // Without a background the padding is the halo's reach, 0.14 of 20 units.
@@ -542,4 +542,14 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map)), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map)), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
+})
+
+test('a fixed note is drawn above the notes on the board, so a click where they overlap lands on it, whichever was made last', () => {
+  const { at, ...rest } = textItem([0, 0], 'off', 1, 20)
+  const fixed = { ...rest, fixed: [100, 50] }
+  const pinned = textItem([100, 50], 'on', 1, 20)
+  // The drawing gives the fixed note's place in board units, as boardView does.
+  const asDrawn = [{ ...fixed, at: [100, 50] }, pinned]
+  assert.equal(textAt(asDrawn, [100, 50]), 0)
+  assert.equal(textAt([pinned, { ...fixed, at: [100, 50] }], [100, 50]), 1)
 })

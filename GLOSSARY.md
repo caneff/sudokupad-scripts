@@ -201,7 +201,8 @@
   **selected**, and a double-click on a text reopens. A text put on the board is pinned to its cells (stored in board units under `at`); one put off the board is
   fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). When the window or SudokuPad's layout puts a fixed text's box under the control panel or top bar, or
   partly past the window's edge, the text is moved to the nearest point wholly inside the window and clear of them, and that point is saved. Both are drawn at the
-  board's scale, in a layer over the page that sits above the digits and below SudokuPad's dialogs and menu.
+  board's scale, in a layer over the page that sits above the digits and below SudokuPad's dialogs and menu. Where they overlap a fixed text is drawn, and
+  clicked, above a pinned one; among texts of one kind the one made last is on top.
 - **box** (a note's) — the room a Text Annotation note's text takes. A note never resized has one 16 em wide and 8 lines high at its text size, which
   it fits up to; a resized one is exactly the size its **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
   or off it, since a note off the board is drawn at the board's scale too. A long line wraps inside it and text past its bottom scrolls: the wheel over
