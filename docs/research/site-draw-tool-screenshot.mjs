@@ -41,7 +41,7 @@ const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
 const strokes = () => p.locator('#draw-tool-layer path').count()
 const pick = async (color, widthIndex) => {
   await p.click(`.controls-input button[data-key="${color}"]`)
-  await p.click(`.draw-tool-widths button >> nth=${widthIndex}`)
+  await p.click(`.draw-tool-widths button[data-width] >> nth=${widthIndex}`)
 }
 const drag = async (points, shift = false) => {
   const before = await strokes()

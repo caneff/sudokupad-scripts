@@ -13,7 +13,7 @@ const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'u
 const DRAW_BUTTON = '#control-draw'
 const DIGIT_BUTTON = '#control-normal'
 const STROKES = '#draw-tool-layer path'
-const WIDTH_BUTTONS = '.draw-tool-widths button'
+const WIDTH_BUTTONS = '.draw-tool-widths button[data-width]'
 const COLOR_KEY = 'DrawTool_color'
 const WIDTH_KEY = 'DrawTool_width'
 // r1c3 of the recorded puzzle, empty.
