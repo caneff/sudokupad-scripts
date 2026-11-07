@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's selection on sudokupad.app: a click selects a note and a double-click edits it, a drag on empty space selects every
-// note its rectangle touches, Shift+click adds or removes one, a click on empty space or Escape ends the selection, the panel's colors, size slider and
+// note its rectangle touches, Shift+click adds or removes one, a click on empty space or Escape ends the selection, the panel's colors, Size menu and
 // Background change only the selected notes, a drag on a selected note moves them all and keeps every one reachable, a right-click erase or leaving the
 // tool keeps the selection right, and Clear all, Delete and Backspace delete only the selection. Real mouse and keyboard input throughout, at a desktop size.
 import { after, before, describe, it } from 'node:test'
@@ -7,10 +7,10 @@ import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
-import { gridPoint, mouseDrag, setInputValue } from '../pen.mjs'
+import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, DIALOG, DIGIT_BUTTON, KEYPAD, SIZE_SLIDER, TEXT_BOX, TEXTS, WIDTH_KEY } = draw
+const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, DIALOG, DIGIT_BUTTON, KEYPAD, TEXT_BOX, TEXTS, WIDTH_KEY } = draw
 const SELECTED = '#draw-tool-layer .draw-tool-selected'
 const RECTANGLE = '#draw-tool-layer .draw-tool-selection-rectangle'
 // In cells from the grid's top left: three notes the rectangle from CORNER to FAR_CORNER covers, a fourth outside it, and empty space.
@@ -129,11 +129,11 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     assert.equal((await savedNote('E')).color, nextColor ?? 1)
   })
 
-  it('the size slider and Background change only the selected notes, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
+  it('the Size menu and Background change only the selected notes, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
     const nextWidth = await p.evaluate((key) => Framework.getData(key), WIDTH_KEY)
     await selectThree()
-    await setInputValue(p.locator(SIZE_SLIDER), 10)
-    assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).size)), [28, 28, 28, 20])
+    await draw.pickMenu(p, draw.SIZE_BUTTON, '32')
+    assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).size)), [32, 32, 32, 20])
     assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), nextWidth, 'the next-note size is unchanged')
     assert.equal(await backgroundPressed(), 'false')
     await p.click(BACKGROUND_BUTTON)

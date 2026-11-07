@@ -61,7 +61,7 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
       scrollRoom: e.scrollHeight - e.clientHeight,
       overflowY: style.overflowY,
       scrollbarColor: style.scrollbarColor,
-      halo: parseFloat(style.webkitTextStrokeWidth),
+      halo: Math.max(0, ...[...style.textShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px 0px/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2])))),
       padding: parseFloat(style.paddingLeft),
       bold: [...e.querySelectorAll('span')].filter((span) => Number(window.getComputedStyle(span).fontWeight) >= 700).map((span) => span.textContent)
     }
@@ -166,7 +166,7 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
     assert.deepEqual(tall.bold, ['end'])
     assert.equal((await draw.texts(p)).find((t) => t.startsWith('line 1')), TALL_LINES.join('\n').replace('**end**', 'end'))
     assert.ok(tall.halo > 0, `a halo of ${tall.halo}px`)
-    assert.ok(tall.padding >= tall.halo / 2 - 0.5, `padding ${tall.padding}px holds a halo reaching ${tall.halo / 2}px past the letters`)
+    assert.ok(tall.padding >= tall.halo - 0.5, `padding ${tall.padding}px holds a halo reaching ${tall.halo}px past the letters`)
   })
 
   it('a redraw, such as selecting the note, keeps its scroll', async () => {

@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, SIZE_SLIDER, WIDTH_KEY } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, SIZE_BUTTON, WIDTH_KEY, face, pickMenu } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -44,7 +44,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     return { color, size }
   }
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
-  const sliderValue = (selector) => read((s) => Number(document.querySelector(s).value), selector)
+  const sizeShown = async () => Number(await face(p, SIZE_BUTTON))
   const textInCells = (content) => draw.noteInCells(p, content)
 
   before(async () => {
@@ -179,14 +179,14 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ', '84'])
   })
 
-  it('the Size slider sets the next text\'s size to 2 x the size value + 8; the earlier text is unchanged, and every note is solid', async () => {
-    assert.equal(await sliderValue(SIZE_SLIDER), 6)
-    await p.locator(SIZE_SLIDER).fill('10')
+  it('the Size menu sets the next text\'s size to the size picked; the earlier text is unchanged, and every note is solid', async () => {
+    assert.equal(await sizeShown(), 20)
+    await pickMenu(p, SIZE_BUTTON, '26')
     await p.click('.controls-input button[data-key="4"]')
     await clickAt(THIRD_AT)
     await p.keyboard.type('6')
     await p.keyboard.press('Escape')
-    assert.deepEqual(await textStyle('6'), { color: await penColor(4), size: 28 })
+    assert.deepEqual(await textStyle('6'), { color: await penColor(4), size: 26 })
     assert.deepEqual(await textStyle('23'), { color: await penColor(1), size: 20 })
   })
 
@@ -195,14 +195,14 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await reload()
     assert.deepEqual(await settle(texts, before), before)
     await pickDraw()
-    assert.equal(await sliderValue(SIZE_SLIDER), 10)
+    assert.equal(await sizeShown(), 26)
   })
 
   it('a bad saved size reads as the default', async () => {
     await plantUnchecked(p, WIDTH_KEY, '"huge"')
     await reload()
     await pickDraw()
-    assert.equal(await sliderValue(SIZE_SLIDER), 6)
+    assert.equal(await sizeShown(), 20)
   })
 
   it('after a window resize each text still sits over the cells it was typed on', async () => {
@@ -251,20 +251,20 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.keyboard.press('Escape')
   })
 
-  it('a note has a halo in the page color, drawn under its letters', async () => {
+  it('a note has a halo in the page color: a ring of sixteen shadows with no blur', async () => {
     const halo = await read((selector) => {
-      const note = document.querySelector(selector)
-      const style = window.getComputedStyle(note)
+      const style = window.getComputedStyle(document.querySelector(selector))
       const probe = document.createElement('div')
       probe.style.color = 'var(--body-bg, #fff)'
       document.body.appendChild(probe)
       const page = window.getComputedStyle(probe).color
       probe.remove()
-      return { width: parseFloat(style.webkitTextStrokeWidth), color: style.webkitTextStrokeColor, page, paintOrder: style.paintOrder }
+      return { shadows: style.textShadow, page, stroke: parseFloat(style.webkitTextStrokeWidth) }
     }, TEXTS)
-    assert.ok(halo.width > 0, `a stroke of ${halo.width}px`)
-    assert.equal(halo.color, halo.page)
-    assert.match(halo.paintOrder, /^stroke/)
+    const rings = [...halo.shadows.matchAll(/(rgb\([^)]*\)) (-?[\d.]+)px (-?[\d.]+)px 0px/g)]
+    assert.equal(rings.length, 16, halo.shadows)
+    for (const [, color] of rings) assert.equal(color, halo.page)
+    assert.equal(halo.stroke, 0, 'no stroke, whose miters grow spikes')
   })
 
   it('the page raised no error', () => {

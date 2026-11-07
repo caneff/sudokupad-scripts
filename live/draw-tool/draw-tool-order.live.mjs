@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
+import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, MENU_ROW, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
 import { injectAtIdle, openPage, startPuzzle } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
@@ -61,7 +61,7 @@ describe('Text Annotation: its button is the last tool button', { concurrency: f
 
   it('the Text Annotation button, last, still makes it the current tool, with its panel, and a click still makes a note', async () => {
     assert.equal(await pickDraw(p), 'draw')
-    await p.locator(SLIDERS).waitFor({ state: 'visible' })
+    await p.locator(MENU_ROW).waitFor({ state: 'visible' })
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
     await p.keyboard.type('15')
     await p.keyboard.press('Escape')

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.4
+// @version      0.3.5
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.4'
+  const VERSION = '0.3.5'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -470,12 +470,16 @@
   const FONT_BAR_ID = `${ID}-font`
   const CORNER_CLASS = `${ID}-corner`
   const SHOWN_CLASS = `${ID}-shown` // on the body while the pane is fitted: the font bar shows
-  const HOVER_CLASS = `${ID}-hover` // on the body while the pointer is over the pane, a corner or the font bar, or a drag is under way: the corners and the bar show
+  const DRAG_CLASS = `${ID}-dragging` // on the body while a corner drag is under way: the corners and the bar stay shown
   const MAX_WIDTH_INPUT_ID = `${ID}-max-width`
   const MAX_HEIGHT_INPUT_ID = `${ID}-max-height`
   const CORNER_PX = 28
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
+
+  // The corners and the font bar show while the pointer is over the pane, a corner or the bar, or a drag is under
+  // way. The bar sits flush against the pane, so the pointer never leaves them on its way up.
+  const SHOW_WHEN = `body.${SHOWN_CLASS}:is(.${DRAG_CLASS}, :has(.puzzle-rules:hover, .${CORNER_CLASS}:hover, #${FONT_BAR_ID}:hover))`
 
   const STYLE = `
     #${FONT_BAR_ID} { position: fixed; z-index: 99999; display: none; visibility: hidden; gap: 4px; font: 14px monospace; }
@@ -484,23 +488,19 @@
       box-sizing: border-box; border-radius: 8px; background: rgba(85, 255, 255, .4); border: 1px dotted rgba(85, 255, 255, .8);
       touch-action: none; }
     body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
-    body.${SHOWN_CLASS}.${HOVER_CLASS} #${FONT_BAR_ID} { visibility: visible; }
-    body.${SHOWN_CLASS}.${HOVER_CLASS} .${CORNER_CLASS} { display: block; }
+    ${SHOW_WHEN} #${FONT_BAR_ID} { visibility: visible; }
+    ${SHOW_WHEN} .${CORNER_CLASS} { display: block; }
   `
 
   let nudgePx = 0
   let fitted = false // whether the fit's output may be on the pane
   let limits = noLimits()
-  let hovering = false
-  let dragging = false
 
   const getStyle = (el) => window.getComputedStyle(el)
   const rulesPane = () => document.querySelector('.puzzle-rules')
   const controlsColumn = () => document.getElementById('controls')
   // A puzzle with no id of its own (a replay or a pack) is told apart by its URL.
   const dragKey = () => String(Framework.app?.puzzle?.puzzleId || window.location.href)
-
-  const showHover = () => document.body.classList.toggle(HOVER_CLASS, hovering || dragging)
 
   function addStyle () {
     const style = document.createElement('style')
@@ -532,24 +532,9 @@
     el.className = CORNER_CLASS
     el.style.cursor = CORNER_CURSOR[corner]
     watchCornerDrag(el, window, (dx, dy) => dragRules(corner, dx, dy), (on) => {
-      dragging = on
-      showHover()
+      document.body.classList.toggle(DRAG_CLASS, on)
     })
     document.body.appendChild(el)
-  }
-
-  // The corners and the font bar show only while the pointer is over the pane, a corner or the bar, or a drag is
-  // under way. The bar sits flush against the pane, so the pointer never leaves them on its way up.
-  function watchHover () {
-    document.addEventListener('pointerover', (e) => {
-      hovering = Boolean(e.target.closest?.(`.puzzle-rules, .${CORNER_CLASS}, #${FONT_BAR_ID}`))
-      showHover()
-    })
-    document.addEventListener('pointerout', (e) => {
-      if (e.relatedTarget) return // pointerover on the next element answers
-      hovering = false
-      showHover()
-    })
   }
 
   // Sizes are passed in: a corner hidden until hover measures 0 x 0.
@@ -688,7 +673,6 @@
     addStyle()
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)
-    watchHover()
     refitAfterResizeBoard(app)
     window.addEventListener('resize', makeTrailing(fitPage, RESIZE_MS))
     fitPage()

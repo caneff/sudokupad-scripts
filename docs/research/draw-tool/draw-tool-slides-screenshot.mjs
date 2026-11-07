@@ -1,7 +1,7 @@
 // Takes the nine slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
 // The notes are what a solver writes: short remarks beside the grid, in the margin above it, or small on a cell's corner or edge, never one digit and never centered in a cell (the script checks both).
 //   draw-tool-slide-1-type.png        a remark typed beside row 2, with markdown
-//   draw-tool-slide-2-size.png        the Size slider moved: a small note beside the grid and a large one above it
+//   draw-tool-slide-2-size.png        the Size menu open after a pick: a small note beside the grid and a large one above it
 //   draw-tool-slide-3-background.png  the Background button on: a note in a page-colored box over the digits, beside one made with it off
 //   draw-tool-slide-4-colors.png      a hold on a color button: a picker over each color, one recolored, and the note in it recolored too
 //   draw-tool-slide-5-move.png        a note dragged off the grid to above it, its old place dashed, a ring on the point it is held by
@@ -60,7 +60,13 @@ async function scene () {
   const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
   const clipRect = () => ({ x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
   const items = () => p.locator(NOTES).count()
-  const pick = (color, size) => p.click(`.controls-input button[data-key="${color}"]`).then(() => p.locator('#draw-tool-size').fill(String(size)))
+  // Picks `size`, one of the Size menu's numbers, with a click on its button and one on its item.
+  const pickSize = async (size) => {
+    await p.click('.draw-tool-menu-button[data-menu="size"]')
+    await p.locator('.draw-tool-menu-item', { hasText: new RegExp(`^${size}$`) }).click()
+    await p.locator('.draw-tool-menu').waitFor({ state: 'detached' })
+  }
+  const pick = (color, size) => p.click(`.controls-input button[data-key="${color}"]`).then(() => pickSize(size))
   const note = async (cell, text) => {
     const before = await items()
     await p.mouse.click(...at(cell))
@@ -104,7 +110,7 @@ async function scene () {
     console.log(`wrote ${out(name)}`)
     if (!keepOpen) await p.close()
   }
-  return { p, at, items, pick, note, background, shoot }
+  return { p, at, items, pick, pickSize, note, background, shoot }
 }
 
 // Beside the grid, next to row 2, in the free space above the panel.
@@ -113,19 +119,21 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 // 1: a remark typed beside the grid, next to the row it talks about.
 {
   const s = await scene()
-  await s.pick(ORANGE, 10)
+  await s.pick(ORANGE, 26)
   await s.note(BESIDE_ROW_2, 'r2: 3 must be in c7-9')
   await s.p.mouse.move(0, 0)
   await s.shoot('1-type')
 }
 
-// 2: the Size slider moved between two notes: a small one beside row 2, a large one in the margin above the grid.
+// 2: a size picked from the Size menu between two notes: a small one beside row 2, a large one in the margin above the grid, with the menu open after the pick.
 {
   const s = await scene()
-  await s.pick(BLUE, 7)
+  await s.pick(BLUE, 20)
   await s.note(BESIDE_ROW_2, 'r2: 3 must be in c7-9')
-  await s.p.locator('#draw-tool-size').fill('13')
+  await s.pickSize(32)
   await s.note([-0.5, 5.6], '*X-wing* on 6')
+  await s.p.click('.draw-tool-menu-button[data-menu="size"]')
+  await s.p.locator('.draw-tool-menu').waitFor({ state: 'visible' })
   await s.p.mouse.move(0, 0)
   await s.shoot('2-size')
 }
@@ -133,7 +141,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 // 3: one note made with Background off, one with it on, both over digits and on cell edges.
 {
   const s = await scene()
-  await s.pick(RED, 11)
+  await s.pick(RED, 26)
   await s.background(false)
   await s.note([3.3, 6.2], '**not** 5 (box 5)')
   await s.background(true)
@@ -146,7 +154,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 // 4: a note in color 3, then a hold on a color button puts a picker over each color, and color 3 is changed in its picker.
 {
   const s = await scene()
-  await s.pick(ORANGE, 9)
+  await s.pick(ORANGE, 26)
   await s.note([2.5, 5.0], '**not** 5 (box 6)')
   await s.p.mouse.move(...await s.p.locator('.controls-input button[data-key="2"]').evaluate((b) => { const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] }))
   await s.p.mouse.down()
@@ -164,7 +172,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 // 5: a note dragged by its middle off the grid, into the margin above it; the old place is a dashed gray box and a ring marks where the pointer holds it.
 {
   const s = await scene()
-  await s.pick(ORANGE, 10)
+  await s.pick(ORANGE, 26)
   const FROM = [5.2, 6.4]
   const TO = [-0.55, 7.4]
   await s.note(FROM, 'cage = 17')
@@ -187,7 +195,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 // 6: three orange notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn dashed gray where it was.
 {
   const s = await scene()
-  await s.pick(ORANGE, 9)
+  await s.pick(ORANGE, 26)
   await s.note([3.5, 6.1], '**not** 5')
   await s.note([5.2, 6.4], 'cage = 17')
   await s.note([6.3, 4.2], '*X-wing* on 6')
@@ -210,7 +218,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 // 7: the pointer on a note with a ring round it, where a right click lands. The click itself follows the shot and must erase the note.
 {
   const s = await scene()
-  await s.pick(GREEN, 11)
+  await s.pick(GREEN, 32)
   await s.note([5.2, 6.4], 'cage = 17')
   const box = await s.p.locator(NOTES).boundingBox()
   const x = box.x + box.width / 2
@@ -234,7 +242,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
 // 9: a two-line note with a background box, open for typing, dragged smaller by its corner handle, so its text wraps and scrolls; a ring marks the handle and the pointer rests on the note.
 {
   const s = await scene()
-  await s.pick(BLUE, 10)
+  await s.pick(BLUE, 26)
   await s.background(true)
   const LINES = ['r1: 1 and 2 only fit in c8 and c9', 'so r1c9 is not 4, and r2c9 is 5']
   await s.p.mouse.click(...s.at([0.6, 10.8]))
