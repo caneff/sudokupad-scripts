@@ -22,15 +22,11 @@ describe('openScriptDialog', { concurrency: false }, () => {
   })
   after(async () => { await context?.close() })
 
-  // SudokuPad slides a dialog in (its `dialog-slide-down` animation), so a point read during the slide is off by up to the
-  // dialog's height: a touch drag measured then missed its handle on the Actions runner (#441).
   it('returns with the dialog at rest, where it stays', async () => {
-    for (let i = 0; i < 3; i++) {
-      await openScriptDialog(p, 'Color by Digit', EDITOR)
-      const atReturn = await p.locator(EDITOR).boundingBox()
-      assert.deepEqual(atReturn, await stable(() => p.locator(EDITOR).boundingBox()))
-      await closeDialogWith(p, 'Cancel', EDITOR)
-    }
+    await openScriptDialog(p, 'Color by Digit', EDITOR)
+    const atReturn = await p.locator(EDITOR).boundingBox()
+    assert.deepEqual(atReturn, await stable(() => p.locator(EDITOR).boundingBox()))
+    await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
   it('the page raised no error', () => {

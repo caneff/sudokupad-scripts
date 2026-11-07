@@ -26,8 +26,9 @@ export async function openSettings (p) {
 export async function openScriptDialog (p, entryText, editorSel) {
   await openSettings(p)
   await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: entryText }).first().click()
-  await p.locator(editorSel).waitFor({ state: 'visible' })
-  await p.locator(editorSel).evaluate((editor) => Promise.all([editor.closest('.dialog'), editor.closest('.dialog-overlay')]
+  const editor = p.locator(editorSel)
+  await editor.waitFor({ state: 'visible' })
+  await editor.evaluate((el) => Promise.all([el.closest('.dialog'), el.closest('.dialog-overlay')]
     .flatMap((e) => e.getAnimations()).map((a) => a.finished)))
 }
 
