@@ -807,7 +807,7 @@
     return `<div class="cbd-group">${head}${body}</div>`
   }
 
-  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors, synced, selectedName = '', open = null) {
+  function renderEditor ({ groups, pages, shown, mode, profilesHtml = '', useDigitColors, synced, selectedName = '', open = null }) {
     const colors = layoutColors(pages)
     const rows = groups.map((_, i) => renderGroup(groups, colors, pages, shown, i, i === open)).join('')
     const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
@@ -1313,7 +1313,7 @@
     const draw = () => {
       const { groups, name } = draft.profiles[selected]
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, selected), usesDigitColors(draft), isSynced(draft), name, open)
+      box.innerHTML = renderEditor({ groups, pages, shown, mode: draftMode, profilesHtml: renderProfiles(draft, readColor, selected), useDigitColors: usesDigitColors(draft), synced: isSynced(draft), selectedName: name, open })
     }
     const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; keptName = draft.profiles[selected].name; shown = []; open = null }
     const newProfile = () => {

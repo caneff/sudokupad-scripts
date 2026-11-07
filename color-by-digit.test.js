@@ -438,7 +438,7 @@ test('use digit colors: off, a press steps Cell and Off only; Digit falls back t
 })
 
 test('the right column starts with the selected profile\'s name in an editable box, cut to the longest name allowed', () => {
-  const html = renderEditor([], [], [], 'cell', '', true, true, 'Mine "x"')
+  const html = renderEditor({ groups: [], pages: [], shown: [], mode: 'cell', useDigitColors: true, synced: true, selectedName: 'Mine "x"' })
   assert.match(html, new RegExp(`<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="Mine &quot;x&quot;"`))
   assert.equal(html.indexOf('data-role="profile-name"') < html.indexOf('data-act="add-group"'), true)
   assert.doesNotMatch(html, /active profile/)
@@ -451,11 +451,11 @@ const modeButtons = (html) => [...html.matchAll(/<button[^>]*data-role="mode-dra
 const checkedMode = (html) => [...html.matchAll(/<button[^>]*aria-checked="true"[^>]*data-role="mode-draft" data-mode="(\w+)"/g)].map((m) => m[1])
 
 test('use digit colors: the dialog has the checkbox in the top row, above the mode, ticked as the draft is, and offers only Cell and Off when it is off', () => {
-  const on = renderEditor([], [], [], 'digit', '', true, true)
+  const on = renderEditor({ groups: [], pages: [], shown: [], mode: 'digit', useDigitColors: true, synced: true })
   assert.equal(checked(on, 'use-digit-colors'), true)
   assert.match(on, /data-role="use-digit-colors"[^>]*> Use digit colors</)
   assert.equal(on.indexOf('data-role="use-digit-colors"') < on.indexOf('data-role="mode-draft"'), true)
-  const off = renderEditor([], [], [], 'digit', '', false, true)
+  const off = renderEditor({ groups: [], pages: [], shown: [], mode: 'digit', useDigitColors: false, synced: true })
   assert.equal(checkbox(off, 'use-digit-colors'), true)
   assert.equal(checked(off, 'use-digit-colors'), false)
   assert.deepEqual(modeButtons(off), ['cell', 'off'])
@@ -463,24 +463,24 @@ test('use digit colors: the dialog has the checkbox in the top row, above the mo
 })
 
 test('sync: the top row has the sync checkbox beside Use digit colors, ticked while synced, and hides it without digit colors', () => {
-  const synced = renderEditor([], [], [], 'cell', '', true, true)
+  const synced = renderEditor({ groups: [], pages: [], shown: [], mode: 'cell', useDigitColors: true, synced: true })
   assert.equal(checked(synced, 'sync'), true)
   assert.match(synced, /data-role="sync"[^>]*> Sync digit profile with cell profile</)
   assert.equal(synced.indexOf('data-role="sync"') < synced.indexOf('data-role="mode-draft"'), true)
-  assert.equal(checked(renderEditor([], [], [], 'cell', '', true, false), 'sync'), false)
-  assert.equal(checkbox(renderEditor([], [], [], 'cell', '', true, false), 'sync'), true)
-  assert.equal(checkbox(renderEditor([], [], [], 'cell', '', false, true), 'sync'), false)
+  assert.equal(checked(renderEditor({ groups: [], pages: [], shown: [], mode: 'cell', useDigitColors: true, synced: false }), 'sync'), false)
+  assert.equal(checkbox(renderEditor({ groups: [], pages: [], shown: [], mode: 'cell', useDigitColors: true, synced: false }), 'sync'), true)
+  assert.equal(checkbox(renderEditor({ groups: [], pages: [], shown: [], mode: 'cell', useDigitColors: false, synced: true }), 'sync'), false)
   assert.equal(checkbox(renderProfiles(apart, colorFor, 0), 'sync'), false)
 })
 
 test('the mode is one row of buttons, none of them a radio input, and a button group announces the draft mode', () => {
-  const html = renderEditor([], [], [], 'both', '', true, true)
+  const html = renderEditor({ groups: [], pages: [], shown: [], mode: 'both', useDigitColors: true, synced: true })
   assert.doesNotMatch(html, /type="radio"/)
   assert.match(html, /<div class="cbd-mode" role="radiogroup" aria-label="Mode">(<button[^>]*>[^<]*<\/button>){4}<\/div>/)
 })
 
 test('the dialog has the profile list and the groups editor as two columns of one grid, the list first', () => {
-  const html = renderEditor([], [], [], 'cell', '<div id="mark-profiles"></div>', true, true)
+  const html = renderEditor({ groups: [], pages: [], shown: [], mode: 'cell', profilesHtml: '<div id="mark-profiles"></div>', useDigitColors: true, synced: true })
   assert.match(html, /<div class="cbd-columns cbd-divider"><div class="cbd-column"><div id="mark-profiles"><\/div><\/div><div class="cbd-column">.*profile-name.*Groups</s)
   const css = STYLE_CSS.replace(/\s+/g, ' ')
   assert.match(css, /#color-by-digit-editor \.cbd-columns \{ display: grid; gap: \d+px; grid-template-columns: repeat\(auto-fit, minmax\(\d+px, 1fr\)\)/)
@@ -778,7 +778,7 @@ test('colorSteps clears a cell that loses a color and puts back the colors it ke
 })
 
 test('mode: the dialog opens with the mode choice at the top, on the draft it is given', () => {
-  const html = renderEditor([], [], [], 'off', '<div id="mark-profiles"></div>', true)
+  const html = renderEditor({ groups: [], pages: [], shown: [], mode: 'off', profilesHtml: '<div id="mark-profiles"></div>', useDigitColors: true })
   assert.equal(html.indexOf('data-role="mode-draft"') < html.indexOf('mark-profiles'), true)
   assert.deepEqual(checkedMode(html), ['off'])
   assert.deepEqual(checkedMode(editor([], [], [], 'cell')), ['cell'])
@@ -1232,7 +1232,7 @@ test('Each digit: an install already offered it keeps the Each digit it has, on 
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
 // The editor without a profile list.
-const editor = (groups, pages, shown, mode = 'cell', open = 0) => renderEditor(groups, pages, shown, mode, '', true, true, '', open)
+const editor = (groups, pages, shown, mode = 'cell', open = 0) => renderEditor({ groups, pages, shown, mode, useDigitColors: true, synced: true, open })
 const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
 const keys = (names) => names.split(' ')
 const slotKeys = (slots) => slots.map((s) => (s ? s.key : null))
@@ -1360,7 +1360,7 @@ test('renderEditor keeps the "No palette colors found" note, and draws no pulldo
 })
 
 test('the editor has no Preload buttons, keeps a Clear all button, and shows the profile list it is given above the groups', () => {
-  const html = renderEditor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0], 'cell', '<div id="mark-profiles"></div>', true)
+  const html = renderEditor({ groups: [{ key: 'a', digits: [] }], pages: layoutPages([], 0, colorOf), shown: [0], mode: 'cell', profilesHtml: '<div id="mark-profiles"></div>', useDigitColors: true })
   assert.doesNotMatch(html, /data-act="preload"|Preload/)
   assert.equal(count(html, /data-act="clear"[^>]*>Clear all</g), 1)
   assert.ok(html.indexOf('mark-profiles') < html.indexOf('data-act="clear"'))
@@ -1705,6 +1705,6 @@ test('the mode row outranks the profile list\'s column rule, so the four buttons
 
 test('renderEditor makes only the chosen mode a tab stop, so the mode row is one radio group', () => {
   const tabStops = (html) => [...html.matchAll(/<button[^>]*tabindex="(-?\d)"[^>]*data-role="mode-draft" data-mode="(\w+)"/g)].map((m) => `${m[2]}:${m[1]}`)
-  assert.deepEqual(tabStops(renderEditor([], [], [], 'both', '', true, true)), ['cell:-1', 'digit:-1', 'both:0', 'off:-1'])
-  assert.deepEqual(tabStops(renderEditor([], [], [], 'both', '', false, true)), ['cell:0', 'off:-1'])
+  assert.deepEqual(tabStops(renderEditor({ groups: [], pages: [], shown: [], mode: 'both', useDigitColors: true, synced: true })), ['cell:-1', 'digit:-1', 'both:0', 'off:-1'])
+  assert.deepEqual(tabStops(renderEditor({ groups: [], pages: [], shown: [], mode: 'both', useDigitColors: false, synced: true })), ['cell:0', 'off:-1'])
 })

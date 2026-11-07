@@ -32,12 +32,12 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   const { renderEditor, renderProfiles, renderMenu, iconLayout, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
 
   // Top row: each checkbox sits inside its label; Mode is one row of four buttons, or Cell and Off without digit colors.
-  const top = renderEditor([], PAGES, [], 'both', '', true, true)
+  const top = renderEditor({ groups: [], pages: PAGES, shown: [], mode: 'both', useDigitColors: true, synced: true })
   assert.match(top, /<label class="cbd-check"><input type="checkbox" data-role="use-digit-colors" checked> Use digit colors<\/label>/)
   assert.match(top, /<label class="cbd-check"><input type="checkbox" data-role="sync" checked> Sync digit profile with cell profile<\/label>/)
   const modes = (html) => [...html.matchAll(/data-mode="([a-z]+)">/g)].map((m) => m[1])
   assert.deepEqual(modes(top), ['cell', 'digit', 'both', 'off'])
-  assert.deepEqual(modes(renderEditor([], PAGES, [], 'cell', '', false, true)), ['cell', 'off'])
+  assert.deepEqual(modes(renderEditor({ groups: [], pages: PAGES, shown: [], mode: 'cell', useDigitColors: false, synced: true })), ['cell', 'off'])
   const css = byDigit.STYLE_CSS.replace(/\s+/g, ' ')
   assert.match(css, /\.cbd-mode\[role="radiogroup"\] \{ display: flex; flex-direction: row/)
   // Two columns where 640 px allows, one on a phone.
@@ -71,16 +71,16 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.match(renderProfiles(six, colorOf, 0), /data-act="new-profile" disabled/)
   assert.equal(renameProfile(STATE, 0, '   ').profiles[0].name, 'Odd/Even')
   assert.equal(renameProfile(STATE, 0, 'Parity').profiles[0].name, 'Parity')
-  assert.match(renderEditor(EACH, PAGES, [], 'cell', '', true, true, 'Each digit'), /data-role="profile-name" maxlength="24" value="Each digit"/)
+  assert.match(renderEditor({ groups: EACH, pages: PAGES, shown: [], mode: 'cell', useDigitColors: true, synced: true, selectedName: 'Each digit' }), /data-role="profile-name" maxlength="24" value="Each digit"/)
 
   // Groups: three compact rows, one open with its pad; a digit another group holds shows that group's color dot.
-  const groups = renderEditor(LOW_HIGH, PAGES, [0, 0, 0], 'cell', '', true, true, 'Low/5/High', 1)
+  const groups = renderEditor({ groups: LOW_HIGH, pages: PAGES, shown: [0, 0, 0], mode: 'cell', useDigitColors: true, synced: true, selectedName: 'Low/5/High', open: 1 })
   assert.equal(count(groups, /data-act="open"/g), 3)
   assert.equal(count(groups, /aria-expanded="true"/g), 1)
   assert.equal(count(groups, /data-role="numpad"/g), 1)
   assert.match(groups, /data-digit="1" style="[^"]*">1<span data-role="holder" title="a3"/)
   assert.doesNotMatch(groups, /data-digit="5" style="[^"]*">5<span data-role="holder"/)
-  assert.equal(count(renderEditor(EACH, PAGES, [], 'cell', '', true, true, 'Each digit', null), /data-role="numpad"/g), 0)
+  assert.equal(count(renderEditor({ groups: EACH, pages: PAGES, shown: [], mode: 'cell', useDigitColors: true, synced: true, selectedName: 'Each digit', open: null }), /data-role="numpad"/g), 0)
   // A group Add group makes opens; a click on a digit another group holds moves it to the open group.
   assert.equal(byDigit.openGroupAfter(null, 'add-group', undefined, 3, 4), 3)
   assert.deepEqual(byDigit.assignDigit(LOW_HIGH, 1, '1').map((g) => g.digits), [['2', '3', '4'], ['1', '5'], ['6', '7', '8', '9']])
