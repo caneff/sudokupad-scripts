@@ -176,6 +176,11 @@
   const CHAR_WIDTH = 0.6
   // A line's height as a share of the text size, in the font's own spacing, so a note's box is as tall as the note drawn.
   const LINE_HEIGHT = 1.15
+  // A note never resized wraps at this many em and stops growing at this many lines, then scrolls.
+  const BOX_WIDTH_EM = 16
+  const BOX_LINES = 8
+  // The smallest box the resize handle leaves: about three characters wide and one line high, in em.
+  const MIN_BOX_EM = [3, LINE_HEIGHT]
   // How far, in screen pixels, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
@@ -186,6 +191,9 @@
   const TEXT_CLASS = 'draw-tool-text'
   const TEXT_BACKGROUND_CLASS = 'draw-tool-text-bg'
   const SELECTED_CLASS = 'draw-tool-selected'
+  // A note whose text runs past its box, and the one such note under the pointer, which shows its scroll bar.
+  const SCROLLS_CLASS = 'draw-tool-scrolls'
+  const HOVER_CLASS = 'draw-tool-hover'
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
@@ -270,11 +278,17 @@
 
   const shownLength = (runs) => runs.reduce((sum, run) => sum + run.text.length, 0)
 
+  // A note's width and height in board units: its stored `box` once resized, else its text wrapped at BOX_WIDTH_EM and cut off at BOX_LINES.
+  function noteSize (item) {
+    if (item.box) return item.box
+    const widths = parseMarkdown(item.text).map((runs) => Math.max(1, shownLength(runs)) * CHAR_WIDTH)
+    const rows = widths.reduce((sum, width) => sum + Math.ceil(width / BOX_WIDTH_EM), 0)
+    return [Math.min(BOX_WIDTH_EM, Math.max(...widths)) * item.size, Math.min(BOX_LINES, rows) * LINE_HEIGHT * item.size]
+  }
+
   // The box a text takes on the board, centred on its point: the text is drawn anchored at its middle.
   function textBox (item) {
-    const lines = parseMarkdown(item.text)
-    const halfWidth = (Math.max(1, ...lines.map(shownLength)) * item.size * CHAR_WIDTH) / 2
-    const halfHeight = (lines.length * item.size * LINE_HEIGHT) / 2
+    const [halfWidth, halfHeight] = noteSize(item).map((side) => side / 2)
     const [x, y] = item.at
     return { left: x - halfWidth, right: x + halfWidth, top: y - halfHeight, bottom: y + halfHeight }
   }
@@ -692,8 +706,9 @@
 
   const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
+  const isBox = (box) => isPoint(box) && box.every((side) => side > 0)
   const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
-    (item.bg === undefined || item.bg === true) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
@@ -925,16 +940,23 @@
   const textColor = (item) => itemOpacity(item) === 100 ? itemColor(item.color) : `color-mix(in srgb, ${itemColor(item.color)} ${itemOpacity(item)}%, transparent)`
 
   // A note is drawn at the board's scale, on the board or off it, centred on its screen point; a background is a page-colored rounded box around the text.
+  // A resized note is exactly its stored box; any other takes the stylesheet's automatic width and height. A note with no background is padded by its
+  // halo's reach, since its box clips what overflows it.
   function styleNote (element, item, map) {
     const [x, y] = screenPoint(item, map.toScreen)
     const px = (units) => `${roundToTenth(units * item.size * map.scale)}px`
+    const [boxWidth, boxHeight] = item.box ? item.box.map((side) => `${roundToTenth(side * map.scale)}px`) : ['', '']
     Object.assign(element.style, {
       left: `${roundToTenth(x)}px`,
       top: `${roundToTenth(y)}px`,
       fontSize: px(1),
+      width: boxWidth,
+      height: boxHeight,
+      maxWidth: item.box ? 'none' : '',
+      maxHeight: item.box ? 'none' : '',
       color: textColor(item),
       backgroundColor: item.bg ? PAGE_COLOR : 'transparent',
-      padding: item.bg ? `${px(BACKGROUND_PAD_Y)} ${px(BACKGROUND_PAD_X)}` : '0',
+      padding: item.bg ? `${px(BACKGROUND_PAD_Y)} ${px(BACKGROUND_PAD_X)}` : px(HALO_EM),
       borderRadius: item.bg ? px(BACKGROUND_RADIUS) : '0'
     })
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
@@ -1071,7 +1093,11 @@
     `.${SLIDER_ROW_CLASS} span:last-child { font-size: ${SIZE_LABEL_REM[1]}rem; padding-right: 0.35rem; }`,
     `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
     // A line as tall as the hit box, so a note's background box is as tall as a digit and covers one under it.
-    `.${TEXT_CLASS} { position: absolute; transform: translate(-50%, -50%); line-height: ${LINE_HEIGHT}; white-space: pre; }`,
+    // SudokuPad sizes every box border-box; a note's sizes are its text's, as its hit box is, with the padding around them.
+    `.${TEXT_CLASS} { position: absolute; transform: translate(-50%, -50%); box-sizing: content-box; line-height: ${LINE_HEIGHT}; white-space: pre-wrap; overflow-wrap: anywhere; width: max-content; max-width: ${BOX_WIDTH_EM}em; max-height: ${roundToTenth(BOX_LINES * LINE_HEIGHT)}em; overflow: hidden; }`,
+    // A thin bar whose room is kept whether it shows or not, so the text does not wrap again as the pointer comes and goes.
+    `.${TEXT_CLASS}.${SCROLLS_CLASS} { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }`,
+    `.${TEXT_CLASS}.${SCROLLS_CLASS}.${HOVER_CLASS} { scrollbar-color: currentColor transparent; }`,
     // A halo in the page's color, painted under the letters so only its outer half shows; a note with a background box already sits on that color.
     `.${TEXT_CLASS}:not(.${TEXT_BACKGROUND_CLASS}) { -webkit-text-stroke: ${HALO_EM * 2}em ${PAGE_COLOR}; paint-order: stroke fill; stroke-linejoin: round; }`,
     `.${SELECTED_CLASS} { outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,
@@ -1349,6 +1375,12 @@
   let savable = true
   // The failures already shown in a dialog on this page.
   const reported = new Set()
+  // The pointer's last screen point, so a note drawn again under a still pointer shows its scroll bar.
+  let pointer = null
+  // Each drawn note's item. Its scroll position is kept on the item under a symbol, which a spread copies and JSON leaves out, so a redraw, a move or a
+  // recolor keeps it and no save stores it.
+  const noteItems = new WeakMap()
+  const SCROLL = Symbol('scroll')
 
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
   const selectedNotes = () => selected.map((i) => drawing[i])
@@ -1384,13 +1416,63 @@
     layer.style.fontFamily = window.getComputedStyle(svg).fontFamily
     const kept = [editing?.element, drag?.rectangle]
     for (const child of [...layer.children]) if (!kept.includes(child)) child.remove()
-    layer.prepend(...drawing.flatMap((item, i) => {
+    const notes = drawing.flatMap((item, i) => {
       if (item.kind !== TEXT_KIND || (editing && editing.index === i)) return []
       const note = newNote(item, map)
       if (selected.includes(i)) note.classList.add(SELECTED_CLASS)
+      noteItems.set(note, item)
       return [note]
-    }))
-    if (editing) styleNote(editing.element, editing.item, map)
+    })
+    layer.prepend(...notes)
+    for (const note of notes) {
+      markScrolling(note)
+      note.scrollTop = noteItems.get(note)[SCROLL] ?? 0
+    }
+    if (editing) {
+      styleNote(editing.element, editing.item, map)
+      markScrolling(editing.element)
+    }
+    showHover()
+  }
+
+  const scrollRoom = (note) => note.scrollHeight - note.clientHeight
+  // A pixel of rounding is not text past the box.
+  function markScrolling (note) {
+    note.classList.toggle(SCROLLS_CLASS, scrollRoom(note) > 1)
+  }
+
+  // The topmost note whose box holds screen point `point`, or null. The notes' layer takes no pointer, so the page cannot say.
+  function noteUnder ([x, y]) {
+    const notes = [...drawingLayer().querySelectorAll(`.${TEXT_CLASS}`)].reverse()
+    return notes.find((note) => inBox([x, y], note.getBoundingClientRect())) ?? null
+  }
+
+  function showHover () {
+    const over = pointer && noteUnder(pointer)
+    for (const note of drawingLayer().querySelectorAll(`.${HOVER_CLASS}`)) if (note !== over) note.classList.remove(HOVER_CLASS)
+    if (over) over.classList.add(HOVER_CLASS)
+  }
+
+  function trackPointer (event) {
+    pointer = eventPoint(event)
+    showHover()
+  }
+
+  // A wheel's lines and pages, as pixels of the note it scrolls.
+  const WHEEL_UNITS = { [window.WheelEvent.DOM_DELTA_LINE]: (note) => parseFloat(window.getComputedStyle(note).fontSize) * LINE_HEIGHT, [window.WheelEvent.DOM_DELTA_PAGE]: (note) => note.clientHeight }
+
+  // The wheel over a note with text past its box scrolls it, and never reaches SudokuPad, until the note can scroll no further that way; Ctrl+wheel stays the browser's zoom.
+  function scrollNote (event) {
+    if (event.ctrlKey || event.deltaY === 0) return
+    const note = noteUnder(eventPoint(event))
+    if (!note || !note.classList.contains(SCROLLS_CLASS)) return
+    const room = event.deltaY < 0 ? note.scrollTop : scrollRoom(note) - note.scrollTop
+    if (room < 1) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    note.scrollTop += event.deltaY * (WHEEL_UNITS[event.deltaMode]?.(note) ?? 1)
+    const item = noteItems.get(note)
+    if (item) item[SCROLL] = note.scrollTop
   }
 
   function redraw () {
@@ -1788,6 +1870,8 @@
     installSliderGuards(`.${SLIDERS_CLASS}`)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
+    window.addEventListener('wheel', scrollNote, { capture: true, passive: false })
+    window.addEventListener('mousemove', trackPointer, { capture: true, passive: true })
     for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
     if (app.puzzle.currentPuzzle) showSavedDrawing()
   })

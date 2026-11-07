@@ -450,3 +450,30 @@ test('a note\'s box is as wide as its longest line shown, markers left out, and 
   assert.equal(height(two), 46)
   assert.equal((textBox(two).top + textBox(two).bottom) / 2, 50)
 })
+
+// A note is 20 board units tall a line, so its automatic box is 16 x 20 = 320 wide and 8 lines (184) high.
+test('a line longer than the box wraps: the box stops at 16 em wide and is a line taller for each wrap', () => {
+  const width = (item) => textBox(item).right - textBox(item).left
+  const height = (item) => textBox(item).bottom - textBox(item).top
+  const long = textItem([100, 50], 'x'.repeat(40), 3, 20)
+  assert.equal(width(long), 320)
+  assert.equal(height(long), 46)
+  assert.equal((textBox(long).left + textBox(long).right) / 2, 100)
+})
+
+test('a note of more than 8 lines stops growing at 8 lines high', () => {
+  const height = (item) => textBox(item).bottom - textBox(item).top
+  assert.equal(height(textItem([100, 50], Array(8).fill('a').join('\n'), 3, 20)), 184)
+  assert.equal(height(textItem([100, 50], Array(12).fill('a').join('\n'), 3, 20)), 184)
+})
+
+test('a resized note\'s box is its stored size, whatever its text, centred on its point', () => {
+  const resized = { ...textItem([100, 50], 'a', 3, 20), box: [200, 60] }
+  assert.deepEqual(textBox(resized), { left: 0, right: 200, top: 20, bottom: 80 })
+})
+
+test('a saved size reads back, and a note without one has none', () => {
+  const resized = { ...sum, box: [200.5, 60] }
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify([resized, sum]))), [resized, sum])
+  for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.throws(() => readDrawing([{ ...sum, box }]), /saved drawing/, JSON.stringify(box))
+})
