@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, PROFILES_KEY, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, paintOn, pressTo, PROFILES_KEY, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle } from './settle.mjs'
 
@@ -126,6 +126,34 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
     assert.equal(await t.undoSteps(), steps)
+  })
+
+  it('a Digits pick leaves alone a cell painted or unpainted by hand, and a pending redo', async () => {
+    // A group color painted by hand on the empty (4,4), and the group color taken off the given 5 at (0,0) by hand.
+    const HAND = [[4, 4], [0, 0]]
+    const handColors = () => t.read((list) => list.map(([r, c]) => [...(Framework.app.grid.getCell(r, c).colours || [])]), HAND)
+    const redoSteps = () => t.read(() => Framework.app.puzzle.redoStack.length)
+    const valueAt = (r, c) => t.read(([r, c]) => String(Framework.app.grid.getCell(r, c).value || ''), [r, c])
+    await paintOn(p, 4, 4, '4')
+    await paintOn(p, 0, 0, '4')
+    assert.deepEqual(await settle(handColors, [['4'], []]), [['4'], []])
+    await t.enter(2, 0, '7')
+    assert.equal(await settle(() => valueAt(2, 0), '7'), '7')
+    await t.undo()
+    assert.equal(await settle(() => valueAt(2, 0), ''), '')
+    const redo = await redoSteps()
+    assert.ok(redo > 0)
+    await t.pick('digits', 0)
+    assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
+    assert.deepEqual(await watch(handColors), [[['4'], []]])
+    assert.equal(await redoSteps(), redo)
+    await t.redo()
+    assert.equal(await settle(() => valueAt(2, 0), '7'), '7')
+    // Back as the next test starts it: digits on Odd/Even, and the hand changes undone by hand.
+    await t.pick('digits', 1)
+    await paintOn(p, 4, 4, '4')
+    await paintOn(p, 0, 0, '4')
+    assert.deepEqual(await settle(t.cells, SPLIT_CELLS), SPLIT_CELLS)
   })
 
   it('in Both, cells on Split and digits on Odd/Even, the icon shows the cell profile', async () => {

@@ -1073,14 +1073,15 @@
     menu.style.top = `${Math.max(rect.top - menu.offsetHeight - 12, 4)}px`
   }
 
-  // A digit pick changes only the digit stylesheet, so it is never an undo step.
+  // A digit pick changes only the digit stylesheet: it touches no cell and is never an undo step.
   function switchProfile (app, index, target) {
     const state = loadState()
     closeMenu()
-    if (index === (target === 'digits' ? state.digitActive : state.active)) return
-    const next = target === 'digits' ? setDigitActive(state, index) : setActive(state, index)
+    const digits = target === 'digits'
+    if (index === (digits ? state.digitActive : state.active)) return
+    const next = digits ? setDigitActive(state, index) : setActive(state, index)
     saveState(next)
-    if (colorsCells(mode)) recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
+    if (!digits && colorsCells(mode)) recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
     redraw()
   }
 

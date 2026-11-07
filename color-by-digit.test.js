@@ -807,6 +807,8 @@ function fire (type, inside = {}, extra = {}) {
 // A short press on the button proper, away from its arrow box, as listenForButton reads one.
 const BUTTON_SELECTOR = '#control-colorbydigit'
 const press = () => { fire('pointerdown', { [BUTTON_SELECTOR]: {} }); fire('pointerup', { [BUTTON_SELECTOR]: {} }) }
+// A click on a profile menu row: `target` is 'cells' or 'digits'.
+const pickRow = (target, index) => fire('click', { '#color-by-digit-menu [data-act]': { dataset: { act: 'pick', target, index: String(index) } } })
 
 const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '#3e63dd', color: 'rgb(62, 99, 221)' }), addEventListener: () => {}, MutationObserver: class { observe () {} } })
 
@@ -1046,6 +1048,29 @@ test('cell coloring: a restart colors the givens again', async () => {
     assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
     assert.equal(app.puzzle.inGroup, false)
   })
+})
+
+const UNSYNCED_BOTH = { ColorByDigit_mode: 'both', ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }, { name: 'Low/5/High', groups: LOW }], active: 0, digitActive: 0 } }
+
+test('sync: unsynced in Both, a Digits pick saves the digit profile and leaves every cell alone, hand-altered ones included, with no action', async () => {
+  // Cell 0 is empty with a group color painted by hand; cell 1's group color, given at load, is then taken off by hand.
+  await withScript(mockApp([{ colours: ['1'] }, { value: '3' }]), async (app) => {
+    app.puzzle.cells[1].colours = []
+    app.calls.length = 0
+    pickRow('digits', 1)
+    assert.equal(app.stored.ColorByDigit_profiles.digitActive, 1)
+    assert.deepEqual(app.calls, [])
+    assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], []])
+  }, UNSYNCED_BOTH)
+})
+
+test('sync: unsynced in Both, a Cells pick recolors the cells: a 6 goes from Odd/Even\'s even color to Low/5/High\'s high one', async () => {
+  await withScript(mockApp([{ value: '6' }]), async (app) => {
+    assert.deepEqual(app.puzzle.cells[0].colours, ['2'])
+    pickRow('cells', 1)
+    assert.equal(app.stored.ColorByDigit_profiles.active, 1)
+    assert.deepEqual(app.puzzle.cells[0].colours, ['9'])
+  }, UNSYNCED_BOTH)
 })
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
