@@ -75,6 +75,6 @@ test('spec 301: Draw Tool has its own colors, Size and Opacity sliders, Shape mo
   assert.match(read('site/index.html'), summary)
   assert.match(read('draw-tool.user.js'), summary)
   const details = read('site/draw-tool.html')
-  for (const lead of ['Shapes.', 'Colors of its own.', 'Size and opacity.', 'Settings.']) assert.match(details, new RegExp(`<strong>${lead.replace('.', '\\.')}</strong>`))
+  for (const lead of ['Shapes', 'Colors of its own', 'Size and opacity', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
   assert.match(read('README.md'), /Each script except No Tab Letters adds an entry/)
 })
