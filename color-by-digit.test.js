@@ -119,8 +119,15 @@ test('Modular maps 1, 4, 7 to key 6, 2, 5, 8 to key 5, 0, 3, 6, 9 to key 8', () 
   assert.equal(byDigit(PRELOADS.Modular), '8658658658')
 })
 
-// SudokuPad's default palette (tool-color.css): the colors Each digit's keys show, typed out as the independent source.
-const DEFAULT_PALETTE = { j: 'rgb(145, 30, 180)', e: 'rgb(238, 153, 170)', h: 'rgb(160, 90, 30)', m: 'rgb(76, 175, 80)', 5: 'rgb(232, 124, 241)', 6: 'rgb(228, 150, 50)', 7: 'rgb(245, 58, 55)', 8: 'rgb(252, 235, 63)', 9: 'rgb(61, 153, 245)' }
+// SudokuPad's default palette, its visible keys (tool-color.css, read 2026-11-07), typed out as the independent source.
+const DEFAULT_PALETTE = Object.fromEntries([
+  ['1', 'rgb(214, 214, 214)'], ['2', 'rgb(124, 124, 124)'], ['3', 'rgb(-36, -36, -36)'], ['4', 'rgb(179, 229, 106)'], ['5', 'rgb(232, 124, 241)'],
+  ['6', 'rgb(228, 150, 50)'], ['7', 'rgb(245, 58, 55)'], ['8', 'rgb(252, 235, 63)'], ['9', 'rgb(61, 153, 245)'], ['b', 'rgb(204, 51, 17)'],
+  ['c', 'rgb(17, 119, 51)'], ['d', 'rgb(0, 68, 196)'], ['e', 'rgb(238, 153, 170)'], ['f', 'rgb(255, 255, 25)'], ['g', 'rgb(240, 70, 240)'],
+  ['h', 'rgb(160, 90, 30)'], ['i', 'rgb(51, 187, 238)'], ['j', 'rgb(145, 30, 180)'], ['l', 'rgb(245, 58, 55)'], ['m', 'rgb(76, 175, 80)'],
+  ['n', 'rgb(61, 153, 245)'], ['o', 'rgb(249, 136, 134)'], ['p', 'rgb(149, 208, 151)'], ['q', 'rgb(158, 204, 250)'], ['r', 'rgb(170, 12, 9)'],
+  ['s', 'rgb(47, 106, 49)'], ['t', 'rgb(9, 89, 170)']
+])
 
 test('Each digit puts each of 1 to 9 alone in a group, 5 to 9 on their own first-page keys and 1 to 4 on keys of pages 2 and 3, and 0 in no group', () => {
   assert.deepEqual(PRELOADS['Each digit'], [['1', 'j'], ['2', 'e'], ['3', 'h'], ['4', 'm'], ['5', '5'], ['6', '6'], ['7', '7'], ['8', '8'], ['9', '9']].map(([d, key]) => ({ key, digits: [d] })))
