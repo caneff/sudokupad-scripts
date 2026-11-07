@@ -10,6 +10,12 @@
   active. Groups saved before profiles existed become the active profile: the preload they equal, else a
   profile named Custom added first, with the five preloads beside it. An install with saved profiles gets
   Entropic and Modular added once, and Each digit once (see **preload**).
+- **selected profile** — the profile the Color by Digit settings dialog is editing: its row is highlighted, its
+  name is in the name box and its groups are in the right column. The dialog opens on the cell profile, and a click
+  on a row selects it. Selecting changes no color and is not saved; the **profile tags** do the picking.
+- **profile tag** — the small button on each row of the dialog's profile list that picks a profile: Active (the
+  cell profile) while the **digit profile** is synced or digit colors are off, else Cells (the cell profile) and
+  Digits (the digit profile). It applies at Save.
 - **shown digit** — the one digit that stands for a group on its colored cell in the Color by Digit icon,
   the profile menu and the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
   are below 5, the highest if all are above 5, else the middle (the lower of the two middle ones on an even

@@ -9,6 +9,7 @@
   ul { margin: 0 0 .75rem; padding-left: 1.25rem; }
   li { margin-bottom: .25rem; }
   li img { display: block; max-width: min(100%, 20rem); height: auto; margin: .35rem 0 .5rem; }
+  img.panel { display: block; max-width: 100%; height: auto; margin: .35rem 0 .75rem; }
   li img.wide { max-width: min(100%, 36rem); }
 </style>
 </head>
@@ -32,19 +33,21 @@
     </li>
     <li><strong>Profiles.</strong> A profile is a list of groups of digits, each group with a palette color, and you can keep up to six profiles. Five come preloaded: Low/5/High, Odd/Even, Entropic, Modular and Each digit. The button's icon shows the active profile.</li>
     <li><strong>The profile menu.</strong> It opens from the arrow box on the button, a right click or a hold. Pick a profile and it takes effect at once.
-      <img class="wide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-menu.gif?v=00c81e3" alt="An animation of two sudoku boxes beside the Color by Digit button, colored by the Low/5/High profile. The profile menu opens above the button from its arrow box, listing the five profiles with their group colors and Edit profiles at the bottom. Odd/Even is picked, the menu closes, and the boxes recolor at once to the Odd/Even groups" width="481" height="343">
+      <img class="wide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-menu.gif?v=7c141db" alt="An animation of two sudoku boxes beside the Color by Digit button, colored by the Low/5/High profile. The profile menu opens above the button from its arrow box, listing the five profiles with their group colors and Edit profiles at the bottom. Odd/Even is picked, the menu closes, and the boxes recolor at once to the Odd/Even groups" width="481" height="343">
     </li>
     <li><strong>Sync digit profile with cell profile.</strong> Ticked, one profile colors both the cells and the digits. Untick it to color the cells from one profile and the digits from another; the menu then has a Cells section and a Digits section.</li>
     <li><strong>Use digit colors.</strong> Untick it to drop digit coloring: the button steps only between Cell and Off.</li>
   </ul>
 
   <h2>The settings dialog</h2>
-  <p>Edit profiles in the menu opens it. It lists the profiles, which you reorder, add, delete and pick the active one from, and edits each profile's groups: which digits are in a group, and its color. It holds the mode and the two checkboxes above, and Copy settings and Paste settings, which move all of it to another browser. Save applies every change at once; Cancel drops them.</p>
+  <p>Edit profiles in the menu opens it. On a desktop it is two columns, the profile list on the left and the selected profile's groups on the right; on a phone it is one, the groups under the list.</p>
+  <img class="panel" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-dialog-annotated.png?v=400952f" alt="The Color by Digit settings dialog with each part labelled. Top row: the two checkboxes, with the mode buttons under them. Profile list: click a row to edit it; its tags pick which profile colors the cells and the digits. Name box: rename the selected profile. Group rows: each shows a group's color and digits; click one to open it. Open group: its color pickers and digit pad; one group is open at a time. Bottom row: Copy settings, Paste settings, Cancel and Save." width="1172" height="907">
+  <p>The profile list lets you reorder, delete and add a copy of profiles. Use the small tags on each row to choose which profile colors the cells and which the digits (one Active tag while Sync is ticked). In an open group's digit pad, a digit another group holds shows that group's color as a dot, and a click moves it. Copy settings and Paste settings move all of it to another browser. Save applies every change at once; Cancel drops them.</p>
 
   <h2>Good to know</h2>
   <ul>
     <li>A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.</li>
-    <li>With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had, and undoing a profile switch does not bring that color back.</li>
+    <li>With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.</li>
   </ul>
   <p><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
 </body>

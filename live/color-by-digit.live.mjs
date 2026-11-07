@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { startPuzzle } from './page.mjs'
-import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintOn, pressTo, PROFILES_KEY, SEED, watch } from './color-by-digit-fixtures.mjs'
+import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openGroup, openSession, paintOn, pressTo, PROFILES_KEY, SEED, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
@@ -210,12 +210,29 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
   })
 
-  it('the settings entry opens the editor with two groups', async () => {
+  const openRows = () => p.locator(`${EDITOR} button[data-act=open]`)
+  it('the settings entry opens the editor with two compact group rows, none open', async () => {
     await openEditor()
-    assert.equal(await p.locator(`${EDITOR} button[data-act=digit][data-digit="1"]`).count(), 2)
+    assert.equal(await openRows().count(), 2)
+    assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 0)
+    assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 0)
+  })
+
+  it('clicking a row opens that group\'s pickers, and clicking another row closes the first: only one group is open', async () => {
+    await openGroup(p, 0)
+    assert.equal(await p.locator(`${EDITOR} select[data-act=page][data-group="0"]`).count(), 1)
+    assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 10)
+    await openGroup(p, 1)
+    assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 1)
+    assert.equal(await p.locator(`${EDITOR} select[data-act=page][data-group="1"]`).count(), 1)
+    assert.equal(await p.locator(`${EDITOR} button[data-act=open][aria-expanded=true]`).count(), 1)
+    await openRows().nth(1).click()
+    assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 0)
+    await openGroup(p, 0)
   })
 
   it('the palette is read from the CSS variables: three pages of 9 visible swatches, 27 in all', async () => {
+    await openGroup(p, 0)
     const select = p.locator(`${EDITOR} select[data-act="page"][data-group="0"]`)
     const seen = []
     for (const value of ['0', '1', '2']) {
@@ -226,11 +243,19 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(seen.flat().filter((bg) => bg === 'rgba(0, 0, 0, 0)').length, 0)
   })
 
-  it('assigning a digit moves it out of its other group, and the dialog stays open', async () => {
-    const weights = () => p.$$eval(`${EDITOR} button[data-act=digit][data-digit="1"]`, (es) => es.map((e) => e.style.fontWeight))
-    assert.deepEqual(await weights(), ['bold', 'normal'])
+  it('a digit another group holds shows that group\'s color as a dot, and a click moves it here and the dialog stays open', async () => {
+    const chips = (g) => p.$$eval(`${EDITOR} button[data-act=open][data-group="${g}"] [data-role=digit-chip]`, (es) => es.map((e) => e.textContent))
+    const dot = (d) => p.locator(`${EDITOR} button[data-act=digit][data-digit="${d}"] [data-role=holder]`)
+    const colorOfSwatch = (g) => p.locator(`${EDITOR} button[data-act=open][data-group="${g}"] [data-role=swatch]`).evaluate((e) => window.getComputedStyle(e).backgroundColor)
+    await openGroup(p, 1)
+    assert.equal((await chips(0)).includes('1'), true)
+    assert.equal(await dot('1').count(), 1)
+    assert.equal(await dot('1').evaluate((e) => window.getComputedStyle(e).backgroundColor), await colorOfSwatch(0))
+    assert.equal(await dot('3').count(), 1)
     await p.click(`${EDITOR} button[data-act=digit][data-group="1"][data-digit="1"]`)
-    assert.deepEqual(await weights(), ['normal', 'bold'])
+    assert.equal((await chips(0)).includes('1'), false)
+    assert.equal((await chips(1)).includes('1'), true)
+    assert.equal(await dot('1').count(), 0)
     assert.equal(await editor().count(), 1)
   })
 
@@ -242,7 +267,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   describe('saved groups', { concurrency: false }, () => {
     it('Save with Low/5/High made the active profile writes it and closes the dialog', async () => {
       await openEditor()
-      await p.click(`${EDITOR} [data-act=activate][data-index="1"]`)
+      await p.click(`${EDITOR} [data-act=tag-cells][data-index="1"]`)
       await closeDialogWith(p, 'Save', EDITOR)
       const expected = { ...SEED, active: 1 }
       assert.deepEqual(await settle(getData, expected), expected)
@@ -292,8 +317,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await pressTo(p, 'DIGIT')
     })
 
-    it('each group box has a red × named "Remove group" in its upper right corner, clear of the pulldown and numpad at desktop and phone width', async () => {
-      const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+    it('each group row has a red × named "Remove group" at its end, level with the row and clear of it at desktop and phone width', async () => {
       for (const width of [1200, 390]) {
         await p.setViewportSize({ width, height: 900 })
         await openEditor()
@@ -301,17 +325,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         assert.equal(await removes.count(), 3)
         assert.equal(await removes.first().getAttribute('title'), 'Remove group')
         assert.equal(await removes.first().evaluate((e) => window.getComputedStyle(e).color), 'rgb(192, 57, 43)')
-        const boxes = await p.locator(`${EDITOR} button[data-act=remove]`).evaluateAll((els) => els.map((x) => {
+        const rows = await p.locator(`${EDITOR} button[data-act=remove]`).evaluateAll((els) => els.map((x) => {
           const rect = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
-          const box = x.parentElement
-          const others = [...box.querySelectorAll('select, [data-role=numpad] button')].map(rect)
-          return { x: rect(x), box: rect(box), others }
+          return { x: rect(x), row: rect(x.parentElement.querySelector('[data-act=open]')), head: rect(x.parentElement) }
         }))
-        for (const { x, box, others } of boxes) {
-          assert.equal(x.right <= box.right && x.top >= box.top, true, `inside the box's upper right at width ${width}: ${JSON.stringify({ x, box })}`)
-          assert.equal(box.right - x.right < 16 && x.top - box.top < 16, true, `in the corner at width ${width}: ${JSON.stringify({ x, box })}`)
-          assert.equal(others.length > 0, true, `the box holds a pulldown and numpad to clear at width ${width}`)
-          assert.deepEqual(others.filter((o) => overlap(x, o)), [], `clear of pulldown and numpad at width ${width}`)
+        for (const { x, row, head } of rows) {
+          assert.equal(row.right <= x.left, true, `the row ends before the × at width ${width}: ${JSON.stringify({ x, row })}`)
+          assert.equal(x.right <= head.right && x.top >= head.top && x.bottom <= head.bottom, true, `the × sits inside its row at width ${width}: ${JSON.stringify({ x, head })}`)
         }
         await closeDialogWith(p, 'Cancel', EDITOR)
       }
@@ -320,16 +340,33 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('Add group adds a group in a color no group has, and Cancel drops it', async () => {
       await openEditor()
-      const chosenKeys = () => p.$$eval(`${EDITOR} select[data-act="page"] + [data-role="chosen"]`, (es) => es.map((e) => e.title))
-      const before = await chosenKeys()
+      const swatchKeys = () => p.$$eval(`${EDITOR} [data-role="swatch"]`, (es) => es.map((e) => e.title))
+      const before = await swatchKeys()
       assert.equal(before.length, 3)
+      assert.equal(await p.locator(`${EDITOR} select[data-act="page"]`).count(), 0)
       await p.click(`${EDITOR} button[data-act=add-group]`)
-      const after = await chosenKeys()
+      const after = await swatchKeys()
       assert.equal(after.length, 4)
       assert.deepEqual(after.slice(0, 3), before)
       assert.equal(before.includes(after[3]), false)
+      assert.equal(await p.locator(`${EDITOR} select[data-act="page"][data-group="3"]`).count(), 1)
+      assert.equal(await p.locator(`${EDITOR} select[data-act="page"]`).count(), 1)
       await closeDialogWith(p, 'Cancel', EDITOR)
       assert.equal((await getGroups()).length, 3)
+    })
+
+    it('an open group\'s new color and a digit moved into it are saved', async () => {
+      await openEditor()
+      await openGroup(p, 0)
+      const used = await p.$$eval(`${EDITOR} [data-role="swatch"]`, (es) => es.map((e) => e.title))
+      const free = await p.$$eval(`${EDITOR} button[data-act=color][data-group="0"]`, (es, used) => es.map((e) => e.dataset.key).find((k) => !used.includes(k)), used)
+      await p.click(`${EDITOR} button[data-act=color][data-group="0"][data-key="${free}"]`)
+      await p.click(`${EDITOR} button[data-act=digit][data-group="0"][data-digit="5"]`)
+      await closeDialogWith(p, 'Save', EDITOR)
+      assert.equal(await settle(async () => (await getGroups())[0].key, free), free)
+      const groups = await getGroups()
+      assert.equal(groups[0].digits.includes('5'), true)
+      assert.equal(groups.slice(1).some((g) => g.digits.includes('5')), false)
     })
 
     it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a step to Both colors nothing', async () => {
@@ -359,11 +396,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   describe('custom palette', { concurrency: false }, () => {
     const group = (g) => `${EDITOR} [data-group="${g}"]`
     const pageSelect = (g) => p.locator(`${group(g)}[data-act="page"]`)
-    const shownPage = (g) => pageSelect(g).inputValue()
-    const labels = (g) => p.$$eval(`${group(g)}[data-act="page"] option`, (es) => es.map((e) => e.textContent))
-    const swatchKeys = (g) => p.$$eval(`${group(g)}[data-act="color"]`, (es) => es.map((e) => e.dataset.key))
-    const pressedKeys = (g) => p.$$eval(`${group(g)}[aria-pressed="true"]`, (es) => es.map((e) => e.dataset.key))
-    const chosenKey = (g) => p.locator(`${group(g)}[data-act="page"] + [data-role="chosen"]`).getAttribute('title')
+    const shownPage = async (g) => { await openGroup(p, g); return pageSelect(g).inputValue() }
+    const labels = async (g) => { await openGroup(p, g); return p.$$eval(`${group(g)}[data-act="page"] option`, (es) => es.map((e) => e.textContent)) }
+    const swatchKeys = async (g) => { await openGroup(p, g); return p.$$eval(`${group(g)}[data-act="color"]`, (es) => es.map((e) => e.dataset.key)) }
+    const pressedKeys = async (g) => { await openGroup(p, g); return p.$$eval(`${group(g)}[aria-pressed="true"]`, (es) => es.map((e) => e.dataset.key)) }
+    const chosenKey = async (g) => { await openGroup(p, g); return p.locator(`${group(g)}[data-act="page"] + [data-role="chosen"]`).getAttribute('title') }
     const boxOf = (g, key) => p.locator(`${EDITOR} button[data-group="${g}"][data-key="${key}"]`).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y) } })
     let original, savedState
 
@@ -409,6 +446,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('lays page 1 out by index, with the empty index kept and index 0 on its own row below', async () => {
       assert.deepEqual(await swatchKeys(1), ['1', '2', '3', '5', '6', '7', '8', '9', '4'])
+      await openGroup(p, 1)
       const [one, two, five, nine, zero] = await Promise.all(['1', '2', '5', '9', '4'].map((key) => boxOf(1, key)))
       // Index 4 is empty, so index 5 stays under index 2 in the second column of row 2.
       assert.equal(five.x, two.x)
@@ -433,6 +471,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('switching pages leaves the group\'s color alone, shows it beside the pulldown, and the page stays chosen', async () => {
+      await openGroup(p, 1)
       await pageSelect(1).selectOption('3')
       assert.equal(await shownPage(1), '3')
       assert.deepEqual(await pressedKeys(1), [])
@@ -447,13 +486,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
     it('the other groups keep their own page', async () => {
       assert.deepEqual([await shownPage(0), await shownPage(2)], ['3', '3'])
+      await openGroup(p, 0)
       await pageSelect(0).selectOption('0')
       assert.deepEqual([await shownPage(0), await shownPage(1), await shownPage(2)], ['0', '3', '3'])
     })
 
     it('removing a group leaves each remaining group on its own page', async () => {
       await p.click(`${group(0)}[data-act="remove"]`)
-      assert.equal(await p.locator(`${EDITOR} select[data-act="page"]`).count(), 2)
+      assert.equal(await p.locator(`${EDITOR} button[data-act="open"]`).count(), 2)
       assert.deepEqual([await shownPage(0), await shownPage(1)], ['3', '3'])
       assert.equal(await chosenKey(0), 'u')
     })

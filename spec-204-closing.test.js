@@ -83,7 +83,7 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   assert.deepEqual(inlineStyles(extras.renderEditor(state)), [])
   assert.ok(!/<small style=/.test(pen), 'the title version has no inline style')
   const colorOf = (key) => ['#ff0000', '#00ff00', '#0000ff'][Number(key)]
-  const html = byDigit.renderEditor([{ key: '1', digits: ['1'] }], byDigit.layoutPages([['0', '1', '2']], 0, colorOf), [0], false, '')
+  const html = byDigit.renderEditor({ groups: [{ key: '1', digits: ['1'] }], pages: byDigit.layoutPages([['0', '1', '2']], 0, colorOf), shown: [0], mode: false })
   const styles = inlineStyles(html)
   assert.ok(styles.some((style) => style.startsWith(' style="background:')), 'the swatches are drawn')
   for (const style of styles) assert.match(style, /^ style="(background:#[0-9a-f]{6}|font-weight:(bold|normal);opacity:(1|0\.4))"$/, 'a swatch color or a digit in or out of its group')

@@ -69,7 +69,7 @@ const tools = (p) => {
     await p.click(selector)
     assert.equal(await settle(() => p.locator(selector).isChecked(), want), want)
   }
-  const modeChoice = () => p.$$eval(`${EDITOR} input[data-role="mode-draft"]`, (es) => es.map((e) => `${e.value}${e.checked ? '*' : ''}`))
+  const modeChoice = () => p.$$eval(`${EDITOR} button[data-role="mode-draft"]`, (es) => es.map((e) => `${e.dataset.mode}${e.getAttribute('aria-checked') === 'true' ? '*' : ''}`))
   return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, menu, pick, openEditor, save, toggle, modeChoice }
 }
 
@@ -190,6 +190,49 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
     assert.deepEqual(await t.icon(), SPLIT_ICON)
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1'], sections: [] })
+  })
+
+  it('no uncaught page errors', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('the dialog\'s Cells and Digits tags, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
+  let context, p, errors, t
+  const SHADE = {}
+  const fill = (digit) => allFillsOn(p, 'entered', digit)
+  const ROW = (index) => `${EDITOR} [data-role=profile-row][data-index="${index}"]`
+
+  before(async () => {
+    ;({ context, p, errors } = await openSession(browser, script, { saved: { ...savedProfiles({ profiles: TWO, active: 0 }), [MODE_STORAGE_KEY]: 'both' } }))
+    t = tools(p)
+    for (const key of ['1', '2', '4']) SHADE[key] = await shadeOn(p, key)
+    await t.enter(0, 2, '4')
+  })
+  after(async () => { await context.close() })
+
+  it('selecting a row changes no color and saves no pick; with sync off each row has a Cells and a Digits tag', async () => {
+    assert.deepEqual(await settle(fill('4'), [SHADE[4]]), [SHADE[4]])
+    await t.openEditor()
+    await t.toggle(SYNC, false)
+    assert.deepEqual(await p.$$eval(`${ROW(1)} .cbd-tag`, (es) => es.map((e) => e.textContent)), ['Cells', 'Digits'])
+    await p.click(ROW(1), { position: { x: 4, y: 4 } })
+    assert.equal(await p.locator(`${ROW(1)}[aria-checked=true]`).count(), 1)
+    await t.save()
+    assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive]), [0, 0])
+    assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
+    assert.deepEqual(await watch(fill('4')), [[SHADE[4]]])
+  })
+
+  it('tagging a digit profile and saving colors the digits from it and no cell', async () => {
+    await t.openEditor()
+    await p.click(`${ROW(1)} [data-act=tag-digits]`)
+    assert.equal(await p.locator(`${ROW(1)} [data-act=tag-digits][aria-pressed=true]`).count(), 1)
+    assert.equal(await p.locator(`${ROW(0)} [data-act=tag-cells][aria-pressed=true]`).count(), 1)
+    await t.save()
+    assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive]), [0, 1])
+    assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
+    assert.deepEqual(await watch(t.cells), [SPLIT_CELLS])
   })
 
   it('no uncaught page errors', () => {
