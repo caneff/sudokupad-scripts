@@ -4,21 +4,15 @@
 // own keypad back under another tool.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from './page.mjs'
 import { gridPoint, mouseDrag, plantUnchecked } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
-const { CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, OPACITY_KEY, OPACITY_SLIDER, PICKER, SETTINGS_BUTTON, SHAPE_BUTTON, SIZE_SLIDER, SLIDERS, STROKES, WIDTH_KEY } = draw
-const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../draw-tool.user.js')
-// The pickers appear only when the hold timer fires.
-const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
+const { CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, OPACITY_KEY, OPACITY_SLIDER, PICKER, SETTINGS_BUTTON, SHAPE_BUTTON, SIZE_SLIDER, SLIDERS, STROKES, WIDTH_KEY } = draw
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
-const NEAR_PX = 0.5
-const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 // #rrggbb as the browser computes it.
 const rgb = (hex) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
 
@@ -128,17 +122,7 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
     assert.equal(await read(() => Framework.app.puzzle.selectedCells.length), 1)
   }
   const emptyCellValue = () => read(([r, c]) => Framework.app.grid.getCell(r, c).propGet('normal') ?? null, EMPTY_CELL)
-  // A press held on the middle of `selector` with `button`, until `selector` of the pickers reaches `state`.
-  const hold = async (selector, button, state) => {
-    const box = await p.locator(selector).boundingBox()
-    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-    await p.mouse.down({ button })
-    try {
-      await p.locator(PICKER).first().waitFor({ state, timeout: HOLD_WAIT_MS })
-    } finally {
-      await p.mouse.up({ button })
-    }
-  }
+  const hold = (selector, button, state) => draw.holdForPickers(p, selector, button, state)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
