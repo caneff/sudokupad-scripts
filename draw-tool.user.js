@@ -675,6 +675,8 @@
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   const SETTINGS_LABEL = 'Draw Tool settings'
+  // The panel's three control buttons draw their icon with these strokes.
+  const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
   // Clear all is a trash can.
   const CLEAR_LABEL = 'Clear all'
   const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
@@ -897,7 +899,7 @@
     button.dataset.mode = shapeMode
     button.title = SHAPE_LABELS[shapeMode]
     button.setAttribute('aria-label', SHAPE_LABELS[shapeMode])
-    button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHAPE_ICONS[shapeMode]}</svg>`
+    button.innerHTML = controlIcon(SHAPE_ICONS[shapeMode])
   }
 
   function showPanel () {
@@ -907,13 +909,13 @@
     clear.className = CLEAR_CLASS
     clear.title = CLEAR_LABEL
     clear.setAttribute('aria-label', CLEAR_LABEL)
-    clear.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${CLEAR_ICON}</svg>`
+    clear.innerHTML = controlIcon(CLEAR_ICON)
     clear.addEventListener('click', confirmClear)
     const settings = document.createElement('button')
     settings.className = SETTINGS_CLASS
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
-    settings.innerHTML = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
+    settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
     settings.addEventListener('click', openDialog)
     const shapeButton = document.createElement('button')
     shapeButton.className = SHAPE_BUTTON_CLASS
