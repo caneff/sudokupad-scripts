@@ -17,9 +17,9 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
   and appends it; `addTool` calls it first. So a tool button's place is its arrival time. The pen tool's button
   arrives when its setting turns on (`makeToolToggler` calls `addTool`), a moment after Start Puzzle on a saved
   setting, so a script injected earlier has its button before the pen's.
-- The ▶▶ button is not SudokuPad's own: the recording's v0.611.0 scripts hold no such glyph, and a stock page has only
+- The ▶▶ button (Chris calls it the replay button) is not SudokuPad's own: the recording's v0.611.0 scripts hold no such glyph, and a stock page has only
   Digit, Corner, Centre, Color and, with the setting on, pen in `.controls-tool`. No script in this repo adds one. It
-  is another userscript's, which can only have joined the bar through `addToolButton` or `addControlButton` with that
+  is another userscript's (no `replay` control or `addToolButton` call is in `framework.js` or the other scripts), which can only have joined the bar through `addToolButton` or `addControlButton` with that
   parent, both of which append. Which script it is was not found (Chris's page was not read); the live check adds a
   button both ways.
 - Draw Tool keeps its button last: after `addTool` it moves the button to the end of `.controls-tool` and watches the bar
