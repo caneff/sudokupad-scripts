@@ -197,6 +197,39 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     }
   })
 
+  // Rebuilding every circle on each change cost 2k - 1 nodes for k circles (docs/research/color-by-digit/color-by-digit-redraw-cost.md).
+  it('a new conflicting mark adds its own circle; the circles already drawn stay the same nodes and have no attribute rewritten', async () => {
+    const tagDrawn = () => read(([circles]) => {
+      const drawn = [...document.querySelectorAll(circles + ' circle')]
+      drawn.forEach((circle) => circle.setAttribute('data-kept', ''))
+      return drawn.length
+    }, [CIRCLES])
+    const state = () => read(([circles]) => ({ all: document.querySelectorAll(circles + ' circle').length, untagged: document.querySelectorAll(circles + ' circle:not([data-kept])').length }), [CIRCLES])
+    // Attribute writes on the tagged circles from now on (a write of the value already there counts).
+    const watchWrites = () => read(([circles]) => {
+      window.__keptWrites = 0
+      const watcher = new window.MutationObserver((records) => { window.__keptWrites += records.filter((r) => r.target.hasAttribute('data-kept')).length })
+      watcher.observe(document.querySelector(circles), { subtree: true, attributes: true })
+      window.__keptWatcher = watcher
+    }, [CIRCLES])
+    const writes = () => read(() => { window.__keptWrites += window.__keptWatcher.takeRecords().filter((r) => r.target.hasAttribute('data-kept')).length; return window.__keptWrites })
+    const base = await tagDrawn()
+    let entered = 0
+    try {
+      // 5 and 3 each conflict with the same digit given in row 1.
+      await markMode('#control-corner', async () => { await enter(0, 7, '5'); entered++ })
+      assert.deepEqual(await settle(state, { all: base + 1, untagged: 1 }), { all: base + 1, untagged: 1 })
+      await tagDrawn()
+      await watchWrites()
+      await markMode('#control-corner', async () => { await enter(0, 8, '3'); entered++ })
+      assert.deepEqual(await settle(state, { all: base + 2, untagged: 1 }), { all: base + 2, untagged: 1 })
+      assert.equal(await writes(), 0, 'a circle already drawn had an attribute written')
+    } finally {
+      for (; entered > 0; entered--) await undo()
+    }
+    assert.deepEqual(await settle(state, { all: base, untagged: 0 }), { all: base, untagged: 0 })
+  })
+
   it('every digit 1-9, as a corner mark and a centre mark, has its circle centred on the ink of the digit', async () => {
     const marksOnBoard = () => read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark, #cell-candidates tspan').length)
     const before = await marksOnBoard()
