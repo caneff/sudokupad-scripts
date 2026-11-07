@@ -151,7 +151,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ'])
   })
 
-  it('with a box open, a click on a keypad color keeps it open, and the keys typed after go into it, not into a cell', async () => {
+  it('with a box open, a click on a keypad color keeps it open, and the keys typed after go into it', async () => {
     await clickAt(FOURTH_AT)
     await p.keyboard.type('8')
     await p.click('.controls-input button[data-key="5"]')

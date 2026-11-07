@@ -80,12 +80,41 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
     await p.mouse.click(bar.x + bar.width - 2, bar.y + bar.height / 2)
     assert.equal(await boxOpen(), true, 'the note is still open')
     assert.equal(await stored(WIDTH_KEY), null, 'the next-note size was never saved')
+    assert.ok(await slider() > nextSize, 'the slider shows the open note\'s size')
     await p.keyboard.type('Z')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'aXbZ', 'typing continues in the note')
     await p.keyboard.press('Escape')
     const after = (await draw.saved(p))[0].size
     assert.ok(after > before, `the note grew (${before} to ${after})`)
     assert.equal(await slider(), nextSize, 'the slider shows the next-note size again')
+  })
+
+  it('a press on the slider that moves nothing leaves the note open with the focus back in it, so typing goes into the note', async () => {
+    await openAt()
+    const bar = await p.locator(SIZE_SLIDER).boundingBox()
+    const end = [bar.x + bar.width - 2, bar.y + bar.height / 2]
+    await p.mouse.click(...end)
+    const value = await slider()
+    await p.mouse.click(...end)
+    assert.equal(await slider(), value, 'the second press moved nothing')
+    assert.equal(await boxOpen(), true)
+    await p.keyboard.type('Q')
+    assert.equal(await boxOpen(), true, 'the key stayed in the note')
+    assert.match(await p.locator(TEXT_BOX).textContent(), /Q$/)
+    await p.keyboard.press('Escape')
+  })
+
+  it('a note reopened and recolored or resized without typing is saved with the change', async () => {
+    await openAt()
+    await p.click(key(GREEN))
+    await p.keyboard.press('Escape')
+    assert.equal((await draw.saved(p))[0].color, GREEN)
+    await openAt()
+    const before = (await draw.saved(p))[0].size
+    const bar = await p.locator(SIZE_SLIDER).boundingBox()
+    await p.mouse.click(bar.x + 2, bar.y + bar.height / 2)
+    await p.keyboard.press('Escape')
+    assert.ok((await draw.saved(p))[0].size < before, 'the smaller size was saved')
   })
 
   it('no page error', () => { assert.deepEqual(errors, []) })

@@ -18,8 +18,9 @@ import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 
 const out = (name) => new URL(`./draw-tool-slide-${name}.png`, import.meta.url).pathname
 const DRAG_STEPS = 10
-// The picture's region on the 1200x900 page, in page pixels: from the margin above the grid and the notes' room beside it, to the panel's bottom.
-const CLIP = { x: 200, y: 85, width: 1000, height: 625 }
+// The picture's size, and its top left in cells from the grid's top left: it takes in the margin above the grid and the room beside it, down to the panel's bottom.
+const CLIP_SIZE = [1000, 625]
+const CLIP_CORNER = [2.3, -0.95]
 // SudokuPad's own number: how long the script holds a color button before it shows the pickers, plus slack.
 const HOLD_MS = 1300
 const GREEN = 1
@@ -87,14 +88,14 @@ async function scene () {
   }
   const shoot = async (name, { keepOpen = false } = {}) => {
     await checkNotes()
-    await p.screenshot({ path: out(name), clip: CLIP })
+    await p.screenshot({ path: out(name), clip: { x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] } })
     console.log(`wrote ${out(name)}`)
     if (!keepOpen) await p.close()
   }
   return { p, at, items, pick, note, background, shoot }
 }
 
-// Beside the grid next to row 2, in the free space above the panel, and in the margin above the grid; the other places are cell corners and edges.
+// Beside the grid, next to row 2, in the free space above the panel.
 const BESIDE_ROW_2 = [1.3, 10.9]
 
 // 1: a remark typed beside the grid, next to the row it talks about.
@@ -122,7 +123,7 @@ const BESIDE_ROW_2 = [1.3, 10.9]
   const s = await scene()
   await s.pick(RED, 9)
   await s.background(false)
-  await s.note([3.75, 4.8], '**not** 5 (box 6)')
+  await s.note([3.75, 4.8], '**not** 5 (box 5)')
   await s.background(true)
   await s.note([5.7, 4.75], 'cage = 17')
   if ((await s.p.locator('#draw-tool-layer .draw-tool-text-bg').count()) !== 1) throw new Error('only the second note should have a box')
@@ -134,7 +135,7 @@ const BESIDE_ROW_2 = [1.3, 10.9]
 {
   const s = await scene()
   await s.pick(ORANGE, 7)
-  await s.note([4, 6.2], '**not** 5 (box 6)')
+  await s.note([4, 7.3], '**not** 5 (box 6)')
   await s.p.mouse.move(...await s.p.locator('.controls-input button[data-key="2"]').evaluate((b) => { const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] }))
   await s.p.mouse.down()
   await s.p.waitForTimeout(HOLD_MS)
@@ -223,7 +224,7 @@ const BESIDE_ROW_2 = [1.3, 10.9]
   const s = await scene()
   await s.pick(BLUE, 8)
   await s.background(true)
-  const LINES = ['r7: 1 and 2 only fit in c8 and c9', 'so r7c9 is not 4, and r8c9 is 5']
+  const LINES = ['r1: 1 and 2 only fit in c8 and c9', 'so r1c9 is not 4, and r2c9 is 5']
   await s.p.mouse.click(...s.at([0.7, 10.8]))
   for (const [i, line] of LINES.entries()) {
     if (i) await s.p.keyboard.press('Enter')
