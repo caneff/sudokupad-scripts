@@ -80,7 +80,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       const labels = await p.evaluate(() => [...document.querySelectorAll('.controls-input button.digit:not([data-key="0"])')].map((b) => window.getComputedStyle(b, '::after').content))
       assert.deepEqual(labels, Array(9).fill('"Aa"'))
       assert.deepEqual(await Promise.all([CLEAR_BUTTON, BACKGROUND_BUTTON, SETTINGS_BUTTON].map((s) => p.locator(s).count())), [1, 1, 1])
-      assert.deepEqual(await p.locator(`${MENU_ROW} button`).allTextContents(), ['Size20', 'OutlineMedium'])
+      assert.deepEqual(await p.locator(`${MENU_ROW} button`).allTextContents(), ['Size20', 'OutlineThicker'])
       assert.equal(await p.locator('.controls-input input[type=range]').count(), 0, 'no slider')
       assert.equal(await p.locator('#draw-tool-opacity, .draw-tool-shape-mode').count(), 0, 'no opacity slider and no Shape button')
     })

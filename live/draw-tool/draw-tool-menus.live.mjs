@@ -10,9 +10,9 @@ import { gridPoint } from '../pen.mjs'
 
 const { COLOR_KEY, MENU, OUTLINE_BUTTON, OUTLINE_KEY, SIZE_BUTTON, TEXT_BOX, WIDTH_KEY, face, menuCurrent, menuItems, pickMenu } = draw
 const SIZES = ['10', '14', '20', '26', '32', '40']
-const OUTLINES = ['None', 'Thin', 'Medium', 'Thick']
+const OUTLINES = ['Off', 'Thinner', 'Thicker']
 // How far each outline reaches past the letters, as a share of the text size.
-const REACH_EM = { Thin: 0.07, Medium: 0.14, Thick: 0.24 }
+const REACH_EM = { Thinner: 0.07, Thicker: 0.14 }
 const A = [1.5, 1.5]
 const B = [1.5, 3.5]
 const C = [5.5, 5.5]
@@ -59,17 +59,17 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
     assert.ok(slot.x >= outline.right, 'the empty slot has its own place')
     assert.ok(size.bottom <= panel.bottom && outline.bottom <= panel.bottom, 'the row fits inside the keypad')
     assert.equal(await face(p, SIZE_BUTTON), '20')
-    assert.equal(await face(p, OUTLINE_BUTTON), 'Medium')
+    assert.equal(await face(p, OUTLINE_BUTTON), 'Thicker')
   })
 
-  it('the Size menu lists six numbered sizes with the current one marked, and the Outline menu None, Thin, Medium and Thick', async () => {
+  it('the Size menu lists six numbered sizes with the current one marked, and the Outline menu Off, Thinner and Thicker', async () => {
     await p.click(SIZE_BUTTON)
     assert.deepEqual(await menuItems(p), SIZES)
     assert.deepEqual(await menuCurrent(p), ['20'])
     await p.click(OUTLINE_BUTTON)
     assert.equal(await p.locator(MENU).count(), 1, 'opening the other menu closes this one')
     assert.deepEqual(await menuItems(p), OUTLINES)
-    assert.deepEqual(await menuCurrent(p), ['Medium'])
+    assert.deepEqual(await menuCurrent(p), ['Thicker'])
     await p.click(OUTLINE_BUTTON)
     assert.equal(await menuOpen(), false, 'a second press on the button closes it')
   })
@@ -112,24 +112,24 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
     await typeText(A, 'A')
     assert.equal((await savedNote('A')).size, 20)
     await pickMenu(p, SIZE_BUTTON, '32')
-    await pickMenu(p, OUTLINE_BUTTON, 'Thick')
+    await pickMenu(p, OUTLINE_BUTTON, 'Thinner')
     assert.equal(await face(p, SIZE_BUTTON), '32')
-    assert.equal(await face(p, OUTLINE_BUTTON), 'Thick')
+    assert.equal(await face(p, OUTLINE_BUTTON), 'Thinner')
     assert.equal((await savedNote('A')).size, 20, 'the earlier note keeps its size')
     assert.equal((await savedNote('A')).outline, undefined, 'and its outline')
     await typeText(B, 'B')
-    assert.deepEqual([(await savedNote('B')).size, (await savedNote('B')).outline], [32, 'thick'])
+    assert.deepEqual([(await savedNote('B')).size, (await savedNote('B')).outline], [32, 'thin'])
     assert.equal(await stored(WIDTH_KEY), 12)
-    assert.equal(await stored(OUTLINE_KEY), 'thick')
+    assert.equal(await stored(OUTLINE_KEY), 'thin')
     await reload()
     assert.equal(await face(p, SIZE_BUTTON), '32')
-    assert.equal(await face(p, OUTLINE_BUTTON), 'Thick')
+    assert.equal(await face(p, OUTLINE_BUTTON), 'Thinner')
   })
 
   it('with notes selected the buttons show the selection\'s values, blank where it is mixed, and a pick changes only those notes and is saved', async () => {
     await clickAt(A)
     assert.equal(await face(p, SIZE_BUTTON), '20')
-    assert.equal(await face(p, OUTLINE_BUTTON), 'Medium')
+    assert.equal(await face(p, OUTLINE_BUTTON), 'Thicker')
     await p.keyboard.down('Shift')
     await clickAt(B)
     await p.keyboard.up('Shift')
@@ -139,44 +139,46 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
     assert.deepEqual(await menuCurrent(p), [], 'no item is highlighted')
     await p.keyboard.press('Escape')
     await pickMenu(p, SIZE_BUTTON, '14')
-    await pickMenu(p, OUTLINE_BUTTON, 'None')
-    assert.deepEqual([await face(p, SIZE_BUTTON), await face(p, OUTLINE_BUTTON)], ['14', 'None'])
+    await pickMenu(p, OUTLINE_BUTTON, 'Off')
+    assert.deepEqual([await face(p, SIZE_BUTTON), await face(p, OUTLINE_BUTTON)], ['14', 'Off'])
     // A press on empty space first ends the selection, and the next one starts the note.
     await p.keyboard.press('Escape')
     await typeText(C, 'C')
-    assert.deepEqual((await saved()).map((i) => [i.text, i.size, i.outline]), [['A', 14, 'none'], ['B', 14, 'none'], ['C', 32, 'thick']])
+    assert.deepEqual((await saved()).map((i) => [i.text, i.size, i.outline]), [['A', 14, 'none'], ['B', 14, 'none'], ['C', 32, 'thin']])
     assert.equal(await stored(WIDTH_KEY), 12, 'the next-note size is unchanged')
-    assert.equal(await stored(OUTLINE_KEY), 'thick', 'and its outline')
+    assert.equal(await stored(OUTLINE_KEY), 'thin', 'and its outline')
     await reload()
-    assert.deepEqual((await saved()).map((i) => [i.size, i.outline]), [[14, 'none'], [14, 'none'], [32, 'thick']])
+    assert.deepEqual((await saved()).map((i) => [i.size, i.outline]), [[14, 'none'], [14, 'none'], [32, 'thin']])
   })
 
-  it('Outline None draws no halo, Medium the default one, and Thick a visibly wider one', async () => {
+  it('Outline Off draws no halo, Thicker the default one, and Thinner a visibly narrower one', async () => {
     const reach = async (text) => {
       const shadow = await textShadowOf(text)
       if (shadow === 'none') return 0
       const offsets = [...shadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px 0px/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2])))
       assert.equal(offsets.length, 16)
-      return Math.max(...offsets)
+      // As a share of the note's own text size, since A and C are not the same size.
+      const fontSize = await p.evaluate(([selector, want]) => parseFloat(window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === want)).fontSize), [draw.TEXTS, text])
+      return Math.max(...offsets) / fontSize
     }
     assert.equal(await reach('A'), 0)
-    const thick = await reach('C')
-    assert.ok(thick > 0, 'a ring')
+    const thin = await reach('C')
+    assert.ok(thin > 0, 'a ring')
     await clickAt(A)
-    await pickMenu(p, OUTLINE_BUTTON, 'Medium')
+    await pickMenu(p, OUTLINE_BUTTON, 'Thicker')
     const medium = await reach('A')
-    assert.ok(medium > 0 && thick > medium * 1.4, `Medium ${medium}px, Thick ${thick}px`)
-    assert.equal((await savedNote('A')).outline, undefined, 'Medium is no field at all')
+    assert.ok(thin > 0 && medium > thin * 1.4, `Thinner ${thin} em, Thicker ${medium} em`)
+    assert.equal((await savedNote('A')).outline, undefined, 'Thicker is no field at all')
     await p.keyboard.press('Escape')
   })
 
-  it('a note saved with a size the menu lacks keeps it, shows it on the Size button and highlights no item; a note with no outline reads as Medium', async () => {
+  it('a note saved with a size the menu lacks keeps it, shows it on the Size button and highlights no item; a note with no outline reads as Thicker', async () => {
     await draw.plantDrawing(p, [{ kind: 'text', color: 1, size: 23, opacity: 100, text: 'odd', at: [96, 96] }])
     await reload()
     assert.equal((await savedNote('odd')).size, 23)
     await clickAt([1.5, 1.5])
     assert.equal(await face(p, SIZE_BUTTON), '23')
-    assert.equal(await face(p, OUTLINE_BUTTON), 'Medium')
+    assert.equal(await face(p, OUTLINE_BUTTON), 'Thicker')
     await p.click(SIZE_BUTTON)
     assert.deepEqual(await menuCurrent(p), [])
     await p.keyboard.press('Escape')
@@ -198,10 +200,10 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
     assert.equal((await savedNote('snap2')).size, 26)
   })
 
-  it('a next-note outline saved as something else reads as Medium, and the note made with it is saved and loads', async () => {
+  it('a next-note outline saved as something else reads as Thicker, and the note made with it is saved and loads', async () => {
     await p.evaluate(([key, value]) => Framework.setData(key, value), [OUTLINE_KEY, 'huge'])
     await reload()
-    assert.equal(await face(p, OUTLINE_BUTTON), 'Medium')
+    assert.equal(await face(p, OUTLINE_BUTTON), 'Thicker')
     await typeText([7.5, 5.5], 'fine')
     assert.equal((await savedNote('fine')).outline, undefined)
     await reload()
@@ -221,7 +223,7 @@ describe('Text Annotation\'s Size and Outline menus', { concurrency: false }, ()
   })
 
   it('the halo is a round ring: no pixel of "AVWMk4" lies past the ring\'s radius from a letter, at every outline', async () => {
-    for (const outline of ['Thin', 'Medium', 'Thick']) {
+    for (const outline of ['Thinner', 'Thicker']) {
       await clickAt(A)
       await pickMenu(p, OUTLINE_BUTTON, outline)
       const shadow = await textShadowOf('oddx')

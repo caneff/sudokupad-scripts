@@ -401,7 +401,7 @@ test('a mixed selection shows no color, size, outline or background state where 
   assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, size: null, outline: 'medium', bg: true })
   assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, size: null, outline: 'medium', bg: null })
   assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, size: 20, outline: 'medium', bg: null })
-  assert.deepEqual(panelLooks([red20, withOutline(red20, 'thick')]).outline, null)
+  assert.deepEqual(panelLooks([red20, withOutline(red20, 'none')]).outline, null)
   assert.deepEqual(panelLooks([withOutline(red20, 'thin'), withOutline(red14Boxed, 'thin')]).outline, 'thin')
 })
 
@@ -422,24 +422,24 @@ test('a size not in the menu reads as the nearest size in it', () => {
   assert.equal(nearestMenuSize(1000), 40)
 })
 
-test('an outline is none, thin, medium or thick, and a note with no outline field reads as medium', () => {
-  assert.deepEqual(OUTLINES, ['none', 'thin', 'medium', 'thick'])
+test('an outline is none, thin or medium, and a note with no outline field reads as medium', () => {
+  assert.deepEqual(OUTLINES, ['none', 'thin', 'medium'])
   assert.equal(DEFAULT_OUTLINE, 'medium')
   assert.equal(readOutline(red20), 'medium')
-  assert.equal(readOutline({ ...red20, outline: 'thick' }), 'thick')
+  assert.equal(readOutline({ ...red20, outline: 'thin' }), 'thin')
   assert.equal(readOutline(withOutline(red20, 'none')), 'none')
   for (const saved of [null, undefined, 'huge', 3, {}]) assert.equal(readSavedOutline(saved), 'medium', JSON.stringify(saved))
   for (const saved of OUTLINES) assert.equal(readSavedOutline(saved), saved)
 })
 
 test('a note keeps its outline in its own field, and medium is the absence of one', () => {
-  assert.deepEqual(withOutline(red20, 'thick'), { ...red20, outline: 'thick' })
-  assert.deepEqual(withOutline({ ...red20, outline: 'thick' }, 'medium'), red20)
+  assert.deepEqual(withOutline(red20, 'thin'), { ...red20, outline: 'thin' })
+  assert.deepEqual(withOutline({ ...red20, outline: 'thin' }, 'medium'), red20)
   assert.deepEqual(readDrawing([{ ...red20, outline: 'none' }]), [{ ...red20, outline: 'none' }])
   assert.throws(() => readDrawing([{ ...red20, outline: 'huge' }]), /not a list of texts/)
 })
 
-test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline\'s reach and grows from thin to thick; none has no shadow', () => {
+test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline\'s reach and grows from thin to medium; none has no shadow', () => {
   assert.equal(haloShadow('none', 'red'), 'none')
   const radii = OUTLINES.slice(1).map((outline) => {
     const shadows = haloShadow(outline, 'red').split(', ')
@@ -461,7 +461,7 @@ test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline
 test('a note\'s padding is its outline\'s reach, none for none', () => {
   const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
   const box = (outline) => noteScreenBox(withOutline(textItem([100, 50], 'sum', 1, 20), outline), map)
-  assert.equal(Math.round((box('thick').right - box('none').right) * 1000) / 1000, Math.round(OUTLINE_EM.thick * 20 * 1000) / 1000)
+  assert.equal(Math.round((box('thin').right - box('none').right) * 1000) / 1000, Math.round(OUTLINE_EM.thin * 20 * 1000) / 1000)
   assert.equal(Math.round((box('medium').right - box('none').right) * 1000) / 1000, 2.8)
 })
 

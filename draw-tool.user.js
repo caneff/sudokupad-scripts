@@ -236,11 +236,12 @@
   const BACKGROUND_PAD_X = 0.35
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
-  // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. A note with no `outline` field has the medium one.
-  const OUTLINE_EM = { none: 0, thin: 0.07, medium: 0.14, thick: 0.24 }
+  // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. A note with no `outline` field has the medium one,
+  // which the menu calls Thicker; none is Off and thin is Thinner.
+  const OUTLINE_EM = { none: 0, thin: 0.07, medium: 0.14 }
   const OUTLINES = Object.keys(OUTLINE_EM)
   const DEFAULT_OUTLINE = 'medium'
-  const OUTLINE_LABELS = { none: 'None', thin: 'Thin', medium: 'Medium', thick: 'Thick' }
+  const OUTLINE_LABELS = { none: 'Off', thin: 'Thinner', medium: 'Thicker' }
   const readOutline = (item) => item.outline ?? DEFAULT_OUTLINE
   const readSavedOutline = (saved) => OUTLINES.includes(saved) ? saved : DEFAULT_OUTLINE
   // The medium outline is the absence of the field, so a note saved before outlines is the same as one given the medium outline.
