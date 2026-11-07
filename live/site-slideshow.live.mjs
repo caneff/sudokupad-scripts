@@ -37,7 +37,7 @@ const SHOWS = [
     slides: 10,
     first: ['draw-tool-slide-1-line.png', 'Draw a line'],
     second: ['draw-tool-slide-2-straight.png', 'Hold Shift for a straight line'],
-    last: ['draw-tool-slide-10-move.png', 'Move: drag a line, shape or text'],
+    last: ['draw-tool-slide-10-move.png', 'Move: drag a text'],
     beforeLast: ['draw-tool-slide-9-erased.png', 'The whole line is gone']
   }
 ]

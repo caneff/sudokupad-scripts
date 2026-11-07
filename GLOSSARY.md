@@ -201,7 +201,7 @@
   a text reopens.
 - **shape** — a rectangle or an ellipse in a drawing, drawn as an outline by a drag in Shape mode, in a draw color, with its own
   width and opacity. Its box is exactly the drag's own box. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
-- **Shape mode** — what a left-drag with Draw draws: free lines (Off), rectangles or ellipses. The **Shape button**, between
+- **Shape mode** — what a left-drag with Draw draws when it starts off every item (one that starts on an item **moves** it): free lines (Off), rectangles or ellipses. The **Shape button**, between
   Clear all and the gear, steps Off, Rectangle, Ellipse and draws the mode a press turns to, with a dot per mode filled for the one in force; the color buttons' swatches draw the one in force. It is saved under `DrawTool_shape`. A click
   still opens the text box in every mode.
 - **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
@@ -209,4 +209,4 @@
   Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
 - **erase** — Draw's right click, or right-drag as an extra: every stroke and text the pointer passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
   drawing, after asking.
-- **move** — Draw's left-drag that starts on an existing item (found the way erase finds one, the topmost): the item follows the pointer, and its stored coordinates change once, on release. A click with no drag does what it did before, and a drag that starts off every item draws.
+- **move** — Draw's left-drag that starts on an existing item (found the way erase finds one, the topmost): the item follows the pointer, and its stored coordinates change once, on release. A click with no drag opens a text box as any click does, and a drag that starts off every item draws.

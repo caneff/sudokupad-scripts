@@ -569,6 +569,6 @@ test('itemAt finds the topmost item under a press the way erase touches it, or -
   assert.equal(itemAt([lower, upper], [50, 0]), 1)
   assert.equal(itemAt([lower, upper], [0, 50]), 0)
   assert.equal(itemAt([lower, upper], [50, 50]), -1)
-  assert.equal(itemAt([lower, upper], [50, 0 + ERASE_TOLERANCE + 3 + 0.5]), -1)
+  assert.equal(itemAt([lower, upper], [50, ERASE_TOLERANCE + upper.width]), -1)
   assert.equal(itemAt([], [1, 1]), -1)
 })

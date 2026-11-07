@@ -1,5 +1,5 @@
-// Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a stroke, a shape or a text moves it (live, and kept over a
-// reload), a click on text still edits it, and a drag that starts off every item still draws, in every Shape mode. Real mouse input throughout.
+// Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a stroke, a shape or a text moves it (following the pointer, and kept over a
+// reload), a drag never leaves the item off the board, a click on text still edits it, and a drag that starts off every item still draws, in Off and Rectangle mode. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -12,12 +12,12 @@ const { SHAPE_BUTTON, SHAPES, STROKES, TEXT_BOX } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0); a real mouse lands on whole page pixels, so positions are checked to within a unit.
 const CELL = 64
 const NEAR_UNITS = 1.5
-// In cells from the grid's top left: a stroke along row 2, a rectangle round r4c2 to r5c4, a text at r8c8, a press clear of all three.
+// In cells from the grid's top left: a stroke along row 2, a rectangle round r4c2 to r5c4, a text at r8c6, a press clear of all three.
 const STROKE = [[1.5, 1.5], [1.6, 3], [1.5, 4.5]]
 const RECT = [[3.2, 1.2], [4.8, 3.8]]
-const TEXT_AT = [7.5, 7.5]
+const TEXT_AT = [7.5, 5.5]
 const EMPTY = [6.2, 4.5]
-// Pressed on the stroke's second point and dragged by (dr, dc) cells.
+// A drag is by (rows, columns) cells.
 const BY = [1, 2]
 
 let browser
@@ -52,12 +52,18 @@ describe('Draw Tool\'s moving', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a left-drag that starts on a stroke moves the whole stroke by the drag, and a reload keeps the new place', async () => {
+  it('a left-drag that starts on a stroke moves the whole stroke with the pointer, and a reload keeps the new place', async () => {
     await mouseDrag(p, STROKE)
     const [before] = await strokeNumbers()
-    await dragBy(STROKE[1])
-    const [after] = await strokeNumbers()
-    assert.equal((await strokeNumbers()).length, 1, 'no second stroke was drawn')
+    await p.mouse.move(...await gridPoint(p, STROKE[1]))
+    await p.mouse.down()
+    await p.mouse.move(...await gridPoint(p, [STROKE[1][0] + BY[0], STROKE[1][1] + BY[1]]), { steps: 8 })
+    const [during] = await strokeNumbers()
+    assert.notDeepEqual(during, before, 'the stroke follows the pointer before the release')
+    await p.mouse.up()
+    const strokes = await strokeNumbers()
+    const [after] = strokes
+    assert.equal(strokes.length, 1, 'no second stroke was drawn')
     assert.equal(near(after, before.map((v, i) => v + (i % 2 === 0 ? BY[1] : BY[0]) * CELL)), true, `the stroke ${after} moved from ${before} by ${BY} cells`)
     const [item] = await saved()
     assert.equal(near(item.points[1], [STROKE[1][1] * CELL + BY[1] * CELL, STROKE[1][0] * CELL + BY[0] * CELL]), true, `the saved middle point ${item.points[1]}`)
@@ -72,8 +78,9 @@ describe('Draw Tool\'s moving', { concurrency: false }, () => {
     const [before] = await shapeBoxes()
     // On its top edge, in the middle.
     await dragBy([RECT[0][0], (RECT[0][1] + RECT[1][1]) / 2])
-    const [after] = await shapeBoxes()
-    assert.equal((await shapeBoxes()).length, 1, 'no second shape was drawn')
+    const boxes = await shapeBoxes()
+    const [after] = boxes
+    assert.equal(boxes.length, 1, 'no second shape was drawn')
     assert.equal(near(after, [before[0] + BY[1] * CELL, before[1] + BY[0] * CELL, before[2], before[3]]), true, `the rectangle ${after} moved from ${before}`)
     await reload()
     assert.deepEqual(await settle(shapeBoxes, [after]), [after])
@@ -100,6 +107,17 @@ describe('Draw Tool\'s moving', { concurrency: false }, () => {
     assert.deepEqual(await settle(textAts, [after]), [after])
   })
 
+  it('a drag that starts off every item still draws a rectangle in Rectangle mode', async () => {
+    await p.click(SHAPE_BUTTON)
+    assert.equal(await mode(), 'rect')
+    const before = (await shapeBoxes()).length
+    await mouseDrag(p, [[5.2, 6.2], [6.4, 8.2]])
+    assert.equal((await shapeBoxes()).length, before + 1)
+    await p.click(SHAPE_BUTTON)
+    await p.click(SHAPE_BUTTON)
+    assert.equal(await mode(), 'off')
+  })
+
   it('a drag that starts off every item still draws a stroke, and Shift still makes it straight', async () => {
     const before = (await strokeNumbers()).length
     await mouseDrag(p, [EMPTY, [EMPTY[0] + 1, EMPTY[1] + 0.6], [EMPTY[0] + 0.5, EMPTY[1] + 2]])
@@ -110,6 +128,17 @@ describe('Draw Tool\'s moving', { concurrency: false }, () => {
     const strokes = await strokeNumbers()
     assert.equal(strokes.length, before + 2)
     assert.equal(strokes[strokes.length - 1].length, 4, 'a straight line has two points')
+  })
+
+  it('a drag that ends off the board leaves the item where a press can still reach it', async () => {
+    const [from] = await textAts()
+    const point = await gridPoint(p, [from[1] / CELL, from[0] / CELL])
+    await p.mouse.move(...point)
+    await p.mouse.down()
+    await p.mouse.move(point[0] + 2000, point[1], { steps: 8 })
+    await p.mouse.up()
+    const [after] = await textAts()
+    assert.equal(after[0] <= 9 * CELL, true, `the text at x ${after[0]} is still over the board`)
   })
 
   it('the page shows no error', () => {

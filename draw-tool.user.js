@@ -261,7 +261,6 @@
     },
     text: (item, by) => ({ ...item, at: shifted(item.at, by) })
   }
-  // A copy of the item moved by the offset `by`.
   const movedItem = (item, by) => MOVES[item.kind](item, by)
 
   // A press whose every point stays within the slop of where it began.
@@ -1027,7 +1026,7 @@
     })
   }
 
-  // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
+  // A left-drag in progress: a free line, a shape when `shape` is set, or a move of the item `move` names. `element` is what it shows on the board so far.
   // `straight` is whether Shift is held, which draws a free line straight.
   let drag = null
   // A right-drag in progress: the last point it reached and whether it has erased an item yet. The right button's `buttons` bit holds it.
@@ -1189,16 +1188,16 @@
     save()
   }
 
-  // The offset of the drag's latest point from where it began.
   const dragOffset = () => {
     const [x, y] = drag.points[0]
     const [lastX, lastY] = drag.points[drag.points.length - 1]
     return [lastX - x, lastY - y]
   }
 
+  const applyMove = () => { drawing[drag.move.index] = movedItem(drag.move.item, dragOffset()) }
+
   function endMove () {
-    const { index, item } = drag.move
-    drawing[index] = movedItem(item, dragOffset())
+    applyMove()
     drag = null
     renderDrawing()
     save()
@@ -1323,11 +1322,13 @@
         return true
       }
       if (!drag) return false
+      // An item stays where a press on it can still reach it: a move ends at the last point on the board.
+      if (drag.move && !onBoard(event)) return true
       drag.points.push(toBoard(drag.layer, event))
       drag.straight = event.shiftKey
       if (drag.move) {
         if (!isClick(drag.points)) {
-          drawing[drag.move.index] = movedItem(drag.move.item, dragOffset())
+          applyMove()
           renderDrawing()
         }
       } else if (drag.shape) {
