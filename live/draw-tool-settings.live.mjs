@@ -74,7 +74,7 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     assert.equal(lines[3], 'rgb(245, 58, 55)', 'color 4 shows SudokuPad\'s red')
   })
 
-  it('a Darker page preset sets nine colors that are not SudokuPad's, and Save writes them', async () => {
+  it('a Darker page preset sets nine colors that are not SudokuPad\'s, and Save writes them', async () => {
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('page-1')
     const colors = await dialogColors(p)
