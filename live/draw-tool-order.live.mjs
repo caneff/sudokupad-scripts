@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { DIGIT_BUTTON, DRAW_BUTTON, PANEL_BOX, pickDraw, script, STROKES, TOOL_KEYS, tool } from './draw-tool-fixtures.mjs'
+import { DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, STROKES, TOOL_KEYS, tool } from './draw-tool-fixtures.mjs'
 import { injectAtIdle, openPage, startPuzzle } from './page.mjs'
 import { mouseDrag } from './pen.mjs'
 import { settle } from './settle.mjs'
@@ -62,7 +62,7 @@ describe('Draw Tool: its button is the last tool button', { concurrency: false }
 
   it('the moved Draw button still makes Draw the current tool, with its panel, and a drag still draws', async () => {
     assert.equal(await pickDraw(p), 'draw')
-    await p.locator(PANEL_BOX).waitFor({ state: 'visible' })
+    await p.locator(SLIDERS).waitFor({ state: 'visible' })
     await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5]])
     assert.equal(await settle(() => p.locator(STROKES).count(), 1), 1)
     await p.click(DIGIT_BUTTON)

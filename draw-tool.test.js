@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -180,6 +180,54 @@ test('penColor reads 1 to 9, as text or a number, and nothing else', () => {
 test('a saved color reads back, and a missing or bad one reads as pen color 1', () => {
   assert.equal(readColor(4), 4)
   for (const saved of [null, undefined, 0, 12, 'red', '', {}]) assert.equal(readColor(saved), DEFAULT_COLOR, JSON.stringify(saved))
+})
+
+test('hexColor reads #rgb, #rrggbb, rgb() and rgba() as lowercase #rrggbb, clamping each channel', () => {
+  assert.equal(hexColor('#1F8020'), '#1f8020')
+  assert.equal(hexColor('#abc'), '#aabbcc')
+  assert.equal(hexColor('rgb(31, 128, 32)'), '#1f8020')
+  assert.equal(hexColor('rgba(232, 124, 241, 0.5)'), '#e87cf1')
+  assert.equal(hexColor(' rgb(-4, 300, 0) '), '#00ff00')
+  for (const text of ['', 'red', 'transparent', 'rgba(0, 0, 0, 0)', '#12345', null, undefined, 7]) assert.equal(hexColor(text), undefined, JSON.stringify(text))
+})
+
+test('nothing saved, or a saved value with no usable color, reads as no draw colors, so the pen colors are copied', () => {
+  for (const saved of [null, undefined, 'red', [], ['#000000'], {}, { 1: 'red', 2: 5 }]) assert.equal(readDrawColors(saved), null, JSON.stringify(saved))
+})
+
+test('saved draw colors read back as the nine #rrggbb colors, a bad entry beside a usable one reading as SudokuPad\'s own pen color', () => {
+  const nine = Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, `#00000${n}`]))
+  assert.deepEqual(readDrawColors(JSON.parse(JSON.stringify(nine))), Object.fromEntries(Object.entries(nine).map(([n, c]) => [n, c])))
+  const partial = readDrawColors({ 1: '#ABCDEF', 2: 'pink' })
+  assert.equal(partial[1], '#abcdef')
+  assert.equal(partial[2], SUDOKUPAD_PEN_COLORS[2])
+  assert.equal(partial[9], SUDOKUPAD_PEN_COLORS[9])
+})
+
+test('the first-use copy takes each pen color as #rrggbb, and SudokuPad\'s own for one it cannot read', () => {
+  const pens = { 1: 'rgb(1, 2, 3)', 2: '#E87CF1', 3: 'nonsense' }
+  const copied = copiedPenColors((n) => pens[n] ?? 'rgb(0, 0, 0)')
+  assert.deepEqual(Object.keys(copied), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+  assert.equal(copied[1], '#010203')
+  assert.equal(copied[2], '#e87cf1')
+  assert.equal(copied[3], SUDOKUPAD_PEN_COLORS[3])
+  assert.equal(copied[4], '#000000')
+  assert.deepEqual(readDrawColors(JSON.parse(JSON.stringify(copied))), copied, 'the copy saved reads back as it is')
+})
+
+test('editing a draw color changes that color only, and refuses a color number or a color it cannot take', () => {
+  const colors = { ...SUDOKUPAD_PEN_COLORS }
+  const edited = editedColor(colors, 4, '#ABCDEF')
+  assert.deepEqual(edited, { ...colors, 4: '#abcdef' })
+  assert.equal(colors[4], SUDOKUPAD_PEN_COLORS[4], 'the colors given are left as they were')
+  assert.throws(() => editedColor(colors, 10, '#000000'), RangeError)
+  assert.throws(() => editedColor(colors, 4, 'red'), RangeError)
+})
+
+test('the colors\' CSS sets one variable per draw color, which the items, the color buttons and the text box read', () => {
+  const css = colorsCss({ ...SUDOKUPAD_PEN_COLORS, 3: '#123456' })
+  assert.match(css, /--draw-tool-color-3: #123456;/)
+  for (let n = 1; n <= 9; n++) assert.match(css, new RegExp(`--draw-tool-color-${n}: #[0-9a-f]{6};`))
 })
 
 test('a saved width reads back for any slider value, and a missing or bad one reads as the default width', () => {
