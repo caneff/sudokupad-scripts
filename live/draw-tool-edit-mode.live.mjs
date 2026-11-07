@@ -2,15 +2,13 @@
 // buttons in their cells, so no button edge shows around SudokuPad's undo row, at the two desktop sizes.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from './page.mjs'
 
-const { PICKER } = draw
-const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../draw-tool.user.js')
-const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
-const NEAR_PX = 0.5
+const { KEYPAD, NEAR_PX, NINE, PICKER_BOX, SLIDERS } = draw
+// The tray behind the controls reaches past the keypad's sides on purpose.
+const TRAY = '.draw-tool-tray'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -24,36 +22,30 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1600, height: 900
       ;({ context, p } = await openPage(browser, { contextOptions: { viewport } }))
       await draw.boot(p)
       await draw.pickDraw(p)
-      await p.locator(draw.SLIDERS).waitFor({ state: 'visible' })
-      const box = await p.locator('.controls-input button[data-key="4"]').boundingBox()
-      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-      await p.mouse.down()
-      try {
-        await p.locator(PICKER).first().waitFor({ state: 'visible', timeout: HOLD_WAIT_MS })
-      } finally {
-        await p.mouse.up()
-      }
+      await p.locator(SLIDERS).waitFor({ state: 'visible' })
+      await draw.holdForPickers(p, `${KEYPAD} button[data-key="4"]`, 'left', 'visible')
     })
     after(async () => { await context.close() })
 
-    it('shows no part of the keypad outside its own box, so no button edge peeks around the undo row', async () => {
-      const stray = await p.evaluate(() => {
-        const panel = document.querySelector('.controls-input').getBoundingClientRect()
-        return [...document.querySelectorAll('.controls-input *')]
+    it('shows no part of the keypad, the tray apart, past any side of its box, so no button edge peeks around the undo row', async () => {
+      const stray = await p.evaluate(([keypad, tray, near]) => {
+        const panel = document.querySelector(keypad).getBoundingClientRect()
+        return [...document.querySelectorAll(`${keypad} *:not(${tray})`)]
           .map((e) => ({ name: `${e.tagName}.${e.className}`, key: e.dataset.key, rect: e.getBoundingClientRect() }))
-          .filter(({ rect }) => rect.width * rect.height > 0 && (rect.bottom > panel.bottom + 0.5 || rect.top < panel.top - 0.5))
-          .map(({ name, key, rect }) => `${name} key ${key}: ${Math.round(rect.top)}-${Math.round(rect.bottom)} outside ${Math.round(panel.top)}-${Math.round(panel.bottom)}`)
-      })
+          .filter(({ rect }) => rect.width * rect.height > 0 &&
+            (rect.bottom > panel.bottom + near || rect.top < panel.top - near || rect.left < panel.left - near || rect.right > panel.right + near))
+          .map(({ name, key, rect }) => `${name} key ${key}: x ${Math.round(rect.left)}-${Math.round(rect.right)}, y ${Math.round(rect.top)}-${Math.round(rect.bottom)} outside x ${Math.round(panel.left)}-${Math.round(panel.right)}, y ${Math.round(panel.top)}-${Math.round(panel.bottom)}`)
+      }, [KEYPAD, TRAY, NEAR_PX])
       assert.deepEqual(stray, [])
     })
 
     it('keeps each color button in the cell of its picker', async () => {
-      const cells = await p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => {
-        const button = document.querySelector(`.controls-input button[data-key="${n}"]`).getBoundingClientRect()
-        const picker = document.querySelector(`.draw-tool-picker[data-color="${n}"]`).getBoundingClientRect()
+      const offsets = await p.evaluate(([keypad, pickerBox, numbers]) => numbers.map((n) => {
+        const button = document.querySelector(`${keypad} button[data-key="${n}"]`).getBoundingClientRect()
+        const picker = document.querySelector(`${pickerBox}[data-color="${n}"]`).getBoundingClientRect()
         return [n, Math.abs(button.x + button.width / 2 - picker.x - picker.width / 2), Math.abs(button.y + button.height / 2 - picker.y - picker.height / 2)]
-      }))
-      for (const [n, dx, dy] of cells) assert.equal(dx <= NEAR_PX && dy <= NEAR_PX, true, `button ${n} is ${dx} px, ${dy} px off its picker's center`)
+      }), [KEYPAD, PICKER_BOX, NINE])
+      for (const [n, dx, dy] of offsets) assert.equal(dx <= NEAR_PX && dy <= NEAR_PX, true, `button ${n} is ${dx} px, ${dy} px off its picker's center`)
     })
   })
 }

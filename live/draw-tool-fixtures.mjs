@@ -3,8 +3,11 @@
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { startPuzzle } from './page.mjs'
 import { clickUntil, SETTLE_MS } from './settle.mjs'
+
+const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../draw-tool.user.js')
 
 export const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
 
@@ -32,6 +35,25 @@ export const COLORS_KEY = 'DrawTool_colors'
 export const SHAPE_KEY = 'DrawTool_shape'
 export const SIZE_SLIDER = '#draw-tool-size'
 export const OPACITY_SLIDER = '#draw-tool-opacity'
+
+// The pickers appear only when the hold timer fires.
+export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
+export const NEAR_PX = 0.5
+export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+export const KEYPAD = '.controls-input'
+export const PICKER_BOX = '.draw-tool-picker'
+
+// A press held on the middle of `selector` with `button`, until the pickers reach `state`.
+export async function holdForPickers (p, selector, button, state) {
+  const box = await p.locator(selector).boundingBox()
+  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await p.mouse.down({ button })
+  try {
+    await p.locator(PICKER).first().waitFor({ state, timeout: HOLD_WAIT_MS })
+  } finally {
+    await p.mouse.up({ button })
+  }
+}
 
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)
