@@ -25,6 +25,7 @@ const DIGITS = '1234567890'
 const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
+const DRAW_BUTTON = '#control-draw'
 
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
@@ -139,6 +140,26 @@ const SCRIPTS = [
       assert.deepEqual(await settle(edge, ['4']), ['4'], 'the first click made SudokuPad\'s X')
       await p.mouse.click(x, y)
       assert.deepEqual(await settle(edge, ['m']), ['m'], 'the second click made the arrow')
+    }
+  },
+  {
+    name: 'Draw Tool',
+    file: 'draw-tool.user.js',
+    ready: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'attached' }),
+    control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
+    // With Draw picked, a left drag across r3 leaves one stroke.
+    act: async (p) => {
+      const tool = () => p.evaluate(() => Framework.app.tool)
+      assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS), 'draw')
+      const [x, y, size] = await p.evaluate(() => {
+        const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
+        return [box.x, box.y, box.width]
+      })
+      await p.mouse.move(x + 0.5 * size, y + 2.5 * size)
+      await p.mouse.down()
+      await p.mouse.move(x + 6.5 * size, y + 3 * size, { steps: 12 })
+      await p.mouse.up()
+      assert.equal(await settle(() => p.locator('#draw-tool-layer path').count(), 1), 1)
     }
   }
 ]
