@@ -1,7 +1,7 @@
 // Live check of the bottom row's cap (#376) on sudokupad.app in headless Chromium: with two stand-in buttons from another
 // script added both before and after Color by Digit's, the row wraps five a row, every control stays inside the viewport,
 // and the button still works. Desktop sizes only. How it looks is judged by sight in the PR.
-/* global document, Framework */
+/* global document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
