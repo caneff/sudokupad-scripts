@@ -197,6 +197,26 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
     }
   })
 
+  // Rebuilding every circle on each change cost 2k - 1 nodes for k circles (docs/research/color-by-digit/color-by-digit-redraw-cost.md).
+  it('a new conflicting mark adds its own circle and keeps the circles already drawn, those nodes untouched', async () => {
+    const tagDrawn = () => read(([circles]) => {
+      const drawn = [...document.querySelectorAll(circles + ' circle')]
+      drawn.forEach((circle) => circle.setAttribute('data-kept', ''))
+      return drawn.length
+    }, [CIRCLES])
+    const state = () => read(([circles]) => ({ all: document.querySelectorAll(circles + ' circle').length, untagged: document.querySelectorAll(circles + ' circle:not([data-kept])').length }), [CIRCLES])
+    const base = await tagDrawn()
+    // 5 and 3 each conflict with the same digit given in row 1.
+    await markMode('#control-corner', async () => { await enter(0, 7, '5') })
+    assert.deepEqual(await settle(state, { all: base + 1, untagged: 1 }), { all: base + 1, untagged: 1 })
+    await tagDrawn()
+    await markMode('#control-corner', async () => { await enter(0, 8, '3') })
+    assert.deepEqual(await settle(state, { all: base + 2, untagged: 1 }), { all: base + 2, untagged: 1 })
+    await undo()
+    await undo()
+    assert.deepEqual(await settle(state, { all: base, untagged: 0 }), { all: base, untagged: 0 })
+  })
+
   it('every digit 1-9, as a corner mark and a centre mark, has its circle centred on the ink of the digit', async () => {
     const marksOnBoard = () => read(() => document.querySelectorAll('#cell-pencilmarks .cell-pencilmark, #cell-candidates tspan').length)
     const before = await marksOnBoard()
