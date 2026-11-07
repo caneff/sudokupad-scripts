@@ -75,3 +75,27 @@ Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run
 - **`Framework.getData`** runs `JSON.parse` and on a parse error hands back the raw text, so a broken entry reads as a
   string, never as an error. Draw Tool reads anything but a list of strokes as unreadable.
 - **The replay**: drawing acts nothing, so `getReplay()` is the same before and after a stroke. Checked live.
+
+## The Draw panel (#271)
+
+Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611.0, and run in
+`live/draw-tool-panel.live.mjs` (2026-11-06).
+
+- **One keypad for every tool.** `.controls-input` holds rows of `button.digit` with `data-key` 1 to 9 and 0, and a
+  last row of 0 and `data-control="delete"`. A tool's look is CSS on `.controls-main.tool-<name>`: `tool-pen.css`
+  hides each digit (`text-indent: -999em`, transparent text on `--body-bg`) and paints a 60% swatch in `:after` from
+  `--puzzle-pencolor-<key>`, and leaves the `.current` button its normal purple. Draw Tool's own `<style>` repeats those
+  rules under `.tool-draw .controls-input`, so a changed pen color variable shows on the swatches with no script.
+- **Digit keys and buttons.** A keypad press (`handleButton`, `control === 'value'`) and a digit key
+  (`handleKeydown` → `eventToDigit` → the button with that `data-key`) both call `doPressDigit(<data-value>)`, which
+  runs the current tool's `handleToolButton` first and stops on true. The color tool's pages rewrite `data-value` and
+  put `1`-`9` back in its `handleToolExit`, so with Draw current the value is the key. Draw picks the color from it.
+- **Enter and exit.** `changeTool` swaps the class, then runs the old tool's `handleToolExit` while `app.tool` still
+  names it, then the new tool's `handleToolEnter`. The pen tool's exit does not take `.current` off its button; Draw's
+  enter clears every `.current` digit before marking its own, and its exit clears them again.
+- **The width box** sits where the pen tool's `.penlinemode` does (`position: absolute; top: 13rem; height: 4rem` in
+  the last row), over 0 and delete, which Draw's CSS also hides. Its buttons are not SudokuPad's, so a plain `click`
+  listener handles them; SudokuPad's window `mousedown` reaches Draw's `handleInputdown`, which ignores a press off
+  the board.
+- A saved `DrawTool_color` or `DrawTool_width` that is not one of the choices reads as pen color 1 or the middle
+  width. Checked live with a planted `"purple"` and `7`.
