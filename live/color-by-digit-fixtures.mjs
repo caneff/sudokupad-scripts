@@ -26,8 +26,13 @@ export const LEGACY_STORAGE_KEY = storedAt('ColorByDigit_groups')
 export const ADDED_PRELOADS_STORAGE_KEY = storedAt('ColorByDigit_addedPreloads')
 // Saved profiles with the one-time Entropic and Modular add already done, so a test sees exactly the profiles it seeded.
 export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true })
+export const MODE_KEY = 'ColorByDigit_mode'
+export const MODE_STORAGE_KEY = storedAt(MODE_KEY)
+// Auto mode's on/off from before the mode existed, read for the starting mode when no mode is saved.
 export const AUTO_KEY = 'ColorByDigit_auto'
 export const AUTO_STORAGE_KEY = storedAt(AUTO_KEY)
+// The mode's value on an untouched board: SEED's profiles with the mode saved Off, so nothing is colored until a test says so.
+export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
 
 export const BUTTON = '#control-colorbydigit'
 export const EDITOR = '#color-by-digit-editor'
@@ -59,8 +64,8 @@ export async function startInjected (p, script, mode = 'after-start') {
 
 // A page with `script` injected at `mode`. `saved` maps a localStorage key to a JSON value, written before the page's own
 // scripts run and only while the key is absent, so a reload keeps what was saved. `force` is written every load.
-// With neither, the page starts with SEED saved as the profiles.
-export async function openSession (browser, script, { saved = savedProfiles(SEED), force = {}, contextOptions = {}, mode = 'after-start' } = {}) {
+// With neither, the page starts with SEED saved as the profiles and the mode saved Off.
+export async function openSession (browser, script, { saved = SEEDED_OFF, force = {}, contextOptions = {}, mode = 'after-start' } = {}) {
   const entries = (object) => Object.entries(object).map(([key, value]) => [key, JSON.stringify(value)])
   const opened = await openPage(browser, {
     contextOptions,

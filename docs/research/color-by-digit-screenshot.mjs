@@ -1,5 +1,5 @@
-// Takes docs/research/site-color-by-digit.png: the sample puzzle's grid after one press of the
-// Color by digit button on a fresh install, whose active profile is Low/5/High, the mascot hidden. Run from the repo root:
+// Takes docs/research/site-color-by-digit.png: the sample puzzle's grid on a fresh install, which starts in Cell
+// and colors the givens by its active profile, Low/5/High, the mascot hidden. Run from the repo root:
 // node docs/research/color-by-digit-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
@@ -18,10 +18,8 @@ await page.locator('#control-undo').waitFor()
 await page.addStyleTag({ content: '#svenpeek { display: none !important }' })
 await page.addScriptTag({ content: script })
 await page.locator('#control-colorbydigit').waitFor({ state: 'visible' })
-// SudokuPad binds the button's handler a moment after it appears: click until a cell is colored.
-const colored = () => page.evaluate(() => [...document.querySelectorAll('#svgrenderer .cell-colour, #svgrenderer [class*="cell-colo"]')].length)
-for (let i = 0; i < 20 && (await colored()) === 0; i++) { await page.click('#control-colorbydigit'); await page.waitForTimeout(400) }
-if ((await colored()) === 0) throw new Error('no cell got a color')
+// Throws when no cell is colored within the timeout.
+await page.waitForFunction(() => document.querySelectorAll('#svgrenderer .cell-colour, #svgrenderer [class*="cell-colo"]').length > 0, null, { timeout: 10000 })
 await page.waitForTimeout(500)
 const box = await page.locator('#svgrenderer').boundingBox()
 await page.screenshot({ path: out, clip: box })

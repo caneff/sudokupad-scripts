@@ -22,7 +22,7 @@ const SCRIPTS = [
   { file: 'dark-page.user.js', owns: /^DarkPage_/, entry: 'Dark Page', editor: '#dark-page-input', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
   { file: 'digit-color.user.js', owns: /^DigitColor_/, entry: 'Digit Color', editor: '#digit-color-editor', key: 'DigitColor_colors', saved: DIGIT_COLORS, badKey: 'DigitColor_colors', bad: ['#ffffff'] },
   { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Rules Resizer', editor: '#auto-rules-resizer-max-width', key: 'AutoRulesResizer_maxWidth', saved: 640, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
-  { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by Digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, badKey: 'ColorByDigit_auto', bad: 'yes' },
+  { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by Digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, badKey: 'ColorByDigit_mode', bad: 'sideways' },
   { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }
 ]
 

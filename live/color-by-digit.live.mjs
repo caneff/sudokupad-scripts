@@ -7,7 +7,7 @@ import { chromium } from 'playwright'
 import { startPuzzle } from './page.mjs'
 import { BUTTON, EDITOR, GIVENS, openSession, PROFILES_KEY, SEED, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
-import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
@@ -15,10 +15,6 @@ const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 // Two entered digits sit on empty cells: r1c3 = 4, r1c4 = 7.
 const ENTERED = { '0,2': '4', '0,3': '7' }
 const DIGIT_CELLS = GIVEN_COUNT + Object.keys(ENTERED).length
-
-// How long clickUntil keeps clicking. The throttle it absorbs is a few hundred ms,
-// so a button that ignores clicks for longer than this fails.
-const CLICK_DEADLINE_MS = 3000
 
 // How often settledLayout re-reads the controls, and how far a bottom edge may overlap the footer's top.
 const LAYOUT_POLL_MS = 250
@@ -59,6 +55,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.locator(BUTTON).waitFor({ state: 'attached' })
   }
   const press = () => p.click(BUTTON)
+  const label = () => p.locator(`${BUTTON} [data-role="mode"]`).textContent()
+  // A press steps the mode; the session starts in Off.
+  const pressTo = async (want) => {
+    await press()
+    assert.equal(await settle(label, want), want)
+  }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
@@ -144,10 +146,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     baseline = JSON.stringify(await digitsOnBoard())
   })
 
-  // The first press of the run, before any dialog has opened: a button whose click
-  // handler was never bound fails here.
-  it('a press colors every given and entered digit by Odd/Even, nothing else', async () => {
-    assert.equal(await clickUntil(press, () => wrongCount(oddEven), 0, CLICK_DEADLINE_MS), 0)
+  // The first press of the run, before any dialog has opened: a press the script never hears fails here.
+  it('a press steps to Cell and colors every given and entered digit by Odd/Even, nothing else', async () => {
+    await pressTo('CELL')
+    assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
     assert.equal(await coloredCount(), DIGIT_CELLS)
     assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
     const s = await cellsState()
@@ -164,22 +166,23 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(rendered.one > 0 && rendered.two > 0, true, JSON.stringify(rendered))
   })
 
-  it('one undo reverses the whole press and leaves digits alone', async () => {
+  it('one undo reverses the whole step to Cell and leaves digits alone', async () => {
     await undo()
     assert.equal(await settle(coloredCount, 0), 0)
     assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
   })
 
-  it('one redo restores the whole press', async () => {
+  it('one redo restores the whole step to Cell', async () => {
     await redo()
     assert.equal(await settle(coloredCount, DIGIT_CELLS), DIGIT_CELLS)
   })
 
-  it('a second press changes nothing and adds no undo step', async () => {
-    await press()
-    // "Nothing happened": the board must stay as it is for QUIET_MS.
-    assert.deepEqual(await watch(coloredCount), [DIGIT_CELLS])
-    assert.equal(await wrongCount(oddEven), 0)
+  it('a second press steps to Off and takes every color off in one undo step', async () => {
+    await pressTo('OFF')
+    assert.equal(await settle(coloredCount, 0), 0)
+    assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
+    await undo()
+    assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
     await undo()
     assert.equal(await settle(coloredCount, 0), 0)
   })
@@ -191,21 +194,25 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await setMultiColor(true)
       await paint(0, 0, '3')
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
-      await press()
+      await pressTo('CELL')
       assert.deepEqual((await settle(async () => [...await colorsAt(0, 0)].sort(), ['1', '3'])), ['1', '3'])
       await undo()
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
+      // Nothing to take off, so stepping back to Off adds no undo step.
+      await pressTo('OFF')
+      assert.deepEqual(await watch(() => colorsAt(0, 0)), [['3']])
     })
 
-    it('off: the group color replaces the existing one, and a second press does not toggle it away', async () => {
+    it('off: the group color replaces the existing one, and stepping to Off takes the cell\'s color off', async () => {
       await setMultiColor(false)
       assert.equal(await getSetting(), false)
-      await press()
+      await pressTo('CELL')
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['1']), ['1'])
       assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
-      await press()
-      // "Nothing happened": the colors must not toggle away.
-      assert.deepEqual(await watch(() => wrongCount(oddEven)), [0])
+      await pressTo('OFF')
+      assert.equal(await settle(coloredCount, 0), 0)
+      await undo()
+      assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
       await undo()
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
       assert.equal(await coloredCount(), 1)
@@ -250,7 +257,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(getData, expected), expected)
     })
 
-    it('the saved list and the button survive a reload, and a press uses the saved list', async () => {
+    it('the saved list, the mode and the button survive a reload, and a step to Cell uses the saved list', async () => {
       const saved = await getData()
       await p.reload({ waitUntil: 'load' })
       await boot()
@@ -265,14 +272,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         a.deselect()
       })
       assert.equal(await settle(coloredCount, 0), 0)
-      assert.equal(await clickUntil(press, () => wrongCount(lowFiveHigh), 0, CLICK_DEADLINE_MS), 0)
+      assert.equal(await label(), 'OFF')
+      await pressTo('CELL')
+      assert.equal(await settle(() => wrongCount(lowFiveHigh), 0), 0)
       assert.equal(await coloredCount() > 0, true)
       await undo()
       assert.equal(await settle(coloredCount, 0), 0)
+      await pressTo('OFF')
     })
 
     // Saved groups are Low/5/High here, so centre marks 6, 7 and 9 all belong to key 9.
-    it('a press also colors an empty cell whose centre marks fit one group, leaves one spanning two groups, and one undo removes it', async () => {
+    it('a step to Cell also colors an empty cell whose centre marks fit one group, leaves one spanning two groups, and one undo removes it', async () => {
       await select(8, 0); await p.click('#control-centre')
       for (const k of ['6', '7', '9']) await p.keyboard.press(k)
       await select(8, 1)
@@ -280,13 +290,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.click('#control-normal')
       const marks = () => read(() => [[8, 0], [8, 1]].map(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join('')))
       assert.deepEqual(await settle(marks, ['679', '17']), ['679', '17'])
-      assert.equal(await clickUntil(press, coloredCount, DIGIT_CELLS + 1, CLICK_DEADLINE_MS), DIGIT_CELLS + 1)
+      await pressTo('CELL')
+      assert.equal(await settle(coloredCount, DIGIT_CELLS + 1), DIGIT_CELLS + 1)
       const s = await cellsState()
       assert.deepEqual(at(s, 8, 0).colours, ['9'])
       assert.deepEqual(at(s, 8, 1).colours, [])
       assert.equal(await wrongCount((x) => (x.r === 8 && x.c === 0 ? ['9'] : lowFiveHigh(x))), 0)
       await undo()
       assert.equal(await settle(coloredCount, 0), 0)
+      await pressTo('OFF')
     })
 
     it('each group box has a red × named "Remove group" in its upper right corner, clear of the pulldown and numpad at desktop and phone width', async () => {
@@ -329,7 +341,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await getGroups()).length, 3)
     })
 
-    it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a press does nothing', async () => {
+    it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a step to Cell colors nothing', async () => {
       await openEditor()
       const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()
       assert.equal(await groupCount(), 3)
@@ -344,7 +356,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await closeDialogWith(p, 'Save', EDITOR)
       assert.deepEqual(await settle(getGroups, []), [])
       assert.equal((await getData()).active, 1)
-      await press()
+      await pressTo('CELL')
       // "Nothing happened": no cell gets a color.
       assert.deepEqual(await watch(coloredCount), [0])
     })

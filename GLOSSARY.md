@@ -6,7 +6,7 @@
   group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit
   and no centre marks, or a digit in no group, is not pure.
 - **profile** — a named list of groups in Color by Digit. Exactly one is active, and the button and
-  auto mode use its groups. There are one to six of them; a fresh install has the four preloads, Low/5/High
+  the mode use its groups. There are one to six of them; a fresh install has the four preloads, Low/5/High
   active. Groups saved before profiles existed become the active profile: the preload they equal, else a
   profile named Custom added first, with the four preloads beside it. An install with saved profiles gets
   Entropic and Modular added once (see **preload**).
@@ -17,9 +17,13 @@
 - **profile menu** — the menu above the Color by Digit button, opened by its arrow box, a right click or a
   hold: one row per profile, the active one highlighted, and Edit profiles…. Picking a row makes that profile
   active and recolors the cells (planSwitch), as one undo step.
-- **auto mode** — Color by Digit's setting, off by default, that keeps a cell's color in step with
+- **mode** — Color by Digit's saved setting, Cell or Off, shown on the button's top strip (CELL in bold
+  purple, OFF in grey) and stepped by a short press on the button. In Cell, a cell's color keeps in step with
   its digit and centre marks as they change: a pure cell gets its group's color and loses any other
   group's, and a cell that is not pure loses every group's color. Colors in no group are left alone, except that with SudokuPad's Multi-color setting off, adding a group color replaces whatever color the cell held.
+  Entering Cell colors every cell with a digit or centre marks; leaving it takes every group color of the
+  active profile off every cell. With no mode saved it starts at Cell, or at Off when auto mode, the on/off
+  setting it replaced, was saved off.
 - **settings group** — one of SudokuPad's collapsible sections of its settings dialog. Every
   script's settings entry goes in the Experimental one, which starts collapsed.
 - **digit color** — the fill of one digit, in entered digits, corner marks and

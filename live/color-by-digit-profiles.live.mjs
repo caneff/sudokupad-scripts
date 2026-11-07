@@ -4,13 +4,13 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { BUTTON, EDITOR, group, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { BUTTON, EDITOR, group, LEGACY_STORAGE_KEY, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
-import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
+import { settle, SETTLE_MS } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 
-const BOX = `${BUTTON} [data-role="auto"]`
+const LABEL = `${BUTTON} [data-role="mode"]`
 const ARROW = `${BUTTON} [data-role="menu"]`
 const MENU = '#color-by-digit-menu'
 const ROWS = `${EDITOR} [data-role=profile-row]`
@@ -33,7 +33,9 @@ before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
 // A page with the script injected; `saved` maps a localStorage key to a JSON value, saved before the page loads.
+// With no mode saved the page starts in Cell; `savedOff` saves the mode Off beside `saved`.
 const openProfiles = (saved, contextOptions = {}) => openSession(browser, script, { saved, contextOptions })
+const savedOff = (saved) => ({ ...saved, [MODE_STORAGE_KEY]: 'off' })
 
 const tools = (p) => {
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -56,10 +58,12 @@ const tools = (p) => {
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
   const rowNames = () => p.$$eval(ROWS, (rows) => rows.map((r) => r.getAttribute('aria-label')))
   const activeRow = () => p.$$eval(ROWS, (es) => es.findIndex((e) => e.getAttribute('aria-checked') === 'true'))
-  // A click on the button proper, away from the AUTO box and the arrow box.
-  const pressButton = async () => {
+  const label = () => p.locator(LABEL).textContent()
+  // A short press on the button, away from the arrow box; it steps the mode to `want`.
+  const pressTo = async (want) => {
     const box = await p.locator(BUTTON).boundingBox()
     await p.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.55)
+    assert.equal(await settle(label, want), want)
   }
   const openMenuByArrow = async () => {
     await p.click(ARROW)
@@ -69,7 +73,7 @@ const tools = (p) => {
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: name }).click()
     await menu().waitFor({ state: 'detached' })
   }
-  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, openEditor, rowNames, activeRow, pressButton, openMenuByArrow, pick }
+  return { read, cellsState, coloredCount, coloursOf, wrongCount, getState, names, select, valueAt, undo, menu, menuRows, iconShownDigits, editor, openEditor, rowNames, activeRow, label, pressTo, openMenuByArrow, pick }
 }
 
 describe('profiles on a fresh install, injected after Start Puzzle', { concurrency: false }, () => {
@@ -89,9 +93,9 @@ describe('profiles on a fresh install, injected after Start Puzzle', { concurren
     await p.keyboard.press('Escape')
   })
 
-  it('a short press colors every given by Low/5/High, as the active profile', async () => {
-    const low = LOW_FIVE_HIGH
-    assert.equal(await clickUntil(t.pressButton, () => t.wrongCount(low), 0, SETTLE_MS), 0)
+  it('a fresh install starts in Cell and colors every given by Low/5/High, as the active profile', async () => {
+    assert.equal(await t.label(), 'CELL')
+    assert.equal(await settle(() => t.wrongCount(LOW_FIVE_HIGH), 0), 0)
     assert.notEqual(await t.coloredCount(), 0)
   })
 
@@ -170,7 +174,7 @@ describe('the one-time add of Entropic and Modular to an install with saved prof
       await t.openMenuByArrow()
       await t.pick('Modular')
       const modular = [group('6', ['1', '4', '7']), group('5', ['2', '5', '8']), group('8', ['0', '3', '6', '9'])]
-      assert.equal(await clickUntil(t.pressButton, () => t.wrongCount(modular), 0, SETTLE_MS), 0)
+      assert.equal(await settle(() => t.wrongCount(modular), 0), 0)
       assert.notEqual(await t.coloredCount(), 0)
     })
   })
@@ -193,7 +197,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
   let context, p, errors, t
 
   before(async () => {
-    ({ context, p, errors } = await openProfiles(savedProfiles(FOUR_PROFILES)))
+    ({ context, p, errors } = await openProfiles(savedOff(savedProfiles(FOUR_PROFILES))))
     t = tools(p)
   })
   after(async () => { await context.close() })
@@ -233,7 +237,7 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await p.keyboard.press('Escape')
   })
 
-  it('a hold on the button opens the menu, and the press colors nothing', async () => {
+  it('a hold on the button opens the menu, and the press neither steps the mode nor colors anything', async () => {
     assert.equal(await t.menu().count(), 0)
     const box = await p.locator(BUTTON).boundingBox()
     await p.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.55)
@@ -242,15 +246,17 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     await t.menu().waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
     await p.mouse.up()
     assert.deepEqual(await watch(t.coloredCount), [0])
+    assert.equal(await t.label(), 'OFF')
     await p.keyboard.press('Escape')
   })
 
-  it('a short press on the button still colors the grid and opens no menu', async () => {
-    assert.equal(await clickUntil(t.pressButton, () => t.wrongCount(ODD_EVEN), 0, SETTLE_MS), 0)
+  it('a short press on the button steps to Cell, colors the grid and opens no menu', async () => {
+    await t.pressTo('CELL')
+    assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
     assert.equal(await t.menu().count(), 0)
   })
 
-  it('a pick with auto mode off removes the old colors and colors every pure cell by the new profile, as one undo step', async () => {
+  it('a pick in Cell removes the old colors and colors every pure cell by the new profile, as one undo step', async () => {
     const before = await t.coloursOf()
     await t.openMenuByArrow()
     await t.pick('Low/5/High')
@@ -266,18 +272,19 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.deepEqual(await t.iconShownDigits(), ['1', '5', '9'])
   })
 
-  it('a pick with auto mode on does the same, as one undo step', async () => {
-    const checked = () => p.locator(BOX).getAttribute('aria-checked')
-    await p.click(BOX)
-    assert.equal(await settle(checked, 'true'), 'true')
+  it('stepping to Off takes off the active profile\'s colors only, and a pick in Off then recolors as one undo step', async () => {
+    // The undo above left Odd/Even's colors on the board under the active Low/5/High: its 2 is in no group of Low/5/High.
+    const lowKeys = () => t.read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).some((k) => ['1', '5', '9'].includes(k))).length)
+    await t.pressTo('OFF')
+    assert.equal(await settle(lowKeys, 0), 0)
+    assert.notEqual(await t.coloredCount(), 0)
     const before = await t.coloursOf()
     await t.openMenuByArrow()
     await t.pick('Odd/Even')
     assert.equal(await settle(() => t.wrongCount(ODD_EVEN), 0), 0)
     await t.undo()
     assert.equal(await settle(t.coloursOf, before), before)
-    await p.click(BOX)
-    assert.equal(await settle(checked, 'false'), 'false')
+    await t.pressTo('CELL')
   })
 
   it('with Multi-color off, a pick that takes one color off a cell holding two leaves it its group color', async () => {
@@ -320,14 +327,15 @@ describe('the menu and switching, injected after Start Puzzle', { concurrency: f
     assert.equal(await settle(() => t.valueAt(8, 1), '3'), '3')
   })
 
-  it('the AUTO box and the arrow box overlap no cell of the icon, for profiles of 2, 3, 4 and 6 groups', async () => {
-    const overlaps = () => p.evaluate(({ button, auto, arrow }) => {
+  it('the mode label, at its widest so far (CELL), and the arrow box overlap no cell of the icon, for profiles of 2, 3, 4 and 6 groups', async () => {
+    assert.equal(await t.label(), 'CELL')
+    const overlaps = () => p.evaluate(({ button, label, arrow }) => {
       const rect = (e) => e.getBoundingClientRect()
       const cells = [...document.querySelectorAll(`${button} svg rect[data-role=cell]`)].map(rect)
-      const small = [auto, arrow].map((sel) => rect(document.querySelector(sel)))
+      const small = [label, arrow].map((sel) => rect(document.querySelector(sel)))
       const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
       return { cells: cells.length, hits: cells.flatMap((c) => small.map((s) => hit(c, s))).filter(Boolean).length }
-    }, { button: BUTTON, auto: BOX, arrow: ARROW })
+    }, { button: BUTTON, label: LABEL, arrow: ARROW })
     const seen = []
     for (const [name, cells] of [['Odd/Even', 2], ['Low/5/High', 3], ['Four', 4], ['Six', 4]]) {
       await t.openMenuByArrow()
@@ -363,7 +371,7 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
   let context, p, errors, t, cdp
 
   before(async () => {
-    ({ context, p, errors } = await openProfiles(savedProfiles(SEED), { hasTouch: true }))
+    ({ context, p, errors } = await openProfiles(savedOff(savedProfiles(SEED)), { hasTouch: true }))
     t = tools(p)
     cdp = await context.newCDPSession(p)
   })
@@ -392,15 +400,14 @@ describe('the menu on a touch screen, injected after Start Puzzle', { concurrenc
     await t.menu().waitFor({ state: 'detached' })
   })
 
-  it('a short tap on the button colors the grid', async () => {
+  it('a short tap on the button steps to Cell and colors the grid', async () => {
     const box = await p.locator(BUTTON).boundingBox()
     const x = box.x + box.width * 0.5
     const y = box.y + box.height * 0.55
-    const tap = async () => {
-      await touch(cdp, 'touchStart', x, y)
-      await touch(cdp, 'touchEnd', x, y)
-    }
-    assert.equal(await clickUntil(tap, async () => (await t.coloredCount()) > 0, true, SETTLE_MS), true)
+    await touch(cdp, 'touchStart', x, y)
+    await touch(cdp, 'touchEnd', x, y)
+    assert.equal(await settle(t.label, 'CELL'), 'CELL')
+    assert.equal(await settle(async () => (await t.coloredCount()) > 0, true), true)
   })
 
   it('no uncaught page errors', () => {

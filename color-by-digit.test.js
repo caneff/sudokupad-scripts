@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, autoBoxHtml, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -490,56 +490,74 @@ test('auto: changedIndices lists the positions whose signature differs', () => {
 
 const colorFor = (key) => (key === 'a' ? 'rgb(10, 10, 10)' : 'rgb(240, 240, 240)')
 
-test('auto: the button box shows its state in aria-checked, an X in the box and bold purple, or an empty box and light grey', () => {
-  const on = autoBoxHtml(true)
-  const off = autoBoxHtml(false)
-  assert.match(on, /data-role="auto"[^>]*aria-checked="true"/)
-  assert.match(off, /data-role="auto"[^>]*aria-checked="false"/)
-  assert.match(on, /<span data-role="auto-mark"[^>]*>X<\/span>/)
-  assert.doesNotMatch(off, />X</)
-  assert.match(on, /AUTO<\/span>$/)
-  assert.match(on, /font:700[^"]*color:#6a1b9a/)
-  assert.match(off, /color:#b3acbf/)
-  assert.doesNotMatch(on, /&#10003;/)
+test('mode: a press steps Cell to Off and Off back to Cell', () => {
+  assert.equal(nextMode('cell'), 'off')
+  assert.equal(nextMode('off'), 'cell')
 })
 
-test('auto: installButton draws the box at the value it is given', () => {
-  const content = (on) => { let spec; installButton({ addAuxButton: (x) => { spec = x } }, { refreshControls: () => {} }, () => {}, on, ODD, colorFor); return spec.content }
-  assert.match(content(true), /aria-checked="true"/)
-  assert.match(content(false), /aria-checked="false"/)
+test('mode: the starting mode is the saved mode, else Cell unless auto mode was saved off', () => {
+  assert.equal(startingMode(null, null), 'cell')
+  assert.equal(startingMode(null, true), 'cell')
+  assert.equal(startingMode(null, false), 'off')
+  assert.equal(startingMode('off', true), 'off')
+  assert.equal(startingMode('cell', false), 'cell')
+  assert.equal(startingMode('sideways', false), 'off')
+  assert.equal(startingMode(null, 'yes'), 'cell')
 })
 
-test('auto: the dialog box opens at the draft it is given', () => {
-  assert.match(editor([], [], [], true), /data-role="auto-draft" checked/)
-  assert.doesNotMatch(editor([], [], []), /data-role="auto-draft" checked/)
+test('mode: the button label reads CELL in bold purple or OFF in light grey, and lets a press through to the button', () => {
+  const cell = modeLabelHtml('cell')
+  const off = modeLabelHtml('off')
+  assert.match(cell, /^<span data-role="mode"[^>]*>CELL<\/span>$/)
+  assert.match(off, /^<span data-role="mode"[^>]*>OFF<\/span>$/)
+  assert.match(cell, /font:700[^"]*color:#6a1b9a/)
+  assert.match(off, /font:400[^"]*color:#b3acbf/)
+  assert.match(cell, /pointer-events:none/)
 })
 
-test('auto: the dialog box label reads "Keep colors in step with digits and centre marks" and the box is named "Auto mode"', () => {
-  const html = editor([], [], [])
-  assert.match(html, /<label for="color-by-digit-auto-draft"[^>]*>Keep colors in step with digits and centre marks<\/label>/)
-  assert.doesNotMatch(html, /Auto mode:/)
-  assert.match(html, /<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"[^>]* aria-label="Auto mode"/)
+test('mode: installButton draws the label of the mode it is given, and no AUTO box', () => {
+  const content = (mode) => { let spec; installButton({ addAuxButton: (x) => { spec = x } }, { refreshControls: () => {} }, mode, ODD, colorFor); return spec.content }
+  assert.match(content('cell'), />CELL</)
+  assert.match(content('off'), />OFF</)
+  assert.doesNotMatch(content('cell'), /AUTO|data-role="auto"|role="checkbox"/)
+})
+
+test('mode: planClear takes every listed group color off every cell, digit or not, and leaves colors in no group', () => {
+  assert.deepEqual(planClear([{ value: '1', colours: ['a'] }, { colours: ['a', 'z'] }, { value: '3', colours: ['b'] }, { colours: ['z'] }, {}], groupKeys(groups)), [
+    { action: 'remove', key: 'a', indices: [0, 1] },
+    { action: 'remove', key: 'b', indices: [2] }
+  ])
+})
+
+test('mode: the dialog opens with the mode choice at the top, on the draft it is given', () => {
+  const html = renderEditor([], [], [], 'off', '<div id="mark-profiles"></div>')
+  assert.equal(html.indexOf('data-role="mode-draft"') < html.indexOf('mark-profiles'), true)
+  assert.match(html, /<input type="radio"[^>]*data-role="mode-draft" value="off" checked/)
+  assert.doesNotMatch(html, /value="cell" checked/)
+  assert.match(editor([], [], [], 'cell'), /value="cell" checked/)
+  assert.equal(count(html, /data-role="mode-draft"/g), 2)
+  assert.doesNotMatch(html, /type="checkbox"|auto-draft/)
 })
 
 test('iconHtml draws one cell per group, at most four, each with its shown digit in the ink that reads on its color', () => {
-  const html = iconHtml(false, [{ key: 'a', digits: ['3', '4'] }, { key: 'b', digits: ['7'] }], colorFor)
+  const html = iconHtml('off', [{ key: 'a', digits: ['3', '4'] }, { key: 'b', digits: ['7'] }], colorFor)
   assert.equal(count(html, /<rect data-role="cell"/g), 2)
   assert.match(html, /data-key="a"[^>]*fill="rgb\(10, 10, 10\)"/)
   assert.match(html, /<text[^>]*fill="#fff"[^>]*>3<\/text>/)
   assert.match(html, /<text[^>]*fill="#000"[^>]*>7<\/text>/)
   const six = Array.from({ length: 6 }, (_, i) => ({ key: 'k' + i, digits: [String(i)] }))
-  assert.equal(count(iconHtml(true, six, colorFor), /<rect data-role="cell"/g), 4)
+  assert.equal(count(iconHtml('cell', six, colorFor), /<rect data-role="cell"/g), 4)
 })
 
-test('iconHtml draws the AUTO box in the upper left and the menu arrow box in the lower right', () => {
-  const html = iconHtml(true, ODD, colorFor)
-  assert.match(html, /data-role="auto"[^>]*left:[^;"]*;top:/)
+test('iconHtml draws the mode label in the upper left and the menu arrow box in the lower right', () => {
+  const html = iconHtml('cell', ODD, colorFor)
+  assert.match(html, /data-role="mode"[^>]*left:[^;"]*;top:/)
   assert.match(html, /data-role="menu"[^>]*aria-haspopup="menu"[^>]*right:[^;"]*;bottom:/)
-  assert.ok(html.indexOf('data-role="auto"') < html.indexOf('data-role="menu"'))
+  assert.equal(html.indexOf('data-role="mode"') < html.indexOf('data-role="menu"'), true)
 })
 
 test('iconHtml gives a group whose palette color is unreadable a grey cell, so the cell still shows', () => {
-  assert.match(iconHtml(false, [{ key: 'q', digits: ['2'] }], () => ''), /data-key="q"[^>]*fill="#ccc"/)
+  assert.match(iconHtml('off', [{ key: 'q', digits: ['2'] }], () => ''), /data-key="q"[^>]*fill="#ccc"/)
 })
 
 const profileState = { profiles: [{ name: 'Low <b>', groups: LOW }, { name: 'Odd/Even', groups: ODD }], active: 1 }
@@ -598,19 +616,18 @@ test('renderMenu has the heading, one row per profile in order with the active o
 
 test('installButton: adds an aux-row icon button titled "Color by digit", then refreshControls so the click handler binds', () => {
   const calls = []
-  const click = () => {}
   const framework = {
     addAuxButton: (spec) => calls.push(['add', spec]),
     addAppButton: () => calls.push(['wrong row'])
   }
   const app = { refreshControls: () => calls.push(['refresh']) }
-  installButton(framework, app, click, false, ODD, colorFor)
+  installButton(framework, app, 'off', ODD, colorFor)
   assert.deepEqual(calls.map((c) => c[0]), ['add', 'refresh'])
   const spec = calls[0][1]
   assert.equal(spec.name, 'colorbydigit')
   assert.equal(spec.title, 'Color by digit')
-  assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="auto"[\s\S]*<span data-role="menu"[\s\S]*<\/span><\/div>$/)
-  assert.equal(spec.onClick, click)
+  assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="mode"[\s\S]*<span data-role="menu"[\s\S]*<\/span><\/div>$/)
+  assert.equal(typeof spec.onClick, 'function')
 })
 
 // The parts of a page the script reads to draw the button: the palette variables and a probe element
@@ -736,7 +753,8 @@ function autoMockApp (cellDefs, { single = false } = {}) {
   return app
 }
 
-async function withAutoMode (app, fn) {
+// `stored` is what Framework.getData answers besides the Odd/Even profile; nothing stored starts the mode at Cell.
+async function withAutoMode (app, fn, stored = {}) {
   const path = require.resolve('./color-by-digit.user.js')
   const saved = require.cache[path]
   delete require.cache[path]
@@ -744,7 +762,7 @@ async function withAutoMode (app, fn) {
   global.window = pageWindow()
   global.Framework = {
     getApp: () => Promise.resolve(app),
-    getData: (key) => ({ ColorByDigit_auto: true, ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 } }[key] ?? null),
+    getData: (key) => ({ ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0 }, ...stored }[key] ?? null),
     setData: () => {},
     addAuxButton: () => {},
     addSetting: () => {}
@@ -818,6 +836,28 @@ test('auto wrapper: a clear with nothing to clear, and a digit on a given, open 
   })
 })
 
+test('mode: in Off, saved or from auto mode saved off, a digit entry passes straight through and loading colors nothing', async () => {
+  for (const saved of [{ ColorByDigit_mode: 'off' }, { ColorByDigit_auto: false }]) {
+    await withAutoMode(autoMockApp([{}, { given: '1' }]), async (app) => {
+      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [[], []])
+      select(app, 0)
+      app.calls.length = 0
+      app.act({ type: 'value', arg: '1' })
+      assert.deepEqual(app.calls, ['value:1'])
+      app.handlers.restarted()
+      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [[], []])
+    }, saved)
+  }
+})
+
+test('mode: in Cell, nothing saved or auto mode saved on, loading colors the givens', async () => {
+  for (const saved of [{}, { ColorByDigit_auto: true }, { ColorByDigit_mode: 'cell', ColorByDigit_auto: false }]) {
+    await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
+    }, saved)
+  }
+})
+
 test('auto wrapper: a restart colors the givens again', async () => {
   await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
     app.handlers.restarted()
@@ -828,7 +868,7 @@ test('auto wrapper: a restart colors the givens again', async () => {
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.
 // The editor without a profile list.
-const editor = (groups, pages, shown, auto = false) => renderEditor(groups, pages, shown, auto, '')
+const editor = (groups, pages, shown, mode = 'cell') => renderEditor(groups, pages, shown, mode, '')
 const colorOf = (key) => (key === 'clear' ? 'transparent' : `#${key}`)
 const keys = (names) => names.split(' ')
 const slotKeys = (slots) => slots.map((s) => (s ? s.key : null))
@@ -953,7 +993,7 @@ test('renderEditor keeps the "No palette colors found" note, and draws no pulldo
 })
 
 test('the editor has no Preload buttons, keeps a Clear all button, and shows the profile list it is given above the groups', () => {
-  const html = renderEditor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0], false, '<div id="mark-profiles"></div>')
+  const html = renderEditor([{ key: 'a', digits: [] }], layoutPages([], 0, colorOf), [0], 'cell', '<div id="mark-profiles"></div>')
   assert.doesNotMatch(html, /data-act="preload"|Preload/)
   assert.equal(count(html, /data-act="clear"[^>]*>Clear all</g), 1)
   assert.ok(html.indexOf('mark-profiles') < html.indexOf('data-act="clear"'))
@@ -978,13 +1018,6 @@ test('renderEditor keeps the in-group digits bold and full opacity and the other
   assert.match(html, /data-digit="3"[^>]*opacity:1/)
   assert.match(html, /data-digit="4"[^>]*font-weight:normal/)
   assert.match(html, /data-digit="4"[^>]*opacity:0.4/)
-})
-
-test('autoBoxHtml centers the X in its box with a flex box, both ways', () => {
-  const tag = autoBoxHtml(true).match(/<span data-role="auto-mark"[^>]*>/)[0]
-  assert.match(tag, /display:flex/)
-  assert.match(tag, /align-items:center/)
-  assert.match(tag, /justify-content:center/)
 })
 
 test('renderEditor gives each group a red × in its box\'s upper right corner, named "Remove group", and no Remove text button', () => {
@@ -1068,26 +1101,35 @@ test('rowAfterKey: Enter and Space stay, the arrows step and wrap at both ends, 
   assert.equal(rowAfterKey('Tab', 1, 3), null)
 })
 
-test('copiedSettings: the profiles and auto mode in force, groups saved before profiles included', () => {
-  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_auto: true, ColorByDigit_addedPreloads: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], Other_key: 1 }
-  const { ColorByDigit_groups: _legacy, Other_key: _other, ...ours } = saved
+test('copiedSettings: the profiles and the mode in force, groups saved before profiles included, and no auto mode', () => {
+  const saved = { ColorByDigit_profiles: { profiles: [{ name: 'Odd/Even', groups }], active: 0 }, ColorByDigit_mode: 'off', ColorByDigit_addedPreloads: true, ColorByDigit_groups: [{ key: 'z', digits: ['1'] }], ColorByDigit_auto: true, Other_key: 1 }
+  const { ColorByDigit_groups: _legacy, ColorByDigit_auto: _auto, Other_key: _other, ...ours } = saved
   assert.deepEqual(JSON.parse(copiedSettings({ getData: (key) => saved[key] ?? null })), JSON.parse(JSON.stringify(ours)))
   const legacyOnly = { ColorByDigit_groups: [{ key: '3', digits: ['1', '2'] }] }
   const copied = JSON.parse(copiedSettings({ getData: (key) => legacyOnly[key] ?? null }))
   assert.deepEqual(copied.ColorByDigit_profiles, JSON.parse(JSON.stringify(stateFromStored(null, legacyOnly.ColorByDigit_groups))))
   assert.equal(copied.ColorByDigit_profiles.profiles[copied.ColorByDigit_profiles.active].groups[0].key, '3')
-  assert.equal(copied.ColorByDigit_auto, false)
+  assert.equal(copied.ColorByDigit_mode, 'cell')
+  assert.equal('ColorByDigit_auto' in copied, false)
   assert.equal('ColorByDigit_addedPreloads' in copied, false)
+  assert.equal(JSON.parse(copiedSettings({ getData: (key) => ({ ColorByDigit_auto: false }[key] ?? null) })).ColorByDigit_mode, 'off')
 })
 
 test('pastedSettings: a state that keeps every profile is kept, one that loses a profile is skipped and counted, other keys are ignored', () => {
   const profiles = { profiles: [{ name: ' Odd/Even ', groups }], active: 0 }
-  const pasted = pastedSettings(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_auto: 'yes', ColorByDigit_addedPreloads: true, DarkPage_color: '#ffffff' }))
+  const pasted = pastedSettings(JSON.stringify({ ColorByDigit_profiles: profiles, ColorByDigit_mode: 'sideways', ColorByDigit_addedPreloads: true, DarkPage_color: '#ffffff' }))
   assert.deepEqual(pasted.values, { ColorByDigit_profiles: stateFromStored(profiles), ColorByDigit_addedPreloads: true })
   assert.equal(pasted.skipped, 1)
   const oneBad = { profiles: [{ name: 'Odd/Even', groups }, { name: 'bad' }], active: 0 }
-  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_auto: false })), { values: { ColorByDigit_auto: false }, skipped: 1 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: oneBad, ColorByDigit_mode: 'off' })), { values: { ColorByDigit_mode: 'off' }, skipped: 1 })
   assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_profiles: { profiles: [] } })), { values: {}, skipped: 1 })
+})
+
+test('pastedSettings: settings copied before the mode, with auto mode and no mode, give Cell for on and Off for off', () => {
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: true })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'off' }, skipped: 0 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_auto: 'yes' })), { values: {}, skipped: 1 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ ColorByDigit_mode: 'cell', ColorByDigit_auto: false })), { values: { ColorByDigit_mode: 'cell' }, skipped: 0 })
 })
 
 test('pastedSettings: throws on text that is not a JSON object', () => {
