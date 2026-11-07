@@ -240,7 +240,7 @@ const PEN_SLIDES = [
 ]
 const DRAW_SLIDES = [
   ['1-line', 'Draw a line'], ['2-straight', 'Hold Shift for a straight line'], ['3-opacity', 'Size and opacity'], ['4-rectangle', 'Shape: rectangle'], ['5-ellipse', 'Shape: ellipse'],
-  ['6-text', 'Type text, such as a cage sum'], ['7-colors', 'Your own colors: hold a color button'], ['8-erase', 'Erase: right-click a line']
+  ['6-text', 'Type text, such as a cage sum'], ['7-colors', 'Your own colors: hold a color button'], ['8-erase', 'Erase: right-click a line'], ['9-erased', 'The whole line is gone']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },

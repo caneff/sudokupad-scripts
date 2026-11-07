@@ -1,4 +1,4 @@
-// Takes the eight slides of Draw Tool's slideshow on site/index.html, each the board patch beside the Draw panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
+// Takes the nine slides of Draw Tool's slideshow on site/index.html, each the board patch beside the Draw panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
 //   draw-tool-slide-1-line.png      a freehand line
 //   draw-tool-slide-2-straight.png  a Shift+drag, which draws a straight line
 //   draw-tool-slide-3-opacity.png   the Size slider up and the Opacity slider down: a thick, see-through line over a thin solid one
@@ -7,6 +7,7 @@
 //   draw-tool-slide-6-text.png      a cage sum typed in a cell's corner
 //   draw-tool-slide-7-colors.png    a hold on a color button: a picker over each color, one recolored, and the line in it recolored too
 //   draw-tool-slide-8-erase.png     the pointer on a line with a red ring round it, where a right click erases it
+//   draw-tool-slide-9-erased.png    the same board after the right click: the line gone
 // Every stroke is a real mouse drag, click or key. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool/draw-tool-slides-screenshot.mjs
@@ -163,9 +164,10 @@ async function scene () {
 {
   const s = await scene()
   await s.pick(GREEN, OLD_WIDTHS[1])
-  await s.landed(await s.drag([[4.3, 4.4], [7.3, 8.6]]))
+  const LINE = [[4.3, 4.4], [7.3, 8.6]]
+  await s.landed(await s.drag(LINE))
   // Halfway along the line.
-  const [x, y] = s.at([5.8, 6.5])
+  const [x, y] = s.at([(LINE[0][0] + LINE[1][0]) / 2, (LINE[0][1] + LINE[1][1]) / 2])
   await s.p.evaluate(([px, py]) => {
     const ring = document.createElement('div')
     ring.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:34px;height:34px;margin:-17px 0 0 -17px;box-sizing:border-box;border-radius:50%;border:3px solid #d32f2f;pointer-events:none;z-index:99998`
@@ -179,6 +181,9 @@ async function scene () {
   await s.shoot('8-erase', { keepOpen: true })
   await s.p.mouse.click(x, y, { button: 'right' })
   if ((await s.items('path')) !== 0) throw new Error('the right click did not erase the line')
-  await s.p.close()
+  // 9: the ring and the pointer taken off, the line gone.
+  await s.p.evaluate(() => { for (const el of document.querySelectorAll('body > div[style*="z-index:9999"]')) el.remove() })
+  await s.p.mouse.move(0, 0)
+  await s.shoot('9-erased')
 }
 await browser.close()
