@@ -18,8 +18,8 @@ export const DRAW_BUTTON = '#control-draw'
 export const DIGIT_BUTTON = '#control-normal'
 // The layer's two groups of notes: those on the board, and the fixed ones.
 export const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
-// Anything in the notes' layer that is not a note or one of its groups, such as a stroke or shape an earlier version drew: none is drawn now.
-export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
+// Anything in the notes' layer that is not a note, a resize handle or one of the groups, such as a stroke or shape an earlier version drew: none is drawn now.
+export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, .draw-tool-resize, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
 // Every element in the layer but the groups themselves.
 export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
