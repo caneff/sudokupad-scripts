@@ -10,7 +10,7 @@
   li { margin-bottom: .25rem; }
   li img { display: block; max-width: min(100%, 20rem); height: auto; margin: .35rem 0 .5rem; }
   img.panel { display: block; max-width: 100%; height: auto; margin: .35rem 0 .75rem; }
-  li img.wide { max-width: min(100%, 36rem); }
+  img.tour { display: block; max-width: 100%; height: auto; margin: .5rem 0 1rem; }
 </style>
 </head>
 <body>
@@ -20,21 +20,17 @@
   <p>Adds to <a href="https://sudokupad.app">SudokuPad</a> a button that colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.</p>
   <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/color-by-digit.user.js">Install Color by Digit</a></p>
 
+  <img class="tour" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-tour.gif?v=f428f7d" alt="An animation of two sudoku boxes with the Color by Digit button under them, captioned step by step. In Cell mode a digit, 1, is typed into an empty cell and the cell fills with its group's color. Center marks 7 and 9, both in one group, are typed into another cell and it fills with that group's color. A center mark 2 from another group is added and the fill goes. Then presses on the button step the modes Digit, Both, Off and Cell: Digit shows darker shades and the red circles, Both shows the fills and the shades, Off shows the plain boxes. Last, the profile menu opens from the button's arrow box, Modular is picked, and the boxes recolor at once" width="450" height="208">
+
   <h2>What it adds</h2>
   <ul>
-    <li><strong>Four modes.</strong> A press on the button steps the mode Cell → Digit → Both → Off, and the button's top strip names it.
-      <img class="wide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-modes.gif?v=72016a7" alt="An animation of two sudoku boxes beside the Color by Digit button, stepping through its four modes, one and a half seconds each: in Cell the cells holding digits are filled with their group's color, and the button reads CELL; in Digit nothing is filled, digits and marks take darker shades and three marks that repeat the given 5 in their row or column have a red circle, and it reads DIGIT; in Both the fills and the shades are both there, and it reads BOTH; in Off the boxes are plain and it reads OFF" width="510" height="211">
-    </li>
-    <li><strong>Kept in step as you solve.</strong> A cell holding one group's digit, or with center marks that all fall in one group, takes that group's color, and loses it when the digit or marks change.
-      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-cell.gif?v=b86f889" alt="An animation of two sudoku boxes in Cell mode, with two empty cells at the bottom right. A digit, 2, is typed into the first and the cell fills with the low group's color. Center marks 7 and 8, both in the high group, are typed into the second and it fills with the high group's color. A center mark 2 from another group, the low one, is added and the fill goes" width="423" height="239">
-    </li>
+    <li><strong>Four modes.</strong> A press on the button steps the mode Cell → Digit → Both → Off, and the button's top strip names it.</li>
+    <li><strong>Kept in step as you solve.</strong> A cell holding one group's digit, or with center marks that all fall in one group, takes that group's color, and loses it when the digit or marks change.</li>
     <li><strong>Digit and mark shades.</strong> In Digit and Both, entered digits, corner marks and center marks take a darker shade of their group's color. A mark that conflicts keeps its shade and gets a small red circle.
-      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-digit.png?v=17672d6" alt="The same two boxes in Digit mode: no cell is filled, and entered digits and marks are in darker shades of their group's colors, and three marks that repeat the given 5 in their row or column each have a red circle behind them" width="400" height="200">
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-digit.png?v=cef94bd" alt="The same two boxes in Digit mode: no cell is filled, and entered digits and marks are in darker shades of their group's colors, and three marks that repeat the given 5 in their row or column each have a red circle behind them" width="400" height="200">
     </li>
     <li><strong>Profiles.</strong> A profile is a list of groups of digits, each group with a palette color, and you can keep up to six profiles. Five come preloaded: Low/5/High, Odd/Even, Entropic, Modular and Each digit. The button's icon shows the active profile.</li>
-    <li><strong>The profile menu.</strong> It opens from the arrow box on the button, a right click or a hold. Pick a profile and it takes effect at once.
-      <img class="wide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit-details-menu.gif?v=7c141db" alt="An animation of two sudoku boxes beside the Color by Digit button, colored by the Low/5/High profile. The profile menu opens above the button from its arrow box, listing the five profiles with their group colors and Edit profiles at the bottom. Odd/Even is picked, the menu closes, and the boxes recolor at once to the Odd/Even groups" width="481" height="343">
-    </li>
+    <li><strong>The profile menu.</strong> It opens from the arrow box on the button, a right click or a hold. Pick a profile and it takes effect at once.</li>
     <li><strong>Sync digit profile with cell profile.</strong> Ticked, one profile colors both the cells and the digits. Untick it to color the cells from one profile and the digits from another; the menu then has a Cells section and a Digits section.</li>
     <li><strong>Use digit colors.</strong> Untick it to drop digit coloring: the button steps only between Cell and Off.</li>
   </ul>
