@@ -34,7 +34,7 @@ export const captureConsoleErrors = (page, errors, take = () => false) => {
 
 // Runs the code at DOMContentLoaded, before the page's own scripts finish, and records in `window.__fwAtIdle`
 // what `Framework` looked like at that moment.
-const injectAtIdle = (p, code) => p.addInitScript((src) => {
+export const injectAtIdle = (p, code) => p.addInitScript((src) => {
   document.addEventListener('DOMContentLoaded', () => {
     window.__fwAtIdle = typeof Framework + '/' + (typeof Framework !== 'undefined' && typeof Framework.getApp)
     const s = document.createElement('script')
