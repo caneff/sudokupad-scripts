@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -682,6 +682,18 @@ test('mode: planClear takes every listed group color off every cell, digit or no
   ])
 })
 
+test('colorSteps clears a cell that loses a color and puts back the colors it keeps, then adds; a cell that loses nothing is only added to', () => {
+  const cells = [{ colours: ['a', 'z'] }, { colours: ['a'] }, { colours: ['b', 'y', 'z'] }, { colours: [] }]
+  const ops = [{ action: 'remove', key: 'a', indices: [0, 1] }, { action: 'remove', key: 'b', indices: [2] }, { action: 'add', key: 'c', indices: [1, 3] }]
+  assert.deepEqual(colorSteps(cells, ops), [
+    { type: 'clear', arg: 'colour', indices: [0, 1, 2] },
+    { type: 'colour', arg: 'z', indices: [0, 2] },
+    { type: 'colour', arg: 'y', indices: [2] },
+    { type: 'colour', arg: 'c', indices: [1, 3] }
+  ])
+  assert.deepEqual(colorSteps(cells, []), [])
+})
+
 test('mode: the dialog opens with the mode choice at the top, on the draft it is given', () => {
   const html = renderEditor([], [], [], 'off', '<div id="mark-profiles"></div>', true)
   assert.equal(html.indexOf('data-role="mode-draft"') < html.indexOf('mark-profiles'), true)
@@ -889,8 +901,10 @@ test('entry point: no Framework at all is left alone without a warning', () => {
 
 // A SudokuPad stand-in for the cell coloring wrapper: cells hold a digit and colors, `act` applies
 // value/clear/colour/select/deselect/group actions and records every call, and `puzzle.inGroup` follows the group actions.
-// `single` mimics SudokuPad with Multi-color off: a color toggle acts on the whole cell, so taking one
-// color off a cell that holds two clears both, and adding one replaces what the cell held.
+// The color toggle is SudokuPad's: it adds the key to the cells that lack it unless every cell holds it, and then
+// takes it off them. `single` mimics SudokuPad with Multi-color off (Cell.toggleColour): a cell that holds two colors,
+// or not the key, is cleared first, so adding a key replaces what the cell held, and taking one off a cell that held
+// two leaves just that key. A clear of `colour` takes every color off.
 function mockApp (cellDefs, { single = false } = {}) {
   const calls = []
   const cells = cellDefs.map((def, i) => {
@@ -909,11 +923,14 @@ function mockApp (cellDefs, { single = false } = {}) {
       if (action.type === 'groupstart') puzzle.inGroup = true
       if (action.type === 'groupend') puzzle.inGroup = false
       if (action.type === 'value') sel.forEach((c) => { c.value = c.value === action.arg ? '' : action.arg })
-      if (action.type === 'clear') sel.forEach((c) => { c.value = '' })
+      if (action.type === 'clear') sel.forEach((c) => { if (action.arg === 'colour') c.colours = []; else c.value = '' })
       if (action.type === 'colour') {
-        const all = sel.every((c) => c.colours.includes(action.arg))
-        if (single) sel.forEach((c) => { c.colours = all ? [] : [action.arg] })
-        else sel.forEach((c) => { c.colours = all ? c.colours.filter((k) => k !== action.arg) : [...c.colours, action.arg] })
+        const key = action.arg
+        const all = sel.every((c) => c.colours.includes(key))
+        sel.filter((c) => all || !c.colours.includes(key)).forEach((c) => {
+          if (single && (c.colours.length > 1 || !c.colours.includes(key))) c.colours = []
+          c.colours = c.colours.includes(key) ? c.colours.filter((k) => k !== key) : [...c.colours, key]
+        })
       }
     },
     select (list) { puzzle.selectedCells = [...[].concat(list)] },
@@ -1071,6 +1088,22 @@ test('sync: unsynced in Both, a Cells pick recolors the cells: a 6 goes from Odd
     assert.equal(app.stored.ColorByDigit_profiles.active, 1)
     assert.deepEqual(app.puzzle.cells[0].colours, ['9'])
   }, UNSYNCED_BOTH)
+})
+
+test('mode: leaving cell coloring keeps a hand color in no group on a cell that held a group color too, Multi-color on or off, in one undo step', async () => {
+  for (const single of [false, true]) {
+    await withScript(mockApp([{ value: '1' }, { value: '4' }], { single }), async (app) => {
+      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
+      // A hand color in no group of Odd/Even, painted while Multi-color was on.
+      app.puzzle.cells[0].colours = ['1', '9']
+      app.calls.length = 0
+      press()
+      assert.equal(app.stored.ColorByDigit_mode, 'off')
+      assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['9'], []], `single ${single}`)
+      assert.deepEqual(types(app).filter((t) => t.startsWith('group')), ['groupstart', 'groupend'], `single ${single}`)
+      assert.equal(app.puzzle.inGroup, false)
+    }, { ColorByDigit_mode: 'both' })
+  }
 })
 
 // A page is ten keys: the key at index K sits on SudokuPad's button K. Each key's color is its own name here.

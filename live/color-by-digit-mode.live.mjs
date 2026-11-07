@@ -153,13 +153,26 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await settle(async () => [await valueAt(0, 6), await colorsAt(0, 6)], ['', []]), ['', []])
   })
 
-  it('a press steps Both to Off in grey and takes every group color off in one undo step', async () => {
-    await pressTo(p, 'OFF')
-    assert.equal(await labelLook(), 'rgb(179, 172, 191) 400')
-    assert.equal(await settle(coloredCount, 0), 0)
+  it('a press steps Both to Off in grey and takes every group color off in one undo step, keeping a hand color in no group with Multi-color off', async () => {
+    await paint(0, 0, NO_GROUP_KEY) // beside the given's group color, while Multi-color is on
+    assert.deepEqual(await settle(() => sortedColorsAt(0, 0), ['1', NO_GROUP_KEY]), ['1', NO_GROUP_KEY])
+    await read(() => Framework.setSetting('multicolour', false))
+    try {
+      await pressTo(p, 'OFF')
+      assert.equal(await labelLook(), 'rgb(179, 172, 191) 400')
+      assert.equal(await settle(coloredCount, 1), 1)
+      assert.deepEqual(await colorsAt(0, 0), [NO_GROUP_KEY])
+    } finally {
+      await read(() => Framework.setSetting('multicolour', true))
+    }
+    // With Multi-color back on, so SudokuPad's undo, which runs the earlier steps again, can rebuild a cell of two colors.
     await undo()
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
+    assert.deepEqual(await settle(() => sortedColorsAt(0, 0), ['1', NO_GROUP_KEY]), ['1', NO_GROUP_KEY])
     await redo()
+    assert.equal(await settle(coloredCount, 1), 1)
+    assert.deepEqual(await colorsAt(0, 0), [NO_GROUP_KEY])
+    await paint(0, 0, NO_GROUP_KEY)
     assert.equal(await settle(coloredCount, 0), 0)
   })
 

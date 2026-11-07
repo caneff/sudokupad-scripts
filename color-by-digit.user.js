@@ -148,6 +148,23 @@
 
   const planClear = (cells, keys) => planCellColors(cells, [], everyIndex(cells), keys)
 
+  // The SudokuPad actions that carry out `ops` on `cells`, each run on the cells at `indices`. A color toggle with
+  // Multi-color off clears a cell that holds another color first (SudokuPad's Cell.toggleColour), so a cell that loses
+  // a color is cleared of every color and has the colors it keeps put back: the same actions leave the same cell under
+  // either setting, so undo and redo, which run them again, do too. Removals come first, as the plan has them.
+  function colorSteps (cells, ops) {
+    const removed = new Map()
+    ops.filter((op) => op.action === 'remove').forEach(({ key, indices }) => indices.forEach((i) => removed.set(i, [...(removed.get(i) || []), key])))
+    const cleared = [...removed.keys()]
+    const putBack = new Map()
+    cleared.forEach((i) => (cells[i].colours || []).filter((key) => !removed.get(i).includes(key)).forEach((key) => putBack.set(key, [...(putBack.get(key) || []), i])))
+    return [
+      ...(cleared.length > 0 ? [{ type: 'clear', arg: 'colour', indices: cleared }] : []),
+      ...[...putBack].map(([key, indices]) => ({ type: 'colour', arg: key, indices })),
+      ...ops.filter((op) => op.action === 'add').map(({ key, indices }) => ({ type: 'colour', arg: key, indices }))
+    ]
+  }
+
   // Read as SudokuPad's SolverTool.getCellOptions does: none when the cell hides them, as a given does.
   function readCentreMarks (cell) {
     return cell.propVisible('centre') ? cell.propGet('centre') : []
@@ -787,7 +804,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -843,22 +860,14 @@
   }
 
   // SudokuPad's color tool toggles: it adds the key where every selected cell lacks it and removes it
-  // where every cell holds it, so an op's cells must all lack it or all hold it.
+  // where every cell holds it; colorSteps only ever adds a key to cells that all lack it.
   function runColorOps (app, cells, ops) {
     const savedSelection = [...app.puzzle.selectedCells]
-    const toggle = (target, key) => {
-      app.deselect()
-      app.select(target)
-      app.act({ type: 'colour', arg: key })
-    }
     try {
-      ops.forEach(({ action, key, indices }) => {
-        const target = indices.map((i) => cells[i])
-        toggle(target, key)
-        // With Multi-color off, SudokuPad's toggle clears a cell's other colors and then toggles the key
-        // back on, so a removal from a cell that held two colors leaves the key: toggle those again.
-        const left = action === 'remove' ? target.filter((cell) => (cell.colours || []).includes(key)) : []
-        if (left.length > 0) toggle(left, key)
+      colorSteps(cells, ops).forEach(({ type, arg, indices }) => {
+        app.deselect()
+        app.select(indices.map((i) => cells[i]))
+        app.act({ type, arg })
       })
     } finally {
       app.deselect()
@@ -866,8 +875,8 @@
     }
   }
 
-  // Planned a second time after the first ops: with Multi-color off, taking one color off a cell that
-  // held two clears both, so the group color planned as already there must go back on.
+  // Planned a second time after the first ops: with Multi-color off a cell holds one color, so putting back a
+  // cell's other colors can take off the group color planned as already there, which must go back on.
   function recolor (app, makeOps) {
     const first = allCells(app)
     const ops = makeOps(first.map(toPlanCell))
