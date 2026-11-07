@@ -13,6 +13,7 @@ const SITE_ADDRESS = /^https?:\/\/(caneff\.github\.io\/sudokupad-scripts|[^/]*ne
 const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
 const DRAW = 'draw-tool.html'
+const CBD = 'color-by-digit.html'
 const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
@@ -72,7 +73,8 @@ for (const name of PAGES) {
 // Each details page: its script's install file and the homepage heading whose entry links to it.
 const DETAIL_PAGES = [
   { page: DETAILS, script: 'pen-tool-extras', name: 'Pen Tool Extras' },
-  { page: DRAW, script: 'draw-tool', name: 'Draw Tool' }
+  { page: DRAW, script: 'draw-tool', name: 'Draw Tool' },
+  { page: CBD, script: 'color-by-digit', name: 'Color by Digit' }
 ]
 
 for (const { page: file, script, name } of DETAIL_PAGES) {
@@ -94,7 +96,8 @@ const DETAILS_WARNING = "This script can break at any time. It relies on SudokuP
 const WARNINGS = {
   [HOME]: "These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.",
   [DETAILS]: DETAILS_WARNING,
-  [DRAW]: DETAILS_WARNING
+  [DRAW]: DETAILS_WARNING,
+  [CBD]: DETAILS_WARNING
 }
 
 for (const [name, text] of Object.entries(WARNINGS)) {
@@ -226,23 +229,72 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
   assert.doesNotMatch(page, /Digit Color|digit-color/)
 })
 
-test(`${HOME} describes Color by Digit's four modes beside a picture of colored digits`, () => {
+// Color by Digit's entry and details page.
+const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, from groups of colors you set, and keeps the colors in step as you solve.'
+const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Sync digit profile with cell profile.', 'Use digit colors.']
+// The lead-ins that carry one picture, and the picture each shows.
+const CBD_PICTURES = {
+  'Four modes.': 'color-by-digit-mode-labels',
+  'Kept in step as you solve.': 'color-by-digit-details-cell',
+  'Digit and mark shades.': 'color-by-digit-details-digit',
+  'The profile menu.': 'color-by-digit-details-menu'
+}
+
+test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside a picture of colored digits`, () => {
   const m = read(HOME).match(/<img ([^>]*)>\s*<div>\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
-  const text = plain(m[2])
-  for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(text, new RegExp(`\\b${mode}\\b`), mode)
-  assert.match(text, /darker shade/)
-  // Chris's ruling on #279: text a reader sees says "center marks".
-  assert.doesNotMatch(text, /centre/)
+  assert.equal(m[2], `${CBD_SUMMARY} <a href="${CBD}">Details</a>`)
   assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
 })
 
-test(`${HOME} names Color by Digit's two digit options: the digit profile sync and turning digit colors off`, () => {
-  const m = read(HOME).match(/<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${HOME} has no Color by Digit entry`)
+test('color-by-digit.user.js\'s @description is the homepage summary', () => {
+  const head = fs.readFileSync(path.join(__dirname, 'color-by-digit.user.js'), 'utf8')
+  assert.equal((head.match(/^\/\/ @description\s+(.*)$/m) || [])[1], CBD_SUMMARY)
+  const version = (head.match(/^\/\/ @version\s+(\S+)$/m) || [])[1]
+  assert.equal((head.match(/const VERSION = '([^']*)'/) || [])[1], version)
+})
+
+test(`${CBD} intro says what the script adds, with SudokuPad linked`, () => {
+  const m = read(CBD).match(/<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${CBD} has no intro paragraph starting "Adds to SudokuPad", with SudokuPad linked`)
+  assert.equal(plain(m[1]), `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`)
+})
+
+test(`${CBD} lists what the script adds, one item per feature`, () => {
+  const lines = section(CBD, 'What it adds')
+  assert.equal(lines.length, CBD_LEAD_INS.length)
+  assert.deepEqual(leadIns(read(CBD)), CBD_LEAD_INS)
+  // Chris's ruling on #279: text a reader sees says "center marks".
+  assert.doesNotMatch(lines.join(' '), /centre/)
+  for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(lines[0], new RegExp(`\\b${mode}\\b`), mode)
+  assert.match(lines[2], /red circle/)
+})
+
+test(`${CBD} puts one picture with alt text on each item in CBD_PICTURES, and none on the others`, () => {
+  const byLeadIn = new Map(items(read(CBD)).map(li => [leadIn(li), li]))
+  for (const lead of CBD_LEAD_INS) {
+    const found = imgs(byLeadIn.get(lead) || '')
+    if (!CBD_PICTURES[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
+    assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
+    assert.ok(found[0].includes(`src="${RAW}docs/research/${CBD_PICTURES[lead]}.png"`), `"${lead}" does not show ${CBD_PICTURES[lead]}.png`)
+    assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
+  }
+})
+
+test(`${CBD} describes the settings dialog in text, with no picture`, () => {
+  const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
+  assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
+  assert.deepEqual(imgs(m[1]), [])
   const text = plain(m[1])
-  assert.match(text, /Sync digit profile with cell profile/)
-  assert.match(text, /Use digit colors/)
+  for (const word of ['profiles', 'groups', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
+})
+
+test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, () => {
+  const lines = section(CBD, 'Good to know')
+  assert.equal(lines.length, 2)
+  assert.match(lines[0], /one undo step/)
+  assert.match(lines[0], /never color/)
+  assert.match(lines[1], /Multi-color/)
 })
 
 // Draw Tool's entry and details page.
@@ -321,4 +373,23 @@ test('the README has a Draw Tool row with a Details link, and the Settings sente
   const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8')
   assert.match(readme, /^\| Draw Tool \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
   assert.match(readme, /Each script except No Tab Letters and Draw Tool adds an entry to SudokuPad's settings/)
+})
+
+test('every Color by Digit picture the site links is named by a screenshot script in docs/research/', () => {
+  const research = path.join(__dirname, 'docs', 'research')
+  const scripts = fs.readdirSync(research).filter(f => f.endsWith('-screenshot.mjs')).map(f => fs.readFileSync(path.join(research, f), 'utf8'))
+  const pictures = [...screenshots(read(CBD)), ...screenshots(read(HOME)).filter(t => /site-color-by-digit\.png$/.test(t))]
+  assert.ok(pictures.length > 0, 'no Color by Digit pictures found')
+  for (const shot of pictures) {
+    assert.ok(fs.existsSync(path.join(__dirname, shot)), `${shot} is not in the repo`)
+    assert.ok(scripts.some(text => text.includes(path.basename(shot))), `no screenshot script in docs/research/ names ${shot}`)
+  }
+})
+
+test('the README has a Color by Digit row with the short summary and a Details link', () => {
+  const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8')
+  const row = readme.match(/^\| Color by Digit \|.*$/m)
+  assert.ok(row, 'the README has no Color by Digit row')
+  assert.ok(row[0].includes(` ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)} [Details](https://caneff.github.io/sudokupad-scripts/${CBD}) `), row[0])
+  assert.match(row[0], /\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/color-by-digit\.user\.js\)/)
 })
