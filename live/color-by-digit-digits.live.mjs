@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, ARROW, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, LABEL, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, chipLookOn, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, PUZZLE_URL } from './page.mjs'
 import { settle } from './settle.mjs'
 
@@ -151,9 +151,10 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
   after(async () => { await context.close() })
 
-  it('the button shows DIGIT in bold purple', async () => {
-    assert.equal(await label(), 'DIGIT')
-    assert.equal(await p.locator(LABEL).evaluate((e) => `${window.getComputedStyle(e).color} ${window.getComputedStyle(e).fontWeight}`), 'rgb(106, 27, 154) 700')
+  it('the button names Digit and draws Split\'s chips white, each digit in its group\'s shade, with a black outline', async () => {
+    assert.equal(await label(), 'Digit')
+    const want = { cells: [['rgb(255, 255, 255)', await shadeOn(p, '4')], ['rgb(255, 255, 255)', await shadeOn(p, '6')]], outline: 'rgb(0, 0, 0)' }
+    assert.deepEqual(await chipLookOn(p), want)
   })
 
   it('the shades differ from SudokuPad\'s own color and from each other', async () => {
@@ -457,13 +458,13 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   it('a press steps Digit to Both: cells take their group colors and the digits keep their shades and circles', async () => {
-    await pressTo(p, 'BOTH')
+    await pressTo(p, 'Both')
     assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
     await expectShadesAfterEntry()
   })
 
   it('a press steps Both to Off: the cells\' group colors come off, the digits take SudokuPad\'s color, and no circle shows', async () => {
-    await pressTo(p, 'OFF')
+    await pressTo(p, 'Off')
     assert.equal(await settle(coloredCount, 0), 0)
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
     assert.deepEqual(await allFills('corner', '8')(), [DEFAULT_FILL])
@@ -472,7 +473,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   it('in Cell, cells are colored, the digits keep SudokuPad\'s color, and a conflict shows as SudokuPad draws it', async () => {
-    await pressTo(p, 'CELL')
+    await pressTo(p, 'Cell')
     assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
     assert.deepEqual(await watch(allFills('entered', '4')), [[DEFAULT_FILL]])
     assert.deepEqual(await allFills('centre', '8')(), [DEFAULT_FILL])
@@ -481,7 +482,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   it('a press steps Cell to Digit: the group colors come off the cells and the shades and circles come back', async () => {
-    await pressTo(p, 'DIGIT')
+    await pressTo(p, 'Digit')
     assert.equal(await settle(coloredCount, 0), 0)
     await expectShadesAfterEntry()
   })
