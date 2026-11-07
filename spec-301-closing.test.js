@@ -44,12 +44,12 @@ test('spec 301: Draw Tool has its own colors, Size and Opacity sliders, Shape mo
   assert.deepEqual(draw.readDrawColors(PEN), PEN)
   assert.notEqual(draw.readDrawColors('garbage'), null)
 
-  // Shapes: the Shape button steps Off, Rectangle, Ellipse and round; a drag snaps out to the cell edges it spans, and Alt
+  // Shapes: the Shape button steps Off, Rectangle, Ellipse and round; a drag snaps each corner to the nearest quarter-cell line, and Alt
   // keeps the drag's own box. A box with no width or height is refused.
   const modes = ['off']
   for (let i = 0; i < 3; i++) modes.push(draw.nextShapeMode(modes[i]))
   assert.deepEqual(modes, ['off', 'rect', 'ellipse', 'off'])
-  assert.deepEqual(draw.shapeBox([CELL + 10, CELL + 50], [2 * CELL + 5, 3 * CELL + 1], false), [CELL, CELL, 3 * CELL, 4 * CELL])
+  assert.deepEqual(draw.shapeBox([CELL + 5, CELL + 50], [2 * CELL + 59, 3 * CELL + 1], false), [CELL, CELL + 48, 3 * CELL, 3 * CELL])
   assert.deepEqual(draw.shapeBox([CELL + 10, CELL + 50], [2 * CELL + 5, 3 * CELL + 1], true), [CELL + 10, CELL + 50, 2 * CELL + 5, 3 * CELL + 1])
   const rect = draw.shapeItem('rect', [CELL, CELL, 3 * CELL, 4 * CELL], 2, 6, 60)
   assert.deepEqual(draw.readDrawing([rect]), [rect])

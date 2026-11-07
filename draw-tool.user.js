@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.11.1
+// @version      0.12.0
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.11.1'
+  const VERSION = '0.12.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -444,11 +444,12 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // A shape's box as [left, top, right, bottom]: out to the edges of the cells `from` and `to` lie in, or the drag's own box when `exact`.
+  // A shape's box as [left, top, right, bottom]: each corner of the drag snapped to the nearest quarter-cell line, or the drag's own box when `exact`.
   function shapeBox ([ax, ay], [bx, by], exact) {
-    const low = (a, b) => exact ? Math.min(a, b) : Math.floor(Math.min(a, b) / CELL_SIZE) * CELL_SIZE
-    const high = (a, b) => exact ? Math.max(a, b) : (Math.floor(Math.max(a, b) / CELL_SIZE) + 1) * CELL_SIZE
-    return [low(ax, bx), low(ay, by), high(ax, bx), high(ay, by)].map(roundToTenth)
+    const quarter = CELL_SIZE / 4
+    const snap = (v) => exact ? v : Math.round(v / quarter) * quarter
+    const [sax, say, sbx, sby] = [ax, ay, bx, by].map(snap)
+    return [Math.min(sax, sbx), Math.min(say, sby), Math.max(sax, sbx), Math.max(say, sby)].map(roundToTenth)
   }
 
   const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
@@ -516,7 +517,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
