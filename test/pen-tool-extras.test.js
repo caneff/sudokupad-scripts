@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
   readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, renderTitle,
-  HOLD_TO_EDIT_MS, buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
+  buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
@@ -268,10 +268,6 @@ test('the panel markup has Thickness above Opacity, each with the range and valu
   assert.deepEqual([...html.matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]), ['Thickness', 'Opacity'])
   assert.equal(html.match(/<input [^>]*tabindex="-1"/g).length, 2)
   assert.doesNotMatch(html, /<button/)
-})
-
-test('the hold that opens edit mode lasts 1000 ms, the same as SudokuPad\'s color tool', () => {
-  assert.equal(HOLD_TO_EDIT_MS, 1000)
 })
 
 const ALL = { x: true, directions: true, circle: true, cornerX: true, cornerCircle: true }
@@ -836,18 +832,17 @@ const editorState = (over = {}) => ({
   ...over
 })
 
-test('the dialog\'s pen colors are a 3 by 3 grid of square color inputs in the order of the pen tool\'s buttons, with no numbers, 4px apart', () => {
+test('the dialog\'s pen colors are the shared color block: a grid of color inputs in the order of the pen tool\'s buttons, with no numbers, styled under the editor', () => {
   const html = renderEditor(editorState())
-  const grid = /<div class="pen-tool-extras-pen-grid">([\s\S]*?)<\/div>/.exec(html)[1]
-  assert.deepEqual([...grid.matchAll(/<input type="color" data-pen="(\d)" value="(#[0-9a-f]{6})"[^>]*>/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
+  const grid = /<div class="pen-tool-extras-swatches">([\s\S]*?)<\/div>/.exec(html)[1]
+  assert.deepEqual([...grid.matchAll(/<input type="color" [^>]*data-key="(\d)" value="(#[0-9a-f]{6})"[^>]*>/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9'])
   assert.deepEqual([...grid.matchAll(/value="(#[0-9a-f]{6})"/g)].map((m) => m[1]), [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => SUDOKUPAD_PEN_COLORS[n]))
   assert.doesNotMatch(grid, /<b[ >]/, 'no numbers')
-  assert.match(DIALOG_CSS, /\.pen-tool-extras-pen-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);[^}]*gap: 4px;/)
-  assert.match(DIALOG_CSS, /input\[type=color\] \{[^}]*aspect-ratio: 1;/)
+  assert.match(DIALOG_CSS, /#pen-tool-extras-editor \.pen-tool-extras-swatches \{[^}]*grid-template-columns: repeat\(3, /)
 })
 
 const presetMenu = (html) => {
-  const menu = /<select data-pen-preset[^>]*>([\s\S]*?)<\/select>/.exec(html)
+  const menu = /<select [^>]*data-role="color-choice"[^>]*>([\s\S]*?)<\/select>/.exec(html)
   assert.ok(menu, 'a pen color preset pulldown')
   return [...menu[1].matchAll(/<option value="([^"]*)"([^>]*)>([^<]*)<\/option>/g)].map(([, value, attributes, label]) => ({ value, label, selected: / selected/.test(attributes), disabled: / disabled/.test(attributes) }))
 }
@@ -861,7 +856,7 @@ test('the Pen colors section has a preset pulldown above the grid, its options i
     ['sudokupad', 'SudokuPad colors', false]
   ])
   const section = html.indexOf('Pen colors')
-  assert.equal(section < html.indexOf('data-pen-preset') && html.indexOf('data-pen-preset') < html.indexOf('data-pen="1"'), true, 'heading, pulldown, then the grid')
+  assert.equal(section < html.indexOf('color-choice') && html.indexOf('color-choice') < html.indexOf('data-key="1"'), true, 'heading, pulldown, then the grid')
   assert.doesNotMatch(html, /<button|data-sudokupad-colors/)
 })
 
@@ -1215,8 +1210,8 @@ test('every page has a measured icon viewBox, so the line type button never show
   PEN_PAGES.forEach((_, page) => assert.doesNotMatch(renderPageIcon(page, 3, BOTH_STYLES), /viewBox="undefined"/, `page ${page + 1}`))
 })
 
-test('Keypad Flipped swaps the rows of colors by grid row, for the buttons and the edit mode pickers over them, since its transform on each button row has no box here', () => {
-  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input :is\\(button\\[data-key="${key}"\\], \\.pen-tool-extras-picker\\[data-pen="${key}"\\]\\) \\{ grid-row: (\\d) / span 1; \\}`).exec(PANEL_CSS)[1]
+test('Keypad Flipped swaps the rows of color buttons by grid row, since its transform on each button row has no box here', () => {
+  const rule = (key) => new RegExp(`\\.setting-flipkeypad \\.tool-pen \\.controls-input button\\[data-key="${key}"\\] \\{ grid-row: (\\d) / span 1; \\}`).exec(PANEL_CSS)[1]
   assert.deepEqual([1, 2, 3, 7, 8, 9].map(rule), ['3', '3', '3', '1', '1', '1'])
 })
 

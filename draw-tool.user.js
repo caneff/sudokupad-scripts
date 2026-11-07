@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.14.6
+// @version      0.14.8
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.14.6'
+  const VERSION = '0.14.8'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -178,8 +178,6 @@
     [PEN_PRESET]: 'Pen colors',
     ...PALETTE_PRESET_LABELS
   }
-  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs), as Pen Tool Extras' pen buttons do.
-  const HOLD_TO_EDIT_MS = 1000
   const WIDTH_KEY = 'DrawTool_width'
   const OPACITY_KEY = 'DrawTool_opacity'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
@@ -194,8 +192,8 @@
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
   const SLIDER_ROW_CLASS = 'draw-tool-slider'
-  const EDITING_CLASS = 'draw-tool-editing'
-  const PICKER_CLASS = 'draw-tool-picker'
+  // The class prefix of the color picker's edit mode and the dialog's color block.
+  const PICKER_PREFIX = 'draw-tool-'
   const COLORS_STYLE_ID = 'draw-tool-colors'
   const PANEL_STYLE_ID = 'draw-tool-style'
   const SIZE_SLIDER = 'draw-tool-size'
@@ -495,6 +493,149 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
+  // <lib:color-picker>
+  // Generated from lib/color-picker.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs).
+  const HOLD_TO_EDIT_MS = 1000
+  // One swatch's side and the gap between swatches; a caller lining its own keys up with the grid uses the same two.
+  const SWATCH_PX = 34
+  const SWATCH_GAP_PX = 4
+  // The pickers over the panel's buttons, in the size SudokuPad's color tool uses for the same job.
+  const PICKER_INPUT_REM = 2.4
+  const PICKER_COLUMNS = 3
+  const PICKER_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+  // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
+  const CHOICE_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
+
+  const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+  // The dialog's color block: a pulldown above a grid of swatches, three to a row.
+  // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
+  // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
+  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '' }) {
+    const palette = picked !== undefined
+    const option = ({ value, label, selected, disabled }) =>
+      `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(label)}</option>`
+    const named = (swatch) => `aria-label="${escapeHtml(swatch.label)}" title="${escapeHtml(swatch.label)}"`
+    const swatch = (s) => {
+      const head = `class="${prefix}swatch" data-role="swatch"`
+      if (!s) return `<span ${head} data-empty="slot"></span>`
+      if (!palette) return `<input type="color" ${head} data-key="${escapeHtml(s.key)}" value="${escapeHtml(s.value)}" ${named(s)}>`
+      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${escapeHtml(s.value)}"></button>`
+    }
+    return `<div class="${prefix}color-block">` +
+      `<select class="${prefix}color-choice" data-role="color-choice" aria-label="${escapeHtml(label)}">${options.map(option).join('')}</select>` +
+      `<div class="${prefix}color-row"><div class="${prefix}swatches">${swatches.map(swatch).join('')}</div>${beside}</div></div>`
+  }
+
+  // `scope` is the dialog's own element (`#id`), so SudokuPad's rules for its dialogs' selects and buttons are outranked without !important.
+  function colorBlockCss (prefix, scope) {
+    const at = (selector) => `${scope} .${prefix}${selector}`
+    return [
+      `${at('color-block')} { display: grid; justify-items: start; gap: 6px; margin: 6px 0; }`,
+      // As wide as the block, whatever its longest option: a select is otherwise as wide as that, and would widen the dialog's column.
+      `${at('color-choice')} { box-sizing: border-box; width: 0; min-width: 100%; margin: 0; font-size: 1rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; appearance: none; color: #222; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; }`,
+      `${at('color-row')} { display: flex; align-items: flex-start; gap: 12px; }`,
+      `${at('swatches')} { display: grid; grid-template-columns: repeat(${PICKER_COLUMNS}, ${SWATCH_PX}px); gap: ${SWATCH_GAP_PX}px; }`,
+      `${at('swatch')} { box-sizing: border-box; display: block; width: ${SWATCH_PX}px; height: ${SWATCH_PX}px; margin: 0; padding: 0; border: 1px solid rgb(0 0 0 / .25); border-radius: 6px; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }`,
+      `${at('swatch')}[data-empty] { border: none; cursor: default; }`,
+      `${at('swatch')}[aria-pressed="true"] { border: 2px solid #fff; outline: 3px solid #000; }`,
+      `${at('swatch')}::-webkit-color-swatch-wrapper { padding: 0; }`,
+      `${at('swatch')}::-webkit-color-swatch { border: none; border-radius: 5px; }`,
+      `${at('swatch')}::-moz-color-swatch { border: none; border-radius: 5px; }`
+    ].join('\n')
+  }
+
+  // Edit mode's looks, for SudokuPad's tool `tool` (its panel carries `tool-<tool>`): each picker fills the grid cell of its button, whose own picture is hidden under it.
+  // A picker is out of the flow, so it takes no cell from the buttons the panel places itself.
+  function pickerCss (prefix, tool) {
+    const panel = `.tool-${tool} .controls-input`
+    const picker = (n) => `${panel} .${prefix}picker[data-key="${n}"]`
+    const rows = PICKER_NUMBERS.length / PICKER_COLUMNS
+    return [
+      `.${prefix}editing .controls-input button[data-key]::after { opacity: 0; }`,
+      `.${prefix}editing .${prefix}picker { position: absolute; inset: 0; z-index: 10; }`,
+      `.${prefix}editing .${prefix}picker input { position: absolute; inset: 0; margin: auto; width: ${PICKER_INPUT_REM}rem; height: ${PICKER_INPUT_REM}rem; padding: 0; pointer-events: all; }`,
+      ...PICKER_NUMBERS.map((n) => `${picker(n)} { grid-row: ${Math.ceil(n / PICKER_COLUMNS)} / span 1; grid-column: ${(n - 1) % PICKER_COLUMNS + 1} / span 1; }`),
+      // SudokuPad's Keypad Flipped swaps the first and third rows of buttons, so each picker follows its button.
+      ...[[[1, 2, 3], rows], [[7, 8, 9], 1]].flatMap(([keys, row]) => keys.map((n) => `.setting-flipkeypad ${picker(n)} { grid-row: ${row} / span 1; }`))
+    ].join('\n')
+  }
+
+  // Every open picker shows the color `colorOf(n)` gives now.
+  function refreshPickers (prefix, colorOf) {
+    document.querySelectorAll(`.${prefix}picker input`).forEach((input) => { input.value = colorOf(input.dataset.key) })
+  }
+
+  // A hold of HOLD_TO_EDIT_MS on one of the tool's nine color buttons, with either mouse button, puts a color picker over each; a picker's input calls `save(n, value)` at once.
+  // A second hold, or the panel leaving the tool, ends edit mode. `guard` runs each toggle, so a caller can report a failure its own way.
+  function installHoldToEdit ({ prefix, tool, colorOf, save, guard = (toggle) => toggle() }) {
+    const toolClass = `tool-${tool}`
+    const editing = `${prefix}editing`
+    const pickerClass = `${prefix}picker`
+    // A right-click hold ends over a picker in edit mode, and Windows opens the context menu on release, so it is suppressed over the pickers as well as the buttons.
+    const targets = `.${toolClass} .controls-input button[data-key], .${toolClass} .${pickerClass} input`
+    // SudokuPad keeps one panel element and swaps its `tool-<name>` class for the next tool's, so a class watcher ends edit mode when the panel stops being this tool's.
+    let leaveWatch = null
+
+    function exit (panel) {
+      if (leaveWatch) leaveWatch.disconnect()
+      leaveWatch = null
+      panel.classList.remove(editing)
+      panel.querySelectorAll(`.${pickerClass}`).forEach((el) => el.remove())
+    }
+
+    function enter (panel) {
+      // Every button is found before anything changes, so a missing one leaves no half edit mode.
+      const buttons = PICKER_NUMBERS.map((n) => {
+        const button = panel.querySelector(`.controls-input button[data-key="${n}"]`)
+        if (!button) throw new Error(`${prefix}color-picker: the ${tool} tool has no button for color ${n}`)
+        return button
+      })
+      panel.classList.add(editing)
+      buttons.forEach((button, i) => {
+        const n = PICKER_NUMBERS[i]
+        button.insertAdjacentHTML('beforebegin', `<div class="${pickerClass}" data-key="${n}"><input type="color" data-key="${n}" value="${escapeHtml(colorOf(String(n)))}"></div>`)
+      })
+      leaveWatch = new window.MutationObserver(() => {
+        if (!panel.classList.contains(toolClass)) exit(panel)
+      })
+      leaveWatch.observe(panel, { attributes: true, attributeFilter: ['class'] })
+    }
+
+    let timer
+    let holdDone = false
+    const cancel = () => { clearTimeout(timer); timer = undefined }
+    // Pointer events carry a mouse button of either kind.
+    document.addEventListener('pointerdown', (event) => {
+      cancel()
+      holdDone = false
+      const target = event.target.closest(targets)
+      if (!target) return
+      const panel = target.closest(`.${toolClass}`)
+      timer = setTimeout(() => {
+        timer = undefined
+        holdDone = true
+        if (!panel.classList.contains(toolClass)) return
+        guard(() => panel.classList.contains(editing) ? exit(panel) : enter(panel))
+      }, HOLD_TO_EDIT_MS)
+    }, true)
+    window.addEventListener('pointerup', cancel, true)
+    window.addEventListener('pointercancel', cancel, true)
+    // The browser's menu would open over the picker during a right-click hold: when the press is still going (Linux opens it on press),
+    // or after the hold has run its course (Windows opens it on release, over the picker that appeared under the pointer).
+    // A quick right-click on a button, released before the delay, keeps its menu on Windows.
+    document.addEventListener('contextmenu', (event) => {
+      if ((timer !== undefined || holdDone) && event.target.closest(targets)) event.preventDefault()
+    }, true)
+    document.addEventListener('input', (event) => {
+      const input = event.target
+      if (input.matches(`.${pickerClass} input`)) save(input.dataset.key, input.value)
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:color-picker>
 
   // A color picker takes only #rrggbb, so every draw color is kept as one. A transparent color has none to keep.
   const hexColor = (text) => {
@@ -777,13 +918,9 @@
     `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse) { fill: none !important; }`,
     `.${TRAY_CLASS} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
     // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each '.button-row', which has no box here, so the rows are swapped by grid row.
-    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} :is(button[data-key="${key}"], .${PICKER_CLASS}[data-color="${key}"]) { grid-row: ${row} / span 1; }`)),
-    // Each color button is placed too: left to auto-placement, the buttons flow round the pickers' cells into rows below the panel.
-    ...COLOR_NUMBERS.map((n) => `${PANEL} :is(button[data-key="${n}"], .${PICKER_CLASS}[data-color="${n}"]) { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
-    // Edit mode: a color picker sits over each color button, with the button's line hidden under it, in the sizes SudokuPad's color tool uses for the same job.
-    `.${EDITING_CLASS} button.digit::after { opacity: 0; }`,
-    `.${EDITING_CLASS} .${PICKER_CLASS} { position: relative; justify-self: stretch; align-self: stretch; z-index: 10; }`,
-    `.${EDITING_CLASS} .${PICKER_CLASS} input { position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; padding: 0; pointer-events: all; }`,
+    ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
+    ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
+    pickerCss(PICKER_PREFIX, TOOL_NAME),
     `.${SLIDERS_CLASS} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; padding: 0 0.8rem; display: flex; flex-direction: column; justify-content: space-evenly; color: ${PANEL_COLOR}; }`,
     `.${SLIDER_ROW_CLASS} { display: flex; align-items: center; height: ${SLIDER_ROW_HEIGHT_REM}rem; }`,
     `.${SLIDER_ROW_CLASS} input { flex: 1; min-width: 0; margin: 0; height: ${SLIDER_ROW_HEIGHT_REM}rem; background: transparent; outline: none; -webkit-appearance: none; appearance: none; }`,
@@ -851,6 +988,7 @@
     colors = next
     Framework.setData(COLORS_KEY, colors)
     showColors()
+    refreshPickers(PICKER_PREFIX, (n) => colors[n])
   }
 
   // A slider sets only the next item and is saved for the next visit, and a paste sets it as a move of the slider would.
@@ -882,10 +1020,8 @@
   const CUSTOM_LABEL = 'Custom'
   const SAVE_LABEL = 'Save'
   const DIALOG_CSS = [
-    `#${DIALOG_ID} .draw-tool-presets { margin: 6px 0; }`,
-    `#${DIALOG_ID} .draw-tool-swatches { display: grid; grid-template-columns: repeat(3, auto); gap: 8px; justify-content: start; margin: 6px 0; }`,
-    `#${DIALOG_ID} .draw-tool-swatches label { display: flex; align-items: center; gap: 6px; }`,
-    `#${DIALOG_ID} .draw-tool-swatches input { width: 2.4rem; height: 2.4rem; padding: 0; }`,
+    `#${DIALOG_ID} .draw-tool-section-title { font-weight: 600; margin: 6px 0 0; }`,
+    colorBlockCss(PICKER_PREFIX, `#${DIALOG_ID}`),
     '.draw-tool-version { opacity: .6; font-weight: normal; }'
   ].join('\n')
 
@@ -964,23 +1100,23 @@
     const box = document.getElementById(DIALOG_ID)
     if (!box) return
     const draw = () => {
-      const options = [`<option value="">${CUSTOM_LABEL}</option>`, ...presetOptions(pages.length).map((id) => `<option value="${id}"${id === chosen ? ' selected' : ''}>${PRESET_LABELS[id]}</option>`)]
-      box.innerHTML = `<label class="draw-tool-presets">Colors <select data-role="preset">${options.join('')}</select></label>` +
-        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
-        `<div class="draw-tool-swatches">${COLOR_NUMBERS.map((n) => `<label>${n} <input type="color" data-color="${n}" value="${draft[n]}"></label>`).join('')}</div>`
+      const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
+      box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
+        renderColorBlock({ prefix: PICKER_PREFIX, label: 'Draw color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Draw color ${n}` })) }) +
+        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '')
     }
     draw()
     box.addEventListener('change', (event) => {
       const target = event.target
-      if (target.matches('[data-role="preset"]')) {
+      if (target.matches('[data-role="color-choice"]')) {
         chosen = target.value || null
         if (chosen) {
           draft = presetColors(chosen, pages, readCellColor, readPenColor)
           changed = true
         }
         draw()
-      } else if (target.matches('input[data-color]')) {
-        draft = editedColor(draft, Number(target.dataset.color), target.value)
+      } else if (target.matches('input[data-role="swatch"]')) {
+        draft = editedColor(draft, Number(target.dataset.key), target.value)
         chosen = null
         changed = true
         draw()
@@ -1037,64 +1173,13 @@
   }
 
   function hidePanel () {
-    exitEditMode()
     for (const part of panelParts) part.remove()
     panelParts = []
   }
 
-  // Edit mode: a hold on a color button puts a color picker over each one, and another hold takes them away.
-  function exitEditMode () {
-    const panel = keypad()
-    panel.classList.remove(EDITING_CLASS)
-    for (const picker of panel.querySelectorAll(`.${PICKER_CLASS}`)) picker.remove()
-  }
-
-  function enterEditMode () {
-    const panel = keypad()
-    panel.classList.add(EDITING_CLASS)
-    for (const n of COLOR_NUMBERS) {
-      const picker = document.createElement('div')
-      picker.className = PICKER_CLASS
-      picker.dataset.color = n
-      const input = document.createElement('input')
-      Object.assign(input, { type: 'color', value: colors[n] })
-      input.dataset.color = n
-      picker.appendChild(input)
-      panel.appendChild(picker)
-    }
-  }
-
-  const toggleEditMode = () => keypad().classList.contains(EDITING_CLASS) ? exitEditMode() : enterEditMode()
-
-  const HOLD_TARGETS = `.tool-draw .controls-input button.digit, .tool-draw .${PICKER_CLASS} input`
-
-  // As Pen Tool Extras' hold on a pen button: either mouse button, and touch, through pointer events.
-  function installHoldToEdit () {
-    let timer
-    let holdDone = false
-    const cancel = () => { clearTimeout(timer); timer = undefined }
-    document.addEventListener('pointerdown', (event) => {
-      cancel()
-      holdDone = false
-      if (!event.target.closest(HOLD_TARGETS)) return
-      timer = setTimeout(() => {
-        timer = undefined
-        holdDone = true
-        if (Framework.app.tool === TOOL_NAME) toggleEditMode()
-      }, HOLD_TO_EDIT_MS)
-    }, true)
-    window.addEventListener('pointerup', cancel, true)
-    window.addEventListener('pointercancel', cancel, true)
-    // The browser's menu would open over the picker during a right-click hold: Linux opens it on the press, Windows on the release, over the picker
-    // that appeared under the pointer. A quick right-click on a button, released before the delay, keeps its menu on Windows.
-    document.addEventListener('contextmenu', (event) => {
-      if ((timer !== undefined || holdDone) && event.target.closest(HOLD_TARGETS)) event.preventDefault()
-    }, true)
-    // Every item in that color number reads the variable, so the recolor shows on them at once.
-    document.addEventListener('input', (event) => {
-      const input = event.target
-      if (input.matches(`.${PICKER_CLASS} input`)) saveColors(editedColor(colors, Number(input.dataset.color), input.value))
-    })
+  // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every item in it reads the variable.
+  function installColorPickers () {
+    installHoldToEdit({ prefix: PICKER_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)) })
   }
 
   // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
@@ -1466,7 +1551,7 @@
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
-    installHoldToEdit()
+    installColorPickers()
     window.addEventListener('blur', endGesture)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
