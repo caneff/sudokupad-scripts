@@ -231,6 +231,8 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
 
 // Checks shared by every details page: the header's @description, the intro, one picture per listed lead-in, and a screenshot script per picture.
 const SCRIPT_INTRO = /<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
+// A picture name with no extension is a PNG.
+const withExtension = (name) => /\.\w+$/.test(name) ? name : `${name}.png`
 const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {
     const head = fs.readFileSync(path.join(__dirname, script + SCRIPT_SUFFIX), 'utf8')
@@ -249,7 +251,7 @@ const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, 
       const found = imgs(byLeadIn.get(lead) || '')
       if (!pictures[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
       assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
-      assert.ok(found[0].includes(`src="${RAW}docs/research/${pictures[lead]}.png"`), `"${lead}" does not show ${pictures[lead]}.png`)
+      assert.ok(found[0].includes(`src="${RAW}docs/research/${withExtension(pictures[lead])}"`), `"${lead}" does not show ${withExtension(pictures[lead])}`)
       assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
     }
   })
@@ -272,7 +274,7 @@ const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, wi
 const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Sync digit profile with cell profile.', 'Use digit colors.']
 // The lead-ins that carry one picture, and the picture each shows.
 const CBD_PICTURES = {
-  'Four modes.': 'color-by-digit-mode-labels',
+  'Four modes.': 'color-by-digit-details-modes.gif',
   'Kept in step as you solve.': 'color-by-digit-details-cell',
   'Digit and mark shades.': 'color-by-digit-details-digit',
   'The profile menu.': 'color-by-digit-details-menu'
@@ -283,6 +285,32 @@ test(`${HOME} describes Color by Digit in a short summary ending in a Details li
   assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
   assert.equal(m[2], `${CBD_SUMMARY} <a href="${CBD}">Details</a>`)
   assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
+})
+
+// The three example pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall.
+test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall`, () => {
+  const examples = [
+    ['homepage picture', imgs(read(HOME)).find(t => t.includes('site-color-by-digit.png'))],
+    ['Cell picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-cell.png'))],
+    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))]
+  ]
+  for (const [what, img] of examples) {
+    assert.ok(img, `no ${what}`)
+    assert.match(img, /alt="[^"]*\btwo\b[^"]*\bboxes\b/i, `${what}'s alt text does not say two boxes`)
+    const [w, h] = ['width', 'height'].map(a => Number((img.match(new RegExp(`${a}="(\\d+)"`)) || [])[1]))
+    assert.ok(w > 0 && Math.abs(w - 2 * h) <= 1, `${what} is ${w} by ${h}, not twice as wide as tall`)
+  }
+})
+
+test(`${CBD}'s Four modes item is one sentence beside an animation whose alt text names the four modes`, () => {
+  const li = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
+  const text = plain(li.replace(/<img[^>]*>/g, '')).replace(/^Four modes\.\s*/, '')
+  assert.equal(text, 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
+  const [img] = imgs(li)
+  assert.match(img, /src="[^"]*\.gif"/)
+  const alt = (img.match(/alt="([^"]*)"/) || [])[1] || ''
+  assert.match(alt, /^An animation/)
+  for (const label of ['CELL', 'DIGIT', 'BOTH', 'OFF']) assert.ok(alt.includes(label), `the alt text does not name ${label}`)
 })
 
 test(`${CBD} lists what the script adds, one item per feature`, () => {
