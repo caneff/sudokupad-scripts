@@ -99,3 +99,27 @@ Read in `script.js`, `tool-pen.js`, `tool-pen.css` and `tool-color.js` of v0.611
   the board.
 - A saved `DrawTool_color` or `DrawTool_width` that is not one of the choices reads as pen color 1 or the middle
   width. Checked live with a planted `"purple"` and `7`.
+
+## The right button, erasing and Clear all (#272)
+
+SudokuPad v0.612.0 (`framework.js`, `script.js`, `utilities.js`), run on the page in `live/draw-tool-erase.live.mjs`
+in headless Chromium on Linux.
+
+- `addDownEventHandler` listens for `mousedown touchstart`, whatever the button, so a right press reaches the current
+  tool's `handleInputdown` as a `mousedown` with `button` 2, and the moves of a right-drag reach `handleInputMove`.
+  Checked live through `App.toolExecHandler`'s `tool-handleInputdown` event. Draw takes a right press on the board as
+  an erase: every stroke the drag passes within 4 board units of the drawn line's edge goes, whole. The hit test runs
+  against the curves `strokePath` draws, not the stored corner points, which a sharp turn leaves far outside the line.
+- No stock code calls `Framework.disableContextMenu`, so the browser's menu opens on a right click anywhere. Draw
+  prevents the `contextmenu` event over the board while it is current, and leaves it alone under every other tool.
+  On Linux the event follows the press; on Windows it follows the release. Not run on Windows: a right-drag that ends
+  off the board there would still open the menu where it ends.
+- Clear all is `Framework.showDialog` with `centerOverBoard`, so its buttons sit over the board. A dialog button's
+  handler (`F.handleButton`) and the overlay's (`F.handleDialogCancel`) both run on `mousedown` and stop its
+  propagation, so `App.handleInputdown` never sees the press; the release reaches Draw's `handleInputup` with no stroke
+  begun, and Draw starts a stroke only on its own press. So the release-without-press mark the pen tool makes (#63,
+  #66, `sudokupad-pen-edge-marks.md`) cannot happen in Draw, and it needs no release swallow of its own. Checked live
+  for a press on Cancel, on OK and on the overlay over r1c1, each dragged across the board before the release.
+- `Framework.closeDialog` does nothing while `window.dialogJustShown` is set, which `showDialog` clears in a
+  `setTimeout(0)`. On a page still busy after a reload, a scripted press came before it and the dialog stayed open; a
+  live test waits for it to clear.

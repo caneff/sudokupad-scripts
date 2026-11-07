@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -145,6 +145,61 @@ test('a saved color reads back, and a missing or bad one reads as pen color 1', 
 test('a saved width reads back, and a missing or bad one reads as the middle width', () => {
   for (const width of WIDTHS) assert.equal(readWidth(width), width)
   for (const saved of [null, undefined, 0, 5, 7, '6', 'wide', {}]) assert.equal(readWidth(saved), DEFAULT_WIDTH, JSON.stringify(saved))
+})
+
+// Board units: a cell is 64 wide. A stroke of width 6 along row 1's middle, from x 0 to x 192.
+const flat = strokeItem([[0, 32], [192, 32]], 1, 6)
+// How far a drag may pass from the line's middle and still erase it: the tolerance plus half the line's width.
+const reach = ERASE_TOLERANCE + 6 / 2
+
+test('a drag across a stroke touches it, wherever it crosses', () => {
+  assert.equal(touchesStroke(flat, [96, 0], [96, 64]), true)
+  assert.equal(touchesStroke(flat, [10, 64], [180, 0]), true)
+})
+
+test('a drag that passes within the tolerance of a stroke touches it, and one just past it does not', () => {
+  assert.equal(touchesStroke(flat, [50, 32 + reach - 0.1], [150, 32 + reach - 0.1]), true)
+  assert.equal(touchesStroke(flat, [50, 32 + reach + 0.1], [150, 32 + reach + 0.1]), false)
+  assert.equal(touchesStroke(flat, [192 + reach + 0.1, 0], [192 + reach + 0.1, 64]), false, 'past the end')
+})
+
+test('a thicker stroke is touched from farther away', () => {
+  const thick = strokeItem([[0, 32], [192, 32]], 1, 10)
+  const y = 32 + reach + 1
+  assert.equal(touchesStroke(flat, [50, y], [150, y]), false)
+  assert.equal(touchesStroke(thick, [50, y], [150, y]), true)
+})
+
+test('a press with no move, a drag of one point, touches a stroke under it', () => {
+  assert.equal(touchesStroke(flat, [100, 33], [100, 33]), true)
+  assert.equal(touchesStroke(flat, [100, 60], [100, 60]), false)
+})
+
+test('a stroke of one point is touched near that point only', () => {
+  const dot = strokeItem([[64, 64]], 1, 6)
+  assert.equal(touchesStroke(dot, [60, 0], [60, 128]), true)
+  assert.equal(touchesStroke(dot, [0, 0], [0, 128]), false)
+})
+
+// strokePath cuts each corner with a curve, so a sharp V is drawn well inside its corner point.
+const vee = strokeItem([[0, 0], [100, 200], [200, 0]], 1, 6)
+
+test('the drawn line of a curved stroke follows the curve the board shows, not the corner points', () => {
+  const line = drawnLine(vee.points)
+  assert.deepEqual(line[0], [0, 0])
+  assert.deepEqual(line[line.length - 1], [200, 0])
+  const lowest = Math.max(...line.map(([, y]) => y))
+  assert.equal(lowest, 100, 'the curve from (0, 0) round (100, 200) to (200, 0) reaches y 100 at its middle')
+})
+
+test('a drag across the curve, inside the stroke\'s corner point, touches it; one across the bare corner does not', () => {
+  assert.equal(touchesStroke(vee, [90, 100], [110, 100]), true, 'across the curve\'s bottom')
+  assert.equal(touchesStroke(vee, [90, 180], [110, 180]), false, 'below the curve, near the corner point')
+})
+
+test('the drawn line of a two-point stroke is its two points', () => {
+  assert.deepEqual(drawnLine([[0, 0], [10, 5]]), [[0, 0], [10, 5]])
+  assert.deepEqual(drawnLine([[4, 4]]), [[4, 4]])
 })
 
 test('VERSION matches the @version header', () => {

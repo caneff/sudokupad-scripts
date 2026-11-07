@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.0
-// @description  Adds a Draw tool to SudokuPad: with it on, a drag on the board draws a smooth freehand line that stays on the cells it was drawn on, and Shift+drag draws a straight line. The keypad's nine pen colors, or the digit keys 1 to 9, pick a line's color, and three buttons pick its width. Each puzzle keeps its own drawing over a reload, and Restart clears it.
+// @version      0.4.0
+// @description  Adds a Draw tool to SudokuPad: with it on, a drag on the board draws a smooth freehand line that stays on the cells it was drawn on, and Shift+drag draws a straight line. The keypad's nine pen colors, or the digit keys 1 to 9, pick a line's color, and three buttons pick its width. A right-drag erases each line it crosses, and Clear all, after asking, erases them all. Each puzzle keeps its own drawing over a reload, and Restart clears it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.3.0'
+  const VERSION = '0.4.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -30,12 +30,21 @@
   const COLOR_KEY = 'DrawTool_color'
   const WIDTH_KEY = 'DrawTool_width'
   const WIDTHS_CLASS = 'draw-tool-widths'
+  const CLEAR_CLASS = 'draw-tool-clear'
+  const CLEAR_QUESTION = 'Clear the drawing?'
+  const CLEAR_OK = 'OK'
+  const CLEAR_CANCEL = 'Cancel'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
   // How far, in board units, a mouse point may stray from the simplified line before it is kept.
   const SIMPLIFY_TOLERANCE = 1.5
+  // How far, in board units, a right-drag may pass from a line's edge and still erase it.
+  const ERASE_TOLERANCE = 4
+  // Straight pieces per curve when a stroke's drawn line is hit-tested.
+  const CURVE_STEPS = 8
   const KEPT_PUZZLES = 50
   const PRIMARY_BUTTON = 0
+  const SECONDARY_BUTTON = 2
   const SHIFT_KEY = 'Shift'
   const BUTTON_ICON = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/></svg>'
 
@@ -71,15 +80,54 @@
   const point = ([x, y]) => `${coordinate(x)} ${coordinate(y)}`
   const midpoint = ([ax, ay], [bx, by]) => [(ax + bx) / 2, (ay + by) / 2]
 
-  // Each inner point is the control of a curve that runs between the midpoints of its two segments.
-  function strokePath (points) {
-    if (points.length <= 2) return `M${point(points[0])} L${point(points[points.length - 1])}`
+  // Each inner point is the control of a curve that runs between the midpoints of its two segments: [start, control, end].
+  function strokeCurves (points) {
     const curves = []
+    let start = points[0]
     for (let i = 1; i < points.length - 1; i++) {
       const end = i === points.length - 2 ? points[i + 1] : midpoint(points[i], points[i + 1])
-      curves.push(`Q${point(points[i])} ${point(end)}`)
+      curves.push([start, points[i], end])
+      start = end
     }
+    return curves
+  }
+
+  function strokePath (points) {
+    if (points.length <= 2) return `M${point(points[0])} L${point(points[points.length - 1])}`
+    const curves = strokeCurves(points).map(([, control, end]) => `Q${point(control)} ${point(end)}`)
     return `M${point(points[0])} ${curves.join(' ')} L${point(points[points.length - 1])}`
+  }
+
+  const onCurve = ([sx, sy], [cx, cy], [ex, ey], t) => {
+    const u = 1 - t
+    return [u * u * sx + 2 * u * t * cx + t * t * ex, u * u * sy + 2 * u * t * cy + t * t * ey]
+  }
+
+  // The line strokePath draws, as straight pieces close enough to its curves to hit-test.
+  function drawnLine (points) {
+    if (points.length <= 2) return points.slice()
+    const line = [points[0]]
+    for (const [start, control, end] of strokeCurves(points)) {
+      for (let step = 1; step <= CURVE_STEPS; step++) line.push(onCurve(start, control, end, step / CURVE_STEPS))
+    }
+    return line
+  }
+
+  const cross = ([ax, ay], [bx, by], [cx, cy]) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+  const segmentsCross = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0
+  const segmentsDistance = (a, b, c, d) => segmentsCross(a, b, c, d)
+    ? 0
+    : Math.min(distanceToSegment(a, c, d), distanceToSegment(b, c, d), distanceToSegment(c, a, b), distanceToSegment(d, a, b))
+
+  // Whether a right-drag from `from` to `to` passes within the tolerance of the line's edge.
+  function touchesStroke (item, from, to) {
+    const reach = ERASE_TOLERANCE + item.width / 2
+    const line = drawnLine(item.points)
+    if (line.length === 1) return distanceToSegment(line[0], from, to) <= reach
+    for (let i = 1; i < line.length; i++) {
+      if (segmentsDistance(from, to, line[i - 1], line[i]) <= reach) return true
+    }
+    return false
   }
 
   // A keypad button's data-value is text, and Framework.getData parses a saved number back as a number.
@@ -129,7 +177,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth }
+    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE }
   }
   if (typeof document === 'undefined') return
 
@@ -192,6 +240,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
 .tool-draw .controls-input .${WIDTHS_CLASS} button { flex: 1; width: auto; height: 100%; margin: 0; padding: 0; }
 .tool-draw .controls-input .${WIDTHS_CLASS} button:not(.current) { background-color: var(--body-bg); color: rgb(124, 124, 124); }
 .${WIDTHS_CLASS} svg { width: 100%; height: 100%; pointer-events: none; }
+.tool-draw .controls-input .${WIDTHS_CLASS} button.${CLEAR_CLASS} { font-size: 0.85rem; line-height: 1.15; color: rgb(124, 124, 124); background-color: var(--body-bg); }
 `
   const widthIcon = (width) => `<svg viewBox="0 0 48 32"><line x1="10" y1="16" x2="38" y2="16" stroke="currentColor" stroke-linecap="round" stroke-width="${width}"/></svg>`
 
@@ -210,7 +259,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
 
   function markWidth () {
     if (!widthsBox) return
-    for (const button of widthsBox.children) button.classList.toggle('current', Number(button.dataset.width) === width)
+    for (const button of widthsBox.querySelectorAll('button[data-width]')) button.classList.toggle('current', Number(button.dataset.width) === width)
   }
 
   function pickColor (next) {
@@ -235,15 +284,24 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       button.innerHTML = widthIcon(w)
       widthsBox.appendChild(button)
     }
+    const clear = document.createElement('button')
+    clear.className = CLEAR_CLASS
+    clear.title = 'Clear the whole drawing'
+    clear.innerHTML = 'Clear<br>all'
+    widthsBox.appendChild(clear)
     widthsBox.addEventListener('click', (event) => {
       const button = event.target.closest('button')
-      if (button) pickWidth(Number(button.dataset.width))
+      if (!button) return
+      if (button === clear) confirmClear()
+      else pickWidth(Number(button.dataset.width))
     })
     keypad().querySelector('.button-row:last-child').appendChild(widthsBox)
     markWidth()
   }
 
   let stroke = null
+  // A right-drag in progress: the last point it reached, and whether it has erased a stroke yet.
+  let erasing = null
   let drawing = []
   // False while this puzzle's saved drawing cannot be read, so the script never writes over it.
   let savable = true
@@ -251,10 +309,15 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
   const drawingKey = (key) => DRAWING_PREFIX + key
 
-  function showSavedDrawing () {
-    stroke = null
+  function renderDrawing () {
     const layer = drawingLayer()
     layer.replaceChildren()
+    for (const item of drawing) newStroke(layer, item.color, item.width).setAttribute('d', strokePath(item.points))
+  }
+
+  function showSavedDrawing () {
+    stroke = null
+    erasing = null
     try {
       drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
       savable = true
@@ -263,7 +326,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       drawing = []
       savable = false
     }
-    for (const item of drawing) newStroke(layer, item.color, item.width).setAttribute('d', strokePath(item.points))
+    renderDrawing()
   }
 
   // Writes the drawing, or removes the puzzle's entry when it is empty, and keeps the index to the newest puzzles.
@@ -287,10 +350,11 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     Framework.setData(drawingKey(key), drawing)
   }
 
-  // Restart, which SudokuPad confirms first, empties the drawing, an unreadable saved one included.
+  // Restart and Clear all, each confirmed first, empty the drawing, an unreadable saved one included.
   function emptyDrawing () {
     drawing = []
     stroke = null
+    erasing = null
     drawingLayer().replaceChildren()
     savable = true
     saveDrawing()
@@ -298,18 +362,57 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
 
   const shownPoints = (points, event) => event.shiftKey ? straightLine(points) : points
 
+  // Deletes, whole, every stroke the drag from `from` to `to` passes near.
+  function eraseAlong (from, to) {
+    const kept = drawing.filter((item) => !touchesStroke(item, from, to))
+    if (kept.length === drawing.length) return
+    drawing = kept
+    erasing.erased = true
+    renderDrawing()
+  }
+
+  // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
+  // release on Windows, so it is suppressed over the board for as long as Draw is current.
+  function suppressMenu (event) {
+    if (Framework.app.tool === TOOL_NAME && onBoard(event)) event.preventDefault()
+  }
+
+  function confirmClear () {
+    Framework.showDialog({
+      parts: [
+        { tag: 'text', content: CLEAR_QUESTION },
+        { tag: 'options', options: [{ tag: 'button', content: CLEAR_OK }, { tag: 'button', content: CLEAR_CANCEL }] }
+      ],
+      onButton: (label) => { if (label === CLEAR_OK) emptyDrawing() },
+      centerOverBoard: true
+    })
+  }
+
   const tool = {
     name: TOOL_NAME,
     isTool: true,
     // A press that starts a stroke returns true, so SudokuPad starts no drag and selects no cell.
     handleInputdown (event) {
-      if (event.type !== 'mousedown' || event.button !== PRIMARY_BUTTON || !onBoard(event)) return false
+      if (event.type !== 'mousedown' || stroke || erasing || !onBoard(event)) return false
+      if (event.button === SECONDARY_BUTTON) {
+        const at = toBoard(drawingLayer(), event)
+        erasing = { last: at, erased: false }
+        eraseAlong(at, at)
+        return true
+      }
+      if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
       stroke = { layer, path: newStroke(layer, color, width), color, width, points: [toBoard(layer, event)], moved: false }
       stroke.path.setAttribute('d', strokePath(stroke.points))
       return true
     },
     handleInputMove (event) {
+      if (erasing) {
+        const at = toBoard(drawingLayer(), event)
+        eraseAlong(erasing.last, at)
+        erasing.last = at
+        return true
+      }
       if (!stroke) return false
       stroke.points.push(toBoard(stroke.layer, event))
       stroke.moved = true
@@ -317,6 +420,12 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
       return true
     },
     handleInputup (event) {
+      if (erasing) {
+        const { erased } = erasing
+        erasing = null
+        if (erased && savable) saveDrawing()
+        return true
+      }
       if (!stroke) return false
       const { path, points, moved, color: strokeColor, width: strokeWidth } = stroke
       stroke = null
@@ -365,6 +474,7 @@ ${Array.from({ length: PEN_COLORS }, (_, i) => `.tool-draw .controls-input butto
     })
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
+    window.addEventListener('contextmenu', suppressMenu)
     if (app.puzzle.currentPuzzle) showSavedDrawing()
   })
 })()
