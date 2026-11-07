@@ -56,7 +56,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
   const press = () => p.click(BUTTON)
   const label = () => p.locator(`${BUTTON} [data-role="mode"]`).textContent()
-  // A press steps the mode; the session starts in Off.
+  // A press steps the mode Cell, Digit, Both, Off, so each press enters or leaves cell coloring in turn; the session starts in Off.
   const pressTo = async (want) => {
     await press()
     assert.equal(await settle(label, want), want)
@@ -177,8 +177,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await settle(coloredCount, DIGIT_CELLS), DIGIT_CELLS)
   })
 
-  it('a second press steps to Off and takes every color off in one undo step', async () => {
-    await pressTo('OFF')
+  it('a second press steps to Digit and takes every color off the cells in one undo step', async () => {
+    await pressTo('DIGIT')
     assert.equal(await settle(coloredCount, 0), 0)
     assert.equal(JSON.stringify(await digitsOnBoard()), baseline)
     await undo()
@@ -194,7 +194,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await setMultiColor(true)
       await paint(0, 0, '3')
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
-      await pressTo('CELL')
+      await pressTo('BOTH')
       assert.deepEqual((await settle(async () => [...await colorsAt(0, 0)].sort(), ['1', '3'])), ['1', '3'])
       await undo()
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['3']), ['3'])
@@ -203,13 +203,13 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await watch(() => colorsAt(0, 0)), [['3']])
     })
 
-    it('off: the group color replaces the existing one, and stepping to Off takes the cell\'s color off', async () => {
+    it('off: the group color replaces the existing one, and stepping to Digit takes the cell\'s color off', async () => {
       await setMultiColor(false)
       assert.equal(await getSetting(), false)
       await pressTo('CELL')
       assert.deepEqual(await settle(() => colorsAt(0, 0), ['1']), ['1'])
       assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
-      await pressTo('OFF')
+      await pressTo('DIGIT')
       assert.equal(await settle(coloredCount, 0), 0)
       await undo()
       assert.equal(await settle(() => wrongCount(oddEven), 0), 0)
@@ -257,7 +257,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await settle(getData, expected), expected)
     })
 
-    it('the saved list, the mode and the button survive a reload, and a step to Cell uses the saved list', async () => {
+    it('the saved list, the mode and the button survive a reload, and a step to Both uses the saved list', async () => {
       const saved = await getData()
       await p.reload({ waitUntil: 'load' })
       await boot()
@@ -272,8 +272,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         a.deselect()
       })
       assert.equal(await settle(coloredCount, 0), 0)
-      assert.equal(await label(), 'OFF')
-      await pressTo('CELL')
+      assert.equal(await label(), 'DIGIT')
+      await pressTo('BOTH')
       assert.equal(await settle(() => wrongCount(lowFiveHigh), 0), 0)
       assert.equal(await coloredCount() > 0, true)
       await undo()
@@ -298,7 +298,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(await wrongCount((x) => (x.r === 8 && x.c === 0 ? ['9'] : lowFiveHigh(x))), 0)
       await undo()
       assert.equal(await settle(coloredCount, 0), 0)
-      await pressTo('OFF')
+      await pressTo('DIGIT')
     })
 
     it('each group box has a red × named "Remove group" in its upper right corner, clear of the pulldown and numpad at desktop and phone width', async () => {
@@ -341,7 +341,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await getGroups()).length, 3)
     })
 
-    it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a step to Cell colors nothing', async () => {
+    it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a step to Both colors nothing', async () => {
       await openEditor()
       const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()
       assert.equal(await groupCount(), 3)
@@ -356,7 +356,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await closeDialogWith(p, 'Save', EDITOR)
       assert.deepEqual(await settle(getGroups, []), [])
       assert.equal((await getData()).active, 1)
-      await pressTo('CELL')
+      await pressTo('BOTH')
       // "Nothing happened": no cell gets a color.
       assert.deepEqual(await watch(coloredCount), [0])
     })

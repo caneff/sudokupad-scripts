@@ -24,8 +24,9 @@ export const PROFILES_KEY = 'ColorByDigit_profiles'
 export const PROFILES_STORAGE_KEY = storedAt(PROFILES_KEY)
 export const LEGACY_STORAGE_KEY = storedAt('ColorByDigit_groups')
 export const ADDED_PRELOADS_STORAGE_KEY = storedAt('ColorByDigit_addedPreloads')
-// Saved profiles with the one-time Entropic and Modular add already done, so a test sees exactly the profiles it seeded.
-export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true })
+export const ADDED_EACH_DIGIT_STORAGE_KEY = storedAt('ColorByDigit_addedEachDigit')
+// Saved profiles with the one-time adds (Entropic and Modular, then Each digit) already done, so a test sees exactly the profiles it seeded.
+export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true, [ADDED_EACH_DIGIT_STORAGE_KEY]: true })
 export const MODE_KEY = 'ColorByDigit_mode'
 export const MODE_STORAGE_KEY = storedAt(MODE_KEY)
 // Auto mode's on/off from before the mode existed, read for the starting mode when no mode is saved.

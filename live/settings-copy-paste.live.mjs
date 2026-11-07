@@ -1,4 +1,4 @@
-// Live check of the Copy settings and Paste settings buttons of the five scripts with a settings dialog, on sudokupad.app in
+// Live check of the Copy settings and Paste settings buttons of the four scripts with a settings dialog, on sudokupad.app in
 // headless Chromium: Copy puts the saved keys on the real clipboard, Paste reads them back through the same dialog.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -13,14 +13,10 @@ const STATUS = '.dialog [data-role="settings-status"]'
 const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
 const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
 
-// Every digit set, since Digit Color saves its table whole.
-const DIGIT_COLORS = { 0: '#4b5563', 1: '#112233', 2: '#b04a00', 3: '#7a6200', 4: '#1b7a2f', 5: '#00736f', 6: '#0059c9', 7: '#3d2bb8', 8: '#8a1fa8', 9: '#5e3a1a' }
-
 // `asDefault`, where there is one, is the value that Copy writes for a setting at its default and that the script saves as no key.
 // `saved` is a value the script saves under `key`; `pasted` holds one good value and one bad one for `key`'s script.
 const SCRIPTS = [
   { file: 'dark-page.user.js', owns: /^DarkPage_/, entry: 'Dark Page', editor: '#dark-page-input', key: 'DarkPage_color', saved: '#336699', asDefault: '#000000', badKey: 'DarkPage_color', bad: 'blue' },
-  { file: 'digit-color.user.js', owns: /^DigitColor_/, entry: 'Digit Color', editor: '#digit-color-editor', key: 'DigitColor_colors', saved: DIGIT_COLORS, badKey: 'DigitColor_colors', bad: ['#ffffff'] },
   { file: 'auto-rules-resizer.user.js', owns: /^AutoRulesResizer_/, entry: 'Rules Resizer', editor: '#auto-rules-resizer-max-width', key: 'AutoRulesResizer_maxWidth', saved: 640, asDefault: null, badKey: 'AutoRulesResizer_maxHeight', bad: 'tall' },
   { file: 'color-by-digit.user.js', owns: /^ColorByDigit_/, entry: 'Color by Digit', editor: '#color-by-digit-editor', key: 'ColorByDigit_profiles', saved: { profiles: [{ name: 'Mine', groups: ODD_EVEN }], active: 0 }, badKey: 'ColorByDigit_mode', bad: 'sideways' },
   { file: 'pen-tool-extras.user.js', owns: /^(PenColor_|EdgeMarks_)/, entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', key: 'PenColor_thickness', saved: 9, asDefault: 5, badKey: 'PenColor_opacity', bad: 7 }

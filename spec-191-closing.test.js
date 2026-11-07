@@ -7,16 +7,16 @@ const { join } = require('node:path')
 const read = (file) => readFileSync(join(__dirname, file), 'utf8')
 const extras = require('./pen-tool-extras.user.js')
 
-// Each script's line count and @version at 159d79f, the commit spec 191 measured, typed out as the independent source.
+// Each script's line count and @version at 159d79f, the commit spec 191 measured, typed out as the independent source. Digit Color,
+// also measured, was deleted by spec 279.
 const BEFORE = {
   'no-tab-letters.user.js': [72, '0.1.0'],
-  'digit-color.user.js': [307, '0.3.5'],
   'dark-page.user.js': [342, '0.3.7'],
   'color-by-digit.user.js': [1036, '0.5.6'],
   'pen-tool-extras.user.js': [2406, '1.14.10']
 }
 // The scripts that gained features after spec 191 closed: their line counts passed its ceiling and their versions changed.
-const GREW_AFTER_SPEC = ['digit-color.user.js', 'dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js']
+const GREW_AFTER_SPEC = ['dark-page.user.js', 'color-by-digit.user.js', 'pen-tool-extras.user.js']
 const lineCount = (text) => text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
 const versionOf = (text) => /^\/\/ @version\s+(\S+)$/m.exec(text)[1]
 
