@@ -13,11 +13,11 @@ import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
-const { RECT_ID, STYLE_ID, SOLVER_REACH } = createRequire(import.meta.url)('../../dark-page.user.js')
+const { BOARD, BOARD_ID, STYLE_ID } = createRequire(import.meta.url)('../../dark-page.user.js')
 const DATA_KEY = 'DarkPage_color'
 
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark Page\s*$/ })
-const RECT = `#${RECT_ID}`
+const BOARD_BOX = `#${BOARD_ID}`
 const STYLE = `#${STYLE_ID}`
 const BLACK = 'rgb(0, 0, 0)'
 const CREDIT_TEXT = 'rgb(221, 221, 221)'
@@ -35,10 +35,6 @@ const OWN_PURPLE = 'rgb(106, 27, 154)'
 const PICKER = 'input[type=color]'
 // SudokuPad's red accent (`--main-color` of `.setting-uitheme-red`), read with no script installed.
 const ACCENT_RED = 'rgb(212, 17, 89)'
-// The most white the rectangle may keep past the drawing on a side that has text on it, in page
-// pixels: the text's box is taller than its glyphs. The whole svg box leaves 20 or more.
-const TIGHT_SLACK_PX = 12
-
 // Boards of other sizes, in the page's own puzzle format. Outside text is drawn the way little
 // killer and sandwich clues are: text beyond the grid lines.
 const clue = (row, col, text, color = '#000000') => ({ center: [row, col], width: 0.8, height: 0.6, text, fontSize: 18, color, backgroundColor: '#00000000', borderColor: '#00000000' })
@@ -55,10 +51,7 @@ function board ({ size, boxHeight, boxWidth, offset = 0, overlays = [], arrows =
   return { size, metadata: { title: `board ${size}` }, cells, regions, overlays, arrows }
 }
 const outsideText = (size) => [clue(-0.5, 1.5, '7'), clue(size / 2, -0.5, '12'), clue(size + 0.5, 2.5, '9'), clue(1.5, size + 0.5, '30'), clue(-0.5, -0.5, '4')]
-// The text of `invisible` has a transparent fill and lies past the visible text; a rectangle that
-// counted it would reach well past the '30'.
-const invisible = clue(3, 6.75, '88', '#00000000')
-const SIX = { size: 6, boxHeight: 2, boxWidth: 3, overlays: [...outsideText(6), invisible] }
+const SIX = { size: 6, boxHeight: 2, boxWidth: 3, overlays: outsideText(6) }
 const OTHER_BOARDS = {
   'a 6x6 board with outside text': board(SIX),
   'a 16x16 board with outside text': board({ size: 16, boxHeight: 4, boxWidth: 4, overlays: outsideText(16) }),
@@ -91,42 +84,36 @@ const selectCells = (p, cells) => p.evaluate((cells) => {
 }, cells)
 const deselect = (p) => p.evaluate(() => Framework.app.deselect())
 
-// The region the board checks read: `#svgrenderer`'s box snapped outward to whole pixels. The svg
-// clips everything the puzzle draws, so no drawn pixel lies outside it. The mascot that peeks over
-// the grid and the top bar, which a narrow window slides the board under, are hidden on every page:
-// they belong to SudokuPad, not to the puzzle.
+// The board's `#svgrenderer` box in whole pixels, as `{ x, y, width, height }`: `inner` is the pixels the box covers
+// entirely and `outer` the pixels it touches. Chrome snaps a box's background to one or the other edge, by a rule
+// that differs with the box's fractional position and size, so a check reads the inner region for what the script
+// must paint and the pixels outside the outer one for what it must not. The svg clips everything the puzzle
+// draws, so no drawn pixel lies outside it. The mascot that peeks over the grid and the top bar, which a narrow
+// window slides the board under, are hidden on every page: they belong to SudokuPad, not to the puzzle.
 const HIDE_PAGE_UI = '#svenpeek { display: none !important } .topbar { visibility: hidden !important }'
-const regionOf = (p) => p.evaluate(() => {
+const boxRegions = (p) => p.evaluate(() => {
   const b = document.querySelector('#svgrenderer').getBoundingClientRect()
-  const x = Math.floor(b.x)
-  const y = Math.floor(b.y)
-  return { x, y, width: Math.ceil(b.right) - x, height: Math.ceil(b.bottom) - y }
+  const region = (left, top, right, bottom) => ({ x: left, y: top, width: right - left, height: bottom - top })
+  return {
+    inner: region(Math.ceil(b.left), Math.ceil(b.top), Math.floor(b.right), Math.floor(b.bottom)),
+    outer: region(Math.floor(b.left), Math.floor(b.top), Math.ceil(b.right), Math.ceil(b.bottom))
+  }
 })
-
-// The kept rectangle in page pixels, once it has held still: the script moves it on the
-// next frame after a change.
-const settledRectangle = (p) => stable(() => p.evaluate((selector) => {
-  const el = document.querySelector(selector)
-  if (!el || window.getComputedStyle(el).display === 'none') return null
-  const b = el.getBoundingClientRect()
-  return { x: b.x, y: b.y, width: b.width, height: b.height }
-}, RECT))
+const regionOf = async (p) => (await boxRegions(p)).inner
 
 // A PNG of `clip`, taken until its bytes have held still, so a fade or a late repaint is waited on by
 // its condition and not by a sleep.
 const settledShot = (p, clip) => stable(() => p.screenshot({ clip, animations: 'disabled' }), SETTLE_MS, (a, b) => a.equals(b))
 
-// The board region now, with the kept rectangle relative to it (null for a page with no board).
-// Each read takes the region, a settled shot of it, the settled rectangle and the region again, and the reads
-// repeat until the region is the same before and after, so a relayout still under way (a resize, a puzzle just
-// loaded) is waited on by its condition and a shot it moved during is not returned. The two regions come first
-// in the read so a timeout's message, cut to its first characters, shows them and not the shot's bytes.
+// The board region now with a settled shot of it. The reads repeat until the region is the same before and
+// after, so a relayout still under way (a resize, a puzzle just loaded) is waited on by its condition and a shot
+// it moved during is not returned. The two regions come first in the read so a timeout's message, cut to its
+// first characters, shows them and not the shot's bytes.
 const boardShot = (p) => readUntil(async () => {
   const region = await regionOf(p)
   const png = await settledShot(p, region)
-  const rect = await settledRectangle(p)
   const regionAfter = await regionOf(p)
-  return { region, regionAfter, png, rect: rect && { x: rect.x - region.x, y: rect.y - region.y, width: rect.width, height: rect.height } }
+  return { region, regionAfter, png }
 }, (r) => JSON.stringify(r.region) === JSON.stringify(r.regionAfter))
 
 // A PNG's pixels: { width, height, data } with `data` the RGBA bytes, carried out of the page as
@@ -150,49 +137,50 @@ const decode = async (p, png) => {
 const sameColor = (image, i, [r, g, b]) => image.data[i] === r && image.data[i + 1] === g && image.data[i + 2] === b
 const at = (image, x, y) => (y * image.width + x) * 4
 
-// Compares the board region with the script off (`off`) and on (`on`), inside `on.rect`:
-// `changed` counts pixels that differ there; `clipped` counts pixels the page draws outside it
-// that are not the page's own color, the corner pixel of the region with the script off; `slack`
-// is, per side, the white the rectangle keeps past the drawing (the smallest distance from the
-// rectangle to a drawn pixel of `off`). Null when the sizes differ.
+// An opaque svg backdrop shifts the antialiasing of glyph and line edges (seen up to 50 levels on the sample 9x9 with
+// digits entered, at 1200x900). A pixel of the puzzle left on the black page color flips by about 255 against the
+// white it has with the script off, so a shift of up to half the range is the same pixel.
+const ANTIALIAS_LEVELS = 127
+
+// Counts the pixels of the board region that differ by more than ANTIALIAS_LEVELS between the script off (`off`)
+// and on (`on`): the box is the page's own white with the script off, so none differ unless the script painted
+// over the puzzle. Null when the sizes differ.
 async function compareBoards (p, off, on) {
   const [a, b] = [await decode(p, off.png), await decode(p, on.png)]
   if (a.width !== b.width || a.height !== b.height) return null
-  const page = [a.data[0], a.data[1], a.data[2]]
-  const { x: rx, y: ry, width: rw, height: rh } = on.rect
   let changed = 0
-  let clipped = 0
-  const drawn = { left: a.width, top: a.height, right: -1, bottom: -1 }
-  for (let y = 0; y < a.height; y++) {
-    for (let x = 0; x < a.width; x++) {
-      const i = at(a, x, y)
-      if (!sameColor(a, i, page)) {
-        drawn.left = Math.min(drawn.left, x); drawn.right = Math.max(drawn.right, x)
-        drawn.top = Math.min(drawn.top, y); drawn.bottom = Math.max(drawn.bottom, y)
-      }
-      if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) {
-        if (!sameColor(b, i, [a.data[i], a.data[i + 1], a.data[i + 2]])) changed++
-      } else if (!sameColor(a, i, page)) {
-        clipped++
-      }
-    }
+  for (let i = 0; i < a.data.length; i += 4) {
+    if ([0, 1, 2].some((c) => Math.abs(a.data[i + c] - b.data[i + c]) > ANTIALIAS_LEVELS)) changed++
   }
-  const slack = { left: drawn.left - rx, top: drawn.top - ry, right: rx + rw - 1 - drawn.right, bottom: ry + rh - 1 - drawn.bottom }
-  return { changed, clipped, slack }
-}
-
-async function colorsIn (p, clip) {
-  const image = await decode(p, await settledShot(p, clip))
-  const seen = new Set()
-  for (let i = 0; i < image.data.length; i += 4) seen.add(`${image.data[i]},${image.data[i + 1]},${image.data[i + 2]}`)
-  return [...seen]
+  return { changed }
 }
 
 async function expectKept (p, off, on) {
   const result = await compareBoards(p, off, on)
   assert.notEqual(result, null, 'the board region has the same size with the script on and off')
-  assert.deepEqual({ changed: result.changed, clipped: result.clipped }, { changed: 0, clipped: 0 }, 'pixels that differ inside the rectangle, and pixels of the puzzle outside it')
+  assert.deepEqual(result, { changed: 0 }, 'pixels of the board region that differ from the script-off page')
   return result
+}
+
+// The white is exactly the `#svgrenderer` box, to the pixel Chrome snaps its edge to: `RING` pixels of the page
+// beyond the box's outer region are the page color, and the four corners of its inner region are white.
+const RING = 4
+async function expectWhiteIsBoardBox (p, color) {
+  const { inner, outer } = await boxRegions(p)
+  const clip = { x: outer.x - RING, y: outer.y - RING, width: outer.width + 2 * RING, height: outer.height + 2 * RING }
+  const image = await decode(p, await settledShot(p, clip))
+  const inOuter = (x, y) => x >= RING && x < RING + outer.width && y >= RING && y < RING + outer.height
+  const wrong = { ring: 0, corners: 0 }
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      if (!inOuter(x, y) && !sameColor(image, at(image, x, y), color)) wrong.ring++
+    }
+  }
+  const [left, top] = [inner.x - clip.x, inner.y - clip.y]
+  for (const [x, y] of [[left, top], [left + inner.width - 1, top], [left, top + inner.height - 1], [left + inner.width - 1, top + inner.height - 1]]) {
+    if (!sameColor(image, at(image, x, y), [255, 255, 255])) wrong.corners++
+  }
+  assert.deepEqual(wrong, { ring: 0, corners: 0 }, 'pixels in the ring that are not the page color, and board corners that are not white')
 }
 
 let browser
@@ -205,8 +193,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const read = (fn, arg) => p.evaluate(fn, arg)
   const readButton = (selector) => read((selector) => { const c = window.getComputedStyle(document.querySelector(selector)); return { bg: c.backgroundColor, fg: c.color, border: c.borderTopColor } }, selector)
   const computed = (selector, property) => read(([selector, property]) => window.getComputedStyle(document.querySelector(selector))[property], [selector, property])
-  // Switches the script's stylesheet off and on in the page the checks already use. Its rectangle
-  // stays, as a transparent div that takes no click and changes no layout.
+  // Switches the script's stylesheet off and on in the page the checks already use.
   const setScript = (on) => read(([selector, on]) => { document.querySelector(selector).media = on ? '' : 'not all' }, [STYLE, on])
   // The board as it is now with the script on, against the same board with it off.
   const expectBoardKept = async () => {
@@ -220,8 +207,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await read((d) => Framework.app.loadCTCPuzzle(d), data)
     const start = p.getByRole('button', { name: START }).first()
     if (await start.isVisible()) await start.click()
-    await p.locator('#svgrenderer').waitFor({ state: 'attached' })
-    await p.waitForFunction((selector) => document.querySelector(selector)?.style.display === 'block', RECT)
+    await p.locator(BOARD_BOX).waitFor({ state: 'attached' })
   }
 
   const boot = async () => {
@@ -241,23 +227,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await computed('body', 'backgroundColor'), BLACK)
   })
 
-  it('the page shows black on all four sides of the rectangle, and white at its corner', async () => {
+  it('the board box is white and the page is black right up to its four edges', async () => {
     await fillBoard(p)
-    const rect = await settledRectangle(p)
-    const gap = 6
-    const strip = (x, y, width, height) => colorsIn(p, { x: Math.round(x), y: Math.round(y), width, height })
-    assert.deepEqual(await strip(rect.x - gap - 4, rect.y + 40, 4, 40), ['0,0,0'], 'left')
-    assert.deepEqual(await strip(rect.x + rect.width + gap, rect.y + 40, 4, 40), ['0,0,0'], 'right')
-    assert.deepEqual(await strip(rect.x + 40, rect.y - gap - 4, 40, 4), ['0,0,0'], 'top')
-    assert.deepEqual(await strip(rect.x + 40, rect.y + rect.height + gap, 40, 4), ['0,0,0'], 'bottom')
-    assert.deepEqual(await strip(rect.x, rect.y, 1, 1), ['255,255,255'], 'inside, at the corner')
-  })
-
-  it('the rectangle has whole-pixel edges and lies within the board', async () => {
-    const rect = await settledRectangle(p)
-    for (const edge of [rect.x, rect.y, rect.width, rect.height]) assert.equal(Number.isInteger(edge), true, JSON.stringify(rect))
-    const { x, y, width, height } = await regionOf(p)
-    assert.equal(rect.x >= x && rect.y >= y && rect.x + rect.width <= x + width && rect.y + rect.height <= y + height, true, JSON.stringify({ rect, region: { x, y, width, height } }))
+    assert.equal(await computed(BOARD_BOX, 'backgroundColor'), 'rgb(255, 255, 255)')
+    await expectWhiteIsBoardBox(p, [0, 0, 0])
   })
 
   it('the credit line is readable on black', async () => {
@@ -346,7 +319,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(on, off)
   })
 
-  it('the puzzle is kept: no pixel inside the rectangle differs with the script off, and none of the puzzle lies outside it', async () => {
+  it('the puzzle is kept: no pixel of the board differs with the script off', async () => {
     await expectBoardKept()
   })
 
@@ -361,33 +334,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
   }
 
-  // The edge X is the pen mark that reaches farthest past a cell. The rectangle already holds it
-  // before it is drawn: it does not move when the marks go on the outermost cells.
-  it('pen marks on the outermost cells sit on white without the rectangle moving', async () => {
-    const before = await settledRectangle(p)
+  // The edge X is the pen mark that reaches farthest past a cell; the svg's box clips it, so it sits on white.
+  it('pen marks on the outermost cells sit on white', async () => {
     await selectCells(p, [[0, 0], [8, 8]])
     await read(() => ['31', '41', 'b1', 'c1'].forEach((arg) => Framework.app.act({ type: 'pen', arg })))
     try {
       await deselect(p)
-      assert.deepEqual(await settledRectangle(p), before, 'the rectangle after the marks')
       await expectBoardKept()
     } finally {
       await selectCells(p, [[0, 0], [8, 8]])
       await read(() => Framework.app.act({ type: 'pen', arg: '0' }))
       await deselect(p)
     }
-  })
-
-  it('the rectangle keeps at least a pen mark\'s reach around the cells', async () => {
-    const gap = await read(() => {
-      const cells = [...document.querySelectorAll('.cells .cell')].map((e) => e.getBoundingClientRect())
-      const svg = document.querySelector('#svgrenderer').getBoundingClientRect()
-      return { left: Math.min(...cells.map((c) => c.left)), top: Math.min(...cells.map((c) => c.top)), svgLeft: svg.left, svgTop: svg.top }
-    })
-    const rect = await settledRectangle(p)
-    // The rectangle is clamped to the puzzle's own svg box, which a mark cannot draw past, so the reach is kept up to that edge.
-    const keeps = (cells, svg, edge) => edge <= Math.max(Math.floor(svg), Math.ceil(cells - SOLVER_REACH))
-    assert.equal(keeps(gap.left, gap.svgLeft, rect.x) && keeps(gap.top, gap.svgTop, rect.y), true, JSON.stringify({ gap, rect }))
   })
 
   it('the controls sit in front of the page: the keypad is still what a click at its center reaches', async () => {
@@ -421,29 +379,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   for (const [name, data] of Object.entries(OTHER_BOARDS)) {
     for (const viewport of [{ width: 1200, height: 900 }, { width: 800, height: 1000 }]) {
       for (const selected of [false, true]) {
-        it(`${name} at ${viewport.width}x${viewport.height}${selected ? ', outermost cells selected' : ''}: the puzzle is kept inside the rectangle`, async () => {
+        it(`${name} at ${viewport.width}x${viewport.height}${selected ? ', outermost cells selected' : ''}: the puzzle is kept`, async () => {
           await p.setViewportSize(viewport)
           await loadBoard(data)
           if (selected) await selectCells(p, [[0, 0], [data.size - 1, data.size - 1]])
           await expectBoardKept()
+          await expectWhiteIsBoardBox(p, [0, 0, 0])
           await deselect(p)
         })
       }
     }
   }
-
-  // On a board whose four sides all carry text, the drawing defines every edge of the rectangle,
-  // so a rectangle that counted the transparent '88' or the whole svg box leaves more white.
-  it('a 6x6 board with outside text: the rectangle is tight to the text on every side, and ignores text that is transparent', async () => {
-    await p.setViewportSize({ width: 1200, height: 900 })
-    await loadBoard(OTHER_BOARDS['a 6x6 board with outside text'])
-    const on = await boardShot(p)
-    await setScript(false)
-    const off = await boardShot(p)
-    await setScript(true)
-    const { slack } = await compareBoards(p, off, on)
-    for (const [side, white] of Object.entries(slack)) assert.equal(white >= 0 && white <= TIGHT_SLACK_PX, true, `${side}: ${white}px of white past the drawing, ${JSON.stringify(slack)}`)
-  })
 
   it('the settings entry is a button named Dark Page in the Experimental group, and it opens a dialog with the version as small text', async () => {
     const group = await openSettings(p)
@@ -488,8 +434,6 @@ describe('the page color dialog', { concurrency: false }, () => {
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
       // Records the script's CSS the moment its style first exists, before any frame paints with it.
-      // The style stays disabled until a board is on the page, so only its text says which color the
-      // first paint will use.
       seed: (page) => page.addInitScript(([src, styleId]) => {
         document.addEventListener('DOMContentLoaded', () => {
           const s = document.createElement('script')
@@ -517,7 +461,7 @@ describe('the page color dialog', { concurrency: false }, () => {
   it('the stylesheet the script first writes after a reload already holds the saved color, never black', async () => {
     await load()
     const firstCss = await p.evaluate(() => window.__firstCss)
-    assert.match(firstCss, /body \{ background-color: #ffcc00 !important \}/)
+    assert.ok(firstCss.includes(`${BOARD} { background-color: #ffcc00 !important }`), firstCss)
     assert.doesNotMatch(firstCss, /#000000/)
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     await openDialog()
@@ -565,14 +509,13 @@ describe('the page color dialog', { concurrency: false }, () => {
 
 // A page with no puzzle in it, such as another page of a site the script matches, is left alone.
 describe('a page with no puzzle', () => {
-  it('stays as it was: white background, no rectangle shown', async () => {
+  it('stays as it was: white background', async () => {
     const page = await browser.newPage()
     try {
       await page.setContent('<!doctype html><body style="background:#fff"><p>not a puzzle</p></body>')
       await page.addScriptTag({ content: script })
       await page.locator(STYLE).waitFor({ state: 'attached' })
       assert.equal(await page.evaluate(() => window.getComputedStyle(document.body).backgroundColor), 'rgb(255, 255, 255)')
-      assert.equal(await page.evaluate((selector) => window.getComputedStyle(document.querySelector(selector)).display, RECT), 'none')
     } finally {
       await page.close()
     }

@@ -1144,7 +1144,7 @@
 
   // 5. Arrow lines
   // An arrow is a filled triangle on the line: its base `halfWidth` out to each side of the line's middle and `halfLength` back from it, its tip `halfLength` forward, all times
-  // `arrowHeadScaleOf`. The furthest an arrow reaches off its line stays inside what Dark Page keeps past a cell (its `SOLVER_REACH`; a unit test holds the two together).
+  // `arrowHeadScaleOf`.
   const ARROW_LINE = { halfLength: 1.4375, halfWidth: 2.125, line: 1 }
 
   function arrowLineWayOf (char) {

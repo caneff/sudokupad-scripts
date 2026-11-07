@@ -200,8 +200,8 @@ Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras/pen
   and the chevrons. The color, the layer's opacity and the eraser all act on the group, and the paths inherit the stroke color.
   Chevron size and spacing are fixed when drawn, so a thickness change draws the cells that hold a chevron line again
   (`cell.renderContent(true)`).
-- **Dark Page.** A chevron reaches half its width plus half its stroke off its line: 15.6 units at thickness 16, inside the 17 Dark
-  Page keeps past a cell (`SOLVER_REACH`; a unit test holds the two together).
+- **Dark Page.** A chevron reaches half its width plus half its stroke off its line: 15.6 units at thickness 16. Dark Page paints the
+  whole `#svgrenderer` box white, and the svg clips what lies outside it, so the reach no longer matters to it (#444).
 - Not run: a touch screen, Windows, Tampermonkey.
 
 ## Holding a modifier leaves the pen tool (run on the page 2026-11-04, SudokuPad 0.611.0, headless Chromium, no script loaded)
