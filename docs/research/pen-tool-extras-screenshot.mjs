@@ -1,5 +1,5 @@
 // Takes the Pen Tool Extras pictures in docs/research/, the mascot hidden:
-//   (the homepage picture, site-pen-tool-extras.png, now comes from site-pen-tool-extras-screenshot.mjs)
+//   (the homepage shows the slides of pen-tool-extras-slides-screenshot.mjs instead)
 //                                    marks (X, arrows, circle) in several pen colors, at the defaults
 //   pen-tool-extras-dialog.png       the merged settings dialog, its thickness slider at the default 5
 //   pen-tool-extras-thin.png         the same drawing at thickness 2
