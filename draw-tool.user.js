@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.9.0
+// @version      0.10.0
 // @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.9.0'
+  const VERSION = '0.10.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -49,6 +49,15 @@
     9: '#000000'
   })
   const HEX_COLOR = /^#([0-9a-f]{6})$/
+  // Preset ids; the labels are what the dialog shows.
+  const PEN_PRESET = 'pen'
+  const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
+  const SUDOKUPAD_PRESET = 'sudokupad'
+  const PRESET_LABELS = { [PEN_PRESET]: 'Pen colors', 'page-1': 'Darker page 1', 'page-2': 'Darker page 2', 'page-3': 'Darker page 3', [SUDOKUPAD_PRESET]: 'SudokuPad colors' }
+  // The share of its OKLCH lightness a cell color keeps as a Darker page color, and the OKLCH chroma under which a darkened color counts as grey (Pen Tool Extras' values).
+  const LIGHTNESS_FACTOR = 0.75
+  const GREY_CHROMA = 0.04
+  const GAMUT_EDGE = 1e-6
   const SHORT_HEX_COLOR = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/
   const RGB_TEXT = /^rgba?\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(?:,\s*(-?[\d.]+)\s*)?\)$/
   // SudokuPad's color tool holds its cell color buttons for the same 1000 ms (HoldToEditDelayMs), as Pen Tool Extras' pen buttons do.
@@ -239,11 +248,12 @@
   }
 
   // null when nothing usable is saved, which means the first-use copy of the pen colors is still owed.
+  const savedHex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
+
   function readDrawColors (saved) {
     if (!isPlainObject(saved)) return null
-    const hex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
-    if (!COLOR_NUMBERS.some((n) => hex(saved[n]))) return null
-    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hex(saved[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+    if (!COLOR_NUMBERS.some((n) => savedHex(saved[n]))) return null
+    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(saved[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
   }
 
   // `readPenColor(n)` reads pen color n as the browser computes it.
@@ -258,6 +268,144 @@
 
   // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
   const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  --draw-tool-color-${n}: ${colors[n]};`), '}'].join('\n')
+
+  const clamp255 = (x) => Math.max(0, Math.min(255, x))
+
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black. Copied from Pen Tool Extras.
+  function parseColor (text) {
+    if (typeof text !== 'string') return null
+    const value = text.trim().toLowerCase()
+    const hex = HEX_COLOR.exec(value)
+    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
+    const rgb = RGB_TEXT.exec(value)
+    if (!rgb || (rgb[4] !== undefined && Number(rgb[4]) <= 0)) return null
+    return rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x))))
+  }
+
+  const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
+  const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
+
+  // Ottosson's published matrices. The way back returns the unclamped linear channels, so a caller can tell an out-of-gamut color.
+  function toOklab ([r, g, b]) {
+    const [lr, lg, lb] = [r, g, b].map(toLinear)
+    const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+    const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+    const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+    ]
+  }
+
+  function fromOklabLinear ([L, a, b]) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+    return [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+    ]
+  }
+
+  const inGamut = (linear) => linear.every((x) => x >= -GAMUT_EDGE && x <= 1 + GAMUT_EDGE)
+
+  // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
+  function darkenColor (rgb) {
+    const [L, a, b] = toOklab(rgb.map(clamp255))
+    const target = L * LIGHTNESS_FACTOR
+    let low = 0
+    let high = 1
+    if (!inGamut(fromOklabLinear([target, a, b]))) {
+      for (let i = 0; i < 30; i++) {
+        const mid = (low + high) / 2
+        if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
+        else high = mid
+      }
+    } else {
+      low = 1
+    }
+    const out = fromOklabLinear([target, a * low, b * low])
+    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x))))).toString(16).padStart(2, '0')).join('')
+  }
+
+  // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the buttons line up.
+  // Of the darkened colors, the darkest one under GREY_CHROMA becomes #000000, so the darkest color is black as in SudokuPad's own set.
+  // A slot with no usable color keeps SudokuPad's own pen color.
+  function darkerPageColors (keys, readCell) {
+    const colors = {}
+    const darkened = []
+    COLOR_NUMBERS.forEach((n) => {
+      const rgb = n < keys.length ? parseColor(readCell(keys[n])) : null
+      colors[n] = rgb ? darkenColor(rgb) : SUDOKUPAD_PEN_COLORS[n]
+      if (rgb) darkened.push(n)
+    })
+    let darkest = null
+    let darkestLightness = Infinity
+    for (const n of darkened) {
+      const [lightness, a, b] = toOklab(parseColor(colors[n]))
+      if (Math.hypot(a, b) < GREY_CHROMA && lightness < darkestLightness) {
+        darkest = n
+        darkestLightness = lightness
+      }
+    }
+    if (darkest) colors[darkest] = '#000000'
+    return colors
+  }
+
+  // The presets the palette in force offers: one Darker page per cell color page, up to three, between the pen colors and SudokuPad's own.
+  const presetOptions = (pageCount) => [PEN_PRESET, ...PAGE_PRESETS.slice(0, pageCount), SUDOKUPAD_PRESET]
+
+  // `pages` is the palette's pages of color keys; `readCell` reads a key's color and `readPen` a pen color, each as CSS text.
+  function presetColors (preset, pages, readCell, readPen) {
+    if (preset === SUDOKUPAD_PRESET) return { ...SUDOKUPAD_PEN_COLORS }
+    if (preset === PEN_PRESET) return copiedPenColors(readPen)
+    const page = PAGE_PRESETS.indexOf(preset)
+    if (page === -1 || page >= pages.length) throw new RangeError(`draw-tool: ${preset} is not a preset of this palette`)
+    return darkerPageColors(pages[page], readCell)
+  }
+
+  // Copy and Paste carry the colors and both slider values, and not the drawings or the color picked.
+  const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) ?? undefined : undefined
+  const READERS = {
+    [COLORS_KEY]: readPastedColors,
+    [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
+    [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined
+  }
+
+  // The width and opacity in force, defaults included, so a paste can put one back to its default; the colors only once they are saved.
+  function copiedSettings (store) {
+    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)) }
+    const savedColors = readDrawColors(store.getData(COLORS_KEY))
+    if (savedColors) copied[COLORS_KEY] = savedColors
+    return JSON.stringify(copied)
+  }
+
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
+  function pastedSettings (text) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!isPlainObject(data)) throw new Error('the clipboard text is not a settings object')
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(READERS)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
 
   const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
 
@@ -319,7 +467,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -498,9 +646,9 @@
     showColors()
   }
 
-  // The browser turns a pen color of any CSS form into rgb() text. A value it rejects, or none, reads as unreadable.
-  function readPenColor (n) {
-    const value = window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()
+  // The browser turns a color of any CSS form into rgb() text. A value it rejects, or none, reads as unreadable.
+  function readRootColor (name) {
+    const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
     const probe = document.createElement('span')
     probe.style.color = value
     if (!probe.style.color) return undefined
@@ -510,6 +658,16 @@
     } finally {
       probe.remove()
     }
+  }
+
+  const readPenColor = (n) => readRootColor(`--puzzle-pencolor-${n}`)
+  // The raw `--cell-color-<key>` values, not the 60% opacity they show with on the grid. SudokuPad sets the variable of every key in the palette, so any page reads.
+  const readCellColor = (key) => readRootColor(`--cell-color-${key}`)
+
+  // The pages of cell color keys of the palette in force, or none until the color tool has one.
+  function palettePages () {
+    const palette = Framework.app.tools?.colour?.palette
+    return palette && Array.isArray(palette.pages) && Array.isArray(palette.pages[0]) ? palette.pages : []
   }
 
   // A slider sets only the next item and is saved for the next visit.
@@ -522,6 +680,127 @@
     input.setAttribute('aria-label', label)
     row.appendChild(input)
     return row
+  }
+
+  // The settings dialog: nine color pickers and a preset list that fill a draft Save writes, and Copy and Paste settings, which act at once.
+  const DIALOG_ID = 'draw-tool-dialog'
+  const DIALOG_STYLE_ID = 'draw-tool-dialog-style'
+  const SETTINGS_ENTRY_GROUP = 'experimental'
+  const CUSTOM_LABEL = 'Custom'
+  const SAVE_LABEL = 'Save'
+  const DIALOG_CSS = [
+    `#${DIALOG_ID} .draw-tool-presets { margin: 6px 0; }`,
+    `#${DIALOG_ID} .draw-tool-swatches { display: grid; grid-template-columns: repeat(3, auto); gap: 8px; justify-content: start; margin: 6px 0; }`,
+    `#${DIALOG_ID} .draw-tool-swatches label { display: flex; align-items: center; gap: 6px; }`,
+    `#${DIALOG_ID} .draw-tool-swatches input { width: 2.4rem; height: 2.4rem; padding: 0; }`,
+    '.draw-tool-version { opacity: .6; font-weight: normal; }'
+  ].join('\n')
+
+  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+    '<button type="button" data-act="copy-settings">Copy settings</button>' +
+    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
+    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+
+  function wireCopyPaste (root, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copiedSettings(Framework))
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+
+  // A pasted value is saved and shown at once, whether or not Draw is current.
+  function applyPasted (values) {
+    if (WIDTH_KEY in values) {
+      width = values[WIDTH_KEY]
+      Framework.setData(WIDTH_KEY, width)
+      const slider = document.getElementById(SIZE_SLIDER)
+      if (slider) slider.value = width
+    }
+    if (OPACITY_KEY in values) {
+      opacity = values[OPACITY_KEY]
+      Framework.setData(OPACITY_KEY, opacity)
+      const slider = document.getElementById(OPACITY_SLIDER)
+      if (slider) slider.value = opacity
+    }
+    if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
+  }
+
+  function presetColorsNow (preset) {
+    return presetColors(preset, palettePages(), readCellColor, readPenColor)
+  }
+
+  function openDialog () {
+    if (!document.getElementById(DIALOG_STYLE_ID)) {
+      const style = document.createElement('style')
+      style.id = DIALOG_STYLE_ID
+      style.textContent = DIALOG_CSS
+      document.head.appendChild(style)
+    }
+    // Until the colors are first copied, the draft is the pen colors a first use would copy.
+    let draft = colors ?? copiedPenColors(readPenColor)
+    let chosen = null
+    let changed = false
+    Framework.showDialog({
+      centerOverBoard: true,
+      parts: [
+        { tag: 'text', innerHTML: `<b>Draw Tool</b> <small class="draw-tool-version">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: `<div id="${DIALOG_ID}"></div>` },
+        { tag: 'text', innerHTML: COPY_PASTE_HTML },
+        {
+          tag: 'options',
+          options: [
+            { tag: 'button', content: 'Cancel', action: 'close' },
+            { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); Framework.closeDialog() } }
+          ]
+        }
+      ]
+    })
+    const box = document.getElementById(DIALOG_ID)
+    if (!box) return
+    const draw = () => {
+      const options = [`<option value="">${CUSTOM_LABEL}</option>`, ...presetOptions(palettePages().length).map((id) => `<option value="${id}"${id === chosen ? ' selected' : ''}>${PRESET_LABELS[id]}</option>`)]
+      box.innerHTML = `<label class="draw-tool-presets">Colors <select data-role="preset">${options.join('')}</select></label>` +
+        `<div class="draw-tool-swatches">${COLOR_NUMBERS.map((n) => `<label>${n} <input type="color" data-color="${n}" value="${draft[n]}"></label>`).join('')}</div>`
+    }
+    draw()
+    box.addEventListener('change', (event) => {
+      const target = event.target
+      if (target.matches('[data-role="preset"]')) {
+        chosen = target.value || null
+        if (chosen) {
+          draft = presetColorsNow(chosen)
+          changed = true
+        }
+        draw()
+      } else if (target.matches('input[data-color]')) {
+        draft = editedColor(draft, Number(target.dataset.color), target.value)
+        chosen = null
+        changed = true
+        draw()
+      }
+    })
+    wireCopyPaste(box.closest('.dialog'), (values) => {
+      applyPasted(values)
+      draft = colors ?? draft
+      chosen = null
+      changed = false
+      draw()
+    })
   }
 
   function showPanel () {
@@ -537,6 +816,7 @@
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
     settings.innerHTML = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
+    settings.addEventListener('click', openDialog)
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
     sliders.append(
@@ -938,6 +1218,17 @@
     Framework.addTool({
       button: { name: TOOL_NAME, title: 'Draw', content: `<div class="icon">${BUTTON_ICON}</div>Draw` },
       tool
+    })
+    // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first.
+    Framework.addSetting({
+      tag: 'button',
+      name: 'drawtool',
+      group: SETTINGS_ENTRY_GROUP,
+      content: 'Draw Tool',
+      handler: () => {
+        Framework.closeDialog()
+        setTimeout(openDialog, 0)
+      }
     })
     keepButtonLast()
     app.puzzle.on('loaded', showSavedDrawing)

@@ -354,7 +354,7 @@ test(`${DRAW} good to know says the drawing stays in this browser`, () => {
 test('the README has a Draw Tool row with a Details link, and the Settings sentence names Draw Tool', () => {
   const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8')
   assert.match(readme, /^\| Draw Tool \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
-  assert.match(readme, /Each script except No Tab Letters and Draw Tool adds an entry to SudokuPad's settings/)
+  assert.match(readme, /Each script except No Tab Letters adds an entry to SudokuPad's settings/)
 })
 
 test('the README has a Color by Digit row with the short summary and a Details link', () => {
