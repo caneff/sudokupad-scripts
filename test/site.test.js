@@ -524,8 +524,10 @@ shared({
   homePicture: 'color-by-digit-slide-1-start.png'
 })
 
-test('a details page frame takes its slides\' own shape: no fixed aspect ratio, pictures scaled to its width', () => {
-  const css = fs.readFileSync(path.join(SITE_DIR, 'style.css'), 'utf8')
-  assert.match(css, /\.details \.slide-frame \{[^}]*aspect-ratio: auto;[^}]*padding: \.6rem;/)
-  assert.match(css, /\.details \.slide-frame img \{[^}]*position: static;[^}]*width: 100%;[^}]*max-height: none;/)
-})
+// The details-page frame is as tall as its tallest slide, so a slideshow whose slides differ in shape leaves empty bands; the live test checks the fit itself.
+for (const { heading, page: file } of SHOWS) {
+  test(`${file}'s ${heading} slides all declare one width and height`, () => {
+    const sizes = new Set([...showOf(read(file)).matchAll(/<img class="slide[^>]*? width="(\d+)" height="(\d+)"/g)].map(m => `${m[1]}x${m[2]}`))
+    assert.equal(sizes.size, 1, `slide sizes: ${[...sizes].join(', ')}`)
+  })
+}

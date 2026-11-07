@@ -24,8 +24,8 @@ p { margin: 0 0 .5rem; }
 
 /* The slideshow: a framed picture, then a caption on the left and a pager on the right. slides.js adds the pager. */
 .slideshow { display: flex; flex-direction: column; }
-.slide-frame { position: relative; aspect-ratio: 16 / 10; background: var(--frame-bg); border: 1px solid var(--frame-edge); border-radius: 8px; }
-.slide-frame img { position: absolute; inset: .6rem; margin: auto; max-width: calc(100% - 1.2rem); max-height: calc(100% - 1.2rem); width: auto; height: auto; }
+.slide-frame { --slide-inset: .6rem; position: relative; aspect-ratio: 16 / 10; background: var(--frame-bg); border: 1px solid var(--frame-edge); border-radius: 8px; }
+.slide-frame img { position: absolute; inset: var(--slide-inset); margin: auto; max-width: calc(100% - 2 * var(--slide-inset)); max-height: calc(100% - 2 * var(--slide-inset)); width: auto; height: auto; }
 /* Every slide shares the frame, and only the current one shows, so the first one shows without script. */
 .slideshow .slide:not(.current) { visibility: hidden; }
 .slide-bar { display: flex; align-items: flex-start; gap: 1rem; margin-top: .55rem; }
@@ -47,8 +47,8 @@ p { margin: 0 0 .5rem; }
 .details .back { font-size: .95rem; margin: .25rem 0 1rem; }
 .details .slide-caption { font-size: 1.25rem; }
 /* On a details page the frame takes the slides' own shape: the pictures stack in one grid cell, each scaled to the frame's width less the inset, so the frame is as tall as the tallest. */
-.details .slide-frame { display: grid; aspect-ratio: auto; padding: .6rem; }
-.details .slide-frame img { position: static; grid-area: 1 / 1; margin: 0; width: 100%; max-width: none; max-height: none; height: auto; }
+.details .slide-frame { display: grid; aspect-ratio: auto; padding: var(--slide-inset); }
+.details .slide-frame img { position: static; grid-area: 1 / 1; margin: 0; width: 100%; max-width: none; max-height: none; }
 .details .lede { max-width: 44rem; font-size: 1.1rem; }
 .details .actions { margin: .75rem 0 1.5rem; }
 .details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }
