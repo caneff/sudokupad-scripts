@@ -22,11 +22,11 @@ SudokuPad v0.611.0, `framework.js`, `script.js` and `tool-pen.js`, read from the
   is another userscript's (no `replay` control or `addToolButton` call is in `framework.js` or the other scripts), which can only have joined the bar through `addToolButton` or `addControlButton` with that
   parent, both of which append. Which script it is was not found (Chris's page was not read); the live check adds a
   button both ways.
-- Draw Tool keeps its button last: after `addTool` it moves the button to the end of `.controls-tool` and watches the bar
-  with a `MutationObserver` (`childList`), appending the button again whenever another button lands after it. Only the
-  button moves. `app.tools` keeps its order, so the tool keys are unchanged (§ Tool keys). Clicking the moved button still selects Draw
-  (checked live). Run in `live/draw-tool/draw-tool-order.live.mjs`: the pen
-  tool on at startup (script injected at DOMContentLoaded, which gave Draw before pen without the move), the pen turned
+- Draw Tool keeps its button last with one rule in its stylesheet, `.controls-tool #control-draw { order: 1 }`: the bar is a
+  `display: grid` (filled column by column) and the stock buttons have order 0, so the button is drawn last whenever another lands
+  after it. The button stays where it was added in the page, so Tab reaches it before a later button. `app.tools` keeps its order, so
+  the tool keys are unchanged (§ Tool keys). Run in `live/draw-tool/draw-tool-order.live.mjs`, which reads the drawn order: the pen
+  tool on at startup (script injected at DOMContentLoaded, which gave Draw before pen in the page), the pen turned
   off and on, a later `addTool` and a later `addToolButton`, Draw still selectable, and Z X C V B on the same tools.
 
 ## Tool keys

@@ -11,13 +11,18 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-const buttonIds = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-tool > button')].map((b) => b.id))
+// The buttons in the order they are drawn (the bar fills a column down, then the next one), not their order in the page:
+// Draw's place comes from a CSS rule, so the page order does not change.
+const buttonIds = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-tool > button')]
+  .map((b) => ({ id: b.id, ...b.getBoundingClientRect().toJSON() }))
+  .sort((a, b) => Math.round(a.left) - Math.round(b.left) || a.top - b.top)
+  .map((b) => b.id))
 const lastButton = async (p) => (await buttonIds(p)).at(-1)
 const penOn = (p) => p.evaluate(() => Framework.setSetting('toolpen', true))
 const PEN_BUTTON = '#control-pen'
 
 // Leaves the pen tool saved on, then reloads with the script injected at DOMContentLoaded: Draw's button and tool are
-// added before SudokuPad restores the pen tool, so the pen's come after them unless Draw moves.
+// added before SudokuPad restores the pen tool, so the pen's button comes after Draw's in the page.
 async function startWithSavedPen (p) {
   await startPuzzle(p)
   await penOn(p)
@@ -33,7 +38,7 @@ async function startWithSavedPen (p) {
 describe('Draw Tool: its button is the last tool button', { concurrency: false }, () => {
   let context, p, errors
 
-  before(async () => { ;({ context, p, errors } = await openPage(browser)) })
+  before(async () => { ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } })) })
   after(async () => { await context.close() })
 
   it('with the pen tool on at startup, Draw comes after the pen button', async () => {
@@ -51,7 +56,7 @@ describe('Draw Tool: its button is the last tool button', { concurrency: false }
     assert.deepEqual(await buttonIds(p), ['control-normal', 'control-corner', 'control-centre', 'control-colour', 'control-pen', 'control-draw'])
   })
 
-  it('a tool added later by Framework.addTool, and a button added later by Framework.addToolButton, come before Draw', async () => {
+  it('a tool added later by Framework.addTool, and a button added later by Framework.addToolButton, are drawn before Draw', async () => {
     await p.evaluate(() => Framework.addTool({ button: { name: 'late', title: 'Late', content: 'Late' }, tool: { name: 'late', isTool: true } }))
     await p.evaluate(() => Framework.addToolButton({ name: 'later', title: 'Later', content: '&#9654;&#9654;' }))
     assert.equal(await settle(() => lastButton(p), 'control-draw'), 'control-draw')
@@ -60,7 +65,7 @@ describe('Draw Tool: its button is the last tool button', { concurrency: false }
     assert.equal(ids.indexOf('control-later') < ids.indexOf('control-draw'), true, ids.join())
   })
 
-  it('the moved Draw button still makes Draw the current tool, with its panel, and a drag still draws', async () => {
+  it('the Draw button, last, still makes Draw the current tool, with its panel, and a drag still draws', async () => {
     assert.equal(await pickDraw(p), 'draw')
     await p.locator(SLIDERS).waitFor({ state: 'visible' })
     await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5]])
@@ -81,7 +86,7 @@ describe('Draw Tool: the pen tool on at startup and the tool keys', { concurrenc
   })
   after(async () => { await context.close() })
 
-  // Draw's tool comes before the pen's in the app, as it does with no move of the button. Without the script the five
+  // Draw's tool comes before the pen's in the app. Without the script the five
   // tools take Z X C V B, and N and M switch to nothing.
   it('Z X C V B select the same tools as without the script, B the pen tool', async () => {
     await p.click(DIGIT_BUTTON)
