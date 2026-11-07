@@ -1,12 +1,12 @@
 // Shared by the live checks: opening SudokuPad's settings dialog the way a user finds a script's
-// entry, and the version in a script's header. Not a check itself, so `live/*.live.mjs` skips it.
+// entry, and the version in a script's header. Not a check itself, so `live/**/*.live.mjs` skips it.
 
 import { createRequire } from 'node:module'
 
 // The label of the group every script's settings entry is in.
 const GROUP_LABEL = 'Experimental'
 
-export const { headerVersion } = createRequire(import.meta.url)('../header-version.js')
+export const { headerVersion } = createRequire(import.meta.url)('../test/header-version.js')
 
 // Opens the settings dialog, expands the Experimental group (SudokuPad starts it collapsed) and
 // returns the group's locator.

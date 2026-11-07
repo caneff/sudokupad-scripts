@@ -24,6 +24,6 @@ Measured 2026-11-03 on sudokupad.app in headless Chromium (font fallback
 Not covered: a real Tampermonkey install, `crackingthecryptic.com`, and Windows
 Tahoma, whose metrics differ from the fallback font above.
 
-Pictures: `digit-color-centred-circles.png` (board at real size) and
-`digit-color-centred-circles-zoom.png` (4x crop of corner and centre marks, after the fix) and
-`digit-color-centred-circles-before-zoom.png` (the same crop and marks with `main`'s script, digits sitting high in their circles).
+Pictures: `color-by-digit/digit-color-centred-circles.png` (board at real size) and
+`color-by-digit/digit-color-centred-circles-zoom.png` (4x crop of corner and centre marks, after the fix) and
+`color-by-digit/digit-color-centred-circles-before-zoom.png` (the same crop and marks with `main`'s script, digits sitting high in their circles).
