@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -476,4 +476,21 @@ test('a saved size reads back, and a note without one has none', () => {
   const resized = { ...sum, box: [200.5, 60] }
   assert.deepEqual(readDrawing(JSON.parse(JSON.stringify([resized, sum]))), [resized, sum])
   for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.throws(() => readDrawing([{ ...sum, box }]), /saved drawing/, JSON.stringify(box))
+})
+
+// The resize keeps the box's top left still: on the board the stub's scale is 2 screen pixels a board unit.
+test('dragging a note\'s corner sets its box in board units and moves its point so its top left stays put', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  const resized = resizedItem(on, [200, 170], [600, 290], { ...board, scale: 2 })
+  assert.deepEqual(resized, { ...on, box: [200, 60], at: [150, 90] })
+})
+
+test('a note off the board keeps its fixed point\'s kind, and its box is in board units too, as its text is', () => {
+  const off = placedItem(textItem([50, 60], 'hi', 3, 20), [40, 700], board)
+  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }), { ...off, box: [200, 60], fixed: [200, 740] })
+})
+
+test('a resize stops at about three characters wide and one line high', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  assert.deepEqual(resizedItem(on, [200, 170], [190, 160], { ...board, scale: 2 }).box, [60, 23])
 })

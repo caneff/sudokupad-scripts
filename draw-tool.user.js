@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.20.0
+// @version      0.21.0
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.20.0'
+  const VERSION = '0.21.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -194,6 +194,8 @@
   // A note whose text runs past its box, and the one such note under the pointer, which shows its scroll bar.
   const SCROLLS_CLASS = 'draw-tool-scrolls'
   const HOVER_CLASS = 'draw-tool-hover'
+  const HANDLE_CLASS = 'draw-tool-resize'
+  const HANDLE_PX = 10
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
@@ -344,6 +346,16 @@
   const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(item.fixed) } : item
 
   const screenPoint = (item, toScreen) => item.fixed ?? toScreen(item.at)
+
+  // The note with its box's bottom right dragged to screen point `corner`, its top left kept at screen point `topLeft`. The box is in board units on the
+  // board and off it, since a note off the board is drawn at the board's scale too; the note's point moves to the box's new middle, pinned or fixed as it was.
+  // `board` has the map from a screen point to board units and the screen pixels per board unit.
+  function resizedItem (item, topLeft, corner, board) {
+    const box = [0, 1].map((i) => roundToTenth(Math.max(MIN_BOX_EM[i] * item.size, (corner[i] - topLeft[i]) / board.scale)))
+    const middle = [0, 1].map((i) => topLeft[i] + box[i] * board.scale / 2)
+    const { at, fixed, ...rest } = item
+    return item.fixed ? { ...rest, box, fixed: roundPoint(middle) } : { ...rest, box, at: roundPoint(board.toBoard(middle)) }
+  }
 
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
@@ -886,7 +898,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1102,6 +1114,7 @@
     `.${TEXT_CLASS}:not(.${TEXT_BACKGROUND_CLASS}) { -webkit-text-stroke: ${HALO_EM * 2}em ${PAGE_COLOR}; paint-order: stroke fill; stroke-linejoin: round; }`,
     `.${SELECTED_CLASS} { outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
+    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; cursor: nwse-resize; }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; outline: 1px dashed currentColor; outline-offset: 1px; cursor: text; }`,
     // The tool bar is a grid and stock buttons have order 0, so Text Annotation's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
@@ -1364,8 +1377,10 @@
   let drag = null
   // A right-drag in progress: the last point it reached and whether it has erased an item yet. The right button's `buttons` bit holds it.
   let erasing = null
-  // The note open for typing: the index of the text it reopened, or -1 for a new one, the item, and its element, which the solver types in.
+  // The note open for typing: the index of the text it reopened, or -1 for a new one, the item, its element, which the solver types in, and its resize handle.
   let editing = null
+  // A drag of the open note's resize handle: the item at the press, its box's top left on the screen, and the handle's offset from the box's corner at the press.
+  let resizing = null
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
   let drawing = []
@@ -1414,7 +1429,7 @@
     watchBoard(svg)
     const map = boardMap()
     layer.style.fontFamily = window.getComputedStyle(svg).fontFamily
-    const kept = [editing?.element, drag?.rectangle]
+    const kept = [editing?.element, editing?.handle, drag?.rectangle]
     for (const child of [...layer.children]) if (!kept.includes(child)) child.remove()
     const notes = drawing.flatMap((item, i) => {
       if (item.kind !== TEXT_KIND || (editing && editing.index === i)) return []
@@ -1428,11 +1443,56 @@
       markScrolling(note)
       note.scrollTop = noteItems.get(note)[SCROLL] ?? 0
     }
-    if (editing) {
-      styleNote(editing.element, editing.item, map)
-      markScrolling(editing.element)
-    }
+    if (editing) showEditing(map)
     showHover()
+  }
+
+  // The handle sits on the open note's bottom right corner.
+  function showEditing (map) {
+    const { element, item, handle } = editing
+    styleNote(element, item, map)
+    markScrolling(element)
+    const { right, bottom } = element.getBoundingClientRect()
+    handle.style.left = `${roundToTenth(right - HANDLE_PX / 2)}px`
+    handle.style.top = `${roundToTenth(bottom - HANDLE_PX / 2)}px`
+  }
+
+  // The open note's text box, inside its padding, on the screen.
+  function contentBox (element) {
+    const { left, top, right, bottom } = element.getBoundingClientRect()
+    const style = window.getComputedStyle(element)
+    const pad = (side) => parseFloat(style[`padding${side}`])
+    return { left: left + pad('Left'), top: top + pad('Top'), right: right - pad('Right'), bottom: bottom - pad('Bottom') }
+  }
+
+  // A press on the handle keeps the note's focus, and never reaches SudokuPad.
+  function startResize (event) {
+    if (event.button !== PRIMARY_BUTTON || !editing) return
+    event.preventDefault()
+    event.stopPropagation()
+    const box = contentBox(editing.element)
+    const [x, y] = eventPoint(event)
+    resizing = { item: editing.item, topLeft: [box.left, box.top], offset: [box.right - x, box.bottom - y] }
+  }
+
+  // A release the page never saw leaves the button up on the next move, which ends the resize.
+  function resizeMove (event) {
+    if (!resizing) return
+    event.stopImmediatePropagation()
+    if (!(event.buttons & PRIMARY_HELD) || !editing) {
+      resizing = null
+      return
+    }
+    const [x, y] = eventPoint(event)
+    const map = boardMap()
+    editing.item = resizedItem(resizing.item, resizing.topLeft, [x + resizing.offset[0], y + resizing.offset[1]], map)
+    showEditing(map)
+  }
+
+  function endResize (event) {
+    if (!resizing) return
+    event.stopImmediatePropagation()
+    resizing = null
   }
 
   const scrollRoom = (note) => note.scrollHeight - note.clientHeight
@@ -1549,8 +1609,14 @@
     // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
     element.addEventListener('blur', () => { if (editing && editing.element === element) finishText() })
-    editing = { index, item, element }
-    drawingLayer().appendChild(element)
+    // Typing grows the box, which carries the handle and may start the text scrolling.
+    element.addEventListener('input', () => { if (editing && editing.element === element) showEditing(boardMap()) })
+    const handle = document.createElement('div')
+    handle.className = HANDLE_CLASS
+    handle.addEventListener('mousedown', startResize)
+    handle.addEventListener('touchstart', (event) => event.stopPropagation())
+    editing = { index, item, element, handle }
+    drawingLayer().append(element, handle)
     redraw()
     element.focus()
     window.getSelection().selectAllChildren(element)
@@ -1562,12 +1628,14 @@
 
   // An empty box removes its text.
   function finishText () {
-    const { index, item, element } = editing
+    const { index, item, element, handle } = editing
     editing = null
+    resizing = null
     element.remove()
+    handle.remove()
     const before = index === -1 ? '' : drawing[index].text
     const text = typedText(element)
-    const changed = text !== before || (index !== -1 && Boolean(item.bg) !== Boolean(drawing[index].bg))
+    const changed = text !== before || (index !== -1 && (Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
@@ -1594,7 +1662,7 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || event.target.closest(`.${BACKGROUND_CLASS}`)) return
+    if (!editing || editing.element.contains(event.target) || event.target === editing.handle || event.target.closest(`.${BACKGROUND_CLASS}`)) return
     pressFinishedText = true
     finishText()
   }
@@ -1697,7 +1765,11 @@
     selected = []
     const open = editing
     editing = null
-    if (open) open.element.remove()
+    resizing = null
+    if (open) {
+      open.element.remove()
+      open.handle.remove()
+    }
   }
 
   function showSavedDrawing () {
@@ -1872,6 +1944,8 @@
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
     window.addEventListener('wheel', scrollNote, { capture: true, passive: false })
     window.addEventListener('mousemove', trackPointer, { capture: true, passive: true })
+    window.addEventListener('mousemove', resizeMove, { capture: true })
+    window.addEventListener('mouseup', endResize, { capture: true })
     for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
     if (app.puzzle.currentPuzzle) showSavedDrawing()
   })
