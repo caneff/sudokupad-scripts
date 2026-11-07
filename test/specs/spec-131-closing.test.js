@@ -2,7 +2,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const colorByDigit = require('../../color-by-digit.user.js')
-const darkPage = require('../../dark-page.user.js')
 
 // The warning each script prints starting on a page whose Framework has no getApp.
 function warningWithoutGetApp (name) {
@@ -47,9 +46,6 @@ test('Color by Digit and Dark Page hold spec 131 together', () => {
   const page = ['clear', 'a1', 'rejected']
   const [{ rows }] = layoutPages([page], 0, (key) => (key === 'rejected' ? '' : `#${key}`))
   assert.deepEqual(rows[0].slice(0, 2).map((slot) => slot && slot.key), ['a1', null])
-
-  const box = { left: 10.5, top: 10.5, right: 20.5, bottom: 20.5 }
-  assert.deepEqual(darkPage.snapOutward(box, 2), { left: 8, top: 8, right: 23, bottom: 23 })
 
   for (const name of ['color-by-digit', 'dark-page']) {
     const warnings = warningWithoutGetApp(name)

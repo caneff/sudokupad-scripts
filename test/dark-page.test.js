@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, unionBoxes, snapOutward, clampBox, growBox, paintAlpha, hasVisiblePaint, halfStroke, markerReach, PAD, SOLVER_REACH, RECT_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 function rules () {
@@ -19,12 +19,12 @@ const rule = (selector) => rules().find((r) => r.selector === selector)
 
 test('the page background is black by default', () => {
   assert.equal(DEFAULT_COLOR, '#000000')
-  assert.deepEqual(rule('body'), { selector: 'body', declarations: 'background-color: #000000 !important' })
+  assert.deepEqual(rule(BOARD), { selector: BOARD, declarations: 'background-color: #000000 !important' })
 })
 
 test('the page background is the color given', () => {
-  const given = buildCss('#336699').split('\n').find((line) => line.startsWith('body '))
-  assert.equal(given, 'body { background-color: #336699 !important }')
+  const given = buildCss('#336699').split('\n').find((line) => line.startsWith(`${BOARD} {`))
+  assert.equal(given, `${BOARD} { background-color: #336699 !important }`)
 })
 
 test('readSavedColor reads the saved color through the Framework, and reports a Framework it cannot read as nothing saved', () => {
@@ -44,25 +44,27 @@ test('readSavedColor reads the saved color through the Framework, and reports a 
 })
 
 test('the credit line takes the text color for the page color given', () => {
-  const credit = (color) => buildCss(color).split('\n').find((line) => line.startsWith('.controls-footer'))
-  assert.equal(credit('#ffffff'), '.controls-footer, .controls-footer a { color: #222222 !important }')
-  assert.equal(credit('#000000'), '.controls-footer, .controls-footer a { color: #dddddd !important }')
+  const credit = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${BOARD} .controls-footer`))
+  assert.equal(credit('#ffffff'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #222222 !important }`)
+  assert.equal(credit('#000000'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #dddddd !important }`)
 })
 
 test('the replay tool\'s readout (the ::after of .controls-input) takes the text color for the page color given', () => {
-  const readout = (color) => buildCss(color).split('\n').find((line) => line.startsWith('.controls-input::after'))
-  assert.equal(readout('#ffffff'), '.controls-input::after { color: #222222 !important }')
-  assert.equal(readout('#000000'), '.controls-input::after { color: #dddddd !important }')
-  assert.equal(readout('#ffcc00'), '.controls-input::after { color: #222222 !important }')
+  const readout = (color) => buildCss(color).split('\n').find((line) => line.startsWith(`${BOARD} .controls-input::after`))
+  assert.equal(readout('#ffffff'), `${BOARD} .controls-input::after { color: #222222 !important }`)
+  assert.equal(readout('#000000'), `${BOARD} .controls-input::after { color: #dddddd !important }`)
+  assert.equal(readout('#ffcc00'), `${BOARD} .controls-input::after { color: #222222 !important }`)
 })
 
 const buttonRules = (color) => buildCss(color).split('\n').filter((line) => /button/.test(line.split(' {')[0]))
 
 test('on a dark page color the control buttons go dark gray with light purple text, and a button that is on keeps its own fill and gets a purple border', () => {
+  const scoped = (selectors) => selectors.map((selector) => `${BOARD} ${selector}`).join(', ')
+  const groups = ['.controls-app', '.controls-tool', '.controls-aux']
   assert.deepEqual(buttonRules('#000000'), [
-    '.controls-app button:not(.selected):not(.selectedperm), .controls-tool button:not(.selected):not(.selectedperm), .controls-aux button:not(.selected):not(.selectedperm) { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }',
-    '.controls-app button.selected, .controls-app button.selectedperm, .controls-tool button.selected, .controls-tool button.selectedperm, .controls-aux button.selected, .controls-aux button.selectedperm { border-color: #d2a8f0 !important }',
-    '.button-row button { border-color: #4a4a4a !important }'
+    `${scoped(groups.map((g) => `${g} button:not(.selected):not(.selectedperm)`))} { background-color: #2a2a2a !important; color: #d2a8f0 !important; border-color: #4a4a4a !important }`,
+    `${scoped(groups.flatMap((g) => [`${g} button.selected`, `${g} button.selectedperm`]))} { border-color: #d2a8f0 !important }`,
+    `${scoped(['.button-row button'])} { border-color: #4a4a4a !important }`
   ])
 })
 
@@ -83,8 +85,14 @@ test('savedColor reads a saved #rrggbb string as lowercase, and anything else as
   for (const bad of [null, undefined, '', 'red', '#fff', '#12345g', 5, {}, ['#000000']]) assert.equal(savedColor(bad), null, String(bad))
 })
 
-test('the rectangle takes SudokuPad\'s own page background, so it follows SudokuPad\'s dark mode', () => {
-  assert.deepEqual(rule(`#${RECT_ID}`), { selector: `#${RECT_ID}`, declarations: 'background-color: var(--body-bg) !important' })
+test('the board\'s own box takes SudokuPad\'s own page background, so it follows SudokuPad\'s dark mode', () => {
+  assert.deepEqual(rule(`${BOARD} #${BOARD_ID}`), { selector: `${BOARD} #${BOARD_ID}`, declarations: 'background-color: var(--body-bg) !important' })
+})
+
+test('every rule applies only while a board is on the page, so a page with no board keeps its own colors', () => {
+  for (const { selector } of rules()) {
+    for (const part of selector.split(',').map((s) => s.trim())) assert.ok(part.startsWith(BOARD), `${selector}: ${part}`)
+  }
 })
 
 test('every declaration is !important, so SudokuPad\'s own rules, dark mode included, lose', () => {
@@ -102,107 +110,25 @@ test('no rule declares a theme variable, which would reach the grid through the 
 
 test('no rule reaches inside the board, or sets color on body or a container of it', () => {
   for (const { selector, declarations } of rules()) {
-    for (const part of selector.split(',').map((s) => s.trim())) {
+    for (const part of selector.split(',').map((s) => s.trim().replace(BOARD, '').replace(`#${BOARD_ID}`, '').trim())) {
       assert.ok(!/svg|\.grid|\.cells|\.game|\.app|#board|\*/.test(part), `${selector} reaches the board or a container of it: ${part}`)
-      if (/(^|[;\s])color\s*:/.test(declarations)) assert.notEqual(part, 'body', selector)
+      if (/(^|[;\s])color\s*:/.test(declarations)) assert.notEqual(part, '', selector)
     }
   }
-})
-
-test('unionBoxes covers every box and is null for none', () => {
-  assert.equal(unionBoxes([]), null)
-  assert.deepEqual(unionBoxes([{ left: 5, top: 6, right: 10, bottom: 12 }, { left: 1, top: 8, right: 7, bottom: 20 }]), { left: 1, top: 6, right: 10, bottom: 20 })
-})
-
-test('snapOutward pads, then rounds every edge away from the box, so no partial pixel is left dark', () => {
-  assert.deepEqual(snapOutward({ left: 17.69, top: 134.69, right: 688.31, bottom: 805.31 }, 0), { left: 17, top: 134, right: 689, bottom: 806 })
-  assert.deepEqual(snapOutward({ left: 10.5, top: 10.5, right: 20.5, bottom: 20.5 }, 2), { left: 8, top: 8, right: 23, bottom: 23 })
-  assert.deepEqual(snapOutward({ left: 10, top: 10, right: 20, bottom: 20 }, 0), { left: 10, top: 10, right: 20, bottom: 20 })
-})
-
-test('the border PAD leaves is at most 2px on any edge, as ruled', () => {
-  for (const edge of [0, 0.01, 0.25, 0.5, 0.75, 0.99]) {
-    const out = snapOutward({ left: 100 + edge, top: 100 + edge, right: 200 + edge, bottom: 200 + edge }, PAD)
-    assert.equal(100 + edge - out.left <= 2 && out.right - (200 + edge) <= 2 && 100 + edge - out.top <= 2 && out.bottom - (200 + edge) <= 2, true, JSON.stringify(out))
-  }
-})
-
-test('clampBox keeps the part of a box that lies within the limit', () => {
-  assert.deepEqual(clampBox({ left: 0, top: 5, right: 50, bottom: 60 }, { left: 10, top: 0, right: 40, bottom: 100 }), { left: 10, top: 5, right: 40, bottom: 60 })
-})
-
-test('growBox grows every side by the amount', () => {
-  assert.deepEqual(growBox({ left: 10, top: 20, right: 30, bottom: 40 }, 3), { left: 7, top: 17, right: 33, bottom: 43 })
-})
-
-test('the margin kept around the cells is 36px, the value Chris ruled: the largest arrow\'s reach of 34 and the White outline\'s 2', () => {
-  assert.equal(SOLVER_REACH, 36, `reach ${SOLVER_REACH}: each unit adds white around every puzzle, so it is not raised past the ruled 36`)
-})
-
-test('markerReach is the farthest side of the marker from its reference point, times the stroke width unless it is in user units, times the scale', () => {
-  const none = { markerWidth: null, markerHeight: null, refX: null, refY: null, markerUnits: null }
-  assert.equal(markerReach(none, 2, 1), 6, 'the SVG defaults: a 3x3 box with the reference point at its corner')
-  assert.equal(markerReach({ ...none, markerWidth: '4', markerHeight: '2.5', refX: '1', markerUnits: null }, 2, 1.5), 9)
-  assert.equal(markerReach({ markerWidth: '80', markerHeight: '80', refX: '30', refY: '40', markerUnits: 'userSpaceOnUse' }, 9, 2), 100)
-})
-
-test('paintAlpha reads the alpha of a computed color, and none is 0', () => {
-  assert.equal(paintAlpha('none'), 0)
-  assert.equal(paintAlpha('rgba(255, 255, 255, 0)'), 0)
-  assert.equal(paintAlpha('rgba(0, 0, 0, 0.4)'), 0.4)
-  assert.equal(paintAlpha('rgb(0, 0, 0)'), 1)
-  assert.equal(paintAlpha('url("#pattern")'), 1)
-  assert.equal(paintAlpha('transparent'), 0)
-})
-
-const painted = { display: 'inline', visibility: 'visible', opacity: '1', fill: 'rgb(0, 0, 0)', fillOpacity: '1', stroke: 'none', strokeOpacity: '1', strokeWidth: '0px' }
-
-test('an element with a fill, or with a stroke of some width, has visible paint', () => {
-  assert.equal(hasVisiblePaint(painted), true)
-  assert.equal(hasVisiblePaint({ ...painted, fill: 'none', stroke: 'rgb(0, 0, 0)', strokeWidth: '2px' }), true)
-})
-
-test('an element with no visible paint does not count', () => {
-  assert.equal(hasVisiblePaint({ ...painted, fill: 'rgba(255, 255, 255, 0)' }), false, 'transparent fill')
-  assert.equal(hasVisiblePaint({ ...painted, fill: 'none', stroke: 'rgb(0, 0, 0)', strokeWidth: '0px' }), false, 'zero-width stroke')
-  assert.equal(hasVisiblePaint({ ...painted, fill: 'none', stroke: 'none' }), false, 'no fill and no stroke')
-  assert.equal(hasVisiblePaint({ ...painted, fillOpacity: '0' }), false, 'fill-opacity 0')
-  assert.equal(hasVisiblePaint({ ...painted, opacity: '0' }), false, 'opacity 0')
-  assert.equal(hasVisiblePaint({ ...painted, display: 'none' }), false, 'display none')
-  assert.equal(hasVisiblePaint({ ...painted, visibility: 'hidden' }), false, 'visibility hidden')
-})
-
-test('halfStroke is half the stroke width in page pixels, and 0 when there is no visible stroke', () => {
-  assert.equal(halfStroke({ ...painted, stroke: 'rgb(0, 0, 0)', strokeWidth: '4px' }, 2), 4)
-  assert.equal(halfStroke({ ...painted, stroke: 'none', strokeWidth: '4px' }, 2), 0)
-  assert.equal(halfStroke({ ...painted, stroke: 'rgba(0, 0, 0, 0)', strokeWidth: '4px' }, 2), 0)
 })
 
 test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')))
 })
 
-const SVG_BOX = { left: 0, top: 0, right: 500, bottom: 500 }
-const CELL_BOX = { left: 100, top: 100, right: 200, bottom: 200 }
-
-// Starts the script on a page holding a board of one cell, with `framework` as the page's Framework, or none.
+// Starts the script on a page holding a board, with `framework` as the page's Framework, or none.
 function startOnBoard (framework) {
   const file = require.resolve('../dark-page.user.js')
   const appended = []
-  const observed = []
-  const element = () => ({ style: { setProperty (name, value) { this[name] = value } } })
-  const svg = { getScreenCTM: () => ({ a: 1 }), getBoundingClientRect: () => SVG_BOX, querySelectorAll: () => [] }
-  const cell = { getBoundingClientRect: () => ({ ...CELL_BOX, width: 100, height: 100 }) }
+  const element = () => ({})
   const saved = { document: global.document, window: global.window, Framework: global.Framework }
-  global.document = {
-    createElement: element,
-    head: { appendChild: (el) => appended.push(el) },
-    body: { appendChild: (el) => appended.push(el) },
-    querySelector: (selector) => (selector === '#svgrenderer' ? svg : null),
-    querySelectorAll: (selector) => (selector === '.cells .cell' ? [cell] : []),
-    fonts: null
-  }
-  global.window = { MutationObserver: class { observe (target) { observed.push(target) } }, addEventListener () {}, requestAnimationFrame () {} }
+  global.document = { createElement: element, head: { appendChild: (el) => appended.push(el) } }
+  global.window = {}
   delete global.Framework
   if (framework) global.Framework = framework
   const warnings = []
@@ -219,22 +145,12 @@ function startOnBoard (framework) {
     }
     delete require.cache[file]
   }
-  return {
-    warnings,
-    observed,
-    style: appended.find((el) => el.id === 'dark-page-style'),
-    rect: appended.find((el) => el.id === RECT_ID)
-  }
+  return { warnings, style: appended.find((el) => el.id === 'dark-page-style'), appended }
 }
 
-function assertDarkens ({ style, rect, observed }) {
-  const kept = clampBox(snapOutward(growBox(CELL_BOX, SOLVER_REACH), PAD), snapOutward(SVG_BOX, 0))
+function assertDarkens ({ style, appended }) {
   assert.equal(style.textContent, buildCss(DEFAULT_COLOR))
-  assert.equal(style.disabled, false)
-  assert.equal(rect.style.display, 'block')
-  assert.equal(rect.style.left, `${kept.left}px`)
-  assert.equal(rect.style.width, `${kept.right - kept.left}px`)
-  assert.equal(observed.length, 1)
+  assert.deepEqual(appended, [style], 'the stylesheet is all the script puts on the page')
 }
 
 test('a Framework without getApp warns that the settings entry was skipped, and the page still darkens', () => {

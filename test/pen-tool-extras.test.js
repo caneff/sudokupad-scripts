@@ -19,7 +19,6 @@ const {
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('../pen-tool-extras.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
-const { SOLVER_REACH } = require('../dark-page.user.js')
 
 const nextType = (current, settings) => stepType(current, settings, EDGE_CYCLE)
 
@@ -1499,12 +1498,11 @@ test('an arrow is centered on its line, on a diagonal as on a straight line, at 
   }
 })
 
-test('at the largest thickness an arrow on a grid\'s outer edge reaches no further than Dark Page keeps (SOLVER_REACH)', () => {
+test('at the largest thickness an arrow on a grid\'s outer edge reaches the ARROW_LINE size at head scale 10.1387', () => {
   // a top edge line, 'a', on row 0: the arrow's base corners are the furthest from the edge itself
   const shape = arrowLineAt('a', true, 0, 0, THICKNESS.max)
   const reach = Math.max(...pointsOf(shape.arrows).map(([, y]) => Math.abs(y)))
   assert.equal(Math.abs(reach - ARROW_LINE.halfWidth * 10.1387) < 0.02, true, `the drawn reach ${reach} is the ARROW_LINE size at head scale 10.1387, the largest thickness's`)
-  assert.equal(reach <= SOLVER_REACH, true, `reach ${reach} against ${SOLVER_REACH}, on a board with cells up to about ${Math.round(SOLVER_REACH / reach * 64)} units (px) wide`)
 })
 
 test('an arrow line has at least one arrow on any segment at any thickness and any arrow spacing, so a run never has none', () => {

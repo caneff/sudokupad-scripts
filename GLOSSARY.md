@@ -172,12 +172,11 @@
   Pen Tool Extras' settings dialog and leaves the selected tool and pen color alone.
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
   saved by SudokuPad under `ToolPen_linemode`. The pen panel's **line mode button** steps it: a click goes Center & Edge, Center only, Edge only, and round.
-- **page color** — the color Dark Page paints the page outside the kept rectangle: black until a solver picks
+- **page color** — the color Dark Page paints the page outside the board box: black until a solver picks
   another in the Dark Page dialog, saved under `DarkPage_color`. The page's own text is light or dark, whichever contrasts more
   with the color.
-- **kept rectangle** — the box Dark Page leaves as SudokuPad renders it: the tight box around everything
-  the puzzle visibly draws, joined with every cell's box grown by a pen mark's reach, padded by 1px,
-  rounded outward to whole pixels and limited to the `#svgrenderer` box. The page is the chosen page color (black by default) outside it.
+- **board box** — the `#svgrenderer` box. Dark Page paints it SudokuPad's own page background (`--body-bg`), so the board stays white,
+  and the page is the chosen page color (black by default) outside it. The box clips everything the puzzle draws.
 - **swatch** — also, in Pen Tool Extras, the picture on a pen color button: page 1 a solid line, page 2 a dashed line, page 3 a line and its arrows, cut out of the button's square so a recolor follows. In Color by Digit: one square button in its dialog showing one palette color, shown one cell color page at a time in a grid of its own, laid out by index (1 to 9 in rows of three, then index 0 last, on a fourth row), beside the grid of digit keys; a click sets the **brush**. An index with no visible color is an empty space of the same size. In the dialog's shared color block (`lib/color-picker.js`: a pulldown above a grid of swatches), Draw Tool's and Pen Tool Extras' swatches are color inputs, one per pen or ink color, and the block's palette mode, used by Color by Digit, makes them buttons.
 - **color block** — the part of a dialog that `lib/color-picker.js` draws for Pen Tool Extras, Draw Tool and Color by Digit: a pulldown (the **presets** or the cell color page) above a grid of **swatches**, three to a row.
 - **hold to edit** — a hold of 1000 ms on a color button of SudokuPad's color tool (the same delay SudokuPad uses), which `lib/color-picker.js` turns into **edit mode** for a script's panel.
