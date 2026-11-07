@@ -14,6 +14,8 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
   show it, with their scripts in `docs/research/` (`*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `site.test.js` fails until you do. README pictures, if added, follow the same rule.
+- **Phones and tablets are not supported**, in any script, and never will be (Chris, 2026-11-07). No change is checked, styled, screenshot or
+  demonstrated at a phone or tablet size, and no ticket or PR asks for it.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
   2026-11-06). A dark page means Dark Page.
 
@@ -49,7 +51,8 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   its startup changed); the full suite runs once, at the controller's merge check.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- It does not cover a real Tampermonkey install or `crackingthecryptic.com`: a PR names those as still owed.
+- It does not cover a real Tampermonkey install: a PR names that as still owed. `crackingthecryptic.com` only redirects to
+  SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`. Run it before you hand off a change:
 `land.testcmd` runs only the tests, and no hook or CI job runs the linter.
