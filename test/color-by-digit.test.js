@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, renderTitle, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -519,16 +519,8 @@ test('the dialog is 640 px wide on a desktop and never wider than the window', (
   assert.match(css, /\.dialog\.color-by-digit-dialog \{ width: 640px; max-width: calc\(100vw - \d+px\)/)
 })
 
-test('Copy settings and Paste settings are two icon buttons at the right end of the title row, with the status between', () => {
-  const html = renderTitle('1.2.3')
-  assert.match(html, /^<div class="cbd-title-row"><span><b>Color by Digit<\/b> <small class="cbd-version">v1\.2\.3<\/small><\/span><span data-role="settings-status"><\/span><span class="cbd-tools">/)
-  assert.match(html, /<button type="button" data-act="copy-settings" title="Copy settings" aria-label="Copy settings"><svg [^>]*aria-hidden="true">.*<\/svg><\/button><button type="button" data-act="paste-settings" title="Paste settings" aria-label="Paste settings"><svg /)
-  assert.doesNotMatch(html, />Copy settings<|>Paste settings</)
-})
-
 test('the bottom row keeps no style rule for the copy and paste buttons', () => {
   assert.doesNotMatch(STYLE_CSS, /paste-settings/)
-  assert.match(STYLE_CSS.replace(/\s+/g, ' '), /\.cbd-title-row \{ display: flex; align-items: center/)
 })
 
 const menuPicks = (html) => [...html.matchAll(/data-act="pick" data-target="(\w+)" data-index="(\d)" aria-checked="(\w+)"/g)].map((m) => `${m[1]}${m[2]}${m[3] === 'true' ? '*' : ''}`)

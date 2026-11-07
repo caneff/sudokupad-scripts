@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.26.7
+// @version      1.26.8
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,8 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.26.7'
-  const SETTINGS_GROUP = 'experimental'
+  const VERSION = '1.26.8'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2115,20 +2114,6 @@
     return `<svg width="${width}" height="16" viewBox="0 0 ${width} 16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes}</svg>`
   }
 
-  const ICON_PICTURES = {
-    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
-    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
-  }
-  const iconButton = (act, label, picture) =>
-    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
-
-  function renderTitle (version) {
-    return '<div class="pen-tool-extras-title-row">' +
-      `<span><b>Pen Tool Extras</b> <small class="pen-tool-extras-version">v${version}</small></span>` +
-      '<span data-role="settings-status"></span>' +
-      '<span class="pen-tool-extras-tools">' + iconButton('copy-settings', 'Copy settings', ICON_PICTURES.copy) + iconButton('paste-settings', 'Paste settings', ICON_PICTURES.paste) + '</span></div>'
-  }
-
   // The class names more than one template writes, named once here; a class only one template writes is spelled in that template and in its rule in `DIALOG_CSS`.
   const NOTE = 'pen-tool-extras-note'
   const SECTION_TITLE = 'pen-tool-extras-section-title'
@@ -2184,15 +2169,6 @@
     `.dialog-options.${DIALOG_CLASS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
     `.dialog-options.${DIALOG_CLASS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: ${MUTED_COLOR} !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
-    '.pen-tool-extras-version { opacity: .6; }',
-    '.pen-tool-extras-title-row { display: flex; align-items: center; gap: 12px; }',
-    '.pen-tool-extras-tools { display: flex; align-items: center; gap: 4px; }',
-    `.pen-tool-extras-tools button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${MUTED_COLOR} !important; cursor: pointer; border-radius: 6px !important; }`,
-    '.pen-tool-extras-tools button:hover { background: #f0edf5 !important; }',
-    '.pen-tool-extras-tools svg { width: 20px; height: 20px; }',
-    '.pen-tool-extras-tools svg * { fill: none !important; }',
-    // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-    `.pen-tool-extras-title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${MUTED_COLOR}; }`,
     `${EDITOR} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
     // In the first column the note wraps to the column set by the marks table; it never sets it.
     `${EDITOR} .${CELL} .${NOTE} { width: 0; min-width: 100%; max-width: none; }`,
@@ -2278,27 +2254,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       cell(section('Other')) + '</div>'
   }
 
-  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
-  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
-  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
-
-  // The next press ends the swallowing even when no release came (a close from the keyboard).
-  function swallowRelease () {
-    const swallow = (event) => event.stopImmediatePropagation()
-    const stop = () => {
-      RELEASE_EVENTS.forEach((type) => window.removeEventListener(type, swallow, true))
-      window.removeEventListener('pointerdown', stop, true)
-    }
-    RELEASE_EVENTS.forEach((type) => window.addEventListener(type, swallow, true))
-    window.addEventListener('pointerdown', stop, true)
-  }
-
-  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
-  function closeDialogKeepingGrid () {
-    Framework.closeDialog()
-    swallowRelease()
-  }
-
   // SudokuPad also closes a dialog on a press on its overlay, which covers the page. The grid never
   // saw that press, so the release would mark the cell of the pointer's last position on the grid.
   // The overlay of this script's own dialog is told apart by the editor inside it.
@@ -2328,6 +2283,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   }
 
   function openDialog () {
+    installDialogTitleStyle(PICKER_PREFIX)
     let set = active
     let pickedPreset = activePickedPreset
     // Save writes the colors only once a preset is picked or a picker edited, so opening and saving never stands in for the install save.
@@ -2356,7 +2312,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }
     Framework.showDialog({
       parts: [
-        { tag: 'text', innerHTML: renderTitle(VERSION) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: PICKER_PREFIX, name: 'Pen Tool Extras', version: VERSION, icons: renderCopyPasteIcons(PICKER_PREFIX) }) },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
         {
           tag: 'options',
@@ -2367,10 +2323,10 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
               handler: () => {
                 if (colorsChosen) saveColors(set, pickedPreset)
                 saveSettings(draft)
-                closeDialogKeepingGrid()
+                closeDialogKeepingGrid(Framework)
               }
             },
-            { tag: 'button', content: 'Cancel', handler: closeDialogKeepingGrid },
+            { tag: 'button', content: 'Cancel', handler: () => closeDialogKeepingGrid(Framework) },
             { tag: 'button', content: 'Restore defaults', handler: restoreDefaults }
           ]
         }
@@ -2436,8 +2392,93 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   }
 
   // 11. Startup: the test exports, the Framework guard and Framework.getApp()
+  // <lib:settings-dialog>
+  // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
+  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
+  const SETTINGS_GROUP = 'experimental'
+  const TITLE_MUTED = '#777'
+
+  // The next press ends the swallowing even when no release came (a close from the keyboard).
+  function swallowRelease (win = window) {
+    const swallow = (event) => event.stopImmediatePropagation()
+    const stop = () => {
+      RELEASE_EVENTS.forEach((type) => win.removeEventListener(type, swallow, true))
+      win.removeEventListener('pointerdown', stop, true)
+    }
+    RELEASE_EVENTS.forEach((type) => win.addEventListener(type, swallow, true))
+    win.addEventListener('pointerdown', stop, true)
+  }
+
+  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
+  function closeDialogKeepingGrid (framework, win = window) {
+    framework.closeDialog()
+    swallowRelease(win)
+  }
+
+  // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
+  function addSettingsEntry (framework, { name, content, open }) {
+    framework.addSetting({
+      tag: 'button',
+      name,
+      group: SETTINGS_GROUP,
+      content,
+      handler: () => {
+        closeDialogKeepingGrid(framework)
+        setTimeout(open, 0)
+      }
+    })
+  }
+
+  const COPY_PASTE_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const titleIconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The title row's icon slot, filled with the Copy settings and Paste settings buttons and the status line they report to.
+  function renderCopyPasteIcons (prefix) {
+    return '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span>`
+  }
+
+  // The dialog's first part: the name, the version beside it, and `icons` (HTML) at the right end.
+  function renderDialogTitle ({ prefix, name, version, icons = '' }) {
+    return `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>${icons}</div>`
+  }
+
+  function dialogTitleCss (prefix) {
+    const tools = `.${prefix}tools`
+    return [
+      `.${prefix}version { opacity: .6; }`,
+      `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
+      `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
+      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} svg { width: 20px; height: 20px; }`,
+      `${tools} svg * { fill: none !important; }`,
+      // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+    ].join('\n')
+  }
+
+  // Puts the title rules in the page once, for a dialog whose script has no stylesheet of its own to hold them.
+  function installDialogTitleStyle (prefix, doc = document) {
+    const id = `${prefix}title-style`
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = dialogTitleCss(prefix)
+    doc.head.appendChild(style)
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-dialog>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, renderTitle, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
+    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS, createStep, STEP_LABELS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
   if (typeof Framework === 'undefined') return
@@ -2465,16 +2506,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     installOverlayPressSwallow()
     effectsOf(SETTING_NAMES).forEach((effect) => effect())
     applyStyle()
-    Framework.addSetting({
-      tag: 'button',
-      name: 'pentoolextras',
-      group: SETTINGS_GROUP,
-      content: 'Pen Tool Extras',
-      handler: () => {
-        closeDialogKeepingGrid()
-        setTimeout(openDialog, 0)
-      }
-    })
+    addSettingsEntry(Framework, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openDialog })
     const start = startupPenColors(Framework.getData(COLORS_KEY), hasColorTool)
     if (start.load) return adoptColors(start.load)
     if (start.save) return saveColors(start.save)
