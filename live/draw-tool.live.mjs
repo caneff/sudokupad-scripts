@@ -2,13 +2,10 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, texts, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, texts, TOOL_KEYS, tool as toolOf } from './draw-tool-fixtures.mjs'
 import { openPage } from './page.mjs'
 import { gridPoint, mouseDrag } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
-
-// SudokuPad's tool keys, App.toolHotkeys.
-const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
 
 let browser
 before(async () => { browser = await chromium.launch() })

@@ -8,6 +8,9 @@ import { clickUntil, SETTLE_MS } from './settle.mjs'
 
 export const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
 
+// SudokuPad's tool keys, App.toolHotkeys.
+export const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
+
 export const DRAW_BUTTON = '#control-draw'
 export const DIGIT_BUTTON = '#control-normal'
 export const STROKES = '#draw-tool-layer path'
