@@ -662,7 +662,9 @@
     `#${OPACITY_SLIDER}::-moz-range-track { background: ${FADE_PICTURE}; }`,
     `.${SLIDER_ROW_CLASS} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${(SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2}rem; ${THUMB_SHAPE} }`,
     `.${SLIDER_ROW_CLASS} input::-moz-range-thumb { ${THUMB_SHAPE} }`,
-    `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`
+    `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`,
+    // The tool bar is a grid and stock buttons have order 0, so Draw's stays last whenever another is added.
+    `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
   // Pen Tool Extras' gear, at its viewBox.
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
@@ -1317,17 +1319,6 @@
     handleKeydown (event) { return Framework.app.tool === TOOL_NAME && event.key === 'Shift' }
   }
 
-  // Every tool button is appended to the bar when it is added (the pen tool's on its setting, a script's whenever it
-  // runs), so Draw's moves back to the end each time one lands after it.
-  function keepButtonLast () {
-    const bar = document.querySelector('.controls-tool')
-    const button = bar?.querySelector(`#control-${TOOL_NAME}`)
-    if (!button) return
-    const moveToEnd = () => { if (bar.lastElementChild !== button) bar.appendChild(button) }
-    moveToEnd()
-    new window.MutationObserver(moveToEnd).observe(bar, { childList: true })
-  }
-
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
     for (const slider of SLIDERS) slider.set(slider.read(Framework.getData(slider.key)))
@@ -1355,7 +1346,6 @@
         setTimeout(openDialog, 0)
       }
     })
-    keepButtonLast()
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
