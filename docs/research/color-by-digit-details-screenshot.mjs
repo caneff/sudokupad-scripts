@@ -1,74 +1,101 @@
 // Takes the pictures for site/color-by-digit.html from the real script on the live page, on the shared example of
-// color-by-digit-example.mjs (two boxes, one given, the default Low/5/High profile): color-by-digit-details-cell.png (Cell),
-// color-by-digit-details-digit.png (the same boxes in Digit, with the red circles of its marks that conflict with the given 5),
-// color-by-digit-details-modes.gif (an animation: the two boxes and the button stepping Cell, Digit, Both and Off by real presses, 1.5 s a frame, joined with Python's PIL)
-// and color-by-digit-details-menu.png (the profile menu open above the button, Each digit picked). The mascot is hidden.
-// Needs python3 with Pillow for the GIF. Run from the repo root: node docs/research/color-by-digit-details-screenshot.mjs
+// color-by-digit-example.mjs (two boxes, one given, the default Low/5/High profile):
+//   color-by-digit-details-digit.png  the boxes in Digit, with the red circles of its marks that conflict with the given 5
+//   color-by-digit-details-modes.gif  an animation: the boxes and the button stepping Cell, Digit, Both and Off by real presses, 1.5 s a frame
+//   color-by-digit-details-cell.gif   an animation in Cell: a 2 typed into an empty cell fills it, center marks 7 and 8 in another fill it,
+//                                     and a center mark 2 from the other group takes the fill away; the last state holds longer
+//   color-by-digit-details-menu.gif   an animation: the boxes and, beside them, the profile menu opened from the button's arrow box,
+//                                     Odd/Even picked by a real click, and the boxes recolored; the last state holds longer
+// Every change is real input on the real script; a frame is taken once the page has settled. The mascot is hidden.
+// Needs python3 with Pillow for the GIFs. Run from the repo root: node docs/research/color-by-digit-details-screenshot.mjs
 import { chromium } from 'playwright'
-import { spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { BUTTON, exampleClip, MODES, openExample, pressTo, waitForCircles } from './color-by-digit-example.mjs'
+import { BUTTON, DEVICE_SCALE, exampleClip, MODES, openExample, pressTo, SETTLE_MS, typeInto, waitForCircles } from './color-by-digit-example.mjs'
+import { joinGif } from './gif-join.mjs'
 
 const out = (name, ext = 'png') => new URL(`./color-by-digit-details-${name}.${ext}`, import.meta.url).pathname
 const FRAME_MS = 1500
-// Puts each frame's grid and button side by side, the button centered on the grid's height with its mode named under it, on white, and saves one looping GIF.
-const JOIN = `
-import sys
-from PIL import Image, ImageDraw, ImageFont
-frames, target, ms, modes = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4:]
-font = ImageFont.load_default(size=36)
-GAP = 40
-images = []
-for i, mode in enumerate(modes):
-    grid = Image.open(f'{frames}/{i}-grid.png').convert('RGB')
-    button = Image.open(f'{frames}/{i}-button.png').convert('RGB')
-    sheet = Image.new('RGB', (grid.width + GAP + button.width, grid.height), 'white')
-    sheet.paste(grid, (0, 0))
-    sheet.paste(button, (grid.width + GAP, (grid.height - button.height) // 2))
-    # The button's own label is too small to read at a phone's width, so each frame names its mode again under the button.
-    top = (grid.height - button.height) // 2 + button.height + 12
-    ImageDraw.Draw(sheet).text((grid.width + GAP + button.width // 2, top), mode.capitalize(), fill='black', font=font, anchor='mt')
-    images.append(sheet)
-# One palette for every frame, so a color only one frame has (the red circles, the darker shades) keeps its own entry.
-strip = Image.new('RGB', (images[0].width, images[0].height * len(images)))
-for i, im in enumerate(images):
-    strip.paste(im, (0, i * im.height))
-palette = strip.quantize(colors=64)
-images = [im.quantize(palette=palette, dither=Image.Dither.NONE) for im in images]
-images[0].save(target, save_all=True, append_images=images[1:], duration=ms, loop=0, optimize=True)
-`
+const HOLD_MS = 3000
+const OPEN_MS = 2000
+// The board is shrunk beside the menu so the menu's text stays readable when the page scales the animation down.
+const BOARD_SCALE = 0.5
+const OPEN_STEP = 1
+const MENU = '#color-by-digit-menu'
+const MENU_ARROW = `${BUTTON} [data-role="menu"]`
 
 const browser = await chromium.launch()
-const p = await openExample(browser)
-await pressTo(p, 'CELL')
-await p.screenshot({ path: out('cell'), clip: await exampleClip(p) })
+const frames = mkdtempSync(join(tmpdir(), 'cbd-gifs-'))
+const shot = (p, name, clip) => p.screenshot({ path: join(frames, `${name}.png`), clip })
 
-// The two boxes and, beside them, the button, one frame per mode, each after a real press; PIL joins them into the GIF.
-const frames = mkdtempSync(join(tmpdir(), 'cbd-modes-'))
-const button = p.locator(BUTTON)
-for (const [i, mode] of MODES.entries()) {
-  await pressTo(p, mode)
-  if (mode === 'DIGIT' || mode === 'BOTH') await waitForCircles(p)
-  if (mode === 'DIGIT') await p.screenshot({ path: out('digit'), clip: await exampleClip(p) })
-  await p.mouse.move(0, 0)
-  await p.screenshot({ path: join(frames, `${i}-grid.png`), clip: await exampleClip(p) })
-  await button.screenshot({ path: join(frames, `${i}-button.png`) })
+// The modes: the two boxes and, beside them, the button, one frame per mode, each after a real press.
+{
+  const p = await openExample(browser)
+  await pressTo(p, 'CELL')
+  const button = p.locator(BUTTON)
+  for (const [i, mode] of MODES.entries()) {
+    await pressTo(p, mode)
+    if (mode === 'DIGIT' || mode === 'BOTH') await waitForCircles(p)
+    if (mode === 'DIGIT') await p.screenshot({ path: out('digit'), clip: await exampleClip(p) })
+    await p.mouse.move(0, 0)
+    await shot(p, `modes-${i}-grid`, await exampleClip(p))
+    await button.screenshot({ path: join(frames, `modes-${i}-button.png`) })
+  }
+  joinGif(MODES.map((mode, i) => ({ files: [join(frames, `modes-${i}-grid.png`), join(frames, `modes-${i}-button.png`)], caption: mode.charAt(0) + mode.slice(1).toLowerCase(), ms: FRAME_MS })), out('modes', 'gif'))
+  await p.context().close()
 }
-const joined = spawnSync('python3', ['-I', '-c', JOIN, frames, out('modes', 'gif'), String(FRAME_MS), ...MODES], { encoding: 'utf8' })
-rmSync(frames, { recursive: true })
-if (joined.status !== 0) throw new Error(`joining the frames failed: ${joined.error ?? joined.stderr}`)
 
-await pressTo(p, 'DIGIT')
-await p.click(`${BUTTON} [data-role="menu"]`)
-await p.locator('#color-by-digit-menu [data-act=pick]').filter({ hasText: 'Each digit' }).click()
-await p.click(`${BUTTON} [data-role="menu"]`)
-await p.locator('#color-by-digit-menu').waitFor({ state: 'visible' })
-await p.waitForTimeout(300)
-const b = await button.boundingBox()
-const m = await p.locator('#color-by-digit-menu').boundingBox()
-const x = Math.max(Math.min(b.x, m.x) - 10, 0)
-const y = Math.max(m.y - 10, 0)
-await p.screenshot({ path: out('menu'), clip: { x, y, width: Math.max(b.x + b.width, m.x + m.width) + 10 - x, height: b.y + b.height + 10 - y } })
+// Kept in step: cells (2, 4) and (2, 5) start empty; a digit, then center marks, then a center mark from the other group.
+{
+  const p = await openExample(browser, { leave: [[2, 5]] })
+  const entries = [
+    ['Start', null],
+    ['Type 2', ['#control-normal', 2, 4, '2']],
+    ['Center marks 7 and 8', ['#control-centre', 2, 5, '78']],
+    ['Add a center mark 2', ['#control-centre', 2, 5, '2']]
+  ]
+  for (const [i, [, entry]] of entries.entries()) {
+    if (entry) await typeInto(p, ...entry)
+    await p.mouse.move(0, 0)
+    await p.waitForTimeout(SETTLE_MS)
+    await shot(p, `cell-${i}`, await exampleClip(p))
+  }
+  joinGif(entries.map(([caption], i) => ({ files: [join(frames, `cell-${i}.png`)], caption, captionUnder: 0, ms: i === entries.length - 1 ? HOLD_MS : FRAME_MS })), out('cell', 'gif'))
+  await p.context().close()
+}
+
+// The profile menu: shut, open, Odd/Even picked.
+{
+  const p = await openExample(browser)
+  // The menu has rounded corners over the number pad; the other buttons are hidden so no strip of one shows there.
+  await p.addStyleTag({ content: `button:not(${BUTTON}):not(${MENU} *) { visibility: hidden !important }` })
+  const button = p.locator(BUTTON)
+  const oddEven = () => p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Odd/Even' })
+  await p.click(MENU_ARROW)
+  await p.locator(MENU).waitFor({ state: 'visible' })
+  await p.waitForTimeout(SETTLE_MS)
+  const menuClip = await p.locator(MENU).boundingBox()
+  const openSize = [Math.round(menuClip.width * DEVICE_SCALE), Math.round(menuClip.height * DEVICE_SCALE)]
+  await p.click(MENU_ARROW)
+  await p.locator(MENU).waitFor({ state: 'hidden' })
+  const steps = [
+    [async () => {}, FRAME_MS],
+    [async () => { await p.click(MENU_ARROW); await p.locator(MENU).waitFor({ state: 'visible' }) }, OPEN_MS],
+    [async () => { await oddEven().click(); await p.locator(MENU).waitFor({ state: 'hidden' }); await p.mouse.move(0, 0) }, HOLD_MS]
+  ]
+  await p.mouse.move(0, 0)
+  for (const [i, [act]] of steps.entries()) {
+    await act()
+    await p.waitForTimeout(SETTLE_MS)
+    await shot(p, `menu-${i}-grid`, await exampleClip(p))
+    if (i === OPEN_STEP) await shot(p, 'menu-open', menuClip)
+    await button.screenshot({ path: join(frames, `menu-${i}-button.png`) })
+  }
+  // The menu is cropped to its own box and the button to its own, so no neighbouring control is cut; the menu shows only while it is open.
+  joinGif(steps.map(([, ms], i) => ({ files: [{ stack: [join(frames, `menu-${i}-grid.png`)], scale: BOARD_SCALE }, { stack: [i === OPEN_STEP ? join(frames, 'menu-open.png') : openSize, join(frames, `menu-${i}-button.png`)] }], ms })), out('menu', 'gif'))
+  await p.context().close()
+}
+
+rmSync(frames, { recursive: true })
 await browser.close()
