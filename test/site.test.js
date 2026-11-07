@@ -523,3 +523,11 @@ shared({
   intro: `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`,
   homePicture: 'color-by-digit-slide-1-start.png'
 })
+
+// The details-page frame is as tall as its tallest slide, so a slideshow whose slides differ in shape leaves empty bands; the live test checks the fit itself.
+for (const { heading, page: file } of SHOWS) {
+  test(`${file}'s ${heading} slides all declare one width and height`, () => {
+    const sizes = new Set([...showOf(read(file)).matchAll(/<img class="slide[^>]*? width="(\d+)" height="(\d+)"/g)].map(m => `${m[1]}x${m[2]}`))
+    assert.equal(sizes.size, 1, `slide sizes: ${[...sizes].join(', ')}`)
+  })
+}
