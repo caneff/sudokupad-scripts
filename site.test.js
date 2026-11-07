@@ -468,7 +468,7 @@ test(`${DRAW} lists what the script adds, one item per feature`, () => {
     'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
     'Colors of its own. Nine colors that belong to Draw Tool, not to SudokuPad\'s pen. A click on a color button or the digit keys 1 to 9 pick one, and a hold on a button puts a color picker over each to change it.',
     'Size and opacity. The Size slider sets the width of the next line or shape and the size of the next text, and the Opacity slider how solid it is. A line, shape or text keeps the size and opacity it was drawn with.',
-    'Erasing. Drag with the right mouse button across a line, shape or text to erase it, or right-click one. Clear all, which asks first, erases everything.',
+    'Erasing. Drag with the right mouse button across a line, shape or text to erase it; a right click erases what is under the pointer. Clear all, which asks first, erases everything.',
     'Settings. The gear, or the Experimental settings entry, opens a dialog with a list of color presets (the pen colors, three darker page sets and SudokuPad\'s colors), a color picker for each of the nine colors, and Copy settings and Paste settings to move the colors and both slider values to another browser.',
     'Stays on the cells. Lines, shapes and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
     'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'

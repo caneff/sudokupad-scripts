@@ -5,7 +5,7 @@
 //   pen-tool-extras-bullet-lines.png    a dashed line and an arrow line on the grid, and the page button
 //   pen-tool-extras-bullet-edges.png    cells with an edge X, an edge circle and the two direction arrows
 //   pen-tool-extras-bullet-corners.png  two grid corners, one with an X and one with a circle
-// The erase bullet has none: a middle click does not show in a still picture (the tour animation shows it). The pen panel's picture is taken by
+// The erase bullet has none: a right click does not show in a still picture (the tour animation shows it). The pen panel's picture is taken by
 // pen-tool-extras-panel-annotated-screenshot.mjs. Every line is a real mouse drag and every mark a real click. The
 // script fails when a line or mark does not land (it checks the grid gained a pen value, not which mark), and writes
 // the four files only once all are taken, so a failure leaves the old ones. The mascot is hidden.

@@ -1574,7 +1574,7 @@
   }
 
   // A right press over the grid in the pen tool starts an erase and has its default prevented, which stops SudokuPad's own draw. A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's `clickCell` (checked live), so no pen mark or drag
-  // follows. `mousedown` is prevented too for a browser that still sends it: SudokuPad's own `mousedown` handler still runs there.
+  // follows.
   // The press's own coordinates are hit-tested, not SudokuPad's cached pointer position, which a dialog stops updating.
   // The browser's menu stays shut: Linux raises it on the press, over the grid, and Windows on the release, wherever the drag ended, so a right press owes it one refusal.
   function installLineErase (app, tool) {
@@ -1611,7 +1611,6 @@
       finishErase(tool, done)
     }), true)
     window.addEventListener('pointercancel', guarded(() => { erase = null }), true)
-    window.addEventListener('mousedown', guarded((event) => { if (erasePress(event)) event.preventDefault() }), true)
     document.addEventListener('contextmenu', guarded((event) => {
       const overGrid = inForce.eraseClicks && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
       if (overGrid || menuOwed) event.preventDefault()

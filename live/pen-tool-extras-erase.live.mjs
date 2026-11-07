@@ -1,8 +1,8 @@
-// Live check of pen-tool-extras.user.js's whole-line erase (a right click in the pen tool; the middle button does nothing) on sudokupad.app in headless Chromium.
+// Live check of pen-tool-extras.user.js's whole-line erase (a right click in the pen tool; the middle button is left to SudokuPad and the browser, and erases nothing) on sudokupad.app in headless Chromium.
 // A real mouse's middle button on Windows is still owed: headless Chromium draws no autoscroll, so the checks read
 // `defaultPrevented` on the press events instead of watching a scroll.
-// Every drag and click is real input except one `mousedown` sent by hand, and each check reads what is stored (`cell.pen`) and the
-// undo stack; the autoscroll checks read `defaultPrevented` on the press events instead.
+// Every drag and click is real input, and each check reads what is stored (`cell.pen`) and the undo stack; the middle button checks
+// read `defaultPrevented` on the press events instead.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -72,15 +72,15 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // A line on each pen page: a row of three segments (dragged right then back left at the end of page 3, so both direction
   // characters are stored), a branch down from the row's second point, and a line of another pen crossing it. The right
   // click on the row removes the row and its branch and leaves the other pen's line, in one undo step.
-  for (const [page, key, button] of [[1, 3, 'right'], [2, 3, 'right'], [3, 3, 'right']]) {
-    it(`page ${page}: a ${button} click erases the whole line with its branch, leaves a crossing from another pen, and one undo brings it all back`, async () => {
+  for (const page of [1, 2, 3]) {
+    it(`page ${page}: a right click erases the whole line with its branch, leaves a crossing from another pen, and one undo brings it all back`, async () => {
       await restartPuzzle(p)
       // the other pen: a vertical line through the row, drawn first with the pen on button 6 of the same page
       await selectPenOnPage(page, 6)
       await drag(p, [[0.5, 4.5], [4.5, 4.5]])
       const otherPen = await penEntries(p)
       assert.equal(otherPen.length, 4)
-      await selectPenOnPage(page, key)
+      await selectPenOnPage(page, 3)
       await drag(p, [[2.5, 2.5], [2.5, 4.5]])
       // the second half goes the other way on page 3: drawn from its right end to the left
       await drag(p, [[2.5, 6.5], [2.5, 4.5]])
@@ -90,7 +90,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       if (page === 3) assert.deepEqual([...new Set(drawn.filter((v) => !otherPen.includes(v)).map((v) => v.slice(-1)))].sort(), ['n', 'o'])
       const depth = await undoDepth()
 
-      await buttonClick(button, [2.5, 3.0])
+      await rightClick([2.5, 3.0])
       assert.deepEqual(await settle(() => penEntries(p), otherPen), otherPen, 'only the other pen is left')
       const erasedDepth = await undoDepth()
       assert.ok(erasedDepth > depth, `undo depth ${erasedDepth} after the erase, ${depth} before`)
@@ -109,6 +109,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   }
 
   const editor = () => p.locator('#pen-tool-extras-editor')
+  // Starts a log of every pointerdown and mousedown: its button and whether the page prevented it. Read by `window.__pressLog`.
+  const watchPresses = () => read(() => {
+    window.__pressLog = []
+    if (!window.__pressLogged) {
+      window.__pressLogged = true
+      for (const type of ['pointerdown', 'mousedown']) window.addEventListener(type, (e) => window.__pressLog.push([type, e.button, e.defaultPrevented]))
+    }
+  })
 
   it('with the Right click erase box unticked the right button erases nothing and prevents no default (menu as stock); the box is ticked by default, saves as false, and ticking it again brings the erase back', async () => {
     await undoAll()
@@ -126,23 +134,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await box.uncheck()
     await closeExtrasEditorWith(p, 'Save')
     assert.equal(await read((k) => Framework.getData(k), ERASE_KEY), false)
-    await read(() => {
-      window.__middleLog = []
-      if (!window.__middleLogged) {
-        window.__middleLogged = true
-        for (const type of ['pointerdown', 'mousedown']) window.addEventListener(type, (e) => window.__middleLog.push([type, e.button, e.defaultPrevented]))
-      }
-    })
+    await watchPresses()
     // a right click: SudokuPad's own, which prevents nothing and draws the edge X as a left click does
     await read(() => {
-      window.__middleLog = []
+      window.__pressLog = []
       if (!window.__menuLogged) {
         window.__menuLogged = true
-        window.addEventListener('contextmenu', (e) => window.__middleLog.push(['contextmenu', e.button, e.defaultPrevented]))
+        window.addEventListener('contextmenu', (e) => window.__pressLog.push(['contextmenu', e.button, e.defaultPrevented]))
       }
     })
     await rightClick([2.5, 3.0])
-    assert.deepEqual((await settle(() => read(() => window.__middleLog.filter(([type]) => type !== 'mousedown')), [['pointerdown', 2, false], ['contextmenu', 2, false]])), [['pointerdown', 2, false], ['contextmenu', 2, false]], 'a right click prevents nothing')
+    assert.deepEqual((await settle(() => read(() => window.__pressLog.filter(([type]) => type !== 'mousedown')), [['pointerdown', 2, false], ['contextmenu', 2, false]])), [['pointerdown', 2, false], ['contextmenu', 2, false]], 'a right click prevents nothing')
     assert.equal((await penEntries(p)).filter((v) => lines.includes(v)).length, lines.length, 'the line is still there after a right click')
     await openExtrasEditor(p)
     assert.equal(await box.isChecked(), false, 'the dialog opens with the box as saved')
@@ -159,24 +161,35 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undoAll()
   })
 
-  it('a middle click and a middle-drag over a line leave it, and prevent no default (the autoscroll is the browser\'s)', async () => {
+  it('a middle click and a middle-drag erase nothing: the line stays, and no default is prevented (the autoscroll is the browser\'s)', async () => {
     await undoAll()
     await selectPenOnPage(1, 3)
     await drag(p, [[2.5, 2.5], [2.5, 4.5]])
     const lines = await penEntries(p)
-    await read(() => {
-      window.__middleLog = []
-      if (!window.__middleLogged) {
-        window.__middleLogged = true
-        for (const type of ['pointerdown', 'mousedown']) window.addEventListener(type, (e) => window.__middleLog.push([type, e.button, e.defaultPrevented]))
-      }
-    })
+    await watchPresses()
     await middleClick([2.5, 3.0])
-    assert.deepEqual(await read(() => window.__middleLog), [['pointerdown', 1, false], ['mousedown', 1, false]], 'no default prevented, and the mouse events follow as in stock')
+    assert.deepEqual(await read(() => window.__pressLog), [['pointerdown', 1, false], ['mousedown', 1, false]], 'no default prevented, and the mouse events follow as in stock')
+    await watchPresses()
     await mouseDrag(p, [[0.5, 3.0], [6.5, 3.0]], { button: 'middle' })
+    assert.deepEqual(await read(() => window.__pressLog), [['pointerdown', 1, false], ['mousedown', 1, false]], 'the drag prevents nothing either')
     await sleep(150) // "nothing happened in 150 ms" check
     assert.equal((await penEntries(p)).filter((v) => lines.includes(v)).length, lines.length, 'the line is still there')
     await p.mouse.click(5, 5) // as after any middle press: a click off the grid, or the next drag draws nothing
+    await undoAll()
+  })
+
+  // SudokuPad treats the middle button as the left one, so with nothing of the script's in the way it makes the mark a left click makes.
+  it('a middle click on an edge makes the mark a left click makes there', async () => {
+    await undoAll()
+    await selectPenOnPage(1, 3)
+    await p.mouse.click(...(await gridPoint(p, [2.5, 3.0])))
+    const left = await settle(async () => (await penEntries(p)).length, 1)
+    const marks = await penEntries(p)
+    assert.equal(left, 1)
+    await undoAll()
+    await middleClick([2.5, 3.0])
+    assert.deepEqual(await settle(() => penEntries(p), marks), marks)
+    await p.mouse.click(5, 5)
     await undoAll()
   })
 
@@ -189,28 +202,26 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.mouse.click(...(await gridPoint(p, [7.5, 4.0])))
   }
 
-  for (const button of ['right']) {
-    it(`a ${button} click on a line leaves a cell circle, a cross and an edge X; on the edge X with no line under it, it removes the X and leaves the cell marks`, async () => {
-      await undoAll()
-      await selectPenOnPage(1, 3)
-      await drag(p, [[2.5, 2.5], [2.5, 5.5]])
-      const line = await penEntries(p)
-      await markOffLine()
-      const marks = (await penEntries(p)).filter((v) => !line.includes(v))
-      assert.equal(marks.length, 3, `marks stored: ${marks}`)
-      await buttonClick(button, [2.5, 4.0])
-      assert.deepEqual(await settle(() => penEntries(p), marks), marks, 'the line goes, the marks stay')
-      const depth = await undoDepth()
-      await buttonClick(button, [7.5, 4.0])
-      const left = marks.filter((v) => !v.startsWith('7,3:3'))
-      assert.equal(left.length, 2, `the edge X was stored on row 7, col 3: ${marks}`)
-      assert.deepEqual(await settle(() => penEntries(p), left), left, 'the edge X goes, the cell circle and cross stay')
-      assert.ok(await undoDepth() > depth, 'an undo step')
-      await undo()
-      assert.deepEqual(await settle(() => penEntries(p), marks), marks, 'one undo brings the X back')
-      await undoAll()
-    })
-  }
+  it('a right click on a line leaves a cell circle, a cross and an edge X; on the edge X with no line under it, it removes the X and leaves the cell marks', async () => {
+    await undoAll()
+    await selectPenOnPage(1, 3)
+    await drag(p, [[2.5, 2.5], [2.5, 5.5]])
+    const line = await penEntries(p)
+    await markOffLine()
+    const marks = (await penEntries(p)).filter((v) => !line.includes(v))
+    assert.equal(marks.length, 3, `marks stored: ${marks}`)
+    await rightClick([2.5, 4.0])
+    assert.deepEqual(await settle(() => penEntries(p), marks), marks, 'the line goes, the marks stay')
+    const depth = await undoDepth()
+    await rightClick([7.5, 4.0])
+    const left = marks.filter((v) => !v.startsWith('7,3:3'))
+    assert.equal(left.length, 2, `the edge X was stored on row 7, col 3: ${marks}`)
+    assert.deepEqual(await settle(() => penEntries(p), left), left, 'the edge X goes, the cell circle and cross stay')
+    assert.ok(await undoDepth() > depth, 'an undo step')
+    await undo()
+    assert.deepEqual(await settle(() => penEntries(p), marks), marks, 'one undo brings the X back')
+    await undoAll()
+  })
 
   it('a right click where a line and an edge X are both under the pointer erases the line and leaves the X', async () => {
     await undoAll()
@@ -264,22 +275,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undoAll()
   })
 
-  for (const [button, other] of [['right', 'middle']]) {
-    it(`a ${button}-drag still erases when a ${other} button pressed during it outlasts it`, async () => {
-      await undoAll()
-      await selectPenOnPage(1, 3)
-      await drag(p, [[1.5, 1.5], [1.5, 3.5]])
-      await p.mouse.move(...await gridPoint(p, [3.5, 2.0]))
-      await p.mouse.down({ button })
-      await p.mouse.move(...await gridPoint(p, [0.5, 2.0]), { steps: 8 })
-      await p.mouse.down({ button: other })
-      await p.mouse.up({ button })
-      await p.mouse.up({ button: other }) // the only `pointerup`, and it is the other button's
-      assert.deepEqual(await settle(() => penEntries(p), []), [], 'the line the drag crossed is erased')
-      await p.mouse.click(5, 5) // as after any middle press: a click off the grid, or the next drag draws nothing
-      await undoAll()
-    })
-  }
+  it('a right-drag still erases when a middle button pressed during it outlasts it', async () => {
+    await undoAll()
+    await selectPenOnPage(1, 3)
+    await drag(p, [[1.5, 1.5], [1.5, 3.5]])
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.0]))
+    await p.mouse.down({ button: 'right' })
+    await p.mouse.move(...await gridPoint(p, [0.5, 2.0]), { steps: 8 })
+    await p.mouse.down({ button: 'middle' })
+    await p.mouse.up({ button: 'right' })
+    await p.mouse.up({ button: 'middle' }) // the only `pointerup`, and it is the other button's
+    assert.deepEqual(await settle(() => penEntries(p), []), [], 'the line the drag crossed is erased')
+    await p.mouse.click(5, 5) // as after any middle press: a click off the grid, or the next drag draws nothing
+    await undoAll()
+  })
 
   it('a right-drag that crosses nothing, and a right click on nothing, change nothing and make no undo step', async () => {
     await undoAll()

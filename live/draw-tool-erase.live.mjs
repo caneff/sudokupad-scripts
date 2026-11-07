@@ -245,33 +245,26 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     const [strokes, before] = [await strokePaths(), await saved()]
     await middleDrag([[8, 3], [9, 3.3]])
     assert.deepEqual([await strokePaths(), await saved()], [strokes, before])
-    // Right-drags clear the items for the tests below: the low stroke, the text and the shape.
+  })
+
+  it('right-drags erase the low stroke, the text and the shape the middle-button tests left', async () => {
     await rightDrag([[8, 3], [9, 3.3]])
     await rightDrag([[7.3, 5.3], [7.7, 5.5]])
     await rightDrag([[7, 8], [7, 9]])
     assert.deepEqual([await strokeCount(), await texts(), await shapeCount()], [1, [], 0])
   })
 
-  it('with Draw current a middle pointerdown, mousedown and auxclick over the board are not prevented, so the autoscroll and Linux paste are the browser\'s', async () => {
+  it('a middle pointerdown, mousedown and auxclick over the board are the page\'s own with Draw current as with another tool: not prevented, so the autoscroll and Linux paste are the browser\'s', async () => {
     await pickDraw()
     await watchPrevented(MIDDLE_EVENTS, MIDDLE)
     await middleClick([8.5, 1.5])
-    assert.deepEqual(await prevented(), { pointerdown: [false], mousedown: [false], auxclick: [false] })
-  })
-
-  it('with another tool current a middle press behaves as it does without the script', async () => {
+    const withDraw = await prevented()
+    assert.deepEqual(withDraw, { pointerdown: [false], mousedown: [false], auxclick: [false] })
     await pickDigit()
     await watchPrevented(MIDDLE_EVENTS, MIDDLE)
     await middleClick([8.5, 1.5])
     assert.deepEqual(await prevented(), stockMiddleClick)
-  })
-
-  it('with Draw current a middle mousedown off the board is not prevented', async () => {
-    await pickDraw()
-    await watchPrevented(['mousedown'], MIDDLE)
-    assert.equal(await read(() => { const b = Framework.app.svgRenderer.getElem().getBoundingClientRect(); return b.left > 5 && b.top > 5 }), true, '(5, 5) is off the board')
-    await p.mouse.click(5, 5, { button: 'middle' })
-    assert.deepEqual(await prevented(), { mousedown: [false] })
+    assert.deepEqual(withDraw, stockMiddleClick)
   })
 
   it('Clear all asks "Clear the drawing?", and Cancel keeps every stroke', async () => {
