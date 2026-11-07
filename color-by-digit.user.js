@@ -750,6 +750,8 @@
   const ACTIVE_RING = '#b79be0'
   const ACTIVE_INK = '#5b2a9a'
   const HOVER_FILL = '#f6f3f9'
+  // The name field's side padding; its border is 1 px.
+  const NAME_PAD = 6
   function renderProfiles (state, colorOf, selected) {
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
@@ -874,15 +876,17 @@
     [`${EDITOR} .cbd-profile [data-role="handle"], ${EDITOR} .cbd-profile [data-act="delete"]`, 'visibility: hidden'],
     [`${EDITOR} .cbd-profile:hover [data-role="handle"], ${EDITOR} .cbd-profile:hover [data-act="delete"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-role="handle"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-act="delete"]`, 'visibility: visible'],
     [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
-    [`${EDITOR} .cbd-chips`, 'display: flex; flex: none'],
-    [`${EDITOR} .cbd-name`, 'flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400'],
+    // One width for every run, so the names line up.
+    [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_MAX_GROUPS * LIST_CHIP + 1}px`],
+    // Its left padding is the name field's padding and border, so a name starts where the selected row's does.
+    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400`],
     [`${EDITOR} .cbd-text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
     [`${EDITOR} .cbd-text-button:hover:not(:disabled)`, `background: ${HOVER_FILL}; color: #222`],
     [`${EDITOR} .cbd-text-button:disabled`, 'opacity: .4; cursor: default'],
     [`${EDITOR} [data-act="delete"]`, 'flex: none; font-size: 1.1rem; line-height: 1'],
     [`${EDITOR} [data-act="new-profile"]`, 'margin: 4px 0'],
     // Looks like the row's name until focused: no border or fill, then the box shows.
-    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px 6px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text'],
+    [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
     [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],

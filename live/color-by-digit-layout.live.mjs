@@ -82,6 +82,15 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
       await p.mouse.move(0, 0)
     })
 
+    it('starts every row\'s name text at one x, the selected row\'s name field included', async () => {
+      const starts = await p.locator(`${EDITOR} [data-role="profile-row"]`).evaluateAll((es) => es.map((row) => {
+        const name = row.querySelector('[data-role="profile-name"], .cbd-name')
+        const style = window.getComputedStyle(name)
+        return Math.round(name.getBoundingClientRect().x + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth))
+      }))
+      assert.equal(new Set(starts).size, 1, JSON.stringify(starts))
+    })
+
     if (viewport === DESKTOP) {
       it('is about 640 px wide', async () => {
         const { width } = await rect('.dialog')
