@@ -1,5 +1,6 @@
-// Live check of draw-tool.user.js's erasing on sudokupad.app: a right-drag deletes the strokes it crosses, the board's
-// context menu is suppressed while Draw is current, and Clear all asks first. Real mouse input throughout.
+// Live check of draw-tool.user.js's erasing on sudokupad.app: a right-drag deletes the strokes and texts it crosses, the
+// board's context menu is suppressed while Draw is current, Clear all asks first, and closing its dialog over the board
+// draws nothing and opens no text box. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -14,6 +15,8 @@ const DRAW_BUTTON = '#control-draw'
 const DIGIT_BUTTON = '#control-normal'
 const CLEAR_BUTTON = '.draw-tool-clear'
 const STROKES = '#draw-tool-layer path'
+const TEXTS = '#draw-tool-layer text.draw-tool-text'
+const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 const DIALOG = '.dialog'
 const DRAWING_PREFIX = 'DrawTool_drawing_'
 const INDEX_KEY = 'DrawTool_index'
@@ -35,6 +38,14 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
   const pickDraw = () => clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS)
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
   const strokeCount = () => p.locator(STROKES).count()
+  const texts = () => read((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
+  const textBoxCount = () => p.locator(TEXT_BOX).count()
+  // A click at `at`, in cells from the grid's top left, then `content` typed and Enter.
+  const typeText = async (at, content) => {
+    await p.mouse.click(...await gridPoint(p, at))
+    await p.keyboard.type(content)
+    await p.keyboard.press('Enter')
+  }
   const strokePaths = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => e.getAttribute('d')), STROKES)
   const saved = () => read((prefix) => Framework.getData(prefix + String(Framework.app.puzzle.puzzleId || window.location.href)), DRAWING_PREFIX)
   const boot = async () => {
@@ -134,6 +145,20 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.equal(await strokeCount(), 1)
   })
 
+  it('a right-drag across a typed text removes it whole and keeps the strokes, and a reload shows the same', async () => {
+    await pickDraw()
+    await typeText([5.5, 5.5], '15')
+    assert.deepEqual(await texts(), ['15'])
+    const strokes = await strokePaths()
+    await rightDrag([[5.2, 5.3], [5.8, 5.4]])
+    assert.deepEqual(await texts(), [])
+    assert.deepEqual(await strokePaths(), strokes)
+    assert.deepEqual((await saved()).map((item) => item.kind), ['stroke'])
+    await reload()
+    assert.deepEqual(await settle(strokePaths, strokes), strokes)
+    assert.deepEqual(await texts(), [])
+  })
+
   it('with Draw current a right click on the board opens no context menu and selects no cell', async () => {
     await pickDraw()
     await p.evaluate(() => Framework.app.deselect())
@@ -158,6 +183,17 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     assert.deepEqual(await strokePaths(), before)
     assert.equal((await saved()).length, 2)
+    assert.equal(await textBoxCount(), 0, 'the click on Cancel opened no text box')
+  })
+
+  it('closing the dialog by a click on its overlay over the board opens no text box', async () => {
+    await openClear()
+    const corner = await gridPoint(p, [0.5, 0.5])
+    assert.equal(await read(([x, y]) => document.elementFromPoint(x, y).classList.contains('dialog-overlay'), corner), true, 'the click lands on the overlay')
+    await p.mouse.click(...corner)
+    await p.locator(DIALOG).waitFor({ state: 'detached' })
+    assert.equal(await textBoxCount(), 0)
+    assert.deepEqual(await texts(), [])
   })
 
   it('closing the dialog by a button pressed over the board and released after a drag on it leaves no stroke', async () => {
@@ -180,15 +216,20 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.equal(await tool(), 'draw')
   })
 
-  it('Clear all\'s OK removes every stroke, and a reload shows none', async () => {
+  it('Clear all\'s OK removes every stroke and text, opens no text box, and a reload shows none', async () => {
     assert.equal(await strokeCount(), 2)
+    await typeText([5.5, 5.5], '15')
+    assert.deepEqual(await texts(), ['15'])
     await openClear()
     await pressDragRelease(await buttonOverBoard('OK'))
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     assert.equal(await settle(strokeCount, 0), 0)
+    assert.deepEqual(await texts(), [])
+    assert.equal(await textBoxCount(), 0)
     assert.equal(await saved(), null)
     await reload()
     assert.equal(await strokeCount(), 0)
+    assert.deepEqual(await texts(), [])
   })
 
   it('the page raised no error', () => {
