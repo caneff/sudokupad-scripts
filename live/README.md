@@ -11,7 +11,7 @@ all three times: at `DOMContentLoaded`, after load before Start Puzzle, after St
 
 - `live/startup.live.mjs` checks each script's startup that way: it loads with no page error, its
   control appears, one action works.
-- The two "auto mode saved on" groups of `live/color-by-digit-auto.live.mjs` do too.
+- The two "auto mode saved on and no mode saved" groups of `live/color-by-digit-mode.live.mjs` do too.
 - Dark Page's page color dialog group injects at `DOMContentLoaded` only.
 
 ## The recording

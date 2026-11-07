@@ -208,3 +208,27 @@ test(`${DETAILS} shows the pen panel as one annotated picture whose alt text nam
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
 })
+
+test(`${HOME} names no Digit Color script and links no digit-color file`, () => {
+  const page = read(HOME)
+  assert.doesNotMatch(page, /Digit Color|digit-color/)
+})
+
+test(`${HOME} describes Color by Digit's four modes beside a picture of colored digits`, () => {
+  const m = read(HOME).match(/<img ([^>]*)>\s*<div>\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
+  const text = plain(m[2])
+  for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(text, new RegExp(`\\b${mode}\\b`), mode)
+  assert.match(text, /darker shade/)
+  // Chris's ruling on #279: text a reader sees says "center marks".
+  assert.doesNotMatch(text, /centre/)
+  assert.match((m[1].match(/alt="([^"]*)"/) || [])[1] || '', /digits/i)
+})
+
+test(`${HOME} names Color by Digit's two digit options: the digit profile sync and turning digit colors off`, () => {
+  const m = read(HOME).match(/<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Color by Digit entry`)
+  const text = plain(m[1])
+  assert.match(text, /Sync digit profile with cell profile/)
+  assert.match(text, /Use digit colors/)
+})

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.7.1
-// @description  Adds a button that colors every cell holding a digit, and every empty cell whose centre marks all belong to one group, using the groups of palette colors in the active profile. A menu on the button switches profile, an AUTO box on it keeps the colors in step as digits and centre marks change, and a settings dialog edits the profiles.
+// @version      0.10.0
+// @description  Colors by digit from groups of palette colors in the active profile: cells holding a digit, or center marks that all belong to one group, take the group's color, and entered digits, corner marks and center marks take a darker shade of it. A press on the button steps the mode Cell, Digit, Both, Off; a menu on it switches profile, for cells and digits apart when they are not synced, and a settings dialog edits the profiles and can turn digit colors off.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,19 +17,28 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.7.1'
+  const VERSION = '0.10.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
-  // The profiles: { profiles: [{ name, groups }], active: index }.
+  // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
+  // `digitActive` is saved only while digits are not synced with cells, and `useDigitColors` only while off, so a state saved before them reads as synced and on.
   const PROFILES_KEY = 'ColorByDigit_profiles'
   const MAX_PROFILES = 6
   const MAX_NAME_LENGTH = 24
   const CUSTOM_NAME = 'Custom'
+  const MODE_KEY = 'ColorByDigit_mode'
+  // Auto mode's on/off, saved before the mode existed: read only to choose the starting mode when no mode is saved.
   const AUTO_KEY = 'ColorByDigit_auto'
-  // Set once Entropic and Modular have been offered to an install that already had profiles, so deleting one keeps it deleted.
-  const ADDED_PRELOADS_KEY = 'ColorByDigit_addedPreloads'
-  const ADDED_PRELOAD_NAMES = ['Entropic', 'Modular']
+  const MODES = ['cell', 'digit', 'both', 'off']
+  const DIGITLESS_MODES = ['cell', 'off']
+  const DIGITLESS_FALLBACK = { digit: 'off', both: 'cell' }
+  const MODE_NAMES = { cell: 'Cell', digit: 'Digit', both: 'Both', off: 'Off' }
+  // Each key is set once its preloads have been offered to an install that already had profiles, so deleting one keeps it deleted.
+  const ADDED_PRELOADS = [
+    { key: 'ColorByDigit_addedPreloads', names: ['Entropic', 'Modular'] },
+    { key: 'ColorByDigit_addedEachDigit', names: ['Each digit'] }
+  ]
   // SudokuPad's numpad order: 1 to 9 in rows of three, then 0 alone in the middle column.
   const NUMPAD_DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
   const NUMPAD_KEY = '2.4em'
@@ -54,7 +63,11 @@
       { key: '6', digits: ['1', '4', '7'] },
       { key: '5', digits: ['2', '5', '8'] },
       { key: '8', digits: ['0', '3', '6', '9'] }
-    ]
+    ],
+    // Nine colors whose darker shades are all distinct and none black or grey, so an entered digit never looks like a
+    // given: 5 to 9 on their own keys of SudokuPad's first palette page, and 1 to 4 (whose first-page keys are grey,
+    // black and a green near 8's yellow) on purple, pink and brown from page 2 and green from page 3.
+    'Each digit': [['1', 'j'], ['2', 'e'], ['3', 'h'], ['4', 'm'], ['5', '5'], ['6', '6'], ['7', '7'], ['8', '8'], ['9', '9']].map(([d, key]) => ({ key, digits: [d] }))
   }
 
   const cloneGroups = (groups) => groups.map((g) => ({ key: g.key, digits: [...g.digits] }))
@@ -94,6 +107,17 @@
 
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
+  const modesFor = (useDigitColors) => (useDigitColors ? MODES : DIGITLESS_MODES)
+  const nextMode = (mode, useDigitColors) => {
+    const modes = modesFor(useDigitColors)
+    return modes[(modes.indexOf(mode) + 1) % modes.length]
+  }
+  const allowedMode = (mode, useDigitColors) => (useDigitColors ? mode : DIGITLESS_FALLBACK[mode] ?? mode)
+  const colorsCells = (mode) => mode === 'cell' || mode === 'both'
+  const colorsDigits = (mode) => mode === 'digit' || mode === 'both'
+  const modeFromAuto = (auto) => (typeof auto === 'boolean' ? (auto ? 'cell' : 'off') : undefined)
+  const startingMode = (savedMode, savedAuto) => (MODES.includes(savedMode) ? savedMode : modeFromAuto(savedAuto) ?? 'cell')
+
   // SudokuPad's action names: `value` (digit), `candidates` (centre mark), `pencilmarks` (corner mark).
   function isEntryAction (action) {
     if (!action) return false
@@ -106,7 +130,7 @@
   const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
 
   // `managedKeys` is wider than the groups' keys when a Save drops an old group whose color must come off too.
-  function planAuto (cells, groups, indices, managedKeys = groupKeys(groups)) {
+  function planCellColors (cells, groups, indices, managedKeys = groupKeys(groups)) {
     const keyOfDigit = keyOfDigitMap(groups)
     const removals = new Map()
     const additions = new Map()
@@ -121,6 +145,25 @@
     return [
       ...[...removals].map(([key, list]) => ({ action: 'remove', key, indices: list })),
       ...[...additions].map(([key, list]) => ({ action: 'add', key, indices: list }))
+    ]
+  }
+
+  const planClear = (cells, keys) => planCellColors(cells, [], everyIndex(cells), keys)
+
+  // The SudokuPad actions that carry out `ops` on `cells`, each run on the cells at `indices`. A color toggle with
+  // Multi-color off clears a cell that holds another color first (SudokuPad's Cell.toggleColour), so a cell that loses
+  // a color is cleared of every color and has the colors it keeps put back: the same actions leave the same cell under
+  // either setting, so undo and redo, which run them again, do too. Removals come first, as the plan has them.
+  function colorSteps (cells, ops) {
+    const removed = new Map()
+    ops.filter((op) => op.action === 'remove').forEach(({ key, indices }) => indices.forEach((i) => removed.set(i, [...(removed.get(i) || []), key])))
+    const cleared = [...removed.keys()]
+    const putBack = new Map()
+    cleared.forEach((i) => (cells[i].colours || []).filter((key) => !removed.get(i).includes(key)).forEach((key) => putBack.set(key, [...(putBack.get(key) || []), i])))
+    return [
+      ...(cleared.length > 0 ? [{ type: 'clear', arg: 'colour', indices: cleared }] : []),
+      ...[...putBack].map(([key, indices]) => ({ type: 'colour', arg: key, indices })),
+      ...ops.filter((op) => op.action === 'add').map(({ key, indices }) => ({ type: 'colour', arg: key, indices }))
     ]
   }
 
@@ -189,8 +232,9 @@
     if (!data || !Array.isArray(data.profiles)) return null
     const kept = data.profiles.slice(0, MAX_PROFILES).map((profile, index) => ({ profile: normalizeProfile(profile), index })).filter((entry) => entry.profile)
     if (kept.length === 0) return null
-    const active = kept.findIndex((entry) => entry.index === data.active)
-    return { profiles: kept.map((entry) => entry.profile), active: Math.max(active, 0) }
+    const keptIndex = (index) => kept.findIndex((entry) => entry.index === index)
+    const digitActive = keptIndex(data.digitActive)
+    return makeState(kept.map((entry) => entry.profile), Math.max(keptIndex(data.active), 0), digitActive >= 0 ? digitActive : undefined, data.useDigitColors !== false)
   }
 
   const readPastedFlag = (data) => (typeof data === 'boolean' ? data : undefined)
@@ -199,11 +243,12 @@
     const state = normalizeState(data)
     return state && state.profiles.length === data.profiles.length ? state : undefined
   }
-  const READERS = { [PROFILES_KEY]: readPastedProfiles, [AUTO_KEY]: readPastedFlag, [ADDED_PRELOADS_KEY]: readPastedFlag }
-  // The profiles in force, which carry groups saved before profiles existed, and the auto mode in force, so a paste can switch either off.
+  const readPastedMode = (data) => (MODES.includes(data) ? data : undefined)
+  const READERS = { [PROFILES_KEY]: readPastedProfiles, [MODE_KEY]: readPastedMode, ...Object.fromEntries(ADDED_PRELOADS.map(({ key }) => [key, readPastedFlag])) }
+  // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
   function copiedSettings (store) {
-    const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [AUTO_KEY]: store.getData(AUTO_KEY) === true }
-    if (store.getData(ADDED_PRELOADS_KEY) === true) copied[ADDED_PRELOADS_KEY] = true
+    const copied = { [PROFILES_KEY]: stateFromStored(store.getData(PROFILES_KEY), store.getData(LEGACY_GROUPS_KEY)), [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
+    ADDED_PRELOADS.forEach(({ key }) => { if (store.getData(key) === true) copied[key] = true })
     return JSON.stringify(copied)
   }
 
@@ -216,6 +261,8 @@
       throw new Error('the clipboard text is not JSON', { cause: error })
     }
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    // Settings copied before the mode existed carry auto mode's on/off in its place.
+    if (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY)) data = { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) }
     const values = {}
     let skipped = 0
     for (const [key, read] of Object.entries(READERS)) {
@@ -263,6 +310,18 @@
 
   const cloneProfile = (profile) => ({ name: profile.name, groups: cloneGroups(profile.groups) })
 
+  // An undefined `digitActive` is synced: the digits take the cell profile.
+  function makeState (profiles, active, digitActive, useDigitColors) {
+    const state = { profiles, active }
+    if (digitActive !== undefined) state.digitActive = digitActive
+    if (!useDigitColors) state.useDigitColors = false
+    return state
+  }
+
+  const isSynced = (state) => state.digitActive === undefined
+  const usesDigitColors = (state) => state.useDigitColors !== false
+  const withProfiles = (state, profiles, active, digitActive) => makeState(profiles, active, digitActive, usesDigitColors(state))
+
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
 
   // Groups saved before profiles existed become the active profile.
@@ -277,49 +336,62 @@
     return { profiles: [{ name: CUSTOM_NAME, groups: legacy }, ...preloads], active: 0 }
   }
 
-  function withAddedPreloads (state) {
+  function withAddedPreloads (state, names) {
     const profiles = state.profiles.map(cloneProfile)
-    for (const name of ADDED_PRELOAD_NAMES) {
+    for (const name of names) {
       const groups = PRELOADS[name]
       if (profiles.length < MAX_PROFILES && !profiles.some((p) => sameGroups(p.groups, groups))) profiles.push({ name, groups: cloneGroups(groups) })
     }
-    return { profiles, active: state.active }
+    return withProfiles(state, profiles, state.active, state.digitActive)
   }
 
   const activeGroups = (state) => state.profiles[state.active].groups
+  const digitGroups = (state) => state.profiles[isSynced(state) ? state.active : state.digitActive].groups
+  const iconGroups = (state, mode) => (mode === 'digit' ? digitGroups(state) : activeGroups(state))
 
   function addProfile (state, name) {
     const trimmed = cleanName(name)
     if (state.profiles.length >= MAX_PROFILES || trimmed === '') return state
     const copy = { name: trimmed, groups: cloneGroups(activeGroups(state)) }
-    return { profiles: [...state.profiles.map(cloneProfile), copy], active: state.active }
+    return withProfiles(state, [...state.profiles.map(cloneProfile), copy], state.active, state.digitActive)
   }
 
   function deleteProfile (state, index) {
     if (state.profiles.length <= 1 || !state.profiles[index]) return state
     const profiles = state.profiles.filter((_, i) => i !== index).map(cloneProfile)
     const active = index < state.active ? state.active - 1 : Math.min(state.active, profiles.length - 1)
-    return { profiles, active }
+    // Deleting the digit profile makes the digits follow the cell profile.
+    const digitActive = isSynced(state) || index === state.digitActive ? undefined : state.digitActive - (index < state.digitActive ? 1 : 0)
+    return withProfiles(state, profiles, active, digitActive)
   }
 
   function moveProfile (state, from, to) {
     if (from === to) return state
     const order = state.profiles.map((_, i) => i)
     order.splice(to, 0, ...order.splice(from, 1))
-    return { profiles: order.map((i) => cloneProfile(state.profiles[i])), active: order.indexOf(state.active) }
+    return withProfiles(state, order.map((i) => cloneProfile(state.profiles[i])), order.indexOf(state.active), isSynced(state) ? undefined : order.indexOf(state.digitActive))
   }
 
   function setActive (state, index) {
-    return state.profiles[index] ? { profiles: state.profiles.map(cloneProfile), active: index } : state
+    return state.profiles[index] ? withProfiles(state, state.profiles.map(cloneProfile), index, state.digitActive) : state
   }
 
+  function setDigitActive (state, index) {
+    return state.profiles[index] ? withProfiles(state, state.profiles.map(cloneProfile), state.active, index) : state
+  }
+
+  // Unticking starts the digit pick at the cell profile, so no color changes until another is picked.
+  const setSync = (state, synced) => withProfiles(state, state.profiles.map(cloneProfile), state.active, synced ? undefined : (state.digitActive ?? state.active))
+
+  const setUseDigitColors = (state, on) => makeState(state.profiles.map(cloneProfile), state.active, state.digitActive, on)
+
   function setActiveGroups (state, groups) {
-    return { profiles: state.profiles.map((p, i) => (i === state.active ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), active: state.active }
+    return withProfiles(state, state.profiles.map((p, i) => (i === state.active ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), state.active, state.digitActive)
   }
 
   const dropIndex = (mids, from, y) => mids.filter((mid, i) => i !== from && mid < y).length
 
-  // The icon is drawn in 100 by 100 units; the AUTO label takes its top ICON_TOP, the arrow box everything below ARROW_START.
+  // The icon is drawn in 100 by 100 units; the mode label takes its top ICON_TOP, the arrow box everything below ARROW_START.
   const ICON_TOP = 22
   const ARROW_START = 78
   const ICON_MAX_GROUPS = 4
@@ -347,24 +419,136 @@
     return shown.map((c, i) => ({ ...c, x: start + i * (size + gap), y: ICON_TOP + 10, size }))
   }
 
-  function inkFor (color) {
-    const v = String(color).trim().toLowerCase()
-    let channels
+  const clamp255 = (x) => Math.max(0, Math.min(255, x))
+
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black.
+  function parseColor (color) {
+    const v = String(color ?? '').trim().toLowerCase()
+    if (!isVisibleColor(v)) return null
     const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(v)
     if (hex) {
       const h = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join('') : hex[1]
-      channels = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
-    } else {
-      const fn = /^rgba?\(([^)]*)\)$/.exec(v)
-      channels = fn ? fn[1].split(/[,/\s]+/).filter(Boolean).slice(0, 3).map(Number) : []
+      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
     }
-    if (channels.length !== 3 || channels.some(Number.isNaN)) return '#000'
+    const fn = /^rgba?\(([^)]*)\)$/.exec(v)
+    const channels = fn ? fn[1].split(/[,/\s]+/).filter(Boolean).slice(0, 3).map(Number) : []
+    return channels.length === 3 && !channels.some(Number.isNaN) ? channels.map((x) => Math.round(clamp255(x))) : null
+  }
+
+  function inkFor (color) {
+    const channels = parseColor(color)
+    if (!channels) return '#000'
     const [r, g, b] = channels
     return 0.299 * r + 0.587 * g + 0.114 * b < 140 ? '#fff' : '#000'
   }
 
+  // The digit shade is Pen Tool Extras' pen color from a cell color, copied since the scripts share no code: the share of its OKLCH lightness a cell color keeps.
+  const LIGHTNESS_FACTOR = 0.75
+  const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
+  const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
+
+  // Ottosson's published matrices. The way back returns the unclamped linear channels, so a caller can tell an out-of-gamut color.
+  function toOklab ([r, g, b]) {
+    const [lr, lg, lb] = [r, g, b].map(toLinear)
+    const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb)
+    const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb)
+    const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb)
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+    ]
+  }
+
+  function fromOklabLinear ([L, a, b]) {
+    const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3
+    return [
+      4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+      -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+      -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+    ]
+  }
+
+  const EDGE = 1e-6
+  const inGamut = (linear) => linear.every((x) => x >= -EDGE && x <= 1 + EDGE)
+
+  // Lowering lightness at fixed chroma can leave sRGB, so chroma is reduced just far enough to fit (a bisection), which keeps the hue.
+  function darkenColor (rgb) {
+    const [L, a, b] = toOklab(rgb.map(clamp255))
+    const target = L * LIGHTNESS_FACTOR
+    let low = inGamut(fromOklabLinear([target, a, b])) ? 1 : 0
+    let high = 1
+    if (low === 0) {
+      for (let i = 0; i < 30; i++) {
+        const mid = (low + high) / 2
+        if (inGamut(fromOklabLinear([target, a * mid, b * mid]))) low = mid
+        else high = mid
+      }
+    }
+    const out = fromOklabLinear([target, a * low, b * low])
+    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x)))))
+      .toString(16).padStart(2, '0')).join('')
+  }
+
+  // An entered digit's text element carries no digit attribute, so the script adds this one.
+  const DIGIT_ATTR = 'data-color-by-digit'
+  // Corner marks are `text`; centre marks are `tspan` inside one `text`.
+  const MARK_SELECTORS = ['#cell-pencilmarks .cell-pencilmark', '#cell-candidates tspan']
+
+  function digitOfText (text) {
+    const t = String(text ?? '').trim()
+    return DIGITS.includes(t) ? t : null
+  }
+
+  // The `#svgrenderer` prefix outranks SudokuPad's red rule for a conflicting mark. Marks carry their digit in
+  // `data-val`; givens sit in `#cell-givens`, which no rule names.
+  function buildDigitCss (groups, colorOf) {
+    const keyOfDigit = keyOfDigitMap(groups)
+    return DIGITS.flatMap((digit) => {
+      const rgb = keyOfDigit[digit] === undefined ? null : parseColor(colorOf(keyOfDigit[digit]))
+      if (!rgb) return []
+      const shade = darkenColor(rgb)
+      return [`#cell-values [${DIGIT_ATTR}="${digit}"] { fill: ${shade} }`, ...MARK_SELECTORS.map((selector) => `#svgrenderer ${selector}[data-val="${digit}"] { fill: ${shade} }`)]
+    }).join('\n')
+  }
+
+  const CIRCLES_ID = 'color-by-digit-circles'
+  // Pale enough that every shade stays readable on it.
+  const CIRCLE_FILL = '#ff6b6b'
+  const CIRCLE_OPACITY = 0.4
+  const CIRCLE_RADIUS_PER_WIDTH = 0.8
+  // SudokuPad adds this class to the page while it shows conflicting marks in red.
+  const CHECK_MARKS_CLASS = '.setting-checkpencilmarks'
+
+  // No pointer events, so a click on a circle reaches the board.
+  const CIRCLE_CSS = [
+    `#${CIRCLES_ID} { display: none; pointer-events: none }`,
+    `${CHECK_MARKS_CLASS} #${CIRCLES_ID} { display: inline }`,
+    `#${CIRCLES_ID} circle { fill: ${CIRCLE_FILL}; fill-opacity: ${CIRCLE_OPACITY} }`
+  ].join('\n')
+
+  function circleFor (mark) {
+    return { cx: mark.x, cy: mark.y, r: mark.width * CIRCLE_RADIUS_PER_WIDTH }
+  }
+
+  // The canvas reports `left` positive going left; the character's origin is on the baseline at
+  // `extent.x`, its em box starts at `extent.y`.
+  function inkMiddle (extent, measure) {
+    // A browser that lacks a measure gives `undefined`, which would draw no circle and say nothing.
+    for (const key of ['left', 'right', 'ascent', 'descent', 'fontAscent']) {
+      if (!Number.isFinite(measure[key])) throw new Error(`color-by-digit: the browser gave no ${key} measure for a mark's digit`)
+    }
+    const baseline = extent.y + measure.fontAscent
+    return {
+      x: extent.x + (measure.right - measure.left) / 2,
+      y: baseline + (measure.descent - measure.ascent) / 2
+    }
+  }
+
   function planSwitch (cells, oldGroups, newGroups) {
-    return planAuto(cells, newGroups, everyIndex(cells), [...new Set([...groupKeys(oldGroups), ...groupKeys(newGroups)])])
+    return planCellColors(cells, newGroups, everyIndex(cells), [...new Set([...groupKeys(oldGroups), ...groupKeys(newGroups)])])
   }
 
   function isVisibleColor (value) {
@@ -383,15 +567,11 @@
   const PURPLE = '#6a1b9a'
   const GREY = '#b3acbf'
 
-  // A span with the checkbox role, not an <input>: a form control inside a <button> takes focus from
-  // the puzzle and is swallowed by some browsers.
-  function autoBoxHtml (on) {
-    const color = on ? PURPLE : GREY
-    return '<span data-role="auto" role="checkbox" aria-label="Auto mode" title="Auto mode" ' + `aria-checked="${Boolean(on)}" ` +
-      'style="pointer-events:auto;position:absolute;left:-3px;top:-2px;display:flex;align-items:center;gap:2px;' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${color}">` +
-      `<span data-role="auto-mark" style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;width:10px;height:10px;border:1.5px solid ${color};border-radius:2px;` +
-      `font:700 8px/1 sans-serif">${on ? 'X' : ''}</span>AUTO</span>`
+  // No pointer events, so a press on the label is a press on the button.
+  function modeLabelHtml (mode) {
+    const on = mode !== 'off'
+    return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-3px;top:-2px;' +
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
@@ -408,15 +588,16 @@
   }
 
   // SudokuPad's own app buttons put their icon in <div class="icon">.
-  const iconHtml = (autoOn, groups, colorOf) =>
+  const iconHtml = (mode, groups, colorOf) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">' +
     iconLayout(groups).map((cell) => iconCellSvg(cell, colorOf)).join('') +
-    '</svg>' + autoBoxHtml(autoOn) + ARROW_BOX_HTML + '</div>'
+    '</svg>' + modeLabelHtml(mode) + ARROW_BOX_HTML + '</div>'
 
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a
-  // button added later needs refreshControls to get its onClick.
-  function installButton (framework, app, onClick, autoOn, groups, colorOf) {
-    framework.addAuxButton({ name: 'colorbydigit', title: 'Color by digit', content: iconHtml(autoOn, groups, colorOf), onClick })
+  // button added later needs refreshControls. Its onClick is left empty: listenForButton takes every
+  // press before SudokuPad sees it.
+  function installButton (framework, app, mode, groups, colorOf) {
+    framework.addAuxButton({ name: 'colorbydigit', title: 'Color by digit', content: iconHtml(mode, groups, colorOf), onClick () {} })
     app.refreshControls()
   }
 
@@ -509,7 +690,10 @@
   const ACTIVE_INK = '#5b2a9a'
   const IDLE_RING = '#e2dcea'
 
+  const checkboxHtml = (role, on, label) => `<label class="cbd-check"><input type="checkbox" data-role="${role}"${on ? ' checked' : ''}> ${label}</label>`
+
   function renderProfiles (state, colorOf, newName) {
+    const sync = usesDigitColors(state) ? checkboxHtml('sync', isSynced(state), 'Sync digit profile with cell profile') : ''
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const active = i === state.active
@@ -520,27 +704,39 @@
         `<button type="button" class="cbd-button cbd-small" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
-    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
+    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) + sync +
       `<div role="radiogroup" aria-label="Active profile">${rows}</div>` +
       '<div class="cbd-add-row">' +
       `<input type="text" data-role="new-name" maxlength="${MAX_NAME_LENGTH}" placeholder="New profile name" value="${esc(newName)}" aria-label="New profile name">` +
       `<button type="button" class="cbd-button" data-act="add"${full ? ' disabled' : ''}>+ Add</button></div>`
   }
 
-  // Rows are not focusable, so the keyboard stays with the puzzle.
-  function renderMenu (state, colorOf) {
-    const rows = state.profiles.map((profile, i) => {
-      const active = i === state.active
-      return `<div role="menuitemradio" data-act="pick" data-index="${i}" aria-checked="${active}" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;` +
+  const MENU_HEADING_STYLE = `font:600 11px/1 sans-serif;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px`
+  const menuHeading = (text) => `<div style="${MENU_HEADING_STYLE};letter-spacing:.08em">${text}</div>`
+  // The Cells and Digits sections' headings, set tighter than the menu's own.
+  const sectionHeading = (text) => `<div style="${MENU_HEADING_STYLE};letter-spacing:.04em">${text}</div>`
+
+  // Rows are not focusable, so the keyboard stays with the puzzle. A row's target says which pick it sets.
+  function renderMenuRows (profiles, picked, target, colorOf) {
+    return profiles.map((profile, i) => {
+      const active = i === picked
+      return `<div role="menuitemradio" data-act="pick" data-target="${target}" data-index="${i}" aria-checked="${active}" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;` +
         `${active ? `background:${ACTIVE_FILL};color:${ACTIVE_INK};font-weight:600` : ''}">` +
         `<span style="display:flex;gap:3px;width:92px">${renderChips(profile.groups, colorOf, 20)}</span><span data-role="name" style="flex:1">${esc(profile.name)}</span></div>`
     }).join('')
-    return `<div style="font:600 11px/1 sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${MUTED};padding:8px 10px 6px">Color by digit profile</div>${rows}` +
+  }
+
+  function renderMenu (state, colorOf) {
+    const cells = renderMenuRows(state.profiles, state.active, 'cells', colorOf)
+    const rows = usesDigitColors(state) && !isSynced(state)
+      ? `${sectionHeading('Cells')}${cells}${sectionHeading('Digits')}${renderMenuRows(state.profiles, state.digitActive, 'digits', colorOf)}`
+      : cells
+    return `${menuHeading('Color by digit profile')}${rows}` +
       '<div style="height:1px;background:#ece8f2;margin:4px 6px"></div>' +
       '<div role="menuitem" data-act="edit" style="padding:9px 10px;border-radius:8px;cursor:pointer;color:#5d5868">&#9881; Edit profiles…</div>'
   }
 
-  function renderEditor (groups, pages, shown, auto, profilesHtml) {
+  function renderEditor (groups, pages, shown, mode, profilesHtml, useDigitColors) {
     const colors = layoutColors(pages)
     const rows = groups.map((g, i) => {
       const digits = NUMPAD_DIGITS.map((d) =>
@@ -552,11 +748,11 @@
         `<button type="button" class="cbd-button cbd-small" data-act="remove" data-group="${i}" title="Remove group" aria-label="Remove group">&#215;</button></div>`
     }).join('')
     const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
-    const autoBox = '<div class="cbd-auto">' +
-      `<input type="checkbox" id="color-by-digit-auto-draft" data-role="auto-draft"${auto ? ' checked' : ''} aria-label="Auto mode">` +
-      '<label for="color-by-digit-auto-draft">Keep colors in step with digits and centre marks</label></div>'
+    const shownMode = allowedMode(mode, useDigitColors)
+    const modeChoice = `<div class="cbd-mode" role="radiogroup" aria-label="Mode">${modesFor(useDigitColors).map((m) =>
+      `<label><input type="radio" name="color-by-digit-mode" data-role="mode-draft" value="${m}"${m === shownMode ? ' checked' : ''}> ${MODE_NAMES[m]}</label>`).join('')}</div>`
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    return `${heading('Auto mode')}${autoBox}<div class="cbd-divider">${profilesHtml}</div>` +
+    return `${checkboxHtml('use-digit-colors', useDigitColors, 'Use digit colors')}${heading('Mode')}${modeChoice}<div class="cbd-divider">${profilesHtml}</div>` +
       `<div class="cbd-divider">${heading('Groups of the active profile', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
       '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div>'
   }
@@ -573,9 +769,11 @@
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
-    [`${EDITOR} .cbd-auto`, 'display: flex; align-items: center; gap: 8px; margin: 0 0 4px'],
-    [`${EDITOR} .cbd-auto input`, 'margin: 0'],
-    [`${EDITOR} .cbd-auto label`, 'width: auto; min-width: 0; margin: 0; text-align: left'],
+    [`${EDITOR} .cbd-mode`, 'display: flex; align-items: center; gap: 18px; margin: 0 0 4px'],
+    [`${EDITOR} .cbd-mode label`, 'display: flex; align-items: center; gap: 6px; width: auto; min-width: 0; margin: 0; text-align: left'],
+    [`${EDITOR} .cbd-mode input`, 'margin: 0'],
+    [`${EDITOR} .cbd-check`, 'display: flex; align-items: center; gap: 6px; width: auto; min-width: 0; margin: 0 0 10px; text-align: left'],
+    [`${EDITOR} .cbd-check input`, 'margin: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-small`, `padding: 0 10px; height: ${SMALL_BUTTON_SIZE}px; line-height: ${SMALL_BUTTON_SIZE - 2}px`],
     [`${EDITOR} [data-act="remove"]`, `position: absolute; top: ${REMOVE_INSET}px; right: ${REMOVE_INSET}px; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
@@ -608,7 +806,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, autoBoxHtml, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -628,11 +826,13 @@
   const loadState = () => stateFromStored(Framework.getData(PROFILES_KEY), Framework.getData(LEGACY_GROUPS_KEY))
 
   function addPreloadsOnce () {
-    if (Framework.getData(ADDED_PRELOADS_KEY) === true) return
-    const state = loadState()
-    const added = withAddedPreloads(state)
-    if (added.profiles.length !== state.profiles.length) saveState(added)
-    Framework.setData(ADDED_PRELOADS_KEY, true)
+    for (const { key, names } of ADDED_PRELOADS) {
+      if (Framework.getData(key) === true) continue
+      const state = loadState()
+      const added = withAddedPreloads(state, names)
+      if (added.profiles.length !== state.profiles.length) saveState(added)
+      Framework.setData(key, true)
+    }
   }
   const loadGroups = () => activeGroups(loadState())
 
@@ -662,22 +862,14 @@
   }
 
   // SudokuPad's color tool toggles: it adds the key where every selected cell lacks it and removes it
-  // where every cell holds it, so an op's cells must all lack it or all hold it.
+  // where every cell holds it; colorSteps only ever adds a key to cells that all lack it.
   function runColorOps (app, cells, ops) {
     const savedSelection = [...app.puzzle.selectedCells]
-    const toggle = (target, key) => {
-      app.deselect()
-      app.select(target)
-      app.act({ type: 'colour', arg: key })
-    }
     try {
-      ops.forEach(({ action, key, indices }) => {
-        const target = indices.map((i) => cells[i])
-        toggle(target, key)
-        // With Multi-color off, SudokuPad's toggle clears a cell's other colors and then toggles the key
-        // back on, so a removal from a cell that held two colors leaves the key: toggle those again.
-        const left = action === 'remove' ? target.filter((cell) => (cell.colours || []).includes(key)) : []
-        if (left.length > 0) toggle(left, key)
+      colorSteps(cells, ops).forEach(({ type, arg, indices }) => {
+        app.deselect()
+        app.select(indices.map((i) => cells[i]))
+        app.act({ type, arg })
       })
     } finally {
       app.deselect()
@@ -685,8 +877,8 @@
     }
   }
 
-  // Planned a second time after the first ops: with Multi-color off, taking one color off a cell that
-  // held two clears both, so the group color planned as already there must go back on.
+  // Planned a second time after the first ops: with Multi-color off a cell holds one color, so putting back a
+  // cell's other colors can take off the group color planned as already there, which must go back on.
   function recolor (app, makeOps) {
     const first = allCells(app)
     const ops = makeOps(first.map(toPlanCell))
@@ -700,14 +892,11 @@
     else inOneUndoStep(app, run)
   }
 
-  const colorCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), everyIndex(plans), []))
+  const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
 
-  const colorEnteredCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), enteredIndices(plans)))
-
-  let autoMode = false
+  let mode = 'off'
 
   const BUTTON = '#control-colorbydigit'
-  const BOX = `${BUTTON} [data-role="auto"]`
   const ARROW = `${BUTTON} [data-role="menu"]`
   // Loading progress resets the board, so a pass before it would be wiped.
   function whenProgressLoaded (app, fn) {
@@ -715,17 +904,119 @@
     else app.puzzle.addEventListener('progressloaded', fn, { once: true })
   }
 
-  function showButton () {
-    const icon = document.querySelector(`${BUTTON} .icon`)
-    if (icon) icon.outerHTML = iconHtml(autoMode, loadGroups(), readColor)
+  const DIGIT_STYLE_ID = 'color-by-digit-digits'
+  const SVG_NS = 'http://www.w3.org/2000/svg'
+
+  // An entered digit's text element has no digit attribute; marks have `data-val`.
+  function stampEnteredDigits () {
+    document.querySelectorAll('#cell-values .cell-value').forEach((el) => {
+      const digit = digitOfText(el.textContent)
+      if (digit === null) el.removeAttribute(DIGIT_ATTR)
+      else if (el.getAttribute(DIGIT_ATTR) !== digit) el.setAttribute(DIGIT_ATTR, digit)
+    })
   }
 
-  function setAutoMode (app, on) {
-    const turnedOn = on && !autoMode
-    autoMode = on
-    Framework.setData(AUTO_KEY, on)
-    showButton()
-    if (turnedOn) colorEnteredCells(app)
+  let measuring = null
+
+  // SudokuPad sizes its fonts in the board's units, which a canvas takes as pixels.
+  function measureInk (mark) {
+    if (!measuring) measuring = document.createElement('canvas').getContext('2d')
+    const style = window.getComputedStyle(mark)
+    measuring.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`
+    const m = measuring.measureText(mark.textContent)
+    return { left: m.actualBoundingBoxLeft, right: m.actualBoundingBoxRight, ascent: m.actualBoundingBoxAscent, descent: m.actualBoundingBoxDescent, fontAscent: m.fontBoundingBoxAscent }
+  }
+
+  // The ink is centred, not the advance box or the `dominant-baseline: middle` point, which sit off
+  // the digit's shape. A corner mark carries a CSS translate its attributes omit, so the point goes
+  // through the `text`'s CTM; `space` holds a translation and a scale only.
+  function markMiddle (mark, space) {
+    const text = mark.localName === 'tspan' ? mark.parentNode : mark
+    const extent = mark.getExtentOfChar(0)
+    const ink = inkMiddle(extent, measureInk(mark))
+    const toSpace = space.getCTM().inverse().multiply(text.getCTM())
+    const point = new window.DOMPoint(ink.x, ink.y).matrixTransform(toSpace)
+    return { x: point.x, y: point.y, width: extent.width * toSpace.a }
+  }
+
+  // Just before the corner marks: behind every mark, above the cells' colors.
+  function circlesGroup () {
+    let group = document.getElementById(CIRCLES_ID)
+    const anchor = document.getElementById('cell-pencilmarks')
+    if (!anchor) return null
+    if (!group || group.nextSibling !== anchor) {
+      if (group) group.remove()
+      group = document.createElementNS(SVG_NS, 'g')
+      group.id = CIRCLES_ID
+      anchor.parentNode.insertBefore(group, anchor)
+    }
+    return group
+  }
+
+  // Rebuilt each time, so a circle never outlives its mark, its conflict or a mode that colors digits.
+  function syncCircles () {
+    const group = circlesGroup()
+    if (!group) return
+    const conflicts = colorsDigits(mode) ? document.querySelectorAll(MARK_SELECTORS.map((s) => `${s}.conflict`).join(',')) : []
+    group.replaceChildren(...[...conflicts].map((mark) => {
+      const { cx, cy, r } = circleFor(markMiddle(mark, group))
+      const circle = document.createElementNS(SVG_NS, 'circle')
+      circle.setAttribute('cx', cx)
+      circle.setAttribute('cy', cy)
+      circle.setAttribute('r', r)
+      return circle
+    }))
+  }
+
+  function syncDigits () {
+    stampEnteredDigits()
+    syncCircles()
+  }
+
+  // A mark's `class` change is how it enters or leaves `conflict`. Stamping `DIGIT_ATTR` and drawing
+  // circles must trigger nothing.
+  function isBoardChange (record) {
+    if (record.target.closest && record.target.closest(`#${CIRCLES_ID}`)) return false
+    return record.type !== 'attributes' || MARK_SELECTORS.some((s) => record.target.matches(s))
+  }
+
+  // The whole page: SudokuPad swaps the board's elements when a puzzle loads.
+  function watchBoard () {
+    let queued = false
+    new window.MutationObserver((records) => {
+      if (queued || !colorsDigits(mode) || !records.some(isBoardChange)) return
+      queued = true
+      window.requestAnimationFrame(() => { queued = false; syncDigits() })
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] })
+  }
+
+  // Digit colors are a stylesheet, not SudokuPad state, so they are never an undo step.
+  function showDigitColors () {
+    let style = document.getElementById(DIGIT_STYLE_ID)
+    if (!style) {
+      style = document.createElement('style')
+      style.id = DIGIT_STYLE_ID
+      document.head.appendChild(style)
+    }
+    style.textContent = colorsDigits(mode) ? `${buildDigitCss(digitGroups(loadState()), readColor)}\n${CIRCLE_CSS}` : ''
+    syncDigits()
+  }
+
+  // The palette can change after the button was drawn, so the icon and the digit shades are drawn from it again.
+  function redraw () {
+    const icon = document.querySelector(`${BUTTON} .icon`)
+    if (icon) icon.outerHTML = iconHtml(mode, iconGroups(loadState(), mode), readColor)
+    showDigitColors()
+  }
+
+  // Leaving cell coloring takes the colors of `keys`, the group keys to take off, off every cell.
+  function setMode (app, next, keys = groupKeys(loadGroups())) {
+    const was = mode
+    mode = next
+    Framework.setData(MODE_KEY, next)
+    redraw()
+    if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
+    if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
   }
 
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
@@ -739,10 +1030,10 @@
 
   // A change SudokuPad already runs inside its own group (a paste) has its color changes added to that
   // group; opening a second would end it early. Undo, redo, replays and loading progress bypass app.act.
-  function installAutoMode (app) {
+  function installCellColoring (app) {
     const act = app.act
     app.act = function (action) {
-      if (!autoMode || !isEntryAction(action)) return act.call(this, action)
+      if (!colorsCells(mode) || !isEntryAction(action)) return act.call(this, action)
       const touched = [...app.puzzle.selectedCells]
       if (!touched.some((cell) => mayChange(action, cell))) return act.call(this, action)
       const cells = allCells(app)
@@ -751,12 +1042,12 @@
       const enter = () => {
         const result = act.call(this, action)
         const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
-        recolor(app, (plans) => planAuto(plans, loadGroups(), changed))
+        recolor(app, (plans) => planCellColors(plans, loadGroups(), changed))
         return result
       }
       return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
     }
-    app.on('restarted', () => { if (autoMode) colorEnteredCells(app) })
+    app.on('restarted', () => { if (colorsCells(mode)) colorEnteredCells(app) })
   }
 
   let menu = null
@@ -776,8 +1067,7 @@
 
   function openMenu () {
     closeMenu()
-    // The palette can change after the button was drawn, so the icon is drawn again with the menu.
-    showButton()
+    redraw()
     const button = document.querySelector(BUTTON)
     if (!button) return
     addStyle()
@@ -794,34 +1084,30 @@
     menu.style.top = `${Math.max(rect.top - menu.offsetHeight - 12, 4)}px`
   }
 
-  function switchProfile (app, index) {
+  // A digit pick changes only the digit stylesheet: it touches no cell and is never an undo step.
+  function switchProfile (app, index, target) {
     const state = loadState()
     closeMenu()
-    if (index === state.active) return
-    const next = setActive(state, index)
+    const digits = target === 'digits'
+    if (index === (digits ? state.digitActive : state.active)) return
+    const next = digits ? setDigitActive(state, index) : setActive(state, index)
     saveState(next)
-    recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
-    showButton()
+    if (!digits && colorsCells(mode)) recolor(app, (plans) => planSwitch(plans, activeGroups(state), activeGroups(next)))
+    redraw()
   }
 
   const HOLD_MS = 500
   const HOLD_SLOP = 10
 
-  // SudokuPad reads `event.target.dataset.control` on a control press, which the box and arrow lack,
-  // and on a touch cancels the touchstart so no click follows: they take the touch themselves. It
-  // runs a button's handler on press, which would color the grid under a right click or a hold, so a
-  // press on the button proper never reaches it. A mouse press on the box or arrow must not focus
+  // SudokuPad reads `event.target.dataset.control` on a control press, which the arrow lacks, and on
+  // a touch cancels the touchstart so no click follows: the arrow takes the touch itself. SudokuPad
+  // runs a button's handler on press, which would step the mode under a right click or a hold, so a
+  // press on the button proper never reaches it. A mouse press on the button or arrow must not focus
   // the button, so the keyboard stays with the puzzle.
   function listenForButton (app, openEditor) {
     const within = (event, selector) => event.target.closest && event.target.closest(selector)
-    const onBox = (event) => within(event, BOX)
     const onArrow = (event) => within(event, ARROW)
-    const onButtonProper = (event) => within(event, BUTTON) && !onBox(event) && !onArrow(event)
-    const toggleBox = (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      setAutoMode(app, !autoMode)
-    }
+    const onButtonProper = (event) => within(event, BUTTON) && !onArrow(event)
     const toggleMenu = (event) => {
       event.preventDefault()
       event.stopPropagation()
@@ -830,10 +1116,9 @@
     }
     document.addEventListener('mousedown', (event) => {
       if (onButtonProper(event)) event.stopPropagation()
-      if (onBox(event) || onArrow(event) || onButtonProper(event) || within(event, MENU)) event.preventDefault()
+      if (onArrow(event) || onButtonProper(event) || within(event, MENU)) event.preventDefault()
     }, true)
     document.addEventListener('click', (event) => {
-      if (onBox(event)) return toggleBox(event)
       if (onArrow(event)) return toggleMenu(event)
       const row = within(event, `${MENU} [data-act]`)
       if (!row) return
@@ -843,12 +1128,11 @@
         closeMenu()
         openEditor()
       } else {
-        switchProfile(app, Number(row.dataset.index))
+        switchProfile(app, Number(row.dataset.index), row.dataset.target)
       }
     }, true)
     document.addEventListener('touchstart', (event) => {
-      if (onBox(event)) toggleBox(event)
-      else if (onArrow(event)) toggleMenu(event)
+      if (onArrow(event)) toggleMenu(event)
       else if (onButtonProper(event)) { event.preventDefault(); event.stopPropagation() }
     }, { capture: true, passive: false })
     document.addEventListener('contextmenu', (event) => {
@@ -874,7 +1158,7 @@
         openMenu()
       }, HOLD_MS)
       const stop = (e) => {
-        if (hold !== null && e.type === 'pointerup') colorCells(app)
+        if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState())))
         endHold()
         document.removeEventListener('pointermove', watch)
         document.removeEventListener('pointerup', stop, true)
@@ -892,12 +1176,13 @@
     window.addEventListener('resize', closeMenu)
   }
 
-  function saveDialog (app, oldState, draft, auto) {
+  function saveDialog (app, oldState, draft, draftMode) {
     saveState(draft)
+    const next = allowedMode(draftMode, usesDigitColors(draft))
     const oldGroups = activeGroups(oldState)
     const groups = activeGroups(draft)
-    if (auto && !sameGroups(oldGroups, groups)) recolor(app, (plans) => planSwitch(plans, oldGroups, groups))
-    setAutoMode(app, auto)
+    if (colorsCells(next) && !sameGroups(oldGroups, groups)) recolor(app, (plans) => planSwitch(plans, oldGroups, groups))
+    setMode(app, next, groupKeys([...oldGroups, ...groups]))
   }
 
   function openDialog (app) {
@@ -905,7 +1190,7 @@
     const colors = layoutColors(pages)
     let savedState = loadState()
     let draft = savedState
-    let auto = autoMode
+    let draftMode = mode
     let newName = ''
     addStyle()
     Framework.showDialog({
@@ -918,7 +1203,7 @@
           tag: 'options',
           options: [
             { tag: 'button', content: 'Cancel', action: 'close' },
-            { tag: 'button', content: SAVE_LABEL, handler: () => { saveDialog(app, savedState, draft, auto); Framework.closeDialog() } }
+            { tag: 'button', content: SAVE_LABEL, handler: () => { saveDialog(app, savedState, draft, draftMode); Framework.closeDialog() } }
           ]
         }
       ]
@@ -934,7 +1219,7 @@
     const draw = () => {
       const groups = activeGroups(draft)
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor(groups, pages, shown, auto, renderProfiles(draft, readColor, newName))
+      box.innerHTML = renderEditor(groups, pages, shown, draftMode, renderProfiles(draft, readColor, newName), usesDigitColors(draft))
     }
     const reshow = (next) => { draft = next; shown = [] }
     const addProfileFromField = () => {
@@ -947,11 +1232,11 @@
     }
     draw()
     wireCopyPaste(box.closest('.dialog'), (values) => {
-      if (ADDED_PRELOADS_KEY in values) Framework.setData(ADDED_PRELOADS_KEY, values[ADDED_PRELOADS_KEY])
-      saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[AUTO_KEY] ?? autoMode)
+      ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
+      saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
       reshow(savedState)
-      auto = autoMode
+      draftMode = mode
       draw()
     })
     box.addEventListener('input', (event) => {
@@ -964,8 +1249,11 @@
       addProfileFromField()
     })
     box.addEventListener('change', (event) => {
-      const draftBox = event.target.closest('input[data-role="auto-draft"]')
-      if (draftBox) { auto = draftBox.checked; return }
+      const choice = event.target.closest('input[data-role="mode-draft"]')
+      if (choice) { draftMode = choice.value; return }
+      // The draft mode is kept as chosen: unticking "Use digit colors" shows its fallback, and ticking it again before Save shows the mode again.
+      if (event.target.matches('[data-role="use-digit-colors"]')) { draft = setUseDigitColors(draft, event.target.checked); draw(); return }
+      if (event.target.matches('[data-role="sync"]')) { draft = setSync(draft, event.target.checked); draw(); return }
       const el = event.target.closest('select[data-act="page"]')
       if (!el) return
       shown[Number(el.dataset.group)] = Number(el.value)
@@ -1048,12 +1336,14 @@
       handler: openEditor
     })
     addPreloadsOnce()
-    autoMode = Framework.getData(AUTO_KEY) === true
-    installButton(Framework, app, () => colorCells(app), autoMode, loadGroups(), readColor)
-    installAutoMode(app)
+    const state = loadState()
+    mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))
+    installButton(Framework, app, mode, iconGroups(state, mode), readColor)
+    installCellColoring(app)
     listenForButton(app, openEditor)
-    // The puzzle's own palette is in the page's colors once it has loaded: the icon shows those.
-    whenProgressLoaded(app, showButton)
-    if (autoMode) whenProgressLoaded(app, () => colorEnteredCells(app))
+    watchBoard()
+    // The puzzle's own palette is in the page's colors once it has loaded: the icon and the digit shades show those.
+    whenProgressLoaded(app, redraw)
+    if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
   })
 })()
