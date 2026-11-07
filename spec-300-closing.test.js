@@ -20,11 +20,11 @@ const count = (html, re) => (html.match(re) || []).length
 
 // Spec 300's acceptance as one pass over Color by Digit's pure functions and its details page, at `npm test`: the top
 // row's pulldowns, the two-column layout's CSS, the selected row
-// apart from the cell and digit profiles, rename, "+ New profile", compact group rows with one open and the taken-digit dot, the three-chip
+// apart from the cell and digit profiles, rename, "+ New profile", the paint editor's palette and digit keys (#347), the three-chip
 // cap, and the details page's annotated dialog picture. This seam is blind to real SudokuPad: the Framework calls, the
 // dialog's rendering at 1200 and 390 px, Save reaching the puzzle and undo are `npm run test:live`'s
 // (live/color-by-digit*.live.mjs), and neither run covers a real Tampermonkey install or crackingthecryptic.com.
-test('spec 300: the Color by Digit settings dialog edits a selected profile in two columns, with compact groups', () => {
+test('spec 300: the Color by Digit settings dialog edits a selected profile in two columns, by painting digits', () => {
   const { renderEditor, renderProfiles, renderMenu, iconLayout, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
 
   // Top row: the Mode pulldown offers four modes, or Cell and Off without digit colors.
@@ -59,17 +59,15 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.equal(renameProfile(STATE, 0, 'Parity').profiles[0].name, 'Parity')
   assert.match(renderProfiles(STATE, colorOf, 2), /data-role="profile-name" maxlength="24" value="Each digit"/)
 
-  // Groups: three compact rows, one open with its pad; a digit another group holds shows that group's color dot.
-  const groups = renderEditor({ groups: LOW_HIGH, pages: PAGES, shown: [0, 0, 0], open: 1 })
-  assert.equal(count(groups, /data-act="open"/g), 3)
-  assert.equal(count(groups, /aria-expanded="true"/g), 1)
-  assert.equal(count(groups, /data-role="numpad"/g), 1)
-  assert.match(groups, /data-digit="1" style="[^"]*">1<span data-role="holder" title="a3"/)
-  assert.doesNotMatch(groups, /data-digit="5" style="[^"]*">5<span data-role="holder"/)
-  assert.equal(count(renderEditor({ groups: EACH, pages: PAGES, shown: [], open: null }), /data-role="numpad"/g), 0)
-  // A group Add group makes opens; a click on a digit another group holds moves it to the open group.
-  assert.equal(byDigit.openGroupAfter(null, 'add-group', undefined, 3, 4), 3)
-  assert.deepEqual(byDigit.assignDigit(LOW_HIGH, 1, '1').map((g) => g.digits), [['2', '3', '4'], ['1', '5'], ['6', '7', '8', '9']])
+  // Digits: one page pulldown, the brush marked, and ten digit keys, each filled with its group's color (#347).
+  const paint = renderEditor({ groups: LOW_HIGH, pages: PAGES, page: 0, brush: 'a3' })
+  assert.equal(count(paint, /<select data-act="page"/g), 1)
+  assert.equal(count(paint, /data-act="digit"/g), 10)
+  assert.equal(count(paint, /aria-pressed="true"/g), 1)
+  assert.match(paint, /data-digit="1" data-key="a3" style="background:#a3;/)
+  assert.match(paint, /data-digit="0" data-key=""/)
+  assert.doesNotMatch(paint, /data-act="(open|remove|add-group)"|data-role="numpad"/)
+  assert.deepEqual(byDigit.paintDigit(LOW_HIGH, '1', 'a4').map((g) => g.digits), [['1', '5'], ['2', '3', '4'], ['6', '7', '8', '9']])
 
   // The selected profile follows its row through a reorder and a delete.
   assert.equal(byDigit.indexAfterMove(2, 2, 0), 0)

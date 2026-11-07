@@ -218,7 +218,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const centre = async (locator) => { await locator.hover(); const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
   const reopen = async () => { await closeDialogWith(p, 'Cancel', EDITOR); await openEditor() }
   // Presses at `from`, drags through `through` and releases: the pointer events of one stroke.
-  const drag = async (from, through) => {
+  const dragThrough = async (from, through) => {
     await p.mouse.move(from.x, from.y)
     await p.mouse.down()
     for (const point of through) await p.mouse.move(point.x, point.y, { steps: 6 })
@@ -276,9 +276,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   it('a drag over digits paints each, and one that starts on a digit already in the brush color clears each', async () => {
     await reopen()
     const [four, five, six] = await Promise.all(['4', '5', '6'].map((d) => centre(digitKey(d))))
-    await drag(four, [five, six])
+    await dragThrough(four, [five, six])
     assert.deepEqual([await keyOf('4'), await keyOf('5'), await keyOf('6')], ['1', '1', '1'])
-    await drag(four, [five, six])
+    await dragThrough(four, [five, six])
     assert.deepEqual([await keyOf('4'), await keyOf('5'), await keyOf('6')], ['', '', ''])
   })
 
@@ -287,7 +287,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await swatch('5').click()
     const [one, two, three] = await Promise.all(['1', '2', '3'].map((d) => centre(digitKey(d))))
     // The gap column sits left of key 1.
-    await drag({ x: one.x - 30, y: one.y }, [one, two, three])
+    await dragThrough({ x: one.x - 30, y: one.y }, [one, two, three])
     assert.deepEqual([await keyOf('1'), await keyOf('2'), await keyOf('3')], ['5', '5', '5'])
     assert.equal(await p.evaluate(() => window.getSelection().toString()), '')
   })
