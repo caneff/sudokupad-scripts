@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planAuto, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
+const { copiedSettings, pastedSettings, pasteReport, installButton, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, modeLabelHtml, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, planSwitch, iconHtml, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, VERSION } = require('./color-by-digit.user.js')
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
 const plan = (cells, g = groups) => planColoring(cells, g)
@@ -557,58 +557,58 @@ test('normalizeGroups keeps a digit in only its first group', () => {
   )
 })
 
-const auto = (cells, indices = cells.map((_, i) => i), g = groups, managed) => planAuto(cells, g, indices, managed)
+const cellPlan = (cells, indices = cells.map((_, i) => i), g = groups, managed) => planCellColors(cells, g, indices, managed)
 
-test('auto: a pure cell gets its group color', () => {
-  assert.deepEqual(auto([{ value: '1' }, { centre: ['3'] }]), [
+test('cell coloring: a pure cell gets its group color', () => {
+  assert.deepEqual(cellPlan([{ value: '1' }, { centre: ['3'] }]), [
     { action: 'add', key: 'a', indices: [0] },
     { action: 'add', key: 'b', indices: [1] }
   ])
 })
 
-test('auto: a pure cell loses another group\'s color and gets its own, removals first', () => {
-  assert.deepEqual(auto([{ value: '1', colours: ['b'] }]), [
+test('cell coloring: a pure cell loses another group\'s color and gets its own, removals first', () => {
+  assert.deepEqual(cellPlan([{ value: '1', colours: ['b'] }]), [
     { action: 'remove', key: 'b', indices: [0] },
     { action: 'add', key: 'a', indices: [0] }
   ])
 })
 
-test('auto: a pure cell that already holds its color and no other group color changes nothing', () => {
-  assert.deepEqual(auto([{ value: '1', colours: ['a'] }]), [])
+test('cell coloring: a pure cell that already holds its color and no other group color changes nothing', () => {
+  assert.deepEqual(cellPlan([{ value: '1', colours: ['a'] }]), [])
 })
 
-test('auto: a cell that is not pure loses every group color, whoever painted it', () => {
-  assert.deepEqual(auto([{ colours: ['a', 'b'] }, { value: '7', colours: ['a'] }, { centre: ['1', '3'], colours: ['b'] }]), [
+test('cell coloring: a cell that is not pure loses every group color, whoever painted it', () => {
+  assert.deepEqual(cellPlan([{ colours: ['a', 'b'] }, { value: '7', colours: ['a'] }, { centre: ['1', '3'], colours: ['b'] }]), [
     { action: 'remove', key: 'a', indices: [0, 1] },
     { action: 'remove', key: 'b', indices: [0, 2] }
   ])
 })
 
-test('auto: a color in no group stays, on a pure cell and on one that is not', () => {
-  assert.deepEqual(auto([{ value: '1', colours: ['z'] }, { colours: ['z'] }]), [{ action: 'add', key: 'a', indices: [0] }])
+test('cell coloring: a color in no group stays, on a pure cell and on one that is not', () => {
+  assert.deepEqual(cellPlan([{ value: '1', colours: ['z'] }, { colours: ['z'] }]), [{ action: 'add', key: 'a', indices: [0] }])
 })
 
-test('auto: corner marks are not part of a plan cell, so they never decide', () => {
-  assert.deepEqual(auto([{ value: '1', pencilmarks: ['3'] }]), [{ action: 'add', key: 'a', indices: [0] }])
-  assert.deepEqual(auto([{ pencilmarks: ['3'] }]), [])
+test('cell coloring: corner marks are not part of a plan cell, so they never decide', () => {
+  assert.deepEqual(cellPlan([{ value: '1', pencilmarks: ['3'] }]), [{ action: 'add', key: 'a', indices: [0] }])
+  assert.deepEqual(cellPlan([{ pencilmarks: ['3'] }]), [])
 })
 
-test('auto: only the listed cells are planned', () => {
-  assert.deepEqual(auto([{ value: '1' }, { value: '1' }], [1]), [{ action: 'add', key: 'a', indices: [1] }])
+test('cell coloring: only the listed cells are planned', () => {
+  assert.deepEqual(cellPlan([{ value: '1' }, { value: '1' }], [1]), [{ action: 'add', key: 'a', indices: [1] }])
 })
 
-test('auto: managed keys beyond the groups (an old group\'s) come off every listed cell', () => {
-  assert.deepEqual(auto([{ value: '1', colours: ['old'] }, { colours: ['old', 'z'] }], undefined, groups, ['a', 'b', 'old']), [
+test('cell coloring: managed keys beyond the groups (an old group\'s) come off every listed cell', () => {
+  assert.deepEqual(cellPlan([{ value: '1', colours: ['old'] }, { colours: ['old', 'z'] }], undefined, groups, ['a', 'b', 'old']), [
     { action: 'remove', key: 'old', indices: [0, 1] },
     { action: 'add', key: 'a', indices: [0] }
   ])
 })
 
-test('auto: groupKeys lists each group\'s key once', () => {
+test('cell coloring: groupKeys lists each group\'s key once', () => {
   assert.deepEqual(groupKeys([{ key: 'a', digits: [] }, { key: 'b', digits: [] }, { key: 'a', digits: [] }]), ['a', 'b'])
 })
 
-test('auto: digits, centre marks and clears of them are edits; corner marks, colors, pen and undo are not', () => {
+test('cell coloring: digits, centre marks and clears of them are edits; corner marks, colors, pen and undo are not', () => {
   const edit = (type, arg) => isEntryAction({ type, arg })
   assert.equal(edit('value', '4'), true)
   assert.equal(edit('candidates', '4'), true)
@@ -623,14 +623,14 @@ test('auto: digits, centre marks and clears of them are edits; corner marks, col
   assert.equal(isEntryAction(undefined), false)
 })
 
-test('auto: the edit signature moves with the digit and the centre marks, not their order, and ignores corner marks and colors', () => {
+test('cell coloring: the edit signature moves with the digit and the centre marks, not their order, and ignores corner marks and colors', () => {
   assert.equal(entrySignature({ centre: ['2', '1'] }), entrySignature({ centre: ['1', '2'] }))
   assert.notEqual(entrySignature({ value: '1' }), entrySignature({ value: '2' }))
   assert.notEqual(entrySignature({ centre: ['1'] }), entrySignature({ centre: ['1', '2'] }))
   assert.equal(entrySignature({ value: '1', colours: ['a'], pencilmarks: ['5'] }), entrySignature({ value: '1' }))
 })
 
-test('auto: changedIndices lists the positions whose signature differs', () => {
+test('cell coloring: changedIndices lists the positions whose signature differs', () => {
   assert.deepEqual(changedIndices(['a', 'b', 'c'], ['a', 'x', 'y']), [1, 2])
   assert.deepEqual(changedIndices(['a'], ['a']), [])
 })
@@ -871,11 +871,11 @@ test('entry point: no Framework at all is left alone without a warning', () => {
   }
 })
 
-// A SudokuPad stand-in for the auto mode wrapper: cells hold a digit and colors, `act` applies
+// A SudokuPad stand-in for the cell coloring wrapper: cells hold a digit and colors, `act` applies
 // value/clear/colour/select/deselect/group actions and records every call, and `puzzle.inGroup` follows the group actions.
 // `single` mimics SudokuPad with Multi-color off: a color toggle acts on the whole cell, so taking one
 // color off a cell that holds two clears both, and adding one replaces what the cell held.
-function autoMockApp (cellDefs, { single = false } = {}) {
+function mockApp (cellDefs, { single = false } = {}) {
   const calls = []
   const cells = cellDefs.map((def, i) => {
     const cell = { row: 0, col: i, given: def.given || '', value: def.value || '', colours: [...(def.colours || [])] }
@@ -910,7 +910,7 @@ function autoMockApp (cellDefs, { single = false } = {}) {
 }
 
 // `stored` is what Framework.getData answers besides the Odd/Even profile; nothing stored starts the mode at Cell.
-async function withAutoMode (app, fn, stored = {}) {
+async function withScript (app, fn, stored = {}) {
   const path = require.resolve('./color-by-digit.user.js')
   const saved = require.cache[path]
   delete require.cache[path]
@@ -937,8 +937,8 @@ async function withAutoMode (app, fn, stored = {}) {
 const select = (app, i) => app.select(app.puzzle.cells[i])
 const types = (app) => app.calls.map((c) => c.split(':')[0])
 
-test('auto wrapper: a digit entry is one group with its color change inside it', async () => {
-  await withAutoMode(autoMockApp([{}, {}]), async (app) => {
+test('cell coloring: a digit entry is one group with its color change inside it', async () => {
+  await withScript(mockApp([{}, {}]), async (app) => {
     select(app, 0)
     app.calls.length = 0
     app.act({ type: 'value', arg: '1' })
@@ -948,8 +948,8 @@ test('auto wrapper: a digit entry is one group with its color change inside it',
   })
 })
 
-test('auto wrapper: with Multi-color off, taking a second color off a cell that clears it still leaves the cell its group color', async () => {
-  await withAutoMode(autoMockApp([{ colours: ['1', '2'] }], { single: true }), async (app) => {
+test('cell coloring: with Multi-color off, taking a second color off a cell that clears it still leaves the cell its group color', async () => {
+  await withScript(mockApp([{ colours: ['1', '2'] }], { single: true }), async (app) => {
     select(app, 0)
     app.act({ type: 'value', arg: '3' })
     assert.deepEqual(app.puzzle.cells[0].colours, ['1'])
@@ -957,8 +957,8 @@ test('auto wrapper: with Multi-color off, taking a second color off a cell that 
   })
 })
 
-test('auto wrapper: an entry SudokuPad already runs in a group adds its colors to that group, never opens another', async () => {
-  await withAutoMode(autoMockApp([{}]), async (app) => {
+test('cell coloring: an entry SudokuPad already runs in a group adds its colors to that group, never opens another', async () => {
+  await withScript(mockApp([{}]), async (app) => {
     select(app, 0)
     app.act({ type: 'groupstart' })
     app.calls.length = 0
@@ -970,8 +970,8 @@ test('auto wrapper: an entry SudokuPad already runs in a group adds its colors t
   })
 })
 
-test('auto wrapper: anything that is not a digit or centre mark entry passes straight through', async () => {
-  await withAutoMode(autoMockApp([{}]), async (app) => {
+test('cell coloring: anything that is not a digit or centre mark entry passes straight through', async () => {
+  await withScript(mockApp([{}]), async (app) => {
     select(app, 0)
     app.calls.length = 0
     app.act({ type: 'colour', arg: '9' })
@@ -981,8 +981,8 @@ test('auto wrapper: anything that is not a digit or centre mark entry passes str
   })
 })
 
-test('auto wrapper: a clear with nothing to clear, and a digit on a given, open no group', async () => {
-  await withAutoMode(autoMockApp([{}, { given: '5' }]), async (app) => {
+test('cell coloring: a clear with nothing to clear, and a digit on a given, open no group', async () => {
+  await withScript(mockApp([{}, { given: '5' }]), async (app) => {
     select(app, 0)
     app.calls.length = 0
     app.act({ type: 'clear', arg: 'normal' })
@@ -994,7 +994,7 @@ test('auto wrapper: a clear with nothing to clear, and a digit on a given, open 
 
 test('mode: in Off, saved or from auto mode saved off, a digit entry passes straight through and loading colors nothing', async () => {
   for (const saved of [{ ColorByDigit_mode: 'off' }, { ColorByDigit_auto: false }]) {
-    await withAutoMode(autoMockApp([{}, { given: '1' }]), async (app) => {
+    await withScript(mockApp([{}, { given: '1' }]), async (app) => {
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [[], []])
       select(app, 0)
       app.calls.length = 0
@@ -1008,7 +1008,7 @@ test('mode: in Off, saved or from auto mode saved off, a digit entry passes stra
 
 test('mode: in Cell, nothing saved or auto mode saved on, loading colors the givens', async () => {
   for (const saved of [{}, { ColorByDigit_auto: true }, { ColorByDigit_mode: 'cell', ColorByDigit_auto: false }]) {
-    await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+    await withScript(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
     }, saved)
   }
@@ -1017,15 +1017,15 @@ test('mode: in Cell, nothing saved or auto mode saved on, loading colors the giv
 test('use digit colors: saved off, a saved Both loads as Cell and colors the givens, and a saved Digit loads as Off and colors nothing', async () => {
   const profiles = { profiles: [{ name: 'Odd/Even', groups: ODD }], active: 0, useDigitColors: false }
   for (const [savedMode, label, colours] of [['both', 'CELL', [['1'], ['2']]], ['digit', 'OFF', [[], []]]]) {
-    await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+    await withScript(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
       assert.match(app.buttonContent, new RegExp(`>${label}<`), savedMode)
       assert.deepEqual(app.puzzle.cells.map((c) => c.colours), colours, savedMode)
     }, { ColorByDigit_profiles: profiles, ColorByDigit_mode: savedMode })
   }
 })
 
-test('auto wrapper: a restart colors the givens again', async () => {
-  await withAutoMode(autoMockApp([{ given: '1' }, { given: '2' }]), async (app) => {
+test('cell coloring: a restart colors the givens again', async () => {
+  await withScript(mockApp([{ given: '1' }, { given: '2' }]), async (app) => {
     app.handlers.restarted()
     assert.deepEqual(app.puzzle.cells.map((c) => c.colours), [['1'], ['2']])
     assert.equal(app.puzzle.inGroup, false)

@@ -129,7 +129,7 @@
   const changedIndices = (before, after) => before.flatMap((sig, i) => (sig === after[i] ? [] : [i]))
 
   // `managedKeys` is wider than the groups' keys when a Save drops an old group whose color must come off too.
-  function planAuto (cells, groups, indices, managedKeys = groupKeys(groups)) {
+  function planCellColors (cells, groups, indices, managedKeys = groupKeys(groups)) {
     const keyOfDigit = keyOfDigitMap(groups)
     const removals = new Map()
     const additions = new Map()
@@ -147,7 +147,7 @@
     ]
   }
 
-  const planClear = (cells, keys) => planAuto(cells, [], everyIndex(cells), keys)
+  const planClear = (cells, keys) => planCellColors(cells, [], everyIndex(cells), keys)
 
   // Read as SudokuPad's SolverTool.getCellOptions does: none when the cell hides them, as a given does.
   function readCentreMarks (cell) {
@@ -532,7 +532,7 @@
   }
 
   function planSwitch (cells, oldGroups, newGroups) {
-    return planAuto(cells, newGroups, everyIndex(cells), [...new Set([...groupKeys(oldGroups), ...groupKeys(newGroups)])])
+    return planCellColors(cells, newGroups, everyIndex(cells), [...new Set([...groupKeys(oldGroups), ...groupKeys(newGroups)])])
   }
 
   function isVisibleColor (value) {
@@ -787,7 +787,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, planColoring, planAuto, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, addProfile, deleteProfile, moveProfile, setActive, setActiveGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -881,7 +881,7 @@
     else inOneUndoStep(app, run)
   }
 
-  const colorEnteredCells = (app) => recolor(app, (plans) => planAuto(plans, loadGroups(), enteredIndices(plans)))
+  const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
 
   let mode = 'off'
 
@@ -1031,7 +1031,7 @@
       const enter = () => {
         const result = act.call(this, action)
         const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
-        recolor(app, (plans) => planAuto(plans, loadGroups(), changed))
+        recolor(app, (plans) => planCellColors(plans, loadGroups(), changed))
         return result
       }
       return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
