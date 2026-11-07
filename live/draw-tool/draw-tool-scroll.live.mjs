@@ -207,7 +207,9 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
     const off = await note('side')
     assert.ok(off.widthEm <= BOX_WIDTH_EM + 0.05, `${off.widthEm} em wide`)
     assert.ok(Math.abs(off.height - BOX_HEIGHT_EM * off.em) <= NEAR_PX, `${off.heightEm} em high`)
-    await moveTo(OFF_BOARD_AT)
+    // A box this tall runs past the window's bottom, so it was moved up to lie inside the window.
+    const { x, y, width, height } = await p.locator(TEXTS).filter({ hasText: 'side' }).boundingBox()
+    await p.mouse.move(x + width / 2, y + height / 2)
     await p.mouse.wheel(0, 40)
     assert.ok((await note('side')).scrollTop > 0)
   })
