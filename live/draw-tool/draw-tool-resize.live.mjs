@@ -113,12 +113,14 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
     await draw.pickDraw(p)
   })
 
-  it('the box stops at about three characters wide and one line high', async () => {
+  it('the box stops at about three characters wide and one line high, and a resize with no text typed is saved', async () => {
     await p.mouse.dblclick(...await gridPoint(p, NOTE_AT))
     await dragHandle(-1000, -1000)
     const smallest = await box(TEXT_BOX)
     assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em) && near(smallest.bottom - smallest.top, MIN_EM[1] * smallest.em), `${smallest.right - smallest.left} x ${smallest.bottom - smallest.top}`)
     await p.keyboard.press('Escape')
+    // The note is 20 board units a line: 3 em by 1.15 em.
+    assert.deepEqual((await saved())[0].box, [60, 23])
   })
 
   it('off the editor, a drag from the note\'s bottom right corner moves it and never resizes it', async () => {
