@@ -54,16 +54,16 @@ const frames = mkdtempSync(join(tmpdir(), 'cbd-slides-'))
 // The scale and the menu's white space slides 1 to 9 were laid out with, which slide 10 reuses.
 let layout
 
-// Takes slide `name` from page `p`: the boxes, the button and, when `menuBox` is set, the open menu, joined at `scale`. `menuSize` is the white space kept for a menu.
-async function takeSlide (p, name, { scale, menuSize, menuBox }) {
+// Takes slide `name` from page `p`: the boxes, the button and, when `menuOpen` is set, the open menu, joined at `scale`. `menuSize` is the white space kept for a menu.
+async function takeSlide (p, name, { scale, menuSize, menuOpen }) {
   const button = p.locator(BUTTON)
   await p.mouse.move(0, 0)
   await p.waitForTimeout(SETTLE_MS)
   const parts = ['grid', 'button', 'menu'].map((part) => join(frames, `${name}-${part}.png`))
   await p.screenshot({ path: parts[0], clip: await exampleClip(p) })
   await button.screenshot({ path: parts[1] })
-  if (menuBox) await p.screenshot({ path: parts[2], clip: await p.locator(MENU).boundingBox() })
-  const joined = spawnSync('python3', ['-c', JOIN, JSON.stringify([parts[0], parts[1], menuBox ? parts[2] : null, menuSize, out(name), scale, GAP, STACK_GAP, SLIDE_WIDTH])], { encoding: 'utf8' })
+  if (menuOpen) await p.screenshot({ path: parts[2], clip: await p.locator(MENU).boundingBox() })
+  const joined = spawnSync('python3', ['-I', '-c', JOIN, JSON.stringify([parts[0], parts[1], menuOpen ? parts[2] : null, menuSize, out(name), scale, GAP, STACK_GAP, SLIDE_WIDTH])], { encoding: 'utf8' })
   if (joined.status !== 0) throw new Error(`joining slide ${name} failed: ${joined.stderr}`)
 }
 
@@ -88,7 +88,7 @@ async function takeSlide (p, name, { scale, menuSize, menuBox }) {
   const scale = (SLIDE_WIDTH - GAP) / ((Math.max(boardBox.width, buttonBox.width) + menuBox.width) * DEVICE_SCALE)
   const menuSize = [Math.round(menuBox.width * DEVICE_SCALE), Math.round(menuBox.height * DEVICE_SCALE)]
   await hideOthers(false)
-  const slide = (name, open = false) => takeSlide(p, name, { scale, menuSize, menuBox: open })
+  const slide = (name, open = false) => takeSlide(p, name, { scale, menuSize, menuOpen: open })
   const press = async (mode) => {
     await pressTo(p, mode)
     if (mode === 'Digit' || mode === 'Both') await waitForCircles(p)
@@ -125,7 +125,7 @@ async function takeSlide (p, name, { scale, menuSize, menuBox }) {
   await typeInto(p, '#control-centre', 2, 5, '279')
   await p.waitForFunction(([selector, label]) => document.querySelector(selector).getAttribute('aria-label') === label, [BUTTON, modeLabel('Both')])
   await waitForCircles(p)
-  await takeSlide(p, '10-split', { ...layout, menuBox: false })
+  await takeSlide(p, '10-split', { ...layout, menuOpen: false })
   await p.context().close()
 }
 

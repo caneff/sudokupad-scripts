@@ -1,5 +1,4 @@
-// Takes the eight slides of Draw Tool's slideshow on site/index.html, each the board patch beside the Draw panel (as
-// site-draw-tool-screenshot.mjs crops it), from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
+// Takes the eight slides of Draw Tool's slideshow on site/index.html, each the board patch beside the Draw panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
 //   draw-tool-slide-1-line.png      a freehand line
 //   draw-tool-slide-2-straight.png  a Shift+drag, which draws a straight line
 //   draw-tool-slide-3-opacity.png   the Size slider up and the Opacity slider down: a thick, see-through line over a thin solid one
@@ -8,7 +7,7 @@
 //   draw-tool-slide-6-text.png      a cage sum typed in a cell's corner
 //   draw-tool-slide-7-colors.png    a hold on a color button: a picker over each color, one recolored, and the line in it recolored too
 //   draw-tool-slide-8-erase.png     a right-drag part way across a line, its path dotted and the pointer on it
-// Every stroke is a real mouse drag, click or key. It fails, writing nothing, when a step does not land.
+// Every stroke is a real mouse drag, click or key. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool-slides-screenshot.mjs
 // Not part of any test.
@@ -43,13 +42,13 @@ async function scene () {
     await p.click(`.controls-input button[data-key="${color}"]`)
     await p.locator('#draw-tool-size').fill(String(width))
   }
-  const drag = async (points, { shift = false, button = 'left', hold = false } = {}) => {
+  const drag = async (points, { shift = false } = {}) => {
     const before = await items('path')
     if (shift) await p.keyboard.down('Shift')
     await p.mouse.move(...at(points[0]))
-    await p.mouse.down({ button })
+    await p.mouse.down()
     for (const point of points.slice(1)) await p.mouse.move(...at(point), { steps: DRAG_STEPS })
-    if (!hold) await p.mouse.up({ button })
+    await p.mouse.up()
     if (shift) await p.keyboard.up('Shift')
     return before
   }

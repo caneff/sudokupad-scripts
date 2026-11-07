@@ -31,7 +31,7 @@ import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extr
 const target = (name) => new URL(`./pen-tool-extras-slide-${name}.png`, import.meta.url).pathname
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 // A 900 x 700 window draws cells 53 px wide and a pen panel 159 px wide and 212 px tall. The board is three columns and four rows of them,
-// as tall as the panel, so the picture is about 340 px wide on the page and no taller than the panel and its caption.
+// as tall as the panel, so the picture is about 340 px wide on the page and no taller than the panel.
 const VIEWPORT = { width: 900, height: 700 }
 const COLS = 3
 const ROWS = 4
@@ -56,8 +56,8 @@ sheet.save(target)
 const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
 const DARK_ROW = 3
 const OUTLINE_ROW = DARK_ROW + 0.5
-// The cell whose right edge takes the edge mark, and the grid corner (row, column) that takes the corner mark.
-const [EDGE_MARK_ROW, EDGE_MARK_COL, CORNER_MARK] = [2, 0, [3, 2]]
+// The row whose cells take the edge marks, and the grid corner (row, column) that takes the corner mark.
+const [EDGE_MARK_ROW, CORNER_MARK] = [2, [3, 2]]
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -92,7 +92,7 @@ const changing = async (what, act) => {
   await act()
   if (JSON.stringify(await penStrings(p)) === before) throw new Error(`${what} changed nothing`)
 }
-const frames = mkdtempSync(join(tmpdir(), 'pte-tour-'))
+const frames = mkdtempSync(join(tmpdir(), 'pte-slides-'))
 const [, , cell] = await cellCentre(p, 0, 0)
 const [x0, y0] = await gridPoint(p, [0, 0])
 const patch = { x: x0 - MARGIN, y: y0 - MARGIN_Y, width: COLS * cell + 2 * MARGIN, height: ROWS * cell + 2 * MARGIN_Y }
