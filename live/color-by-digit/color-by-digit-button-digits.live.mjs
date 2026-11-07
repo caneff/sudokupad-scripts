@@ -1,5 +1,5 @@
-// Live check that the button's strip shows the cell profile's numbers with a separate digit profile (#377), on
-// sudokupad.app in headless Chromium: Low/5/High on the cells, Odd/Even on the digits, in Digit mode.
+// Live check that each mode picks the button's digits (#389), on sudokupad.app in headless Chromium: Low/5/High on the
+// cells, Odd/Even on the digits. Cell and Off show 1 5 9, Digit 5 4 and Both 1 5 6.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -16,14 +16,18 @@ after(async () => { await browser?.close() })
 
 const chips = (p) => p.locator(BUTTON).evaluate((button) => [...button.querySelectorAll('[data-role="chip"] text')].map((t) => ({ digit: t.textContent, ink: t.getAttribute('fill') })))
 
-describe('with Low/5/High on the cells and Odd/Even on the digits, in Digit mode', { concurrency: false }, () => {
+const shownIn = (mode, digits) => describe(`with Low/5/High on the cells and Odd/Even on the digits, in ${mode} mode`, { concurrency: false }, () => {
   let context, p
-  before(async () => { ({ context, p } = await openSession(browser, script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: 'digit' } })) })
+  before(async () => { ({ context, p } = await openSession(browser, script, { saved: { ...savedProfiles(APART), [MODE_STORAGE_KEY]: mode } })) })
   after(async () => { await context?.close() })
 
-  it('the button shows 1 5 9, the cell profile\'s numbers, all inked in the one color Odd/Even gives them', async () => {
-    const seen = await settle(async () => (await chips(p)).map((c) => c.digit), ['1', '5', '9'])
-    assert.deepEqual(seen, ['1', '5', '9'])
-    assert.equal(new Set((await chips(p)).map((c) => c.ink)).size, 1)
+  it(`the button shows ${digits.join(' ')}`, async () => {
+    const seen = await settle(async () => (await chips(p)).map((c) => c.digit), digits)
+    assert.deepEqual(seen, digits)
   })
 })
+
+shownIn('cell', ['1', '5', '9'])
+shownIn('off', ['1', '5', '9'])
+shownIn('digit', ['5', '4'])
+shownIn('both', ['1', '5', '6'])
