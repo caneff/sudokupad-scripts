@@ -838,27 +838,17 @@ test('renderProfiles marks the selected row by aria-checked, not the active one,
   assert.match(STYLE_CSS, /\[aria-checked="true"\] \.cbd-name \{[^}]*font-weight: 600/)
 })
 
-test('renderProfiles with sync on gives the active profile an Active tag and every other row a Use tag', () => {
+test('renderProfiles with sync on gives each row one Active tag, pressed on the active profile', () => {
   const html = renderProfiles(profileState, colorFor, 0)
-  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Use']])
+  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Active']])
   assert.deepEqual(tagsOf(html, 1), [['tag-cells', 'true', 'Active']])
 })
 
-test('renderProfiles with sync off gives each row a Cells and a Digits tag, labelled by name on the pick and Use elsewhere', () => {
+test('renderProfiles with sync off gives each row a Cells tag and a Digits tag, each pressed on its own profile', () => {
   const split = { ...profileState, digitActive: 0 }
   const html = renderProfiles(split, colorFor, 1)
-  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Use'], ['tag-digits', 'true', 'Digits']])
-  assert.deepEqual(tagsOf(html, 1), [['tag-cells', 'true', 'Cells'], ['tag-digits', 'false', 'Use']])
-})
-
-test('an unpressed tag names its pick in a title, since two Use tags share a row', () => {
-  const html = renderProfiles({ ...profileState, digitActive: 0 }, colorFor, 0)
-  assert.match(html, /data-act="tag-cells" data-index="0"[^>]*title="Use for cells"/)
-  assert.match(html, /data-act="tag-digits" data-index="1"[^>]*title="Use for digits"/)
-})
-
-test('the stylesheet gives an unpressed tag a faint look', () => {
-  assert.match(STYLE_CSS, /\.cbd-tag\[aria-pressed="false"\] \{[^}]*color: #8a8496/)
+  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Cells'], ['tag-digits', 'true', 'Digits']])
+  assert.deepEqual(tagsOf(html, 1), [['tag-cells', 'true', 'Cells'], ['tag-digits', 'false', 'Digits']])
 })
 
 test('renderProfiles drops the two tags to a second line only when sync is off', () => {
@@ -867,9 +857,9 @@ test('renderProfiles drops the two tags to a second line only when sync is off',
   assert.match(STYLE_CSS, /\.cbd-two-tags \.cbd-tags \{[^}]*flex-basis: 100%/)
 })
 
-test('renderProfiles with digit colors off gives each row one tag, since no digit profile is in use', () => {
+test('renderProfiles with digit colors off gives each row one Active tag, since no digit profile is in use', () => {
   const html = renderProfiles({ ...profileState, digitActive: 0, useDigitColors: false }, colorFor, 0)
-  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Use']])
+  assert.deepEqual(tagsOf(html, 0), [['tag-cells', 'false', 'Active']])
 })
 
 test('renderProfiles disables delete on the last profile and + New profile at six', () => {

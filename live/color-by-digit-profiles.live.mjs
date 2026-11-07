@@ -474,12 +474,12 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await touch(cdp, 'touchEnd', start.x, start.y)
   }
 
-  it('the dialog lists each profile with its colors and shown digits (three at most), a count, the selected radio and an Active tag on the active profile and a Use tag on the others', async () => {
+  it('the dialog lists each profile with its colors and shown digits (three at most), a count, the selected radio and an Active tag on the active profile', async () => {
     await t.openEditor()
     assert.deepEqual(await t.rowNames(), ['Odd/Even', 'Low/5/High', 'Four'])
     assert.equal(await t.selectedRow(), 0)
     assert.equal(await t.taggedRow('tag-cells'), 0)
-    assert.deepEqual(await p.$$eval(`${ROWS} .cbd-tag`, (es) => es.map((e) => e.textContent)), ['Active', 'Use', 'Use'])
+    assert.deepEqual(await p.$$eval(`${ROWS} .cbd-tag`, (es) => es.map((e) => e.textContent)), ['Active', 'Active', 'Active'])
     assert.match(await heading(), /3 of 6/)
     assert.equal(await p.inputValue(NAME_BOX), 'Odd/Even')
     assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4', '1', '5', '9', '1', '3', '5'])
