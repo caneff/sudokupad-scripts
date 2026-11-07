@@ -1,24 +1,24 @@
-// Live check of draw-tool.user.js's erasing on sudokupad.app: a right-drag deletes the items it crosses (a middle click or drag does nothing), the
-// board's context menu is suppressed while Draw is current, Clear all asks first, and closing its dialog over the board
-// draws nothing and opens no text box. Real mouse input throughout.
+// Live check of draw-tool.user.js's erasing on sudokupad.app: a right-drag or right click deletes the notes it crosses (a middle click or drag does nothing), the
+// board's context menu is suppressed while Text Annotation is current, Clear all asks first, and closing its dialog over the board
+// makes no note and opens no text box. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, DRAW_BUTTON, script, SHAPE_BUTTON, SHAPES, STROKES, TEXT_BOX } from './draw-tool-fixtures.mjs'
+import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, DRAW_BUTTON, script, STROKES, TEXT_BOX } from './draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 
-// Two strokes along rows 2 and 4, from c2 to c7, in cells from the grid's top left.
-const UPPER = [[1.5, 1.5], [1.6, 4], [1.5, 6.5]]
-const LOWER = [[3.5, 1.5], [3.4, 4], [3.5, 6.5]]
+// Two notes, in cells from the grid's top left: the upper one reads 15 and the lower one 20.
+const UPPER_AT = [1.5, 2.5]
+const LOWER_AT = [3.5, 2.5]
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Draw Tool\'s erasing', { concurrency: false }, () => {
+describe('Text Annotation\'s erasing', { concurrency: false }, () => {
   let context, p, errors
   // A right click on the board before the script runs: whether the page prevented its menu, and the cells selected.
   let stockRightClick
@@ -29,7 +29,6 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
   const tool = () => draw.tool(p)
   const pickDraw = () => draw.pickDraw(p)
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
-  const strokeCount = () => p.locator(STROKES).count()
   const texts = () => draw.texts(p)
   const textBoxCount = () => p.locator(TEXT_BOX).count()
   // A click at `at`, in cells from the grid's top left, then `content` typed and Enter.
@@ -38,15 +37,14 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     await p.keyboard.type(content)
     await p.keyboard.press('Enter')
   }
-  const strokePaths = () => draw.strokePaths(p)
   const saved = () => draw.saved(p)
   const reload = () => draw.reload(p)
-  const drawTwo = async () => {
+  // Both notes, the lower one made first.
+  const makeTwo = async () => {
     await pickDraw()
-    await mouseDrag(p, UPPER)
-    await mouseDrag(p, LOWER)
-    assert.equal(await strokeCount(), 2)
-    return strokePaths()
+    await typeText(LOWER_AT, '20')
+    await typeText(UPPER_AT, '15')
+    assert.deepEqual(await texts(), ['20', '15'])
   }
   const rightDrag = (points) => mouseDrag(p, points, { button: 'right' })
   // A right click at r5c5's middle: whether its contextmenu event ended prevented, and the cells selected after it.
@@ -101,7 +99,7 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('the Draw tool gets the right button as a mousedown with button 2', async () => {
+  it('Text Annotation gets the right button as a mousedown with button 2', async () => {
     await pickDraw()
     // App.toolExecHandler triggers `tool-<handler>` with the event before it calls the current tool's handler.
     const got = read(() => new Promise((resolve) => {
@@ -112,83 +110,76 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(await got, ['mousedown', 2])
   })
 
-  it('a right-drag across one of two strokes deletes it whole and keeps the other, and a reload shows the same', async () => {
-    const [, lower] = await drawTwo()
-    await rightDrag([[1, 3], [2, 3.3]])
-    assert.deepEqual(await strokePaths(), [lower])
-    assert.equal((await saved()).length, 1)
+  it('a right-drag across one of two notes deletes it whole and keeps the other, and a reload shows the same', async () => {
+    await makeTwo()
+    await rightDrag([[1.5, 2.2], [1.5, 2.8]])
+    assert.deepEqual(await texts(), ['20'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['20'])
     await reload()
-    assert.deepEqual(await settle(strokePaths, [lower]), [lower])
+    assert.deepEqual(await settle(texts, ['20']), ['20'])
   })
 
-  it('a right-drag that passes near no stroke deletes nothing', async () => {
+  it('a right-drag that passes near no note deletes nothing', async () => {
     await pickDraw()
     await rightDrag([[5.5, 1], [6.5, 8]])
-    assert.equal(await strokeCount(), 1)
+    assert.deepEqual(await texts(), ['20'])
   })
 
-  // Z switches to Digit with the right button still held, so the release goes to the Digit tool and not to Draw.
-  it('a right-drag cut short by a tool switch keeps what it erased, and erases nothing more when Draw is back', async () => {
-    await pickDraw()
-    await mouseDrag(p, UPPER)
-    const [lower] = await strokePaths()
-    await p.mouse.move(...await gridPoint(p, [1, 3]))
+  it('a right click on a note, with no drag, deletes it', async () => {
+    await typeText(UPPER_AT, '15')
+    assert.deepEqual(await texts(), ['20', '15'])
+    await p.mouse.click(...await gridPoint(p, UPPER_AT), { button: 'right' })
+    assert.deepEqual(await texts(), ['20'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['20'])
+  })
+
+  // Z switches to Digit with the right button still held, so the release goes to the Digit tool and not to Text Annotation.
+  it('a right-drag cut short by a tool switch keeps what it erased, and erases nothing more when Text Annotation is back', async () => {
+    await typeText(UPPER_AT, '15')
+    await p.mouse.move(...await gridPoint(p, [1.5, 2.2]))
     await p.mouse.down({ button: 'right' })
-    await p.mouse.move(...await gridPoint(p, [2, 3.3]), { steps: 8 })
-    assert.deepEqual(await strokePaths(), [lower], 'the drag erased the upper stroke')
+    await p.mouse.move(...await gridPoint(p, [1.5, 2.8]), { steps: 8 })
+    assert.deepEqual(await texts(), ['20'], 'the drag erased the upper note')
     await p.keyboard.press('z')
     assert.equal(await settle(tool, 'normal'), 'normal')
     await p.mouse.up({ button: 'right' })
-    assert.equal((await saved()).length, 1, 'the erase was saved when Draw was left')
+    assert.equal((await saved()).length, 1, 'the erase was saved when Text Annotation was left')
     await read(() => Framework.app.changeTool('draw'))
     assert.equal(await tool(), 'draw')
-    await p.mouse.move(...await gridPoint(p, [2.5, 4]))
-    await p.mouse.move(...await gridPoint(p, [4.5, 4.2]), { steps: 8 })
-    assert.deepEqual(await strokePaths(), [lower])
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.2]))
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.8]), { steps: 8 })
+    assert.deepEqual(await texts(), ['20'])
   })
 
   // A mouse move with no button down stands for a release the page never saw, such as one off the window.
   it('a right-drag whose button is no longer held erases nothing more', async () => {
-    const [lower] = await strokePaths()
     await p.mouse.move(...await gridPoint(p, [5.5, 0.5]))
     await p.mouse.down({ button: 'right' })
     const [x, y] = await gridPoint(p, [3.5, 1])
     await read(([cx, cy]) => document.elementFromPoint(cx, cy).dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true, clientX: cx, clientY: cy, buttons: 0 })), [x, y])
-    await p.mouse.move(...await gridPoint(p, [2.5, 4]), { steps: 4 })
-    await p.mouse.move(...await gridPoint(p, [4.5, 4.2]), { steps: 8 })
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.2]), { steps: 4 })
+    await p.mouse.move(...await gridPoint(p, [3.5, 2.8]), { steps: 8 })
     await p.mouse.up({ button: 'right' })
-    assert.deepEqual(await strokePaths(), [lower])
+    assert.deepEqual(await texts(), ['20'])
   })
 
   // The window's blur stands for the solver switching window mid-drag; the release then goes to the other window.
-  it('a stroke cut short by the window losing focus is kept and saved', async () => {
-    const before = (await saved()).length
-    await p.mouse.move(...await gridPoint(p, [6.5, 1.5]))
+  it('a move cut short by the window losing focus is kept and saved', async () => {
+    const [before] = (await saved()).map((item) => item.at)
+    await p.mouse.move(...await gridPoint(p, LOWER_AT))
     await p.mouse.down()
-    await p.mouse.move(...await gridPoint(p, [7, 4]), { steps: 8 })
+    await p.mouse.move(...await gridPoint(p, [3.5, 4.5]), { steps: 8 })
     await read(() => window.dispatchEvent(new window.Event('blur')))
-    assert.equal((await saved()).length, before + 1, 'saved at the blur')
+    const [after] = (await saved()).map((item) => item.at)
+    assert.notDeepEqual(after, before, 'saved at the blur')
     await p.mouse.up()
-    assert.equal(await strokeCount(), before + 1)
-    await rightDrag([[6.2, 2.5], [7.2, 2.6]])
-    assert.equal(await strokeCount(), before)
-  })
-
-  it('a right-drag across a typed text removes it whole and keeps the strokes, and a reload shows the same', async () => {
-    await pickDraw()
-    await typeText([5.5, 5.5], '15')
-    assert.deepEqual(await texts(), ['15'])
-    const strokes = await strokePaths()
-    await rightDrag([[5.2, 5.3], [5.8, 5.4]])
-    assert.deepEqual(await texts(), [])
-    assert.deepEqual(await strokePaths(), strokes)
-    assert.deepEqual((await saved()).map((item) => item.kind), ['stroke'])
-    await reload()
-    assert.deepEqual(await settle(strokePaths, strokes), strokes)
+    assert.deepEqual(await texts(), ['20'])
+    assert.equal(await textBoxCount(), 0)
+    await p.mouse.click(...await gridPoint(p, [3.5, 4.5]), { button: 'right' })
     assert.deepEqual(await texts(), [])
   })
 
-  it('with Draw current a right click on the board opens no context menu and selects no cell', async () => {
+  it('with Text Annotation current a right click on the board opens no context menu and selects no cell', async () => {
     await pickDraw()
     await p.evaluate(() => Framework.app.deselect())
     assert.deepEqual(await rightClick(), { prevented: [true], selected: 0 })
@@ -205,7 +196,6 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
   const MIDDLE_EVENTS = ['pointerdown', 'mousedown', 'auxclick']
   const middleDrag = (points) => mouseDrag(p, points, { button: 'middle' })
   const middleClick = async (at) => p.mouse.click(...await gridPoint(p, at), { button: 'middle' })
-  const shapeCount = () => p.locator(SHAPES).count()
   // For each mouse event type, the `defaultPrevented` of the events of button `button` that reached the window. The listener
   // is added last, so it runs after every listener the page and the script added.
   const watchPrevented = (types, button) => read(([names, wanted]) => {
@@ -218,43 +208,33 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
   }, [types, button])
   const prevented = () => read(() => window.__prevented)
 
-  // The stroke left from the tests above sits along row 4; the middle-click tests draw their own items lower on the board.
-  const LOW = [[8.5, 1.5], [8.6, 4], [8.5, 6.5]]
-  const drawLow = async () => {
-    await pickDraw()
-    await mouseDrag(p, LOW)
-  }
+  const NOTE = [7.5, 5.5]
 
-  it('a middle click on a stroke, a text and a shape leaves each, and a reload shows the same', async () => {
-    await drawLow()
-    await typeText([7.5, 5.5], '15')
-    await clickUntil(() => p.click(SHAPE_BUTTON), () => p.locator(SHAPE_BUTTON).getAttribute('data-mode'), 'rect', SETTLE_MS)
-    await mouseDrag(p, [[6.2, 6.2], [7, 7], [8.5, 8.5]])
-    await clickUntil(() => p.click(SHAPE_BUTTON), () => p.locator(SHAPE_BUTTON).getAttribute('data-mode'), 'off', SETTLE_MS)
-    const [strokes, shapes, saved0] = [await strokePaths(), await shapeCount(), await saved()]
-    assert.deepEqual([await texts(), shapes], [['15'], 1])
-    for (const at of [[8.6, 4], [7.3, 5.4], [7.5, 8.5]]) await middleClick(at)
-    assert.deepEqual([await strokePaths(), await texts(), await shapeCount(), await saved()], [strokes, ['15'], 1, saved0])
-    await reload()
-    assert.deepEqual(await settle(strokePaths, strokes), strokes)
+  it('a middle click on a note leaves it, and a reload shows the same', async () => {
+    await pickDraw()
+    await typeText(NOTE, '15')
+    const saved0 = await saved()
     assert.deepEqual(await texts(), ['15'])
+    await middleClick(NOTE)
+    assert.deepEqual([await texts(), await saved()], [['15'], saved0])
+    assert.equal(await textBoxCount(), 0)
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
   })
 
-  it('a middle-drag across a stroke leaves it', async () => {
+  it('a middle-drag across a note leaves it', async () => {
     await pickDraw()
-    const [strokes, before] = [await strokePaths(), await saved()]
-    await middleDrag([[8, 3], [9, 3.3]])
-    assert.deepEqual([await strokePaths(), await saved()], [strokes, before])
+    const before = await saved()
+    await middleDrag([[7.5, 5], [7.5, 6]])
+    assert.deepEqual([await texts(), await saved()], [['15'], before])
   })
 
-  it('right-drags erase the low stroke, the text and the shape the middle-button tests left', async () => {
-    await rightDrag([[8, 3], [9, 3.3]])
-    await rightDrag([[7.3, 5.3], [7.7, 5.5]])
-    await rightDrag([[7, 8], [7, 9]])
-    assert.deepEqual([await strokeCount(), await texts(), await shapeCount()], [1, [], 0])
+  it('a right-drag erases the note the middle-button tests left', async () => {
+    await rightDrag([[7.5, 5], [7.5, 6]])
+    assert.deepEqual(await texts(), [])
   })
 
-  it('a middle pointerdown, mousedown and auxclick over the board are the page\'s own with Draw current as with another tool: not prevented, so the autoscroll and Linux paste are the browser\'s', async () => {
+  it('a middle pointerdown, mousedown and auxclick over the board are the page\'s own with Text Annotation current as with another tool: not prevented, so the autoscroll and Linux paste are the browser\'s', async () => {
     await pickDraw()
     await watchPrevented(MIDDLE_EVENTS, MIDDLE)
     await middleClick([8.5, 1.5])
@@ -267,16 +247,16 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(withDraw, stockMiddleClick)
   })
 
-  it('Clear all asks "Clear the drawing?", and Cancel keeps every stroke', async () => {
+  it('Clear all asks "Clear all notes?", and Cancel keeps every note', async () => {
     await pickDraw()
-    await mouseDrag(p, UPPER)
-    const before = await strokePaths()
-    assert.equal(before.length, 2)
+    await typeText(UPPER_AT, '15')
+    await typeText(LOWER_AT, '20')
+    assert.deepEqual(await texts(), ['15', '20'])
     await openClear()
-    assert.match(await p.locator(DIALOG).textContent(), /Clear the drawing\?/)
+    assert.match(await p.locator(DIALOG).textContent(), /Clear all notes\?/)
     await p.mouse.click(...await buttonOverBoard('Cancel'))
     await p.locator(DIALOG).waitFor({ state: 'detached' })
-    assert.deepEqual(await strokePaths(), before)
+    assert.deepEqual(await texts(), ['15', '20'])
     assert.equal((await saved()).length, 2)
     assert.equal(await textBoxCount(), 0, 'the click on Cancel opened no text box')
   })
@@ -288,42 +268,37 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     await p.mouse.click(...corner)
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     assert.equal(await textBoxCount(), 0)
-    assert.deepEqual(await texts(), [])
+    assert.deepEqual(await texts(), ['15', '20'])
   })
 
-  it('closing the dialog by a button pressed over the board and released after a drag on it leaves no stroke', async () => {
-    const before = await strokePaths()
+  it('closing the dialog by a button pressed over the board and released after a drag on it makes no note', async () => {
     await openClear()
     await pressDragRelease(await buttonOverBoard('Cancel'))
     await p.locator(DIALOG).waitFor({ state: 'detached' })
-    assert.deepEqual(await strokePaths(), before)
+    assert.deepEqual(await texts(), ['15', '20'])
+    assert.equal(await p.locator(STROKES).count(), 0)
   })
 
-  it('closing the dialog by its overlay over the board, with a drag on the board, leaves no stroke', async () => {
-    const before = await strokePaths()
+  it('closing the dialog by its overlay over the board, with a drag on the board, makes no note', async () => {
     await openClear()
     // r1c1's middle is over the board and outside the dialog, which sits over the board's middle.
     const corner = await gridPoint(p, [0.5, 0.5])
     assert.equal(await read(([x, y]) => document.elementFromPoint(x, y).classList.contains('dialog-overlay'), corner), true, 'the press lands on the overlay')
     await pressDragRelease(corner)
     await p.locator(DIALOG).waitFor({ state: 'detached' })
-    assert.deepEqual(await strokePaths(), before)
+    assert.deepEqual(await texts(), ['15', '20'])
+    assert.equal(await textBoxCount(), 0)
     assert.equal(await tool(), 'draw')
   })
 
-  it('Clear all\'s OK removes every stroke and text, opens no text box, and a reload shows none', async () => {
-    assert.equal(await strokeCount(), 2)
-    await typeText([5.5, 5.5], '15')
-    assert.deepEqual(await texts(), ['15'])
+  it('Clear all\'s OK removes every note, opens no text box, and a reload shows none', async () => {
     await openClear()
     await pressDragRelease(await buttonOverBoard('OK'))
     await p.locator(DIALOG).waitFor({ state: 'detached' })
-    assert.equal(await settle(strokeCount, 0), 0)
-    assert.deepEqual(await texts(), [])
+    assert.deepEqual(await settle(texts, []), [])
     assert.equal(await textBoxCount(), 0)
     assert.equal(await saved(), null)
     await reload()
-    assert.equal(await strokeCount(), 0)
     assert.deepEqual(await texts(), [])
   })
 

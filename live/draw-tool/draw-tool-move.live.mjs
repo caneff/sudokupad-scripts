@@ -1,5 +1,6 @@
-// Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a stroke, a shape or a text moves it (following the pointer, and kept over a
-// reload), a drag never leaves the item off the board, a click on text still edits it, and a drag that starts off every item still draws, in Off and Rectangle mode. Real mouse input throughout.
+// Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a note moves it (following the pointer, and kept over a
+// reload), a drag never leaves the note off the board, a click on a note still edits it, a drag that starts off every note makes nothing, and a
+// moved note keeps its background. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -8,14 +9,13 @@ import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { SHAPE_BUTTON, SHAPES, STROKES, TEXT_BOX } = draw
+const { BACKGROUND_BUTTON, STROKES, TEXT_BGS, TEXT_BOX, TEXTS } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0); a real mouse lands on whole page pixels, so positions are checked to within a unit.
 const CELL = 64
 const NEAR_UNITS = 1.5
-// In cells from the grid's top left: a stroke along row 2, a rectangle round r4c2 to r5c4, a text at r8c6, a press clear of all three.
-const STROKE = [[1.5, 1.5], [1.6, 3], [1.5, 4.5]]
-const RECT = [[3.2, 1.2], [4.8, 3.8]]
+// In cells from the grid's top left: a note at r8c6, a second at r3c3 made with Background on, and a press clear of both.
 const TEXT_AT = [7.5, 5.5]
+const SECOND_AT = [2.5, 2.5]
 const EMPTY = [6.2, 4.5]
 // A drag is by (rows, columns) cells.
 const BY = [1, 2]
@@ -24,113 +24,82 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Draw Tool\'s moving', { concurrency: false }, () => {
+describe('Text Annotation\'s moving', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => draw.saved(p)
-  // A reload leaves Draw not current.
+  // A reload leaves Text Annotation not current.
   const reload = async () => {
     await draw.reload(p)
     await draw.pickDraw(p)
   }
   const texts = () => draw.texts(p)
-  const mode = () => p.locator(SHAPE_BUTTON).getAttribute('data-mode')
   const near = (got, want) => got.length === want.length && got.every((v, i) => Math.abs(v - want[i]) <= NEAR_UNITS)
   // A press at `from`, then a drag by BY, in cells.
   const dragBy = (from) => mouseDrag(p, [from, [from[0] + BY[0], from[1] + BY[1]]])
-  const strokeNumbers = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => e.getAttribute('d').match(/-?[\d.]+/g).map(Number)), STROKES)
-  const shapeBoxes = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => ['x', 'y', 'width', 'height'].map((a) => Number(e.getAttribute(a)))), SHAPES)
   const textAts = async () => (await saved()).filter((i) => i.kind === 'text').map((i) => i.at)
+  const typeText = async (at, content) => {
+    await p.mouse.click(...await gridPoint(p, at))
+    await p.keyboard.type(content)
+    await p.keyboard.press('Enter')
+  }
+  const bgBoxes = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => ['x', 'y'].map((a) => Number(e.getAttribute(a)))), TEXT_BGS)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
     await draw.forgetDrawings(p)
     await reload()
-    await draw.pickDraw(p)
   })
   after(async () => { await context.close() })
 
-  it('a left-drag that starts on a stroke moves the whole stroke with the pointer, and a reload keeps the new place', async () => {
-    await mouseDrag(p, STROKE)
-    const [before] = await strokeNumbers()
-    await p.mouse.move(...await gridPoint(p, STROKE[1]))
-    await p.mouse.down()
-    await p.mouse.move(...await gridPoint(p, [STROKE[1][0] + BY[0], STROKE[1][1] + BY[1]]), { steps: 8 })
-    const [during] = await strokeNumbers()
-    assert.notDeepEqual(during, before, 'the stroke follows the pointer before the release')
-    await p.mouse.up()
-    const strokes = await strokeNumbers()
-    const [after] = strokes
-    assert.equal(strokes.length, 1, 'no second stroke was drawn')
-    assert.equal(near(after, before.map((v, i) => v + (i % 2 === 0 ? BY[1] : BY[0]) * CELL)), true, `the stroke ${after} moved from ${before} by ${BY} cells`)
-    const [item] = await saved()
-    assert.equal(near(item.points[1], [STROKE[1][1] * CELL + BY[1] * CELL, STROKE[1][0] * CELL + BY[0] * CELL]), true, `the saved middle point ${item.points[1]}`)
-    await reload()
-    assert.deepEqual(await settle(strokeNumbers, [after]), [after])
-  })
-
-  it('a left-drag that starts on a rectangle\'s edge moves the rectangle, in Shape mode too', async () => {
-    await p.click(SHAPE_BUTTON)
-    assert.equal(await mode(), 'rect')
-    await mouseDrag(p, RECT)
-    const [before] = await shapeBoxes()
-    // On its top edge, in the middle.
-    await dragBy([RECT[0][0], (RECT[0][1] + RECT[1][1]) / 2])
-    const boxes = await shapeBoxes()
-    const [after] = boxes
-    assert.equal(boxes.length, 1, 'no second shape was drawn')
-    assert.equal(near(after, [before[0] + BY[1] * CELL, before[1] + BY[0] * CELL, before[2], before[3]]), true, `the rectangle ${after} moved from ${before}`)
-    await reload()
-    assert.deepEqual(await settle(shapeBoxes, [after]), [after])
-  })
-
-  it('a click on text still edits it, and a left-drag that starts on it moves it and keeps the text', async () => {
-    await p.click(SHAPE_BUTTON)
-    await p.click(SHAPE_BUTTON)
-    assert.equal(await mode(), 'off')
-    await p.mouse.click(...await gridPoint(p, TEXT_AT))
-    await p.keyboard.type('15')
-    await p.keyboard.press('Enter')
+  it('a click on a note still edits it, and a left-drag that starts on it moves it, keeps the text, and a reload keeps the new place', async () => {
+    await typeText(TEXT_AT, '15')
     assert.deepEqual(await texts(), ['15'])
     await p.mouse.click(...await gridPoint(p, TEXT_AT))
     assert.equal(await p.locator(TEXT_BOX).inputValue(), '15', 'the click reopened the text')
     await p.keyboard.press('Escape')
     const [before] = await textAts()
-    await dragBy(TEXT_AT)
+    await p.mouse.move(...await gridPoint(p, TEXT_AT))
+    await p.mouse.down()
+    await p.mouse.move(...await gridPoint(p, [TEXT_AT[0] + BY[0], TEXT_AT[1] + BY[1]]), { steps: 8 })
+    const duringBox = await p.locator(TEXTS).boundingBox()
+    await p.mouse.up()
     const [after] = await textAts()
-    assert.equal(near(after, [before[0] + BY[1] * CELL, before[1] + BY[0] * CELL]), true, `the text ${after} moved from ${before}`)
+    assert.equal(near(after, [before[0] + BY[1] * CELL, before[1] + BY[0] * CELL]), true, `the note ${after} moved from ${before}`)
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     assert.deepEqual(await texts(), ['15'])
+    const endBox = await p.locator(TEXTS).boundingBox()
+    assert.deepEqual([duringBox.x, duringBox.y], [endBox.x, endBox.y], 'the note followed the pointer before the release')
     await reload()
     assert.deepEqual(await settle(textAts, [after]), [after])
   })
 
-  it('a drag that starts off every item still draws a rectangle in Rectangle mode', async () => {
-    await p.click(SHAPE_BUTTON)
-    assert.equal(await mode(), 'rect')
-    const before = (await shapeBoxes()).length
-    await mouseDrag(p, [[5.2, 6.2], [6.4, 8.2]])
-    assert.equal((await shapeBoxes()).length, before + 1)
-    await p.click(SHAPE_BUTTON)
-    await p.click(SHAPE_BUTTON)
-    assert.equal(await mode(), 'off')
-  })
-
-  it('a drag that starts off every item still draws a stroke, and Shift still makes it straight', async () => {
-    const before = (await strokeNumbers()).length
+  it('a drag that starts off every note makes no note and no stroke, and moves nothing', async () => {
+    const before = await saved()
+    await draw.pickDraw(p)
     await mouseDrag(p, [EMPTY, [EMPTY[0] + 1, EMPTY[1] + 0.6], [EMPTY[0] + 0.5, EMPTY[1] + 2]])
-    assert.equal((await strokeNumbers()).length, before + 1)
-    await p.keyboard.down('Shift')
-    await mouseDrag(p, [[8.6, 1.5], [8.2, 2.5], [8.7, 3.5]])
-    await p.keyboard.up('Shift')
-    const strokes = await strokeNumbers()
-    assert.equal(strokes.length, before + 2)
-    assert.equal(strokes[strokes.length - 1].length, 4, 'a straight line has two points')
+    assert.equal(await p.locator(STROKES).count(), 0)
+    assert.equal(await p.locator(TEXT_BOX).count(), 0)
+    assert.deepEqual(await saved(), before)
   })
 
-  it('a drag that ends off the board leaves the item where a press can still reach it', async () => {
+  it('a note made with Background on keeps its box with it when moved, and a reload shows the box in the new place', async () => {
+    await p.click(BACKGROUND_BUTTON)
+    await typeText(SECOND_AT, '7')
+    await p.click(BACKGROUND_BUTTON)
+    assert.equal(await p.locator(TEXT_BGS).count(), 1)
+    const [boxBefore] = await bgBoxes()
+    await dragBy(SECOND_AT)
+    const [boxAfter] = await bgBoxes()
+    assert.equal(near(boxAfter, [boxBefore[0] + BY[1] * CELL, boxBefore[1] + BY[0] * CELL]), true, `the box ${boxAfter} moved from ${boxBefore}`)
+    assert.equal((await saved())[1].bg, true)
+    await reload()
+    assert.deepEqual(await settle(bgBoxes, [boxAfter]), [boxAfter])
+  })
+
+  it('a drag that ends off the board leaves the note where a press can still reach it', async () => {
     const [from] = await textAts()
     const point = await gridPoint(p, [from[1] / CELL, from[0] / CELL])
     await p.mouse.move(...point)
@@ -138,7 +107,7 @@ describe('Draw Tool\'s moving', { concurrency: false }, () => {
     await p.mouse.move(point[0] + 2000, point[1], { steps: 8 })
     await p.mouse.up()
     const [after] = await textAts()
-    assert.equal(after[0] <= 9 * CELL, true, `the text at x ${after[0]} is still over the board`)
+    assert.equal(after[0] <= 9 * CELL, true, `the note at x ${after[0]} is still over the board`)
   })
 
   it('the page shows no error', () => {

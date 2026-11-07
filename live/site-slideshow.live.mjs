@@ -1,4 +1,4 @@
-// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Draw Tool), opened from disk: Next and Previous step
+// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Text Annotation), opened from disk: Next and Previous step
 // the slideshow's picture, caption and counter, and both ends wrap. Each details page's slides also fill their frame to its inset and are never shown wider than their own width, at 1280x720 and 1600x900. The page's raw.githubusercontent.com
 // pictures are served from this checkout, since a branch is not on main yet.
 import { after, before, describe, it } from 'node:test'
@@ -31,14 +31,14 @@ const SHOWS = [
     beforeLast: ['pen-tool-extras-slide-13-erase.png', 'Right-click a line to delete it']
   },
   {
-    heading: 'Draw Tool',
+    heading: 'Text Annotation',
     row: 3,
     details: 'draw-tool.html',
-    slides: 10,
-    first: ['draw-tool-slide-1-line.png', 'Draw a line'],
-    second: ['draw-tool-slide-2-straight.png', 'Hold Shift for a straight line'],
-    last: ['draw-tool-slide-10-move.png', 'Move: drag a text'],
-    beforeLast: ['draw-tool-slide-9-erased.png', 'The whole line is gone']
+    slides: 7,
+    first: ['draw-tool-slide-1-type.png', 'Left click to type a note'],
+    second: ['draw-tool-slide-2-size.png', 'One size slider'],
+    last: ['draw-tool-slide-7-erased.png', 'The note is gone'],
+    beforeLast: ['draw-tool-slide-6-erase.png', 'Erase: right-click a note']
   }
 ]
 

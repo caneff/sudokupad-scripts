@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, texts, TOOL_KEYS, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, TEXTS, texts, TOOL_KEYS, tool as toolOf } from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
@@ -11,19 +11,18 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () => {
+describe('Text Annotation, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
 
   const tool = () => toolOf(p)
   const selected = () => p.evaluate(() => Framework.app.puzzle.selectedCells.length)
-  const strokeCount = () => p.locator(STROKES).count()
-  // The last stroke's box on screen, in cell units from the grid's top left corner.
-  const lastStrokeInCells = () => p.evaluate((selector) => {
+  // The only note's middle on screen, in cell units from the grid's top left corner.
+  const noteInCells = () => p.evaluate((selector) => {
     const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-    const box = [...document.querySelectorAll(selector)].pop().getBoundingClientRect()
-    const round = (v) => Math.round(v * 100) / 100
-    return [round((box.left - cell.x) / cell.width), round((box.top - cell.y) / cell.height), round(box.width / cell.width), round(box.height / cell.height)]
-  }, STROKES)
+    const box = document.querySelector(selector).getBoundingClientRect()
+    const round = (v) => Math.round(v * 10) / 10
+    return [round((box.left + box.width / 2 - cell.x) / cell.width), round((box.top + box.height / 2 - cell.y) / cell.height)]
+  }, TEXTS)
   const cellWidth = () => p.evaluate(() => Math.round(Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect().width))
   const pickDraw = () => pick(p)
 
@@ -33,9 +32,10 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
   })
   after(async () => { await context.close() })
 
-  it('the Draw button sits among the tool buttons, and picking it makes Draw the current tool', async () => {
+  it('the Text Annotation button sits among the tool buttons, and picking it makes it the current tool', async () => {
     assert.equal(await p.locator(`.controls-tool ${DRAW_BUTTON}`).count(), 1)
-    assert.equal(await p.locator(DRAW_BUTTON).textContent(), 'Draw')
+    assert.equal(await p.locator(DRAW_BUTTON).textContent(), 'Text')
+    assert.equal(await p.locator(DRAW_BUTTON).getAttribute('title'), 'Text Annotation')
     assert.equal(await pickDraw(), 'draw')
   })
 
@@ -62,11 +62,13 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     await p.evaluate(() => Framework.setSetting('toolpen', false))
   })
 
-  it('a left drag leaves one stroke above the digits and selects no cell', async () => {
+  it('a left click leaves one note above the digits and selects no cell', async () => {
     await pickDraw()
     await p.evaluate(() => Framework.app.deselect())
-    await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5], [3.6, 6.5]])
-    assert.equal(await strokeCount(), 1)
+    await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    await p.keyboard.type('15')
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await texts(p), ['15'])
     assert.equal(await selected(), 0, 'no cell selected')
     assert.equal(await tool(), 'draw')
     const order = await p.evaluate(() => {
@@ -77,63 +79,41 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     assert.equal(await p.evaluate(() => Framework.app.svgRenderer.getElem().lastElementChild.id), 'draw-tool-layer')
   })
 
-  it('the stroke is a smoothed curve with round ends and joins, solid by default, in draw color 1 (pen color 1, copied on first use) at the default width', async () => {
-    const look = await p.evaluate((selector) => {
-      const path = document.querySelector(selector)
-      const style = window.getComputedStyle(path)
-      return {
-        curved: /Q/.test(path.getAttribute('d')),
-        commands: (path.getAttribute('d').match(/[MQL]/g) || []).length,
-        cap: style.strokeLinecap,
-        join: style.strokeLinejoin,
-        opacity: parseFloat(style.strokeOpacity),
-        width: style.strokeWidth,
-        stroke: style.stroke,
-        pen1: window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-1').trim()
-      }
-    }, STROKES)
-    assert.equal(look.curved, true, 'the path has curves')
-    assert.equal(look.commands < 30, true, `${look.commands} path commands: the mouse points were simplified`)
-    assert.equal(look.cap, 'round')
-    assert.equal(look.join, 'round')
-    assert.equal(look.opacity, 1)
-    assert.equal(look.width, '6px')
-    assert.equal(look.stroke, look.pen1)
+  it('a drag that starts on no note draws nothing and selects no cell', async () => {
+    await mouseDrag(p, [[5.5, 1.5], [6, 3], [5.5, 4.5]])
+    assert.equal(await p.locator(STROKES).count(), 0, 'no stroke')
+    assert.deepEqual(await texts(p), ['15'])
+    assert.equal(await selected(), 0, 'no cell selected')
   })
 
-  it('Shift+drag draws a straight line from the press point to the release point, and stays in Draw', async () => {
+  it('Shift held with a drag stays in Text Annotation and selects no cell', async () => {
     await p.keyboard.down('Shift')
-    await mouseDrag(p, [[1.5, 1.5], [4, 2], [1, 3], [5.5, 6.5]])
+    await mouseDrag(p, [[7.5, 1.5], [7.5, 4]])
     await p.keyboard.up('Shift')
-    assert.equal(await strokeCount(), 2)
     assert.equal(await tool(), 'draw', 'Shift did not switch to Corner')
     assert.equal(await selected(), 0, 'no cell selected')
-    const line = await p.evaluate((selector) => [...document.querySelectorAll(selector)].pop().getAttribute('d'), STROKES)
-    assert.match(line, /^M[\d.]+ [\d.]+ L[\d.]+ [\d.]+$/, line)
-    // The board draws a cell 64 wide, from 0: r2c2's middle is (96, 96) and r6c7's corner region is (416, 352).
-    const [x1, y1, x2, y2] = line.match(/[\d.]+/g).map(Number)
-    assert.deepEqual([x1, y1, x2, y2].map((v) => Math.round(v / 32)), [3, 3, 13, 11])
+    assert.equal(await p.locator(STROKES).count(), 0)
   })
 
-  it('after a window resize each stroke still sits over the cells it was drawn on', async () => {
-    const before = await lastStrokeInCells()
+  it('after a window resize each note still sits over the cells it was typed on', async () => {
+    const before = await noteInCells()
     const cellWidthBefore = await cellWidth()
     await p.setViewportSize({ width: 800, height: 1000 })
-    const after = await stable(lastStrokeInCells)
+    const after = await stable(noteInCells)
     assert.notEqual(await cellWidth(), cellWidthBefore, 'the resize changed the board\'s size')
     assert.deepEqual(after, before)
     await p.setViewportSize({ width: 1200, height: 900 })
   })
 
-  it('with another tool current the strokes stay visible and a drag selects cells as it does without the script', async () => {
+  it('with another tool current the note stays visible and a drag selects cells as it does without the script', async () => {
     await p.click(DIGIT_BUTTON)
     assert.equal(await tool(), 'normal')
-    assert.equal(await strokeCount(), 2)
-    assert.equal(await p.locator(STROKES).first().isVisible(), true)
+    assert.deepEqual(await texts(p), ['15'])
+    assert.equal(await p.locator(TEXTS).first().isVisible(), true)
     await p.evaluate(() => Framework.app.deselect())
     await mouseDrag(p, [[0.5, 0.5], [0.5, 2.5]])
     assert.equal(await selected(), 3, 'the drag selected r1c1 to r1c3')
-    assert.equal(await strokeCount(), 2, 'no stroke was drawn')
+    assert.deepEqual(await texts(p), ['15'], 'no note was made')
   })
 
   it('the page raised no error', () => {
@@ -142,10 +122,9 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
 })
 
 // Test Markup is SudokuPad's own Experimental freehand drawing, on a fabric.js canvas over the page while M is held.
-describe('Draw Tool with SudokuPad\'s Test Markup turned on', { concurrency: false }, () => {
+describe('Text Annotation with SudokuPad\'s Test Markup turned on', { concurrency: false }, () => {
   let context, p, errors
 
-  const strokeCount = () => p.locator(STROKES).count()
   const markupDrawing = () => p.evaluate(() => Framework.features.markup.fabcan.isDrawingMode)
   const markupStrokes = () => p.evaluate(() => Framework.features.markup.fabcan.getObjects().length)
 
@@ -160,33 +139,24 @@ describe('Draw Tool with SudokuPad\'s Test Markup turned on', { concurrency: fal
     await context.close()
   })
 
-  it('Draw draws a stroke and a right-drag erases it', async () => {
+  it('a click makes a note and a right click on it erases it', async () => {
     await pick(p)
-    await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5]])
-    assert.equal(await strokeCount(), 1)
-    await mouseDrag(p, [[2, 4], [3.5, 4.2]], { button: 'right' })
-    assert.equal(await strokeCount(), 0)
+    await p.mouse.click(...await gridPoint(p, [3.5, 3.5]))
+    await p.keyboard.type('15')
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await texts(p), ['15'])
+    await p.mouse.click(...await gridPoint(p, [3.5, 3.5]), { button: 'right' })
+    assert.deepEqual(await texts(p), [])
   })
 
-  it('a right click on a stroke, with no drag, erases it', async () => {
-    await pick(p)
-    await mouseDrag(p, [[2.5, 2.5], [3.5, 5.5]])
-    assert.equal(await strokeCount(), 1)
-    // The middle of the straight stroke.
-    const [x, y] = await gridPoint(p, [3, 4])
-    await p.mouse.move(x, y)
-    await p.mouse.click(x, y, { button: 'right' })
-    assert.equal(await strokeCount(), 0)
-  })
-
-  it('holding M with Draw current draws with Test Markup, not with Draw, and its release ends it', async () => {
+  it('holding M with Text Annotation current draws with Test Markup, not a note, and its release ends it', async () => {
     await p.keyboard.down('m')
     assert.equal(await settle(markupDrawing, true), true)
     await mouseDrag(p, [[5.5, 1.5], [6, 3], [5.5, 4.5]])
     await p.keyboard.up('m')
     assert.equal(await settle(markupDrawing, false), false)
     assert.equal(await markupStrokes(), 1)
-    assert.equal(await strokeCount(), 0)
+    assert.deepEqual(await texts(p), [])
     assert.equal(await toolOf(p), 'draw')
   })
 

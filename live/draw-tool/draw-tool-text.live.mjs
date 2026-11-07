@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
-// SudokuPad, Enter, a click elsewhere and Escape end it, a click on text edits it, and the Size and Opacity sliders. Real
+// SudokuPad, Enter, a click elsewhere and Escape end it, a click on text edits it, and the Size slider. Real
 // mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, OPACITY_KEY, SIZE_SLIDER, OPACITY_SLIDER, TEXTS, WIDTH_KEY } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, SIZE_SLIDER, TEXTS, WIDTH_KEY } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -21,7 +21,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Draw Tool\'s typed text', { concurrency: false }, () => {
+describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -53,7 +53,7 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
     await draw.forgetDrawings(p)
-    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, OPACITY_KEY])
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY])
     await reload()
   })
   after(async () => { await context.close() })
@@ -197,32 +197,30 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
   })
 
-  it('the Size slider sets the next text\'s size to 2 x the width + 8, and the Opacity slider its opacity; the earlier text is unchanged', async () => {
+  it('the Size slider sets the next text\'s size to 2 x the size value + 8; the earlier text is unchanged, and every note is solid', async () => {
     assert.equal(await sliderValue(SIZE_SLIDER), 6)
     await p.locator(SIZE_SLIDER).fill('10')
-    await p.locator(OPACITY_SLIDER).fill('40')
     await p.click('.controls-input button[data-key="4"]')
     await clickAt(THIRD_AT)
     await p.keyboard.type('6')
     await p.keyboard.press('Enter')
-    assert.deepEqual(await textStyle('6'), { fill: await penColor(4), opacity: '0.4', size: '28px' })
+    assert.deepEqual(await textStyle('6'), { fill: await penColor(4), opacity: '1', size: '28px' })
     assert.deepEqual(await textStyle('23'), { fill: await penColor(1), opacity: '1', size: '20px' })
   })
 
-  it('the text and the slider values come back after a reload', async () => {
+  it('the text and the size come back after a reload', async () => {
     const before = await texts()
     await reload()
     assert.deepEqual(await settle(texts, before), before)
     await pickDraw()
-    assert.deepEqual([await sliderValue(SIZE_SLIDER), await sliderValue(OPACITY_SLIDER)], [10, 40])
+    assert.equal(await sliderValue(SIZE_SLIDER), 10)
   })
 
-  it('bad saved slider values read as the defaults', async () => {
+  it('a bad saved size reads as the default', async () => {
     await plantUnchecked(p, WIDTH_KEY, '"huge"')
-    await plantUnchecked(p, OPACITY_KEY, '7')
     await reload()
     await pickDraw()
-    assert.deepEqual([await sliderValue(SIZE_SLIDER), await sliderValue(OPACITY_SLIDER)], [6, 100])
+    assert.equal(await sliderValue(SIZE_SLIDER), 6)
   })
 
   it('after a window resize each text still sits over the cells it was typed on', async () => {

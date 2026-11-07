@@ -109,7 +109,7 @@
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type.
-- **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Draw's **erase** is a different feature. The install step that does it is `line erase`.
+- **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Text Annotation's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle and
   cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
   SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
@@ -183,30 +183,20 @@
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
   browser under `ToolLetter_letterMode`. The button and `/` toggle it; No Tab Letters makes Tab do nothing in play instead.
-- **Draw Tool** — the script `draw-tool.user.js`, and the tool it adds to SudokuPad's tool buttons as Draw. It takes no
-  tool key.
-- **drawing** — everything Draw Tool has put on one puzzle: its strokes, texts and shapes, oldest first. Saved per puzzle (keyed by
-  the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles drawn on last; it is not in the replay, Undo
-  does not touch it, and Restart and Clear all empty it.
-- **draw color** — one of Draw's nine colors, numbered 1 to 9, saved under `DrawTool_colors`. With none saved, Draw copies the
+- **Text Annotation** — the script `draw-tool.user.js` (the file keeps its old name so installed copies keep updating), and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. It takes no
+  tool key. Called Draw Tool before 0.17.0, when it also drew lines and shapes.
+- **notes** — everything Text Annotation has put on one puzzle: its texts, oldest first. Saved per puzzle (keyed by
+  the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles noted on last, under the storage keys it always used (`DrawTool_drawing_*`, `DrawTool_index`); it is not in the replay, Undo
+  does not touch it, and Restart and Clear all empty it. A stored item of kind `stroke` or `shape`, from before 0.17.0, is never drawn, and a save, Clear all and Restart leave it as it is.
+- **note color** — one of Text Annotation's nine colors, numbered 1 to 9, saved under `DrawTool_colors`. With none saved, it copies the
   pen colors once, when it is first made current; after that they no longer follow the pen colors. A saved value it cannot
   read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a
-  color button puts a color picker over each button, and a picked color recolors every item already drawn in that number,
-  since an item saves the number. The digit keys 1 to 9 pick one.
-- **stroke** — one freehand line of a drawing, or a straight one drawn with Shift, in a draw color, with its own width
-  (1 to 16) and opacity. The homepage, the script's description and its buttons call it a line, for the solver; code and tests say
-  stroke. Not a pen tool line, which SudokuPad stores in the cells.
-- **text** — a short string typed into a drawing, in a draw color, with its own size (2 x the width + 8) and opacity, centred on the
+  color button puts a color picker over each button, and a picked color recolors every note already made in that number,
+  since a note saves the number. The digit keys 1 to 9 pick one. A color button shows "Aa" in its color.
+- **text** (a note) — a short string typed onto the notes, in a note color, with its own size (2 x the size slider's value + 8) and opacity (always 100 for a new note; a saved note keeps its own), centred on the
   point clicked. It is typed in the **text box**, an input over the board that a click on the board opens, and a click on
   a text reopens.
-- **shape** — a rectangle or an ellipse in a drawing, drawn as an outline by a drag in Shape mode, in a draw color, with its own
-  width and opacity. Its box is exactly the drag's own box. Saved as an item of kind `shape`, which a Draw Tool before 0.11.0 reads as an unreadable drawing.
-- **Shape mode** — what a left-drag with Draw draws when it starts off every item (one that starts on an item **moves** it): free lines (Off), rectangles or ellipses. The **Shape button**, between
-  Clear all and the gear, steps Off, Rectangle, Ellipse and draws the mode a press turns to, with a dot per mode filled for the one in force; the color buttons' swatches draw the one in force. It is saved under `DrawTool_shape`. A click
-  still opens the text box in every mode.
-- **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
-  (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.
-  Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
-- **erase** — Draw's right click, or right-drag as an extra: every stroke and text the pointer passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
-  drawing, after asking.
-- **move** — Draw's left-drag that starts on an existing item (found the way erase finds one, the topmost): the item follows the pointer, and its stored coordinates change once, on release. A click with no drag opens a text box as any click does, and a drag that starts off every item draws.
+- **Size slider** — Text Annotation's one slider, on a light purple tray with a small and a large "A" at its ends. It sets the next text's size (1 to 16, step 0.5, default 6), saved under `DrawTool_width`, and never changes a text already made.
+- **Background** — the button between Clear all and the gear, on or off, and a setting for the NEXT text: a text made while it is on stores `bg: true` and is drawn with a page-colored rounded box behind it, and one made while it is off has none; a saved text with no `bg` has none. The state is remembered under `DrawTool_background`. Pressing it never changes a text already made, except the one open in the text box.
+- **erase** — Text Annotation's right click: the text the pointer is near is removed whole. Clear all erases every note, after asking.
+- **move** — Text Annotation's left-drag that starts on a text (the topmost): the text follows the pointer, and its stored coordinates change once, on release. A click with no drag opens the text box as any click does.
