@@ -39,9 +39,9 @@ with `LIVE_REFRESH=1`, red files one `bug` issue, and a version already checked 
 checked lives in `last-version`, beside the recording.
 
 It runs nightly on GitHub Actions (`.github/workflows/watch.yml`, 06:17 UTC; `workflow_dispatch` runs it by hand).
-The recording and `last-version` persist between runs in the Actions cache, saved under a key ending in the run id
-and restored by prefix, because a cache entry cannot be overwritten. The recording never goes in the repo or an
-artifact. A run on an unchanged version stops after the version request.
+The recording and `last-version` persist between runs in the Actions cache, saved under a key ending in the run id and
+attempt, and restored by prefix, because a cache entry cannot be overwritten. The recording never goes in the repo or an
+artifact. A run on an unchanged version makes one request to SudokuPad and runs no suite.
 
 GitHub turns off a public repository's scheduled workflows after 60 days with no repository activity. To turn it
 back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow" (or run
