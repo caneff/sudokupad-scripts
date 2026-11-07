@@ -28,7 +28,7 @@ describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
   }
   const puzzleKey = () => draw.puzzleKey(p)
   const saved = () => draw.saved(p)

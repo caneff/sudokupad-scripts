@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.19.0
+// @version      0.20.0
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.19.0'
+  const VERSION = '0.20.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -212,17 +212,69 @@
   const BACKGROUND_PAD_X = 0.35
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
+  // How far a note's halo reaches past its letters, as a share of the text size.
+  const HALO_EM = 0.14
 
   const roundToTenth = (value) => Math.round(value * 10) / 10
 
   const cross = ([ax, ay], [bx, by], [cx, cy]) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
   const segmentsCross = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0
 
+  // Markers in the order they are tried, each with the flag it sets. `**` comes before `*` so a bold marker is never read as two italic ones.
+  const MARKERS = [['**', 'bold'], ['~~', 'strike'], ['*', 'italic'], ['_', 'italic']]
+  const isWordChar = (char) => char !== undefined && /\w/.test(char)
+  const isSpace = (char) => char === undefined || /\s/.test(char)
+
+  // One line of a note as runs of text, each `{ text }` with its `bold`, `italic` or `strike` flag set where it applies. A marker opens only before a
+  // non-space and closes only after one, `_` only at a word's edge, and a marker with no partner shows as typed.
+  function parseLine (line) {
+    const memo = new Map()
+    const add = (runs, run) => {
+      const last = runs[runs.length - 1]
+      if (last && ['bold', 'italic', 'strike'].every((flag) => Boolean(last[flag]) === Boolean(run[flag]))) last.text += run.text
+      else runs.push({ ...run })
+    }
+    // The runs from `at` up to the marker that closes `stop`, or to the end when `stop` is empty; `closed` says whether it was found.
+    function read (at, stop) {
+      const key = `${stop}@${at}`
+      if (memo.has(key)) return memo.get(key)
+      const runs = []
+      let i = at
+      let result = null
+      while (i < line.length && !result) {
+        const opener = MARKERS.find(([mark]) => line.startsWith(mark, i) && !isSpace(line[i + mark.length]) && !(mark === '_' && isWordChar(line[i - 1])))
+        const inner = opener && read(i + opener[0].length, opener[0])
+        if (inner && inner.closed) {
+          for (const run of inner.runs) add(runs, { ...run, [opener[1]]: true })
+          i = inner.end
+        } else if (stop && line.startsWith(stop, i) && i > at && !isSpace(line[i - 1]) && !(stop === '_' && isWordChar(line[i + 1]))) {
+          result = { runs, end: i + stop.length, closed: true }
+        } else {
+          const mark = opener ? opener[0] : line[i]
+          add(runs, { text: mark })
+          i += mark.length
+        }
+      }
+      result ??= { runs, end: i, closed: false }
+      memo.set(key, result)
+      return result
+    }
+    return read(0, '').runs
+  }
+
+  // A note's text as one list of runs per line; a marker does not reach across a line break.
+  const parseMarkdown = (text) => text.split('\n').map(parseLine)
+
+  // The number of characters a line shows, markers left out.
+  const shownLength = (runs) => runs.reduce((sum, run) => sum + run.text.length, 0)
+
   // The box a text takes on the board, centred on its point: the text is drawn anchored at its middle.
   function textBox (item) {
-    const halfWidth = (Math.max(1, item.text.length) * item.size * CHAR_WIDTH) / 2
+    const lines = parseMarkdown(item.text)
+    const halfWidth = (Math.max(1, ...lines.map(shownLength)) * item.size * CHAR_WIDTH) / 2
+    const halfHeight = (lines.length * item.size) / 2
     const [x, y] = item.at
-    return { left: x - halfWidth, right: x + halfWidth, top: y - item.size / 2, bottom: y + item.size / 2 }
+    return { left: x - halfWidth, right: x + halfWidth, top: y - halfHeight, bottom: y + halfHeight }
   }
 
   // What a note answers to: its text's box, and with a background the box drawn behind it.
@@ -817,7 +869,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -886,10 +938,23 @@
     element.classList.toggle(TEXT_BACKGROUND_CLASS, Boolean(item.bg))
   }
 
-  function newNote (item, map) {
+  // A run with a flag set is a span carrying every flag it has, so nested markdown is one span; a plain run is bare text.
+  function runElement (run) {
+    if (!run.bold && !run.italic && !run.strike) return run.text
+    const element = document.createElement('span')
+    element.textContent = run.text
+    if (run.bold) element.style.fontWeight = 'bold'
+    if (run.italic) element.style.fontStyle = 'italic'
+    if (run.strike) element.style.textDecoration = 'line-through'
+    return element
+  }
+
+  // A note being edited shows its text as typed, markers and all; a finished one shows the styled runs, lines joined by line breaks.
+  function newNote (item, map, { raw = false } = {}) {
     const element = document.createElement('div')
     element.className = TEXT_CLASS
-    element.textContent = item.text
+    if (raw) element.textContent = item.text
+    else element.append(...parseMarkdown(item.text).flatMap((runs, i) => [...(i ? ['\n'] : []), ...runs.map(runElement)]))
     styleNote(element, item, map)
     return element
   }
@@ -1006,6 +1071,8 @@
     `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
     // The font's own line height, so a note's background box is as tall as a digit and covers one under it.
     `.${TEXT_CLASS} { position: absolute; transform: translate(-50%, -50%); line-height: normal; white-space: pre; }`,
+    // A halo in the page's color, painted under the letters so only its outer half shows; a note with a background box already sits on that color.
+    `.${TEXT_CLASS}:not(.${TEXT_BACKGROUND_CLASS}) { -webkit-text-stroke: ${HALO_EM * 2}em ${PAGE_COLOR}; paint-order: stroke fill; stroke-linejoin: round; }`,
     `.${SELECTED_CLASS} { outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; outline: 1px dashed currentColor; outline-offset: 1px; cursor: text; }`,
@@ -1392,7 +1459,7 @@
     selected = []
     const map = boardMap()
     const item = index === -1 ? placedItem(textItem(map.toBoard(point), '', color, textSizeFor(width), background), point, map) : { ...drawing[index] }
-    const element = newNote(item, map)
+    const element = newNote(item, map, { raw: true })
     element.classList.add(TEXT_BOX_CLASS)
     element.contentEditable = 'plaintext-only'
     element.spellcheck = false
@@ -1407,8 +1474,8 @@
     window.getSelection().collapseToEnd()
   }
 
-  // A note is one line, so a line break pasted into it reads as a space.
-  const typedText = (element) => element.textContent.replace(/^[\r\n]+|[\r\n]+$/g, '').replace(/[\r\n]+/g, ' ')
+  // Blank lines before and after the text are dropped; line breaks inside it stay.
+  const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
 
   // An empty box removes its text.
   function finishText () {
@@ -1428,14 +1495,6 @@
     if (changed) save()
   }
 
-  function dropText () {
-    const { element } = editing
-    editing = null
-    element.remove()
-    renderDrawing()
-    showBackground()
-  }
-
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
   // a key typed in the box is stopped in the window's capture phase, before them all. Its default is left alone, so
   // the note types, edits, pastes and composes as any editable text does, and F5 or Tab do what they do anywhere.
@@ -1443,12 +1502,9 @@
     if (!editing || event.target !== editing.element) return
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
-    if (event.key === 'Enter') {
+    if (event.key === 'Escape') {
       event.preventDefault()
       finishText()
-    } else if (event.key === 'Escape') {
-      event.preventDefault()
-      dropText()
     }
   }
 

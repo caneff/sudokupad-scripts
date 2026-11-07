@@ -50,7 +50,7 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
   const typeAt = async (point, content) => {
     await p.mouse.click(...point)
     await p.keyboard.type(content)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
   }
   const dragFromTo = async (from, to) => {
     await p.mouse.move(...from)

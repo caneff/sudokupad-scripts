@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -401,4 +401,48 @@ test('a mixed selection shows no color and no background state, and the size of 
   assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, width: 3, bg: true })
   assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, width: 6, bg: null })
   assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, width: 6, bg: null })
+})
+
+// A note's text as styled runs, one list of runs per line; a flag is set only on the runs it applies to.
+const runs = (text) => parseMarkdown(text)[0]
+
+test('markdown reads bold, italic (both marks) and strikethrough, with the markers left out of the runs', () => {
+  assert.deepEqual(runs('**a** *b* ~~c~~ _d_'), [
+    { text: 'a', bold: true }, { text: ' ' }, { text: 'b', italic: true }, { text: ' ' }, { text: 'c', strike: true }, { text: ' ' }, { text: 'd', italic: true }
+  ])
+})
+
+test('markdown nests where it parses cleanly, in either order', () => {
+  assert.deepEqual(runs('**bold *and italic***'), [{ text: 'bold ', bold: true }, { text: 'and italic', bold: true, italic: true }])
+  assert.deepEqual(runs('*italic **and bold***'), [{ text: 'italic ', italic: true }, { text: 'and bold', italic: true, bold: true }])
+  assert.deepEqual(runs('~~**x**~~'), [{ text: 'x', bold: true, strike: true }])
+})
+
+test('an unmatched marker, or one with a space inside it, shows as typed', () => {
+  assert.deepEqual(runs('**a'), [{ text: '**a' }])
+  assert.deepEqual(runs('a * b * c'), [{ text: 'a * b * c' }])
+  assert.deepEqual(runs('5 ** 2'), [{ text: '5 ** 2' }])
+  assert.deepEqual(runs('**a *b**'), [{ text: '**a ' }, { text: 'b', italic: true }, { text: '*' }])
+  assert.deepEqual(runs('~~~'), [{ text: '~~~' }])
+  assert.deepEqual(runs('****'), [{ text: '****' }])
+})
+
+test('an underscore inside a word is not italic', () => {
+  assert.deepEqual(runs('snake_case_name'), [{ text: 'snake_case_name' }])
+})
+
+test('each line is read on its own, so a marker does not reach across a line break', () => {
+  assert.deepEqual(parseMarkdown('**a\nb**'), [[{ text: '**a' }], [{ text: 'b**' }]])
+  assert.deepEqual(parseMarkdown('x\n*y*'), [[{ text: 'x' }], [{ text: 'y', italic: true }]])
+  assert.deepEqual(parseMarkdown(''), [[]])
+})
+
+test('a note\'s box is as wide as its longest line shown, markers left out, and one line taller for each line break', () => {
+  const width = (item) => textBox(item).right - textBox(item).left
+  const height = (item) => textBox(item).bottom - textBox(item).top
+  assert.equal(width(textItem([100, 50], '**15**', 3, 20)), width(sum))
+  const two = textItem([100, 50], '15\n150', 3, 20)
+  assert.equal(width(two), width(textItem([100, 50], '150', 3, 20)))
+  assert.equal(height(two), 40)
+  assert.equal((textBox(two).top + textBox(two).bottom) / 2, 50)
 })

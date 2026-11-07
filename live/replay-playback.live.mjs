@@ -108,7 +108,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     await p.mouse.click(...await gridPoint(p, [6.2, 6.25]))
     await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
     await p.keyboard.type('15')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await settle(() => drawTexts(p), ['15']), ['15'])
     await useTool(DIGIT_BUTTON)
     solved = await board()

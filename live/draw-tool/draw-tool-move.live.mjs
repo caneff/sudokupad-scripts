@@ -42,7 +42,7 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
   }
   // The top left corner of each box, in board units.
   const bgBoxes = () => read((selector) => {
