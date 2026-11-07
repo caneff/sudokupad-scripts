@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -375,4 +375,62 @@ test('a press and release with the mouse still, or moved no more than the slop, 
 
 test('VERSION matches the @version header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, 'draw-tool.user.js'), 'utf8')))
+})
+
+const hexes = (value) => Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, value]))
+// SudokuPad's first cell color page: keys 0 to 9, 0 empty.
+const PAGE = ['transparent', 'rgb(255, 0, 0)', 'rgb(0, 128, 0)', 'rgb(0, 0, 255)', 'rgb(255, 255, 0)', 'rgb(128, 0, 128)', 'rgb(255, 165, 0)', 'rgb(0, 255, 255)', 'rgb(200, 200, 200)', 'rgb(10, 10, 10)']
+
+test('the presets are Pen colors, a Darker page for each page up to three, then SudokuPad colors', () => {
+  assert.deepEqual(presetOptions(0).map((id) => PRESET_LABELS[id]), ['Pen colors', 'SudokuPad colors'])
+  assert.deepEqual(presetOptions(2).map((id) => PRESET_LABELS[id]), ['Pen colors', 'Darker page 1', 'Darker page 2', 'SudokuPad colors'])
+  assert.deepEqual(presetOptions(7).map((id) => PRESET_LABELS[id]), ['Pen colors', 'Darker page 1', 'Darker page 2', 'Darker page 3', 'SudokuPad colors'])
+})
+
+test('SudokuPad colors is SudokuPad\'s nine, and Pen colors is the pen colors as read', () => {
+  assert.deepEqual(presetColors('sudokupad', [], () => undefined, () => undefined), SUDOKUPAD_PEN_COLORS)
+  assert.deepEqual(presetColors('pen', [], () => undefined, (n) => `rgb(${n}, 0, 0)`), copiedPenColors((n) => `rgb(${n}, 0, 0)`))
+})
+
+test('a Darker page preset darkens the page\'s color at each index and makes the darkest grey black', () => {
+  const colors = presetColors('page-1', [PAGE.map((_, i) => String(i))], (key) => PAGE[Number(key)], () => undefined)
+  assert.equal(colors[9], '#000000')
+  assert.equal(colors[1] !== SUDOKUPAD_PEN_COLORS[1], true)
+  const red = parseInt(colors[1].slice(1, 3), 16)
+  assert.equal(red < 255 && red > 100, true, `red darkened to ${colors[1]}`)
+  assert.deepEqual(darkerPageColors(['0', '1'], (key) => PAGE[Number(key)])[2], SUDOKUPAD_PEN_COLORS[2], 'a slot past the page keeps SudokuPad\'s color')
+})
+
+test('a Darker page preset the palette lacks, or an unknown one, throws', () => {
+  assert.throws(() => presetColors('page-2', [['0']], () => undefined, () => undefined), /not a preset/)
+  assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
+})
+
+test('Copy settings holds the colors and both slider values, defaults included, and no drawing or color pick', () => {
+  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, DrawTool_color: 4, DrawTool_drawing_x: [] })))
+  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, [OPACITY_KEY]: DEFAULT_OPACITY })
+})
+
+test('Copy settings leaves the colors out until they are saved', () => {
+  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY })
+})
+
+test('Paste settings returns the colors and sliders, ignores other scripts\' keys and counts a refused value as skipped', () => {
+  const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
+  assert.deepEqual(pastedSettings(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35 }, skipped: 0 })
+  const bad = pastedSettings(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99, [OPACITY_KEY]: 50 }))
+  assert.deepEqual(bad, { values: { [OPACITY_KEY]: 50 }, skipped: 2 })
+})
+
+test('Paste settings fills a missing color with SudokuPad\'s and refuses text that is not settings', () => {
+  const { values } = pastedSettings(JSON.stringify({ [COLORS_KEY]: { 1: '#010203' } }))
+  assert.deepEqual(values[COLORS_KEY], { ...SUDOKUPAD_PEN_COLORS, 1: '#010203' })
+  assert.throws(() => pastedSettings('hello'), /not JSON/)
+  assert.throws(() => pastedSettings('[1]'), /not a settings object/)
+})
+
+test('the paste report counts applied and skipped values, and says when the text held none', () => {
+  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
+  assert.equal(pasteReport(1, 0), 'Pasted 1 setting.')
+  assert.equal(pasteReport(3, 2), 'Pasted 3 settings; skipped 2 that did not check out.')
 })
