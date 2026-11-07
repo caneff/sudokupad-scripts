@@ -88,6 +88,19 @@ describe('Draw Tool\'s Shape mode', { concurrency: false }, () => {
     assert.equal(near(box, DRAG_BOX), true, `the box ${box} is the drag's ${DRAG_BOX}`)
   })
 
+  it('an Alt drag straight down a column, a box with no width, saves no shape', async () => {
+    const before = await saved()
+    const drawn = await shapes()
+    await p.keyboard.down('Alt')
+    try {
+      await mouseDrag(p, [[1.3, 6.4], [3.6, 6.4]])
+    } finally {
+      await p.keyboard.up('Alt')
+    }
+    assert.deepEqual(await saved(), before)
+    assert.deepEqual(await shapes(), drawn)
+  })
+
   it('a drag in Ellipse mode draws an ellipse in the cells it spans', async () => {
     await stepTo('ellipse')
     await mouseDrag(p, [[6.2, 6.2], [7, 7], [7.8, 7.8]])

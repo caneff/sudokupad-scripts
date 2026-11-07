@@ -77,7 +77,7 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     assert.equal(await p.evaluate(() => Framework.app.svgRenderer.getElem().lastElementChild.id), 'draw-tool-layer')
   })
 
-  it('the stroke is a smoothed curve with round ends and joins, solid by default, in pen color 1 at the default width', async () => {
+  it('the stroke is a smoothed curve with round ends and joins, solid by default, in draw color 1 (pen color 1, copied on first use) at the default width', async () => {
     const look = await p.evaluate((selector) => {
       const path = document.querySelector(selector)
       const style = window.getComputedStyle(path)

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, shapeBox, shapeItem, nextShapeMode, readShapeMode, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, shapeBox, shapeItem, nextShapeMode, readShapeMode, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -75,7 +75,7 @@ test('a drawing saved as JSON reads back equal, stroke for stroke', () => {
   assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
 })
 
-test('a stroke item holds its kind, pen color number, width, opacity and its points rounded to a tenth of a board unit', () => {
+test('a stroke item holds its kind, draw color number, width, opacity and its points rounded to a tenth of a board unit', () => {
   assert.deepEqual(strokeItem([[0.123, 1.06], [10.55, 5.04]], 1, 6, 50), { kind: 'stroke', color: 1, width: 6, opacity: 50, points: [[0.1, 1.1], [10.6, 5]] })
 })
 
@@ -155,7 +155,7 @@ test('an index with no saved data is empty, and one that is not a list of keys t
   for (const saved of ['oops', { a: 1 }, [1, 2]]) assert.throws(() => readIndex(saved), /saved index/, JSON.stringify(saved))
 })
 
-test('the size slider runs 1 to 16 and starts at 6, the opacity slider 20 to 100 and starts at 100, and pen color 1 is the default', () => {
+test('the size slider runs 1 to 16 and starts at 6, the opacity slider 20 to 100 and starts at 100, and draw color 1 is the default', () => {
   assert.deepEqual([MIN_WIDTH, MAX_WIDTH, DEFAULT_WIDTH], [1, 16, 6])
   assert.equal(DEFAULT_OPACITY, 100)
   assert.equal(DEFAULT_COLOR, 1)
@@ -169,15 +169,15 @@ test('a text is 2 x the width + 8 tall: 10 to 40, and 20 at the default width', 
 })
 
 // A keypad button's data-value is text; Framework.getData parses a saved 3 back as the number 3.
-test('penColor reads 1 to 9, as text or a number, and nothing else', () => {
+test('drawColor reads 1 to 9, as text or a number, and nothing else', () => {
   for (let n = 1; n <= 9; n++) {
-    assert.equal(penColor(String(n)), n)
-    assert.equal(penColor(n), n)
+    assert.equal(drawColor(String(n)), n)
+    assert.equal(drawColor(n), n)
   }
-  for (const value of ['0', 0, 10, '10', 'a', '1.5', 1.5, '', null, undefined, {}, [3]]) assert.equal(penColor(value), undefined, JSON.stringify(value))
+  for (const value of ['0', 0, 10, '10', 'a', '1.5', 1.5, '', null, undefined, {}, [3]]) assert.equal(drawColor(value), undefined, JSON.stringify(value))
 })
 
-test('a saved color reads back, and a missing or bad one reads as pen color 1', () => {
+test('a saved color reads back, and a missing or bad one reads as draw color 1', () => {
   assert.equal(readColor(4), 4)
   for (const saved of [null, undefined, 0, 12, 'red', '', {}]) assert.equal(readColor(saved), DEFAULT_COLOR, JSON.stringify(saved))
 })
@@ -188,16 +188,20 @@ test('hexColor reads #rgb, #rrggbb, rgb() and rgba() as lowercase #rrggbb, clamp
   assert.equal(hexColor('rgb(31, 128, 32)'), '#1f8020')
   assert.equal(hexColor('rgba(232, 124, 241, 0.5)'), '#e87cf1')
   assert.equal(hexColor(' rgb(-4, 300, 0) '), '#00ff00')
-  for (const text of ['', 'red', 'transparent', 'rgba(0, 0, 0, 0)', '#12345', null, undefined, 7]) assert.equal(hexColor(text), undefined, JSON.stringify(text))
+  for (const text of ['', 'red', 'transparent', 'rgba(0, 0, 0, 0)', 'rgba(1, 2, 3, -1)', '#12345', null, undefined, 7]) assert.equal(hexColor(text), undefined, JSON.stringify(text))
 })
 
-test('nothing saved, or a saved value with no usable color, reads as no draw colors, so the pen colors are copied', () => {
-  for (const saved of [null, undefined, 'red', [], ['#000000'], {}, { 1: 'red', 2: 5 }]) assert.equal(readDrawColors(saved), null, JSON.stringify(saved))
+test('nothing saved reads as no draw colors, so the pen colors are copied', () => {
+  for (const saved of [null, undefined]) assert.equal(readDrawColors(saved), null, String(saved))
+})
+
+test('a saved value with no usable color still reads as saved, so the copy never writes over it, and shows SudokuPad\'s own colors', () => {
+  for (const saved of ['red', [], ['#000000'], {}, { 1: 'red', 2: 5 }]) assert.deepEqual(readDrawColors(saved), SUDOKUPAD_PEN_COLORS, JSON.stringify(saved))
 })
 
 test('saved draw colors read back as the nine #rrggbb colors, a bad entry beside a usable one reading as SudokuPad\'s own pen color', () => {
   const nine = Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [n, `#00000${n}`]))
-  assert.deepEqual(readDrawColors(JSON.parse(JSON.stringify(nine))), Object.fromEntries(Object.entries(nine).map(([n, c]) => [n, c])))
+  assert.deepEqual(readDrawColors(JSON.parse(JSON.stringify(nine))), nine)
   const partial = readDrawColors({ 1: '#ABCDEF', 2: 'pink' })
   assert.equal(partial[1], '#abcdef')
   assert.equal(partial[2], SUDOKUPAD_PEN_COLORS[2])
@@ -224,7 +228,7 @@ test('editing a draw color changes that color only, and refuses a color number o
   assert.throws(() => editedColor(colors, 4, 'red'), RangeError)
 })
 
-test('the colors\' CSS sets one variable per draw color, which the items, the color buttons and the text box read', () => {
+test('the colors\' CSS sets one variable per draw color', () => {
   const css = colorsCss({ ...SUDOKUPAD_PEN_COLORS, 3: '#123456' })
   assert.match(css, /--draw-tool-color-3: #123456;/)
   for (let n = 1; n <= 9; n++) assert.match(css, new RegExp(`--draw-tool-color-${n}: #[0-9a-f]{6};`))
@@ -314,7 +318,7 @@ test('the drawn line of a two-point stroke is its two points', () => {
 // A cage sum "15" at size 20, centred on (100, 50) in board units.
 const sum = textItem([100, 50], '15', 3, 20, 100)
 
-test('a text item holds its kind, pen color number, text size, opacity, text and its point rounded to a tenth of a board unit', () => {
+test('a text item holds its kind, draw color number, text size, opacity, text and its point rounded to a tenth of a board unit', () => {
   assert.deepEqual(textItem([10.04, 20.06], '15', 3, 20, 55), { kind: 'text', color: 3, size: 20, opacity: 55, text: '15', at: [10, 20.1] })
 })
 
@@ -335,7 +339,7 @@ test('a text\'s box is centred on its point, as tall as its size and wider with 
   assert.equal((box.top + box.bottom) / 2, 50)
   assert.equal(box.bottom - box.top, 20)
   const longer = textBox(textItem([100, 50], '150', 3, 20))
-  assert.equal(longer.right - longer.left > box.right - box.left, true)
+  assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
 })
 
 test('a click on a text lands on it, and a click beside it on none', () => {
@@ -395,7 +399,7 @@ test('SudokuPad colors is SudokuPad\'s nine, and Pen colors is the pen colors as
 test('a Darker page preset darkens the page\'s color at each index and makes the darkest grey black', () => {
   const colors = presetColors('page-1', [PAGE.map((_, i) => String(i))], (key) => PAGE[Number(key)], () => undefined)
   assert.equal(colors[9], '#000000')
-  assert.equal(colors[1] !== SUDOKUPAD_PEN_COLORS[1], true)
+  assert.notEqual(colors[1], SUDOKUPAD_PEN_COLORS[1])
   const red = parseInt(colors[1].slice(1, 3), 16)
   assert.equal(red < 255 && red > 100, true, `red darkened to ${colors[1]}`)
   assert.deepEqual(darkerPageColors(['0', '1'], (key) => PAGE[Number(key)])[2], SUDOKUPAD_PEN_COLORS[2], 'a slot past the page keeps SudokuPad\'s color')
@@ -420,6 +424,7 @@ test('Paste settings returns the colors and sliders, ignores other scripts\' key
   assert.deepEqual(pastedSettings(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35 }, skipped: 0 })
   const bad = pastedSettings(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99, [OPACITY_KEY]: 50 }))
   assert.deepEqual(bad, { values: { [OPACITY_KEY]: 50 }, skipped: 2 })
+  assert.deepEqual(pastedSettings(JSON.stringify({ [COLORS_KEY]: {} })), { values: {}, skipped: 1 }, 'colors with no color in them')
 })
 
 test('Paste settings fills a missing color with SudokuPad\'s and refuses text that is not settings', () => {
@@ -449,7 +454,7 @@ test('a shape drag with Alt held follows the drag exactly, to a tenth of a board
   assert.deepEqual(shapeBox([250.04, 140], [70.06, 100.12], true), [70.1, 100.1, 250, 140])
 })
 
-test('a shape item holds its kind, its shape, pen color number, width, opacity and its box', () => {
+test('a shape item holds its kind, its shape, draw color number, width, opacity and its box', () => {
   assert.deepEqual(shapeItem('ellipse', [64, 0, 192, 128], 2, 4.5, 60), { kind: 'shape', shape: 'ellipse', color: 2, width: 4.5, opacity: 60, box: [64, 0, 192, 128] })
 })
 
@@ -458,10 +463,17 @@ test('a drawing of strokes, texts and shapes saved as JSON reads back equal, ite
   assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
 })
 
-test('a saved shape that is not a shape item throws', () => {
+test('a saved shape that is not a shape item, or has no opacity, throws', () => {
   const box = shapeItem('rect', [0, 0, 64, 64], 1, 6, 100)
-  for (const item of [{ ...box, shape: 'star' }, { ...box, shape: undefined }, { ...box, box: [0, 0, 64] }, { ...box, box: [0, 0, 64, '64'] }, { ...box, box: [64, 0, 0, 64] }, { ...box, box: [0, 64, 64, 0] }, { ...box, box: 'big' }, { ...box, color: 0 }, { ...box, width: 0.5 }, { ...box, opacity: 15 }]) {
+  const { opacity, ...noOpacity } = box
+  for (const item of [{ ...box, shape: 'star' }, { ...box, shape: undefined }, { ...box, box: [0, 0, 64] }, { ...box, box: [0, 0, 64, '64'] }, { ...box, box: [64, 0, 0, 64] }, { ...box, box: [0, 64, 64, 0] }, { ...box, box: 'big' }, { ...box, color: 0 }, { ...box, width: 0.5 }, { ...box, opacity: 15 }, noOpacity]) {
     assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
+  }
+})
+
+test('a saved shape with no width or no height, which SVG never draws, throws', () => {
+  for (const box of [[100, 10, 100, 150], [10, 100, 150, 100], [5, 5, 5, 5]]) {
+    assert.throws(() => readDrawing([shapeItem('ellipse', box, 1, 6, 100)]), /saved drawing/, JSON.stringify(box))
   }
 })
 

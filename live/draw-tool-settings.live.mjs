@@ -12,7 +12,6 @@ const { COLORS_KEY, OPACITY_KEY, OPACITY_SLIDER, SETTINGS_BUTTON, SIZE_SLIDER, W
 const EDITOR = '#draw-tool-dialog'
 const PRESET = `${EDITOR} select[data-role="preset"]`
 const STATUS = '.dialog [data-role="settings-status"]'
-const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 const SUDOKUPAD_COLORS = { 1: '#1f8020', 2: '#e87cf1', 3: '#e49632', 4: '#f53a37', 5: '#d2be32', 6: '#3d99f5', 7: '#d6d6d6', 8: '#7c7c7c', 9: '#000000' }
 
 let browser
@@ -60,7 +59,7 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     await p.click(SETTINGS_BUTTON)
     const labels = await p.locator(`${PRESET} option`).allTextContents()
     assert.deepEqual(labels.filter((l) => !l.startsWith('Darker page')), ['Custom', 'Pen colors', 'SudokuPad colors'])
-    assert.equal(labels.some((l) => l === 'Darker page 1'), true, 'a Darker page 1 preset')
+    assert.equal(labels[2], 'Darker page 1')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
@@ -68,7 +67,7 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     await p.click(SETTINGS_BUTTON)
     await p.locator(PRESET).selectOption('page-1')
     const colors = await dialogColors(p)
-    assert.equal(NINE.some((n) => colors[n] !== SUDOKUPAD_COLORS[n]), true)
+    assert.notDeepEqual(colors, SUDOKUPAD_COLORS)
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await savedColors(p), colors)
   })
@@ -112,6 +111,35 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
       assert.deepEqual(await dialogColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       assert.deepEqual(await read(other.p, ([a, b]) => [Number(document.querySelector(a).value), Number(document.querySelector(b).value)], [SIZE_SLIDER, OPACITY_SLIDER]), [3.5, 45])
       assert.equal(await dialogButton(other.p, 'Save').count(), 1)
+      assert.deepEqual(other.errors, [])
+    } finally {
+      await other.context.close()
+    }
+  })
+
+  it('a palette of a shape the script does not know leaves the Darker page presets out, and the dialog says so', async () => {
+    await read(p, () => { window.drawToolPalette = Framework.app.tools.colour.palette; Framework.app.tools.colour.palette = { pages: 'unknown' } })
+    try {
+      await p.click(SETTINGS_BUTTON)
+      assert.deepEqual(await p.locator(`${PRESET} option`).allTextContents(), ['Custom', 'Pen colors', 'SudokuPad colors'])
+      assert.match(await p.locator(`${EDITOR} [data-role="palette-note"]`).textContent(), /Darker page presets are left out/)
+      await closeDialogWith(p, 'Cancel', EDITOR)
+    } finally {
+      await read(p, () => { Framework.app.tools.colour.palette = window.drawToolPalette })
+    }
+  })
+
+  it('saved colors that cannot be read are left as they are when Draw is first made current, a bad color showing SudokuPad\'s', async () => {
+    const bad = { 1: 'red', 4: '#123456' }
+    const other = await open()
+    try {
+      await draw.boot(other.p)
+      await read(other.p, ([key, value]) => Framework.setData(key, value), [COLORS_KEY, bad])
+      await draw.reload(other.p)
+      await pickDraw(other.p)
+      const lines = await other.p.locator('.controls-input button.digit:not([data-key="0"])').evaluateAll((bs) => bs.map((b) => window.getComputedStyle(b, '::after').backgroundColor))
+      assert.deepEqual([lines[0], lines[3]], ['rgb(31, 128, 32)', 'rgb(18, 52, 86)'], 'color 1 shows SudokuPad\'s green and color 4 the saved one')
+      assert.deepEqual(await savedColors(other.p), bad)
       assert.deepEqual(other.errors, [])
     } finally {
       await other.context.close()

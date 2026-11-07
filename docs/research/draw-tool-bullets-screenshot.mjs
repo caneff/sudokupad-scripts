@@ -11,13 +11,12 @@ import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 
 const DRAG_STEPS = 10
 const MARGIN = 4
+// The Size slider's values for the thin, middle and thick lines.
+const OLD_WIDTHS = [3, 6, 10]
 
 const browser = await chromium.launch()
 
 // A page with Draw on, its drawing helpers, and the grid's top left and cell size.
-// The Size slider's values for the thin, middle and thick lines (a text takes 2 x the width + 8: 14, 20, 28).
-const OLD_WIDTHS = [3, 6, 10]
-
 async function drawPage () {
   const p = await openDrawPage(browser, 2)
   const [x0, y0, cell] = await p.evaluate(() => {

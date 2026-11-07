@@ -40,11 +40,13 @@
   const OPACITY_STEP = 5
   const DEFAULT_OPACITY = 100
   // An item saves its color as a number, 1 to 9, the number of one of Draw's nine colors, so a recolor recolors it.
-  const PEN_COLORS = 9
-  const COLOR_NUMBERS = Array.from({ length: PEN_COLORS }, (_, i) => i + 1)
+  const DRAW_COLORS = 9
+  const COLOR_NUMBERS = Array.from({ length: DRAW_COLORS }, (_, i) => i + 1)
   const DEFAULT_COLOR = 1
   const COLOR_KEY = 'DrawTool_color'
   const COLORS_KEY = 'DrawTool_colors'
+  // The CSS variable that holds draw color n: the items, the color buttons and the text box all read it.
+  const colorVar = (n) => `--draw-tool-color-${n}`
   // Copied from Pen Tool Extras: SudokuPad's own pen colors, for a color that cannot be read.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -60,9 +62,13 @@
   const HEX_COLOR = /^#([0-9a-f]{6})$/
   // Preset ids; the labels are what the dialog shows.
   const PEN_PRESET = 'pen'
-  const PAGE_PRESETS = ['page-1', 'page-2', 'page-3']
+  const PAGE_PRESETS = [1, 2, 3].map((page) => `page-${page}`)
   const SUDOKUPAD_PRESET = 'sudokupad'
-  const PRESET_LABELS = { [PEN_PRESET]: 'Pen colors', 'page-1': 'Darker page 1', 'page-2': 'Darker page 2', 'page-3': 'Darker page 3', [SUDOKUPAD_PRESET]: 'SudokuPad colors' }
+  const PRESET_LABELS = {
+    [PEN_PRESET]: 'Pen colors',
+    ...Object.fromEntries(PAGE_PRESETS.map((id, i) => [id, `Darker page ${i + 1}`])),
+    [SUDOKUPAD_PRESET]: 'SudokuPad colors'
+  }
   // The share of its OKLCH lightness a cell color keeps as a Darker page color, and the OKLCH chroma under which a darkened color counts as grey (Pen Tool Extras' values).
   const LIGHTNESS_FACTOR = 0.75
   const GREY_CHROMA = 0.04
@@ -98,8 +104,8 @@
   const SLIDER_THUMB_REM = 1.1
   const SLIDER_THUMB_RING_REM = 0.2
   const CLEAR_QUESTION = 'Clear the drawing?'
-  const CLEAR_OK = 'OK'
-  const CLEAR_CANCEL = 'Cancel'
+  const OK_LABEL = 'OK'
+  const CANCEL_LABEL = 'Cancel'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
   // How far, in board units, a mouse point may stray from the simplified line before it is kept.
@@ -245,11 +251,11 @@
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
 
   // A keypad button's data-value is text, and Framework.getData parses a saved number back as a number.
-  function penColor (value) {
+  function drawColor (value) {
     const n = typeof value === 'string' && /^[0-9]$/.test(value) ? Number(value) : value
-    return Number.isInteger(n) && n >= 1 && n <= PEN_COLORS ? n : undefined
+    return Number.isInteger(n) && n >= 1 && n <= DRAW_COLORS ? n : undefined
   }
-  const readColor = (saved) => penColor(saved) ?? DEFAULT_COLOR
+  const readColor = (saved) => drawColor(saved) ?? DEFAULT_COLOR
   const onSlider = (value, min, max, step) => isNumber(value) && value >= min && value <= max && Number.isInteger((value - min) / step)
   const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
@@ -258,59 +264,60 @@
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
   // Board units, as a text's height: the line width's slider also sets the text size.
-  const textSizeFor = (width) => 2 * width + 8
-  const isTextSize = (value) => Number.isInteger(value) && isWidth((value - 8) / 2)
+  const TEXT_SIZE_PER_WIDTH = 2
+  const TEXT_SIZE_BASE = 8
+  const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
+  const isTextSize = (value) => Number.isInteger(value) && isWidth((value - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH)
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
   const isPlainObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
-  // A color picker takes only #rrggbb, so every draw color is kept as one. A transparent color has none to keep.
-  function hexColor (text) {
-    if (typeof text !== 'string') return undefined
+  const clamp255 = (x) => Math.max(0, Math.min(255, x))
+
+  // A color's [r, g, b] channels, from #rgb, #rrggbb, rgb() or rgba() text, or null for a transparent or unreadable one.
+  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black. Copied from Pen Tool Extras.
+  function parseColor (text) {
+    if (typeof text !== 'string') return null
     const value = text.trim().toLowerCase()
-    if (HEX_COLOR.test(value)) return value
     const short = SHORT_HEX_COLOR.exec(value)
-    if (short) return `#${short.slice(1).map((c) => c + c).join('')}`
+    const hex = HEX_COLOR.exec(short ? `#${short.slice(1).map((c) => c + c).join('')}` : value)
+    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
     const rgb = RGB_TEXT.exec(value)
-    if (!rgb || (rgb[4] !== undefined && Number(rgb[4]) === 0)) return undefined
-    return `#${rgb.slice(1, 4).map((x) => Math.round(Math.max(0, Math.min(255, Number(x)))).toString(16).padStart(2, '0')).join('')}`
+    if (!rgb || (rgb[4] !== undefined && Number(rgb[4]) <= 0)) return null
+    return rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x))))
   }
 
-  // null when nothing usable is saved, which means the first-use copy of the pen colors is still owed.
+  const toHex = (rgb) => '#' + rgb.map((x) => Math.round(clamp255(x)).toString(16).padStart(2, '0')).join('')
+
+  // A color picker takes only #rrggbb, so every draw color is kept as one. A transparent color has none to keep.
+  const hexColor = (text) => {
+    const rgb = parseColor(text)
+    return rgb ? toHex(rgb) : undefined
+  }
+
   const savedHex = (value) => typeof value === 'string' && HEX_COLOR.test(value.toLowerCase()) ? value.toLowerCase() : undefined
 
+  // null when nothing is saved, which means the first-use copy of the pen colors is still owed. A saved value that is not
+  // nine colors still counts as saved, so the copy never writes over it: each color it lacks shows SudokuPad's own.
   function readDrawColors (saved) {
-    if (!isPlainObject(saved)) return null
-    if (!COLOR_NUMBERS.some((n) => savedHex(saved[n]))) return null
-    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(saved[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
+    if (saved === null || saved === undefined) return null
+    const entries = isPlainObject(saved) ? saved : {}
+    return Object.fromEntries(COLOR_NUMBERS.map((n) => [n, savedHex(entries[n]) ?? SUDOKUPAD_PEN_COLORS[n]]))
   }
 
   // `readPenColor(n)` reads pen color n as the browser computes it.
   const copiedPenColors = (readPenColor) => Object.fromEntries(COLOR_NUMBERS.map((n) => [n, hexColor(readPenColor(n)) ?? SUDOKUPAD_PEN_COLORS[n]]))
 
   function editedColor (colors, n, value) {
-    if (penColor(n) === undefined) throw new RangeError(`draw-tool: ${n} is not a color number`)
+    if (drawColor(n) === undefined) throw new RangeError(`draw-tool: ${n} is not a color number`)
     const hex = hexColor(value)
     if (!hex) throw new RangeError(`draw-tool: ${value} is not a color`)
     return { ...colors, [n]: hex }
   }
 
   // `:root:root` outranks a plain `:root` rule whichever stylesheet loads last.
-  const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  --draw-tool-color-${n}: ${colors[n]};`), '}'].join('\n')
-
-  const clamp255 = (x) => Math.max(0, Math.min(255, x))
-
-  // SudokuPad's own cell color 3 is `rgb(-36, -36, -36)`, which clamps to black. Copied from Pen Tool Extras.
-  function parseColor (text) {
-    if (typeof text !== 'string') return null
-    const value = text.trim().toLowerCase()
-    const hex = HEX_COLOR.exec(value)
-    if (hex) return [0, 2, 4].map((i) => parseInt(hex[1].slice(i, i + 2), 16))
-    const rgb = RGB_TEXT.exec(value)
-    if (!rgb || (rgb[4] !== undefined && Number(rgb[4]) <= 0)) return null
-    return rgb.slice(1, 4).map((x) => Math.round(clamp255(Number(x))))
-  }
+  const colorsCss = (colors) => [':root:root {', ...COLOR_NUMBERS.map((n) => `  ${colorVar(n)}: ${colors[n]};`), '}'].join('\n')
 
   const toLinear = (c) => { const x = c / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4 }
   const fromLinear = (x) => 255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055)
@@ -357,7 +364,7 @@
       low = 1
     }
     const out = fromOklabLinear([target, a * low, b * low])
-    return '#' + out.map((x) => Math.round(clamp255(fromLinear(Math.max(0, Math.min(1, x))))).toString(16).padStart(2, '0')).join('')
+    return toHex(out.map((x) => fromLinear(Math.max(0, Math.min(1, x)))))
   }
 
   // Color N is the color at index N of the page: SudokuPad shows index K on the cell color button with data-key K, so the buttons line up.
@@ -397,7 +404,7 @@
   }
 
   // Copy and Paste carry the colors and both slider values, and not the drawings or the color picked.
-  const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) ?? undefined : undefined
+  const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
   const READERS = {
     [COLORS_KEY]: readPastedColors,
     [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
@@ -451,16 +458,16 @@
   const textItem = ([x, y], text, color, size, opacity) => ({ kind: 'text', color, size, opacity, text, at: [roundToTenth(x), roundToTenth(y)] })
   const shapeItem = (shape, box, color, width, opacity) => ({ kind: 'shape', shape, color, width, opacity, box })
 
-  const isStroke = (item) => item !== null && typeof item === 'object' && item.kind === 'stroke' &&
-    penColor(item.color) !== undefined && isWidth(item.width) && (item.opacity === undefined || isOpacity(item.opacity)) && Array.isArray(item.points) && item.points.length > 0 &&
-    item.points.every((p) => Array.isArray(p) && p.length === 2 && p.every(isNumber))
-  const isText = (item) => item !== null && typeof item === 'object' && item.kind === 'text' &&
-    penColor(item.color) !== undefined && isTextSize(item.size) && (item.opacity === undefined || isOpacity(item.opacity)) && typeof item.text === 'string' && item.text.length > 0 &&
-    Array.isArray(item.at) && item.at.length === 2 && item.at.every(isNumber)
+  const isItem = (item, kind, isItemOpacity) => isPlainObject(item) && item.kind === kind && drawColor(item.color) !== undefined && isItemOpacity(item.opacity)
+  const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
+  const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
+  // SVG draws nothing for a rectangle or an ellipse with no width or no height.
+  const hasArea = ([left, top, right, bottom]) => left < right && top < bottom
+  const isStroke = (item) => isItem(item, 'stroke', isOpacityOrNone) && isWidth(item.width) && Array.isArray(item.points) && item.points.length > 0 && item.points.every(isPoint)
+  const isText = (item) => isItem(item, 'text', isOpacityOrNone) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 && isPoint(item.at)
   // A shape is newer than opacity, so it always has one.
-  const isShape = (item) => item !== null && typeof item === 'object' && item.kind === 'shape' && SHAPES.includes(item.shape) &&
-    penColor(item.color) !== undefined && isWidth(item.width) && isOpacity(item.opacity) && Array.isArray(item.box) && item.box.length === 4 &&
-    item.box.every(isNumber) && item.box[0] <= item.box[2] && item.box[1] <= item.box[3]
+  const isShape = (item) => isItem(item, 'shape', isOpacity) && SHAPES.includes(item.shape) && isWidth(item.width) &&
+    Array.isArray(item.box) && item.box.length === 4 && item.box.every(isNumber) && hasArea(item.box)
 
   // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
   function readDrawing (saved) {
@@ -509,7 +516,7 @@
     : names
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, shapeBox, shapeItem, nextShapeMode, readShapeMode, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -546,37 +553,38 @@
   }
 
   // Until Draw is first made current its colors are not copied yet, so an item drawn by an older version shows in the pen color.
-  const itemColor = (n) => `var(--draw-tool-color-${n}, var(--puzzle-pencolor-${n}))`
+  const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
+
+  // An unfilled line in a draw color, as a stroke and a shape are drawn.
+  function newOutline (layer, tag, className, color, width, opacity) {
+    const element = document.createElementNS(SVG_NS, tag)
+    element.setAttribute('class', className)
+    element.setAttribute('fill', 'none')
+    element.setAttribute('stroke-width', String(width))
+    element.setAttribute('stroke-linejoin', 'round')
+    element.setAttribute('stroke-opacity', String(opacity / 100))
+    element.style.stroke = itemColor(color)
+    layer.appendChild(element)
+    return element
+  }
 
   function newStroke (layer, color, width, opacity) {
-    const path = document.createElementNS(SVG_NS, 'path')
-    path.setAttribute('class', 'draw-tool-stroke')
-    path.setAttribute('fill', 'none')
-    path.setAttribute('stroke-width', String(width))
+    const path = newOutline(layer, 'path', 'draw-tool-stroke', color, width, opacity)
     path.setAttribute('stroke-linecap', 'round')
-    path.setAttribute('stroke-linejoin', 'round')
-    path.setAttribute('stroke-opacity', String(opacity / 100))
-    path.style.stroke = itemColor(color)
-    layer.appendChild(path)
     return path
   }
 
   function newShape (layer, item) {
     const [left, top, right, bottom] = item.box
-    const element = document.createElementNS(SVG_NS, item.shape === RECT ? 'rect' : 'ellipse')
+    const element = newOutline(layer, item.shape === RECT ? 'rect' : 'ellipse', SHAPE_ITEM_CLASS, item.color, item.width, item.opacity)
     const geometry = item.shape === RECT
       ? { x: left, y: top, width: right - left, height: bottom - top }
       : { cx: (left + right) / 2, cy: (top + bottom) / 2, rx: (right - left) / 2, ry: (bottom - top) / 2 }
     for (const [name, value] of Object.entries(geometry)) element.setAttribute(name, coordinate(value))
-    element.setAttribute('class', SHAPE_ITEM_CLASS)
-    element.setAttribute('fill', 'none')
-    element.setAttribute('stroke-width', String(item.width))
-    element.setAttribute('stroke-linejoin', 'round')
-    element.setAttribute('stroke-opacity', String(item.opacity / 100))
-    element.style.stroke = itemColor(item.color)
-    layer.appendChild(element)
     return element
   }
+
+  const drawStroke = (layer, item) => newStroke(layer, item.color, item.width, itemOpacity(item)).setAttribute('d', strokePath(item.points))
 
   function newText (layer, item) {
     const text = document.createElementNS(SVG_NS, 'text')
@@ -592,6 +600,8 @@
     layer.appendChild(text)
     return text
   }
+
+  const DRAWERS = { stroke: drawStroke, text: newText, shape: newShape }
 
   // Pen Tool Extras' pen panel, in the same sizes: SudokuPad's outer keypad size (four rows of a 4rem button between 0.15rem margins) as a grid of the nine
   // color buttons shortened to 2.5rem, a gap, a row of Clear all, the Shape button and the settings gear at the full 4rem, and the sliders across the rest. The tray
@@ -634,7 +644,7 @@
     `${PANEL} button.digit { position: relative; width: ${PANEL_BUTTON_REM}rem !important; height: ${COLOR_BUTTON_REM}rem !important; min-width: 0 !important; margin: ${PANEL_BUTTON_MARGIN_REM}rem !important; text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
     `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; -webkit-mask: ${SWATCH_MASK}; mask: ${SWATCH_MASK}; }`,
-    ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(--draw-tool-color-${n}); }`),
+    ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(${colorVar(n)}); }`),
     `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
     `${PANEL} button.${CLEAR_CLASS} { font-size: 0.85rem; line-height: 1.15; color: ${GREY}; }`,
@@ -734,16 +744,28 @@
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
   function palettePages () {
     const palette = Framework.app.tools?.colour?.palette
-    return palette && Array.isArray(palette.pages) && Array.isArray(palette.pages[0]) ? palette.pages : []
+    if (!palette) return []
+    if (!Array.isArray(palette.pages) || !palette.pages.every(Array.isArray)) throw new Error('SudokuPad\'s color palette has no pages of color keys, so the Darker page presets are left out')
+    return palette.pages
   }
 
-  // A slider sets only the next item and is saved for the next visit.
-  function sliderRow (id, label, min, max, step, value) {
+  // A slider sets only the next item and is saved for the next visit, and a paste sets it as a move of the slider would.
+  const SLIDERS = [
+    { id: SIZE_SLIDER, label: 'Size', key: WIDTH_KEY, min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP, read: readWidth, get: () => width, set: (value) => { width = value } },
+    { id: OPACITY_SLIDER, label: 'Opacity (%)', key: OPACITY_KEY, min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP, read: readOpacity, get: () => opacity, set: (value) => { opacity = value } }
+  ]
+
+  function setSlider (slider, value) {
+    slider.set(value)
+    Framework.setData(slider.key, value)
+  }
+
+  function sliderRow ({ id, label, min, max, step, get }) {
     const row = document.createElement('div')
     row.className = SLIDER_ROW_CLASS
     row.title = label
     const input = document.createElement('input')
-    Object.assign(input, { type: 'range', id, min, max, step, value, tabIndex: -1 })
+    Object.assign(input, { type: 'range', id, min, max, step, value: get(), tabIndex: -1 })
     input.setAttribute('aria-label', label)
     row.appendChild(input)
     return row
@@ -792,23 +814,13 @@
 
   // A pasted value is saved and shown at once, whether or not Draw is current.
   function applyPasted (values) {
-    if (WIDTH_KEY in values) {
-      width = values[WIDTH_KEY]
-      Framework.setData(WIDTH_KEY, width)
-      const slider = document.getElementById(SIZE_SLIDER)
-      if (slider) slider.value = width
-    }
-    if (OPACITY_KEY in values) {
-      opacity = values[OPACITY_KEY]
-      Framework.setData(OPACITY_KEY, opacity)
-      const slider = document.getElementById(OPACITY_SLIDER)
-      if (slider) slider.value = opacity
+    for (const slider of SLIDERS) {
+      if (!(slider.key in values)) continue
+      setSlider(slider, values[slider.key])
+      const input = document.getElementById(slider.id)
+      if (input) input.value = values[slider.key]
     }
     if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
-  }
-
-  function presetColorsNow (preset) {
-    return presetColors(preset, palettePages(), readCellColor, readPenColor)
   }
 
   function openDialog () {
@@ -822,6 +834,14 @@
     let draft = colors ?? copiedPenColors(readPenColor)
     let chosen = null
     let changed = false
+    let pages = []
+    let paletteNote = ''
+    try {
+      pages = palettePages()
+    } catch (error) {
+      console.warn(`draw-tool: ${error.message}`)
+      paletteNote = error.message
+    }
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
@@ -831,7 +851,7 @@
         {
           tag: 'options',
           options: [
-            { tag: 'button', content: 'Cancel', action: 'close' },
+            { tag: 'button', content: CANCEL_LABEL, action: 'close' },
             { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); Framework.closeDialog() } }
           ]
         }
@@ -840,8 +860,9 @@
     const box = document.getElementById(DIALOG_ID)
     if (!box) return
     const draw = () => {
-      const options = [`<option value="">${CUSTOM_LABEL}</option>`, ...presetOptions(palettePages().length).map((id) => `<option value="${id}"${id === chosen ? ' selected' : ''}>${PRESET_LABELS[id]}</option>`)]
+      const options = [`<option value="">${CUSTOM_LABEL}</option>`, ...presetOptions(pages.length).map((id) => `<option value="${id}"${id === chosen ? ' selected' : ''}>${PRESET_LABELS[id]}</option>`)]
       box.innerHTML = `<label class="draw-tool-presets">Colors <select data-role="preset">${options.join('')}</select></label>` +
+        (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
         `<div class="draw-tool-swatches">${COLOR_NUMBERS.map((n) => `<label>${n} <input type="color" data-color="${n}" value="${draft[n]}"></label>`).join('')}</div>`
     }
     draw()
@@ -850,7 +871,7 @@
       if (target.matches('[data-role="preset"]')) {
         chosen = target.value || null
         if (chosen) {
-          draft = presetColorsNow(chosen)
+          draft = presetColors(chosen, pages, readCellColor, readPenColor)
           changed = true
         }
         draw()
@@ -901,18 +922,10 @@
     })
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
-    sliders.append(
-      sliderRow(SIZE_SLIDER, 'Size', MIN_WIDTH, MAX_WIDTH, WIDTH_STEP, width),
-      sliderRow(OPACITY_SLIDER, 'Opacity (%)', MIN_OPACITY, MAX_OPACITY, OPACITY_STEP, opacity)
-    )
+    sliders.append(...SLIDERS.map(sliderRow))
     sliders.addEventListener('input', (event) => {
-      if (event.target.id === SIZE_SLIDER) {
-        width = readWidth(Number(event.target.value))
-        Framework.setData(WIDTH_KEY, width)
-      } else {
-        opacity = readOpacity(Number(event.target.value))
-        Framework.setData(OPACITY_KEY, opacity)
-      }
+      const slider = SLIDERS.find((s) => s.id === event.target.id)
+      setSlider(slider, slider.read(Number(event.target.value)))
     })
     panelParts = [tray, clear, shapeButton, settings, sliders]
     keypad().append(...panelParts)
@@ -980,6 +993,7 @@
   }
 
   // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
+  // `held` is whether its key is held: Alt keeps a shape to the drag's own box, and Shift draws a free line straight.
   let drag = null
   // A right-drag in progress: the last point it reached, and whether it has erased an item yet.
   let erasing = null
@@ -999,10 +1013,7 @@
     const layer = drawingLayer()
     layer.replaceChildren()
     drawing.forEach((item, i) => {
-      if (editing && editing.index === i) return
-      if (item.kind === 'text') newText(layer, item)
-      else if (item.kind === 'shape') newShape(layer, item)
-      else newStroke(layer, item.color, item.width, itemOpacity(item)).setAttribute('d', strokePath(item.points))
+      if (!editing || editing.index !== i) DRAWERS[item.kind](layer, item)
     })
   }
 
@@ -1013,7 +1024,7 @@
     if (reported.has(message) || document.querySelector('.dialog-overlay')) return
     reported.add(message)
     Framework.showDialog({
-      parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: CLEAR_OK }] }],
+      parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }] }],
       centerOverBoard: true
     })
   }
@@ -1117,7 +1128,8 @@
     if (erasing) endErase()
     if (!drag) return
     if (isClick(drag.points)) dropDrag()
-    else endDrag(drag.shape ? drag.exact : drag.straight)
+    else if (drag.shape) endShape()
+    else endStroke()
   }
 
   function dropDrag () {
@@ -1125,16 +1137,16 @@
     drag = null
   }
 
-  // `exact` is Alt for a shape and Shift for a free line, as held at the release.
-  function endDrag (exact) {
-    if (drag.shape) endShape(exact)
-    else endStroke(exact)
-  }
+  const dragKeyHeld = (event) => drag.shape ? event.altKey : event.shiftKey
+  const dragShape = () => shapeItem(drag.shape, shapeBox(drag.points[0], drag.points[drag.points.length - 1], drag.held), drag.color, drag.width, drag.opacity)
 
-  const dragShape = (exact) => shapeItem(drag.shape, shapeBox(drag.points[0], drag.points[drag.points.length - 1], exact), drag.color, drag.width, drag.opacity)
-
-  function endShape (exact) {
-    const item = dragShape(exact)
+  // An Alt drag straight along a row or a column has no box to draw, so it saves nothing.
+  function endShape () {
+    const item = dragShape()
+    if (!hasArea(item.box)) {
+      dropDrag()
+      return
+    }
     drag.element?.remove()
     newShape(drag.layer, item)
     drag = null
@@ -1148,10 +1160,10 @@
     if (erased) save()
   }
 
-  function endStroke (straight) {
-    const { element: path, points, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = drag
+  function endStroke () {
+    const { element: path, points, held, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = drag
     drag = null
-    const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
+    const item = strokeItem(held ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
     path.setAttribute('d', strokePath(item.points))
     drawing.push(item)
     save()
@@ -1206,9 +1218,9 @@
     Framework.showDialog({
       parts: [
         { tag: 'text', content: CLEAR_QUESTION },
-        { tag: 'options', options: [{ tag: 'button', content: CLEAR_OK }, { tag: 'button', content: CLEAR_CANCEL }] }
+        { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: (label) => { if (label === CLEAR_OK) emptyDrawing() },
+      onButton: (label) => { if (label === OK_LABEL) emptyDrawing() },
       centerOverBoard: true
     })
   }
@@ -1235,7 +1247,7 @@
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
       const shape = shapeMode === SHAPE_OFF ? null : shapeMode
-      drag = { layer, shape, element: null, color, width, opacity, straight: false, exact: false, points: [toBoard(layer, event)] }
+      drag = { layer, shape, element: null, color, width, opacity, held: false, points: [toBoard(layer, event)] }
       // A shape shows only once the press moves, so a click that opens a text box flashes no box.
       if (!shape) {
         drag.element = newStroke(layer, color, width, opacity)
@@ -1257,13 +1269,12 @@
       }
       if (!drag) return false
       drag.points.push(toBoard(drag.layer, event))
+      drag.held = dragKeyHeld(event)
       if (drag.shape) {
-        drag.exact = event.altKey
         drag.element?.remove()
-        drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape(drag.exact))
+        drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape())
       } else {
-        drag.straight = event.shiftKey
-        drag.element.setAttribute('d', strokePath(drag.straight ? straightLine(drag.points) : drag.points))
+        drag.element.setAttribute('d', strokePath(drag.held ? straightLine(drag.points) : drag.points))
       }
       return true
     },
@@ -1280,7 +1291,9 @@
         openText(at)
         return true
       }
-      endDrag(drag.shape ? event.altKey : event.shiftKey)
+      drag.held = dragKeyHeld(event)
+      if (drag.shape) endShape()
+      else endStroke()
       return true
     },
     handleToolEnter () {
@@ -1297,7 +1310,7 @@
     // A digit key or keypad button gets the button's data-value. With Draw current it picks a draw color, and no key
     // or button enters anything in a cell.
     handleToolButton (value) {
-      const picked = penColor(value)
+      const picked = drawColor(value)
       if (picked !== undefined) pickColor(picked)
       return true
     },
@@ -1320,8 +1333,7 @@
 
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
-    width = readWidth(Framework.getData(WIDTH_KEY))
-    opacity = readOpacity(Framework.getData(OPACITY_KEY))
+    for (const slider of SLIDERS) slider.set(slider.read(Framework.getData(slider.key)))
     shapeMode = readShapeMode(Framework.getData(SHAPE_KEY))
     colors = readDrawColors(Framework.getData(COLORS_KEY))
     showColors()

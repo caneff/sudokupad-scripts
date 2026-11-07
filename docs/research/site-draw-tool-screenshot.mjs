@@ -12,7 +12,7 @@ import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 
 const out = new URL('./site-draw-tool.png', import.meta.url).pathname
 
-// The Size slider's values for the thin, middle and thick lines (a text takes 2 x the width + 8: 14, 20, 28).
+// The Size slider's values for the thin, middle and thick lines; the thick one also sets the sum's text size.
 const OLD_WIDTHS = [3, 6, 10]
 // Mouse moves per segment of a drag, so the drag reads as a hand-drawn stroke and not a jump.
 const DRAG_STEPS = 10

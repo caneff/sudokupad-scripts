@@ -17,8 +17,6 @@ const LABEL_WIDTH = 230
 const SIDE_GAP = 36
 const PAD = 10
 const FONT = '15px system-ui, sans-serif'
-// Extra pixels under the panel.
-const ROW_SPREAD = 0
 // Pixels under the panel for the Opacity label, which sits below the panel's last row.
 const BOTTOM_ROOM = 6
 const LINE_COLOR = '#6a1b9a'
@@ -61,7 +59,7 @@ const labels = [
 
 const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width + SIDE_GAP + LABEL_WIDTH
 const panelLeft = PAD + LABEL_WIDTH + SIDE_GAP
-const height = panel.height + 2 * PAD + ROW_SPREAD + BOTTOM_ROOM
+const height = panel.height + 2 * PAD + BOTTOM_ROOM
 const html = labels.map((l) => {
   const left = l.side === 'left' ? PAD : panelLeft + panel.width + SIDE_GAP
   return `<div class="l ${l.side}" style="left:${left}px;top:${PAD + l.y}px">${l.text}</div>`

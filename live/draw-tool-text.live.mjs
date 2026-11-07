@@ -86,7 +86,7 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     assert.equal(await tool(), 'draw')
   })
 
-  it('the text is solid, in the current pen color, at the default size', async () => {
+  it('the text is solid, in the current draw color, at the default size', async () => {
     assert.deepEqual(await textStyle('15'), { fill: await penColor(1), opacity: '1', size: '20px' })
   })
 
