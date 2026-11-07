@@ -27,7 +27,7 @@ export async function holdPenButton (page, key) {
 
 // Sets pen `key`'s picker, which exists only in edit mode, to the color `hex`; the buttons and the lines take it at once.
 export async function pickPenColor (page, key, hex) {
-  const picker = page.locator(`.pen-tool-extras-picker input[data-pen="${key}"]`)
+  const picker = page.locator(`.pen-tool-extras-picker input[data-key="${key}"]`)
   await picker.waitFor({ state: 'attached' })
   await setInputValue(picker, hex)
 }

@@ -204,7 +204,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
   // Hold a color button and the pickers appear: they must leave the grid alone and follow their buttons (#275). A hold on a picker ends edit mode, as in live/pen-tool-extras/pen-tool-extras.live.mjs.
   it('in edit mode every color button keeps its box, and each picker sits over its own button, also with Keypad Flipped on', async () => {
     const boxes = () => Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map(key))
-    const pickers = (n) => p.locator(`.pen-tool-extras-picker input[data-pen="${n}"]`)
+    const pickers = (n) => p.locator(`.pen-tool-extras-picker input[data-key="${n}"]`)
     const hold = async (selector) => {
       const box = await p.locator(selector).boundingBox()
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -212,7 +212,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
     }
     const overOwnButton = async (buttons, what) => {
       for (let n = 1; n <= 9; n++) {
-        const picker = await rect(`.pen-tool-extras-picker input[data-pen="${n}"]`)
+        const picker = await rect(`.pen-tool-extras-picker input[data-key="${n}"]`)
         const button = buttons[n - 1]
         const inside = picker.x >= button.x - NEAR_PX && picker.y >= button.y - NEAR_PX && picker.right <= button.right + NEAR_PX && picker.bottom <= button.bottom + NEAR_PX
         assert.equal(inside, true, `${what}: picker ${n} ${JSON.stringify(picker)} over button ${JSON.stringify(button)}`)
@@ -240,7 +240,7 @@ describe('the pen panel layout', { concurrency: false }, () => {
         await p.evaluate(() => Framework.setSetting('flipkeypad', false))
       }
     } finally {
-      await hold('.pen-tool-extras-picker input[data-pen="4"]')
+      await hold('.pen-tool-extras-picker input[data-key="4"]')
       await p.locator('.pen-tool-extras-picker').first().waitFor({ state: 'detached', timeout: HOLD_WAIT_MS })
       await p.mouse.up()
     }

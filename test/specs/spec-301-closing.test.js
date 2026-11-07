@@ -48,9 +48,9 @@ test('spec 301: Text Annotation has its own colors, one Size slider and a settin
   // Copy carries the colors and the size and no notes; Paste keeps its own values, skips bad ones and counts them.
   const copied = JSON.parse(draw.copiedSettings(storeOf({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
   assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5 })
-  const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }))
+  const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }), draw.READERS)
   assert.deepEqual(pasted, { values: { DrawTool_colors: PEN }, skipped: 1 })
-  assert.throws(() => draw.pastedSettings('not settings'))
+  assert.throws(() => draw.pastedSettings('not settings', draw.READERS))
 
   // The site: the homepage summary and @description name the notes and the tool's own colors, the details page has a bullet for
   // each part, and the README still says every script but No Tab Letters has a settings entry.

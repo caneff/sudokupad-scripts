@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.1
+// @version      0.3.4
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,8 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.1'
-  const SETTINGS_GROUP = 'experimental'
+  const VERSION = '0.3.4'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -74,58 +73,6 @@
   function copiedSettings (store) {
     const { maxWidth, maxHeight } = readLimits(store)
     return JSON.stringify({ [MAX_WIDTH_KEY]: maxWidth, [MAX_HEIGHT_KEY]: maxHeight })
-  }
-
-  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of this script's own that its reader refuses is skipped.
-  function pastedSettings (text) {
-    let data
-    try {
-      data = JSON.parse(text)
-    } catch (error) {
-      throw new Error('the clipboard text is not JSON', { cause: error })
-    }
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
-    const values = {}
-    let skipped = 0
-    for (const [key, read] of Object.entries(READERS)) {
-      if (!Object.hasOwn(data, key)) continue
-      const value = read(data[key])
-      if (value === undefined) skipped++
-      else values[key] = value
-    }
-    return { values, skipped }
-  }
-
-  function pasteReport (applied, skipped) {
-    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
-    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
-  }
-
-  const COPY_PASTE_HTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
-    '<button type="button" data-act="copy-settings">Copy settings</button>' +
-    '<button type="button" data-act="paste-settings">Paste settings</button></div>' +
-    '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
-
-  function wireCopyPaste (root, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
-    root.addEventListener('click', async (event) => {
-      const act = event.target.closest('button[data-act]')?.dataset.act
-      if (act !== 'copy-settings' && act !== 'paste-settings') return
-      event.preventDefault()
-      event.stopPropagation()
-      try {
-        if (act === 'copy-settings') {
-          await navigator.clipboard.writeText(copiedSettings(Framework))
-          say('Settings copied.')
-        } else {
-          const { values, skipped } = pastedSettings(await navigator.clipboard.readText())
-          if (Object.keys(values).length > 0) apply(values)
-          say(pasteReport(Object.keys(values).length, skipped))
-        }
-      } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
-      }
-    })
   }
 
   function rulesRoom ({ rulesTop, containerBottom, viewportBottom, paddingBottom }) {
@@ -351,8 +298,135 @@
     })
   }
 
+  // <lib:settings-dialog>
+  // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
+  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
+  const SETTINGS_GROUP = 'experimental'
+  const TITLE_MUTED = '#777'
+
+  // The next press ends the swallowing even when no release came (a close from the keyboard).
+  function swallowRelease (win = window) {
+    const swallow = (event) => event.stopImmediatePropagation()
+    const stop = () => {
+      RELEASE_EVENTS.forEach((type) => win.removeEventListener(type, swallow, true))
+      win.removeEventListener('pointerdown', stop, true)
+    }
+    RELEASE_EVENTS.forEach((type) => win.addEventListener(type, swallow, true))
+    win.addEventListener('pointerdown', stop, true)
+  }
+
+  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
+  function closeDialogKeepingGrid (framework, win = window) {
+    framework.closeDialog()
+    swallowRelease(win)
+  }
+
+  // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
+  function addSettingsEntry (framework, { name, content, open }) {
+    framework.addSetting({
+      tag: 'button',
+      name,
+      group: SETTINGS_GROUP,
+      content,
+      handler: () => {
+        closeDialogKeepingGrid(framework)
+        setTimeout(open, 0)
+      }
+    })
+  }
+
+  const COPY_PASTE_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const titleIconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      '<span data-role="settings-status"></span>' +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
+  }
+
+  function dialogTitleCss (prefix) {
+    const tools = `.${prefix}tools`
+    return [
+      `.${prefix}version { opacity: .6; }`,
+      `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
+      `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
+      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} svg { width: 20px; height: 20px; }`,
+      `${tools} svg * { fill: none !important; }`,
+      // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+    ].join('\n')
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-dialog>
+  // <lib:settings-transfer>
+  // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
+  function pastedSettings (text, readers, upgrade = (data) => data) {
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      throw new Error('the clipboard text is not JSON', { cause: error })
+    }
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('the clipboard text is not a settings object')
+    data = upgrade(data)
+    const values = {}
+    let skipped = 0
+    for (const [key, read] of Object.entries(readers)) {
+      if (!Object.hasOwn(data, key)) continue
+      const value = read(data[key])
+      if (value === undefined) skipped++
+      else values[key] = value
+    }
+    return { values, skipped }
+  }
+
+  function pasteReport (applied, skipped) {
+    if (applied === 0 && skipped === 0) return 'Nothing to paste: the text holds none of this script\'s settings.'
+    return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
+  }
+
+  // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
+  function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
+    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    root.addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-settings' && act !== 'paste-settings') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'copy-settings') {
+          await navigator.clipboard.writeText(copied())
+          say('Settings copied.')
+        } else {
+          const { values, skipped } = pastedSettings(await navigator.clipboard.readText(), readers, upgrade)
+          if (Object.keys(values).length > 0) apply(values)
+          say(pasteReport(Object.keys(values).length, skipped))
+        }
+      } catch (error) {
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+      }
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
+      READERS,
       VERSION,
       MAX_WIDTH_KEY,
       copiedSettings,
@@ -533,6 +607,8 @@
     }
   }
 
+  const CLASS_PREFIX = 'rules-resizer-'
+
   function openDialog () {
     const row = (id, label, value) => `<label for="${id}">${label}</label>` +
       `<input type="number" id="${id}" min="1" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
@@ -540,13 +616,12 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Rules Resizer</b> <small style="opacity:.6">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Rules Resizer', version: VERSION }) },
         {
           tag: 'text',
           innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
             row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
-            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>' +
-            COPY_PASTE_HTML
+            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
         },
         {
           tag: 'options',
@@ -572,7 +647,7 @@
     const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
     const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
     if (!widthInput || !heightInput) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
-    wireCopyPaste(widthInput.closest('.dialog'), (values) => {
+    wireCopyPaste(widthInput.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
       saveLimits(Framework, limits)
       if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''
@@ -609,16 +684,7 @@
 
   Framework.getApp().then((app) => {
     limits = readLimits(Framework)
-    Framework.addSetting({
-      tag: 'button',
-      name: 'rulesresizer',
-      group: SETTINGS_GROUP,
-      content: 'Rules Resizer',
-      handler: () => {
-        Framework.closeDialog()
-        setTimeout(openDialog, 0)
-      }
-    })
+    addSettingsEntry(Framework, { name: 'rulesresizer', content: 'Rules Resizer', open: openDialog })
     addStyle()
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)

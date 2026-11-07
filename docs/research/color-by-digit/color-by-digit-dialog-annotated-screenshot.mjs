@@ -58,7 +58,7 @@ const parts = {
   profiles: await box(`${E} .cbd-profile:nth-child(2)`),
   newProfile: await box(`${E} button[data-act=new-profile]`),
   name: await box(`${E} input[type=text]`),
-  palette: union(await page.locator(`${E} button[data-act=color]`).evaluateAll((es) => es.map((e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height } }))),
+  palette: union(await page.locator(`${E} button[data-role=swatch]`).evaluateAll((es) => es.map((e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height } }))),
   digits: union(await page.locator(`${E} button[data-act=digit]`).evaluateAll((es) => es.map((e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, width: b.width, height: b.height } }))),
   bottom: union(await Promise.all(['Cancel', 'Save'].map((t) => box(`.dialog-options button:text-is("${t}")`))))
 }

@@ -4,7 +4,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, darkerPageColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
 const keydown = (eventPhase) => ({ type: 'keydown', eventPhase })
@@ -203,7 +204,6 @@ test('a Darker page preset darkens the page\'s color at each index and makes the
   assert.notEqual(colors[1], SUDOKUPAD_PEN_COLORS[1])
   const red = parseInt(colors[1].slice(1, 3), 16)
   assert.equal(red < 255 && red > 100, true, `red darkened to ${colors[1]}`)
-  assert.deepEqual(darkerPageColors(['0', '1'], (key) => PAGE[Number(key)])[2], SUDOKUPAD_PEN_COLORS[2], 'a slot past the page keeps SudokuPad\'s color')
 })
 
 test('a Darker page preset the palette lacks, or an unknown one, throws', () => {
@@ -222,23 +222,17 @@ test('Copy settings leaves the colors out until they are saved', () => {
 
 test('Paste settings returns the colors and size, ignores other scripts\' keys, the old opacity and counts a refused value as skipped', () => {
   const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, DrawTool_opacity: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
-  assert.deepEqual(pastedSettings(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5 }, skipped: 0 })
-  const bad = pastedSettings(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99 }))
+  assert.deepEqual(readPaste(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5 }, skipped: 0 })
+  const bad = readPaste(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99 }))
   assert.deepEqual(bad, { values: {}, skipped: 2 })
-  assert.deepEqual(pastedSettings(JSON.stringify({ [COLORS_KEY]: {} })), { values: {}, skipped: 1 }, 'colors with no color in them')
+  assert.deepEqual(readPaste(JSON.stringify({ [COLORS_KEY]: {} })), { values: {}, skipped: 1 }, 'colors with no color in them')
 })
 
 test('Paste settings fills a missing color with SudokuPad\'s and refuses text that is not settings', () => {
-  const { values } = pastedSettings(JSON.stringify({ [COLORS_KEY]: { 1: '#010203' } }))
+  const { values } = readPaste(JSON.stringify({ [COLORS_KEY]: { 1: '#010203' } }))
   assert.deepEqual(values[COLORS_KEY], { ...SUDOKUPAD_PEN_COLORS, 1: '#010203' })
-  assert.throws(() => pastedSettings('hello'), /not JSON/)
-  assert.throws(() => pastedSettings('[1]'), /not a settings object/)
-})
-
-test('the paste report counts applied and skipped values, and says when the text held none', () => {
-  assert.equal(pasteReport(0, 0), 'Nothing to paste: the text holds none of this script\'s settings.')
-  assert.equal(pasteReport(1, 0), 'Pasted 1 setting.')
-  assert.equal(pasteReport(3, 2), 'Pasted 3 settings; skipped 2 that did not check out.')
+  assert.throws(() => readPaste('hello'), /not JSON/)
+  assert.throws(() => readPaste('[1]'), /not a settings object/)
 })
 
 test('a text item holds its kind, color number, text size, full opacity, text and its point rounded to a tenth, and a background only when it is made with one', () => {
