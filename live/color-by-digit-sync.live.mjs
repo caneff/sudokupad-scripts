@@ -5,16 +5,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, BUTTON, DEFAULT_FILL, EDITOR, group, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, BUTTON, coloredCountOn, DEFAULT_FILL, EDITOR, group, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, PROFILES_KEY, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle } from './settle.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
 const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../color-by-digit.user.js'))
 
-const LABEL = `${BUTTON} [data-role="mode"]`
-const ARROW = `${BUTTON} [data-role="menu"]`
-const MENU = '#color-by-digit-menu'
 const CIRCLES = '#color-by-digit-circles'
 const SYNC = `${EDITOR} input[data-role="sync"]`
 const USE_DIGIT_COLORS = `${EDITOR} input[data-role="use-digit-colors"]`
@@ -33,9 +30,9 @@ after(async () => { await browser?.close() })
 
 const tools = (p) => {
   const read = (fn, arg) => p.evaluate(fn, arg)
-  const label = () => p.locator(LABEL).textContent()
+  const label = () => labelOn(p)
   const cells = () => read(() => [[0, 0], [1, 0]].map(([r, c]) => [...(Framework.app.grid.getCell(r, c).colours || [])]))
-  const coloredCount = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
+  const coloredCount = () => coloredCountOn(p)
   const undoSteps = () => read(() => Framework.app.puzzle.undoStack.length)
   const getState = () => read((key) => Framework.getData(key), PROFILES_KEY)
   const icon = () => p.$$eval(`${BUTTON} svg text`, (es) => es.map((e) => e.textContent))
@@ -44,12 +41,6 @@ const tools = (p) => {
   const enter = async (r, c, digit) => { await select(r, c); await p.keyboard.press(digit) }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  // A short press on the button, away from the arrow box.
-  const pressTo = async (want) => {
-    const box = await p.locator(BUTTON).boundingBox()
-    await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
-    assert.equal(await settle(label, want), want)
-  }
   const openMenu = async () => {
     await p.click(ARROW)
     await p.locator(MENU).waitFor({ state: 'visible' })
@@ -79,7 +70,7 @@ const tools = (p) => {
     assert.equal(await settle(() => p.locator(selector).isChecked(), want), want)
   }
   const modeChoice = () => p.$$eval(`${EDITOR} input[data-role="mode-draft"]`, (es) => es.map((e) => `${e.value}${e.checked ? '*' : ''}`))
-  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, pressTo, menu, pick, openEditor, save, toggle, modeChoice }
+  return { read, label, cells, coloredCount, undoSteps, getState, icon, shownCircles, enter, select, undo, redo, menu, pick, openEditor, save, toggle, modeChoice }
 }
 
 describe('the digit profile unsynced, saved synced in Both, injected after Start Puzzle', { concurrency: false }, () => {
@@ -145,11 +136,11 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
   })
 
   it('in Digit, the icon shows the digit profile, and in Cell and Off the cell profile', async () => {
-    await t.pressTo('OFF')
+    await pressTo(p, 'OFF')
     assert.deepEqual(await t.icon(), SPLIT_ICON)
-    await t.pressTo('CELL')
+    await pressTo(p, 'CELL')
     assert.deepEqual(await t.icon(), SPLIT_ICON)
-    await t.pressTo('DIGIT')
+    await pressTo(p, 'DIGIT')
     assert.deepEqual(await t.icon(), ODD_EVEN_ICON)
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.equal(await settle(t.coloredCount, 0), 0)
@@ -225,10 +216,10 @@ describe('"Use digit colors" turned off and on, saved unsynced in Both, injected
   })
 
   it('off, a press steps Cell to Off and back to Cell', async () => {
-    await t.pressTo('OFF')
-    await t.pressTo('CELL')
-    await t.pressTo('OFF')
-    await t.pressTo('CELL')
+    await pressTo(p, 'OFF')
+    await pressTo(p, 'CELL')
+    await pressTo(p, 'OFF')
+    await pressTo(p, 'CELL')
   })
 
   it('a reload keeps it off', async () => {
@@ -246,7 +237,7 @@ describe('"Use digit colors" turned off and on, saved unsynced in Both, injected
     assert.equal(await p.locator(SYNC).isChecked(), false)
     await t.save()
     assert.deepEqual(await t.menu(), { rows: ['cells0*', 'cells1', 'digits0', 'digits1*'], sections: ['Cells', 'Digits'] })
-    await t.pressTo('DIGIT')
+    await pressTo(p, 'DIGIT')
     assert.deepEqual(await settle(fill('4'), [SHADE[2]]), [SHADE[2]])
     assert.equal(await settle(t.shownCircles, 1), 1)
   })

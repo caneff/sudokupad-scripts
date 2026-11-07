@@ -2,9 +2,10 @@
 // script's selectors, and the helpers that open a session on that board. Not a check itself, so `live/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
+import assert from 'node:assert/strict'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { openPage, startPuzzle } from './page.mjs'
-import { POLL_MS } from './settle.mjs'
+import { POLL_MS, settle } from './settle.mjs'
 
 // The puzzle's givens, row by row, 0 for empty. Must match the board built by puzzle-url.txt; the
 // 'the board holds the givens' test in color-by-digit.live.mjs checks it.
@@ -37,6 +38,10 @@ export const SEEDED_OFF = { ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'off' }
 
 export const BUTTON = '#control-colorbydigit'
 export const EDITOR = '#color-by-digit-editor'
+// The mode's name on the button's top strip, the arrow box that opens the profile menu, and that menu.
+export const LABEL = `${BUTTON} [data-role="mode"]`
+export const ARROW = `${BUTTON} [data-role="menu"]`
+export const MENU = '#color-by-digit-menu'
 
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.
 const QUIET_MS = 500
@@ -81,6 +86,31 @@ export async function openSession (browser, script, { saved = SEEDED_OFF, force 
   await startInjected(opened.p, script, mode)
   return opened
 }
+
+export const labelOn = (p) => p.locator(LABEL).textContent()
+
+// Where every press on the button lands: on the button proper, below the mode label and left of the arrow box.
+export async function buttonPoint (p) {
+  const box = await p.locator(BUTTON).boundingBox()
+  return { x: box.x + box.width * 0.3, y: box.y + box.height * 0.6 }
+}
+
+// A short press on the button, which steps the mode to `want`.
+export async function pressTo (p, want) {
+  const { x, y } = await buttonPoint(p)
+  await p.mouse.click(x, y)
+  assert.equal(await settle(() => labelOn(p), want), want)
+}
+
+// How many cells hold a color, and how many givens do.
+export const coloredCountOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
+export const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
+
+// Toggles palette key `key` on the cell at row r, column c, as a solver's color tool does: one SudokuPad action.
+export const paintOn = (p, r, c, key) => p.evaluate(([r, c, key]) => {
+  const a = Framework.app
+  a.deselect(); a.select(a.grid.getCell(r, c)); a.act({ type: 'colour', arg: key }); a.deselect()
+}, [r, c, key])
 
 // SudokuPad's own color for an entered digit or a mark, read off the page with no script installed.
 export const DEFAULT_FILL = 'rgb(29, 106, 229)'

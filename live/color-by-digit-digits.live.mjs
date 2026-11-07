@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { allFillsOn, BUTTON, DEFAULT_FILL, GIVENS, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
+import { allFillsOn, ARROW, coloredCountOn, DEFAULT_FILL, GIVENS, givensColoredOn, LABEL, labelOn, MENU, MODE_STORAGE_KEY, ODD_EVEN, group, openSession, paletteColorOn, pressTo, savedProfiles, shadeReaders, startInjected, styleOn, watch } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, PUZZLE_URL } from './page.mjs'
 import { settle } from './settle.mjs'
 
@@ -40,8 +40,6 @@ const CONFLICT_CELLS = {
 }
 const CONFLICTING = { corner: '#cell-pencilmarks text.cell-pencilmark.conflict', centre: '#cell-candidates tspan.conflict' }
 const STYLE = '#color-by-digit-digits'
-const LABEL = `${BUTTON} [data-role="mode"]`
-const MENU = '#color-by-digit-menu'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -55,10 +53,10 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   const read = (fn, arg) => p.evaluate(fn, arg)
   const fills = (place, digit, conflict) => styleOn(p, 'fill', place, digit, conflict)
   const allFills = (place, digit, conflict) => allFillsOn(p, place, digit, conflict)
-  const coloredCount = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
-  const givensColored = () => read(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
+  const coloredCount = () => coloredCountOn(p)
+  const givensColored = () => givensColoredOn(p)
   const undoSteps = () => read(() => Framework.app.puzzle.undoStack.length)
-  const label = () => p.locator(LABEL).textContent()
+  const label = () => labelOn(p)
 
   // Every circle in the group, as it is drawn: its centre in screen pixels and radius, and whether it paints at all.
   const circles = () => read((sel) => [...document.querySelectorAll(sel + ' circle')].map((c) => {
@@ -138,14 +136,8 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   const markMode = async (id, fn) => { await p.click(id); try { await fn() } finally { await p.click('#control-normal') } }
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
-  // A short press on the button, away from the arrow box.
-  const pressTo = async (want) => {
-    const box = await p.locator(BUTTON).boundingBox()
-    await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
-    assert.equal(await settle(label, want), want)
-  }
   const pickProfile = async (index) => {
-    await p.click(`${BUTTON} [data-role="menu"]`)
+    await p.click(ARROW)
     await p.locator(`${MENU} [data-act=pick][data-index="${index}"]`).click()
     await p.locator(MENU).waitFor({ state: 'detached' })
   }
@@ -447,7 +439,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
 
   it('switching profiles recolors the digits at once, adds no undo step and colors no cell', async () => {
     // A click off the board is SudokuPad's own deselect step, so the steps are counted after one.
-    await p.click(`${BUTTON} [data-role="menu"]`)
+    await p.click(ARROW)
     await p.keyboard.press('Escape')
     await p.locator(MENU).waitFor({ state: 'detached' })
     const steps = await undoSteps()
@@ -465,13 +457,13 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   it('a press steps Digit to Both: cells take their group colors and the digits keep their shades and circles', async () => {
-    await pressTo('BOTH')
+    await pressTo(p, 'BOTH')
     assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
     await expectShadesAfterEntry()
   })
 
   it('a press steps Both to Off: the cells\' group colors come off, the digits take SudokuPad\'s color, and no circle shows', async () => {
-    await pressTo('OFF')
+    await pressTo(p, 'OFF')
     assert.equal(await settle(coloredCount, 0), 0)
     assert.deepEqual(await settle(allFills('entered', '4'), [DEFAULT_FILL]), [DEFAULT_FILL])
     assert.deepEqual(await allFills('corner', '8')(), [DEFAULT_FILL])
@@ -480,7 +472,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   it('in Cell, cells are colored, the digits keep SudokuPad\'s color, and a conflict shows as SudokuPad draws it', async () => {
-    await pressTo('CELL')
+    await pressTo(p, 'CELL')
     assert.equal(await settle(givensColored, GROUPED_GIVENS), GROUPED_GIVENS)
     assert.deepEqual(await watch(allFills('entered', '4')), [[DEFAULT_FILL]])
     assert.deepEqual(await allFills('centre', '8')(), [DEFAULT_FILL])
@@ -489,7 +481,7 @@ describe('digit colors, saved in Digit, injected after Start Puzzle', { concurre
   })
 
   it('a press steps Cell to Digit: the group colors come off the cells and the shades and circles come back', async () => {
-    await pressTo('DIGIT')
+    await pressTo(p, 'DIGIT')
     assert.equal(await settle(coloredCount, 0), 0)
     await expectShadesAfterEntry()
   })

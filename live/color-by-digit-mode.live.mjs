@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, EDITOR, GIVENS, LOW_FIVE_HIGH, MODE_KEY, openSession, PROFILES_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonPoint, coloredCountOn, EDITOR, GIVENS, givensColoredOn, LABEL, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, pressTo, PROFILES_KEY, SEED, savedProfiles, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, MODES } from './page.mjs'
 import { closeDialogWith, openScriptDialog } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
@@ -15,16 +15,9 @@ const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url
 
 const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 
-const LABEL = `${BUTTON} [data-role="mode"]`
-const ARROW = `${BUTTON} [data-role="menu"]`
-const MENU = '#color-by-digit-menu'
 const HOLD_MS = 500
 // SudokuPad's color 3 is in no group of Odd/Even, whose keys are 1 and 2.
 const NO_GROUP_KEY = '3'
-
-const givensColoredOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => c.given && (c.colours || []).length).length)
-const coloredCountOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).filter((c) => (c.colours || []).length).length)
-const labelOn = (p) => p.locator(LABEL).textContent()
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -53,19 +46,10 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const labelLook = () => p.locator(LABEL).evaluate((e) => `${window.getComputedStyle(e).color} ${window.getComputedStyle(e).fontWeight}`)
   const modeChoice = (mode) => p.locator(`${EDITOR} input[data-role="mode-draft"][value="${mode}"]`)
   const select = (r, c) => read(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
-  const paint = (r, c, key) => read(([r, c, key]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)); a.act({ type: 'colour', arg: key }); a.deselect() }, [r, c, key])
+  const paint = (r, c, key) => paintOn(p, r, c, key)
   const undo = () => p.click('#control-undo')
   const redo = () => p.click('#control-redo')
   const openEditor = () => openScriptDialog(p, 'Color by Digit', EDITOR)
-  // A short press on the button, away from the arrow box.
-  const pressButton = async () => {
-    const box = await p.locator(BUTTON).boundingBox()
-    await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
-  }
-  const pressTo = async (want) => {
-    await pressButton()
-    assert.equal(await settle(label, want), want)
-  }
 
   before(async () => {
     ({ context, p, errors } = await openSession(browser, script))
@@ -93,7 +77,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     await select(8, 5); await p.click('#control-centre'); await p.keyboard.press('1'); await p.keyboard.press('3'); await p.click('#control-normal')
     assert.equal(await settle(() => marks(8, 5), '13'), '13')
     assert.equal(await coloredCount(), 0)
-    await pressTo('CELL')
+    await pressTo(p, 'CELL')
     assert.equal(await labelLook(), 'rgb(106, 27, 154) 700')
     assert.equal(await settle(getMode, 'cell'), 'cell')
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
@@ -126,7 +110,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
     assert.deepEqual(await settle(() => sortedColorsAt(0, 0), ['1', NO_GROUP_KEY]), ['1', NO_GROUP_KEY])
     assert.deepEqual(await settle(() => colorsAt(1, 2), ['2']), ['2'])
     const before = await allColors()
-    await pressTo('DIGIT')
+    await pressTo(p, 'DIGIT')
     assert.equal(await labelLook(), 'rgb(106, 27, 154) 700')
     assert.equal(await settle(getMode, 'digit'), 'digit')
     assert.equal(await settle(coloredCount, 2), 2)
@@ -153,7 +137,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   it('a press steps to Both in bold purple, which colors cells as Cell does and leaves a group color painted by hand on an empty cell with no marks', async () => {
     await paint(1, 1, '2')
     assert.deepEqual(await settle(() => colorsAt(1, 1), ['2']), ['2'])
-    await pressTo('BOTH')
+    await pressTo(p, 'BOTH')
     assert.equal(await labelLook(), 'rgb(106, 27, 154) 700')
     assert.equal(await settle(getMode, 'both'), 'both')
     assert.equal(await settle(givensColored, GIVEN_COUNT), GIVEN_COUNT)
@@ -170,7 +154,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('a press steps Both to Off in grey and takes every group color off in one undo step', async () => {
-    await pressTo('OFF')
+    await pressTo(p, 'OFF')
     assert.equal(await labelLook(), 'rgb(179, 172, 191) 400')
     assert.equal(await settle(coloredCount, 0), 0)
     await undo()
@@ -181,7 +165,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
 
   it('the keyboard stays with the puzzle right after a press: a digit typed next lands and takes its color', async () => {
     await select(0, 5)
-    await pressTo('CELL')
+    await pressTo(p, 'CELL')
     await p.keyboard.press('3')
     assert.equal(await settle(() => valueAt(0, 5), '3'), '3')
     assert.deepEqual(await settle(() => colorsAt(0, 5), ['1']), ['1'])
@@ -299,18 +283,18 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('a hold, a right click and the arrow box open the profile menu, and none of them steps the mode', async () => {
-    const box = await p.locator(BUTTON).boundingBox()
+    const { x, y } = await buttonPoint(p)
     const closeMenu = async () => {
       await p.keyboard.press('Escape')
       await p.locator(MENU).waitFor({ state: 'detached' })
     }
-    await p.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.6)
+    await p.mouse.move(x, y)
     await p.mouse.down()
     // Opens on a timer after HOLD_MS; waits on the menu, not on the clock.
     await p.locator(MENU).waitFor({ state: 'visible', timeout: HOLD_MS + SETTLE_MS })
     await p.mouse.up()
     await closeMenu()
-    await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6, { button: 'right' })
+    await p.mouse.click(x, y, { button: 'right' })
     await p.locator(MENU).waitFor({ state: 'visible' })
     await closeMenu()
     await p.click(ARROW)
@@ -381,7 +365,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   })
 
   it('one Save that enters Cell and changes the groups recolors every pure cell, not only the givens', async () => {
-    await pressTo('DIGIT')
+    await pressTo(p, 'DIGIT')
     await select(0, 6); await p.keyboard.press('8')
     assert.equal(await settle(() => valueAt(0, 6), '8'), '8')
     assert.deepEqual(await watch(() => colorsAt(0, 6)), [[]])
@@ -490,8 +474,8 @@ describe('the mode on a touch screen, injected after Start Puzzle', { concurrenc
   after(async () => { await context.close() })
 
   it('a tap on the button steps to Cell and colors the givens, and a second tap steps to Digit and takes them off', async () => {
-    const box = await p.locator(BUTTON).boundingBox()
-    const tap = () => p.touchscreen.tap(box.x + box.width * 0.3, box.y + box.height * 0.6)
+    const { x, y } = await buttonPoint(p)
+    const tap = () => p.touchscreen.tap(x, y)
     await tap()
     assert.equal(await settle(() => labelOn(p), 'CELL'), 'CELL')
     assert.equal(await settle(() => givensColoredOn(p), GIVEN_COUNT), GIVEN_COUNT)
