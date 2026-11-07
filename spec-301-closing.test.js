@@ -17,7 +17,7 @@ const readPen = (n) => PEN[n]
 
 // Spec 301's acceptance as one pass over Draw Tool's pure functions and the site, at `npm test`: per-item opacity and
 // any slider width, a missing opacity read as solid (Chris's ruling D4), text size from width, the slider ranges;
-// Draw's own nine colors and the first-use copy; shapes, their snapping, erasing and the Shape button's order; the
+// Draw's own nine colors and the first-use copy; shapes, erasing and the Shape button's order; the
 // presets and Copy/Paste settings; old drawings; and the homepage, details page and README. This seam is blind to real
 // SudokuPad: the panel's layout in the keypad, the hold-to-recolor picker, a drag on the board, rendering, the settings
 // entry and undo are `npm run test:live`'s, and neither run covers a real Tampermonkey install or crackingthecryptic.com.
@@ -44,13 +44,11 @@ test('spec 301: Draw Tool has its own colors, Size and Opacity sliders, Shape mo
   assert.deepEqual(draw.readDrawColors(PEN), PEN)
   assert.notEqual(draw.readDrawColors('garbage'), null)
 
-  // Shapes: the Shape button steps Off, Rectangle, Ellipse and round; a drag snaps each corner to the nearest quarter-cell line, and Alt
-  // keeps the drag's own box. A box with no width or height is refused.
+  // Shapes: the Shape button steps Off, Rectangle, Ellipse and round; a drag is exactly its own box. A box with no width or height is refused.
   const modes = ['off']
   for (let i = 0; i < 3; i++) modes.push(draw.nextShapeMode(modes[i]))
   assert.deepEqual(modes, ['off', 'rect', 'ellipse', 'off'])
-  assert.deepEqual(draw.shapeBox([CELL + 5, CELL + 50], [2 * CELL + 59, 3 * CELL + 1], false), [CELL, CELL + 48, 3 * CELL, 3 * CELL])
-  assert.deepEqual(draw.shapeBox([CELL + 10, CELL + 50], [2 * CELL + 5, 3 * CELL + 1], true), [CELL + 10, CELL + 50, 2 * CELL + 5, 3 * CELL + 1])
+  assert.deepEqual(draw.shapeBox([CELL + 10, CELL + 50], [2 * CELL + 5, 3 * CELL + 1]), [CELL + 10, CELL + 50, 2 * CELL + 5, 3 * CELL + 1])
   const rect = draw.shapeItem('rect', [CELL, CELL, 3 * CELL, 4 * CELL], 2, 6, 60)
   assert.deepEqual(draw.readDrawing([rect]), [rect])
   assert.throws(() => draw.readDrawing([draw.shapeItem('rect', [CELL, CELL, CELL, 4 * CELL], 2, 6, 60)]))

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.13.0
+// @version      0.14.0
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,12 +16,10 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.13.0'
+  const VERSION = '0.14.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
-  // Board units: SudokuPad's board SVG draws a cell 64 wide, from (0, 0). Test Markup's brush is 3.
-  const CELL_SIZE = 64
   // The shapes a drag can draw, as a shape item saves them.
   const RECT = 'rect'
   const ELLIPSE = 'ellipse'
@@ -109,7 +107,7 @@
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
   // How far, in board units, a mouse point may stray from the simplified line before it is kept.
-  const SIMPLIFY_TOLERANCE = 1.5
+  const SIMPLIFY_TOLERANCE = 2.25
   // How far, in board units, a right-drag may pass from a line's edge and still erase it.
   const ERASE_TOLERANCE = 4
   // Straight pieces per curve when a stroke's drawn line is hit-tested.
@@ -118,8 +116,8 @@
   const ELLIPSE_STEPS = 64
   const KEPT_PUZZLES = 50
   const PRIMARY_BUTTON = 0
+  const MIDDLE_BUTTON = 1
   const SECONDARY_BUTTON = 2
-  const HELD_KEYS = ['Shift', 'Alt']
   const FREE_LINE_ICON = '<path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/>'
   const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${FREE_LINE_ICON}</svg>`
 
@@ -444,13 +442,8 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // A shape's box as [left, top, right, bottom]: each corner of the drag snapped to the nearest quarter-cell line, or the drag's own box when `exact`.
-  function shapeBox ([ax, ay], [bx, by], exact) {
-    const quarter = CELL_SIZE / 4
-    const snap = (v) => exact ? v : Math.round(v / quarter) * quarter
-    const [sax, say, sbx, sby] = [ax, ay, bx, by].map(snap)
-    return [Math.min(sax, sbx), Math.min(say, sby), Math.max(sax, sbx), Math.max(say, sby)].map(roundToTenth)
-  }
+  // A shape's box as [left, top, right, bottom]: the drag's own box.
+  const shapeBox = ([ax, ay], [bx, by]) => [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)].map(roundToTenth)
 
   const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
 
@@ -998,9 +991,9 @@
   }
 
   // A left-drag in progress: a free line, or a shape when `shape` is set. `element` is what it shows on the board so far.
-  // `held` is whether its key is held: Alt keeps a shape to the drag's own box, and Shift draws a free line straight.
+  // `held` is whether Shift is held, which draws a free line straight.
   let drag = null
-  // A right-drag in progress: the last point it reached, and whether it has erased an item yet.
+  // A right-drag or middle-drag in progress: the last point it reached, whether it has erased an item yet, and the `buttons` bit that holds it.
   let erasing = null
   // The open text box: the index of the text it reopened, or -1 for a new one, the item, and the input the solver types in.
   let editing = null
@@ -1142,10 +1135,9 @@
     drag = null
   }
 
-  const dragKeyHeld = (event) => drag.shape ? event.altKey : event.shiftKey
-  const dragShape = () => shapeItem(drag.shape, shapeBox(drag.points[0], drag.points[drag.points.length - 1], drag.held), drag.color, drag.width, drag.opacity)
+  const dragShape = () => shapeItem(drag.shape, shapeBox(drag.points[0], drag.points[drag.points.length - 1]), drag.color, drag.width, drag.opacity)
 
-  // An Alt drag straight along a row or a column has no box to draw, so it saves nothing.
+  // A drag straight along a row or a column has no box to draw, so it saves nothing.
   function endShape () {
     const item = dragShape()
     if (!hasArea(item.box)) {
@@ -1219,6 +1211,11 @@
     if (Framework.app.tool === TOOL_NAME && onBoard(event)) event.preventDefault()
   }
 
+  // The browser's middle-click autoscroll and Linux's paste start on the mousedown and its auxclick. The pointerdown is left alone: preventing it makes the browser send no mousedown, which is how SudokuPad hands Draw the press.
+  function suppressMiddle (event) {
+    if (event.button === MIDDLE_BUTTON && Framework.app.tool === TOOL_NAME && onBoard(event)) event.preventDefault()
+  }
+
   function confirmClear () {
     Framework.showDialog({
       parts: [
@@ -1233,6 +1230,9 @@
   // The mouse button each gesture is held by, as a bit of a MouseEvent's `buttons`.
   const PRIMARY_HELD = 1
   const SECONDARY_HELD = 2
+  const MIDDLE_HELD = 4
+  // An erase is held by the right or the middle button.
+  const ERASE_HELD = { [SECONDARY_BUTTON]: SECONDARY_HELD, [MIDDLE_BUTTON]: MIDDLE_HELD }
 
   const tool = {
     name: TOOL_NAME,
@@ -1243,9 +1243,9 @@
       if (event.type !== 'mousedown' || drag || erasing) return false
       if (pressFinishedText) return onBoard(event)
       if (!onBoard(event)) return false
-      if (event.button === SECONDARY_BUTTON) {
+      if (event.button in ERASE_HELD) {
         const at = toBoard(drawingLayer(), event)
-        erasing = { last: at, erased: false }
+        erasing = { last: at, erased: false, held: ERASE_HELD[event.button] }
         eraseAlong(at, at)
         return true
       }
@@ -1262,7 +1262,7 @@
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
     handleInputMove (event) {
-      if (event.type === 'mousemove' && (erasing || drag) && !(event.buttons & (erasing ? SECONDARY_HELD : PRIMARY_HELD))) {
+      if (event.type === 'mousemove' && (erasing || drag) && !(event.buttons & (erasing ? erasing.held : PRIMARY_HELD))) {
         endGesture()
         return false
       }
@@ -1274,7 +1274,7 @@
       }
       if (!drag) return false
       drag.points.push(toBoard(drag.layer, event))
-      drag.held = dragKeyHeld(event)
+      drag.held = event.shiftKey
       if (drag.shape) {
         drag.element?.remove()
         drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape())
@@ -1296,7 +1296,7 @@
         openText(at)
         return true
       }
-      drag.held = dragKeyHeld(event)
+      drag.held = event.shiftKey
       if (drag.shape) endShape()
       else endStroke()
       return true
@@ -1320,9 +1320,8 @@
       return true
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch
-    // to Corner for as long as it is held (that tool's tempKey), and Alt to Letter or Corner by the Letter Tool Hotkey
-    // setting, and a drag with either held would never reach Draw.
-    handleKeydown (event) { return Framework.app.tool === TOOL_NAME && HELD_KEYS.includes(event.key) }
+    // to Corner for as long as it is held (that tool's tempKey), and a drag with it held would never reach Draw.
+    handleKeydown (event) { return Framework.app.tool === TOOL_NAME && event.key === 'Shift' }
   }
 
   // Every tool button is appended to the bar when it is added (the pen tool's on its setting, a script's whenever it
@@ -1367,6 +1366,7 @@
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)
+    for (const type of ['mousedown', 'auxclick']) window.addEventListener(type, suppressMiddle)
     installHoldToEdit()
     window.addEventListener('blur', endGesture)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })

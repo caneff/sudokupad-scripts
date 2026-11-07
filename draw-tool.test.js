@@ -19,6 +19,11 @@ test('simplifyPath keeps the first and the last point', () => {
   assert.deepEqual(simple[simple.length - 1], points[points.length - 1])
 })
 
+test('simplifyPath drops a point 2 board units off the line between its neighbours, and keeps one 3 units off', () => {
+  assert.deepEqual(simplifyPath([[0, 0], [50, 2], [100, 0]]), [[0, 0], [100, 0]])
+  assert.deepEqual(simplifyPath([[0, 0], [50, 3], [100, 0]]), [[0, 0], [50, 3], [100, 0]])
+})
+
 test('simplifyPath leaves fewer points than a dense mouse path, and more than its two ends on a curve', () => {
   const simple = simplifyPath(denseArc())
   assert.equal(simple.length < 40, true, `${simple.length} points left of 160`)
@@ -440,26 +445,14 @@ test('the paste report counts applied and skipped values, and says when the text
   assert.equal(pasteReport(3, 2), 'Pasted 3 settings; skipped 2 that did not check out.')
 })
 
-test('a shape drag snaps each corner to the nearest quarter-cell line, whichever way it runs', () => {
-  // Board units: a cell is 64 wide from (0, 0), so a quarter is 16. Near-corner points box whole cells (r2c2 to r3c4).
-  assert.deepEqual(shapeBox([66, 62], [250, 195], false), [64, 64, 256, 192])
-  assert.deepEqual(shapeBox([250, 195], [66, 62], false), [64, 64, 256, 192])
-  // Cell centre to cell centre, and to quarters, give offset boxes.
-  assert.deepEqual(shapeBox([96, 96], [224, 160], false), [96, 96, 224, 160])
-  assert.deepEqual(shapeBox([75, 70], [117, 150], false), [80, 64, 112, 144])
+test('a shape drag is exactly the drag box, whichever way it runs, to a tenth of a board unit', () => {
+  assert.deepEqual(shapeBox([250.04, 140], [70.06, 100.12]), [70.1, 100.1, 250, 140])
+  assert.deepEqual(shapeBox([70.06, 100.12], [250.04, 140]), [70.1, 100.1, 250, 140])
 })
 
-test('a shape drag rounds a corner halfway between two quarter lines up', () => {
-  assert.deepEqual(shapeBox([8, 24], [72, 40], false), [16, 32, 80, 48])
-})
-
-test('a shape drag within one quarter of a cell snaps to no width, which has no area', () => {
-  assert.deepEqual(shapeBox([10, 20], [14, 50], false), [16, 16, 16, 48])
-  assert.equal(hasArea(shapeBox([10, 20], [14, 50], false)), false)
-})
-
-test('a shape drag with Alt held follows the drag exactly, to a tenth of a board unit', () => {
-  assert.deepEqual(shapeBox([250.04, 140], [70.06, 100.12], true), [70.1, 100.1, 250, 140])
+test('a shape drag with no width or no height has no area', () => {
+  assert.equal(hasArea(shapeBox([10, 20], [10, 50])), false)
+  assert.equal(hasArea(shapeBox([10, 20], [14, 50])), true)
 })
 
 test('a shape item holds its kind, its shape, draw color number, width, opacity and its box', () => {

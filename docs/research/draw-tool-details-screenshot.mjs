@@ -3,7 +3,7 @@
 // color-by-digit-details-screenshot.mjs):
 //   draw-tool-details-text.gif:    a click in a cell's corner, 15 typed, Enter, on a crop four whole cells wide so the 15 reads at the page's size
 //   draw-tool-details-erasing.gif: a right-drag across a drawn line removes it, the drag's path shown as a faint trail with the pointer on it
-//   draw-tool-details-shapes.gif:  the Shape button set to rectangle, a drag boxing four cells, snapping to the quarter-cell lines next to the cell edges
+//   draw-tool-details-shapes.gif:  the Shape button set to rectangle, a drag from one cell corner to another, boxing four cells exactly as dragged
 // Every step is a real mouse move, click or key; a small dot marks the pointer and a faint trail its drag, which a screenshot does not show. It
 // fails, writing nothing, when a step does not land. Each frame lasts FRAME_MS and the last one LAST_MS before the loop.
 // Needs python3 with Pillow. Run from the repo root with Playwright's Chromium installed:
@@ -148,17 +148,17 @@ async function scene (from, to) {
   await s.finish(out('erasing'))
 }
 
-// Shapes: the Shape button stepped to a rectangle, a drag from near one cell corner to near another, boxing four cells.
+// Shapes: the Shape button stepped to a rectangle, a drag from one cell corner to another, boxing four cells.
 {
   const s = await scene([3.5, 4], [7.5, 8])
   await s.p.click('.controls-input button[data-key="6"]')
   await s.p.locator('#draw-tool-size').fill('6')
   await s.p.click('.draw-tool-shape-mode')
   if ((await s.p.locator('.draw-tool-shape-mode').getAttribute('data-mode')) !== 'rect') throw new Error('Shape did not step to rectangle')
-  await s.move([4.1, 5.1])
+  await s.move([4, 5])
   await s.frame()
   await s.p.mouse.down()
-  await s.glide([[4.1, 5.1], [5.9, 6.9]])
+  await s.glide([[4, 5], [6, 7]])
   await s.p.mouse.up()
   if ((await s.p.locator('#draw-tool-layer rect.draw-tool-shape').count()) !== 1) throw new Error('the rectangle did not land')
   await s.finish(out('shapes'))
