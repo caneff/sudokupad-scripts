@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
+import { mouseDrag } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS, stable } from './settle.mjs'
 
 const script = readFileSync(new URL('../draw-tool.user.js', import.meta.url), 'utf8')
@@ -24,19 +25,6 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
   const tool = () => p.evaluate(() => Framework.app.tool)
   const selected = () => p.evaluate(() => Framework.app.puzzle.selectedCells.length)
   const strokeCount = () => p.locator(STROKES).count()
-  // The client point at (r, c) in cell units from the grid's top left corner, so (2.5, 2.5) is the middle of r3c3.
-  const at = (r, c) => p.evaluate(([r, c]) => {
-    const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-    return [box.x + c * box.width, box.y + r * box.height]
-  }, [r, c])
-  // A real left drag through the points given in cell units, with a mouse move every few pixels between them.
-  const drag = async (points) => {
-    const [first, ...rest] = await Promise.all(points.map(([r, c]) => at(r, c)))
-    await p.mouse.move(...first)
-    await p.mouse.down()
-    for (const point of rest) await p.mouse.move(...point, { steps: 12 })
-    await p.mouse.up()
-  }
   // The last stroke's box on screen, in cell units from the grid's top left corner.
   const lastStrokeInCells = () => p.evaluate((selector) => {
     const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
@@ -87,7 +75,7 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
   it('a left drag leaves one stroke above the digits and selects no cell', async () => {
     await pickDraw()
     await p.evaluate(() => Framework.app.deselect())
-    await drag([[2.5, 2.5], [3.2, 4], [2.4, 5.5], [3.6, 6.5]])
+    await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5], [3.6, 6.5]])
     assert.equal(await strokeCount(), 1)
     assert.equal(await selected(), 0, 'no cell selected')
     assert.equal(await tool(), 'draw')
@@ -125,7 +113,7 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
 
   it('Shift+drag draws a straight line from the press point to the release point, and stays in Draw', async () => {
     await p.keyboard.down('Shift')
-    await drag([[1.5, 1.5], [4, 2], [1, 3], [5.5, 6.5]])
+    await mouseDrag(p, [[1.5, 1.5], [4, 2], [1, 3], [5.5, 6.5]])
     await p.keyboard.up('Shift')
     assert.equal(await strokeCount(), 2)
     assert.equal(await tool(), 'draw', 'Shift did not switch to Corner')
@@ -153,7 +141,7 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     assert.equal(await strokeCount(), 2)
     assert.equal(await p.locator(STROKES).first().isVisible(), true)
     await p.evaluate(() => Framework.app.deselect())
-    await drag([[0.5, 0.5], [0.5, 2.5]])
+    await mouseDrag(p, [[0.5, 0.5], [0.5, 2.5]])
     assert.equal(await selected(), 3, 'the drag selected r1c1 to r1c3')
     assert.equal(await strokeCount(), 2, 'no stroke was drawn')
   })

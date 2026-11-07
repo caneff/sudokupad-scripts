@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { MODES, openPage, START, startPuzzle } from './page.mjs'
 import { openSettings } from './settings.mjs'
-import { keydownDefaults, openPenTool, penEntries } from './pen.mjs'
+import { keydownDefaults, mouseDrag, openPenTool, penEntries } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
@@ -151,14 +151,7 @@ const SCRIPTS = [
     act: async (p) => {
       const tool = () => p.evaluate(() => Framework.app.tool)
       assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS), 'draw')
-      const [x, y, size] = await p.evaluate(() => {
-        const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-        return [box.x, box.y, box.width]
-      })
-      await p.mouse.move(x + 0.5 * size, y + 2.5 * size)
-      await p.mouse.down()
-      await p.mouse.move(x + 6.5 * size, y + 3 * size, { steps: 12 })
-      await p.mouse.up()
+      await mouseDrag(p, [[2.5, 0.5], [3, 6.5]])
       assert.equal(await settle(() => p.locator('#draw-tool-layer path').count(), 1), 1)
     }
   }
