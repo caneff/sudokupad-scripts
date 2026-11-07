@@ -8,6 +8,7 @@
 <style>
   ul { margin: 0 0 .75rem; padding-left: 1.25rem; }
   li { margin-bottom: .25rem; }
+  img.panel { display: block; max-width: 100%; height: auto; margin: .35rem 0 .75rem; }
   li img { display: block; max-width: min(100%, 14rem); height: auto; margin: .35rem 0 .5rem; }
 </style>
 </head>
@@ -15,13 +16,13 @@
   <p><a href="index.html">&larr; All SudokuPad scripts</a></p>
   <h1>Pen Tool Extras</h1>
   <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad.</p>
-  <p>Adds to <a href="https://sudokupad.app">SudokuPad</a>'s pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.</p>
+  <p>Adds to <a href="https://sudokupad.app">SudokuPad</a>'s pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.</p>
   <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install Pen Tool Extras</a></p>
 
   <h2>What it adds</h2>
   <ul>
-    <li><strong>Pen colors from your cell colors.</strong> Darker versions of one cell color page, kept until you pick another in the settings.
-      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-bullet-colors.png" alt="A row of three cell color buttons, pink, yellow and light blue, above a row of three pen color buttons, red, olive and blue, each a darker version of the cell color above it" width="661" height="390">
+    <li><strong>Customizable pen colors.</strong> Hold a pen color button, or pick a preset in the settings.
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-bullet-colors.png" alt="The Pen colors section of the Pen Tool Extras settings: a preset pulldown reading Darker page 1, over nine color boxes, one for each pen color" width="432" height="630">
     </li>
     <li><strong>Dashed lines and arrow lines.</strong> Two more pages of pens.
       <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-bullet-lines.png" alt="A blue dashed line and an orange arrow line drawn on a sudoku grid, beside the line type button" width="930" height="721">
@@ -37,17 +38,7 @@
   </ul>
 
   <h2>The pen panel</h2>
-  <ul>
-    <li><strong>Pen color buttons.</strong> Hold one to change its color.</li>
-    <li><strong>Line type button.</strong> Switches between the solid, dashed and arrow pens.</li>
-    <li><strong>Line mode button.</strong> Steps SudokuPad's line mode: Center &amp; Edge, Center only, Edge only.</li>
-    <li><strong>Settings button.</strong> Opens the Pen Tool Extras settings.
-      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-bullet-settings.png" alt="The pen panel's tray: three buttons, line mode, line type and a settings gear, over the Thickness and Opacity sliders" width="675" height="420">
-    </li>
-    <li><strong>Thickness and Opacity sliders.</strong> Across the bottom of the panel, for thicker or fainter lines.
-      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-bullet-sliders.png" alt="The pen panel's Thickness and Opacity sliders above a thick blue line with a white outline crossing yellow cells" width="721" height="486">
-    </li>
-  </ul>
+  <img class="panel" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras-panel-annotated.png" alt="The pen panel with each part labelled. Pen color buttons: hold one to change its color. Line mode button: steps Center &amp; Edge, Center only, Edge only. Line type button: switches the solid, dashed and arrow pens. Settings button: opens the settings. Thickness and Opacity sliders: make lines thicker or fainter." width="825" height="304">
 
   <h2>Good to know</h2>
   <ul>

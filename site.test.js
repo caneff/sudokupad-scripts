@@ -98,7 +98,7 @@ for (const [name, text] of Object.entries(WARNINGS)) {
   })
 }
 
-// The details page text is pinned word for word: "What it adds" says what you can do, and "The pen panel" names each control.
+// The details page text is pinned word for word: "What it adds" says what you can do.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
 const section = (page, heading) => {
   const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
@@ -112,12 +112,12 @@ const leadIns = page => items(page).map(leadIn).filter(Boolean)
 test(`${DETAILS} intro says what the script adds`, () => {
   const m = read(DETAILS).match(/<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>'s pen tool[\s\S]*?)<\/p>/)
   assert.ok(m, `site/${DETAILS} has no intro paragraph starting "Adds to SudokuPad's pen tool", with SudokuPad linked`)
-  assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
+  assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
 test(`${DETAILS} lists what the script adds to drawing, one item per feature`, () => {
   assert.deepEqual(section(read(DETAILS), 'What it adds'), [
-    'Pen colors from your cell colors. Darker versions of one cell color page, kept until you pick another in the settings.',
+    'Customizable pen colors. Hold a pen color button, or pick a preset in the settings.',
     'Dashed lines and arrow lines. Two more pages of pens.',
     'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
     'Marks on grid corners. Click near a corner for an X or a circle.',
@@ -126,41 +126,24 @@ test(`${DETAILS} lists what the script adds to drawing, one item per feature`, (
   ])
 })
 
-test(`${DETAILS} lists every pen panel button and slider in The pen panel`, () => {
-  assert.deepEqual(section(read(DETAILS), 'The pen panel'), [
-    'Pen color buttons. Hold one to change its color.',
-    'Line type button. Switches between the solid, dashed and arrow pens.',
-    'Line mode button. Steps SudokuPad\'s line mode: Center &amp; Edge, Center only, Edge only.',
-    'Settings button. Opens the Pen Tool Extras settings.',
-    'Thickness and Opacity sliders. Across the bottom of the panel, for thicker or fainter lines.'
-  ])
-})
-
 test(`${DETAILS} opens each item with its bold lead-in`, () => {
   assert.deepEqual(leadIns(read(DETAILS)), [
-    'Pen colors from your cell colors.',
+    'Customizable pen colors.',
     'Dashed lines and arrow lines.',
     'Marks on cell edges.',
     'Marks on grid corners.',
     'Erase a whole line.',
-    'White outlines.',
-    'Pen color buttons.',
-    'Line type button.',
-    'Line mode button.',
-    'Settings button.',
-    'Thickness and Opacity sliders.'
+    'White outlines.'
   ])
 })
 
 // The items listed here have one picture inside them; every other item has none (a middle click, for one, does not
-// show in a still picture). The page has no figure.
+// show in a still picture). The pen panel section has its own one picture, tested below. The page has no figure.
 const PICTURES = {
-  'Pen colors from your cell colors.': 'colors',
+  'Customizable pen colors.': 'colors',
   'Dashed lines and arrow lines.': 'lines',
   'Marks on cell edges.': 'edges',
-  'Marks on grid corners.': 'corners',
-  'Settings button.': 'settings',
-  'Thickness and Opacity sliders.': 'sliders'
+  'Marks on grid corners.': 'corners'
 }
 const NO_PICTURE = 'Erase a whole line.'
 const imgs = html => [...html.matchAll(/<img\b[^>]*>/g)].map(m => m[0])
@@ -181,7 +164,7 @@ test(`${DETAILS} has no picture on the erase item and no large example figure`, 
   assert.ok(erase, `site/${DETAILS} has no "${NO_PICTURE}" item`)
   assert.deepEqual(imgs(erase), [])
   assert.doesNotMatch(page, /<figure\b/)
-  assert.equal(imgs(page).length, Object.keys(PICTURES).length)
+  assert.equal(imgs(page).length, Object.keys(PICTURES).length + 1)
 })
 
 test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
@@ -192,6 +175,7 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
   const m = read(HOME).match(/<h2>Pen Tool Extras<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Pen Tool Extras description`)
   assert.doesNotMatch(m[1], /slider/i)
+  assert.match(m[1], /^Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners\.$/)
 })
 
 test('netlify.toml publishes only site/', () => {
@@ -202,4 +186,17 @@ test('netlify.toml publishes only site/', () => {
 test('the Pages workflow publishes only site/', () => {
   const workflow = fs.readFileSync(path.join(__dirname, '.github', 'workflows', 'pages.yml'), 'utf8')
   assert.match(workflow, /uses:\s*actions\/upload-pages-artifact@\S+\s+with:\s+path:\s*['"]?site\/?['"]?\s*$/m)
+})
+
+test(`${DETAILS} shows the pen panel as one annotated picture whose alt text names every label`, () => {
+  const m = read(DETAILS).match(/<h2>The pen panel<\/h2>([\s\S]*?)<h2>/)
+  assert.ok(m, `site/${DETAILS} has no <h2>The pen panel</h2>`)
+  assert.doesNotMatch(m[1], /<li\b/, 'the pen panel section is still a list')
+  const found = imgs(m[1])
+  assert.equal(found.length, 1, 'the pen panel section is not one picture')
+  assert.match(found[0], /pen-tool-extras-panel-annotated\.png/)
+  const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
+  for (const label of ['Pen color buttons', 'Line mode button', 'Line type button', 'Settings button', 'Thickness and Opacity sliders']) {
+    assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
+  }
 })

@@ -1530,7 +1530,7 @@ const HEADER = fs.readFileSync(path.join(__dirname, 'pen-tool-extras.user.js'), 
 const headerField = (name) => (new RegExp(`^// @${name}\\s+(.+)$`, 'm').exec(HEADER) || [])[1]
 
 test('the header describes the script in Chris\'s approved intro and links its details page', () => {
-  assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: pen colors that match your cell colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
+  assert.equal(headerField('description'), 'Adds to SudokuPad\'s pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad\'s settings first.')
   assert.equal(headerField('homepageURL'), 'https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html')
 })
 
