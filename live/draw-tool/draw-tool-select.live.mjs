@@ -1,7 +1,7 @@
 // Live check of draw-tool.user.js's selection on sudokupad.app: a click selects a note and a double-click edits it, a drag on empty space selects every
 // note its rectangle touches, Shift+click adds or removes one, a click on empty space or Escape ends the selection, the panel's colors, size slider and
-// Background change only the selected notes, a drag on a selected note moves them all, and Trash and Delete delete only the selection. Real mouse and
-// keyboard input throughout, at a desktop size.
+// Background change only the selected notes, a drag on a selected note moves them all and keeps every one reachable, a right-click erase or leaving the
+// tool keeps the selection right, and Clear all, Delete and Backspace delete only the selection. Real mouse and keyboard input throughout, at a desktop size.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -10,9 +10,9 @@ import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag, setInputValue } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, DIALOG, KEYPAD, SIZE_SLIDER, TEXT_BOX, WIDTH_KEY } = draw
+const { BACKGROUND_BUTTON, CLEAR_BUTTON, COLOR_KEY, DIALOG, DIGIT_BUTTON, KEYPAD, SIZE_SLIDER, TEXT_BOX, TEXTS, WIDTH_KEY } = draw
 const SELECTED = '#draw-tool-layer .draw-tool-selected'
-const MARQUEE = '#draw-tool-layer .draw-tool-marquee'
+const RECTANGLE = '#draw-tool-layer .draw-tool-selection-rectangle'
 // In cells from the grid's top left: three notes the rectangle from CORNER to FAR_CORNER covers, a fourth outside it, and empty space.
 const NOTES = { A: [1.5, 1.5], B: [1.5, 3.5], C: [3.5, 2.5], D: [7.5, 7.5] }
 const CORNER = [0.6, 0.6]
@@ -78,9 +78,9 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     await p.mouse.dblclick(...await gridPoint(p, NOTES.B))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'B', 'the double-click opened the note')
-    assert.deepEqual(await selectedTexts(), [], 'opening a note ends the selection')
     await p.keyboard.press('Escape')
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
+    assert.deepEqual(await selectedTexts(), [], 'opening the note ended the selection its first click made')
   })
 
   it('a click on empty space with a selection only ends it, and starts no note; Escape ends it too', async () => {
@@ -94,18 +94,25 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     assert.deepEqual(await draw.texts(p), ['A', 'B', 'C', 'D'])
   })
 
-  it('a drag on empty space draws a rectangle and selects every note it touches, and Shift+click removes one and adds it back', async () => {
+  it('a drag on empty space draws a rectangle and selects every note it touches, Shift+click removes one and adds it back, and Shift+drag adds more', async () => {
     await p.mouse.move(...await gridPoint(p, CORNER))
     await p.mouse.down()
     await p.mouse.move(...await gridPoint(p, FAR_CORNER), { steps: 8 })
-    assert.equal(await p.locator(MARQUEE).count(), 1, 'the rectangle shows during the drag')
+    assert.equal(await p.locator(RECTANGLE).count(), 1, 'the rectangle shows during the drag')
     await p.mouse.up()
-    assert.equal(await p.locator(MARQUEE).count(), 0, 'the rectangle goes on the release')
+    assert.equal(await p.locator(RECTANGLE).count(), 0, 'the rectangle goes on the release')
     assert.deepEqual(await selectedTexts(), ['A', 'B', 'C'])
     await shiftClickAt(NOTES.B)
     assert.deepEqual(await selectedTexts(), ['A', 'C'])
     await shiftClickAt(NOTES.B)
     assert.deepEqual(await selectedTexts(), ['A', 'B', 'C'])
+    await p.keyboard.down('Shift')
+    try {
+      await mouseDrag(p, [[6.6, 6.6], [8.4, 8.4]])
+    } finally {
+      await p.keyboard.up('Shift')
+    }
+    assert.deepEqual(await selectedTexts(), ['A', 'B', 'C', 'D'])
     await p.keyboard.press('Escape')
   })
 
@@ -122,7 +129,7 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     assert.equal((await savedNote('E')).color, nextColor ?? 1)
   })
 
-  it('the size slider and Background change only the selected notes, and a mixed selection shows no color and no background state', async () => {
+  it('the size slider and Background change only the selected notes, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
     const nextWidth = await p.evaluate((key) => Framework.getData(key), WIDTH_KEY)
     await selectThree()
     await setInputValue(p.locator(SIZE_SLIDER), 10)
@@ -135,7 +142,11 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     await shiftClickAt(NOTES.D)
     assert.deepEqual(await selectedTexts(), ['A', 'B', 'C', 'D'])
     assert.equal(await backgroundPressed(), 'mixed')
+    assert.equal(await p.locator(BACKGROUND_BUTTON).evaluate((b) => window.getComputedStyle(b).outlineStyle), 'dashed', 'the mixed state has a look of its own')
     assert.equal(await markedColor(), null)
+    await p.click(BACKGROUND_BUTTON)
+    assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => Boolean((await savedNote(t)).bg))), [true, true, true, true])
+    assert.equal(await backgroundPressed(), 'true')
     await p.keyboard.press('Escape')
     assert.equal(await backgroundPressed(), 'false', 'with nothing selected the button shows the next-note setting')
   })
@@ -165,7 +176,7 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     assert.equal(Math.abs(after[0] - (before[0] - CELL)) <= NEAR_UNITS, true, `D moved from ${before} to ${after}`)
   })
 
-  it('Delete deletes only the selected notes, and Trash with a selection deletes only it, with no question', async () => {
+  it('Delete deletes only the selected notes, and Clear all with a selection deletes only it, with no question', async () => {
     await reload()
     const texts = () => draw.texts(p)
     await clickAt([NOTES.D[0], NOTES.D[1] - 1])
@@ -181,12 +192,46 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     assert.deepEqual((await saved()).map((item) => item.text), ['E'])
   })
 
-  it('Trash with nothing selected asks to clear every note', async () => {
+  it('Clear all with nothing selected asks to clear every note', async () => {
     assert.equal(await p.locator(CLEAR_BUTTON).getAttribute('aria-label'), 'Clear all')
     await p.click(CLEAR_BUTTON)
     await p.locator(DIALOG).waitFor({ state: 'visible' })
-    assert.equal(await p.locator(DIALOG).textContent().then((t) => t.includes('Clear all notes?')), true)
-    await p.evaluate(() => Framework.closeDialog())
+    assert.match(await p.locator(DIALOG).textContent(), /Clear all notes\?/)
+    // SudokuPad's dialog ignores a close until showDialog has cleared window.dialogJustShown.
+    await p.waitForFunction(() => !window.dialogJustShown)
+    await p.click(`${DIALOG} button:text-is("Cancel")`)
+    await p.locator(DIALOG).waitFor({ state: 'detached' })
+    assert.deepEqual(await draw.texts(p), ['E'], 'Cancel kept the note')
+  })
+
+  it('a right-click erase keeps the rest selected, a group move keeps every note in the window, leaving the tool ends the selection, and Backspace deletes it', async () => {
+    const [F, G] = [[EMPTY[0], 4.5], [EMPTY[0], 6.5]]
+    await typeText(F, 'F')
+    await typeText(G, 'G')
+    await clickAt(EMPTY)
+    await shiftClickAt(F)
+    await shiftClickAt(G)
+    assert.deepEqual(await selectedTexts(), ['E', 'F', 'G'])
+    await clickAt(F, { button: 'right' })
+    assert.deepEqual(await selectedTexts(), ['E', 'G'])
+    await p.click(`${KEYPAD} button[data-key="2"]`)
+    assert.deepEqual(await Promise.all(['E', 'G'].map(async (t) => (await savedNote(t)).color)), [2, 2])
+    // G is dragged to the window's left edge; E, five cells to its left, would go off the window.
+    const [, y] = await gridPoint(p, G)
+    await p.mouse.move(...await gridPoint(p, G))
+    await p.mouse.down()
+    await p.mouse.move(20, y, { steps: 10 })
+    await p.mouse.up()
+    const middles = await p.evaluate((selector) => [...document.querySelectorAll(selector)].map((e) => { const r = e.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] }), TEXTS)
+    for (const [x, my] of middles) assert.equal(x >= 0 && my >= 0 && x <= 1200 && my <= 900, true, `a note's middle is at ${x}, ${my}`)
+    assert.deepEqual(await selectedTexts(), ['E', 'G'])
+    await p.click(DIGIT_BUTTON)
+    await draw.pickDraw(p)
+    assert.deepEqual(await selectedTexts(), [], 'leaving the tool ended the selection')
+    await p.mouse.click(...middles[0])
+    assert.equal(await selectedTexts().then((t) => t.length), 1)
+    await p.keyboard.press('Backspace')
+    assert.equal(await draw.texts(p).then((t) => t.length), 1, 'Backspace deleted the selected note')
   })
 
   it('the page shows no error', () => {

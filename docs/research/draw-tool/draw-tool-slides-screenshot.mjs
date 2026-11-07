@@ -26,6 +26,7 @@ const ORANGE = 3
 const RED = 4
 const BLUE = 6
 const NOTES = '#draw-tool-layer .draw-tool-text'
+const DRAWING_PREFIX = 'DrawTool_drawing_'
 
 // A red ring round the point (x, y), where a press lands.
 const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d]) => {
@@ -33,6 +34,16 @@ const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d]) => {
   ring.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:${d}px;height:${d}px;margin:${-d / 2}px 0 0 ${-d / 2}px;box-sizing:border-box;border-radius:50%;border:3px solid #d32f2f;pointer-events:none;z-index:99998`
   document.body.appendChild(ring)
 }, [x, y, size])
+
+// A gray dashed box over the page box `{ x, y, width, height }`: where a note was, or where a drag went.
+const addDashedBox = (p, box) => p.evaluate(({ x, y, width, height }) => {
+  const el = document.createElement('div')
+  el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${width}px;height:${height}px;box-sizing:border-box;border:2px dashed #666;pointer-events:none;z-index:99998`
+  document.body.appendChild(el)
+}, box)
+
+// The notes Text Annotation saved for the puzzle on the page.
+const storedNotes = (p) => p.evaluate((prefix) => Framework.getData(prefix + (Framework.app.puzzle.puzzleId || window.location.href)), DRAWING_PREFIX)
 
 const browser = await chromium.launch()
 
@@ -138,13 +149,9 @@ async function scene () {
   await s.p.mouse.up()
   const moved = await text.boundingBox()
   if ((await text.count()) !== 1 || Math.abs(moved.x - placed.x) < 10) throw new Error('the drag did not leave one moved note')
-  const stored = await s.p.evaluate(() => Framework.getData(`DrawTool_drawing_${Framework.app.puzzle.puzzleId || window.location.href}`))
+  const stored = await storedNotes(s.p)
   if (!stored[0].fixed) throw new Error(`the note was not stored off the board: ${JSON.stringify(stored)}`)
-  await s.p.evaluate(({ x, y, width, height }) => {
-    const old = document.createElement('div')
-    old.style.cssText = `position:fixed;left:${x - 6}px;top:${y - 4}px;width:${width + 12}px;height:${height + 8}px;box-sizing:border-box;border:2px dashed #666;pointer-events:none;z-index:99998`
-    document.body.appendChild(old)
-  }, placed)
+  await addDashedBox(s.p, { x: placed.x - 6, y: placed.y - 4, width: placed.width + 12, height: placed.height + 8 })
   await addRing(s.p, s.at(TO), 80)
   await s.p.mouse.move(0, 0)
   await s.shoot('5-move')
@@ -165,14 +172,10 @@ async function scene () {
   await s.p.mouse.up()
   if ((await s.p.locator('#draw-tool-layer .draw-tool-selected').count()) !== 3) throw new Error('the drag did not select the three notes')
   await s.p.click(`.controls-input button[data-key="${BLUE}"]`)
-  const stored = await s.p.evaluate(() => Framework.getData(`DrawTool_drawing_${Framework.app.puzzle.puzzleId || window.location.href}`))
+  const stored = await storedNotes(s.p)
   if (!stored.every((item) => item.color === BLUE)) throw new Error(`the notes were not recolored: ${JSON.stringify(stored)}`)
   const [[x1, y1], [x2, y2]] = [s.at(FROM), s.at(TO)]
-  await s.p.evaluate(([left, top, width, height]) => {
-    const box = document.createElement('div')
-    box.style.cssText = `position:fixed;left:${left}px;top:${top}px;width:${width}px;height:${height}px;box-sizing:border-box;border:2px dashed #666;pointer-events:none;z-index:99998`
-    document.body.appendChild(box)
-  }, [x1, y1, x2 - x1, y2 - y1])
+  await addDashedBox(s.p, { x: x1, y: y1, width: x2 - x1, height: y2 - y1 })
   await s.p.mouse.move(0, 0)
   await s.shoot('6-select')
 }
