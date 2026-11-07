@@ -342,7 +342,7 @@ const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === l
 
 test(`${CBD}'s Kept in step item is an animation whose alt text describes its three steps`, () => {
   const img = itemImg(CBD, 'Kept in step as you solve.')
-  assert.match(img, /src="[^"]*color-by-digit-details-cell\.gif"/)
+  assert.match(img, /src="[^"]*color-by-digit-details-cell\.gif(\?v=[0-9a-f]{7})?"/)
   const alt = altOf(img)
   assert.match(alt, /^An animation/)
   assert.match(alt, /\btwo\b[^.]*\bboxes\b/i)
@@ -353,7 +353,7 @@ test(`${CBD}'s Kept in step item is an animation whose alt text describes its th
 
 test(`${CBD}'s profile menu item is an animation whose alt text describes the menu opening and Odd/Even picked`, () => {
   const img = itemImg(CBD, 'The profile menu.')
-  assert.match(img, /src="[^"]*color-by-digit-details-menu\.gif"/)
+  assert.match(img, /src="[^"]*color-by-digit-details-menu\.gif(\?v=[0-9a-f]{7})?"/)
   const alt = altOf(img)
   assert.match(alt, /^An animation/)
   assert.match(alt, /arrow box/i)
@@ -381,7 +381,7 @@ test(`${DETAILS} opens with a tour animation between the install link and What i
   assert.ok(m, `site/${DETAILS} has no section between the install link and "What it adds"`)
   const found = imgs(m[1])
   assert.equal(found.length, 1, 'the tour is not one picture')
-  assert.match(found[0], /src="[^"]*pen-tool-extras-tour\.gif"/)
+  assert.match(found[0], /src="[^"]*pen-tool-extras-tour\.gif(\?v=[0-9a-f]{7})?"/)
   const alt = altOf(found[0])
   assert.match(alt, /^An animation/)
   const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /edge marks?/i, /grid.corner mark/i, /middle.click/i, /erase/i]
