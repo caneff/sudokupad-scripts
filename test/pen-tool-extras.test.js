@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const {
   buildCss, SUDOKUPAD_PEN_COLORS, editedColors,
-  readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, renderTitle,
+  readPenColors, storedPenColors, startupPenColors, PRESET_LABELS,
   buildThicknessCss, buildOpacityCss, renderPanelSliders, renderLineModeButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, markGrowthScale, MARK_VALUES, DASH, OPACITY, THICKNESS, FULL_WIDTH_VALUES, VERSION, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH,
   copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
@@ -1079,13 +1079,6 @@ test('the editor is a two by two grid: Pen colors | Line settings and Line style
   assert.equal((html.match(/<div class="pen-tool-extras-divider"><\/div>/g) || []).length, 1)
   assert.match(cells[1], /Opacity[\s\S]*pen-tool-extras-divider[\s\S]*>Line styles</)
   assert.match(DIALOG_CSS, /@media \(max-width: \d+px\) \{[^@]*grid-template-columns: minmax\(0, 1fr\)/, 'one column on a narrow screen')
-})
-
-test('the title row holds the name and version, the status message, then a Copy settings icon button and a Paste settings icon button, each with a hover title and label', () => {
-  const html = renderTitle('1.2.3')
-  assert.match(html, /^<div class="pen-tool-extras-title-row"><span><b>Pen Tool Extras<\/b> <small class="pen-tool-extras-version">v1\.2\.3<\/small><\/span><span data-role="settings-status"><\/span><span class="pen-tool-extras-tools"><button type="button" data-act="copy-settings" title="Copy settings" aria-label="Copy settings"><svg[^>]*>[\s\S]*<\/svg><\/button><button type="button" data-act="paste-settings" title="Paste settings" aria-label="Paste settings"><svg/)
-  assert.doesNotMatch(html.replace(/<svg[\s\S]*?<\/svg>/g, ''), />(Copy|Paste) settings</, 'icons, not words')
-  assert.match(DIALOG_CSS, /\[data-role="settings-status"\] \{[^}]*flex: 1 1 0;[^}]*min-width: 0;[^}]*contain: inline-size;/, 'the status wraps in the room the title leaves and sets no width')
 })
 
 test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin, and the dialog is not centred over the board', () => {
