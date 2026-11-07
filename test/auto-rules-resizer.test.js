@@ -448,7 +448,7 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
   assert.deepEqual(readPaste(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })
 
-test('the corners and the font bar show on hover through CSS: no pointerover or pointerout listener is left', () => {
+test('the script has no pointerover or pointerout listener', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
   assert.doesNotMatch(source, /pointerover|pointerout/)
 })
