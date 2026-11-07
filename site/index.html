@@ -12,6 +12,8 @@
   }
   .entries { display: grid; grid-template-columns: 1fr; gap: 1px; margin: 1.5rem 0; background: var(--rule); border-block: 1px solid var(--rule); }
   section { display: flow-root; padding: 1.25rem 1rem 1rem 0; background: Canvas; }
+  /* The Install button clears the picture, so it sits at the entry's left edge whatever the picture or text height. */
+  section p:has(.install) { clear: both; padding-top: .5rem; }
   section img { float: left; max-width: 50%; height: auto; margin: 0 1.25rem .5rem 0; }
   @media (min-width: 52rem) {
     .entries { grid-template-columns: 1fr 1fr; }
@@ -49,8 +51,7 @@
     <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/site-pen-tool-extras.png" alt="Solid, dashed and arrow pen lines in several colors, with edge marks and both corner marks" width="253" height="218">
     <div>
       <h2>Pen Tool Extras</h2>
-      <p>Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners.</p>
-      <p><a href="pen-tool-extras.html">Details</a></p>
+      <p>Makes SudokuPad's pen tool more useful: customizable pen colors, dashed lines and lines with arrows, and marks you can put on cell edges and grid corners. <a href="pen-tool-extras.html">Details</a></p>
       <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/pen-tool-extras.user.js">Install Pen Tool Extras</a></p>
     </div>
   </section>
