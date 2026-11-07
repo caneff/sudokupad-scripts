@@ -1,11 +1,11 @@
-// The example Color by Digit's site pictures share: a custom puzzle of one given and nothing else (SudokuPad's own compact
+// The example Color by Digit's site pictures share: a custom puzzle of one given, a 2, and nothing else (SudokuPad's own compact
 // classic format, loaded after Start Puzzle), with the first two boxes (3 rows x 6 columns) filled with the entries below,
 // on a demo profile with no blue, because SudokuPad's own digits and marks are blue: Entropic's grouping (0-3, 4-6, 7-9) in red, green
 // and yellow from the palette's first page. It is saved by this script, not a preload of Color by Digit. The picture is the live page's grid cropped to those two boxes: the crop
 // is cut at the grid lines, so no part of a third box shows.
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../live/page.mjs'
-import { modeLabel, savedProfiles } from '../../live/color-by-digit-fixtures.mjs'
+import { MODE_STORAGE_KEY, modeLabel, savedProfiles } from '../../live/color-by-digit-fixtures.mjs'
 
 // The pixel density every picture is taken at.
 export const DEVICE_SCALE = 2
@@ -24,28 +24,31 @@ const PROFILES = {
   active: 0
 }
 const SAVED = savedProfiles(PROFILES)
+// The saved settings of the picture with different groupings: Both mode, the cells on the demo profile (active 0) and the digits on Modular (digitActive 1).
+const SPLIT_SAVED = { ...savedProfiles({ ...PROFILES, digitActive: 1 }), [MODE_STORAGE_KEY]: 'both' }
 
-// [row, column, digits], 0-based. The given 5 is at (0, 0).
+// [row, column, digits], 0-based. The given 2 is at (0, 0): in the demo profile's red group, so the circles sit behind red marks.
 // Big digits: Color by Digit circles only marks, so none has a circle.
 const DIGITS = [[0, 2, '3'], [0, 5, '8'], [1, 0, '9'], [1, 2, '1'], [1, 5, '6'], [2, 1, '6'], [2, 3, '3']]
-// SudokuPad flags a mark that repeats a given in its row or column: the corner 5s at (0, 4) and (2, 0) and the center 5 at (0, 1) all
-// conflict with the given 5. A corner mark colors nothing in Cell.
+// SudokuPad flags a mark that repeats a given in its row or column: the corner 2s at (0, 4) and (2, 0) and the center 2 at (0, 1) all
+// conflict with the given 2. A corner mark colors nothing in Cell.
 const CORNER = [[0, 3, '19'], [0, 4, '25'], [1, 4, '27'], [2, 0, '25'], [2, 5, '19']]
-// (0, 1) is the 4-6 group alone, (1, 1) all 7-9 and (1, 3) all 0-3, so each takes a group's color; (2, 2) mixes groups and stays white.
-const CENTRE = [[0, 1, '5'], [1, 1, '78'], [1, 3, '2'], [2, 2, '47']]
+// (0, 1) is the 0-3 group alone, (1, 1) all 7-9 and (1, 3) all 0-3, so each takes a group's color; (2, 2) mixes groups and stays white.
+const CENTRE = [[0, 1, '2'], [1, 1, '78'], [1, 3, '2'], [2, 2, '47']]
 const CONFLICTS = 3
 const ROWS = 3
 const COLS = 6
 
 // Opens the live page, at `DEVICE_SCALE`, on the example puzzle with Color by Digit installed in Cell mode on the demo profile, the entries in, the mascot hidden.
 // `leave` is a list of [row, column] cells whose entries are left out, for a picture that fills them in itself.
-export async function openExample (browser, { leave = [] } = {}) {
+// `split` starts from saved settings that give the digits another profile than the cells, in Both mode, instead of Cell mode on the demo profile.
+export async function openExample (browser, { leave = [], split = false } = {}) {
   const { p } = await openPage(browser, {
     contextOptions: { deviceScaleFactor: DEVICE_SCALE },
-    seed: (page) => page.addInitScript((saved) => Object.entries(saved).forEach(([key, value]) => window.localStorage.setItem(key, JSON.stringify(value))), SAVED)
+    seed: (page) => page.addInitScript((saved) => Object.entries(saved).forEach(([key, value]) => window.localStorage.setItem(key, JSON.stringify(value))), split ? SPLIT_SAVED : SAVED)
   })
   await startPuzzle(p)
-  await p.evaluate(() => Framework.app.loadCompactClassicSudoku('5' + '0'.repeat(80)))
+  await p.evaluate(() => Framework.app.loadCompactClassicSudoku('2' + '0'.repeat(80)))
   await p.waitForFunction(() => Framework.app.grid.getCell(0, 0).given)
   await p.addStyleTag({ content: '#svenpeek { display: none !important }' })
   await p.addScriptTag({ content: script })

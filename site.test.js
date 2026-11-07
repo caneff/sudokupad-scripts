@@ -228,7 +228,7 @@ test(`${HOME}'s Draw Tool row is a slideshow of eight slides, each a tagged pict
 })
 
 test(`${HOME}'s other rows show one picture and no pager`, () => {
-  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Draw Tool</h2>') && !r.includes('<h2>Pen Tool Extras</h2>'))) {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Draw Tool</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
     assert.equal(imgs(row).length, 1)
     assert.doesNotMatch(row, /slide-caption|slideshow/)
   }
@@ -346,17 +346,14 @@ const shared = ({ page, script, name, summary, intro, leadIns: leads, pictures, 
 
 // Color by Digit's entry and details page.
 const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.'
-const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Digit: Same as cell.', 'Digit: None.']
+const CBD_LEAD_INS = ['Four modes', 'Kept in step as you solve', 'Digit and mark shades', 'Profiles', 'The profile menu', 'Cells and digits apart']
 // The lead-ins that carry one picture, and the picture each shows.
-const CBD_PICTURES = {
-  'Digit and mark shades.': 'color-by-digit-details-digit'
-}
+const CBD_PICTURES = {}
 
-test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside a picture of colored digits`, () => {
-  const m = read(HOME).match(/<img ([^>]*)>\s*<\/div>\s*<\/div>\s*<div class="row-text">\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${HOME} has no Color by Digit entry with a picture`)
-  assert.equal(m[2], CBD_SUMMARY)
-  assert.match(altOf(m[1]), /digits/i)
+test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside its slideshow`, () => {
+  const m = read(HOME).match(/<\/div>\s*<div class="row-text">\s*<h2>Color by Digit<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Color by Digit entry`)
+  assert.equal(m[1], CBD_SUMMARY)
 })
 
 // A picture's pixel size, from its file's header: a PNG's IHDR or a GIF's logical screen.
@@ -375,61 +372,55 @@ const assertDeclaredAtFileShape = (img, file, what) => {
   return [fileW, fileH]
 }
 
-// The homepage and Digit pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall.
-test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall, at their files' shape`, () => {
-  const examples = [
-    ['homepage picture', imgs(read(HOME)).find(t => t.includes('site-color-by-digit.png'))],
-    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))]
-  ]
-  for (const [what, img] of examples) {
-    assert.ok(img, `no ${what}`)
-    const file = (img.match(/src="[^"]*?(docs\/research\/[^"?]+)(?:\?v=[0-9a-f]{7})?"/) || [])[1]
-    const [fileW, fileH] = assertDeclaredAtFileShape(img, file, what)
-    if (what.endsWith('picture')) {
-      assert.match(img, /alt="[^"]*\btwo\b[^"]*\bboxes\b/i, `${what}'s alt text does not say two boxes`)
-      assert.ok(Math.abs(fileW - 2 * fileH) <= 2, `${what}'s file is ${fileW} by ${fileH}, not twice as wide as tall`)
-    }
-  }
-})
-
-const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === lead) || '')[0] || ''
-
-test(`${CBD}'s Four modes item is one sentence, and it and the Kept in step and profile menu items have no picture of their own`, () => {
-  const four = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
-  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off. The button\'s chips, a short run of board cells, are drawn the way the mode colors the board: filled cells, shaded digits, both, or plain white.')
-  for (const lead of ['Four modes.', 'Kept in step as you solve.', 'The profile menu.']) assert.equal(itemImg(CBD, lead), '', `"${lead}" has a picture`)
-})
-
-test(`${CBD} opens with a tour animation between the install link and What it adds, whose alt text lists the steps in order`, () => {
-  const m = read(CBD).match(/<p><a class="install"[^>]*>[^<]*<\/a><\/p>([\s\S]*?)<h2>What it adds<\/h2>/)
-  assert.ok(m, `site/${CBD} has no section between the install link and "What it adds"`)
-  const found = imgs(m[1])
-  assert.equal(found.length, 1, 'the tour is not one picture')
-  assert.match(found[0], /src="[^"]*color-by-digit-details-tour\.gif(\?v=[0-9a-f]{7})?"/)
-  const alt = altOf(found[0])
-  assert.match(alt, /^An animation/)
-  const steps = [/digit, 1, is typed/i, /center marks 7 and 9/i, /center mark 2 from another group/i, /Digit, Both, Off and Cell/, /profile menu opens/i, /Modular is picked/i, /recolor/i]
-  let at = 0
-  for (const step of steps) {
-    const found = alt.slice(at).search(step)
-    assert.ok(found >= 0, `the alt text does not mention ${step} after position ${at}`)
-    at += found
-  }
-  assertDeclaredAtFileShape(found[0], 'docs/research/color-by-digit-details-tour.gif', 'the tour')
-})
-
-// A GIF the site links stays small enough to load on a phone: the budget each animation was given.
-const GIF_BUDGETS = [
-  [CBD, 'color-by-digit-details-tour.gif', 1000]
+// Color by Digit's ten slides: the picture file's name, its caption.
+const CBD_SLIDES = [
+  ['1-start', 'Start'], ['2-type', 'Type a 1'], ['3-marks', 'Center marks 7 and 9'], ['4-add', 'Add a center mark 2'], ['5-digit', 'Digit'], ['6-both', 'Both'],
+  ['7-off', 'Off'], ['8-menu', 'Open the profile menu'], ['9-modular', 'Pick Modular'], ['10-split', 'Cells from one profile, digits from another']
 ]
-for (const [page, gif, kb] of GIF_BUDGETS) {
-  test(`site/${page}'s ${gif} is under ${kb} KB and loops`, () => {
-    assert.ok(read(page).includes(`${RAW}docs/research/${gif}`), `site/${page} does not show ${gif}`)
-    const bytes = fs.readFileSync(path.join(__dirname, 'docs', 'research', gif))
-    assert.ok(bytes.length < kb * 1000, `${gif} is ${bytes.length} bytes, over ${kb} KB`)
-    assert.ok(bytes.includes('NETSCAPE2.0'), `${gif} has no loop extension`)
+
+test(`${HOME}'s Color by Digit row is a slideshow of ten slides, each a tagged picture with a caption, the first showing without script, ending on the two profiles`, () => {
+  const [show] = slideshows(rowsOf(read(HOME)).find(r => r.includes('<h2>Color by Digit</h2>')))
+  const pictures = imgs(show)
+  const captions = [...show.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)]
+  assert.deepEqual(captions.map(m => m[2]), CBD_SLIDES.map(([, caption]) => caption))
+  assert.equal(pictures.length, CBD_SLIDES.length)
+  pictures.forEach((img, i) => {
+    assert.match(img, i === 0 ? /class="slide current"/ : /class="slide"/)
+    assert.match(img, new RegExp(`src="${RAW.replace(/\./g, '\\.')}docs/research/color-by-digit-slide-${CBD_SLIDES[i][0]}\\.png\\?v=[0-9a-f]{7}"`))
+    assert.match(img, /\balt="[^"]*[^"\s][^"]*"/)
+    assertDeclaredAtFileShape(img, `docs/research/color-by-digit-slide-${CBD_SLIDES[i][0]}.png`, `slide ${i + 1}`)
   })
-}
+  assert.deepEqual(captions.map(m => Boolean(m[1])), CBD_SLIDES.map((_, i) => i === 0))
+})
+
+test(`${CBD} opens with the homepage's Color by Digit slideshow between the install link and "What it adds", and sits in the details layout`, () => {
+  const page = read(CBD)
+  const at = marker => { const i = page.indexOf(marker); assert.notEqual(i, -1, `site/${CBD} lacks ${marker}`); return i }
+  const order = [at('<p class="lede">'), at('class="install"'), at('<div class="slideshow">'), at('<h2>What it adds</h2>'), at('<h2>The settings dialog</h2>'), at('<ol class="steps">'), at('<h2>Good to know</h2>')]
+  assert.deepEqual(order, [...order].sort((a, b) => a - b))
+  assert.match(page, /<script src="slides\.js"><\/script>/)
+  const [onHome] = slideshows(rowsOf(read(HOME)).find(r => r.includes('<h2>Color by Digit</h2>')))
+  const [onPage] = slideshows(page.replace('</footer>', '</section>').replace(/<h2>What it adds<\/h2>/, '</section>$&'))
+  assert.equal(imgs(onPage).length, CBD_SLIDES.length)
+  assert.deepEqual(imgs(onPage), imgs(onHome))
+  const captions = html => [...html.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)].map(m => m[0])
+  assert.deepEqual(captions(onPage), captions(onHome))
+  assert.equal(page.match(/<ol class="steps">[\s\S]*?<\/ol>/)[0].match(/<li>/g).length, 4)
+})
+
+test('no page links the removed Color by Digit tour GIF, Digit picture or homepage picture, and none of them is in docs/research/', () => {
+  const gone = ['color-by-digit-details-tour.gif', 'color-by-digit-details-digit.png', 'color-by-digit-details-screenshot.mjs', 'site-color-by-digit.png', 'color-by-digit-screenshot.mjs', 'gif-join.mjs']
+  for (const name of PAGES) for (const file of gone) assert.ok(!read(name).includes(file), `site/${name} links ${file}`)
+  for (const file of gone) assert.equal(fs.existsSync(path.join(__dirname, 'docs', 'research', file)), false, `${file} is still in docs/research/`)
+})
+
+test("Color by Digit's example board has the given 2, and its last slide splits the cell and digit profiles", () => {
+  const example = fs.readFileSync(path.join(__dirname, 'docs', 'research', 'color-by-digit-example.mjs'), 'utf8')
+  assert.match(example, /loadCompactClassicSudoku\('2' \+ '0'\.repeat\(80\)\)/)
+  assert.match(example, /\[0, 1, '2'\]/)
+  assert.match(example, /digitActive: 1/)
+  assert.match(example, /\[MODE_STORAGE_KEY\]: 'both'/)
+})
 
 // Chris's ruling on #317: the slides' pen colors are far from SudokuPad's nine, so they show colors its own pen cannot draw.
 const colorValues = (text) => [...text.matchAll(/#[0-9a-f]{6}/gi)].map(m => m[0])
@@ -452,7 +443,9 @@ test("the slides' five pen colors are far from SudokuPad's nine", () => {
 test(`${CBD} lists what the script adds, one item per feature`, () => {
   const lines = section(CBD, 'What it adds')
   assert.equal(lines.length, CBD_LEAD_INS.length)
-  assert.deepEqual(leadIns(read(CBD)), CBD_LEAD_INS)
+  const grid = read(CBD).match(/<ul class="features">([\s\S]*?)<\/ul>/)
+  assert.ok(grid, `site/${CBD} has no <ul class="features">`)
+  assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
   // Chris's ruling on #279: text a reader sees says "center marks".
   assert.doesNotMatch(lines.join(' '), /centre/)
   for (const mode of ['Cell', 'Digit', 'Both', 'Off']) assert.match(lines[0], new RegExp(`\\b${mode}\\b`), mode)
@@ -477,7 +470,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
   assert.deepEqual(section(CBD, 'Good to know'), [
     'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
     "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
-    "Where the button is: it sits in the bottom row with Undo, Redo, Check and Select. When that row already holds five or more buttons, as it can once other extensions add theirs, it goes in a second row under it. Color by Digit never moves another script's button."
+    "The button sits in the bottom row with Undo, Redo, Check and Select, or in a second row under it once that row holds five or more buttons. It never moves another script's button."
   ])
 })
 
@@ -587,5 +580,5 @@ shared({
   intro: `Adds to SudokuPad a button that ${CBD_SUMMARY[0].toLowerCase()}${CBD_SUMMARY.slice(1)}`,
   leadIns: CBD_LEAD_INS,
   pictures: CBD_PICTURES,
-  homePicture: 'site-color-by-digit.png'
+  homePicture: 'color-by-digit-slide-1-start.png'
 })
