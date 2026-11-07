@@ -2,28 +2,31 @@
 // live page, on a blank grid. Each frame is the board patch in use beside the pen panel, cropped tight, with a caption under the board:
 //   1. a pen color recolored through edit mode: a hold on its button, the color set from the script with the picker's own input event
 //      (the browser's color dialog is drawn by the operating system and is not shown), the button and the line recoloring, a second hold
-//   2. a solid line, a page turn with the page button and a dashed line, another turn and an arrow line
-//   3. edge marks, then grid-corner marks, back on page 1
-//   4. one middle click on the first line, which erases the whole of it
+//   2. a solid line, a dashed line and an arrow line (the page button turns the page between them, and is not shown)
+//   3. one cell edge clicked again and again, stepping X, circle and the two arrows, then one grid corner, stepping X and circle
+//   4. the Thickness slider moved, every line and mark thicker and then thinner; the Opacity slider moved, the whole pen layer fainter and then firmer
+//   5. a line across cells colored dark grey with White outlines off and then on, the box switched in the settings dialog
+//   6. one middle click on the first line, which erases the whole of it
 // Every line is a real drag, every mark a real click, every hold a real press; a red ring marks where a hold or the middle click lands,
 // since a screenshot draws no pointer. Each line, mark and hold is checked to have landed, and the last state holds longer than the rest.
-// Needs python3 with Pillow for the GIF.
+// The GIF joins with a 256-color palette and dithering, so the Opacity slider's gradient does not band. Needs python3 with Pillow.
 // Run from the repo root: node docs/research/pen-tool-extras-tour-screenshot.mjs
 import { chromium } from 'playwright'
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openPage, startPuzzle } from '../../live/page.mjs'
-import { cellCentre, gridPoint, mouseDrag, openPenTool, PAGE_BUTTON } from '../../live/pen.mjs'
+import { cellCentre, gridPoint, mouseDrag, openPenTool, PAGE_BUTTON, penStrings, setInputValue } from '../../live/pen.mjs'
+import { closeExtrasEditorWith, openExtrasEditor } from '../../live/settings.mjs'
 import { joinGif } from './gif-join.mjs'
 import { holdPenButton, PICTURE_PEN_COLORS, pickPenColor } from './pen-tool-extras-recolor.mjs'
 
 const target = new URL('./pen-tool-extras-tour.gif', import.meta.url).pathname
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const COLS = 5
+// Three columns and six rows of cells at their full size, so the picture is about 460 px wide on the page.
+const COLS = 3
 const ROWS = 6
-const MARGIN = 12
-const CLICK_PAUSE_MS = 150
+const MARGIN = 10
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -50,6 +53,12 @@ const landing = async (what, act) => {
   const before = await penCount()
   await act()
   if (await penCount() <= before) throw new Error(`${what} did not land`)
+}
+// Throws when `act` leaves the pen values as they were, for a click that replaces a mark with the next one in its cycle.
+const changing = async (what, act) => {
+  const before = JSON.stringify(await penStrings(p))
+  await act()
+  if (JSON.stringify(await penStrings(p)) === before) throw new Error(`${what} changed nothing`)
 }
 const frames = mkdtempSync(join(tmpdir(), 'pte-tour-'))
 const list = []
@@ -88,56 +97,76 @@ const holdWithRing = async (key) => {
 }
 const line = async (key, points) => { await pick(key); await landing(`the line from ${points[0]}`, () => mouseDrag(p, points)); await park() }
 const turnPage = async () => { await p.locator(PAGE_BUTTON).click(); await park() }
-const clickTimes = async (x, y, n) => { for (let i = 0; i < n; i++) { await p.mouse.click(x, y); await p.waitForTimeout(CLICK_PAUSE_MS) } }
-const edgeClicks = async (row, col, side, n, key) => {
-  await pick(key)
-  const [cx, cy, w] = await cellCentre(p, row, col)
-  const [x, y] = side === 'right' ? [cx + w / 2 - EDGE_INSET_PX, cy] : [cx, cy + w / 2 - EDGE_INSET_PX]
-  await landing(`the edge mark at ${row},${col} ${side}`, () => clickTimes(x, y, n))
+const [NEW_PEN_COLOR_KEY, SOLID_PEN, EDGE_PEN, CORNER_PEN, OUTLINE_PEN] = [1, 6, 9, 5, 8]
+// SudokuPad's cell color key for the dark grey the outline picture draws on.
+const DARK_CELL_KEY = '3'
+const sliderValue = async (selector, value) => { await setInputValue(p.locator(selector), value); await park() }
+const setOutline = async (on) => {
+  await openExtrasEditor(p)
+  await p.locator('#pen-tool-extras-editor input[data-box="outline"]').setChecked(on)
+  await closeExtrasEditorWith(p, 'Save')
+  await park()
 }
+const colorCell = (row, col, key) => p.evaluate(([row, col, key]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)); a.act({ type: 'colour', arg: key }); a.deselect() }, [row, col, key])
+const THICKNESS = '#pen-tool-extras-thickness'
+const OPACITY = '#pen-tool-extras-opacity'
 
 // 1. Recolor pen 1 in edit mode.
 await frame('The pen tool', 1000)
-await line(1, [[0.5, 0.5], [0.5, 4.5]])
+await line(NEW_PEN_COLOR_KEY, [[0.5, 0.5], [0.5, 2.5]])
 await frame('Draw a line', 1200)
-await holdWithRing(1)
-await frame('Hold a color button', 1600)
-await pickPenColor(p, 1, NEW_COLOR)
+await holdWithRing(NEW_PEN_COLOR_KEY)
+await frame('Hold a color button', 1500)
+await pickPenColor(p, NEW_PEN_COLOR_KEY, NEW_COLOR)
 await unring()
-await frame('Pick a color', 1600)
-await holdWithRing(1)
+await frame('Pick a color', 1500)
+await holdWithRing(NEW_PEN_COLOR_KEY)
 await unring()
 await frame('Hold again to finish', 1200)
 
-// 2. A solid line, then the page button turns to dashed and arrow lines.
-await line(6, [[1.5, 0.5], [1.5, 4.5]])
+// 2. A solid line, then dashed and arrow lines on the next pages.
+await line(SOLID_PEN, [[1.5, 0.5], [1.5, 2.5]])
 await frame('A solid line', 1200)
 await turnPage()
-await frame('The page button', 1000)
-await line(6, [[2.5, 0.5], [2.5, 4.5]])
+await line(SOLID_PEN, [[2.5, 0.5], [2.5, 2.5]])
 await frame('A dashed line', 1200)
 await turnPage()
-await frame('Another page', 1000)
-await line(6, [[3.5, 0.5], [3.5, 4.5]])
-await frame('An arrow line', 1400)
-
-// 3. Edge marks and grid-corner marks, on page 1 again.
+await line(SOLID_PEN, [[3.5, 0.5], [3.5, 2.5]])
+await frame('An arrow line', 1300)
 await turnPage()
-await edgeClicks(4, 0, 'right', 1, 9)
-await edgeClicks(4, 1, 'bottom', 4, 6)
-await edgeClicks(4, 3, 'right', 2, 4)
-await park()
-await frame('Edge marks', 1600)
-await pick(5)
-await landing('the corner X', async () => clickTimes(...await gridPoint(p, [5, 1]), 1))
-await pick(9)
-await landing('the corner circle', async () => clickTimes(...await gridPoint(p, [5, 4]), 2))
-await park()
-await frame('Grid-corner marks', 1600)
 
-// 4. One middle click erases the whole first line.
+// 3. One edge clicked over and over, then one grid corner.
+await pick(EDGE_PEN)
+const [ex, ey, ew] = await cellCentre(p, 4, 1)
+const edge = [ex + ew / 2 - EDGE_INSET_PX, ey]
+for (const caption of ['An edge mark: X', 'Click again: circle', 'Again: arrow', 'Again: the other arrow']) {
+  await changing(caption, async () => { await p.mouse.click(...edge); await park() })
+  await frame(caption, 1200)
+}
+await pick(CORNER_PEN)
+const corner = await gridPoint(p, [5, 1])
+for (const caption of ['A corner mark: X', 'Click again: circle']) {
+  await changing(caption, async () => { await p.mouse.click(...corner); await park() })
+  await frame(caption, 1200)
+}
+
+// 4. The sliders change every line and mark already drawn.
+for (const [selector, value, caption] of [[THICKNESS, 12, 'Thickness up'], [THICKNESS, 2, 'Thickness down'], [THICKNESS, 5, 'Thickness back'], [OPACITY, 30, 'Opacity down'], [OPACITY, 100, 'Opacity up'], [OPACITY, 80, 'Opacity back']]) {
+  await sliderValue(selector, value)
+  await frame(caption, 1000)
+}
+
+// 5. A line across dark cells, White outlines off and then on.
+for (const col of [0, 1, 2]) await colorCell(5, col, DARK_CELL_KEY)
+await line(OUTLINE_PEN, [[5.5, 0.5], [5.5, 2.5]])
+await setOutline(false)
+await frame('White outlines off', 1500)
+await setOutline(true)
+await frame('White outlines on', 1500)
+
+// 6. One middle click erases the whole first line.
 const before = await penCount()
-const [lx, ly] = await gridPoint(p, [0.5, 2.5])
+const [lx, ly] = await gridPoint(p, [0.5, 2])
 await ring(lx, ly)
 await frame('Middle-click a line', 1200)
 await p.mouse.click(lx, ly, { button: 'middle' })
@@ -146,6 +175,6 @@ await park()
 await p.waitForFunction((n) => Framework.app.puzzle.cells.reduce((sum, c) => sum + c.pen.length, 0) < n, before, { timeout: SETTLE_TIMEOUT_MS })
 await frame('The whole line is gone', 2600)
 
-joinGif(list, target)
+joinGif(list, target, { colors: 256, dither: true })
 rmSync(frames, { recursive: true })
 await browser.close()

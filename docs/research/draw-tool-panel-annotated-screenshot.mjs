@@ -1,6 +1,6 @@
 // Takes the one annotated picture of the Draw panel on site/draw-tool.html ("The Draw panel"), from the real
 // draw-tool.user.js on the recorded puzzle: the panel (nine color buttons, Clear all, the Shape button, the settings gear
-// and the Size and Opacity sliders) cropped close at 3x, with each part labelled beside it by a short line from the label to the part:
+// and the Size and Opacity sliders) cropped close at 3x, with each part labelled on its left by a short phrase and a line from the phrase to the part:
 //   draw-tool-panel-annotated.png
 // Labels are laid out from the parts' own boxes. The script fails when a part is missing, and writes the file only when
 // the picture is taken. The mascot is hidden.
@@ -13,7 +13,7 @@ import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 const out = new URL('./draw-tool-panel-annotated.png', import.meta.url).pathname
 
 // Page pixels of space around the panel for the labels, and of padding around the whole picture.
-const LABEL_WIDTH = 230
+const LABEL_WIDTH = 250
 const SIDE_GAP = 36
 const PAD = 10
 const FONT = '15px system-ui, sans-serif'
@@ -45,34 +45,32 @@ const rel = (b) => ({ x: b.x - panel.x, y: b.y - panel.y, w: b.width, h: b.heigh
 const colorBlock = { x: Math.min(...colors.map((b) => b.x)), y: colors[0].y, width: colors[0].width, height: colors[2].y + colors[2].height - colors[0].y }
 const part = { colors: rel(colorBlock), sizeSlider: rel(sizeSlider), opacitySlider: rel(opacitySlider), clear: rel(clearButton), shape: rel(shapeButton), gear: rel(gearButton) }
 
-// Each label: its text, the side it sits on, the y of its middle, and the line from the label to the part.
-// The Shape label sits in the gap above the controls row, its line running along the gap and down onto the button.
+// Each label: its text, the y of its middle, and the line from the label to the part as points. Every label is on the
+// left, and its line runs from the panel's left edge into the part. The Shape button's line runs in the gap above the
+// controls row, and the settings gear's in the gap below it, bent out to the left so its label clears the Size label.
 const gapY = (part.colors.y + part.colors.h + part.clear.y) / 2
+const lowGapY = part.gear.y + part.gear.h + 5
 const labels = [
-  { text: '<b>Color buttons</b><br>A click or the digit keys 1 to 9 pick one; a hold edits it', side: 'left', y: part.colors.cy, to: [[part.colors.x + 6, part.colors.cy]] },
-  { text: '<b>Clear all</b><br>Erases the whole drawing, after asking', side: 'left', y: part.clear.cy, to: [[part.clear.x + 6, part.clear.cy]] },
-  { text: '<b>Size slider</b><br>Line width, and text size', side: 'left', y: part.sizeSlider.cy, to: [[part.sizeSlider.x + 8, part.sizeSlider.cy]] },
-  { text: '<b>Opacity slider</b><br>Faint to solid', side: 'right', y: part.opacitySlider.cy, to: [[part.opacitySlider.x + part.opacitySlider.w - 8, part.opacitySlider.cy]] },
-  { text: '<b>Shape</b><br>Off, rectangle or ellipse', side: 'right', y: gapY - 14, to: [[part.shape.cx, gapY - 14], [part.shape.cx, part.shape.y + 8]] },
-  { text: '<b>Settings</b><br>The gear opens the colors and presets', side: 'right', y: part.gear.cy, to: [[part.gear.x + part.gear.w - 6, part.gear.cy]] }
+  { text: 'Click or press 1 to 9; hold to edit', y: part.colors.cy, to: [[part.colors.x + 6, part.colors.cy]] },
+  { text: 'Off, rectangle or ellipse', y: gapY, to: [[part.shape.cx, gapY], [part.shape.cx, part.shape.y + 8]] },
+  { text: 'Erases the whole drawing', y: part.clear.cy, to: [[part.clear.x + 6, part.clear.cy]] },
+  { text: 'Opens the settings', y: lowGapY - 12, to: [[-14, lowGapY - 12], [-14, lowGapY], [part.gear.cx, lowGapY], [part.gear.cx, part.gear.y + part.gear.h - 8]] },
+  { text: 'Line width and text size', y: part.sizeSlider.cy, to: [[part.sizeSlider.x + 8, part.sizeSlider.cy]] },
+  { text: 'Faint to solid', y: part.opacitySlider.cy, to: [[part.opacitySlider.x + 8, part.opacitySlider.cy]] }
 ]
 
-const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width + SIDE_GAP + LABEL_WIDTH
+const width = PAD * 2 + LABEL_WIDTH + SIDE_GAP + panel.width
 const panelLeft = PAD + LABEL_WIDTH + SIDE_GAP
 const height = panel.height + 2 * PAD + BOTTOM_ROOM
-const html = labels.map((l) => {
-  const left = l.side === 'left' ? PAD : panelLeft + panel.width + SIDE_GAP
-  return `<div class="l ${l.side}" style="left:${left}px;top:${PAD + l.y}px">${l.text}</div>`
-}).join('')
+const html = labels.map((l) => `<div class="l" style="left:${PAD}px;top:${PAD + l.y}px">${l.text}</div>`).join('')
 const lines = labels.map((l) => {
-  const start = l.side === 'left' ? [PAD + LABEL_WIDTH, l.y] : [panelLeft + panel.width + SIDE_GAP, l.y]
-  const points = [start, ...l.to.map(([x, y]) => [panelLeft + x, y])].map(([x, y]) => `${x},${y + PAD}`).join(' ')
+  const points = [[PAD + LABEL_WIDTH + 6, l.y], ...l.to.map(([x, y]) => [panelLeft + x, y])].map(([x, y]) => `${x},${y + PAD}`).join(' ')
   const end = l.to[l.to.length - 1]
   return `<polyline points="${points}" fill="none" stroke="${LINE_COLOR}" stroke-width="1.5"/><circle cx="${panelLeft + end[0]}" cy="${end[1] + PAD}" r="3.5" fill="${LINE_COLOR}"/>`
 }).join('')
 const p = await (await browser.newContext({ viewport: { width: Math.ceil(width), height: Math.ceil(height) }, deviceScaleFactor: 3 })).newPage()
 await p.setContent(`<body style="margin:0;background:#fff"><div id="c" style="position:relative;width:${width}px;height:${height}px;font:${FONT};color:#222">
-<style>.l{position:absolute;width:${LABEL_WIDTH}px;transform:translateY(-50%);line-height:1.25}.l.left{text-align:right}</style>
+<style>.l{position:absolute;width:${LABEL_WIDTH}px;transform:translateY(-50%);line-height:1.25;text-align:right;white-space:nowrap}</style>
 <img id="panel" src="data:image/png;base64,${panelPng}" style="position:absolute;left:${panelLeft}px;top:${PAD}px;width:${panel.width}px;height:${panel.height}px">
 <svg width="${width}" height="${height}" style="position:absolute;left:0;top:0">${lines}</svg>${html}</div></body>`)
 await p.locator('#panel').evaluate((i) => i.decode())

@@ -284,10 +284,7 @@ const CBD_SUMMARY = 'Colors cells, or the digits and marks in them, by digit, wi
 const CBD_LEAD_INS = ['Four modes.', 'Kept in step as you solve.', 'Digit and mark shades.', 'Profiles.', 'The profile menu.', 'Digit: Same as cell.', 'Digit: None.']
 // The lead-ins that carry one picture, and the picture each shows.
 const CBD_PICTURES = {
-  'Four modes.': 'color-by-digit-details-modes.gif',
-  'Kept in step as you solve.': 'color-by-digit-details-cell.gif',
-  'Digit and mark shades.': 'color-by-digit-details-digit',
-  'The profile menu.': 'color-by-digit-details-menu.gif'
+  'Digit and mark shades.': 'color-by-digit-details-digit'
 }
 
 test(`${HOME} describes Color by Digit in a short summary ending in a Details link, beside a picture of colored digits`, () => {
@@ -313,14 +310,11 @@ const assertDeclaredAtFileShape = (img, file, what) => {
   return [fileW, fileH]
 }
 
-// The homepage and Digit pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall; the animations
-// add a button, a menu or a caption, and their declared sizes keep their files' shapes.
+// The homepage and Digit pictures show the same two boxes, 3 rows by 6 columns, so each is twice as wide as tall.
 test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, twice as wide as tall, at their files' shape`, () => {
   const examples = [
     ['homepage picture', imgs(read(HOME)).find(t => t.includes('site-color-by-digit.png'))],
-    ['Kept in step animation', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-cell.gif'))],
-    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))],
-    ['Four modes animation', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-modes.gif'))]
+    ['Digit picture', imgs(read(CBD)).find(t => t.includes('color-by-digit-details-digit.png'))]
   ]
   for (const [what, img] of examples) {
     assert.ok(img, `no ${what}`)
@@ -333,44 +327,35 @@ test(`${HOME} and ${CBD} show Color by Digit's example pictures as two boxes, tw
   }
 })
 
-test(`${CBD}'s Four modes item is one sentence beside an animation whose alt text names the four modes`, () => {
-  const li = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
-  const text = plain(li.replace(/<img[^>]*>/g, '')).replace(/^Four modes\.\s*/, '')
-  assert.equal(text, 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
-  const [img] = imgs(li)
-  assert.match(img, /src="[^"]*\.gif(\?v=[0-9a-f]{7})?"/)
-  const alt = altOf(img)
-  assert.match(alt, /^An animation/)
-  for (const label of ['CELL', 'DIGIT', 'BOTH', 'OFF']) assert.ok(alt.includes(label), `the alt text does not name ${label}`)
-})
-
 const itemImg = (page, lead) => imgs(items(read(page)).find(t => leadIn(t) === lead) || '')[0] || ''
 
-test(`${CBD}'s Kept in step item is an animation whose alt text describes its three steps`, () => {
-  const img = itemImg(CBD, 'Kept in step as you solve.')
-  assert.match(img, /src="[^"]*color-by-digit-details-cell\.gif(\?v=[0-9a-f]{7})?"/)
-  const alt = altOf(img)
-  assert.match(alt, /^An animation/)
-  assert.match(alt, /\btwo\b[^.]*\bboxes\b/i)
-  assert.match(alt, /digit[^.]*typed/i, 'the alt text does not name typing a digit')
-  assert.match(alt, /center marks/i)
-  assert.match(alt, /another group/i, 'the alt text does not name a center mark from another group')
+test(`${CBD}'s Four modes item is one sentence, and it and the Kept in step and profile menu items have no picture of their own`, () => {
+  const four = items(read(CBD)).find(t => leadIn(t) === 'Four modes.')
+  assert.equal(plain(four).replace(/^Four modes\.\s*/, ''), 'A press on the button steps the mode Cell → Digit → Both → Off, and the button\'s top strip names it.')
+  for (const lead of ['Four modes.', 'Kept in step as you solve.', 'The profile menu.']) assert.equal(itemImg(CBD, lead), '', `"${lead}" has a picture`)
 })
 
-test(`${CBD}'s profile menu item is an animation whose alt text describes the menu opening and Odd/Even picked`, () => {
-  const img = itemImg(CBD, 'The profile menu.')
-  assert.match(img, /src="[^"]*color-by-digit-details-menu\.gif(\?v=[0-9a-f]{7})?"/)
-  const alt = altOf(img)
+test(`${CBD} opens with a tour animation between the install link and What it adds, whose alt text lists the steps in order`, () => {
+  const m = read(CBD).match(/<p><a class="install"[^>]*>[^<]*<\/a><\/p>([\s\S]*?)<h2>What it adds<\/h2>/)
+  assert.ok(m, `site/${CBD} has no section between the install link and "What it adds"`)
+  const found = imgs(m[1])
+  assert.equal(found.length, 1, 'the tour is not one picture')
+  assert.match(found[0], /src="[^"]*color-by-digit-details-tour\.gif(\?v=[0-9a-f]{7})?"/)
+  const alt = altOf(found[0])
   assert.match(alt, /^An animation/)
-  assert.match(alt, /arrow box/i)
-  assert.match(alt, /Odd\/Even/)
-  assert.match(alt, /recolor/i)
+  const steps = [/digit, 1, is typed/i, /center marks 7 and 9/i, /center mark 2 from another group/i, /Digit, Both, Off and Cell/, /profile menu opens/i, /Modular is picked/i, /recolor/i]
+  let at = 0
+  for (const step of steps) {
+    const found = alt.slice(at).search(step)
+    assert.ok(found >= 0, `the alt text does not mention ${step} after position ${at}`)
+    at += found
+  }
+  assertDeclaredAtFileShape(found[0], 'docs/research/color-by-digit-details-tour.gif', 'the tour')
 })
 
 // A GIF the site links stays small enough to load on a phone: the budget each animation was given.
 const GIF_BUDGETS = [
-  [CBD, 'color-by-digit-details-cell.gif', 300],
-  [CBD, 'color-by-digit-details-menu.gif', 300],
+  [CBD, 'color-by-digit-details-tour.gif', 1000],
   [DETAILS, 'pen-tool-extras-tour.gif', 1000]
 ]
 for (const [page, gif, kb] of GIF_BUDGETS) {
@@ -390,7 +375,8 @@ test(`${DETAILS} opens with a tour animation between the install link and What i
   assert.match(found[0], /src="[^"]*pen-tool-extras-tour\.gif(\?v=[0-9a-f]{7})?"/)
   const alt = altOf(found[0])
   assert.match(alt, /^An animation/)
-  const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /edge marks?/i, /grid.corner mark/i, /middle.click/i, /erase/i]
+  assert.doesNotMatch(alt, /page button/i, 'the tour alt text names the page button')
+  const steps = [/hold/i, /recolor/i, /solid line/i, /dashed line/i, /arrow line/i, /cell edge/i, /grid corner/i, /Thickness slider/i, /Opacity slider/i, /White outlines off and then on/i, /middle.click/i, /erase/i]
   let at = 0
   for (const step of steps) {
     const found = alt.slice(at).search(step)
@@ -500,7 +486,7 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
   for (const label of ['Color buttons', 'Clear all', 'Shape', 'Settings', 'Size slider', 'Opacity slider']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.match(alt, /digit keys 1 to 9/)
+  assert.match(alt, /press 1 to 9/)
 })
 
 test(`${DRAW}'s Text, Erasing and Shapes pictures are animations under 300 KB whose alt text says so`, () => {

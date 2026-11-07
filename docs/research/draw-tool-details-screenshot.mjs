@@ -1,10 +1,10 @@
 // Takes the three animations on site/draw-tool.html's "What it adds" list, from the real draw-tool.user.js on the recorded
 // puzzle, each a crop of the grid on a fresh page, frames joined into a looping GIF by Python's PIL (as in
 // color-by-digit-details-screenshot.mjs):
-//   draw-tool-details-text.gif:    a click in a cell's corner, 15 typed, Enter
-//   draw-tool-details-erasing.gif: a right-drag across a drawn line removes it
+//   draw-tool-details-text.gif:    a click in a cell's corner, 15 typed, Enter, on a crop four whole cells wide so the 15 reads at the page's size
+//   draw-tool-details-erasing.gif: a right-drag across a drawn line removes it, the drag's path shown as a faint trail with the pointer on it
 //   draw-tool-details-shapes.gif:  the Shape button set to rectangle, a drag boxing four cells, snapping to the cell edges
-// Every step is a real mouse move, click or key; a small dot marks the pointer, which a screenshot does not show. It
+// Every step is a real mouse move, click or key; a small dot marks the pointer and a faint trail its drag, which a screenshot does not show. It
 // fails, writing nothing, when a step does not land. Each frame lasts FRAME_MS and the last one LAST_MS before the loop.
 // Needs python3 with Pillow. Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool-details-screenshot.mjs
@@ -45,6 +45,12 @@ async function scene (from, to) {
     dot.id = 'demo-pointer'
     dot.style.cssText = 'position:fixed;left:0;top:0;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:rgba(40,40,40,.55);border:2px solid #fff;pointer-events:none;z-index:99999;display:none'
     document.body.appendChild(dot)
+    const trail = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    trail.id = 'demo-trail'
+    trail.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:99998'
+    trail.innerHTML = '<polyline id="demo-path" fill="none" stroke="rgba(40,40,40,.35)" stroke-width="3" stroke-dasharray="2 8" stroke-linecap="round" points=""/>' +
+      '<polyline id="demo-trail-line" fill="none" stroke="rgba(40,40,40,.4)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" points=""/>'
+    document.body.appendChild(trail)
   })
   const [x0, y0, cell] = await p.evaluate(() => {
     const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
@@ -64,15 +70,29 @@ async function scene (from, to) {
     dot.style.left = `${x}px`
     dot.style.top = `${y}px`
   }, [...at(point), shown])
-  const move = async (point) => { await p.mouse.move(...at(point)); await pointer(point) }
+  let trailing = false
+  const move = async (point) => {
+    await p.mouse.move(...at(point))
+    await pointer(point)
+    if (trailing) await p.evaluate(([x, y]) => { const line = document.getElementById('demo-trail-line'); line.setAttribute('points', `${line.getAttribute('points')} ${x},${y}`) }, at(point))
+  }
+  // From now on every move extends a faint line behind the pointer, and the whole path ahead of it is dotted, so a frame before the pointer
+  // reaches a line already shows the drag crossing it.
+  const startTrail = async (path) => {
+    trailing = true
+    await p.evaluate(([planned, first]) => {
+      document.getElementById('demo-path').setAttribute('points', planned)
+      document.getElementById('demo-trail-line').setAttribute('points', first)
+    }, [path.map((point) => at(point).join(',')).join(' '), at(path[0]).join(',')])
+  }
   // Moves the held or free pointer through points, a frame after each step when `framed`.
-  const glide = async (points, framed = true) => {
+  const glide = async (points, framed = true, every = 2) => {
     let last = points[0]
     for (const point of points.slice(1)) {
       for (let i = 1; i <= GLIDE_STEPS; i++) {
         const t = i / GLIDE_STEPS
         await move([last[0] + (point[0] - last[0]) * t, last[1] + (point[1] - last[1]) * t])
-        if (framed && i % 2 === 0) await frame()
+        if (framed && i % every === 0) await frame()
       }
       last = point
     }
@@ -87,12 +107,12 @@ async function scene (from, to) {
     console.log(`wrote ${target}`)
     await p.close()
   }
-  return { p, at, move, glide, frame, finish, pointer }
+  return { p, at, move, glide, frame, finish, pointer, startTrail }
 }
 
-// Text: a click in r8c7's corner, 15 typed, Enter.
+// Text: a click in r8c7's corner, 15 typed, Enter, in a crop of three rows and four whole columns.
 {
-  const s = await scene([6.5, 5.5], [8.5, 7.5])
+  const s = await scene([6, 5], [9, 9])
   await s.p.click('.controls-input button[data-key="3"]')
   await s.p.locator('#draw-tool-size').fill('10')
   await s.move([8.5, 7.5])
@@ -117,11 +137,13 @@ async function scene (from, to) {
   await s.p.mouse.up()
   const strokes = () => s.p.locator('#draw-tool-layer path').count()
   if ((await strokes()) !== 1) throw new Error('the line did not land')
+  await s.startTrail([[4.9, 7.3], [4.9, 5.0]])
   await s.move([4.9, 7.3])
   await s.frame()
   await s.p.mouse.down({ button: 'right' })
-  await s.glide([[4.9, 7.3], [4.9, 5.0]])
+  await s.glide([[4.9, 7.3], [4.9, 5.0]], true, 1)
   await s.p.mouse.up({ button: 'right' })
+  await s.frame()
   if ((await strokes()) !== 0) throw new Error('the right-drag did not erase the line')
   await s.finish(out('erasing'))
 }

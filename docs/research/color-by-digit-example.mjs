@@ -1,9 +1,11 @@
 // The example Color by Digit's site pictures share: a custom puzzle of one given and nothing else (SudokuPad's own compact
 // classic format, loaded after Start Puzzle), with the first two boxes (3 rows x 6 columns) filled with the entries below,
-// on the default profile (Low/5/High: 1-4, 5, 6-9). The picture is the live page's grid cropped to those two boxes: the crop
+// on a demo profile with no blue, because SudokuPad's own digits and marks are blue: Entropic's grouping (0-3, 4-6, 7-9) in red, green
+// and yellow from the palette's first page. It is saved by this script, not a preload of Color by Digit. The picture is the live page's grid cropped to those two boxes: the crop
 // is cut at the grid lines, so no part of a third box shows.
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../live/page.mjs'
+import { savedProfiles } from '../../live/color-by-digit-fixtures.mjs'
 
 // The pixel density every picture is taken at.
 export const DEVICE_SCALE = 2
@@ -12,22 +14,37 @@ export const MODES = ['CELL', 'DIGIT', 'BOTH', 'OFF']
 const MODE_LABEL = `${BUTTON} [data-role="mode"]`
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
+// The demo profile is active; Modular (orange, pink, yellow) follows it for the menu picture. savedProfiles also sets the two flags that stop the script adding its
+// own preloads, so the menu lists exactly these two.
+const DEMO_PROFILE = 'Entropic, no blue'
+const PROFILES = {
+  profiles: [
+    { name: DEMO_PROFILE, groups: [{ key: '7', digits: ['0', '1', '2', '3'] }, { key: '4', digits: ['4', '5', '6'] }, { key: '8', digits: ['7', '8', '9'] }] },
+    { name: 'Modular', groups: [{ key: '6', digits: ['1', '4', '7'] }, { key: '5', digits: ['2', '5', '8'] }, { key: '8', digits: ['0', '3', '6', '9'] }] }
+  ],
+  active: 0
+}
+const SAVED = savedProfiles(PROFILES)
+
 // [row, column, digits], 0-based. The given 5 is at (0, 0).
 // Big digits: Color by Digit circles only marks, so none has a circle.
 const DIGITS = [[0, 2, '3'], [0, 5, '8'], [1, 0, '9'], [1, 2, '1'], [1, 5, '6'], [2, 1, '6'], [2, 3, '3']]
 // SudokuPad flags a mark that repeats a given in its row or column: the corner 5s at (0, 4) and (2, 0) and the center 5 at (0, 1) all
 // conflict with the given 5. A corner mark colors nothing in Cell.
 const CORNER = [[0, 3, '19'], [0, 4, '25'], [1, 4, '27'], [2, 0, '25'], [2, 5, '19']]
-// (0, 1) is the 5 group alone, (1, 3) all low and (1, 1) all high, so each takes a group's color; (2, 2) mixes groups and stays white.
-const CENTRE = [[0, 1, '5'], [1, 1, '78'], [1, 3, '24'], [2, 2, '47']]
+// (0, 1) is the 4-6 group alone, (1, 1) all 7-9 and (1, 3) all 0-3, so each takes a group's color; (2, 2) mixes groups and stays white.
+const CENTRE = [[0, 1, '5'], [1, 1, '78'], [1, 3, '2'], [2, 2, '47']]
 const CONFLICTS = 3
 const ROWS = 3
 const COLS = 6
 
-// Opens the live page, at `DEVICE_SCALE`, on the example puzzle with Color by Digit installed in Cell mode, the entries in, the mascot hidden.
+// Opens the live page, at `DEVICE_SCALE`, on the example puzzle with Color by Digit installed in Cell mode on the demo profile, the entries in, the mascot hidden.
 // `leave` is a list of [row, column] cells whose entries are left out, for a picture that fills them in itself.
 export async function openExample (browser, { leave = [] } = {}) {
-  const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: DEVICE_SCALE } })
+  const { p } = await openPage(browser, {
+    contextOptions: { deviceScaleFactor: DEVICE_SCALE },
+    seed: (page) => page.addInitScript((saved) => Object.entries(saved).forEach(([key, value]) => window.localStorage.setItem(key, JSON.stringify(value))), SAVED)
+  })
   await startPuzzle(p)
   await p.evaluate(() => Framework.app.loadCompactClassicSudoku('5' + '0'.repeat(80)))
   await p.waitForFunction(() => Framework.app.grid.getCell(0, 0).given)
