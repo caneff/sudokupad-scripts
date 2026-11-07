@@ -2,7 +2,7 @@
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
 // @version      0.4.2
-// @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. A rectangle bounding everything the puzzle draws, and the cells a solver writes in, stays as SudokuPad renders it. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
+// @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
