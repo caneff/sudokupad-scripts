@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         SudokuPad Draw Tool
+// @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.16.2
-// @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
+// @version      0.17.1
+// @description  Adds a Text Annotation tool for typed notes on the board, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,28 +16,20 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.16.2'
+  const VERSION = '0.17.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
-  // The shapes a drag can draw, as a shape item saves them.
-  const RECT = 'rect'
-  const ELLIPSE = 'ellipse'
-  const SHAPES = [RECT, ELLIPSE]
-  // The Shape button's modes in the order it steps through them: Off draws free lines.
-  const SHAPE_OFF = 'off'
-  const SHAPE_MODES = [SHAPE_OFF, ...SHAPES]
-  const SHAPE_KEY = 'DrawTool_shape'
   const MIN_WIDTH = 1
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
   const DEFAULT_WIDTH = 6
-  // Percent. An item saved before opacity existed has none and reads as the default.
+  // Percent. A note has no opacity control; one saved with an opacity keeps it, and one saved without reads as the default.
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
   const DEFAULT_OPACITY = 100
-  // An item saves its color as a number, 1 to 9, the number of one of Draw's nine colors, so a recolor recolors it.
+  // An item saves its color as a number, 1 to 9, the number of one of the nine colors, so a recolor recolors it.
   const DRAW_COLORS = 9
   const COLOR_NUMBERS = Array.from({ length: DRAW_COLORS }, (_, i) => i + 1)
   const DEFAULT_COLOR = 1
@@ -178,8 +170,9 @@
     [PEN_PRESET]: 'Pen colors',
     ...PALETTE_PRESET_LABELS
   }
+  // The size slider keeps the width slider's name, range and key, so a saved size still reads.
   const WIDTH_KEY = 'DrawTool_width'
-  const OPACITY_KEY = 'DrawTool_opacity'
+  const BACKGROUND_KEY = 'DrawTool_background'
   // A character's width as a share of the text size: the widest digit of a sans-serif font, so a hit test errs wide.
   const CHAR_WIDTH = 0.6
   // How far, in board units, the mouse may move between press and release and the press still be a click.
@@ -187,8 +180,9 @@
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
   const SETTINGS_CLASS = 'draw-tool-settings'
-  const SHAPE_BUTTON_CLASS = 'draw-tool-shape-mode'
-  const SHAPE_ITEM_CLASS = 'draw-tool-shape'
+  const BACKGROUND_CLASS = 'draw-tool-background'
+  const BACKGROUND_FILL_CLASS = 'draw-tool-background-fill'
+  const TEXT_BACKGROUND_CLASS = 'draw-tool-text-bg'
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
   const SLIDER_ROW_CLASS = 'draw-tool-slider'
@@ -196,120 +190,32 @@
   const COLORS_STYLE_ID = 'draw-tool-colors'
   const PANEL_STYLE_ID = 'draw-tool-style'
   const SIZE_SLIDER = 'draw-tool-size'
-  const OPACITY_SLIDER = 'draw-tool-opacity'
-  const CLEAR_QUESTION = 'Clear the drawing?'
+  const SIZE_LABEL = 'Size'
+  const CLEAR_QUESTION = 'Clear all notes?'
   const OK_LABEL = 'OK'
   const CANCEL_LABEL = 'Cancel'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
-  // How far, in board units, a mouse point may stray from the simplified line before it is kept.
-  const SIMPLIFY_TOLERANCE = 2.25
-  // How far, in board units, an erase may pass from a line's edge and still erase it.
-  const ERASE_TOLERANCE = 4
-  // Straight pieces per curve when a stroke's drawn line is hit-tested.
-  const CURVE_STEPS = 8
-  // Straight pieces round an ellipse's outline when it is hit-tested.
-  const ELLIPSE_STEPS = 64
   const KEPT_PUZZLES = 50
+  // How far, in board units, an erase may pass from a text's box and still erase it.
+  const ERASE_TOLERANCE = 4
   const PRIMARY_BUTTON = 0
   const SECONDARY_BUTTON = 2
-  const FREE_LINE_ICON = '<path d="M3 17c3-6 5-9 7-6s1 6 4 3 4-8 7-9"/>'
-  const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${FREE_LINE_ICON}</svg>`
-
-  const distanceToSegment = ([px, py], [ax, ay], [bx, by]) => {
-    const dx = bx - ax
-    const dy = by - ay
-    const lengthSquared = dx * dx + dy * dy
-    const t = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared))
-    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
-  }
-
-  // Ramer-Douglas-Peucker: the fewest points whose line stays within SIMPLIFY_TOLERANCE of every point given.
-  function simplifyPath (points) {
-    if (points.length <= 2) return points.slice()
-    const first = points[0]
-    const last = points[points.length - 1]
-    let farthest = 0
-    let farthestIndex = 0
-    for (let i = 1; i < points.length - 1; i++) {
-      const distance = distanceToSegment(points[i], first, last)
-      if (distance > farthest) {
-        farthest = distance
-        farthestIndex = i
-      }
-    }
-    if (farthest <= SIMPLIFY_TOLERANCE) return [first, last]
-    const head = simplifyPath(points.slice(0, farthestIndex + 1))
-    return head.slice(0, -1).concat(simplifyPath(points.slice(farthestIndex)))
-  }
+  const TEXT_KIND = 'text'
+  // Kinds an earlier version saved; they stay in storage and are never drawn.
+  const HIDDEN_KINDS = ['stroke', 'shape']
+  const TEXT_GLYPH = '<path d="M8 15l4-8 4 8M9.5 12.5h5"/>'
+  const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${TEXT_GLYPH}</svg>`
+  // The box behind a note with a background: the text's own box grown by these shares of the text size, with rounded corners.
+  const BACKGROUND_PAD_X = 0.35
+  const BACKGROUND_PAD_Y = 0.15
+  const BACKGROUND_RADIUS = 0.3
 
   const roundToTenth = (value) => Math.round(value * 10) / 10
   const coordinate = (value) => String(roundToTenth(value))
-  const point = ([x, y]) => `${coordinate(x)} ${coordinate(y)}`
-  const midpoint = ([ax, ay], [bx, by]) => [(ax + bx) / 2, (ay + by) / 2]
-
-  // Each inner point is the control of a curve that runs between the midpoints of its two segments: [start, control, end].
-  function strokeCurves (points) {
-    const curves = []
-    let start = points[0]
-    for (let i = 1; i < points.length - 1; i++) {
-      const end = i === points.length - 2 ? points[i + 1] : midpoint(points[i], points[i + 1])
-      curves.push([start, points[i], end])
-      start = end
-    }
-    return curves
-  }
-
-  function strokePath (points) {
-    if (points.length <= 2) return `M${point(points[0])} L${point(points[points.length - 1])}`
-    const curves = strokeCurves(points).map(([, control, end]) => `Q${point(control)} ${point(end)}`)
-    return `M${point(points[0])} ${curves.join(' ')} L${point(points[points.length - 1])}`
-  }
-
-  const onCurve = ([sx, sy], [cx, cy], [ex, ey], t) => {
-    const u = 1 - t
-    return [u * u * sx + 2 * u * t * cx + t * t * ex, u * u * sy + 2 * u * t * cy + t * t * ey]
-  }
-
-  // The line strokePath draws, as straight pieces close enough to its curves to hit-test.
-  function drawnLine (points) {
-    if (points.length <= 2) return points.slice()
-    const line = [points[0]]
-    for (const [start, control, end] of strokeCurves(points)) {
-      for (let step = 1; step <= CURVE_STEPS; step++) line.push(onCurve(start, control, end, step / CURVE_STEPS))
-    }
-    return line
-  }
 
   const cross = ([ax, ay], [bx, by], [cx, cy]) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
   const segmentsCross = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0
-  const segmentsDistance = (a, b, c, d) => segmentsCross(a, b, c, d)
-    ? 0
-    : Math.min(distanceToSegment(a, c, d), distanceToSegment(b, c, d), distanceToSegment(c, a, b), distanceToSegment(d, a, b))
-
-  // Whether an erase from `from` to `to` passes within the tolerance of the edge of a line drawn `width` wide.
-  function touchesLine (line, width, from, to) {
-    const reach = ERASE_TOLERANCE + width / 2
-    if (line.length === 1) return distanceToSegment(line[0], from, to) <= reach
-    for (let i = 1; i < line.length; i++) {
-      if (segmentsDistance(from, to, line[i - 1], line[i]) <= reach) return true
-    }
-    return false
-  }
-
-  const touchesStroke = (item, from, to) => touchesLine(drawnLine(item.points), item.width, from, to)
-
-  // A shape's outline as a closed line of straight pieces; an ellipse's are close enough to its curve to hit-test.
-  function shapeOutline ({ shape, box: [left, top, right, bottom] }) {
-    if (shape === RECT) return [[left, top], [right, top], [right, bottom], [left, bottom], [left, top]]
-    const [cx, cy, rx, ry] = [(left + right) / 2, (top + bottom) / 2, (right - left) / 2, (bottom - top) / 2]
-    return Array.from({ length: ELLIPSE_STEPS + 1 }, (_, i) => {
-      const a = (2 * Math.PI * i) / ELLIPSE_STEPS
-      return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]
-    })
-  }
-
-  const touchesShape = (item, from, to) => touchesLine(shapeOutline(item), item.width, from, to)
 
   // The box a text takes on the board, centred on its point: the text is drawn anchored at its middle.
   function textBox (item) {
@@ -318,46 +224,34 @@
     return { left: x - halfWidth, right: x + halfWidth, top: y - item.size / 2, bottom: y + item.size / 2 }
   }
 
+  // What a note answers to: its text's box, and with a background the box drawn behind it.
+  function noteBox (item) {
+    const box = textBox(item)
+    if (!item.bg) return box
+    const [padX, padY] = [item.size * BACKGROUND_PAD_X, item.size * BACKGROUND_PAD_Y]
+    return { left: box.left - padX, right: box.right + padX, top: box.top - padY, bottom: box.bottom + padY }
+  }
+
   const inBox = ([x, y], box) => x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
 
   // The index of the text a click at `at` lands on, the one drawn last when texts overlap, or -1 for none.
   function textAt (drawing, at) {
     for (let i = drawing.length - 1; i >= 0; i--) {
-      if (drawing[i].kind === 'text' && inBox(at, textBox(drawing[i]))) return i
+      if (drawing[i].kind === TEXT_KIND && inBox(at, noteBox(drawing[i]))) return i
     }
     return -1
   }
 
-  // Whether an erase from `from` to `to` passes within the tolerance of the text's box.
+  // Whether an erase from `from` to `to` passes within the tolerance of the note's box.
   function touchesText (item, from, to) {
-    const b = textBox(item)
+    const b = noteBox(item)
     const box = { left: b.left - ERASE_TOLERANCE, right: b.right + ERASE_TOLERANCE, top: b.top - ERASE_TOLERANCE, bottom: b.bottom + ERASE_TOLERANCE }
     if (inBox(from, box) || inBox(to, box)) return true
     const corners = [[box.left, box.top], [box.right, box.top], [box.right, box.bottom], [box.left, box.bottom]]
     return corners.some((corner, i) => segmentsCross(from, to, corner, corners[(i + 1) % 4]))
   }
 
-  const TOUCHES = { stroke: touchesStroke, text: touchesText, shape: touchesShape }
-  const touchesItem = (item, from, to) => TOUCHES[item.kind](item, from, to)
-
-  // The index of the topmost item under a press at `at`, found the way an erase finds one, or -1 for none.
-  function itemAt (drawing, at) {
-    for (let i = drawing.length - 1; i >= 0; i--) {
-      if (touchesItem(drawing[i], at, at)) return i
-    }
-    return -1
-  }
-
-  const shifted = ([x, y], [dx, dy]) => [roundToTenth(x + dx), roundToTenth(y + dy)]
-  const MOVES = {
-    stroke: (item, by) => ({ ...item, points: item.points.map((p) => shifted(p, by)) }),
-    shape: (item, by) => {
-      const [left, top, right, bottom] = item.box
-      return { ...item, box: [...shifted([left, top], by), ...shifted([right, bottom], by)] }
-    },
-    text: (item, by) => ({ ...item, at: shifted(item.at, by) })
-  }
-  const movedItem = (item, by) => MOVES[item.kind](item, by)
+  const movedItem = (item, [dx, dy]) => ({ ...item, at: [roundToTenth(item.at[0] + dx), roundToTenth(item.at[1] + dy)] })
 
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
@@ -371,30 +265,9 @@
   const onSlider = (value, min, max, step) => isNumber(value) && value >= min && value <= max && Number.isInteger((value - min) / step)
   const isWidth = (value) => onSlider(value, MIN_WIDTH, MAX_WIDTH, WIDTH_STEP)
   const isOpacity = (value) => onSlider(value, MIN_OPACITY, MAX_OPACITY, OPACITY_STEP)
-  const readShapeMode = (saved) => SHAPE_MODES.includes(saved) ? saved : SHAPE_OFF
-  const nextShapeMode = (mode) => SHAPE_MODES[(SHAPE_MODES.indexOf(mode) + 1) % SHAPE_MODES.length]
-  // Pen Tool Extras' page button and swatches draw in a 24-unit box with a 3-unit round stroke; Draw's modes are drawn the same way.
-  const shapePaint = (stroke) => `fill='none' stroke='${stroke}' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'`
-  const SHAPE_PICTURES = {
-    [SHAPE_OFF]: FREE_LINE_ICON,
-    [RECT]: "<rect x='3.5' y='7.5' width='17' height='11'/>",
-    [ELLIPSE]: "<ellipse cx='12' cy='13' rx='9.5' ry='5.5'/>"
-  }
-  // The swatch shows a straight line for free lines, where the button's picture is a freehand squiggle.
-  const SWATCH_PICTURES = { ...SHAPE_PICTURES, [SHAPE_OFF]: "<path d='M2 12H22'/>" }
-  const shapeSwatchSvg = (mode) => `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' ${shapePaint('black')}>${SWATCH_PICTURES[mode]}</svg>`
-  // The picture is the mode a press turns to, with a dot per mode under it filled for the current one, as Pen Tool Extras' page button has.
-  const shapeButtonIcon = (mode) => {
-    const dots = SHAPE_MODES.map((m, i) =>
-      `<circle cx='${20 - 3 * (SHAPE_MODES.length - i - 1)}' cy='3' r='1.1' data-shape-dot='${m === mode ? 'filled' : 'outline'}'/>`)
-    return `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24' aria-hidden='true'><g ${shapePaint('currentColor')}>${SHAPE_PICTURES[nextShapeMode(mode)]}</g>` +
-      `<g stroke='currentColor' fill='currentColor' stroke-width='0.5'>${dots.join('')}</g></svg>`
-  }
-  const SHAPE_NAMES = { [SHAPE_OFF]: 'off, free lines', [RECT]: 'rectangle', [ELLIPSE]: 'ellipse' }
-  const SHAPE_LABELS = Object.fromEntries(SHAPE_MODES.map((mode) => [mode, `Shape: ${SHAPE_NAMES[mode]}. Click for ${SHAPE_NAMES[nextShapeMode(mode)]}`]))
   const readWidth = (saved) => isWidth(saved) ? saved : DEFAULT_WIDTH
-  const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
-  // Board units, as a text's height: the line width's slider also sets the text size.
+  const readBackground = (saved) => saved === true
+  // Board units, as a text's height: the size slider's value gives the text size.
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
@@ -714,47 +587,35 @@
     return { ...paletteColors(preset, pages, readCell).colors }
   }
 
-  // Copy and Paste carry the colors and both slider values, and not the drawings or the color picked.
+  // Copy and Paste carry the colors and the size, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
   const READERS = {
     [COLORS_KEY]: readPastedColors,
-    [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
-    [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined
+    [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined
   }
 
-  // The width and opacity in force, defaults included, so a paste can put one back to its default; the colors only once they are saved.
+  // The size in force, default included, so a paste can put it back to its default; the colors only once they are saved.
   function copiedSettings (store) {
-    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)) }
+    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)) }
     const savedColors = readDrawColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = savedColors
     return JSON.stringify(copied)
   }
 
-  // A shape's box as [left, top, right, bottom]: the drag's own box.
-  const shapeBox = ([ax, ay], [bx, by]) => [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)].map(roundToTenth)
+  // A note is a text item. `bg` is set only on a note made with the Background button on, so a note saved without it has no box.
+  const textItem = ([x, y], text, color, size, background) => ({ kind: TEXT_KIND, color, size, opacity: DEFAULT_OPACITY, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
-  const straightLine = (points) => points.length <= 1 ? points.slice() : [points[0], points[points.length - 1]]
-
-  // A drawing is a list of items, each with a kind: a stroke, a text or a shape. Their points and boxes are in board units.
-  const strokeItem = (points, color, width, opacity) => ({ kind: 'stroke', color, width, opacity, points: points.map(([x, y]) => [roundToTenth(x), roundToTenth(y)]) })
-  const textItem = ([x, y], text, color, size, opacity) => ({ kind: 'text', color, size, opacity, text, at: [roundToTenth(x), roundToTenth(y)] })
-  const shapeItem = (shape, box, color, width, opacity) => ({ kind: 'shape', shape, color, width, opacity, box })
-
-  const isItem = (item, kind, isItemOpacity) => isPlainObject(item) && item.kind === kind && drawColor(item.color) !== undefined && isItemOpacity(item.opacity)
   const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
-  // SVG draws nothing for a rectangle or an ellipse with no width or no height.
-  const hasArea = ([left, top, right, bottom]) => left < right && top < bottom
-  const isStroke = (item) => isItem(item, 'stroke', isOpacityOrNone) && isWidth(item.width) && Array.isArray(item.points) && item.points.length > 0 && item.points.every(isPoint)
-  const isText = (item) => isItem(item, 'text', isOpacityOrNone) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 && isPoint(item.at)
-  // A shape is newer than opacity, so it always has one.
-  const isShape = (item) => isItem(item, 'shape', isOpacity) && SHAPES.includes(item.shape) && isWidth(item.width) &&
-    Array.isArray(item.box) && item.box.length === 4 && item.box.every(isNumber) && hasArea(item.box)
+  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
+    (item.bg === undefined || item.bg === true) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 && isPoint(item.at)
+  // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
+  const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
 
   // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
   function readDrawing (saved) {
     if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((item) => isStroke(item) || isText(item) || isShape(item))) throw new Error(`the saved drawing is not a list of strokes, texts and shapes: ${JSON.stringify(saved).slice(0, 200)}`)
+    if (!Array.isArray(saved) || !saved.every((item) => isText(item) || isHiddenItem(item))) throw new Error(`the saved drawing is not a list of texts, strokes and shapes: ${JSON.stringify(saved).slice(0, 200)}`)
     return saved
   }
 
@@ -791,8 +652,8 @@
     for (const dropped of touched.dropped) store.removeData(drawingKey(dropped))
   }
 
-  // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Draw out of the
-  // list while a keydown is dispatched gives Draw no key, and keeps every other tool's key where it is without Draw.
+  // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Annotation out of the
+  // list while a keydown is dispatched gives it no key, and keeps every other tool's key where it is without it.
   const toolNamesFor = (names, event) => event && event.type === 'keydown' && event.eventPhase !== 0
     ? names.filter((name) => name !== TOOL_NAME)
     : names
@@ -924,14 +785,14 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, hasArea, shapeBox, shapeItem, nextShapeMode, readShapeMode, SHAPE_MODES, shapeButtonIcon, shapeSwatchSvg, SHAPE_LABELS, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, itemAt, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, textAt, touchesText, movedItem, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
   if (!Framework.getApp || !Framework.addTool) {
-    console.warn('draw-tool: SudokuPad\'s Framework has no getApp or addTool, so no Draw tool was added')
+    console.warn('draw-tool: SudokuPad\'s Framework has no getApp or addTool, so no Text Annotation tool was added')
     return
   }
 
@@ -960,39 +821,22 @@
     return [p.x, p.y]
   }
 
-  // Until Draw is first made current its colors are not copied yet, so an item drawn by an older version shows in the pen color.
+  // The page's own color, as SudokuPad's buttons use it behind their icons.
+  const PAGE_COLOR = 'var(--body-bg, #fff)'
+
+  // Until Text Annotation is first made current its colors are not copied yet, so a note drawn by an older version shows in the pen color.
   const itemColor = (n) => `var(${colorVar(n)}, var(--puzzle-pencolor-${n}))`
 
-  // An unfilled line in a draw color, as a stroke and a shape are drawn.
-  function newOutline (layer, tag, className, color, width, opacity) {
-    const element = document.createElementNS(SVG_NS, tag)
-    element.setAttribute('class', className)
-    element.setAttribute('fill', 'none')
-    element.setAttribute('stroke-width', String(width))
-    element.setAttribute('stroke-linejoin', 'round')
-    element.setAttribute('stroke-opacity', String(opacity / 100))
-    element.style.stroke = itemColor(color)
-    layer.appendChild(element)
-    return element
+  // The box behind a note with a background, in the page's color, sized to the text as the browser measures it.
+  function newTextBackground (layer, text, item) {
+    const box = text.getBBox()
+    const [padX, padY] = [item.size * BACKGROUND_PAD_X, item.size * BACKGROUND_PAD_Y]
+    const rect = document.createElementNS(SVG_NS, 'rect')
+    rect.setAttribute('class', TEXT_BACKGROUND_CLASS)
+    for (const [name, value] of Object.entries({ x: box.x - padX, y: box.y - padY, width: box.width + 2 * padX, height: box.height + 2 * padY, rx: item.size * BACKGROUND_RADIUS })) rect.setAttribute(name, coordinate(value))
+    rect.style.fill = PAGE_COLOR
+    layer.insertBefore(rect, text)
   }
-
-  function newStroke (layer, color, width, opacity) {
-    const path = newOutline(layer, 'path', 'draw-tool-stroke', color, width, opacity)
-    path.setAttribute('stroke-linecap', 'round')
-    return path
-  }
-
-  function newShape (layer, item) {
-    const [left, top, right, bottom] = item.box
-    const element = newOutline(layer, item.shape === RECT ? 'rect' : 'ellipse', SHAPE_ITEM_CLASS, item.color, item.width, item.opacity)
-    const geometry = item.shape === RECT
-      ? { x: left, y: top, width: right - left, height: bottom - top }
-      : { cx: (left + right) / 2, cy: (top + bottom) / 2, rx: (right - left) / 2, ry: (bottom - top) / 2 }
-    for (const [name, value] of Object.entries(geometry)) element.setAttribute(name, coordinate(value))
-    return element
-  }
-
-  const drawStroke = (layer, item) => newStroke(layer, item.color, item.width, itemOpacity(item)).setAttribute('d', strokePath(item.points))
 
   function newText (layer, item) {
     const text = document.createElementNS(SVG_NS, 'text')
@@ -1006,10 +850,9 @@
     text.setAttribute('fill-opacity', String(itemOpacity(item) / 100))
     text.textContent = item.text
     layer.appendChild(text)
+    if (item.bg) newTextBackground(layer, text, item)
     return text
   }
-
-  const DRAWERS = { stroke: drawStroke, text: newText, shape: newShape }
 
   // <lib:panel>
   // Generated from lib/panel.js; edit that file and run node sync-lib.js.
@@ -1052,7 +895,7 @@
 
   // The panel's rules, as a list of CSS rules. `panel` is the keypad's selector and `colorButton` the selector of a color button under it; `controlButtons` is the
   // selector list of the three control buttons; `tray`, `sliders` and `sliderRow` are class names; `wedgeSlider` and `fadeSlider` are the ids of the slider drawn as a wedge
-  // (widening to the right) and the one drawn as a fade (faint to solid).
+  // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out.
   function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
     return [
@@ -1074,8 +917,7 @@
       `.${sliderRow} input::-moz-range-track { ${TRACK_SHAPE} }`,
       `#${wedgeSlider}::-webkit-slider-runnable-track { background: ${WEDGE_PICTURE}; }`,
       `#${wedgeSlider}::-moz-range-track { background: ${WEDGE_PICTURE}; }`,
-      `#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`,
-      `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`,
+      ...(fadeSlider ? [`#${fadeSlider}::-webkit-slider-runnable-track { background: ${FADE_PICTURE}; }`, `#${fadeSlider}::-moz-range-track { background: ${FADE_PICTURE}; }`] : []),
       `.${sliderRow} input::-webkit-slider-thumb { -webkit-appearance: none; margin-top: ${rem((SLIDER_TRACK_REM - SLIDER_THUMB_REM) / 2)}rem; ${THUMB_SHAPE} }`,
       `.${sliderRow} input::-moz-range-thumb { ${THUMB_SHAPE} }`
     ]
@@ -1095,35 +937,38 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:panel>
-  const SWATCH_REM = 2.4
-  // The column of each control in its row.
-  const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SHAPE_BUTTON_CLASS]: 2, [SETTINGS_CLASS]: 3 }
-  // Each color button shows the current mode (a line, a rectangle or an ellipse) in its draw color, cut out of the button so a recolor follows.
-  const swatchMask = (mode) => `url("data:image/svg+xml,${encodeURIComponent(shapeSwatchSvg(mode)).replace(/'/g, '%27')}") center / 100% no-repeat`
+  const COLOR_LABEL_REM = 1.7
+  const SIZE_LABEL_REM = [0.85, 1.6]
+  // The column of each control in its row: Clear all, the Background button and the settings gear.
+  const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [BACKGROUND_CLASS]: 2, [SETTINGS_CLASS]: 3 }
   const PANEL = '.tool-draw .controls-input'
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
+  // Each color button shows "Aa" in its draw color, so a recolor follows.
   const PANEL_CSS = [
-    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
+    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
-    `${PANEL} button.digit::after { content: ""; position: absolute; inset: 0; margin: auto; width: ${SWATCH_REM}rem; height: ${SWATCH_REM}rem; }`,
-    `${PANEL} button.digit::after { -webkit-mask: ${swatchMask(SHAPE_OFF)}; mask: ${swatchMask(SHAPE_OFF)}; }`,
-    ...SHAPES.map((mode) => `${PANEL}[data-draw-shape="${mode}"] button.digit::after { -webkit-mask: ${swatchMask(mode)}; mask: ${swatchMask(mode)}; }`),
-    ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(${colorVar(n)}); }`),
+    `${PANEL} button.digit::after { content: "Aa"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-indent: 0; font-size: ${COLOR_LABEL_REM}rem; font-weight: 600; line-height: 1; }`,
+    ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { color: var(${colorVar(n)}); }`),
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
-    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
+    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${BACKGROUND_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path', which would turn the icons' lines into blobs.
-    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse):not([data-shape-dot="filled"]) { fill: none !important; }`,
+    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}) :is(path, circle, rect, ellipse), .${BACKGROUND_CLASS} :is(path, circle, rect, ellipse):not(.${BACKGROUND_FILL_CLASS}) { fill: none !important; }`,
+    `.${BACKGROUND_CLASS}[aria-pressed="true"] { background-color: ${TRAY_COLOR}; outline: 2px solid ${PANEL_COLOR}; }`,
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     pickerCss(CLASS_PREFIX, TOOL_NAME),
+    // The slider row's gap stands between each "A" and the track, so a label is padded only on its outer side.
+    `.${SLIDER_ROW_CLASS} span { font-weight: 600; line-height: 1; }`,
+    `.${SLIDER_ROW_CLASS} span:first-child { font-size: ${SIZE_LABEL_REM[0]}rem; padding-left: 0.35rem; }`,
+    `.${SLIDER_ROW_CLASS} span:last-child { font-size: ${SIZE_LABEL_REM[1]}rem; padding-right: 0.35rem; }`,
     `.${TEXT_BOX_CLASS} { position: absolute; z-index: 1000; box-sizing: content-box; margin: 0; padding: 0; border: 1px dashed currentColor; outline: none; background: transparent; text-align: center; }`,
-    // The tool bar is a grid and stock buttons have order 0, so Draw's stays last whenever another is added.
+    // The tool bar is a grid and stock buttons have order 0, so Text Annotation's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
   // Pen Tool Extras' gear, at its viewBox.
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
-  const SETTINGS_LABEL = 'Draw Tool settings'
+  const SETTINGS_LABEL = 'Text Annotation settings'
   // The panel's three control buttons draw their icon with these strokes.
   const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
   // Clear all is a trash can.
@@ -1131,11 +976,11 @@
   const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
-  let opacity = DEFAULT_OPACITY
-  let shapeMode = SHAPE_OFF
-  // Draw's nine colors, or null until they are first copied from the pen colors.
+  // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
+  let background = false
+  // Text Annotation's nine colors, or null until they are first copied from the pen colors.
   let colors = null
-  // The elements the panel adds to SudokuPad's keypad while Draw is current.
+  // The elements the panel adds to SudokuPad's keypad while Text Annotation is current.
   let panelParts = []
 
   const keypad = () => document.querySelector('.controls-input')
@@ -1170,25 +1015,21 @@
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
   }
 
-  // A slider sets only the next item and is saved for the next visit, and a paste sets it as a move of the slider would.
-  const SLIDERS = [
-    { id: SIZE_SLIDER, label: 'Size', key: WIDTH_KEY, min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP, read: readWidth, get: () => width, set: (value) => { width = value } },
-    { id: OPACITY_SLIDER, label: 'Opacity (%)', key: OPACITY_KEY, min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP, read: readOpacity, get: () => opacity, set: (value) => { opacity = value } }
-  ]
-
-  function setSlider (slider, value) {
-    slider.set(value)
-    Framework.setData(slider.key, value)
+  // The slider sets only the next note and is saved for the next visit, and a paste sets it as a move of the slider would.
+  function setSize (value) {
+    width = value
+    Framework.setData(WIDTH_KEY, value)
   }
 
-  function sliderRow ({ id, label, min, max, step, get }) {
+  function sizeRow () {
     const row = document.createElement('div')
     row.className = SLIDER_ROW_CLASS
-    row.title = label
+    row.title = SIZE_LABEL
     const input = document.createElement('input')
-    Object.assign(input, { type: 'range', id, min, max, step, value: get(), tabIndex: -1 })
-    input.setAttribute('aria-label', label)
-    row.appendChild(input)
+    Object.assign(input, { type: 'range', id: SIZE_SLIDER, min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP, value: width, tabIndex: -1 })
+    input.setAttribute('aria-label', SIZE_LABEL)
+    const [small, large] = ['A', 'A'].map((letter) => Object.assign(document.createElement('span'), { textContent: letter }))
+    row.append(small, input, large)
     return row
   }
 
@@ -1202,13 +1043,12 @@
     colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`)
   ].join('\n')
 
-  // A pasted value is saved and shown at once, whether or not Draw is current.
+  // A pasted value is saved and shown at once, whether or not Text Annotation is current.
   function applyPasted (values) {
-    for (const slider of SLIDERS) {
-      if (!(slider.key in values)) continue
-      setSlider(slider, values[slider.key])
-      const input = document.getElementById(slider.id)
-      if (input) input.value = values[slider.key]
+    if (WIDTH_KEY in values) {
+      setSize(values[WIDTH_KEY])
+      const input = document.getElementById(SIZE_SLIDER)
+      if (input) input.value = values[WIDTH_KEY]
     }
     if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
   }
@@ -1235,7 +1075,7 @@
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Draw Tool', version: VERSION }) },
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Text Annotation', version: VERSION }) },
         { tag: 'text', innerHTML: `<div id="${DIALOG_ID}"></div>` },
         {
           tag: 'options',
@@ -1251,7 +1091,7 @@
     const draw = () => {
       const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
-        renderColorBlock({ prefix: CLASS_PREFIX, label: 'Draw color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Draw color ${n}` })) }) +
+        renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '')
     }
     draw()
@@ -1280,12 +1120,38 @@
     })
   }
 
-  function showShapeMode (button) {
-    button.dataset.mode = shapeMode
-    button.title = SHAPE_LABELS[shapeMode]
-    button.setAttribute('aria-label', SHAPE_LABELS[shapeMode])
-    button.innerHTML = shapeButtonIcon(shapeMode)
-    keypad().dataset.drawShape = shapeMode
+  const BACKGROUND_ON_LABEL = 'Background: on. Click to turn off'
+  const BACKGROUND_OFF_LABEL = 'Background: off. Click to turn on'
+  const BACKGROUND_ICON = `<rect class="${BACKGROUND_FILL_CLASS}" x="3" y="5" width="18" height="14" rx="3" fill="currentColor" fill-opacity=".22"/><rect x="3" y="5" width="18" height="14" rx="3" stroke-dasharray="3 3"/>${TEXT_GLYPH}`
+
+  // The button shows the open note's own background while a note is open, and the setting for the next note otherwise.
+  const backgroundShown = () => editing ? Boolean(editing.item.bg) : background
+
+  function showBackground () {
+    const button = document.querySelector(`.${BACKGROUND_CLASS}`)
+    if (!button) return
+    const label = backgroundShown() ? BACKGROUND_ON_LABEL : BACKGROUND_OFF_LABEL
+    button.title = label
+    button.setAttribute('aria-label', label)
+    button.setAttribute('aria-pressed', String(backgroundShown()))
+  }
+
+  function setBackground (on) {
+    background = on
+    Framework.setData(BACKGROUND_KEY, on)
+  }
+
+  // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the setting.
+  function pressBackground () {
+    if (!editing) setBackground(!background)
+    else {
+      const on = !editing.item.bg
+      const { bg, ...rest } = editing.item
+      editing.item = on ? { ...rest, bg: true } : rest
+      editing.input.style.backgroundColor = on ? PAGE_COLOR : 'transparent'
+      if (editing.index === -1) setBackground(on)
+    }
+    showBackground()
   }
 
   function showPanel () {
@@ -1303,38 +1169,32 @@
     settings.setAttribute('aria-label', SETTINGS_LABEL)
     settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
     settings.addEventListener('click', openDialog)
-    const shapeButton = document.createElement('button')
-    shapeButton.className = SHAPE_BUTTON_CLASS
-    showShapeMode(shapeButton)
-    shapeButton.addEventListener('click', () => {
-      shapeMode = nextShapeMode(shapeMode)
-      Framework.setData(SHAPE_KEY, shapeMode)
-      showShapeMode(shapeButton)
-    })
+    const backgroundButton = document.createElement('button')
+    backgroundButton.className = BACKGROUND_CLASS
+    backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
+    // A press on the button keeps the focus in an open text box, so the box stays open for the click.
+    backgroundButton.addEventListener('mousedown', (event) => event.preventDefault())
+    backgroundButton.addEventListener('click', pressBackground)
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
-    sliders.append(...SLIDERS.map(sliderRow))
-    sliders.addEventListener('input', (event) => {
-      const slider = SLIDERS.find((s) => s.id === event.target.id)
-      setSlider(slider, slider.read(Number(event.target.value)))
-    })
-    panelParts = [tray, clear, shapeButton, settings, sliders]
+    sliders.append(sizeRow())
+    sliders.addEventListener('input', (event) => setSize(readWidth(Number(event.target.value))))
+    panelParts = [tray, clear, backgroundButton, settings, sliders]
     keypad().append(...panelParts)
+    showBackground()
   }
 
   function hidePanel () {
     for (const part of panelParts) part.remove()
-    delete keypad().dataset.drawShape
     panelParts = []
   }
 
-  // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every item in it reads the variable.
+  // A hold on a color button toggles a color picker over each, and a picker recolors its color number at once: every note in it reads the variable.
   function installColorPickers () {
     installHoldToEdit({ prefix: CLASS_PREFIX, tool: TOOL_NAME, colorOf: (n) => colors[n], save: (n, value) => saveColors(editedColor(colors, Number(n), value)) })
   }
 
-  // A left-drag in progress: a free line, a shape when `shape` is set, or a move of the item `move` names. `element` is what it shows on the board so far.
-  // `straight` is whether Shift is held, which draws a free line straight.
+  // A left press in progress: a move of the note `move` names, or null when the press began on no note.
   let drag = null
   // A right-drag in progress: the last point it reached and whether it has erased an item yet. The right button's `buttons` bit holds it.
   let erasing = null
@@ -1354,7 +1214,7 @@
     const layer = drawingLayer()
     layer.replaceChildren()
     drawing.forEach((item, i) => {
-      if (!editing || editing.index !== i) DRAWERS[item.kind](layer, item)
+      if (item.kind === TEXT_KIND && (!editing || editing.index !== i)) newText(layer, item)
     })
   }
 
@@ -1372,13 +1232,13 @@
 
   function save () {
     if (!savable) {
-      report('This puzzle\'s saved drawing cannot be read, so Draw Tool leaves it as it is and does not save the drawing on this puzzle. Clear all or Restart replaces it.')
+      report('This puzzle\'s saved notes cannot be read, so Text Annotation leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
       return
     }
     try {
       saveDrawingTo(Framework, currentPuzzleKey(), drawing)
     } catch (err) {
-      report(`Draw Tool could not save this puzzle's drawing: ${err.message}`)
+      report(`Text Annotation could not save this puzzle's notes: ${err.message}`)
     }
   }
 
@@ -1399,12 +1259,13 @@
 
   function openText (at) {
     const index = textAt(drawing, at)
-    const item = index === -1 ? textItem(at, '', color, textSizeFor(width), opacity) : { ...drawing[index] }
+    const item = index === -1 ? textItem(at, '', color, textSizeFor(width), background) : { ...drawing[index] }
     const input = document.createElement('input')
     input.className = TEXT_BOX_CLASS
     input.type = 'text'
     input.value = item.text
     input.style.color = itemColor(item.color)
+    input.style.backgroundColor = item.bg ? PAGE_COLOR : 'transparent'
     input.style.fontFamily = window.getComputedStyle(drawingLayer()).fontFamily
     // As SudokuPad's own buttons do: a press in the box is the box's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) input.addEventListener(type, (event) => event.stopPropagation())
@@ -1414,6 +1275,7 @@
     document.body.appendChild(input)
     placeTextBox()
     renderDrawing()
+    showBackground()
     input.focus()
   }
 
@@ -1424,13 +1286,15 @@
     input.remove()
     const before = index === -1 ? '' : drawing[index].text
     const text = input.value
-    if (text !== before) {
+    const changed = text !== before || (index !== -1 && Boolean(item.bg) !== Boolean(drawing[index].bg))
+    if (changed) {
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
       else drawing[index] = { ...item, text }
     }
     renderDrawing()
-    if (text !== before) save()
+    showBackground()
+    if (changed) save()
   }
 
   function dropText () {
@@ -1438,6 +1302,7 @@
     editing = null
     input.remove()
     renderDrawing()
+    showBackground()
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
@@ -1459,7 +1324,7 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them.
   function finishTextOnPress (event) {
-    if (!editing || event.target === editing.input) return
+    if (!editing || event.target === editing.input || event.target.closest(`.${BACKGROUND_CLASS}`)) return
     pressFinishedText = true
     finishText()
   }
@@ -1468,31 +1333,8 @@
   function endGesture () {
     if (erasing) endErase()
     if (!drag) return
-    if (isClick(drag.points)) dropDrag()
-    else if (drag.move) endMove()
-    else if (drag.shape) endShape()
-    else endStroke()
-  }
-
-  function dropDrag () {
-    drag.element?.remove()
-    drag = null
-  }
-
-  const dragShape = () => shapeItem(drag.shape, shapeBox(drag.points[0], drag.points[drag.points.length - 1]), drag.color, drag.width, drag.opacity)
-
-  // A drag straight along a row or a column has no box to draw, so it saves nothing.
-  function endShape () {
-    const item = dragShape()
-    if (!hasArea(item.box)) {
-      dropDrag()
-      return
-    }
-    drag.element?.remove()
-    newShape(drag.layer, item)
-    drag = null
-    drawing.push(item)
-    save()
+    if (drag.move && !isClick(drag.points)) endMove()
+    else drag = null
   }
 
   const dragOffset = () => {
@@ -1516,15 +1358,6 @@
     if (erased) save()
   }
 
-  function endStroke () {
-    const { element: path, points, straight, color: strokeColor, width: strokeWidth, opacity: strokeOpacity } = drag
-    drag = null
-    const item = strokeItem(straight ? straightLine(points) : simplifyPath(points), strokeColor, strokeWidth, strokeOpacity)
-    path.setAttribute('d', strokePath(item.points))
-    drawing.push(item)
-    save()
-  }
-
   function cancelInput () {
     drag = null
     erasing = null
@@ -1538,25 +1371,25 @@
       drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
       savable = true
     } catch (err) {
-      console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's drawing is not saved.`)
+      console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's notes are not saved.`)
       drawing = []
       savable = false
     }
     renderDrawing()
   }
 
-  // An unreadable saved drawing is written over too.
+  // The saved strokes and shapes of an earlier version are left as they are, but an unreadable saved drawing is written over.
   function emptyDrawing () {
-    drawing = []
+    drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
     drawingLayer().replaceChildren()
     savable = true
     save()
   }
 
-  // Deletes, whole, every item the drag from `from` to `to` passes near.
+  // Deletes, whole, every note the drag from `from` to `to` passes near.
   function eraseAlong (from, to) {
-    const kept = drawing.filter((item) => !touchesItem(item, from, to))
+    const kept = drawing.filter((item) => item.kind !== TEXT_KIND || !touchesText(item, from, to))
     if (kept.length === drawing.length) return
     drawing = kept
     erasing.erased = true
@@ -1564,7 +1397,7 @@
   }
 
   // SudokuPad gives a tool every button's mousedown; the browser opens its menu on the press on Linux and on the
-  // release on Windows, so it is suppressed over the board for as long as Draw is current. On Windows a right-drag
+  // release on Windows, so it is suppressed over the board for as long as Text Annotation is current. On Windows a right-drag
   // that ends off the board still opens the menu there.
   const overBoardWhileDrawing = (event) => Framework.app.tool === TOOL_NAME && onBoard(event)
   function suppressMenu (event) {
@@ -1604,16 +1437,9 @@
       if (event.button !== PRIMARY_BUTTON) return false
       const layer = drawingLayer()
       const at = toBoard(layer, event)
-      // A press on an item moves it once it drags, in every Shape mode; a click on it does what a click does.
-      const index = itemAt(drawing, at)
-      const move = index === -1 ? null : { index, item: drawing[index] }
-      const shape = shapeMode === SHAPE_OFF || move ? null : shapeMode
-      drag = { layer, shape, move, element: null, color, width, opacity, straight: false, points: [at] }
-      // A shape shows only once the press moves, so a click that opens a text box flashes no box.
-      if (!shape && !move) {
-        drag.element = newStroke(layer, color, width, opacity)
-        drag.element.setAttribute('d', strokePath(drag.points))
-      }
+      // A press on a note moves it once it drags; a click on it opens it.
+      const index = textAt(drawing, at)
+      drag = { layer, move: index === -1 ? null : { index, item: drawing[index] }, points: [at] }
       return true
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
@@ -1632,17 +1458,9 @@
       // An item stays where a press on it can still reach it: a move ends at the last point on the board.
       if (drag.move && !onBoard(event)) return true
       drag.points.push(toBoard(drag.layer, event))
-      drag.straight = event.shiftKey
-      if (drag.move) {
-        if (!isClick(drag.points)) {
-          applyMove()
-          renderDrawing()
-        }
-      } else if (drag.shape) {
-        drag.element?.remove()
-        drag.element = isClick(drag.points) ? null : newShape(drag.layer, dragShape())
-      } else {
-        drag.element.setAttribute('d', strokePath(drag.straight ? straightLine(drag.points) : drag.points))
+      if (drag.move && !isClick(drag.points)) {
+        applyMove()
+        renderDrawing()
       }
       return true
     },
@@ -1652,17 +1470,15 @@
         return true
       }
       if (!drag) return false
-      // A text box opens only on the release of Draw's own press, never on a release or click alone.
+      // A text box opens only on the release of Text Annotation's own press, never on a release or click alone.
       if (isClick(drag.points)) {
         const [at] = drag.points
-        dropDrag()
+        drag = null
         openText(at)
         return true
       }
-      drag.straight = event.shiftKey
       if (drag.move) endMove()
-      else if (drag.shape) endShape()
-      else endStroke()
+      else drag = null
       return true
     },
     handleToolEnter () {
@@ -1676,7 +1492,7 @@
       hidePanel()
       unmarkColor()
     },
-    // A digit key or keypad button gets the button's data-value. With Draw current it picks a draw color, and no key
+    // A digit key or keypad button gets the button's data-value. With Text Annotation current it picks a color, and no key
     // or button enters anything in a cell.
     handleToolButton (value) {
       const picked = drawColor(value)
@@ -1684,14 +1500,14 @@
       return true
     },
     // SudokuPad calls every tool's handleKeydown first, and true ends the keydown there. Shift would otherwise switch
-    // to Corner for as long as it is held (that tool's tempKey), and a drag with it held would never reach Draw.
+    // to Corner for as long as it is held (that tool's tempKey), and a drag with it held would never reach Text Annotation.
     handleKeydown (event) { return Framework.app.tool === TOOL_NAME && event.key === 'Shift' }
   }
 
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
-    for (const slider of SLIDERS) slider.set(slider.read(Framework.getData(slider.key)))
-    shapeMode = readShapeMode(Framework.getData(SHAPE_KEY))
+    width = readWidth(Framework.getData(WIDTH_KEY))
+    background = readBackground(Framework.getData(BACKGROUND_KEY))
     colors = readDrawColors(Framework.getData(COLORS_KEY))
     showColors()
     const style = document.createElement('style')
@@ -1701,10 +1517,10 @@
     const names = app.getToolNames
     app.getToolNames = function () { return toolNamesFor(names.call(this), this.currentEvent) }
     Framework.addTool({
-      button: { name: TOOL_NAME, title: 'Draw', content: `<div class="icon">${BUTTON_ICON}</div>Draw` },
+      button: { name: TOOL_NAME, title: 'Text Annotation', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
       tool
     })
-    addSettingsEntry(Framework, { name: 'drawtool', content: 'Draw Tool', open: openDialog })
+    addSettingsEntry(Framework, { name: 'drawtool', content: 'Text Annotation', open: openDialog })
     app.puzzle.on('loaded', showSavedDrawing)
     app.on('restarted', emptyDrawing)
     window.addEventListener('contextmenu', suppressMenu)

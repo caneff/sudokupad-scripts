@@ -1,12 +1,9 @@
-// Shared by the Draw Tool's screenshot scripts: the recorded puzzle past Start Puzzle, with draw-tool.user.js injected
-// and the Draw tool on. Not a script to run.
+// Shared by Text Annotation's screenshot scripts: the recorded puzzle past Start Puzzle, with draw-tool.user.js injected
+// and the Text Annotation tool on. Not a script to run.
 import { readFileSync } from 'node:fs'
 import { openPage, startPuzzle } from '../../../live/page.mjs'
 
 const script = readFileSync(new URL('../../../draw-tool.user.js', import.meta.url), 'utf8')
-
-// The Size slider's values for the thin, middle and thick lines the site pictures draw.
-export const OLD_WIDTHS = [3, 6, 10]
 
 export async function openDrawPage (browser, deviceScaleFactor) {
   const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor } })

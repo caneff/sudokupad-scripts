@@ -1,22 +1,16 @@
-// Live check of the place of Draw Tool's button among the tool buttons, on sudokupad.app in headless Chromium.
+// Live check of the place of Text Annotation's button among the tool buttons, on sudokupad.app in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, STROKES, TOOL_KEYS, tool } from './draw-tool-fixtures.mjs'
+import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
 import { injectAtIdle, openPage, startPuzzle } from '../page.mjs'
-import { mouseDrag } from '../pen.mjs'
+import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// The buttons in the order they are drawn (the bar fills a column down, then the next one), not their order in the page:
-// Draw's place comes from a CSS rule, so the page order does not change.
-const buttonIds = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-tool > button')]
-  .map((b) => ({ id: b.id, ...b.getBoundingClientRect().toJSON() }))
-  .sort((a, b) => Math.round(a.left) - Math.round(b.left) || a.top - b.top)
-  .map((b) => b.id))
 const lastButton = async (p) => (await buttonIds(p)).at(-1)
 const penOn = (p) => p.evaluate(() => Framework.setSetting('toolpen', true))
 const PEN_BUTTON = '#control-pen'
@@ -35,7 +29,7 @@ async function startWithSavedPen (p) {
   await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
 }
 
-describe('Draw Tool: its button is the last tool button', { concurrency: false }, () => {
+describe('Text Annotation: its button is the last tool button', { concurrency: false }, () => {
   let context, p, errors
 
   before(async () => { ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } })) })
@@ -65,11 +59,13 @@ describe('Draw Tool: its button is the last tool button', { concurrency: false }
     assert.equal(ids.indexOf('control-later') < ids.indexOf('control-draw'), true, ids.join())
   })
 
-  it('the Draw button, last, still makes Draw the current tool, with its panel, and a drag still draws', async () => {
+  it('the Text Annotation button, last, still makes it the current tool, with its panel, and a click still makes a note', async () => {
     assert.equal(await pickDraw(p), 'draw')
     await p.locator(SLIDERS).waitFor({ state: 'visible' })
-    await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5]])
-    assert.equal(await settle(() => p.locator(STROKES).count(), 1), 1)
+    await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    await p.keyboard.type('15')
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await settle(() => texts(p), ['15']), ['15'])
     await p.click(DIGIT_BUTTON)
     assert.equal(await tool(p), 'normal')
   })
@@ -77,7 +73,7 @@ describe('Draw Tool: its button is the last tool button', { concurrency: false }
   it('no page error', () => { assert.deepEqual(errors, []) })
 })
 
-describe('Draw Tool: the pen tool on at startup and the tool keys', { concurrency: false }, () => {
+describe('Text Annotation: the pen tool on at startup and the tool keys', { concurrency: false }, () => {
   let context, p
 
   before(async () => {

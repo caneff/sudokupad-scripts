@@ -1,6 +1,6 @@
 // Live check of draw-tool.user.js's settings dialog on sudokupad.app: it opens from SudokuPad's settings (Experimental) and from the
 // panel's gear, shows the version, a preset sets all nine colors and Save writes them, and Copy then Paste in a fresh page restores
-// the colors and both sliders.
+// the colors and the size.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -8,7 +8,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
 
-const { COLORS_KEY, OPACITY_KEY, OPACITY_SLIDER, SETTINGS_BUTTON, SIZE_SLIDER, WIDTH_KEY, pickDraw, script } = draw
+const { COLORS_KEY, SETTINGS_BUTTON, SIZE_SLIDER, WIDTH_KEY, pickDraw, script } = draw
 const EDITOR = '#draw-tool-dialog'
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const STATUS = '.dialog [data-role="settings-status"]'
@@ -23,7 +23,7 @@ const read = (p, fn, arg) => p.evaluate(fn, arg)
 const savedColors = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
 const dialogColors = (p) => p.locator(`${EDITOR} input[type=color]`).evaluateAll((inputs) => Object.fromEntries(inputs.map((i) => [i.dataset.key, i.value])))
 
-describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
+describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
     ;({ context, p, errors } = await open())
@@ -32,8 +32,8 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the Experimental settings entry opens it, with the version from the script header beside the heading', async () => {
-    await openScriptDialog(p, 'Draw Tool', EDITOR)
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Draw Tool')
+    await openScriptDialog(p, 'Text Annotation', EDITOR)
+    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Text Annotation')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
     assert.equal(await p.locator(`${EDITOR} input[type=color]`).count(), 9)
     await closeDialogWith(p, 'Cancel', EDITOR)
@@ -78,7 +78,7 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await dialogColors(p), SUDOKUPAD_COLORS)
     await closeDialogWith(p, 'Save', EDITOR)
     assert.deepEqual(await savedColors(p), SUDOKUPAD_COLORS)
-    const lines = await p.locator('.controls-input button.digit').evaluateAll((bs) => bs.map((b) => window.getComputedStyle(b, '::after').backgroundColor))
+    const lines = await p.locator('.controls-input button.digit').evaluateAll((bs) => bs.map((b) => window.getComputedStyle(b, '::after').color))
     assert.equal(lines[3], 'rgb(245, 58, 55)', 'color 4 shows SudokuPad\'s red')
   })
 
@@ -91,12 +91,13 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     assert.deepEqual(await savedColors(p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
   })
 
-  it('Copy settings then Paste settings in a fresh page restores the colors and both sliders', async () => {
-    await read(p, ([w, o]) => { Framework.setData(w, 3.5); Framework.setData(o, 45) }, [WIDTH_KEY, OPACITY_KEY])
+  it('Copy settings then Paste settings in a fresh page restores the colors and the size, and carries nothing else', async () => {
+    await read(p, (w) => Framework.setData(w, 3.5), WIDTH_KEY)
     await p.click(SETTINGS_BUTTON)
     await p.locator('.dialog button[data-act="copy-settings"]').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
     const copied = await p.evaluate(() => navigator.clipboard.readText())
+    assert.deepEqual(Object.keys(JSON.parse(copied)).sort(), [COLORS_KEY, WIDTH_KEY], 'colors and size only')
     await closeDialogWith(p, 'Cancel', EDITOR)
 
     const other = await open()
@@ -106,10 +107,10 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
       await other.p.evaluate((t) => navigator.clipboard.writeText(t), copied)
       await other.p.click(SETTINGS_BUTTON)
       await other.p.locator('.dialog button[data-act="paste-settings"]').click()
-      await other.p.locator(STATUS).filter({ hasText: 'Pasted 3 settings.' }).waitFor()
+      await other.p.locator(STATUS).filter({ hasText: 'Pasted 2 settings.' }).waitFor()
       assert.deepEqual(await savedColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       assert.deepEqual(await dialogColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
-      assert.deepEqual(await read(other.p, ([a, b]) => [Number(document.querySelector(a).value), Number(document.querySelector(b).value)], [SIZE_SLIDER, OPACITY_SLIDER]), [3.5, 45])
+      assert.equal(await read(other.p, (a) => Number(document.querySelector(a).value), SIZE_SLIDER), 3.5)
       assert.equal(await dialogButton(other.p, 'Save').count(), 1)
       assert.deepEqual(other.errors, [])
     } finally {
@@ -129,7 +130,7 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
     }
   })
 
-  it('saved colors that cannot be read are left as they are when Draw is first made current, a bad color showing SudokuPad\'s', async () => {
+  it('saved colors that cannot be read are left as they are when Text Annotation is first made current, a bad color showing SudokuPad\'s', async () => {
     const bad = { 1: 'red', 4: '#123456' }
     const other = await open()
     try {
@@ -137,7 +138,7 @@ describe('Draw Tool\'s settings dialog', { concurrency: false }, () => {
       await read(other.p, ([key, value]) => Framework.setData(key, value), [COLORS_KEY, bad])
       await draw.reload(other.p)
       await pickDraw(other.p)
-      const lines = await other.p.locator('.controls-input button.digit:not([data-key="0"])').evaluateAll((bs) => bs.map((b) => window.getComputedStyle(b, '::after').backgroundColor))
+      const lines = await other.p.locator('.controls-input button.digit:not([data-key="0"])').evaluateAll((bs) => bs.map((b) => window.getComputedStyle(b, '::after').color))
       assert.deepEqual([lines[0], lines[3]], ['rgb(31, 128, 32)', 'rgb(18, 52, 86)'], 'color 1 shows SudokuPad\'s green and color 4 the saved one')
       assert.deepEqual(await savedColors(other.p), bad)
       assert.deepEqual(other.errors, [])

@@ -1,16 +1,16 @@
-// Live check of draw-tool.user.js's panel on sudokupad.app: Draw's nine colors copied from the pen colors on first use, the
-// short color buttons, the controls row (Clear all, Shape and the gear) and the sliders inside the keypad's height at 1200 px and 390 px, the digit keys,
-// a hold that opens the color pickers and a recolor of items already drawn, the choices kept over a reload, and SudokuPad's
+// Live check of draw-tool.user.js's panel on sudokupad.app: the nine colors copied from the pen colors on first use, the nine "Aa" color buttons,
+// the controls row (Clear all, Background and the gear) and the one size slider inside the keypad's height at the two desktop sizes, the digit keys,
+// a hold that opens the color pickers and a recolor of notes already made, the choices kept over a reload, and SudokuPad's
 // own keypad back under another tool.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
-import { gridPoint, mouseDrag, plantUnchecked } from '../pen.mjs'
+import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 
-const { CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, OPACITY_KEY, OPACITY_SLIDER, PICKER, SETTINGS_BUTTON, SHAPE_BUTTON, SIZE_SLIDER, SLIDERS, STROKES, WIDTH_KEY } = draw
+const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, SLIDERS, TEXTS, WIDTH_KEY } = draw
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
 // #rrggbb as the browser computes it.
@@ -28,8 +28,8 @@ const keypadBox = (p) => p.evaluate(() => {
   return { top: box.top, bottom: box.bottom, height: box.height, partsTop: Math.min(...parts.map((r) => r.top)), partsBottom: Math.max(...parts.map((r) => r.bottom)) }
 })
 
-for (const viewport of [{ width: 1200, height: 900 }, { width: 390, height: 844 }]) {
-  describe(`Draw Tool's panel at ${viewport.width} px`, { concurrency: false }, () => {
+for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720 }]) {
+  describe(`Text Annotation's panel at ${viewport.width} px`, { concurrency: false }, () => {
     let context, p, errors
 
     before(async () => {
@@ -38,10 +38,10 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 390, height: 844 
     })
     after(async () => { await context.close() })
 
-    it('keeps the height SudokuPad gives Draw\'s keypad, and its buttons, the controls row and the sliders all fit inside it', async () => {
+    it('keeps the height SudokuPad gives the keypad, and its buttons, the controls row and the slider all fit inside it', async () => {
       await draw.pickDraw(p)
       await p.locator(SLIDERS).waitFor({ state: 'visible' })
-      // SudokuPad's own keypad for Draw: the script's stylesheet off and the parts it adds hidden, for one reading.
+      // SudokuPad's own keypad for this tool: the script's stylesheet off and the parts it adds hidden, for one reading.
       const own = await p.evaluate(([styleId, parts]) => {
         const style = document.getElementById(styleId)
         const added = [...document.querySelectorAll(parts)]
@@ -51,35 +51,46 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 390, height: 844 
         style.disabled = false
         added.forEach((e) => { e.style.display = '' })
         return height
-      }, ['draw-tool-style', '.draw-tool-tray, .draw-tool-clear, .draw-tool-shape-mode, .draw-tool-settings, .draw-tool-sliders'])
+      }, ['draw-tool-style', '.draw-tool-tray, .draw-tool-clear, .draw-tool-background, .draw-tool-settings, .draw-tool-sliders'])
       const panel = await keypadBox(p)
       assert.equal(Math.abs(panel.height - own) <= NEAR_PX, true, `the panel is ${panel.height} px tall, SudokuPad's keypad ${own} px`)
       assert.equal(panel.partsTop >= panel.top - NEAR_PX, true, `the top part ${panel.partsTop} starts inside the panel's top ${panel.top}`)
       assert.equal(panel.partsBottom <= panel.bottom + NEAR_PX, true, `the bottom part ${panel.partsBottom} ends inside the panel's bottom ${panel.bottom}`)
     })
 
-    it('the color buttons are short, three to a row, and Clear all, Shape and the gear sit full height in the row under them, with the sliders under that', async () => {
+    it('the color buttons are short, three to a row, and Clear all, Background and the gear sit full height in the row under them, with the slider under that', async () => {
       const rect = (selector) => p.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom } })
       const keys = await Promise.all(NINE.map((n) => rect(`.controls-input button[data-key="${n}"]`)))
-      const [clear, shape, gear, sliders] = await Promise.all([CLEAR_BUTTON, SHAPE_BUTTON, SETTINGS_BUTTON, SLIDERS].map(rect))
+      const [clear, background, gear, sliders] = await Promise.all([CLEAR_BUTTON, BACKGROUND_BUTTON, SETTINGS_BUTTON, SLIDERS].map(rect))
       for (const [i, k] of keys.entries()) assert.equal(Math.abs(k.height / k.width - 2.5 / 4) < 0.01, true, `key ${i + 1} is 2.5 by 4: ${JSON.stringify(k)}`)
       assert.deepEqual([keys[1].y, keys[2].y], [keys[0].y, keys[0].y], 'keys 1 to 3 share a row')
       assert.equal(keys[3].y > keys[0].y && keys[6].y > keys[3].y, true, 'keys 4 and 7 start the next rows')
-      for (const control of [clear, shape, gear]) {
+      for (const control of [clear, background, gear]) {
         assert.equal(Math.abs(control.width - keys[0].width) <= NEAR_PX && Math.abs(control.height - keys[0].width) <= NEAR_PX, true, `a full-size square: ${JSON.stringify(control)}`)
         assert.equal(control.y > keys[8].bottom, true, 'under the colors')
       }
       assert.equal(Math.abs(clear.x - keys[6].x) <= NEAR_PX, true, 'Clear all is under key 7')
-      assert.equal(Math.abs(shape.x - keys[7].x) <= NEAR_PX, true, 'Shape is under key 8')
+      assert.equal(Math.abs(background.x - keys[7].x) <= NEAR_PX, true, 'Background is under key 8')
       assert.equal(Math.abs(gear.x - keys[8].x) <= NEAR_PX, true, 'the gear is under key 9')
-      assert.equal(sliders.y >= clear.bottom, true, 'the sliders are under the controls')
+      assert.equal(sliders.y >= clear.bottom, true, 'the slider is under the controls')
+    })
+
+    it('the panel is nine Aa color buttons, Clear all, Background and the gear, and one size slider with no opacity slider and no Shape button', async () => {
+      assert.equal(await p.locator('.controls-input button.digit:not([data-key="0"])').count(), 9)
+      const labels = await p.evaluate(() => [...document.querySelectorAll('.controls-input button.digit:not([data-key="0"])')].map((b) => window.getComputedStyle(b, '::after').content))
+      assert.deepEqual(labels, Array(9).fill('"Aa"'))
+      assert.deepEqual(await Promise.all([CLEAR_BUTTON, BACKGROUND_BUTTON, SETTINGS_BUTTON].map((s) => p.locator(s).count())), [1, 1, 1])
+      assert.equal(await p.locator(`${SLIDERS} input[type=range]`).count(), 1)
+      assert.equal(await p.locator(SIZE_SLIDER).count(), 1)
+      assert.equal(await p.locator('#draw-tool-opacity, .draw-tool-shape-mode').count(), 0, 'no opacity slider and no Shape button')
+      assert.equal(await p.locator(`${SLIDERS} span`).allTextContents().then((t) => t.join('')), 'AA', 'an A on each side of the size slider')
     })
 
     it('the page raised no error', () => { assert.deepEqual(errors, []) })
   })
 }
 
-describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
+describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -87,35 +98,34 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
   const pickDraw = () => draw.pickDraw(p)
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
   const reload = () => draw.reload(p)
-  // The keypad's digit buttons, 1 to 9: the color of the line each shows and whether it is marked current.
+  // The keypad's digit buttons, 1 to 9: the Aa label each shows and its color, and whether it is marked current.
   const keypad = () => read(() => [...document.querySelectorAll('.controls-input button.digit')]
     .filter((b) => b.dataset.key !== '0')
     .map((b) => {
       const after = window.getComputedStyle(b, '::after')
-      return { key: b.dataset.key, current: b.classList.contains('current'), swatch: after.content === 'none' ? null : after.backgroundColor, text: window.getComputedStyle(b).color }
+      return { key: b.dataset.key, current: b.classList.contains('current'), label: after.content, swatch: after.color, text: window.getComputedStyle(b).color }
     }))
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
   const currentKey = async () => (await keypad()).filter((b) => b.current).map((b) => b.key)
   const sliderValue = (selector) => read((s) => Number(document.querySelector(s).value), selector)
-  const saved = () => draw.saved(p)
   const savedColors = () => read((key) => Framework.getData(key) ?? null, COLORS_KEY)
-  // The computed stroke color, width and opacity of the last stroke drawn.
-  const lastStroke = () => read((selector) => {
+  // The computed fill and font size of the last note on the board.
+  const lastNote = () => read((selector) => {
     const style = window.getComputedStyle([...document.querySelectorAll(selector)].pop())
-    return { stroke: style.stroke, width: style.strokeWidth, opacity: style.strokeOpacity }
-  }, STROKES)
-  // The width and opacity of the first stroke on the board, drawn before any slider moved.
-  const firstLook = () => read((selector) => {
+    return { fill: style.fill, size: style.fontSize }
+  }, TEXTS)
+  const firstNote = () => read((selector) => {
     const style = window.getComputedStyle(document.querySelector(selector))
-    return { width: style.strokeWidth, opacity: style.strokeOpacity }
-  }, STROKES)
-  const strokeColors = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => window.getComputedStyle(e).stroke), STROKES)
-  // Each stroke takes its own row: a drag that starts on an earlier stroke moves it and draws nothing.
-  const drawStroke = async () => {
-    const before = await p.locator(STROKES).count()
-    const row = 0.5 + (before % 8)
-    await mouseDrag(p, [[row, 1.5], [row + 0.7, 3], [row - 0.1, 4.5]])
-    assert.equal(await p.locator(STROKES).count(), before + 1, 'the drag drew a stroke')
+    return { fill: style.fill, size: style.fontSize }
+  }, TEXTS)
+  const noteFills = () => read((selector) => [...document.querySelectorAll(selector)].map((e) => window.getComputedStyle(e).fill), TEXTS)
+  // Each note takes its own spot: a click on an earlier note would reopen it.
+  const makeNote = async () => {
+    const before = await p.locator(TEXTS).count()
+    await p.mouse.click(...await gridPoint(p, [0.5 + (before % 9), 1.5 + 3 * Math.floor(before / 9)]))
+    await p.keyboard.type(String(before + 1))
+    await p.keyboard.press('Enter')
+    assert.equal(await p.locator(TEXTS).count(), before + 1, 'the click made a note')
   }
   const selectEmptyCell = async () => {
     await pickDigit()
@@ -129,12 +139,13 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
-    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, OPACITY_KEY, COLORS_KEY])
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, COLORS_KEY, BACKGROUND_KEY])
+    await draw.forgetDrawings(p)
     await reload()
   })
   after(async () => { await context.close() })
 
-  it('nothing is saved for Draw\'s colors until Draw is first made current, which copies the nine pen colors and saves them', async () => {
+  it('nothing is saved for the colors until Text Annotation is first made current, which copies the nine pen colors and saves them', async () => {
     assert.equal(await savedColors(), null)
     const pens = await Promise.all(NINE.map(penColor))
     await pickDraw()
@@ -142,35 +153,38 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
     assert.deepEqual(NINE.map((n) => rgb(colors[n])), pens.map((c) => c.replace(/^rgb\(-\d+, -\d+, -\d+\)$/, 'rgb(0, 0, 0)')))
   })
 
-  it('with Draw current the keypad shows a line in each of Draw\'s colors, digits hidden, with color 1 marked, the default Size and Opacity, Clear all and the gear', async () => {
+  it('with Text Annotation current the keypad shows Aa in each color, digits hidden, with color 1 marked, the default size, Clear all, Background off and the gear', async () => {
     const colors = await savedColors()
     const buttons = await keypad()
     assert.deepEqual(buttons.map((b) => b.swatch), NINE.map((n) => rgb(colors[n])))
+    assert.deepEqual(buttons.map((b) => b.label), Array(9).fill('"Aa"'))
     assert.deepEqual(buttons.map((b) => b.text), Array(9).fill('rgba(0, 0, 0, 0)'), 'the digits are not shown')
     assert.deepEqual(await currentKey(), ['1'])
-    assert.equal(await p.locator(`${SLIDERS} input[type=range]`).count(), 2)
-    assert.deepEqual([await sliderValue(SIZE_SLIDER), await sliderValue(OPACITY_SLIDER)], [6, 100])
+    assert.equal(await p.locator(`${SLIDERS} input[type=range]`).count(), 1)
+    assert.equal(await sliderValue(SIZE_SLIDER), 6)
     assert.equal(await p.locator(CLEAR_BUTTON).isVisible(), true)
     assert.equal(await p.locator(CLEAR_BUTTON).getAttribute('title'), 'Clear all')
     assert.equal(await p.locator(CLEAR_BUTTON).getAttribute('aria-label'), 'Clear all')
     assert.equal(await p.locator(`${CLEAR_BUTTON} svg`).count(), 1, 'Clear all is an icon')
     assert.equal(await p.locator(CLEAR_BUTTON).innerText(), '', 'Clear all shows no text')
+    assert.equal(await p.locator(BACKGROUND_BUTTON).getAttribute('aria-pressed'), 'false')
     const [clearColor, gearColor] = await Promise.all([CLEAR_BUTTON, SETTINGS_BUTTON].map((s) => p.locator(s).evaluate((e) => window.getComputedStyle(e).color)))
     assert.equal(clearColor, gearColor, 'Clear all is the same purple as the gear')
     const iconLook = (button) => p.locator(`${button} svg`).evaluate((svg) => ({ size: [svg.getBoundingClientRect().width, svg.getBoundingClientRect().height], fills: [...svg.querySelectorAll('path')].map((e) => window.getComputedStyle(e).fill) }))
     const [clearIcon, gearIcon] = await Promise.all([CLEAR_BUTTON, SETTINGS_BUTTON].map(iconLook))
     assert.equal(clearIcon.size.every((side, i) => Math.abs(side - gearIcon.size[i]) <= NEAR_PX), true, `Clear all's icon is the gear's size: ${clearIcon.size} against ${gearIcon.size}`)
     assert.deepEqual([...new Set(clearIcon.fills)], ['none'], 'Clear all\'s lines are not filled')
-    assert.equal(await p.locator(SETTINGS_BUTTON).getAttribute('title'), 'Draw Tool settings')
+    assert.equal(await p.locator(SETTINGS_BUTTON).getAttribute('title'), 'Text Annotation settings')
+    assert.equal(await p.locator(SETTINGS_BUTTON).getAttribute('aria-label'), 'Text Annotation settings')
     assert.equal(await p.locator('.controls-input button[data-key="0"]').isVisible(), false)
     assert.equal(await p.locator('.controls-input button[data-control="delete"]').isVisible(), false)
   })
 
-  it('clicking a color button marks it, and the next stroke draws in it', async () => {
+  it('clicking a color button marks it, and the next note is in it', async () => {
     await p.click('.controls-input button[data-key="4"]')
     assert.deepEqual(await settle(currentKey, ['4']), ['4'])
-    await drawStroke()
-    assert.equal((await lastStroke()).stroke, rgb((await savedColors())[4]))
+    await makeNote()
+    assert.equal((await lastNote()).fill, rgb((await savedColors())[4]))
   })
 
   it('a digit key picks its color and enters nothing in the selected cell', async () => {
@@ -181,34 +195,32 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
     assert.deepEqual(await settle(currentKey, ['6']), ['6'])
     assert.equal(await emptyCellValue(), null, 'no digit in r1c3')
     assert.equal(await read(() => Framework.app.getReplay()), replay)
-    await drawStroke()
-    assert.equal((await lastStroke()).stroke, rgb((await savedColors())[6]))
+    await makeNote()
+    assert.equal((await lastNote()).fill, rgb((await savedColors())[6]))
   })
 
-  it('a slider sets the next stroke only: earlier strokes keep their width and opacity', async () => {
-    assert.deepEqual(await firstLook(), { width: '6px', opacity: '1' })
+  it('the slider sets the next note\'s size only: earlier notes keep theirs', async () => {
+    assert.equal((await firstNote()).size, '20px')
     await p.locator(SIZE_SLIDER).fill('10.5')
-    await p.locator(OPACITY_SLIDER).fill('45')
-    await drawStroke()
-    const look = await lastStroke()
-    assert.deepEqual([look.width, look.opacity], ['10.5px', '0.45'])
-    assert.deepEqual(await firstLook(), { width: '6px', opacity: '1' }, 'the earlier stroke did not change')
+    await makeNote()
+    assert.equal((await lastNote()).size, '29px')
+    assert.equal((await firstNote()).size, '20px', 'the earlier note did not change')
   })
 
-  it('a stroke drawn with the sliders is saved with its width and opacity', async () => {
-    const items = await saved()
+  it('a note made with the slider moved is saved with its size and the default opacity', async () => {
+    const items = await draw.saved(p)
     const last = items[items.length - 1]
-    assert.deepEqual([last.width, last.opacity], [10.5, 45])
+    assert.deepEqual([last.size, last.opacity], [29, 100])
   })
 
-  it('a later change of a pen color leaves Draw\'s color, its button and its strokes as they were', async () => {
-    const draw2 = rgb((await savedColors())[2])
+  it('a later change of a pen color leaves the color, its button and its notes as they were', async () => {
+    const color2 = rgb((await savedColors())[2])
     await read(() => document.documentElement.style.setProperty('--puzzle-pencolor-2', 'rgb(1, 2, 3)'))
     try {
-      assert.equal((await keypad())[1].swatch, draw2)
+      assert.equal((await keypad())[1].swatch, color2)
       await p.keyboard.press('2')
-      await drawStroke()
-      assert.equal((await lastStroke()).stroke, draw2)
+      await makeNote()
+      assert.equal((await lastNote()).fill, color2)
     } finally {
       await read(() => document.documentElement.style.removeProperty('--puzzle-pencolor-2'))
     }
@@ -221,12 +233,12 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
     assert.deepEqual(await p.locator(PICKER).evaluateAll((inputs) => inputs.map((i) => [Number(i.dataset.key), i.value])), NINE.map((n) => [n, colors[n]]))
   })
 
-  it('a picked color applies at once to the button and to every stroke already drawn in that color, and is saved', async () => {
-    const before = await strokeColors()
+  it('a picked color applies at once to the button and to every note already made in that color, and is saved', async () => {
+    const before = await noteFills()
     const old4 = rgb((await savedColors())[4])
-    assert.equal(before.includes(old4), true, 'a stroke in color 4 is on the board')
+    assert.equal(before.includes(old4), true, 'a note in color 4 is on the board')
     await p.locator(`${PICKER}[data-key="4"]`).fill('#123456')
-    assert.deepEqual(await settle(strokeColors, before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c)), before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c))
+    assert.deepEqual(await settle(noteFills, before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c)), before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c))
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')
     assert.equal((await savedColors())[4], '#123456')
   })
@@ -236,39 +248,37 @@ describe('Draw Tool\'s colors and sliders', { concurrency: false }, () => {
     assert.equal(await p.locator(PICKER).count(), 0)
   })
 
-  it('the colors, the color picked and the slider values come back after a reload', async () => {
-    const strokes = await strokeColors()
+  it('the colors, the color picked and the size come back after a reload', async () => {
+    const fills = await noteFills()
     await p.keyboard.press('7')
     await p.locator(SIZE_SLIDER).fill('14')
-    await p.locator(OPACITY_SLIDER).fill('60')
     await reload()
-    assert.deepEqual(await strokeColors(), strokes, 'the strokes keep the recolor before Draw is made current')
+    assert.deepEqual(await noteFills(), fills, 'the notes keep the recolor before Text Annotation is made current')
     await pickDraw()
     assert.deepEqual(await currentKey(), ['7'])
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')
-    assert.deepEqual([await sliderValue(SIZE_SLIDER), await sliderValue(OPACITY_SLIDER)], [14, 60])
-    await drawStroke()
-    assert.deepEqual(await lastStroke(), { stroke: rgb((await savedColors())[7]), width: '14px', opacity: '0.6' })
+    assert.equal(await sliderValue(SIZE_SLIDER), 14)
+    await makeNote()
+    assert.deepEqual(await lastNote(), { fill: rgb((await savedColors())[7]), size: '36px' })
   })
 
-  it('bad saved values read as color 1 and the default Size and Opacity', async () => {
+  it('bad saved values read as color 1 and the default size', async () => {
     await plantUnchecked(p, COLOR_KEY, '"purple"')
     await plantUnchecked(p, WIDTH_KEY, '7.25')
-    await plantUnchecked(p, OPACITY_KEY, '3')
     await reload()
     await pickDraw()
     assert.deepEqual(await currentKey(), ['1'])
-    assert.deepEqual([await sliderValue(SIZE_SLIDER), await sliderValue(OPACITY_SLIDER)], [6, 100])
-    await drawStroke()
-    assert.deepEqual(await lastStroke(), { stroke: rgb((await savedColors())[1]), width: '6px', opacity: '1' })
+    assert.equal(await sliderValue(SIZE_SLIDER), 6)
+    await makeNote()
+    assert.deepEqual(await lastNote(), { fill: rgb((await savedColors())[1]), size: '20px' })
   })
 
   it('another tool gets SudokuPad\'s own keypad back, and its digit keys enter digits again', async () => {
     await selectEmptyCell()
-    assert.equal(await p.locator(SIZE_SLIDER).count(), 0, 'no Size slider')
-    assert.equal(await p.locator(`${CLEAR_BUTTON}, ${SHAPE_BUTTON}, ${SETTINGS_BUTTON}`).count(), 0, 'no Clear all, Shape or gear')
+    assert.equal(await p.locator(SIZE_SLIDER).count(), 0, 'no size slider')
+    assert.equal(await p.locator(`${CLEAR_BUTTON}, ${BACKGROUND_BUTTON}, ${SETTINGS_BUTTON}`).count(), 0, 'no Clear all, Background or gear')
     const buttons = await keypad()
-    assert.deepEqual(buttons.map((b) => b.swatch), Array(9).fill(null), 'no color lines')
+    assert.deepEqual(buttons.map((b) => b.label).filter((l) => l === '"Aa"'), [], 'no Aa labels')
     assert.deepEqual(buttons.map((b) => b.current), Array(9).fill(false), 'no color marked')
     assert.equal(await p.locator('.controls-input button[data-key="0"]').isVisible(), true)
     assert.equal(await p.locator('.controls-input button[data-control="delete"]').isVisible(), true)

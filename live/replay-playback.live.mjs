@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { DIGIT_BUTTON, DRAW_BUTTON, strokePaths, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
+import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from './page.mjs'
 import { cellCentre, goToPenPage, gridPoint, mouseDrag, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
@@ -61,19 +61,19 @@ describe('the replay tool plays a solve back with every script installed', { con
   }
 
   // The board as a solver sees it: every cell's digit, marks, colors (as Color by Digit and the color tool set them), the
-  // pen elements as drawn, and the Draw drawing.
+  // pen elements as drawn, and the Text Annotation notes.
   const board = async () => ({
     cells: await read(() => Framework.app.puzzle.cells.map((c) => [c.row, c.col, c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), [...(c.colours || [])], c.given])),
     actions: await read(() => Framework.app.puzzle.replayStack.length),
     pen: await penStrings(p),
     penDrawn: await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => e.outerHTML)),
-    draw: { strokes: await strokePaths(p), texts: await drawTexts(p) }
+    draw: { texts: await drawTexts(p) }
   })
 
   before(async () => { ;({ context, p, errors } = await openSolver(SCRIPT_FILES)) })
   after(async () => { await context.close() })
 
-  it('setup: a short solve of digits, marks, colors, pen lines and Draw drawing', async () => {
+  it('setup: a short solve of digits, marks, colors, pen lines and a Text Annotation note', async () => {
     // digits, which Color by Digit colors in Cell mode
     await useTool('#control-normal')
     for (const [r, c, d] of [[0, 2, '4'], [0, 3, '6'], [1, 1, '7']]) {
@@ -103,10 +103,8 @@ describe('the replay tool plays a solve back with every script installed', { con
     const count = (await penStrings(p)).length
     await p.mouse.click(x + half - 2, y)
     assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'an edge mark appeared')
-    // Draw: a line and a text
+    // Text Annotation: a note
     await useTool(DRAW_BUTTON)
-    await mouseDrag(p, [[2.5, 6.5], [3.2, 7.5], [2.4, 8.5]])
-    assert.equal(await settle(async () => (await strokePaths(p)).length, 1), 1)
     await p.mouse.click(...await gridPoint(p, [6.2, 6.25]))
     await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
     await p.keyboard.type('15')
@@ -116,7 +114,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     solved = await board()
   })
 
-  it('the solve holds what the test compares: digits, marks, colors, seven pen entries and one Draw line and text', () => {
+  it('the solve holds what the test compares: digits, marks, colors, seven pen entries and one Text Annotation note', () => {
     const cell = (r, c) => solved.cells.find((x) => x[0] === r && x[1] === c)
     assert.deepEqual([cell(0, 2)[2], cell(0, 3)[2], cell(1, 1)[2]], ['4', '6', '7'])
     assert.deepEqual(cell(2, 0)[3], ['1', '2'])
@@ -127,7 +125,6 @@ describe('the replay tool plays a solve back with every script installed', { con
     // a solid line over two cells, a dashed one, an arrow line, and an X on a cell's right edge
     assert.deepEqual([...solved.pen].sort(), ['11', '11', '1a', '1a', '1j', '1j', '31'])
     assert.equal(solved.penDrawn.length, 7)
-    assert.equal(solved.draw.strokes.length, 1)
     assert.deepEqual(solved.draw.texts, ['15'])
   })
 
@@ -141,7 +138,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     assert.deepEqual(rewound, { entered: 0, marks: 0, pen: [] }, 'no entered digit, mark or pen entry while the tool shows the start')
   })
 
-  it('Play runs to the end, and the board then equals the board before: digits, marks, colors, pen lines, and the Draw drawing', async () => {
+  it('Play runs to the end, and the board then equals the board before: digits, marks, colors, pen lines, and the Text Annotation notes', async () => {
     // Armed before the click: at speed 10 the whole solve plays in about a second.
     const playing = p.locator('body.replay-playing').waitFor({ state: 'attached' })
     await p.click(PLAY_BUTTON)
@@ -155,7 +152,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     // Color by Digit only adds a color that is missing, so a coloring of its own during playback ends on the same colors;
     // the replay's action count shows it, since it would add actions.
     assert.equal(played.actions, solved.actions, 'playback adds no action beyond what the replay holds')
-    assert.deepEqual(played.draw, solved.draw, 'the Draw drawing is not part of the replay, and playback leaves it')
+    assert.deepEqual(played.draw, solved.draw, 'the Text Annotation notes are not part of the replay, and playback leaves it')
   })
 
   it('no page error', () => { assert.deepEqual(errors, []) })
@@ -199,9 +196,8 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS), 'draw')
   })
 
-  it('the replay button comes before Draw\'s among the tool buttons, as it does without Draw', async () => {
-    const ids = (page) => page.evaluate(() => [...document.querySelectorAll('.controls-tool > button')].map((b) => b.id))
-    const [withIds, withoutIds] = [await ids(withDraw.p), await ids(without.p)]
+  it('the replay button comes before Text Annotation\'s among the tool buttons on screen, as it does without it', async () => {
+    const [withIds, withoutIds] = [await buttonIds(withDraw.p), await buttonIds(without.p)]
     assert.equal(withIds.indexOf('control-replay') < withIds.indexOf('control-draw'), true, withIds.join())
     assert.deepEqual(withIds.filter((id) => id !== 'control-draw'), withoutIds)
   })
