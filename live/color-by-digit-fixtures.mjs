@@ -43,10 +43,12 @@ export const LABEL = `${BUTTON} [data-role="mode"]`
 export const ARROW = `${BUTTON} [data-role="menu"]`
 export const MENU = '#color-by-digit-menu'
 
-// Opens a group's pickers in the editor; a group already open stays open (a second click on its row would close it).
-export async function openGroup (p, g) {
-  const row = p.locator(`${EDITOR} button[data-act=open][data-group="${g}"]`)
-  if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+// The editor's digit keys as { digit: palette key }, '' for a digit in no group.
+export const paintedKeys = (p) => p.$$eval(`${EDITOR} button[data-act=digit]`, (es) => Object.fromEntries(es.map((e) => [e.dataset.digit, e.dataset.key])))
+
+// How many groups the editor shows: the colors its digit keys share.
+export async function groupCountOn (p) {
+  return new Set(Object.values(await paintedKeys(p)).filter(Boolean)).size
 }
 
 // How long a "nothing happened" check watches. A fixed sleep is correct only here.

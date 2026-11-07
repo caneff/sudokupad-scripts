@@ -35,14 +35,13 @@ function warningWithoutGetApp (name) {
 // to real SudokuPad: the Framework calls, rendering and undo are `npm run test:live`'s, and neither run covers a real
 // Tampermonkey install or crackingthecryptic.com.
 test('Color by Digit and Dark Page hold spec 131 together', () => {
-  const { editGroupsFor, rowAfterKey, layoutPages } = colorByDigit
-  const colors = [{ key: 'a' }, { key: 'b' }]
-  let edit = editGroupsFor([{ key: 'a', digits: [] }], [0], 'add-group', {}, colors)
-  assert.deepEqual(edit.groups[1], { key: 'b', digits: [] })
-  edit = editGroupsFor(edit.groups, [4, 7], 'digit', { group: 1, digit: '5' }, colors)
-  edit = editGroupsFor(edit.groups, edit.shown, 'remove', { group: 0 }, colors)
-  assert.deepEqual(edit, { groups: [{ key: 'b', digits: ['5'] }], shown: [7] })
-  assert.deepEqual(editGroupsFor(edit.groups, edit.shown, 'clear', {}, colors), { groups: [], shown: [] })
+  const { paintDigit, rowAfterKey, layoutPages } = colorByDigit
+  // Painting a digit moves it, and a group left with no digits is gone.
+  let groups = paintDigit([{ key: 'a', digits: ['5'] }], '2', 'b')
+  assert.deepEqual(groups, [{ key: 'b', digits: ['2'] }, { key: 'a', digits: ['5'] }])
+  groups = paintDigit(groups, '5', 'b')
+  assert.deepEqual(groups, [{ key: 'b', digits: ['2', '5'] }])
+  assert.deepEqual(paintDigit(paintDigit(groups, '2', 'b'), '5', 'b'), [])
   assert.equal(rowAfterKey('ArrowUp', 0, 3), 2)
 
   const page = ['clear', 'a1', 'rejected']
