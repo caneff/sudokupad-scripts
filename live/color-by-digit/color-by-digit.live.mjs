@@ -210,9 +210,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
   })
 
-  const brushKeys = () => p.$$eval(`${EDITOR} button[data-act=color][aria-pressed=true]`, (es) => es.map((e) => e.dataset.key))
+  const brushKeys = () => p.$$eval(`${EDITOR} button[data-role=swatch][aria-pressed=true]`, (es) => es.map((e) => e.dataset.key))
   const digitKey = (digit) => p.locator(`${EDITOR} button[data-act=digit][data-digit="${digit}"]`)
-  const swatch = (key) => p.locator(`${EDITOR} button[data-act=color][data-key="${key}"]`)
+  const swatch = (key) => p.locator(`${EDITOR} button[data-role=swatch][data-key="${key}"]`)
   const keyOf = async (digit) => (await paintedKeys(p))[digit]
   // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
   const centre = async (locator) => { await locator.hover(); const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
@@ -227,7 +227,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('the settings entry opens the editor with the palette and ten digit keys filled with their colors, no group rows, and the brush on the lowest group\'s color', async () => {
     await openEditor()
-    assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 1)
+    assert.equal(await p.locator(`${EDITOR} select[data-role=color-choice]`).count(), 1)
     assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 10)
     assert.equal(await p.locator(`${EDITOR} button[data-act=open], ${EDITOR} button[data-act=remove], ${EDITOR} button[data-act=add-group]`).count(), 0)
     assert.deepEqual(await brushKeys(), ['1'])
@@ -238,11 +238,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 
   it('the palette is read from the CSS variables: three pages of 9 visible swatches, 27 in all', async () => {
-    const select = p.locator(`${EDITOR} select[data-act="page"]`)
+    const select = p.locator(`${EDITOR} select[data-role="color-choice"]`)
     const seen = []
     for (const value of ['0', '1', '2']) {
       await select.selectOption(value)
-      seen.push(await p.$$eval(`${EDITOR} button[data-act=color]`, (es) => es.map((e) => window.getComputedStyle(e).backgroundColor)))
+      seen.push(await p.$$eval(`${EDITOR} button[data-role=swatch]`, (es) => es.map((e) => window.getComputedStyle(e).backgroundColor)))
     }
     assert.deepEqual(seen.map((page) => page.length), [9, 9, 9])
     assert.equal(seen.flat().filter((bg) => bg === 'rgba(0, 0, 0, 0)').length, 0)
@@ -295,10 +295,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reopen()
     await swatch('5').click()
     const [one, two, three] = await Promise.all(['1', '2', '3'].map((d) => centre(digitKey(d))))
-    // The gap column sits left of key 1.
+    // The press is in the gap between the swatch grid and key 1.
     // Then it runs on over the headings' text, which an unprotected press would select.
     const headings = await Promise.all([2, 1].map((column) => centre(p.locator(`${EDITOR} .cbd-column:nth-child(${column}) .cbd-heading`).first())))
-    await dragThrough({ x: one.x - 30, y: one.y }, [one, two, three, ...headings])
+    const [grid, key] = await Promise.all([p.locator(`${EDITOR} .cbd-swatches`).boundingBox(), digitKey('1').boundingBox()])
+    await dragThrough({ x: (grid.x + grid.width + key.x) / 2, y: one.y }, [one, two, three, ...headings])
     assert.deepEqual([await keyOf('1'), await keyOf('2'), await keyOf('3')], ['5', '5', '5'])
     // SudokuPad's dialog already has user-select: none, so this holds without the script's own rule: it guards against that changing.
     assert.equal(await p.evaluate(() => window.getSelection().toString()), '')
@@ -368,7 +369,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await pressTo(p, 'Both')
       assert.equal(await settle(() => wrongCount(withMarks(lowFiveHigh)), 0), 0)
       await openEditor()
-      const free = await p.$$eval(`${EDITOR} button[data-act=color]`, (es) => es.map((e) => e.dataset.key).find((k) => !['1', '5', '9'].includes(k)))
+      const free = await p.$$eval(`${EDITOR} button[data-role=swatch]`, (es) => es.map((e) => e.dataset.key).find((k) => !['1', '5', '9'].includes(k)))
       await swatch(free).click()
       await digitKey('5').click()
       await closeDialogWith(p, 'Save', EDITOR)
@@ -407,9 +408,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // and a fourth page of four colors: u and v on keys the default palette lacks, w on a color the browser cannot draw. Three saved
   // groups: key 8 (on pages 1 and 4), key 6 (on page 1) and key nope (on none).
   describe('custom palette', { concurrency: false }, () => {
-    const pageSelect = () => p.locator(`${EDITOR} select[data-act="page"]`)
-    const labels = () => p.$$eval(`${EDITOR} select[data-act="page"] option`, (es) => es.map((e) => e.textContent))
-    const swatchKeys = () => p.$$eval(`${EDITOR} button[data-act=color]`, (es) => es.map((e) => e.dataset.key))
+    const pageSelect = () => p.locator(`${EDITOR} select[data-role="color-choice"]`)
+    const labels = () => p.$$eval(`${EDITOR} select[data-role="color-choice"] option`, (es) => es.map((e) => e.textContent))
+    const swatchKeys = () => p.$$eval(`${EDITOR} button[data-role=swatch]`, (es) => es.map((e) => e.dataset.key))
     const boxOf = (key) => swatch(key).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y) } })
     let original, savedState
 
@@ -457,7 +458,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('shows the fourth page, with its index 0 below, and an empty slot where the palette holds a color the browser cannot draw', async () => {
       assert.deepEqual(await swatchKeys(), ['v', '8', 'u'])
       // Index 2 holds 'w', whose color is 'notacolor': its slot stays empty and 8 stays at index 3.
-      const firstRow = await p.$eval(`${EDITOR} [data-role=paint]`, (e) => [...e.children].slice(0, 3).map((c) => c.dataset.key || c.dataset.empty))
+      const firstRow = await p.$eval(`${EDITOR} .cbd-swatches`, (e) => [...e.children].slice(0, 3).map((c) => c.dataset.key || c.dataset.empty))
       assert.deepEqual(firstRow, ['v', 'slot', '8'])
     })
 
@@ -471,7 +472,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal(zero.x, one.x)
       assert.equal(zero.y > nine.y, true)
       // Every swatch and digit key is the same square, whatever height SudokuPad's own button styles ask for.
-      const sizes = await p.$$eval(`${EDITOR} button[data-act="color"], ${EDITOR} button[data-act="digit"]`, (es) => [...new Set(es.map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}` }))])
+      const sizes = await p.$$eval(`${EDITOR} button[data-role="swatch"], ${EDITOR} button[data-act="digit"]`, (es) => [...new Set(es.map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}` }))])
       assert.deepEqual(sizes, ['34x34'])
     })
 

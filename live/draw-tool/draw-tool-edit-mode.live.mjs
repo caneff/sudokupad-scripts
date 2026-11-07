@@ -42,7 +42,7 @@ for (const viewport of [{ width: 1280, height: 720 }, { width: 1600, height: 900
     it('keeps each color button in the cell of its picker', async () => {
       const offsets = await p.evaluate(([keypad, pickerBox, numbers]) => numbers.map((n) => {
         const button = document.querySelector(`${keypad} button[data-key="${n}"]`).getBoundingClientRect()
-        const picker = document.querySelector(`${pickerBox}[data-color="${n}"]`).getBoundingClientRect()
+        const picker = document.querySelector(`${pickerBox}[data-key="${n}"]`).getBoundingClientRect()
         return [n, Math.abs(button.x + button.width / 2 - picker.x - picker.width / 2), Math.abs(button.y + button.height / 2 - picker.y - picker.height / 2)]
       }), [KEYPAD, PICKER_BOX, NINE])
       for (const [n, dx, dy] of offsets) assert.equal(dx <= NEAR_PX && dy <= NEAR_PX, true, `button ${n} is ${dx} px, ${dy} px off its picker's center`)

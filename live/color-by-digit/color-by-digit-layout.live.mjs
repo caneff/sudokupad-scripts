@@ -113,7 +113,7 @@ for (const viewport of [DESKTOP, PHONE]) {
     })
     after(async () => { await context?.close() })
 
-    it('shows the palette and the ten digit keys in one grid, one key per digit, and the dialog stays inside the window', async () => {
+    it('shows the palette and the ten digit keys beside it, one key per digit, and the dialog stays inside the window', async () => {
       assert.equal(await p.locator(`${EDITOR} button[data-act=open]`).count(), 0)
       assert.deepEqual(await paintedKeys(p), { 0: '', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9' })
       if (viewport === DESKTOP) {
@@ -125,7 +125,7 @@ for (const viewport of [DESKTOP, PHONE]) {
     it('puts each swatch row level with a pad row, 0 right of 9, and the pad inside the column at this width', async () => {
       const box = (selector) => p.locator(selector).first().boundingBox()
       const [swatch1, swatch4, swatch7, d1, d4, d7, d9, d0, column] = await Promise.all([
-        box(`${EDITOR} button[data-act=color]`), box(`${EDITOR} button[data-act=color] >> nth=3`), box(`${EDITOR} button[data-act=color] >> nth=6`),
+        box(`${EDITOR} button[data-role=swatch]`), box(`${EDITOR} button[data-role=swatch] >> nth=3`), box(`${EDITOR} button[data-role=swatch] >> nth=6`),
         box(`${EDITOR} [data-digit="1"]`), box(`${EDITOR} [data-digit="4"]`), box(`${EDITOR} [data-digit="7"]`), box(`${EDITOR} [data-digit="9"]`), box(`${EDITOR} [data-digit="0"]`),
         box(`${EDITOR} .cbd-column:nth-child(2)`)
       ])
