@@ -2,7 +2,7 @@
 'use strict'
 // The slideshow every page shares: it adds a pager to each .slideshow and steps the .slide pictures and .slide-caption
 // texts, which share the .current class. Without this script the first slide and its caption show.
-const CHEVRON = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`
+const ARROW_ICON = (path) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`
 
 for (const show of document.querySelectorAll('.slideshow')) {
   const slides = [...show.querySelectorAll('.slide')]
@@ -10,9 +10,9 @@ for (const show of document.querySelectorAll('.slideshow')) {
   if (slides.length < 2) continue
   const pager = document.createElement('div')
   pager.className = 'slide-pager'
-  pager.innerHTML = `<button type="button" class="prev" aria-label="Previous">${CHEVRON('M15 5l-7 7 7 7')}</button>` +
+  pager.innerHTML = `<button type="button" class="prev" aria-label="Previous">${ARROW_ICON('M15 5l-7 7 7 7')}</button>` +
     '<span class="slide-count" aria-live="polite"></span>' +
-    `<button type="button" class="next" aria-label="Next">${CHEVRON('M9 5l7 7-7 7')}</button>`
+    `<button type="button" class="next" aria-label="Next">${ARROW_ICON('M9 5l7 7-7 7')}</button>`
   show.querySelector('.slide-bar').appendChild(pager)
   let at = 0
   const go = (to) => {
