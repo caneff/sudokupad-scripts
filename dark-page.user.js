@@ -181,20 +181,19 @@
   // lies on the page color. The replay readout is the `::after` of `.controls-input`, drawn on the
   // page. Svg-painted icons and color swatch fills keep their colors.
   function buildCss (pageColor) {
-    const scoped = (selector) => selector.split(',').map((part) => `${BOARD} ${part.trim()}`).join(', ')
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
-    const boardRule = (selector, ...declarations) => rule(scoped(selector), ...declarations)
+    const boardRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${BOARD} ${selector}`).join(', '), ...declarations)
     const textColor = textColorFor(pageColor)
     const darkButtons = [
-      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`).join(', '), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
-      boardRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]).join(', '), `border-color: ${BUTTON_ACCENT}`),
-      boardRule('.button-row button', `border-color: ${BUTTON_BORDER}`)
+      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
+      boardRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
+      boardRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`)
     ]
     return [
       rule(BOARD, `background-color: ${pageColor}`),
-      boardRule(`#${BOARD_ID}`, 'background-color: var(--body-bg)'),
-      boardRule('.controls-footer, .controls-footer a', `color: ${textColor}`),
-      boardRule('.controls-input::after', `color: ${textColor}`),
+      boardRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
+      boardRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
+      boardRule(['.controls-input::after'], `color: ${textColor}`),
       ...(textColor === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }

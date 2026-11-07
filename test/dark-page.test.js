@@ -108,11 +108,17 @@ test('no rule declares a theme variable, which would reach the grid through the 
   }
 })
 
-test('no rule reaches inside the board, or sets color on body or a container of it', () => {
+test('no rule reaches inside the board, or sets color on body or a container of it; the one rule on the board\'s own box sets only its background', () => {
+  const boardBox = `${BOARD} #${BOARD_ID}`
   for (const { selector, declarations } of rules()) {
-    for (const part of selector.split(',').map((s) => s.trim().replace(BOARD, '').replace(`#${BOARD_ID}`, '').trim())) {
-      assert.ok(!/svg|\.grid|\.cells|\.game|\.app|#board|\*/.test(part), `${selector} reaches the board or a container of it: ${part}`)
-      if (/(^|[;\s])color\s*:/.test(declarations)) assert.notEqual(part, '', selector)
+    for (const part of selector.split(',').map((s) => s.trim())) {
+      if (part === boardBox) {
+        assert.ok(/^background-color: [^;]+$/.test(declarations.replace(' !important', '')), `${selector}: ${declarations}`)
+        continue
+      }
+      const rest = part.replace(BOARD, '').trim()
+      assert.ok(!/svg|\.grid|\.cells|\.game|\.app|#board|\*/.test(rest), `${selector} reaches the board or a container of it: ${rest}`)
+      if (/(^|[;\s])color\s*:/.test(declarations)) assert.notEqual(rest, '', selector)
     }
   }
 })
@@ -121,7 +127,7 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')))
 })
 
-// Starts the script on a page holding a board, with `framework` as the page's Framework, or none.
+// Starts the script on a page that has a document with a head, with `framework` as the page's Framework, or none.
 function startOnBoard (framework) {
   const file = require.resolve('../dark-page.user.js')
   const appended = []
