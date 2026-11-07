@@ -155,6 +155,20 @@ describe('Draw Tool\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(await strokePaths(), [lower])
   })
 
+  // The window's blur stands for the solver switching window mid-drag; the release then goes to the other window.
+  it('a stroke cut short by the window losing focus is kept and saved', async () => {
+    const before = (await saved()).length
+    await p.mouse.move(...await gridPoint(p, [6.5, 1.5]))
+    await p.mouse.down()
+    await p.mouse.move(...await gridPoint(p, [7, 4]), { steps: 8 })
+    await read(() => window.dispatchEvent(new window.Event('blur')))
+    assert.equal((await saved()).length, before + 1, 'saved at the blur')
+    await p.mouse.up()
+    assert.equal(await strokeCount(), before + 1)
+    await rightDrag([[6.2, 2.5], [7.2, 2.6]])
+    assert.equal(await strokeCount(), before)
+  })
+
   it('a right-drag across a typed text removes it whole and keeps the strokes, and a reload shows the same', async () => {
     await pickDraw()
     await typeText([5.5, 5.5], '15')

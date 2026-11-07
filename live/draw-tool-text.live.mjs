@@ -158,6 +158,18 @@ describe('Draw Tool\'s typed text', { concurrency: false }, () => {
     assert.equal(await tool(), 'draw')
   })
 
+  it('Tab moves out of the box and finishes it as Enter does', async () => {
+    await clickAt(EMPTY_AT)
+    await p.keyboard.type('3')
+    await p.keyboard.press('Tab')
+    assert.equal(await boxOpen(), false)
+    assert.deepEqual(await texts(), ['23', 'xy CZ', '3'])
+    await clickAt(EMPTY_AT)
+    await p.keyboard.press('Backspace')
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await texts(), ['23', 'xy CZ'])
+  })
+
   it('with a box open, a click on a keypad color finishes it, and a key typed after reaches no drawing', async () => {
     await clickAt(FOURTH_AT)
     await p.keyboard.type('8')
