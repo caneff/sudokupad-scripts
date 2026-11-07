@@ -445,7 +445,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 // Text Annotation's entry and details page.
 const DRAW_SUMMARY = 'Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes', 'Colors of its own', 'Text size', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
+const DRAW_LEAD_INS = ['Typed notes', 'Bold, italic and strikethrough', 'Readable over digits', 'Colors of its own', 'Text size', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Text Annotation in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Text Annotation<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -455,7 +455,9 @@ test(`${HOME} describes Text Annotation in a short summary ending in a Details l
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter or a click elsewhere finishes the note, Escape drops it, and a double-click on a note changes it.',
+    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it.',
+    'Bold, italic and strikethrough Write **bold**, *italic* (or _italic_) and ~~strikethrough~~ in a note, and nest them, such as **bold *and italic***. The markers show while you type and are hidden once the note is finished; a marker with no partner shows as typed.',
+    'Readable over digits Each note has a halo, a thin outline of its letters in the page color, so it reads over digits, pencil marks and colored cells.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
     'Text size One slider, from small to large. A note keeps the size it was typed with until you select it and move the slider.',
     'Background Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',

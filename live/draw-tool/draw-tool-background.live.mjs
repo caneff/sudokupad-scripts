@@ -37,7 +37,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
   }
   const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
   const boxFilled = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)')
@@ -117,7 +117,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
     assert.equal(await pressed(), 'true')
     assert.equal(await boxOpen(), true, 'the text box is still open')
     assert.equal(await boxFilled(), true, 'the open box shows the background')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.equal(await bgCount(), 2)
     assert.deepEqual(await savedBgs(), { a: true, b: true, c: false })
   })
@@ -128,7 +128,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await pressed(), 'false')
     assert.equal(await boxFilled(), false)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.equal(await bgCount(), 1)
     assert.deepEqual(await savedBgs(), { a: false, b: true, c: false })
     assert.equal('bg' in (await saved()).find((item) => item.text === 'a'), false)
@@ -140,17 +140,9 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
     await p.keyboard.type('d')
     assert.equal(await boxFilled(), true)
     await p.click(BACKGROUND_BUTTON)
-    await p.keyboard.press('Enter')
-    assert.deepEqual(await savedBgs(), { a: false, b: true, c: false, d: false })
-    assert.equal(await bgCount(), 1)
-  })
-
-  it('Escape on an open note after toggling Background leaves the note as it was', async () => {
-    await openAt(SPOTS[2])
-    await p.click(BACKGROUND_BUTTON)
     await p.keyboard.press('Escape')
-    assert.equal(await bgCount(), 1)
     assert.deepEqual(await savedBgs(), { a: false, b: true, c: false, d: false })
+    assert.equal(await bgCount(), 1)
   })
 
   it('pressing Background on a note whose box differs from the setting turns that note\'s box over in one press and leaves the setting alone', async () => {
@@ -160,7 +152,7 @@ describe('Text Annotation\'s Background button', { concurrency: false }, () => {
     await p.click(BACKGROUND_BUTTON)
     assert.equal(await pressed(), 'false')
     assert.equal(await boxFilled(), false)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await savedBgs(), { a: false, b: false, c: false, d: false })
     assert.equal(await storedSetting(), false, 'the setting is unchanged')
     assert.equal(await pressed(), 'false', 'with no note open the button shows the setting')

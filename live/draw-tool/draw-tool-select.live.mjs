@@ -47,7 +47,7 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
   }
   // A rectangle over A, B and C, where they are before the group move, or after it when `moved`.
   const selectThree = async (moved = false) => {

@@ -61,7 +61,7 @@ async function scene () {
     const before = await items()
     await p.mouse.click(...at(cell))
     await p.keyboard.type(text)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     if ((await items()) !== before + 1) throw new Error(`the note ${text} did not land`)
   }
   const background = async (on) => {

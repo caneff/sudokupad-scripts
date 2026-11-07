@@ -141,7 +141,7 @@ const SCRIPTS = [
       assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS), 'draw')
       await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
       await p.keyboard.type('15')
-      await p.keyboard.press('Enter')
+      await p.keyboard.press('Escape')
       assert.equal(await settle(() => p.locator('#draw-tool-layer .draw-tool-text').count(), 1), 1)
     }
   }

@@ -31,11 +31,11 @@ describe('Text Annotation\'s erasing', { concurrency: false }, () => {
   const pickDigit = () => clickUntil(() => p.click(DIGIT_BUTTON), tool, 'normal', SETTLE_MS)
   const texts = () => draw.texts(p)
   const textBoxCount = () => p.locator(TEXT_BOX).count()
-  // A click at `at`, in cells from the grid's top left, then `content` typed and Enter.
+  // A click at `at`, in cells from the grid's top left, then `content` typed and Escape.
   const typeText = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
   }
   const saved = () => draw.saved(p)
   const reload = () => draw.reload(p)

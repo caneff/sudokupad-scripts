@@ -64,7 +64,7 @@ describe('Text Annotation: its button is the last tool button', { concurrency: f
     await p.locator(SLIDERS).waitFor({ state: 'visible' })
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
     await p.keyboard.type('15')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await settle(() => texts(p), ['15']), ['15'])
     await p.click(DIGIT_BUTTON)
     assert.equal(await tool(p), 'normal')

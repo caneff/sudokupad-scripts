@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's typed text on sudokupad.app: a click opens a text box whose keys never reach
-// SudokuPad, Enter, a click elsewhere and Escape end it, a double-click on text edits it, and the Size slider. Real
+// SudokuPad, Enter starts a new line, a click elsewhere and Escape end it, a double-click on text edits it, and the Size slider. Real
 // mouse and keyboard input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -7,15 +7,17 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
-import { settle, stable } from '../settle.mjs'
+import { readUntil, settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, SIZE_SLIDER, WIDTH_KEY } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, SIZE_SLIDER, WIDTH_KEY } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
 const THIRD_AT = [4.5, 7.5]
 const FOURTH_AT = [7.5, 1.5]
 const EMPTY_AT = [8.5, 0.5]
+const MULTI_AT = [3.5, 5.5]
+const MARKDOWN_AT = [5.5, 6.5]
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -54,14 +56,14 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('a click opens a text box; typing 15 and Enter leaves the text 15 there, with no digit in a cell and no tool switched', async () => {
+  it('a click opens a text box; typing 15 and Escape leaves the text 15 there, with no digit in a cell and no tool switched', async () => {
     await pickDraw()
     const cells = await cellState()
     const replay = await read(() => Framework.app.getReplay())
     await clickAt(SUM_AT)
     assert.equal(await boxOpen(), true, 'a text box is open')
     await p.keyboard.type('15')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['15'])
     assert.equal(await boxOpen(), false, 'the box is closed')
     assert.equal(await cellState(), cells)
@@ -77,7 +79,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.equal(await tool(), 'draw', 'Shift held does not switch to Corner')
     await p.keyboard.press('KeyZ')
     await p.keyboard.up('Shift')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['15', 'Zx CZ'])
     assert.equal(await tool(), 'draw')
   })
@@ -86,7 +88,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await textStyle('15'), { color: await penColor(1), size: 20 })
   })
 
-  it('a click elsewhere finishes the box as Enter does, and opens no second box', async () => {
+  it('a click elsewhere finishes the box as Escape does, and opens no second box', async () => {
     await clickAt(THIRD_AT)
     await p.keyboard.type('7')
     await clickAt(EMPTY_AT)
@@ -95,23 +97,15 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual((await saved()).map((item) => item.text), ['15', 'Zx CZ', '7'])
   })
 
-  it('Escape on a new box leaves no text', async () => {
-    await clickAt(EMPTY_AT)
-    await p.keyboard.type('9')
-    await p.keyboard.press('Escape')
-    assert.equal(await boxOpen(), false)
-    assert.deepEqual(await texts(), ['15', 'Zx CZ', '7'])
-  })
-
   it('a box finished empty leaves no text', async () => {
     await clickAt(EMPTY_AT)
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.equal(await boxOpen(), false)
     assert.deepEqual(await texts(), ['15', 'Zx CZ', '7'])
     assert.equal((await saved()).length, 3)
   })
 
-  it('a double-click on text reopens it with its text, and Enter saves the change', async () => {
+  it('a double-click on text reopens it with its text, and Escape saves the change', async () => {
     await doubleClickAt(SUM_AT)
     assert.equal(await boxOpen(), true)
     assert.equal(await boxText(), '15', 'the open box holds the text')
@@ -119,23 +113,15 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.keyboard.press('Backspace')
     await p.keyboard.press('Backspace')
     await p.keyboard.type('23')
-    await p.keyboard.press('Enter')
-    assert.deepEqual(await texts(), ['23', 'Zx CZ', '7'])
-    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx CZ', '7'])
-  })
-
-  it('Escape on a reopened box restores the text it had', async () => {
-    await doubleClickAt(SUM_AT)
-    await p.keyboard.press('Backspace')
-    await p.keyboard.type('x')
     await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['23', 'Zx CZ', '7'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx CZ', '7'])
   })
 
   it('clearing a reopened text removes it', async () => {
     await doubleClickAt(THIRD_AT)
     await p.keyboard.press('Backspace')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['23', 'Zx CZ'])
     assert.deepEqual((await saved()).map((item) => item.text), ['23', 'Zx CZ'])
   })
@@ -147,13 +133,13 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.keyboard.press('Delete')
     await p.keyboard.press('ArrowRight')
     await p.keyboard.type('y')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['23', 'xy CZ'])
     assert.equal(await cellState(), cells)
     assert.equal(await tool(), 'draw')
   })
 
-  it('Tab moves out of the box and finishes it as Enter does', async () => {
+  it('Tab moves out of the box and finishes it as Escape does', async () => {
     await clickAt(EMPTY_AT)
     await p.keyboard.type('3')
     await p.keyboard.press('Tab')
@@ -161,7 +147,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ', '3'])
     await doubleClickAt(EMPTY_AT)
     await p.keyboard.press('Backspace')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['23', 'xy CZ'])
   })
 
@@ -189,7 +175,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     await doubleClickAt(EMPTY_AT)
     await p.keyboard.press('Backspace')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await texts(), ['23', 'xy CZ', '8'])
   })
 
@@ -199,7 +185,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     await p.click('.controls-input button[data-key="4"]')
     await clickAt(THIRD_AT)
     await p.keyboard.type('6')
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.deepEqual(await textStyle('6'), { color: await penColor(4), size: 28 })
     assert.deepEqual(await textStyle('23'), { color: await penColor(1), size: 20 })
   })
@@ -227,6 +213,58 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     const after = await stable(() => textInCells('23'))
     assert.notEqual(await cellWidth(), cellWidthBefore, 'the resize changed the board\'s size')
     assert.deepEqual(after, before)
+  })
+
+  it('Enter starts a new line in the box and leaves the box open; Escape ends it with both lines, and a reload keeps them', async () => {
+    await clickAt(MULTI_AT)
+    await p.keyboard.type('top')
+    await p.keyboard.press('Enter')
+    await p.keyboard.type('low')
+    assert.equal(await boxOpen(), true, 'Enter did not finish the box')
+    assert.equal(await boxText(), 'top\nlow')
+    await p.keyboard.press('Escape')
+    assert.deepEqual((await saved()).map((item) => item.text).slice(-1), ['top\nlow'], 'saved with a line break')
+    assert.deepEqual((await texts()).slice(-1), ['top\nlow'])
+    await reload()
+    assert.deepEqual((await readUntil(texts, (t) => t.includes('top\nlow'))).slice(-1), ['top\nlow'], 'back after a reload')
+  })
+
+  it('a finished note shows markdown styled and hides the markers; editing it shows the raw text, which is what is saved', async () => {
+    await pickDraw()
+    await clickAt(MARKDOWN_AT)
+    await p.keyboard.type('**a** *b* ~~c~~')
+    assert.equal(await boxText(), '**a** *b* ~~c~~', 'the markers show while typing')
+    await p.keyboard.press('Escape')
+    assert.deepEqual((await saved()).map((item) => item.text).slice(-1), ['**a** *b* ~~c~~'], 'the raw markdown is stored')
+    const spans = await read((selector) => [...document.querySelectorAll(`${selector} span`)].map((e) => {
+      const style = window.getComputedStyle(e)
+      return { text: e.textContent, bold: Number(style.fontWeight) >= 700, italic: style.fontStyle === 'italic', strike: style.textDecorationLine === 'line-through' }
+    }), TEXTS)
+    assert.deepEqual(spans, [
+      { text: 'a', bold: true, italic: false, strike: false },
+      { text: 'b', bold: false, italic: true, strike: false },
+      { text: 'c', bold: false, italic: false, strike: true }
+    ])
+    assert.deepEqual((await texts()).slice(-1), ['a b c'])
+    await doubleClickAt(MARKDOWN_AT)
+    assert.equal(await boxText(), '**a** *b* ~~c~~', 'editing shows the raw text again')
+    await p.keyboard.press('Escape')
+  })
+
+  it('a note has a halo in the page color, drawn under its letters', async () => {
+    const halo = await read((selector) => {
+      const note = document.querySelector(selector)
+      const style = window.getComputedStyle(note)
+      const probe = document.createElement('div')
+      probe.style.color = 'var(--body-bg, #fff)'
+      document.body.appendChild(probe)
+      const page = window.getComputedStyle(probe).color
+      probe.remove()
+      return { width: parseFloat(style.webkitTextStrokeWidth), color: style.webkitTextStrokeColor, page, paintOrder: style.paintOrder }
+    }, TEXTS)
+    assert.ok(halo.width > 0, `a stroke of ${halo.width}px`)
+    assert.equal(halo.color, halo.page)
+    assert.match(halo.paintOrder, /^stroke/)
   })
 
   it('the page raised no error', () => {

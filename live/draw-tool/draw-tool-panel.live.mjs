@@ -119,7 +119,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     const before = await p.locator(TEXTS).count()
     await p.mouse.click(...await gridPoint(p, [0.5 + (before % 9), 1.5 + 3 * Math.floor(before / 9)]))
     await p.keyboard.type(String(before + 1))
-    await p.keyboard.press('Enter')
+    await p.keyboard.press('Escape')
     assert.equal(await p.locator(TEXTS).count(), before + 1, 'the click made a note')
   }
   const selectEmptyCell = async () => {
