@@ -26,7 +26,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       # The recording is SudokuPad's own code: the Actions cache only, never the repo or an artifact. A cache entry
       # cannot be overwritten, so each run saves under its own id and restores the newest by prefix.
-      - uses: actions/cache@v6
+      - uses: actions/cache/restore@v6
         with:
           path: ~/.cache/sudokupad-scripts/live
           key: sudokupad-live-${{ github.run_id }}
@@ -34,3 +34,10 @@ jobs:
       - run: npm run watch:live
         env:
           GH_TOKEN: ${{ github.token }}
+      # A red run files its bug and remembers the version, so the save runs after a failed step too: otherwise the
+      # next night checks the same version again and files a second bug.
+      - uses: actions/cache/save@v6
+        if: ${{ always() }}
+        with:
+          path: ~/.cache/sudokupad-scripts/live
+          key: sudokupad-live-${{ github.run_id }}
