@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Draw Tool: SudokuPad scripts</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  ul { margin: 0 0 .75rem; padding-left: 1.25rem; }
+  li { margin-bottom: .25rem; }
+  img.panel { display: block; max-width: 100%; height: auto; margin: .35rem 0 .75rem; }
+  li img { display: block; max-width: min(100%, 20rem); height: auto; margin: .35rem 0 .5rem; }
+</style>
+</head>
+<body>
+  <p><a href="index.html">&larr; All SudokuPad scripts</a></p>
+  <h1>Draw Tool</h1>
+  <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad.</p>
+  <p>Adds to <a href="https://sudokupad.app">SudokuPad</a> a Draw tool: drag on the puzzle to draw freehand lines, and click to type text, such as cage sums, in the pen colors.</p>
+  <p><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/draw-tool.user.js">Install Draw Tool</a></p>
+
+  <h2>What it adds</h2>
+  <ul>
+    <li><strong>Freehand lines.</strong> Drag on the puzzle to draw; hold Shift for a straight line.
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool-bullet-lines.png" alt="A thin blue straight line, a green loop round two cells and a thick red curved arrow drawn on a sudoku grid" width="360" height="396">
+    </li>
+    <li><strong>Text.</strong> Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.
+      <img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool-bullet-text.png" alt="An orange cage sum, 17, typed in the corner of a cell" width="149" height="149">
+    </li>
+    <li><strong>Erasing.</strong> Drag with the right mouse button across a line or text to erase it. Clear all, which asks first, erases everything.</li>
+    <li><strong>Stays on the cells.</strong> Lines and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.</li>
+    <li><strong>Kept for each puzzle.</strong> A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.</li>
+  </ul>
+
+  <h2>The Draw panel</h2>
+  <img class="panel" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool-panel-annotated.png" alt="The Draw panel with each part labelled. Pen color buttons: a click or the digit keys 1 to 9 pick a color. Width buttons: pick a thin, middle or thick line. Text size buttons: pick a small, middle or large text. Clear all: erases the whole drawing, after asking." width="765" height="334">
+
+  <h2>Good to know</h2>
+  <ul>
+    <li>The drawing is kept in this browser only, so another browser or device does not show it.</li>
+  </ul>
+  <p><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></p>
+</body>
+</html>

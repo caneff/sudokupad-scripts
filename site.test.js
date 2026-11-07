@@ -12,6 +12,7 @@ const SITE_DIR = path.join(__dirname, 'site')
 const SITE_ADDRESS = /^https?:\/\/(caneff\.github\.io\/sudokupad-scripts|[^/]*netlify)/i
 const HOME = 'index.html'
 const DETAILS = 'pen-tool-extras.html'
+const DRAW = 'draw-tool.html'
 const PAGES = fs.readdirSync(SITE_DIR).filter(f => f.endsWith('.html'))
 // Comments are dropped first: a link inside one is not a link on the page.
 const read = name => fs.readFileSync(path.join(SITE_DIR, name), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
@@ -68,21 +69,32 @@ for (const name of PAGES) {
   })
 }
 
-test('the homepage links to the Pen Tool Extras details page', () => {
-  assert.ok(siteLinks(read(HOME)).includes(DETAILS), `site/${HOME} has no relative link to ${DETAILS}`)
-})
+// Each details page: its script's install file and the homepage heading whose entry links to it.
+const DETAIL_PAGES = [
+  { page: DETAILS, script: 'pen-tool-extras', name: 'Pen Tool Extras' },
+  { page: DRAW, script: 'draw-tool', name: 'Draw Tool' }
+]
 
-test('the details page links back to the homepage and carries the Pen Tool Extras install link', () => {
-  const page = read(DETAILS)
-  assert.ok(siteLinks(page).includes(HOME), `site/${DETAILS} has no relative link back to ${HOME}`)
-  assert.ok(scriptLinks(page).includes(RAW + 'pen-tool-extras.user.js'), `site/${DETAILS} has no Pen Tool Extras install link`)
-})
+for (const { page: file, script, name } of DETAIL_PAGES) {
+  test(`the homepage links to the ${name} details page`, () => {
+    assert.ok(siteLinks(read(HOME)).includes(file), `site/${HOME} has no relative link to ${file}`)
+  })
+
+  test(`${file} links back to the homepage and carries the ${name} install link`, () => {
+    const page = read(file)
+    assert.ok(siteLinks(page).includes(HOME), `site/${file} has no relative link back to ${HOME}`)
+    assert.ok(scriptLinks(page).includes(RAW + script + SCRIPT_SUFFIX), `site/${file} has no ${name} install link`)
+    assert.match(page, /<p><a href="index\.html">&larr; All SudokuPad scripts<\/a> &middot; <a href="https:\/\/github\.com\/caneff\/sudokupad-scripts">Source on GitHub<\/a><\/p>\s*<\/body>/)
+  })
+}
 
 // The warning sits directly under the page title, so it is read before any install link.
 const WARNING = /<\/h1>\s*<p class="warning">([\s\S]*?)<\/p>/
+const DETAILS_WARNING = "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad."
 const WARNINGS = {
   [HOME]: "These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.",
-  [DETAILS]: "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad."
+  [DETAILS]: DETAILS_WARNING,
+  [DRAW]: DETAILS_WARNING
 }
 
 for (const [name, text] of Object.entries(WARNINGS)) {
@@ -100,9 +112,9 @@ for (const [name, text] of Object.entries(WARNINGS)) {
 
 // The details page text is pinned word for word: "What it adds" says what you can do.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
-const section = (page, heading) => {
-  const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
-  assert.ok(m, `site/${DETAILS} has no <h2>${heading}</h2> followed by a list`)
+const section = (file, heading) => {
+  const m = read(file).match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
+  assert.ok(m, `site/${file} has no <h2>${heading}</h2> followed by a list`)
   return items(m[1]).map(plain)
 }
 // An item's opening words are its bold lead-in: the first <strong> of the item.
@@ -116,7 +128,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
 })
 
 test(`${DETAILS} lists what the script adds to drawing, one item per feature`, () => {
-  assert.deepEqual(section(read(DETAILS), 'What it adds'), [
+  assert.deepEqual(section(DETAILS, 'What it adds'), [
     'Customizable pen colors. Hold a pen color button, or pick a preset in the settings.',
     'Dashed lines and arrow lines. Two more pages of pens.',
     'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
@@ -168,7 +180,7 @@ test(`${DETAILS} has no picture on the erase item and no large example figure`, 
 })
 
 test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
-  assert.deepEqual(section(read(DETAILS), 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
+  assert.deepEqual(section(DETAILS, 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
 })
 
 test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, () => {
@@ -231,4 +243,82 @@ test(`${HOME} names Color by Digit's two digit options: the digit profile sync a
   const text = plain(m[1])
   assert.match(text, /Sync digit profile with cell profile/)
   assert.match(text, /Use digit colors/)
+})
+
+// Draw Tool's entry and details page.
+const DRAW_SUMMARY = 'Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.'
+const DRAW_LEAD_INS = ['Freehand lines.', 'Text.', 'Erasing.', 'Stays on the cells.', 'Kept for each puzzle.']
+
+test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
+  const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Draw Tool description`)
+  assert.equal(m[1], `${DRAW_SUMMARY} <a href="${DRAW}">Details</a>`)
+})
+
+test('draw-tool.user.js\'s @description is the homepage summary', () => {
+  const head = fs.readFileSync(path.join(__dirname, 'draw-tool.user.js'), 'utf8')
+  assert.equal((head.match(/^\/\/ @description\s+(.*)$/m) || [])[1], DRAW_SUMMARY)
+})
+
+test(`${DRAW} intro says what the script adds, with SudokuPad linked`, () => {
+  const m = read(DRAW).match(/<\/p>\s*<p>(Adds to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${DRAW} has no intro paragraph starting "Adds to SudokuPad", with SudokuPad linked`)
+  assert.equal(plain(m[1]), 'Adds to SudokuPad a Draw tool: drag on the puzzle to draw freehand lines, and click to type text, such as cage sums, in the pen colors.')
+})
+
+test(`${DRAW} lists what the script adds, one item per feature`, () => {
+  assert.deepEqual(section(DRAW, 'What it adds'), [
+    'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
+    'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
+    'Erasing. Drag with the right mouse button across a line or text to erase it. Clear all, which asks first, erases everything.',
+    'Stays on the cells. Lines and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
+    'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'
+  ])
+  assert.deepEqual(leadIns(read(DRAW)), DRAW_LEAD_INS)
+})
+
+test(`${DRAW} puts one picture with alt text on Freehand lines and on Text, and none on the others`, () => {
+  const byLeadIn = new Map(items(read(DRAW)).map(li => [leadIn(li), li]))
+  const expected = { 'Freehand lines.': 'lines', 'Text.': 'text' }
+  for (const lead of DRAW_LEAD_INS) {
+    const found = imgs(byLeadIn.get(lead) || '')
+    if (!expected[lead]) { assert.deepEqual(found, [], `"${lead}" has a picture`); continue }
+    assert.equal(found.length, 1, `"${lead}" has ${found.length} images, not 1`)
+    assert.ok(found[0].includes(`src="${RAW}docs/research/draw-tool-bullet-${expected[lead]}.png"`), `"${lead}" does not show draw-tool-bullet-${expected[lead]}.png`)
+    assert.match(found[0], /\balt="[^"]*[^"\s][^"]*"/, `"${lead}" has an image with no alt text`)
+  }
+})
+
+test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names every label`, () => {
+  const m = read(DRAW).match(/<h2>The Draw panel<\/h2>([\s\S]*?)<h2>/)
+  assert.ok(m, `site/${DRAW} has no <h2>The Draw panel</h2>`)
+  const found = imgs(m[1])
+  assert.equal(found.length, 1, 'the Draw panel section is not one picture')
+  assert.ok(found[0].includes(`src="${RAW}docs/research/draw-tool-panel-annotated.png"`))
+  const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
+  for (const label of ['Pen color buttons', 'Width buttons', 'Text size buttons', 'Clear all']) {
+    assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
+  }
+  assert.match(alt, /digit keys 1 to 9/)
+})
+
+test(`${DRAW} good to know says the drawing stays in this browser`, () => {
+  assert.deepEqual(section(DRAW, 'Good to know'), ['The drawing is kept in this browser only, so another browser or device does not show it.'])
+})
+
+// A script in docs/research/ takes a picture when its header names the picture's file.
+test('every Draw Tool picture the site links is named by a screenshot script in docs/research/', () => {
+  const research = path.join(__dirname, 'docs', 'research')
+  const scripts = fs.readdirSync(research).filter(f => f.endsWith('-screenshot.mjs')).map(f => fs.readFileSync(path.join(research, f), 'utf8'))
+  const pictures = [...screenshots(read(DRAW)), ...screenshots(read(HOME)).filter(t => /site-draw-tool\.png$/.test(t))]
+  assert.ok(pictures.length > 0, 'no Draw Tool pictures found')
+  for (const shot of pictures) {
+    assert.ok(scripts.some(text => text.includes(path.basename(shot))), `no screenshot script in docs/research/ names ${shot}`)
+  }
+})
+
+test('the README has a Draw Tool row with a Details link, and the Settings sentence names Draw Tool', () => {
+  const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8')
+  assert.match(readme, /^\| Draw Tool \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
+  assert.match(readme, /Each script except No Tab Letters and Draw Tool adds an entry to SudokuPad's settings/)
 })

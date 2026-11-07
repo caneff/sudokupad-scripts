@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.6.0
-// @description  Adds a Draw tool to SudokuPad: with it on, a drag on the board draws a smooth freehand line that stays on the cells it was drawn on, and Shift+drag draws a straight line. The keypad's nine pen colors, or the digit keys 1 to 9, pick a line's color, and three buttons pick its width. A click on the board types text there, such as a cage sum, in the pen color and one of three text sizes, and a click on text edits it. A right-drag erases each line and text it crosses, and Clear all, after asking, erases them all. Each puzzle keeps its own drawing over a reload, and Restart clears it.
+// @version      0.6.1
+// @description  Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.6.0'
+  const VERSION = '0.6.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
