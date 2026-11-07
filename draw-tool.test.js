@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, KEPT_PUZZLES, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -200,6 +200,79 @@ test('a drag across the curve, inside the stroke\'s corner point, touches it; on
 test('the drawn line of a two-point stroke is its two points', () => {
   assert.deepEqual(drawnLine([[0, 0], [10, 5]]), [[0, 0], [10, 5]])
   assert.deepEqual(drawnLine([[4, 4]]), [[4, 4]])
+})
+
+// A cage sum "15" at size 20, centred on (100, 50) in board units.
+const sum = textItem([100, 50], '15', 3, 20)
+
+test('a text item holds its kind, pen color number, text size, text and its point rounded to a tenth of a board unit', () => {
+  assert.deepEqual(textItem([10.04, 20.06], '15', 3, 20), { kind: 'text', color: 3, size: 20, text: '15', at: [10, 20.1] })
+})
+
+test('a drawing of strokes and text saved as JSON reads back equal, item for item', () => {
+  const drawing = [strokeItem([[1, 2], [64, 128]], 1, 6), sum, textItem([5, 5], 'a b', 9, TEXT_SIZES[0])]
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
+})
+
+test('saved text that is not a text item throws', () => {
+  for (const item of [{ ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, color: null }]) {
+    assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
+  }
+})
+
+test('the three text sizes, smallest first, the middle one by default', () => {
+  assert.equal(TEXT_SIZES.length, 3)
+  assert.deepEqual([...TEXT_SIZES].sort((a, b) => a - b), TEXT_SIZES)
+  assert.equal(DEFAULT_TEXT_SIZE, TEXT_SIZES[1])
+})
+
+test('a saved text size reads back, and a missing or bad one reads as the middle size', () => {
+  for (const size of TEXT_SIZES) assert.equal(readTextSize(size), size)
+  for (const saved of [null, undefined, 0, 6, String(TEXT_SIZES[0]), 'big', {}]) assert.equal(readTextSize(saved), DEFAULT_TEXT_SIZE, JSON.stringify(saved))
+})
+
+test('a text\'s box is centred on its point, as tall as its size and wider with more characters', () => {
+  const box = textBox(sum)
+  assert.equal((box.left + box.right) / 2, 100)
+  assert.equal((box.top + box.bottom) / 2, 50)
+  assert.equal(box.bottom - box.top, 20)
+  const longer = textBox(textItem([100, 50], '150', 3, 20))
+  assert.equal(longer.right - longer.left > box.right - box.left, true)
+})
+
+test('a click on a text lands on it, and a click beside it on none', () => {
+  const drawing = [strokeItem([[0, 50], [200, 50]], 1, 6), sum]
+  assert.equal(textAt(drawing, [100, 50]), 1)
+  assert.equal(textAt(drawing, [textBox(sum).right - 1, textBox(sum).top + 1]), 1)
+  assert.equal(textAt(drawing, [100, 80]), -1)
+  assert.equal(textAt(drawing, [textBox(sum).right + 3, 50]), -1)
+  assert.equal(textAt([], [100, 50]), -1)
+})
+
+test('a click on two texts that overlap lands on the one drawn last', () => {
+  assert.equal(textAt([sum, textItem([104, 52], '7', 1, 20)], [102, 51]), 1)
+})
+
+test('a drag across a text touches it, and one that passes clear of it does not', () => {
+  const box = textBox(sum)
+  assert.equal(touchesItem(sum, [100, 0], [100, 100]), true, 'across its middle')
+  assert.equal(touchesItem(sum, [0, 0], [200, 100]), true, 'on a slant through it')
+  assert.equal(touchesItem(sum, [100, 50], [100, 50]), true, 'a press on it')
+  assert.equal(touchesItem(sum, [box.right + ERASE_TOLERANCE - 0.1, 0], [box.right + ERASE_TOLERANCE - 0.1, 100]), true, 'within the tolerance')
+  assert.equal(touchesItem(sum, [box.right + ERASE_TOLERANCE + 0.1, 0], [box.right + ERASE_TOLERANCE + 0.1, 100]), false, 'just past it')
+  assert.equal(touchesItem(sum, [0, 0], [200, 0]), false, 'above it')
+})
+
+test('touchesItem tests a stroke as touchesStroke does', () => {
+  assert.equal(touchesItem(flat, [96, 0], [96, 64]), true)
+  assert.equal(touchesItem(flat, [96, 50], [96, 64]), false)
+})
+
+test('a press and release with the mouse still, or moved no more than the slop, is a click; a drag is not', () => {
+  assert.equal(isClick([[10, 10]]), true)
+  assert.equal(isClick([[10, 10], [10 + CLICK_SLOP, 10], [10, 10 - CLICK_SLOP]]), true)
+  assert.equal(isClick([[10, 10], [10 + CLICK_SLOP + 0.1, 10]]), false)
+  assert.equal(isClick([[10, 10], [40, 10], [10, 10]]), false, 'a drag that comes back to its start')
 })
 
 test('VERSION matches the @version header', () => {

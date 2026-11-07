@@ -1,8 +1,9 @@
 // Takes docs/research/site-draw-tool.png, the homepage's Draw Tool picture: the grid's right side on the recorded
 // puzzle, with draw-tool.user.js injected, and the Draw panel beside it. A thin blue Shift+drag straight line, a green
-// freehand loop round two cells at the middle width and a thick red freehand arrow, each color and width picked in the
-// panel, which is left showing the red and the thick line. Every stroke is a real mouse drag. It fails, writing
-// nothing, when a stroke does not land.
+// freehand loop round two cells at the middle width, a thick red freehand arrow and an orange cage sum typed in r8c7's
+// corner at the large text size, each color, width and size picked in the panel, which is left showing the red and
+// the thick line. Every stroke is a real mouse drag and the sum real clicks and keys. It fails, writing nothing, when a
+// stroke or the sum does not land.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/site-draw-tool-screenshot.mjs
 // Not part of any test.
@@ -68,6 +69,14 @@ await drag(loop)
 await pick(4, 2)
 await drag([[8.6, 4.9], [8.1, 5.4], [7.3, 5.5], [6.65, 5.2]])
 await drag([[6.95, 4.85], [6.62, 5.18], [6.9, 5.55]])
+// A cage sum, 17, in r8c7's top left corner.
+await pick(3, 1)
+await p.click('.draw-tool-widths button[data-text-size] >> nth=2')
+await p.mouse.click(...at([7.25, 6.3]))
+await p.keyboard.type('17')
+await p.keyboard.press('Enter')
+if ((await p.locator('#draw-tool-layer text.draw-tool-text').allTextContents()).join() !== '17') throw new Error('the typed sum did not land')
+await pick(4, 2)
 
 const [panelTop, panelRight] = await p.evaluate(() => [
   document.querySelector('.controls-input').getBoundingClientRect().top,
