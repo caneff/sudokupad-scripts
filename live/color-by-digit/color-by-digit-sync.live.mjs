@@ -15,10 +15,12 @@ const { shadeOn } = shadeReaders(createRequire(import.meta.url)('../../color-by-
 const CIRCLES = '#color-by-digit-circles'
 const DIGIT_SELECT = `${EDITOR} select[data-role="digit-profile"]`
 const CELL_SELECT = `${EDITOR} select[data-role="cell-profile"]`
-// 1 to 5 on palette key 4, 8 and 9 on key 6. Its icon shows 3 and 9; Odd/Even's shows 5 and 4.
+// 1 to 5 on palette key 4, 8 and 9 on key 6. In Cell and Off its icon shows 3 and 9, in Digit Odd/Even's 5 and 4, and in Both 2 and 9:
+// of the pairs reaching both cell groups and both parities, 2 9, 3 8 and 4 9 share a digit with the Cell strip, and 2 9 is the lowest.
 const SPLIT = [group('4', ['1', '2', '3', '4', '5']), group('6', ['8', '9'])]
 const SPLIT_ICON = ['3', '9']
 const ODD_EVEN_ICON = ['5', '4']
+const BOTH_ICON = ['2', '9']
 const TWO = [{ name: 'Split', groups: SPLIT }, { name: 'Odd/Even', groups: ODD_EVEN }]
 // The given 5 at (0,0) and 6 at (1,0): Split colors the first with key 4 and leaves the second; Odd/Even gives keys 1 and 2.
 const SPLIT_CELLS = [['4'], []]
@@ -157,11 +159,11 @@ describe('the digit profile unsynced, saved synced in Both, injected after Start
     assert.deepEqual(await settle(t.cells, SPLIT_CELLS), SPLIT_CELLS)
   })
 
-  it('in Both, cells on Split and digits on Odd/Even, the icon shows the cell profile', async () => {
+  it('in Both, cells on Split and digits on Odd/Even, the icon shows the pair of digits reaching most groups', async () => {
     assert.equal(await t.label(), 'Both')
     assert.deepEqual(await t.cells(), SPLIT_CELLS)
     assert.deepEqual(await fill('4')(), [SHADE[2]])
-    assert.deepEqual(await t.icon(), SPLIT_ICON)
+    assert.deepEqual(await t.icon(), BOTH_ICON)
   })
 
   it('in Digit, the icon shows the digit profile, and in Cell and Off the cell profile', async () => {

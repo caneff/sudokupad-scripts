@@ -23,10 +23,16 @@
 - **settings pulldowns** — the three drafts at the top of Color by Digit's settings dialog: **Mode** (Cell, Digit,
   Both, Off; only Cell and Off while Digit is None), **Cell** (the cell profile, by name) and **Digit** (Same as
   cell, a profile by name, or None). They apply at Save; Cancel drops them.
-- **chips** — a profile's colors in Color by Digit, drawn as a run of joined square board cells: one per group,
-  the first three groups at most, one outline with single dividers, no gaps or rounded corners, each cell with its
-  group's **shown digit**. The button draws them in the **mode**'s look; the profile menu and the dialog's profile
+- **chips** — a profile's colors in Color by Digit, drawn as a run of joined square board cells: three at most,
+  one outline with single dividers, no gaps or rounded corners, each cell with a digit. In Cell and Off one cell per
+  group of the cell profile, with the group's **shown digit**; in Digit the same from the digit profile; in Both the
+  digits that reach the most groups of the two profiles (see **Cell strip**). The button draws them in the **mode**'s look; the profile menu and the dialog's profile
   list draw them as Cell does.
+- **Cell strip** — the chips the button shows in Cell: one cell per group of the cell profile, each with its shown digit.
+  Both shows as many chips as the larger of the two profiles has groups (three at most), on the set of digits that
+  scores most (the cell groups plus the digit groups its digits fall in); a tie goes to the set sharing most digits with
+  the Cell strip, then to the lowest digits. The chips run in ascending digit order, except that Both with one profile
+  on both shows the Cell strip itself.
 - **shown digit** — the one digit that stands for a group on its cell of the Color by Digit **chips**, on
   the button, in the profile menu and in the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
   are below 5, the highest if all are above 5, else the middle (the lower of the two middle ones on an even
@@ -59,7 +65,7 @@
 - **digit profile** — the profile whose groups give the **digit colors**. While the Digit pulldown says Same as
   cell (the default) it is the active profile; on a profile's name, it is a second pick from the same list,
   saved as `digitActive`, picked too by the profile menu's Digit dots. Deleting it makes the digits follow the
-  active profile again (Same as cell). The button's icon shows it in Digit, and the active profile in every other mode.
+  active profile again (Same as cell). The button's chips come from it in Digit, from the active profile in Cell and Off, and from both in Both.
 - **Use digit colors** — whether Color by Digit colors digits at all, saved as `useDigitColors` (on by default) and
   set by the Digit pulldown: None is off, Same as cell and a profile's name are on. Off, the **mode** is only Cell or
   Off (Digit falls back to Off, Both to Cell), the profile menu drops its Cell and Digit dots, and nothing is drawn
@@ -201,5 +207,5 @@
 - **Size slider** and **Opacity slider** — Draw's two sliders on a light purple tray. Size sets the next stroke's width
   (1 to 16, step 0.5, default 6) and the next text's size; Opacity (20 to 100%, step 5, default 100) sets the next item's.
   Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
-- **erase** — Draw's right-drag: every stroke and text the drag passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
+- **erase** — Draw's right click, or right-drag as an extra: every stroke and text the pointer passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
   drawing, after asking.
