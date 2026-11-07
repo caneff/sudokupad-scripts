@@ -1,19 +1,19 @@
-// Takes the six small pictures on site/pen-tool-extras.html, one per "What it adds" bullet a still picture can
+// Takes the four small pictures on site/pen-tool-extras.html, one per "What it adds" bullet a still picture can
 // show, from the current pen-tool-extras.user.js on sudokupad.app. Each is cropped close and taken at 3x so it
 // reads at about 14rem wide:
-//   pen-tool-extras-bullet-colors.png   the cell color buttons above the pen color buttons, colors matching
+//   pen-tool-extras-bullet-colors.png   the settings dialog's Pen colors section: the preset pulldown over the nine color pickers
 //   pen-tool-extras-bullet-lines.png    a dashed line and an arrow line on the grid, and the page button
 //   pen-tool-extras-bullet-edges.png    cells with an edge X, an edge circle and the two direction arrows
 //   pen-tool-extras-bullet-corners.png  two grid corners, one with an X and one with a circle
-//   pen-tool-extras-bullet-sliders.png  the Thickness and Opacity sliders, and a thick outlined line over a colored cell
-//   pen-tool-extras-bullet-settings.png the pen panel's tray: the line mode, line type and settings buttons over the sliders
-// The erase bullet has none: a middle click does not show in a still picture. Every line is a real mouse drag
-// and every mark a real click. The script fails when a line or mark does not land (it checks the grid gained a pen
-// value, not which mark), and writes the six files only once all are taken, so a failure leaves the old ones. The mascot is hidden.
+// The erase bullet has none: a middle click does not show in a still picture. The pen panel's picture is taken by
+// pen-tool-extras-panel-annotated-screenshot.mjs. Every line is a real mouse drag and every mark a real click. The
+// script fails when a line or mark does not land (it checks the grid gained a pen value, not which mark), and writes
+// the four files only once all are taken, so a failure leaves the old ones. The mascot is hidden.
 // Run from the repo root with Playwright's Chromium installed: node docs/research/pen-tool-extras-bullets-screenshot.mjs
 // Not part of any test.
 import { chromium } from 'playwright'
 import { readFileSync, writeFileSync } from 'node:fs'
+import { openExtrasEditor } from '../../live/settings.mjs'
 // Taken pictures wait here until every one is taken.
 const taken = new Map()
 
@@ -95,23 +95,6 @@ const compose = async (name, pictures, vertical) => {
   await p.close()
 }
 
-// Colors: the cell color tool's bottom row of buttons (7 to 9) above the pen tool's, the pen colors darker versions of the cell colors.
-// The page rectangle that holds every box, padded.
-const around = (boxes, pad) => {
-  const x = Math.min(...boxes.map((b) => b.x))
-  const y = Math.min(...boxes.map((b) => b.y))
-  return { x: x - pad, y: y - pad, width: Math.max(...boxes.map((b) => b.x + b.width)) - x + 2 * pad, height: Math.max(...boxes.map((b) => b.y + b.height)) - y + 2 * pad }
-}
-const rowShot = async (control, panel) => {
-  await openPanel(control, panel)
-  await quiet()
-  const boxes = await Promise.all([7, 8, 9].map((k) => page.locator(`${panel} button[data-key="${k}"]`).boundingBox()))
-  return png(around(boxes, 4))
-}
-const cellRow = await rowShot('#control-colour', '.tool-colour')
-const penRow = await rowShot('#control-pen', '.tool-pen')
-await compose('colors', [cellRow, penRow], true)
-
 // Lines: a dashed line (page 2, blue) and an arrow line (page 3, orange) on the grid, with the page button.
 await mode('centeronly')
 await pageButton.click()
@@ -147,35 +130,14 @@ await landing('the corner circle', () => clickTimes(...at(1, 7), 2))
 await quiet()
 save('corners', await page.screenshot({ clip: gridClip(0.6, 6, 0.8, 1) }))
 
-// Sliders: the panel's Thickness and Opacity sliders, and a thick line with its white outline over a colored cell.
-const slider = await page.locator('#pen-tool-extras-thickness').boundingBox()
-const dragSlider = async (selector, toX) => {
-  const box = await page.locator(selector).boundingBox()
-  const y = box.y + box.height / 2
-  await page.mouse.move(box.x + box.width / 2, y)
-  await page.mouse.down()
-  await page.mouse.move(toX, y, { steps: 12 })
-  await page.mouse.up()
-}
-await dragSlider('#pen-tool-extras-thickness', slider.x + slider.width + 30)
-await dragSlider('#pen-tool-extras-opacity', slider.x + slider.width * 0.6)
-await openPanel('#control-colour', '.tool-colour')
-await page.mouse.click(...at(8.5, 6.5))
-await page.locator('.tool-colour button[data-key="8"]').click()
-await page.mouse.click(...at(8.5, 7.5))
-await page.locator('.tool-colour button[data-key="8"]').click()
-await openPanel('#control-pen', '.tool-pen')
-await pick(9); await drag([[8.5, 5.5], [8.5, 7.5]])
-await quiet()
-const lineOverColor = await png(gridClip(8, 5, 1, 3))
-// The sliders block is the full width of the panel, under the controls row.
-const sliderClip = around([await page.locator('.pen-tool-extras-sliders').boundingBox()], 4)
-await compose('sliders', [await png(sliderClip), lineOverColor], true)
-
-// Settings button: the whole tray, the controls row over the sliders, with the pen tool on.
-await openPanel('#control-pen', '.tool-pen')
-await quiet()
-save('settings', await page.screenshot({ clip: around([await page.locator('.pen-tool-extras-tray').boundingBox()], 2) }))
+// Colors: the settings dialog's Pen colors section, the preset pulldown over the nine color pickers. Edit mode is not used.
+await openExtrasEditor(page)
+await page.evaluate(() => Promise.all(document.getAnimations().map((animation) => animation.finished)))
+await page.mouse.move(5, 5)
+const penColors = page.locator('#pen-tool-extras-editor .pen-tool-extras-cell').first()
+const titleBox = await penColors.locator('.pen-tool-extras-section-title').boundingBox()
+const lastPicker = await penColors.locator('input[type=color]').last().boundingBox()
+save('colors', await page.screenshot({ clip: { x: titleBox.x, y: titleBox.y - 4, width: lastPicker.x + lastPicker.width - titleBox.x + 4, height: lastPicker.y + lastPicker.height - titleBox.y + 8 } }))
 
 for (const [name, buffer] of taken) writeFileSync(out(name), buffer)
 await browser.close()
