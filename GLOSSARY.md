@@ -6,25 +6,26 @@
   group or, with no digit, all its centre marks are. Corner marks never count. A cell with no digit
   and no centre marks, or a digit in no group, is not pure.
 - **profile** — a named list of groups in Color by Digit. Exactly one is active, the cell profile: cell
-  coloring uses its groups, and so do the digits while the **digit profile** is synced. There are one to six of them; a fresh install has the five preloads, Low/5/High
+  coloring uses its groups, and so do the digits while the Digit pulldown says Same as cell. There are one to six of them; a fresh install has the five preloads, Low/5/High
   active. Groups saved before profiles existed become the active profile: the preload they equal, else a
   profile named Custom added first, with the five preloads beside it. An install with saved profiles gets
   Entropic and Modular added once, and Each digit once (see **preload**).
 - **selected profile** — the profile the Color by Digit settings dialog is editing: its row is highlighted, its
-  name is in the name box and its groups are in the right column. The dialog opens on the cell profile, and a click
-  on a row selects it. Selecting changes no color and is not saved; the **profile tags** do the picking.
-- **profile tag** — the small button on each row of the dialog's profile list that picks a profile: Active (the
-  cell profile) while the **digit profile** is synced or digit colors are off, else Cells (the cell profile) and
-  Digits (the digit profile). It applies at Save.
+  name is an editable field in its row and its groups are in the right column. The dialog opens on the cell
+  profile, and a click on a row selects it. Selecting changes no color and is not saved; the dialog's **Cell** and
+  **Digit** pulldowns do the picking, and the profile list is only for editing.
+- **settings pulldowns** — the three drafts at the top of Color by Digit's settings dialog: **Mode** (Cell, Digit,
+  Both, Off; only Cell and Off while Digit is None), **Cell** (the cell profile, by name) and **Digit** (Same as
+  cell, a profile by name, or None). They apply at Save; Cancel drops them.
 - **shown digit** — the one digit that stands for a group on its colored cell in the Color by Digit icon,
   the profile menu and the dialog's profile list. Over the group's digits with 0 left out: the lowest if all
   are below 5, the highest if all are above 5, else the middle (the lower of the two middle ones on an even
   count). A group of only 0 shows 0; a group with no digits shows none.
 - **profile menu** — the menu above the Color by Digit button, opened by its arrow box, a right click or a
-  hold: one row per profile, the active one highlighted, and Edit profiles…; with the **digit profile** unsynced,
+  hold: one row per profile, the active one highlighted, and Edit profiles…; with the Digit pulldown on a profile's name,
   a Cells section and a Digits section, each with its own pick highlighted. Picking a row makes that profile
   active: in Cell and Both it recolors the cells (planSwitch), as one undo step, and in Digit and Both the
-  digits take their new **digit colors** at once. Unsynced, a Cells row does only the first and a Digits row,
+  digits take their new **digit colors** at once. With separate picks, a Cells row does only the first and a Digits row,
   which picks the digit profile, only the second.
 - **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off, shown on the button's top strip (CELL,
   DIGIT and BOTH in bold purple, OFF in grey) and stepped by a short press on the button, Cell → Digit → Both →
@@ -43,13 +44,14 @@
   group, or in a group whose color cannot be read, keeps SudokuPad's own color. A mark in the `conflict` state
   keeps it and gets a conflict circle; a mark of a digit on SudokuPad's own color stays SudokuPad's red and gets
   the circle too. It is a stylesheet, not SudokuPad state, so it is never an undo step.
-- **digit profile** — the profile whose groups give the **digit colors**. While "Sync digit profile with cell
-  profile" is ticked (the default) it is the active profile; unticked, it is a second pick from the same list,
-  saved as `digitActive`, picked in the profile menu's Digits section. Deleting it makes the digits follow the
-  active profile again. The button's icon shows it in Digit, and the active profile in every other mode.
-- **Use digit colors** — Color by Digit's checkbox, ticked by default, that turns digit coloring on and off.
-  Unticked, the **mode** is only Cell or Off (Digit falls back to Off, Both to Cell), the sync checkbox and the
-  profile menu's Digits section hide, and nothing is drawn for digits. The **digit profile** pick is kept.
+- **digit profile** — the profile whose groups give the **digit colors**. While the Digit pulldown says Same as
+  cell (the default) it is the active profile; on a profile's name, it is a second pick from the same list,
+  saved as `digitActive`, picked too in the profile menu's Digits section. Deleting it makes the digits follow the
+  active profile again (Same as cell). The button's icon shows it in Digit, and the active profile in every other mode.
+- **Use digit colors** — whether Color by Digit colors digits at all, saved as `useDigitColors` (on by default) and
+  set by the Digit pulldown: None is off, Same as cell and a profile's name are on. Off, the **mode** is only Cell or
+  Off (Digit falls back to Off, Both to Cell), the profile menu's Digits section hides, and nothing is drawn for
+  digits. The **digit profile** pick is kept.
 - **conflict circle** — the small pale red circle Color by Digit draws behind a corner or centre mark
   in the `conflict` state, in Digit and Both, only while SudokuPad shows conflicts.
 - **preload** — one of the five ready-made profiles a fresh install starts with: Low/5/High, Odd/Even,

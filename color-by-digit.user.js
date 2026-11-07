@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.13.1
+// @version      0.14.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.13.1'
+  const VERSION = '0.14.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -291,10 +291,19 @@
     return `Pasted ${applied} setting${applied === 1 ? '' : 's'}${skipped ? `; skipped ${skipped} that did not check out` : ''}.`
   }
 
-  // The buttons are moved into the dialog's options row, beside Cancel and Save; the status stays under the editor.
-  const COPY_PASTE_BUTTONS_HTML = '<button type="button" data-act="copy-settings">Copy settings</button>' +
-    '<button type="button" data-act="paste-settings">Paste settings</button>'
-  const COPY_PASTE_STATUS_HTML = '<div data-role="settings-status" style="opacity:.7;min-height:1.2em"></div>'
+  // The icons are Pen Tool Extras' copy and paste pictures; the scripts share no code.
+  const ICON_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const iconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The status sits between the title and the icons, so a long message wraps in the room the title leaves.
+  const renderTitle = (version) => '<div class="cbd-title-row">' +
+    `<span><b>Color by Digit</b> <small class="cbd-version">v${version}</small></span>` +
+    '<span data-role="settings-status"></span>' +
+    `<span class="cbd-tools">${iconButton('copy-settings', 'Copy settings', ICON_PICTURES.copy)}${iconButton('paste-settings', 'Paste settings', ICON_PICTURES.paste)}</span></div>`
 
   function wireCopyPaste (root, apply) {
     const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
@@ -416,6 +425,15 @@
   const setSync = (state, synced) => withProfiles(state, state.profiles.map(cloneProfile), state.active, synced ? undefined : (state.digitActive ?? state.active))
 
   const setUseDigitColors = (state, on) => makeState(state.profiles.map(cloneProfile), state.active, state.digitActive, on)
+
+  // The Digit pulldown's value: 'same' (digits follow the cells), a profile index, or 'none' (no digit is colored).
+  const digitChoice = (state) => (!usesDigitColors(state) ? 'none' : isSynced(state) ? 'same' : String(state.digitActive))
+
+  function chooseDigit (state, choice) {
+    if (choice === 'none') return setUseDigitColors(state, false)
+    const colored = setUseDigitColors(state, true)
+    return choice === 'same' ? setSync(colored, true) : setDigitActive(colored, Number(choice))
+  }
 
   function setProfileGroups (state, index, groups) {
     return withProfiles(state, state.profiles.map((p, i) => (i === index ? { name: p.name, groups: cloneGroups(groups) } : cloneProfile(p))), state.active, state.digitActive)
@@ -712,6 +730,8 @@
   const SMALL_BUTTON_SIZE = 28
   // Two columns need this much room each; the dialog's 640 px gives them two, a phone gives one.
   const COLUMN_MIN = 270
+  // Three pulldowns fit one row of the 640 px dialog; at phone width they stack.
+  const PULLDOWN_MIN = 180
   const DIALOG_WIDTH = 640
   const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
   const SAVE_LABEL = 'Save'
@@ -725,29 +745,14 @@
   const ACTIVE_RING = '#b79be0'
   const ACTIVE_INK = '#5b2a9a'
   const IDLE_RING = '#e2dcea'
-  // The pressed look of a chosen mode button and a tag that is on.
-  const PRESSED_LOOK = `background: ${ACTIVE_FILL}; border-color: ${ACTIVE_RING}; color: ${ACTIVE_INK}; font-weight: 600`
-
-  const checkboxHtml = (role, on, label) => `<label class="cbd-check"><input type="checkbox" data-role="${role}"${on ? ' checked' : ''}> ${label}</label>`
-
-  // The Active tag is the one pick while the digits follow the cells, or no digit is colored.
-  const hasTwoTags = (state) => usesDigitColors(state) && !isSynced(state)
-
-  function renderTags (state, i) {
-    const tag = (act, label, on) => `<button type="button" class="cbd-button cbd-tag" data-act="${act}" data-index="${i}" aria-pressed="${on}">${label}</button>`
-    if (!hasTwoTags(state)) return tag('tag-cells', 'Active', i === state.active)
-    return tag('tag-cells', 'Cells', i === state.active) + tag('tag-digits', 'Digits', i === state.digitActive)
-  }
-
   function renderProfiles (state, colorOf, selected) {
     const only = state.profiles.length <= 1
     const rows = state.profiles.map((profile, i) => {
       const chosen = i === selected
-      return `<div class="cbd-profile${hasTwoTags(state) ? ' cbd-two-tags' : ''}" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${esc(profile.name)}">` +
+      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${esc(profile.name)}">` +
         `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
         `<span class="cbd-chips">${renderChips(profile.groups, colorOf, 20)}</span>` +
-        `<span class="cbd-name">${esc(profile.name)}</span>` +
-        `<span class="cbd-tags">${renderTags(state, i)}</span>` +
+        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${esc(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${esc(profile.name)}</span>`) +
         `<button type="button" class="cbd-button cbd-small" data-act="delete" data-index="${i}" aria-label="Delete profile ${esc(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
     }).join('')
     const full = state.profiles.length >= MAX_PROFILES
@@ -807,20 +812,30 @@
     return `<div class="cbd-group">${head}${body}</div>`
   }
 
-  function renderEditor ({ groups, pages, shown, mode, profilesHtml = '', useDigitColors, synced, selectedName = '', open = null }) {
+  const optionHtml = (value, label, selected, index) =>
+    `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${esc(label)}</option>`
+
+  // The three drafts at the top of the dialog; the mode offers only what the Digit pulldown allows.
+  function renderPulldowns (state, mode) {
+    const shownMode = allowedMode(mode, usesDigitColors(state))
+    const digit = digitChoice(state)
+    const named = (picked) => state.profiles.map((p, i) => optionHtml(i, p.name, picked === String(i), i)).join('')
+    const pulldown = (role, label, options) => `<label class="cbd-pulldown"><span>${label}</span><select data-role="${role}">${options}</select></label>`
+    return '<div class="cbd-pulldowns">' +
+      pulldown('mode-draft', 'Mode', modesFor(usesDigitColors(state)).map((m) => optionHtml(m, MODE_NAMES[m], m === shownMode)).join('')) +
+      pulldown('cell-profile', 'Cell', named(String(state.active))) +
+      pulldown('digit-profile', 'Digit', optionHtml('same', 'Same as cell', digit === 'same') + named(digit) + optionHtml('none', 'None', digit === 'none')) +
+      '</div>'
+  }
+
+  function renderEditor ({ groups, pages, shown, pulldownsHtml = '', profilesHtml = '', open = null }) {
     const colors = layoutColors(pages)
     const rows = groups.map((_, i) => renderGroup(groups, colors, pages, shown, i, i === open)).join('')
     const note = colors.length === 0 ? '<div class="cbd-note">No palette colors found: groups cannot be added.</div>' : ''
-    const shownMode = allowedMode(mode, useDigitColors)
-    const modeChoice = `<div class="cbd-mode" role="radiogroup" aria-label="Mode">${modesFor(useDigitColors).map((m) =>
-      `<button type="button" class="cbd-button" role="radio" aria-checked="${m === shownMode}" tabindex="${m === shownMode ? 0 : -1}" data-role="mode-draft" data-mode="${m}">${MODE_NAMES[m]}</button>`).join('')}</div>`
-    const checks = checkboxHtml('use-digit-colors', useDigitColors, 'Use digit colors') +
-      (useDigitColors ? checkboxHtml('sync', synced, 'Sync digit profile with cell profile') : '')
     const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    return `<div class="cbd-checks">${checks}</div>${heading('Mode')}${modeChoice}` +
+    return `${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
       '<div class="cbd-column">' +
-      `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${esc(selectedName)}" aria-label="Profile name">` +
       `${heading('Groups', clear)}${note}${rows || '<div class="cbd-note">No groups.</div>'}` +
       '<button type="button" class="cbd-button" data-act="add-group">Add group</button></div></div>'
   }
@@ -829,24 +844,28 @@
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id and the options row's two classes outrank those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const OPTIONS = `.dialog-options.${DIALOG_CLASS}`
+  const TITLE = `.dialog.${DIALOG_CLASS} .cbd-title-row`
   // Percent-encoded; its inner quotes are single, so the url("...") wrapper's double quotes hold it.
   const PULLDOWN_ARROW = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'10\' height=\'6\'%3E%3Cpath d=\'M0 0l5 6 5-6z\' fill=\'%236b4fa0\'/%3E%3C/svg%3E")'
   const STYLE_CSS = [
     ['.cbd-version', 'opacity: .6'],
+    [TITLE, 'display: flex; align-items: center; gap: 12px'],
+    [`${TITLE} .cbd-tools`, 'display: flex; align-items: center; gap: 4px'],
+    [`${TITLE} .cbd-tools button`, `background: none; border: none; box-shadow: none; padding: 4px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 0; color: ${MUTED}; cursor: pointer; border-radius: 6px`],
+    [`${TITLE} .cbd-tools button:hover`, 'background: #f0edf5'],
+    [`${TITLE} .cbd-tools svg`, 'width: 20px; height: 20px'],
+    [`${TITLE} .cbd-tools svg *`, 'fill: none'],
+    // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+    [`${TITLE} [data-role="settings-status"]`, `flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${MUTED}`],
     [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
     [`.dialog.${DIALOG_CLASS}`, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
     [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
     [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
-    [`${EDITOR} .cbd-checks`, 'display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 0 0 10px'],
-    // Outranks the profile list's column rule on [role="radiogroup"].
-    [`${EDITOR} .cbd-mode[role="radiogroup"]`, 'display: flex; flex-direction: row; gap: 8px; margin: 0 0 4px'],
-    [`${EDITOR} .cbd-mode .cbd-button`, 'flex: 1'],
-    [`${EDITOR} .cbd-mode [aria-checked="true"]`, PRESSED_LOOK],
+    [`${EDITOR} .cbd-pulldowns`, `display: grid; gap: 8px 12px; grid-template-columns: repeat(auto-fit, minmax(${PULLDOWN_MIN}px, 1fr)); margin: 0 0 10px`],
+    [`${EDITOR} .cbd-pulldown`, 'display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left'],
     [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
     [`${EDITOR} .cbd-column`, 'min-width: 0'],
-    [`${EDITOR} .cbd-check`, 'display: flex; align-items: center; gap: 6px; flex: none; width: auto; min-width: 0; margin: 0; padding: 0; text-align: left; white-space: nowrap'],
-    [`${EDITOR} .cbd-check input`, 'flex: none; width: auto; min-width: 0; margin: 0'],
     [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
     [`${EDITOR} .cbd-small`, `padding: 0 10px; height: ${SMALL_BUTTON_SIZE}px; line-height: ${SMALL_BUTTON_SIZE - 2}px`],
     [`${EDITOR} [data-act="remove"]`, `flex: none; width: ${SMALL_BUTTON_SIZE}px; padding: 0; color: #c0392b; font-size: 1.1rem`],
@@ -862,7 +881,7 @@
     [`${EDITOR} [data-role="holder"]`, 'position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1px #fff, 0 0 0 2px #000'],
     [`${EDITOR} [data-role="numpad"]`, `display: grid; grid-template-columns: repeat(3, ${NUMPAD_KEY}); gap: 4px`],
     [`${EDITOR} .cbd-palette-head`, 'margin-bottom: 6px'],
-    [`${EDITOR} select[data-act="page"]`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
+    [`${EDITOR} select[data-act="page"], ${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${PULLDOWN_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
     [`${EDITOR} .cbd-swatches`, `display: grid; gap: 6px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${SWATCH_SIZE})`],
     [`${EDITOR} .cbd-zero`, 'margin-top: 6px'],
     [`${EDITOR} [data-empty="slot"]`, `display: block; width: ${SWATCH_SIZE}; height: ${SWATCH_SIZE}`],
@@ -876,25 +895,17 @@
     [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
     [`${EDITOR} .cbd-chips`, 'display: flex; gap: 3px; flex: none'],
     [`${EDITOR} .cbd-name`, 'flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400'],
-    [`${EDITOR} [aria-checked="true"] .cbd-name`, 'font-weight: 600'],
     [`${EDITOR} .cbd-new`, 'margin: 8px 0'],
-    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; width: 100%; padding: 6px 8px; margin: 0 0 10px'],
-    [`${EDITOR} .cbd-tags`, 'display: flex; gap: 4px; flex: none'],
+    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px 6px; margin: 0; font-size: .9rem; font-weight: 600'],
     [`${EDITOR} .cbd-profile .cbd-small`, 'flex: none; padding: 0 8px'], [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
-    // Two tags would leave the name no room, so they drop to a second line under it.
-    [`${EDITOR} .cbd-two-tags`, 'flex-wrap: wrap'],
-    [`${EDITOR} .cbd-two-tags .cbd-tags`, 'order: 1; flex-basis: 100%; padding-left: 28px'],
-    [`${EDITOR} .cbd-tag`, 'padding: 0 6px; height: 24px; line-height: 22px; font-size: .75rem'],
-    [`${EDITOR} .cbd-tag[aria-pressed="true"]`, PRESSED_LOOK],
     [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
     [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
-    [`${OPTIONS} button[data-act="paste-settings"]`, 'margin-right: auto'],
     [`${OPTIONS} button[data-role="save"]`, 'background: #6b3fa0; color: #fff; border: 1px solid #5a3489; font-weight: 600']
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, openGroupAfter, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderProfiles, renderMenu, COPY_PASTE_BUTTONS_HTML, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
+    module.exports = { VERSION, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, modeLabelHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, assignDigit, editGroupsFor, openGroupAfter, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, iconLayout, inkFor, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH, ICON_TOP, ARROW_START, ICON_MAX_GROUPS, CHIP_MAX_GROUPS }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1280,15 +1291,14 @@
     let draft = savedState
     let draftMode = mode
     let selected = draft.active
-    // The selected profile's name when it was selected: an emptied name box keeps it.
+    // The selected profile's name when it was selected: an emptied name field keeps it.
     let keptName = draft.profiles[selected].name
     addStyle()
     Framework.showDialog({
       centerOverBoard: true,
       parts: [
-        { tag: 'text', innerHTML: `<b>Color by Digit</b> <small class="cbd-version">v${VERSION}</small>` },
+        { tag: 'text', innerHTML: renderTitle(VERSION) },
         { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
-        { tag: 'text', innerHTML: COPY_PASTE_STATUS_HTML },
         {
           tag: 'options',
           options: [
@@ -1305,15 +1315,14 @@
     const row = dialog && dialog.querySelector('.dialog-options')
     if (row) {
       row.classList.add(DIALOG_CLASS)
-      row.insertAdjacentHTML('afterbegin', COPY_PASTE_BUTTONS_HTML)
       row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     }
     let shown = []
     let open = null
     const draw = () => {
-      const { groups, name } = draft.profiles[selected]
+      const { groups } = draft.profiles[selected]
       groups.forEach((g, i) => { if (shown[i] === undefined) shown[i] = initialPage(pages, g.key) })
-      box.innerHTML = renderEditor({ groups, pages, shown, mode: draftMode, profilesHtml: renderProfiles(draft, readColor, selected), useDigitColors: usesDigitColors(draft), synced: isSynced(draft), selectedName: name, open })
+      box.innerHTML = renderEditor({ groups, pages, shown, pulldownsHtml: renderPulldowns(draft, draftMode), profilesHtml: renderProfiles(draft, readColor, selected), open })
     }
     const reshow = (next, nextSelected = selected) => { draft = next; selected = nextSelected; keptName = draft.profiles[selected].name; shown = []; open = null }
     const newProfile = () => {
@@ -1334,13 +1343,13 @@
       draftMode = mode
       draw()
     })
-    // Typing renames the draft and its row in place, so the name box keeps the focus.
+    // Typing renames the draft, its row and the pulldowns' options in place, so the name field keeps the focus.
     box.addEventListener('input', (event) => {
       if (!event.target.matches('[data-role="profile-name"]')) return
       draft = renameProfile(draft, selected, event.target.value.trim() === '' ? keptName : event.target.value)
-      const row = box.querySelector(`[data-role="profile-row"][data-index="${selected}"]`)
-      row.setAttribute('aria-label', draft.profiles[selected].name)
-      row.querySelector('.cbd-name').textContent = draft.profiles[selected].name
+      const name = draft.profiles[selected].name
+      box.querySelector(`[data-role="profile-row"][data-index="${selected}"]`).setAttribute('aria-label', name)
+      box.querySelectorAll(`.cbd-pulldown option[data-index="${selected}"]`).forEach((option) => { option.textContent = name })
     })
     // Enter, or leaving the box, shows the name the draft holds: a blank box shows the kept name again.
     const settleName = (nameBox) => { nameBox.value = draft.profiles[selected].name }
@@ -1352,9 +1361,8 @@
     })
     box.addEventListener('change', (event) => {
       if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
-      // The draft mode is kept as chosen: unticking "Use digit colors" shows its fallback, and ticking it again before Save shows the mode again.
-      if (event.target.matches('[data-role="use-digit-colors"]')) { draft = setUseDigitColors(draft, event.target.checked); draw(); return }
-      if (event.target.matches('[data-role="sync"]')) { draft = setSync(draft, event.target.checked); draw(); return }
+      const pulldown = event.target.closest('select[data-role]')
+      if (pulldown) { choose(pulldown.dataset.role, pulldown.value); return }
       const el = event.target.closest('select[data-act="page"]')
       if (!el) return
       shown[Number(el.dataset.group)] = Number(el.value)
@@ -1390,19 +1398,14 @@
       draw()
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
-    const chooseMode = (next) => {
-      draftMode = next
+    // The draft mode is kept as chosen: picking None in Digit shows the mode's fallback, and picking a digit profile again before Save shows the mode again.
+    const choose = (role, value) => {
+      if (role === 'mode-draft') draftMode = value
+      else if (role === 'cell-profile') draft = setActive(draft, Number(value))
+      else draft = chooseDigit(draft, value)
       draw()
-      box.querySelector(`[data-role="mode-draft"][data-mode="${draftMode}"]`).focus()
+      box.querySelector(`select[data-role="${role}"]`).focus()
     }
-    // The mode row is one radio group: an arrow key moves the choice, as the profile rows do.
-    box.addEventListener('keydown', (event) => {
-      if (!event.target.matches('[data-role="mode-draft"]') || !ARROW_STEP[event.key]) return
-      const modes = [...box.querySelectorAll('[data-role="mode-draft"]')]
-      event.preventDefault()
-      event.stopPropagation()
-      chooseMode(modes[rowAfterKey(event.key, modes.indexOf(event.target), modes.length)].dataset.mode)
-    })
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="select"]')) return
       const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)
@@ -1413,17 +1416,10 @@
     })
     box.addEventListener('click', (event) => {
       const row = event.target.closest('[data-act="select"]')
-      if (row && !event.target.closest('[data-role="handle"], button')) {
+      if (row && !event.target.closest('[data-role="handle"], [data-role="profile-name"], button')) {
         event.preventDefault()
         event.stopPropagation()
         selectRow(Number(row.dataset.index), false)
-        return
-      }
-      const modeButton = event.target.closest('button[data-role="mode-draft"]')
-      if (modeButton) {
-        event.preventDefault()
-        event.stopPropagation()
-        chooseMode(modeButton.dataset.mode)
         return
       }
       const el = event.target.closest('button[data-act]')
@@ -1432,10 +1428,7 @@
       event.stopPropagation()
       const act = el.dataset.act
       if (act === 'new-profile') { newProfile(); return }
-      if (act === 'tag-cells' || act === 'tag-digits') {
-        const set = act === 'tag-cells' ? setActive : setDigitActive
-        draft = set(draft, Number(el.dataset.index))
-      } else if (act === 'delete') {
+      if (act === 'delete') {
         const index = Number(el.dataset.index)
         const next = deleteProfile(draft, index)
         if (next === draft) return

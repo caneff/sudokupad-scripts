@@ -17,45 +17,31 @@ const colorOf = (key) => `#${key}`
 const PAGES = byDigit.layoutPages([['clear', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'a9']], 0, colorOf)
 
 const count = (html, re) => (html.match(re) || []).length
-const tagsOfRow = (html, i) => {
-  const row = html.split('data-role="profile-row"')[i + 1]
-  return [...row.matchAll(/data-act="tag-(cells|digits)"[^>]*aria-pressed="(true|false)">([A-Za-z]+)</g)].map((m) => `${m[3]}:${m[2]}`)
-}
 
 // Spec 300's acceptance as one pass over Color by Digit's pure functions and its details page, at `npm test`: the top
-// row's checkboxes and one-row mode, the two-column layout's CSS, the profile list's Cells/Digits/Active tags apart from
-// the selected row, rename, "+ New profile", compact group rows with one open and the taken-digit dot, the three-chip
+// row's pulldowns (spec 333 replaced its checkboxes and mode buttons), the two-column layout's CSS, the selected row
+// apart from the cell and digit profiles, rename, "+ New profile", compact group rows with one open and the taken-digit dot, the three-chip
 // cap, and the details page's annotated dialog picture. This seam is blind to real SudokuPad: the Framework calls, the
 // dialog's rendering at 1200 and 390 px, Save reaching the puzzle and undo are `npm run test:live`'s
 // (live/color-by-digit*.live.mjs), and neither run covers a real Tampermonkey install or crackingthecryptic.com.
 test('spec 300: the Color by Digit settings dialog edits a selected profile in two columns, with compact groups', () => {
   const { renderEditor, renderProfiles, renderMenu, iconLayout, setSync, setActive, setDigitActive, copyProfile, renameProfile, setUseDigitColors } = byDigit
 
-  // Top row: each checkbox sits inside its label; Mode is one row of four buttons, or Cell and Off without digit colors.
-  const top = renderEditor({ groups: [], pages: PAGES, shown: [], mode: 'both', useDigitColors: true, synced: true })
-  assert.match(top, /<label class="cbd-check"><input type="checkbox" data-role="use-digit-colors" checked> Use digit colors<\/label>/)
-  assert.match(top, /<label class="cbd-check"><input type="checkbox" data-role="sync" checked> Sync digit profile with cell profile<\/label>/)
-  const modes = (html) => [...html.matchAll(/data-mode="([a-z]+)">/g)].map((m) => m[1])
-  assert.deepEqual(modes(top), ['cell', 'digit', 'both', 'off'])
-  assert.deepEqual(modes(renderEditor({ groups: [], pages: PAGES, shown: [], mode: 'cell', useDigitColors: false, synced: true })), ['cell', 'off'])
+  // Top row: the Mode pulldown offers four modes, or Cell and Off without digit colors.
+  const modes = (html) => [...html.match(/<select data-role="mode-draft">(.*?)<\/select>/s)[1].matchAll(/<option value="([a-z]+)"/g)].map((m) => m[1])
+  assert.deepEqual(modes(byDigit.renderPulldowns(STATE, 'both')), ['cell', 'digit', 'both', 'off'])
+  assert.deepEqual(modes(byDigit.renderPulldowns(setUseDigitColors(STATE, false), 'cell')), ['cell', 'off'])
   const css = byDigit.STYLE_CSS.replace(/\s+/g, ' ')
-  assert.match(css, /\.cbd-mode\[role="radiogroup"\] \{ display: flex; flex-direction: row/)
   // Two columns where 640 px allows, one on a phone.
   assert.match(css, /width: 640px; max-width: calc\(100vw - 16px\)/)
   assert.match(css, /grid-template-columns: repeat\(auto-fit, minmax\(270px, 1fr\)\)/)
 
-  // Synced: one Active tag per row, on the cell profile; the selected row is apart from it.
-  const synced = setUseDigitColors(STATE, true)
-  const list = renderProfiles(synced, colorOf, 2)
-  assert.deepEqual([0, 1, 2].map((i) => tagsOfRow(list, i)), [['Active:true'], ['Active:false'], ['Active:false']])
+  // The selected row is apart from the cell profile, and no row has a tag.
+  const list = renderProfiles(setUseDigitColors(STATE, true), colorOf, 2)
   assert.match(list, /data-index="2" role="radio" aria-checked="true"/)
   assert.match(list, /data-index="0" role="radio" aria-checked="false"/)
-
-  // Unticking Sync shows both tags, Digits starting on the cell profile; each tag sets its own pick.
-  const unsynced = setSync(synced, false)
-  assert.deepEqual(tagsOfRow(renderProfiles(unsynced, colorOf, 0), 0), ['Cells:true', 'Digits:true'])
-  const tagged = setDigitActive(setActive(unsynced, 1), 2)
-  assert.deepEqual([0, 1, 2].map((i) => tagsOfRow(renderProfiles(tagged, colorOf, 0), i)), [['Cells:false', 'Digits:false'], ['Cells:true', 'Digits:false'], ['Cells:false', 'Digits:true']])
+  assert.doesNotMatch(list, /tag-cells|tag-digits/)
+  const tagged = setDigitActive(setActive(setSync(setUseDigitColors(STATE, true), false), 1), 2)
   assert.deepEqual(byDigit.digitGroups(tagged), EACH)
   assert.deepEqual(byDigit.activeGroups(tagged), LOW_HIGH)
 
@@ -71,29 +57,24 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.match(renderProfiles(six, colorOf, 0), /data-act="new-profile" disabled/)
   assert.equal(renameProfile(STATE, 0, '   ').profiles[0].name, 'Odd/Even')
   assert.equal(renameProfile(STATE, 0, 'Parity').profiles[0].name, 'Parity')
-  assert.match(renderEditor({ groups: EACH, pages: PAGES, shown: [], mode: 'cell', useDigitColors: true, synced: true, selectedName: 'Each digit' }), /data-role="profile-name" maxlength="24" value="Each digit"/)
+  assert.match(renderProfiles(STATE, colorOf, 2), /data-role="profile-name" maxlength="24" value="Each digit"/)
 
   // Groups: three compact rows, one open with its pad; a digit another group holds shows that group's color dot.
-  const groups = renderEditor({ groups: LOW_HIGH, pages: PAGES, shown: [0, 0, 0], mode: 'cell', useDigitColors: true, synced: true, selectedName: 'Low/5/High', open: 1 })
+  const groups = renderEditor({ groups: LOW_HIGH, pages: PAGES, shown: [0, 0, 0], open: 1 })
   assert.equal(count(groups, /data-act="open"/g), 3)
   assert.equal(count(groups, /aria-expanded="true"/g), 1)
   assert.equal(count(groups, /data-role="numpad"/g), 1)
   assert.match(groups, /data-digit="1" style="[^"]*">1<span data-role="holder" title="a3"/)
   assert.doesNotMatch(groups, /data-digit="5" style="[^"]*">5<span data-role="holder"/)
-  assert.equal(count(renderEditor({ groups: EACH, pages: PAGES, shown: [], mode: 'cell', useDigitColors: true, synced: true, selectedName: 'Each digit', open: null }), /data-role="numpad"/g), 0)
+  assert.equal(count(renderEditor({ groups: EACH, pages: PAGES, shown: [], open: null }), /data-role="numpad"/g), 0)
   // A group Add group makes opens; a click on a digit another group holds moves it to the open group.
   assert.equal(byDigit.openGroupAfter(null, 'add-group', undefined, 3, 4), 3)
   assert.deepEqual(byDigit.assignDigit(LOW_HIGH, 1, '1').map((g) => g.digits), [['2', '3', '4'], ['1', '5'], ['6', '7', '8', '9']])
 
-  // The selected profile follows its row through a reorder and a delete, and the mode row is one tab stop.
+  // The selected profile follows its row through a reorder and a delete.
   assert.equal(byDigit.indexAfterMove(2, 2, 0), 0)
   assert.equal(byDigit.indexAfterMove(1, 2, 0), 2)
   assert.equal(byDigit.indexAfterDelete(2, 0, 3), 1)
-  assert.match(top, /aria-checked="true" tabindex="0" data-role="mode-draft" data-mode="both"/)
-
-  // Copy settings and Paste settings join Cancel and Save in the bottom row, sized by the row's one button rule.
-  assert.doesNotMatch(byDigit.COPY_PASTE_BUTTONS_HTML, /style=|class=/)
-  assert.match(css, /\.dialog-options\.color-by-digit-dialog button \{ background: #f1eff5;[^}]*height: 38px/)
 
   // Chips stop at three in the menu and the list; the button's icon keeps four.
   const eachRow = (html, marker) => html.split(marker).find((row) => row.includes('Each digit'))
