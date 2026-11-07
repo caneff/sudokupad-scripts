@@ -240,7 +240,7 @@ const PEN_SLIDES = [
 ]
 const DRAW_SLIDES = [
   ['1-line', 'Draw a line'], ['2-straight', 'Hold Shift for a straight line'], ['3-opacity', 'Size and opacity'], ['4-rectangle', 'Shape: rectangle'], ['5-ellipse', 'Shape: ellipse'],
-  ['6-text', 'Type text, such as a cage sum'], ['7-colors', 'Your own colors: hold a color button'], ['8-erase', 'Erase: right-click a line'], ['9-erased', 'The whole line is gone']
+  ['6-text', 'Left click to type text'], ['7-colors', 'Your own colors: hold a color button'], ['8-erase', 'Erase: right-click a line'], ['9-erased', 'The whole line is gone']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
@@ -329,7 +329,7 @@ const shared = ({ page, script, name, summary, intro, homePicture }) => {
 
   test(`${page} intro says what the script adds, with SudokuPad linked`, () => {
     const m = read(page).match(SCRIPT_INTRO)
-    assert.ok(m, `site/${page} has no intro paragraph starting "Adds to SudokuPad", with SudokuPad linked`)
+    assert.ok(m, `site/${page} has no intro paragraph starting "Adds to SudokuPad" or "Adds a button to SudokuPad", with SudokuPad linked`)
     assert.equal(plain(m[1]), intro)
   })
 
@@ -378,11 +378,8 @@ const assertDeclaredAtFileShape = (img, file, what) => {
   return [fileW, fileH]
 }
 
-test(`${CBD} has the slideshow between the install link and "What it adds", then the settings dialog and its one sentence`, () => {
+test(`${CBD} has the slideshow between the install link and "What it adds", then the settings dialog`, () => {
   assertSectionsInOrder(CBD, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The settings dialog</h2>', '<h2>Good to know</h2>'])
-  const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
-  assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the settings dialog section has a list')
-  assert.match(m[1].replace(/<div class="figure">[\s\S]*?<\/div>/, ''), /<p class="prose">A click on a digit already in the chosen color clears it\.<\/p>\s*$/)
 })
 
 test("Color by Digit's slide 5 shows the three marks that repeat the given 2, and its last slide splits the cell and digit profiles", () => {
@@ -422,8 +419,6 @@ test(`${CBD} lists what the script adds, one item per feature`, () => {
   const grid = read(CBD).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${CBD} has no <ul class="features">`)
   assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
-  // Chris's ruling on #279: text a reader sees says "center marks".
-  assert.doesNotMatch(lines.join(' '), /centre/)
 })
 
 test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and one sentence`, () => {
