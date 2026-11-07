@@ -446,7 +446,8 @@
 
   // A shape's box as [left, top, right, bottom]: each corner of the drag snapped to the nearest quarter-cell line, or the drag's own box when `exact`.
   function shapeBox ([ax, ay], [bx, by], exact) {
-    const snap = (v) => exact ? v : Math.round(v / (CELL_SIZE / 4)) * (CELL_SIZE / 4)
+    const quarter = CELL_SIZE / 4
+    const snap = (v) => exact ? v : Math.round(v / quarter) * quarter
     const [sax, say, sbx, sby] = [ax, ay, bx, by].map(snap)
     return [Math.min(sax, sbx), Math.min(say, sby), Math.max(sax, sbx), Math.max(say, sby)].map(roundToTenth)
   }

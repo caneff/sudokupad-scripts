@@ -1,6 +1,7 @@
 // Live check of draw-tool.user.js's Shape mode on sudokupad.app: the Shape button's steps and saved mode, a rectangle that
-// boxes whole cells from near-corner drags, a centre-to-centre drag that boxes on the centre lines, Alt for the drag's own box, an ellipse, a click that still starts text, a right-drag that erases a
-// shape, shapes kept over a reload, and Clear all. Real mouse input throughout.
+// boxes whole cells from near-corner drags, a centre-to-centre drag that boxes on the centre lines, a drag that snaps to
+// nothing and saves nothing, Alt for the drag's own box, an ellipse, a click that still starts text, a right-drag that
+// erases a shape, shapes kept over a reload, and Clear all. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -12,13 +13,14 @@ import { settle } from './settle.mjs'
 const { CLEAR_BUTTON, DIALOG, SHAPE_BUTTON, SHAPE_KEY, SHAPES, STROKES, TEXT_BOX } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0).
 const CELL = 64
-// A drag from near r2c2's top left corner to near r4c5's bottom right corner, in cells from the grid's top left.
+// A drag from near r2c2's top left corner to near r4c5's bottom right corner, in cells from the
+// grid's top left.
 const CORNER_FROM = [1.1, 1.05]
 const CORNER_TO = [3.9, 4.95]
 // A drag off the quarter lines, from r2c2 to r4c5.
 const FROM = [1.3, 1.4]
 const TO = [3.6, 4.2]
-// The cells it spans, r2c2 to r4c5, by their edges: [left, top, right, bottom].
+// The cells the corner drag spans, r2c2 to r4c5, by their edges: [left, top, right, bottom].
 const CELL_BOX = [1 * CELL, 1 * CELL, 5 * CELL, 4 * CELL]
 // The drag's own box, in board units; a real mouse lands on whole page pixels, so it is checked to within a unit.
 const DRAG_BOX = [FROM[1] * CELL, FROM[0] * CELL, TO[1] * CELL, TO[0] * CELL]
@@ -94,6 +96,14 @@ describe('Draw Tool\'s Shape mode', { concurrency: false }, () => {
     assert.deepEqual(await settle(shapes, before), before)
   })
 
+  it('a short drag that snaps to no width or height saves no shape', async () => {
+    const before = await saved()
+    const drawn = await shapes()
+    await mouseDrag(p, [[8.1, 8.1], [8.5, 8.2], [8.9, 8.12]])
+    assert.deepEqual(await saved(), before)
+    assert.deepEqual(await shapes(), drawn)
+  })
+
   it('with Alt held the rectangle follows the drag, and Draw stays the tool', async () => {
     await p.keyboard.down('Alt')
     try {
@@ -122,8 +132,8 @@ describe('Draw Tool\'s Shape mode', { concurrency: false }, () => {
 
   it('a drag in Ellipse mode draws an ellipse in the same snapped box', async () => {
     await stepTo('ellipse')
-    await mouseDrag(p, [[6.05, 6.05], [7, 7], [7.95, 7.95]])
-    const [left, top, right, bottom] = [6 * CELL, 6 * CELL, 8 * CELL, 8 * CELL]
+    await mouseDrag(p, [[6.45, 6.45], [7, 7], [7.55, 7.55]])
+    const [left, top, right, bottom] = [6.5 * CELL, 6.5 * CELL, 7.5 * CELL, 7.5 * CELL]
     const drawn = await shapes()
     assert.deepEqual(drawn[drawn.length - 1], { tag: 'ellipse', geometry: [(left + right) / 2, (top + bottom) / 2, (right - left) / 2, (bottom - top) / 2] })
     const items = await saved()
