@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Draw Tool
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.12.0
+// @version      0.13.0
 // @description  Adds a Draw tool for freehand lines, shapes and typed text, such as cage sums, in colors of its own. Each puzzle keeps its own drawing.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.12.0'
+  const VERSION = '0.13.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const SVG_NS = 'http://www.w3.org/2000/svg'
@@ -627,7 +627,6 @@
   const SWATCH_REM = 2.4
   // The column of each control in its row.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [SHAPE_BUTTON_CLASS]: 2, [SETTINGS_CLASS]: 3 }
-  const GREY = 'rgb(124, 124, 124)'
   const SWATCH_SVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M2 12H22' stroke='black' stroke-width='3' stroke-linecap='round'/></svg>"
   const SWATCH_MASK = `url("data:image/svg+xml,${encodeURIComponent(SWATCH_SVG).replace(/'/g, '%27')}") center / 100% no-repeat`
   // A CSS gradient cannot draw a slanted edge, so the wedge is a data-URI picture stretched over the track.
@@ -648,10 +647,9 @@
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"]::after { background-color: var(${colorVar(n)}); }`),
     `${controlButtons} { grid-row: ${CONTROLS_ROW}; align-self: end; position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; width: ${PANEL_BUTTON_REM}rem; height: ${PANEL_BUTTON_REM}rem; min-height: 0; margin: ${PANEL_BUTTON_MARGIN_REM}rem; padding: 0; background-color: var(--body-bg); color: ${PANEL_COLOR}; }`,
     ...Object.entries(CONTROL_COLUMNS).map(([name, column]) => `${PANEL} button.${name} { grid-column: ${column}; }`),
-    `${PANEL} button.${CLEAR_CLASS} { font-size: 0.85rem; line-height: 1.15; color: ${GREY}; }`,
-    `:is(.${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
+    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) svg { width: 2.6rem; height: 2.6rem; }`,
     // SudokuPad's CSS fills every 'svg path', which would turn the icons' lines into blobs.
-    `:is(.${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse) { fill: none !important; }`,
+    `:is(.${CLEAR_CLASS}, .${SETTINGS_CLASS}, .${SHAPE_BUTTON_CLASS}) :is(path, circle, rect, ellipse) { fill: none !important; }`,
     `.${TRAY_CLASS} { grid-row: ${CONTROLS_ROW} / ${SLIDERS_ROW + 1}; grid-column: 1 / ${PANEL_COLUMNS + 1}; position: absolute; inset: 0; z-index: 0; margin: ${TRAY_TOP_REM}rem -${TRAY_REACH_REM}rem 0; background: ${TRAY_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; }`,
     // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each '.button-row', which has no box here, so the rows are swapped by grid row.
     ...[[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]].flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${PANEL} :is(button[data-key="${key}"], .${PICKER_CLASS}[data-color="${key}"]) { grid-row: ${row} / span 1; }`)),
@@ -677,6 +675,11 @@
   const SETTINGS_ICON_VIEWBOX = '-1.51 -2.63 27.882 27.882'
   const SETTINGS_ICON = '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>'
   const SETTINGS_LABEL = 'Draw Tool settings'
+  // The panel's three control buttons draw their icon with these strokes.
+  const controlIcon = (paths, viewBox = '0 0 24 24') => `<svg viewBox="${viewBox}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`
+  // Clear all is a trash can.
+  const CLEAR_LABEL = 'Clear all'
+  const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
   // The Shape button shows the mode in force: a free line, a rectangle or an ellipse.
   const SHAPE_LABELS = { [SHAPE_OFF]: 'Shape: off, free lines', [RECT]: 'Shape: rectangle', [ELLIPSE]: 'Shape: ellipse' }
   const SHAPE_ICONS = {
@@ -896,7 +899,7 @@
     button.dataset.mode = shapeMode
     button.title = SHAPE_LABELS[shapeMode]
     button.setAttribute('aria-label', SHAPE_LABELS[shapeMode])
-    button.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHAPE_ICONS[shapeMode]}</svg>`
+    button.innerHTML = controlIcon(SHAPE_ICONS[shapeMode])
   }
 
   function showPanel () {
@@ -904,14 +907,15 @@
     tray.className = TRAY_CLASS
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
-    clear.title = 'Clear the whole drawing'
-    clear.innerHTML = 'Clear<br>all'
+    clear.title = CLEAR_LABEL
+    clear.setAttribute('aria-label', CLEAR_LABEL)
+    clear.innerHTML = controlIcon(CLEAR_ICON)
     clear.addEventListener('click', confirmClear)
     const settings = document.createElement('button')
     settings.className = SETTINGS_CLASS
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
-    settings.innerHTML = `<svg viewBox="${SETTINGS_ICON_VIEWBOX}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SETTINGS_ICON}</svg>`
+    settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
     settings.addEventListener('click', openDialog)
     const shapeButton = document.createElement('button')
     shapeButton.className = SHAPE_BUTTON_CLASS
