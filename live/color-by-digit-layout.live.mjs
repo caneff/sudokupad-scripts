@@ -6,7 +6,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { EDITOR, group, openGroup, openSession, savedProfiles, SEEDED_OFF, MODE_STORAGE_KEY } from './color-by-digit-fixtures.mjs'
+import { EDITOR, group, openSession, paintedKeys, savedProfiles, SEEDED_OFF, MODE_STORAGE_KEY } from './color-by-digit-fixtures.mjs'
 import { openScriptDialog } from './settings.mjs'
 
 const script = readFileSync(new URL('../color-by-digit.user.js', import.meta.url), 'utf8')
@@ -80,7 +80,7 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
 const EACH_DIGIT = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d, i) => group(String(i + 1), [d]))
 
 for (const viewport of [DESKTOP, PHONE]) {
-  describe(`the nine groups of Each digit at ${viewport.width} px`, { concurrency: false }, () => {
+  describe(`the paint editor with Each digit's nine groups at ${viewport.width} px`, { concurrency: false }, () => {
     let context, p
     const heights = () => p.evaluate(() => ({ dialog: document.querySelector('.dialog').getBoundingClientRect().bottom, window: window.innerHeight }))
     before(async () => {
@@ -90,21 +90,26 @@ for (const viewport of [DESKTOP, PHONE]) {
     })
     after(async () => { await context?.close() })
 
-    it('shows nine one-line rows, none open, and the dialog stays inside the window', async () => {
-      assert.equal(await p.locator(`${EDITOR} button[data-act=open]`).count(), 9)
-      assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 0)
-      const rows = await p.locator(`${EDITOR} .cbd-group-head`).evaluateAll((es) => es.map((e) => e.getBoundingClientRect().height))
-      for (const h of rows) assert.equal(h <= 40, true, `a row is one short line: ${rows}`)
+    it('shows the palette and the ten digit keys in one grid, one key per digit, and the dialog stays inside the window', async () => {
+      assert.equal(await p.locator(`${EDITOR} button[data-act=open]`).count(), 0)
+      assert.deepEqual(await paintedKeys(p), { 0: '', 1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9' })
       if (viewport === DESKTOP) {
         const { dialog, window } = await heights()
         assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)
       }
     })
 
-    it('opens one group at a time and the dialog still stays inside the window on a desktop', async () => {
-      await openGroup(p, 8)
-      await openGroup(p, 2)
-      assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 1)
+    it('puts each swatch row level with a pad row, 0 right of 9, and the pad inside the column at this width', async () => {
+      const box = (selector) => p.locator(selector).first().boundingBox()
+      const [swatch1, swatch4, swatch7, d1, d4, d7, d9, d0, column] = await Promise.all([
+        box(`${EDITOR} button[data-act=color]`), box(`${EDITOR} button[data-act=color] >> nth=3`), box(`${EDITOR} button[data-act=color] >> nth=6`),
+        box(`${EDITOR} [data-digit="1"]`), box(`${EDITOR} [data-digit="4"]`), box(`${EDITOR} [data-digit="7"]`), box(`${EDITOR} [data-digit="9"]`), box(`${EDITOR} [data-digit="0"]`),
+        box(`${EDITOR} .cbd-column:nth-child(2)`)
+      ])
+      assert.deepEqual([swatch1.y, swatch4.y, swatch7.y], [d1.y, d4.y, d7.y])
+      assert.equal(d0.y, d7.y)
+      assert.equal(d0.x > d9.x, true, JSON.stringify([d9, d0]))
+      assert.equal(d0.x + d0.width <= column.x + column.width + 1, true, `pad inside the column: ${JSON.stringify([d0, column])}`)
       if (viewport === DESKTOP) {
         const { dialog, window } = await heights()
         assert.equal(dialog <= window, true, `dialog bottom ${dialog} within window ${window}`)

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { startPuzzle } from './page.mjs'
-import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openGroup, openSession, paintOn, pressTo, PROFILES_KEY, SEED, watch } from './color-by-digit-fixtures.mjs'
+import { BUTTON, coloredCountOn, EDITOR, GIVENS, labelOn, openSession, paintedKeys, paintOn, pressTo, PROFILES_KEY, SEED, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from './settings.mjs'
 import { settle, SETTLE_MS } from './settle.mjs'
 
@@ -210,53 +210,98 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
   })
 
-  const openRows = () => p.locator(`${EDITOR} button[data-act=open]`)
-  it('the settings entry opens the editor with two compact group rows, none open', async () => {
-    await openEditor()
-    assert.equal(await openRows().count(), 2)
-    assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 0)
-    assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 0)
-  })
+  const brushKeys = () => p.$$eval(`${EDITOR} button[data-act=color][aria-pressed=true]`, (es) => es.map((e) => e.dataset.key))
+  const digitKey = (digit) => p.locator(`${EDITOR} button[data-act=digit][data-digit="${digit}"]`)
+  const swatch = (key) => p.locator(`${EDITOR} button[data-act=color][data-key="${key}"]`)
+  const keyOf = async (digit) => (await paintedKeys(p))[digit]
+  // Hovering first waits for the dialog to stop moving, so the box read is where the key is.
+  const centre = async (locator) => { await locator.hover(); const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
+  const reopen = async () => { await closeDialogWith(p, 'Cancel', EDITOR); await openEditor() }
+  // Presses at `from`, drags through `through` and releases: the pointer events of one stroke.
+  const dragThrough = async (from, through) => {
+    await p.mouse.move(from.x, from.y)
+    await p.mouse.down()
+    for (const point of through) await p.mouse.move(point.x, point.y, { steps: 6 })
+    await p.mouse.up()
+  }
 
-  it('clicking a row opens that group\'s pickers, and clicking another row closes the first: only one group is open', async () => {
-    await openGroup(p, 0)
-    assert.equal(await p.locator(`${EDITOR} select[data-act=page][data-group="0"]`).count(), 1)
-    assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 10)
-    await openGroup(p, 1)
+  it('the settings entry opens the editor with the palette and ten digit keys filled with their colors, no group rows, and the brush on the lowest group\'s color', async () => {
+    await openEditor()
     assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 1)
-    assert.equal(await p.locator(`${EDITOR} select[data-act=page][data-group="1"]`).count(), 1)
-    assert.equal(await p.locator(`${EDITOR} button[data-act=open][aria-expanded=true]`).count(), 1)
-    await openRows().nth(1).click()
-    assert.equal(await p.locator(`${EDITOR} select[data-act=page]`).count(), 0)
-    await openGroup(p, 0)
+    assert.equal(await p.locator(`${EDITOR} button[data-act=digit]`).count(), 10)
+    assert.equal(await p.locator(`${EDITOR} button[data-act=open], ${EDITOR} button[data-act=remove], ${EDITOR} button[data-act=add-group]`).count(), 0)
+    assert.deepEqual(await brushKeys(), ['1'])
+    assert.deepEqual(await paintedKeys(p), { 0: '2', 1: '1', 2: '2', 3: '1', 4: '2', 5: '1', 6: '2', 7: '1', 8: '2', 9: '1' })
+    const background = (locator) => locator.evaluate((e) => window.getComputedStyle(e).backgroundColor)
+    assert.equal(await background(digitKey('1')), await background(swatch('1')))
+    assert.equal(await background(digitKey('2')), await background(swatch('2')))
   })
 
   it('the palette is read from the CSS variables: three pages of 9 visible swatches, 27 in all', async () => {
-    await openGroup(p, 0)
-    const select = p.locator(`${EDITOR} select[data-act="page"][data-group="0"]`)
+    const select = p.locator(`${EDITOR} select[data-act="page"]`)
     const seen = []
     for (const value of ['0', '1', '2']) {
       await select.selectOption(value)
-      seen.push(await p.$$eval(`${EDITOR} button[data-act=color][data-group="0"]`, (es) => es.map((e) => window.getComputedStyle(e).backgroundColor)))
+      seen.push(await p.$$eval(`${EDITOR} button[data-act=color]`, (es) => es.map((e) => window.getComputedStyle(e).backgroundColor)))
     }
     assert.deepEqual(seen.map((page) => page.length), [9, 9, 9])
     assert.equal(seen.flat().filter((bg) => bg === 'rgba(0, 0, 0, 0)').length, 0)
   })
 
-  it('a digit another group holds shows that group\'s color as a dot, and a click moves it here and the dialog stays open', async () => {
-    const chips = (g) => p.$$eval(`${EDITOR} button[data-act=open][data-group="${g}"] [data-role=digit-chip]`, (es) => es.map((e) => e.textContent))
-    const dot = (d) => p.locator(`${EDITOR} button[data-act=digit][data-digit="${d}"] [data-role=holder]`)
-    const colorOfSwatch = (g) => p.locator(`${EDITOR} button[data-act=open][data-group="${g}"] [data-role=swatch]`).evaluate((e) => window.getComputedStyle(e).backgroundColor)
-    await openGroup(p, 1)
-    assert.equal((await chips(0)).includes('1'), true)
-    assert.equal(await dot('1').count(), 1)
-    assert.equal(await dot('1').evaluate((e) => window.getComputedStyle(e).backgroundColor), await colorOfSwatch(0))
-    assert.equal(await dot('3').count(), 1)
-    await p.click(`${EDITOR} button[data-act=digit][data-group="1"][data-digit="1"]`)
-    assert.equal((await chips(0)).includes('1'), false)
-    assert.equal((await chips(1)).includes('1'), true)
-    assert.equal(await dot('1').count(), 0)
+  it('a swatch click sets the brush, a digit click paints it moving it out of its group, a click in the brush color clears it, and the dialog stays open', async () => {
+    await reopen()
+    await swatch('5').click()
+    assert.deepEqual(await brushKeys(), ['5'])
+    await digitKey('3').click()
+    assert.equal(await keyOf('3'), '5')
+    await digitKey('3').click()
+    assert.equal(await keyOf('3'), '')
+    await swatch('1').click()
+    await digitKey('2').click()
+    assert.equal(await keyOf('2'), '1')
+    await digitKey('2').click()
+    assert.equal(await keyOf('2'), '')
     assert.equal(await editor().count(), 1)
+  })
+
+  it('Enter on a focused digit key paints it too', async () => {
+    await reopen()
+    await digitKey('4').focus()
+    await p.keyboard.press('Enter')
+    assert.equal(await keyOf('4'), '1')
+    await p.keyboard.press('Enter')
+    assert.equal(await keyOf('4'), '')
+  })
+
+  it('a mouse click on a digit key paints once: a click event that follows a pointer press is not a second paint, and one with no pointer is the keyboard\'s', async () => {
+    await reopen()
+    const click = (detail) => digitKey('4').evaluate((e, detail) => e.dispatchEvent(new window.MouseEvent('click', { bubbles: true, detail })), detail)
+    await click(1)
+    assert.equal(await keyOf('4'), '2')
+    await click(0)
+    assert.equal(await keyOf('4'), '1')
+  })
+
+  it('a drag over digits paints each, and one that starts on a digit already in the brush color clears each', async () => {
+    await reopen()
+    const [four, five, six] = await Promise.all(['4', '5', '6'].map((d) => centre(digitKey(d))))
+    await dragThrough(four, [five, six])
+    assert.deepEqual([await keyOf('4'), await keyOf('5'), await keyOf('6')], ['1', '1', '1'])
+    await dragThrough(four, [five, six])
+    assert.deepEqual([await keyOf('4'), await keyOf('5'), await keyOf('6')], ['', '', ''])
+  })
+
+  it('a press in a gap before a key paints from the first digit the drag reaches, leaving no text selected', async () => {
+    await reopen()
+    await swatch('5').click()
+    const [one, two, three] = await Promise.all(['1', '2', '3'].map((d) => centre(digitKey(d))))
+    // The gap column sits left of key 1.
+    // Then it runs on over the headings' text, which an unprotected press would select.
+    const headings = await Promise.all([2, 1].map((column) => centre(p.locator(`${EDITOR} .cbd-column:nth-child(${column}) .cbd-heading`).first())))
+    await dragThrough({ x: one.x - 30, y: one.y }, [one, two, three, ...headings])
+    assert.deepEqual([await keyOf('1'), await keyOf('2'), await keyOf('3')], ['5', '5', '5'])
+    // SudokuPad's dialog already has user-select: none, so this holds without the script's own rule: it guards against that changing.
+    assert.equal(await p.evaluate(() => window.getSelection().toString()), '')
   })
 
   it('Cancel saves nothing', async () => {
@@ -317,69 +362,37 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await pressTo(p, 'DIGIT')
     })
 
-    it('each group row has a red × named "Remove group" at its end, level with the row and clear of it at desktop and phone width', async () => {
-      for (const width of [1200, 390]) {
-        await p.setViewportSize({ width, height: 900 })
-        await openEditor()
-        const removes = p.getByRole('button', { name: 'Remove group' })
-        assert.equal(await removes.count(), 3)
-        assert.equal(await removes.first().getAttribute('title'), 'Remove group')
-        assert.equal(await removes.first().evaluate((e) => window.getComputedStyle(e).color), 'rgb(192, 57, 43)')
-        const rows = await p.locator(`${EDITOR} button[data-act=remove]`).evaluateAll((els) => els.map((x) => {
-          const rect = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
-          return { x: rect(x), row: rect(x.parentElement.querySelector('[data-act=open]')), head: rect(x.parentElement) }
-        }))
-        for (const { x, row, head } of rows) {
-          assert.equal(row.right <= x.left, true, `the row ends before the × at width ${width}: ${JSON.stringify({ x, row })}`)
-          assert.equal(x.right <= head.right && x.top >= head.top && x.bottom <= head.bottom, true, `the × sits inside its row at width ${width}: ${JSON.stringify({ x, head })}`)
-        }
-        await closeDialogWith(p, 'Cancel', EDITOR)
-      }
-      await p.setViewportSize({ width: 1200, height: 900 })
-    })
-
-    it('Add group adds a group in a color no group has, and Cancel drops it', async () => {
+    it('a color and a digit painted are saved with the emptied group gone, and the cells recolor at once', async () => {
+      // The earlier test left centre marks 6, 7 and 9 on r9c1, which key 9 colors, and 1 and 7 on r9c2, which no key does.
+      const withMarks = (expected) => (x) => (x.r === 8 && x.c === 0 ? ['9'] : expected(x))
+      await pressTo(p, 'BOTH')
+      assert.equal(await settle(() => wrongCount(withMarks(lowFiveHigh)), 0), 0)
       await openEditor()
-      const swatchKeys = () => p.$$eval(`${EDITOR} [data-role="swatch"]`, (es) => es.map((e) => e.title))
-      const before = await swatchKeys()
-      assert.equal(before.length, 3)
-      assert.equal(await p.locator(`${EDITOR} select[data-act="page"]`).count(), 0)
-      await p.click(`${EDITOR} button[data-act=add-group]`)
-      const after = await swatchKeys()
-      assert.equal(after.length, 4)
-      assert.deepEqual(after.slice(0, 3), before)
-      assert.equal(before.includes(after[3]), false)
-      assert.equal(await p.locator(`${EDITOR} select[data-act="page"][data-group="3"]`).count(), 1)
-      assert.equal(await p.locator(`${EDITOR} select[data-act="page"]`).count(), 1)
-      await closeDialogWith(p, 'Cancel', EDITOR)
-      assert.equal((await getGroups()).length, 3)
-    })
-
-    it('an open group\'s new color and a digit moved into it are saved', async () => {
-      await openEditor()
-      await openGroup(p, 0)
-      const used = await p.$$eval(`${EDITOR} [data-role="swatch"]`, (es) => es.map((e) => e.title))
-      const free = await p.$$eval(`${EDITOR} button[data-act=color][data-group="0"]`, (es, used) => es.map((e) => e.dataset.key).find((k) => !used.includes(k)), used)
-      await p.click(`${EDITOR} button[data-act=color][data-group="0"][data-key="${free}"]`)
-      await p.click(`${EDITOR} button[data-act=digit][data-group="0"][data-digit="5"]`)
+      const free = await p.$$eval(`${EDITOR} button[data-act=color]`, (es) => es.map((e) => e.dataset.key).find((k) => !['1', '5', '9'].includes(k)))
+      await swatch(free).click()
+      await digitKey('5').click()
       await closeDialogWith(p, 'Save', EDITOR)
-      assert.equal(await settle(async () => (await getGroups())[0].key, free), free)
-      const groups = await getGroups()
-      assert.equal(groups[0].digits.includes('5'), true)
-      assert.equal(groups.slice(1).some((g) => g.digits.includes('5')), false)
+      assert.deepEqual(await settle(async () => (await getGroups())[1].key, free), free)
+      assert.deepEqual(await getGroups(), [{ key: '1', digits: ['0', '1', '2', '3', '4'] }, { key: free, digits: ['5'] }, { key: '9', digits: ['6', '7', '8', '9'] }])
+      assert.equal(await settle(() => wrongCount(withMarks(expectedColours((d) => (Number(d) < 5 ? '1' : d === '5' ? free : '9')))), 0), 0)
+      // Back to Digit through Off and Cell, which take the cell colors off again.
+      await pressTo(p, 'OFF')
+      await pressTo(p, 'CELL')
+      await pressTo(p, 'DIGIT')
+      assert.equal(await settle(coloredCount, 0), 0)
     })
 
-    it('Clear all empties the dialog, Cancel restores the saved groups, Save keeps the empty list, and a step to Both colors nothing', async () => {
+    it('Clear all empties the digit keys, Cancel restores the saved groups, Save keeps the empty list, and a step to Both colors nothing', async () => {
       await openEditor()
-      const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()
-      assert.equal(await groupCount(), 3)
+      const painted = async () => Object.values(await paintedKeys(p)).filter(Boolean).length
+      assert.equal(await painted(), 10)
       assert.equal(await p.locator(`${EDITOR} [data-role=profile-row]`).count(), 2)
       await p.click(`${EDITOR} button[data-act=clear]`)
-      assert.equal(await groupCount(), 0)
+      assert.equal(await painted(), 0)
       await closeDialogWith(p, 'Cancel', EDITOR)
       assert.equal((await getGroups()).length, 3)
       await openEditor()
-      assert.equal(await groupCount(), 3)
+      assert.equal(await painted(), 10)
       await p.click(`${EDITOR} button[data-act=clear]`)
       await closeDialogWith(p, 'Save', EDITOR)
       assert.deepEqual(await settle(getGroups, []), [])
@@ -394,14 +407,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   // and a fourth page of four colors: u and v on keys the default palette lacks, w on a color the browser cannot draw. Three saved
   // groups: key 8 (on pages 1 and 4), key 6 (on page 1) and key nope (on none).
   describe('custom palette', { concurrency: false }, () => {
-    const group = (g) => `${EDITOR} [data-group="${g}"]`
-    const pageSelect = (g) => p.locator(`${group(g)}[data-act="page"]`)
-    const shownPage = async (g) => { await openGroup(p, g); return pageSelect(g).inputValue() }
-    const labels = async (g) => { await openGroup(p, g); return p.$$eval(`${group(g)}[data-act="page"] option`, (es) => es.map((e) => e.textContent)) }
-    const swatchKeys = async (g) => { await openGroup(p, g); return p.$$eval(`${group(g)}[data-act="color"]`, (es) => es.map((e) => e.dataset.key)) }
-    const pressedKeys = async (g) => { await openGroup(p, g); return p.$$eval(`${group(g)}[aria-pressed="true"]`, (es) => es.map((e) => e.dataset.key)) }
-    const chosenKey = async (g) => { await openGroup(p, g); return p.locator(`${group(g)}[data-act="page"] + [data-role="chosen"]`).getAttribute('title') }
-    const boxOf = (g, key) => p.locator(`${EDITOR} button[data-group="${g}"][data-key="${key}"]`).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y) } })
+    const pageSelect = () => p.locator(`${EDITOR} select[data-act="page"]`)
+    const labels = () => p.$$eval(`${EDITOR} select[data-act="page"] option`, (es) => es.map((e) => e.textContent))
+    const swatchKeys = () => p.$$eval(`${EDITOR} button[data-act=color]`, (es) => es.map((e) => e.dataset.key))
+    const boxOf = (key) => swatch(key).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x), y: Math.round(r.y) } })
     let original, savedState
 
     before(async () => {
@@ -416,7 +425,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         palette.pages.push(['u', 'v', 'w', '8'])
         Framework.app.tools.colour.setPalette(palette)
         Framework.app.tools.colour.setPage(3)
-        Framework.setData(profilesKey, { profiles: [{ name: 'Custom', groups: [{ key: '8', digits: [] }, { key: '6', digits: [] }, { key: 'nope', digits: [] }] }], active: 0 })
+        Framework.setData(profilesKey, { profiles: [{ name: 'Custom', groups: [{ key: '8', digits: ['1'] }, { key: '6', digits: ['2'] }, { key: 'nope', digits: ['3'] }] }], active: 0 })
       }, [original, PROFILES_KEY])
       await openEditor()
     })
@@ -432,70 +441,56 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
 
     it('the pulldown lists four pages and marks SudokuPad\'s current page', async () => {
-      assert.deepEqual(await labels(0), ['Page 1', 'Page 2', 'Page 3', 'Page 4 (current)'])
+      assert.deepEqual(await labels(), ['Page 1', 'Page 2', 'Page 3', 'Page 4 (current)'])
     })
 
-    it('each group opens on the page holding its color, the current page first, and the current page with no color', async () => {
-      assert.deepEqual([await shownPage(0), await shownPage(1), await shownPage(2)], ['3', '0', '3'])
+    it('opens on the page holding the brush color, the current page first, and the brush starts on the lowest digit\'s group', async () => {
+      assert.equal(await pageSelect().inputValue(), '3')
+      assert.deepEqual(await brushKeys(), ['8'])
     })
 
-    it('a group shows one 3 by 3 page: nine or ten swatches, not every page', async () => {
-      assert.equal((await swatchKeys(1)).length, 9)
-      assert.equal((await swatchKeys(0)).length, 3)
+    it('a digit whose group color is on no page of the palette shows the unset look', async () => {
+      assert.equal(await digitKey('3').getAttribute('class'), 'cbd-unset')
+      assert.equal(await digitKey('1').getAttribute('class'), null)
     })
 
-    it('lays page 1 out by index, with the empty index kept and index 0 on its own row below', async () => {
-      assert.deepEqual(await swatchKeys(1), ['1', '2', '3', '5', '6', '7', '8', '9', '4'])
-      await openGroup(p, 1)
-      const [one, two, five, nine, zero] = await Promise.all(['1', '2', '5', '9', '4'].map((key) => boxOf(1, key)))
+    it('shows the fourth page, with its index 0 below, and an empty slot where the palette holds a color the browser cannot draw', async () => {
+      assert.deepEqual(await swatchKeys(), ['v', '8', 'u'])
+      // Index 2 holds 'w', whose color is 'notacolor': its slot stays empty and 8 stays at index 3.
+      const firstRow = await p.$eval(`${EDITOR} [data-role=paint]`, (e) => [...e.children].slice(0, 3).map((c) => c.dataset.key || c.dataset.empty))
+      assert.deepEqual(firstRow, ['v', 'slot', '8'])
+    })
+
+    it('lays page 1 out by index, with the empty index kept and index 0 on its own row below, every swatch the size of a digit key', async () => {
+      await pageSelect().selectOption('0')
+      assert.deepEqual(await swatchKeys(), ['1', '2', '3', '5', '6', '7', '8', '9', '4'])
+      const [one, two, five, nine, zero] = await Promise.all(['1', '2', '5', '9', '4'].map(boxOf))
       // Index 4 is empty, so index 5 stays under index 2 in the second column of row 2.
       assert.equal(five.x, two.x)
       assert.equal(five.y > two.y, true)
       assert.equal(zero.x, one.x)
       assert.equal(zero.y > nine.y, true)
-      // Every swatch is the same square, whatever height SudokuPad's own button styles ask for.
-      const sizes = await p.$$eval(`${group(1)}[data-act="color"]`, (es) => [...new Set(es.map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}` }))])
-      assert.deepEqual(sizes, ['44x44'])
+      // Every swatch and digit key is the same square, whatever height SudokuPad's own button styles ask for.
+      const sizes = await p.$$eval(`${EDITOR} button[data-act="color"], ${EDITOR} button[data-act="digit"]`, (es) => [...new Set(es.map((e) => { const r = e.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}` }))])
+      assert.deepEqual(sizes, ['34x34'])
     })
 
-    it('shows the fourth page, with its index 0 below, and an empty slot where the palette holds a color the browser cannot draw', async () => {
-      assert.deepEqual(await swatchKeys(0), ['v', '8', 'u'])
-      // Index 2 holds 'w', whose color is 'notacolor': its slot stays empty and 8 stays at index 3.
-      const grid = await pageSelect(0).evaluate((e) => [...e.parentElement.nextElementSibling.children].map((c) => c.dataset.key || c.dataset.empty))
-      assert.deepEqual(grid, ['v', 'slot', '8', 'slot', 'slot', 'slot', 'slot', 'slot', 'slot'])
+    it('the brush is marked only on a page that holds it, and keeps through a page change', async () => {
+      assert.deepEqual(await brushKeys(), ['8'])
+      await pageSelect().selectOption('3')
+      await swatch('u').click()
+      assert.deepEqual(await brushKeys(), ['u'])
+      assert.equal(await pageSelect().inputValue(), '3')
+      await pageSelect().selectOption('0')
+      assert.deepEqual(await brushKeys(), [])
+      await pageSelect().selectOption('3')
+      assert.deepEqual(await brushKeys(), ['u'])
     })
 
-    it('the group\'s own color is marked selected only on the page that holds it', async () => {
-      assert.deepEqual(await pressedKeys(1), ['6'])
-      assert.deepEqual(await pressedKeys(0), ['8'])
-    })
-
-    it('switching pages leaves the group\'s color alone, shows it beside the pulldown, and the page stays chosen', async () => {
-      await openGroup(p, 1)
-      await pageSelect(1).selectOption('3')
-      assert.equal(await shownPage(1), '3')
-      assert.deepEqual(await pressedKeys(1), [])
-      assert.equal(await chosenKey(1), '6')
-      const chosen = await p.locator(`${group(1)}[data-act="page"] + [data-role="chosen"]`).evaluate((e) => window.getComputedStyle(e).backgroundColor)
-      assert.equal(chosen, 'rgb(228, 150, 50)')
-      await p.click(`${group(1)}[data-key="u"]`)
-      assert.equal(await shownPage(1), '3')
-      assert.deepEqual(await pressedKeys(1), ['u'])
-      assert.equal(await chosenKey(1), 'u')
-    })
-
-    it('the other groups keep their own page', async () => {
-      assert.deepEqual([await shownPage(0), await shownPage(2)], ['3', '3'])
-      await openGroup(p, 0)
-      await pageSelect(0).selectOption('0')
-      assert.deepEqual([await shownPage(0), await shownPage(1), await shownPage(2)], ['0', '3', '3'])
-    })
-
-    it('removing a group leaves each remaining group on its own page', async () => {
-      await p.click(`${group(0)}[data-act="remove"]`)
-      assert.equal(await p.locator(`${EDITOR} button[data-act="open"]`).count(), 2)
-      assert.deepEqual([await shownPage(0), await shownPage(1)], ['3', '3'])
-      assert.equal(await chosenKey(0), 'u')
+    it('painting with a key the default palette lacks colors the digit key in the page\'s color', async () => {
+      await digitKey('4').click()
+      assert.equal(await keyOf('4'), 'u')
+      assert.equal(await digitKey('4').evaluate((e) => window.getComputedStyle(e).backgroundColor), 'rgb(10, 20, 30)')
     })
   })
 

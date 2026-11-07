@@ -430,7 +430,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   assert.equal(found.length, 1, 'the settings dialog section is not one picture')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/color-by-digit-dialog-annotated.png"`))
   const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
-  for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Group rows', 'Open group', 'Bottom row']) {
+  for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   const text = plain(m[1])
