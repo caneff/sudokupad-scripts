@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, STROKES, TEXT_BGS, TEXT_BOX, TEXTS } = draw
+const { BACKGROUND_BUTTON, NOT_NOTES, TEXT_BGS, TEXT_BOX, TEXTS } = draw
 // SudokuPad's board draws a cell 64 units wide from (0, 0); a real mouse lands on whole page pixels, so positions are checked to within a unit.
 const CELL = 64
 const NEAR_UNITS = 1.5
@@ -87,7 +87,7 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
     const before = await saved()
     await draw.pickDraw(p)
     await mouseDrag(p, [EMPTY, [EMPTY[0] + 1, EMPTY[1] + 0.6], [EMPTY[0] + 0.5, EMPTY[1] + 2]])
-    assert.equal(await p.locator(STROKES).count(), 0)
+    assert.equal(await p.locator(NOT_NOTES).count(), 0)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
     assert.deepEqual(await saved(), before)
   })

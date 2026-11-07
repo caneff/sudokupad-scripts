@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, SIZE_SLIDER, TEXTS, WIDTH_KEY } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, SIZE_SLIDER, WIDTH_KEY } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -42,12 +42,7 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
   }
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
   const sliderValue = (selector) => read((s) => Number(document.querySelector(s).value), selector)
-  // The middle of the text that reads `content`, in cells from the grid's top left.
-  const textInCells = (content) => read(([selector, want]) => {
-    const t = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
-    const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-    return [(t.y + t.height / 2 - cell.y) / cell.height, (t.x + t.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
-  }, [TEXTS, content])
+  const textInCells = (content) => draw.noteInCells(p, content)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))

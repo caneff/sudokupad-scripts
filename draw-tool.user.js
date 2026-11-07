@@ -157,7 +157,7 @@
   const roundPoint = ([x, y]) => [roundToTenth(x), roundToTenth(y)]
 
   // A note put down at screen point `point` is pinned to the grid in board units when the point is over the board, and is
-  // fixed on the screen, in its own key, when it is not: an older version reads every note's `at` as board units.
+  // fixed on the screen, under its own `fixed` field, when it is not: an older version reads every note's `at` as board units.
   // `board` is the board's screen box and the map from a screen point to board units.
   function placedItem (item, point, board) {
     const { at, fixed, ...rest } = item
@@ -925,7 +925,8 @@
 
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
 
-  // The board moves and scales with the window and SudokuPad's layout, so the notes are placed again whenever the board's box or any of its boxes' styles change.
+  // The board moves and scales with the window and SudokuPad's layout, which sets the styles of the board and the boxes round it, so the
+  // notes are placed again whenever those change.
   const watchedBoards = new WeakSet()
   let placing = false
   function placeSoon () {
@@ -940,7 +941,6 @@
   function watchBoard (svg) {
     if (watchedBoards.has(svg)) return
     watchedBoards.add(svg)
-    new window.ResizeObserver(placeSoon).observe(svg)
     const mutations = new window.MutationObserver(placeSoon)
     for (let box = svg; box && box !== document.body; box = box.parentElement) mutations.observe(box, { attributes: true, attributeFilter: ['style', 'class', 'viewBox', 'width', 'height', 'transform'] })
   }
@@ -987,7 +987,7 @@
   function openText (point) {
     const map = boardMap()
     const index = textAt(boardDrawing(map), map.toBoard(point))
-    const item = index === -1 ? placedItem(textItem([0, 0], '', color, textSizeFor(width), background), point, map) : { ...drawing[index] }
+    const item = index === -1 ? placedItem(textItem(map.toBoard(point), '', color, textSizeFor(width), background), point, map) : { ...drawing[index] }
     const element = newNote(item, map)
     element.classList.add(TEXT_BOX_CLASS)
     element.contentEditable = 'plaintext-only'

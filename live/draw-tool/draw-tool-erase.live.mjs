@@ -5,7 +5,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, DRAW_BUTTON, script, STROKES, TEXT_BOX } from './draw-tool-fixtures.mjs'
+import { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, DRAW_BUTTON, script, NOT_NOTES, TEXT_BOX } from './draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
@@ -276,7 +276,7 @@ describe('Text Annotation\'s erasing', { concurrency: false }, () => {
     await pressDragRelease(await buttonOverBoard('Cancel'))
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     assert.deepEqual(await texts(), ['15', '20'])
-    assert.equal(await p.locator(STROKES).count(), 0)
+    assert.equal(await p.locator(NOT_NOTES).count(), 0)
   })
 
   it('closing the dialog by its overlay over the board, with a drag on the board, makes no note', async () => {

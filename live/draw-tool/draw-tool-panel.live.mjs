@@ -113,7 +113,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   const look = ({ color, size }) => ({ color, size })
   const lastNote = async () => look((await draw.noteLooks(p)).pop())
   const firstNote = async () => look((await draw.noteLooks(p))[0])
-  const noteFills = async () => (await draw.noteLooks(p)).map((note) => note.color)
+  const noteColors = async () => (await draw.noteLooks(p)).map((note) => note.color)
   // Each note takes its own spot: a click on an earlier note would reopen it.
   const makeNote = async () => {
     const before = await p.locator(TEXTS).count()
@@ -229,11 +229,11 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   })
 
   it('a picked color applies at once to the button and to every note already made in that color, and is saved', async () => {
-    const before = await noteFills()
+    const before = await noteColors()
     const old4 = rgb((await savedColors())[4])
     assert.equal(before.includes(old4), true, 'a note in color 4 is on the board')
     await p.locator(`${PICKER}[data-color="4"]`).fill('#123456')
-    assert.deepEqual(await settle(noteFills, before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c)), before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c))
+    assert.deepEqual(await settle(noteColors, before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c)), before.map((c) => c === old4 ? 'rgb(18, 52, 86)' : c))
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')
     assert.equal((await savedColors())[4], '#123456')
   })
@@ -244,11 +244,11 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   })
 
   it('the colors, the color picked and the size come back after a reload', async () => {
-    const fills = await noteFills()
+    const fills = await noteColors()
     await p.keyboard.press('7')
     await p.locator(SIZE_SLIDER).fill('14')
     await reload()
-    assert.deepEqual(await noteFills(), fills, 'the notes keep the recolor before Text Annotation is made current')
+    assert.deepEqual(await noteColors(), fills, 'the notes keep the recolor before Text Annotation is made current')
     await pickDraw()
     assert.deepEqual(await currentKey(), ['7'])
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')

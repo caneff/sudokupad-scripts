@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, TEXTS, texts, TOOL_KEYS, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { boot, DIGIT_BUTTON, DRAW_BUTTON, noteInCells as cellsOf, NOT_NOTES, pickDraw as pick, TEXTS, texts, TOOL_KEYS, topmostAtNotes, tool as toolOf } from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
@@ -16,13 +16,7 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
 
   const tool = () => toolOf(p)
   const selected = () => p.evaluate(() => Framework.app.puzzle.selectedCells.length)
-  // The only note's middle on screen, in cell units from the grid's top left corner.
-  const noteInCells = () => p.evaluate((selector) => {
-    const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-    const box = document.querySelector(selector).getBoundingClientRect()
-    const round = (v) => Math.round(v * 10) / 10
-    return [round((box.left + box.width / 2 - cell.x) / cell.width), round((box.top + box.height / 2 - cell.y) / cell.height)]
-  }, TEXTS)
+  const noteInCells = () => cellsOf(p, '15')
   const cellWidth = () => p.evaluate(() => Math.round(Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect().width))
   const pickDraw = () => pick(p)
 
@@ -71,23 +65,13 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
     assert.deepEqual(await texts(p), ['15'])
     assert.equal(await selected(), 0, 'no cell selected')
     assert.equal(await tool(), 'draw')
-    // The note is over r3c3's given 8. The layer takes no pointer, so the note is made hit-testable for the one check.
-    const onTop = await p.evaluate((selector) => {
-      const note = document.querySelector(selector)
-      const { x, y, width, height } = note.getBoundingClientRect()
-      note.style.pointerEvents = 'auto'
-      try {
-        return document.elementFromPoint(x + width / 2, y + height / 2) === note
-      } finally {
-        note.style.pointerEvents = ''
-      }
-    }, TEXTS)
-    assert.equal(onTop, true, 'the note is drawn above the digit under it')
+    // The note is over r3c3's given 8.
+    assert.deepEqual(await topmostAtNotes(p), ['note'], 'the note is drawn above the digit under it')
   })
 
   it('a drag that starts on no note draws nothing and selects no cell', async () => {
     await mouseDrag(p, [[5.5, 1.5], [6, 3], [5.5, 4.5]])
-    assert.equal(await p.locator(STROKES).count(), 0, 'no stroke')
+    assert.equal(await p.locator(NOT_NOTES).count(), 0, 'nothing but the note is drawn')
     assert.deepEqual(await texts(p), ['15'])
     assert.equal(await selected(), 0, 'no cell selected')
   })
@@ -98,7 +82,7 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
     await p.keyboard.up('Shift')
     assert.equal(await tool(), 'draw', 'Shift did not switch to Corner')
     assert.equal(await selected(), 0, 'no cell selected')
-    assert.equal(await p.locator(STROKES).count(), 0)
+    assert.equal(await p.locator(NOT_NOTES).count(), 0)
   })
 
   it('after a window resize each note still sits over the cells it was typed on', async () => {

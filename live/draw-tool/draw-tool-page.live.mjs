@@ -1,6 +1,6 @@
 // Live check of draw-tool.user.js's notes off the board on sudokupad.app: a click anywhere on the page but a control starts a
 // note there, fixed on the screen; a click on a control starts none; a resize or a layout change leaves an off-board note
-// where it was and an on-board note over its cells; a drag across the board's edge stores the note as its drop point
+// where it was and an on-board note over its cells; a right click beside the board erases with no browser menu, and one on a control keeps its menu; a drag across the board's edge stores the note as its drop point
 // requires, kept over a reload; notes saved before 0.18.0 load in their places; a dialog covers the notes. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -40,12 +40,7 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
     return [box.x + box.width / 2, box.y + box.height / 2]
   }, [TEXTS, text])
-  // The middle of the note that reads `text`, in cells from the grid's top left.
-  const noteInCells = (text) => read(([selector, want]) => {
-    const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
-    const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-    return [(box.y + box.height / 2 - cell.y) / cell.height, (box.x + box.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
-  }, [TEXTS, text])
+  const noteInCells = (text) => draw.noteInCells(p, text)
   // Blank page points clear of the board and the controls: right of the controls, and below the board.
   const blankPoints = () => read(() => {
     const controls = document.querySelector('#controls').getBoundingClientRect()
@@ -87,7 +82,9 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     }
   })
 
-  it('a click on a control, on the controls\' blank space, on the top bar or in an open dialog starts no note', async () => {
+  // SudokuPad keeps a press on its panel or in a dialog from reaching any tool; a press on the top bar does reach Text
+  // Annotation, and only the script's own check of the controls keeps it from starting a note there.
+  it('a click on the controls\' blank space, on the top bar or in an open dialog starts no note', async () => {
     const before = await saved()
     const controls = await p.locator('#controls').boundingBox()
     const undo = await p.locator('#control-undo').boundingBox()
@@ -106,20 +103,28 @@ describe('Text Annotation\'s notes off the board', { concurrency: false }, () =>
     assert.deepEqual(await saved(), before)
   })
 
+  it('a right click beside the board has its menu suppressed, and one on a control keeps it', async () => {
+    // The listener is added last, so it runs after every listener the page and the script added.
+    const menuPrevented = async (point) => {
+      await read(() => {
+        window.__menuPrevented = []
+        window.addEventListener('contextmenu', (e) => window.__menuPrevented.push(e.defaultPrevented), { once: true })
+      })
+      await p.mouse.click(...point, { button: 'right' })
+      return read(() => window.__menuPrevented)
+    }
+    const undo = await p.locator('#control-undo').boundingBox()
+    const { below } = await blankPoints()
+    assert.deepEqual(await menuPrevented([below[0] + 60, below[1]]), [true], 'beside the board')
+    assert.deepEqual(await menuPrevented([undo.x + undo.width / 2, undo.y + undo.height / 2]), [false], 'on the undo button')
+  })
+
   it('an open dialog is drawn over the notes', async () => {
     await p.click('.draw-tool-settings')
     await p.locator(DIALOG).waitFor({ state: 'visible' })
-    const covered = await read((selector) => [...document.querySelectorAll(selector)].map((note) => {
-      const { x, y, width, height } = note.getBoundingClientRect()
-      note.style.pointerEvents = 'auto'
-      try {
-        return document.elementFromPoint(x + width / 2, y + height / 2).closest('.dialog-overlay') !== null
-      } finally {
-        note.style.pointerEvents = ''
-      }
-    }), TEXTS)
+    const covered = await draw.topmostAtNotes(p)
     await closeDialog()
-    assert.deepEqual(covered, [true, true])
+    assert.deepEqual(covered, ['dialog', 'dialog'])
   })
 
   it('a click on an off-board note reopens it in place, and a right click erases it', async () => {

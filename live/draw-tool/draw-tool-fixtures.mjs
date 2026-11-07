@@ -16,9 +16,8 @@ export const TOOL_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm']
 
 export const DRAW_BUTTON = '#control-draw'
 export const DIGIT_BUTTON = '#control-normal'
-// What an earlier version drew: none of it is drawn now.
-export const STROKES = '#draw-tool-layer path'
-export const OLD_SHAPES = '#draw-tool-layer :is(rect:not(.draw-tool-text-bg), ellipse)'
+// Anything in the notes' layer that is not a note, such as a stroke or shape an earlier version drew: none is drawn now.
+export const NOT_NOTES = '#draw-tool-layer > :not(.draw-tool-text)'
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
@@ -72,6 +71,26 @@ export const noteLooks = (p) => p.evaluate((selector) => {
     return { text: e.textContent, color: style.color, size: Math.round(parseFloat(style.fontSize) / scale * 10) / 10 }
   })
 }, TEXTS)
+
+// The middle of the note that reads `text`, in cells from the grid's top left, as [row, column] to a tenth.
+export const noteInCells = (p, text) => p.evaluate(([selector, want]) => {
+  const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
+  const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
+  return [(box.y + box.height / 2 - cell.y) / cell.height, (box.x + box.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
+}, [TEXTS, text])
+
+// For each note, what the page shows topmost at its middle: 'note' (itself), 'dialog' or 'other'. The layer takes no
+// pointer, so each note is made hit-testable for its one check.
+export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => {
+  const { x, y, width, height } = note.getBoundingClientRect()
+  note.style.pointerEvents = 'auto'
+  try {
+    const top = document.elementFromPoint(x + width / 2, y + height / 2)
+    return top === note ? 'note' : top.closest('.dialog-overlay') ? 'dialog' : 'other'
+  } finally {
+    note.style.pointerEvents = ''
+  }
+}), TEXTS)
 
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
