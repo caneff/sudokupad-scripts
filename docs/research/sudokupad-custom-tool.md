@@ -157,3 +157,15 @@ SudokuPad v0.611.0 (`script.js`, `framework.js`, `feature-*.js` in the live reco
 - **The text** is an SVG `text` in Draw's layer, anchored at its middle (`text-anchor: middle`,
   `dominant-baseline: central`), so its point is the click point. Its hit box for a click and for erasing is estimated
   at 0.6 of the text size per character, not measured, so the pure functions can test it.
+
+## Test Markup
+
+SudokuPad v0.611.0 (`feature-markup.js`), run on the page in `live/draw-tool.live.mjs` (2026-11-07) with the Experimental
+setting "Test Markup (Press: "M")" on (`Framework.setSetting('markup', true)`). It loads `fabric-5.3.1.min.js` only once
+turned on, so the live recording turns it on too.
+
+- Draw and Test Markup do not clash. With it on, Draw draws a stroke and a right-drag erases it. Holding M with Draw
+  current (no text box open) draws on Test Markup's canvas and not in Draw's layer: while M is held its `.fabcan` layer
+  covers the page and stops the `mousedown`, so Draw never sees the press; the release of M ends it, and Draw is still
+  current. An M typed in an open text box goes into the text, since Draw keeps the box's keys from every SudokuPad
+  listener, `feature-markup.js`'s window one included. No page error.

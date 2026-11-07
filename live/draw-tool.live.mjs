@@ -2,9 +2,9 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { boot, DIGIT_BUTTON, DRAW_BUTTON, pickDraw as pick, STROKES, texts, tool as toolOf } from './draw-tool-fixtures.mjs'
 import { openPage } from './page.mjs'
-import { mouseDrag } from './pen.mjs'
+import { gridPoint, mouseDrag } from './pen.mjs'
 import { settle, stable } from './settle.mjs'
 
 // SudokuPad's tool keys, App.toolHotkeys.
@@ -137,6 +137,58 @@ describe('Draw Tool, injected after Start Puzzle', { concurrency: false }, () =>
     await mouseDrag(p, [[0.5, 0.5], [0.5, 2.5]])
     assert.equal(await selected(), 3, 'the drag selected r1c1 to r1c3')
     assert.equal(await strokeCount(), 2, 'no stroke was drawn')
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+// Test Markup is SudokuPad's own Experimental freehand drawing, on a fabric.js canvas over the page while M is held.
+describe('Draw Tool with SudokuPad\'s Test Markup turned on', { concurrency: false }, () => {
+  let context, p, errors
+
+  const strokeCount = () => p.locator(STROKES).count()
+  const markupDrawing = () => p.evaluate(() => Framework.features.markup.fabcan.isDrawingMode)
+  const markupStrokes = () => p.evaluate(() => Framework.features.markup.fabcan.getObjects().length)
+
+  before(async () => {
+    ;({ context, p, errors } = await openPage(browser))
+    await boot(p)
+    await p.evaluate(() => Framework.setSetting('markup', true))
+    await p.locator('.fabcan canvas').first().waitFor({ state: 'attached' })
+  })
+  after(async () => {
+    await p.evaluate(() => Framework.setSetting('markup', false))
+    await context.close()
+  })
+
+  it('Draw draws a stroke and a right-drag erases it', async () => {
+    await pick(p)
+    await mouseDrag(p, [[2.5, 2.5], [3.2, 4], [2.4, 5.5]])
+    assert.equal(await strokeCount(), 1)
+    await mouseDrag(p, [[2, 4], [3.5, 4.2]], { button: 'right' })
+    assert.equal(await strokeCount(), 0)
+  })
+
+  it('holding M with Draw current draws with Test Markup, not with Draw, and its release ends it', async () => {
+    await p.keyboard.down('m')
+    assert.equal(await settle(markupDrawing, true), true)
+    await mouseDrag(p, [[5.5, 1.5], [6, 3], [5.5, 4.5]])
+    await p.keyboard.up('m')
+    assert.equal(await settle(markupDrawing, false), false)
+    assert.equal(await markupStrokes(), 1)
+    assert.equal(await strokeCount(), 0)
+    assert.equal(await toolOf(p), 'draw')
+  })
+
+  it('an M typed in a text box goes into the text and starts no Test Markup', async () => {
+    await p.mouse.click(...await gridPoint(p, [7.5, 7.5]))
+    await p.keyboard.down('m')
+    assert.equal(await markupDrawing(), false)
+    await p.keyboard.up('m')
+    await p.keyboard.press('Enter')
+    assert.deepEqual(await texts(p), ['m'])
   })
 
   it('the page raised no error', () => {
