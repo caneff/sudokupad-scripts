@@ -1,4 +1,4 @@
-// Takes the Pen Tool Extras pictures of the color grid, slider options, dash length and mark growth, in docs/research/,
+// Takes the Pen Tool Extras pictures of the color grid, slider options, dash length and mark growth, in docs/research/pen-tool-extras/,
 // at 1200x900, the mascot hidden:
 //   pen-tool-extras-grid-dialog.png   the settings dialog: the 3x3 color grid, the slider boxes and the three sliders
 //   pen-tool-extras-grid-panel.png    the pen panel with both sliders, without the thickness one, without the opacity one, with neither

@@ -1,4 +1,4 @@
-// Takes the Pen Tool Extras opacity pictures in docs/research/, the mascot hidden, at 30% opacity:
+// Takes the Pen Tool Extras opacity pictures in docs/research/pen-tool-extras/, the mascot hidden, at 30% opacity:
 //   pen-tool-extras-opacity-grid.png    free lines, cell circles and crosses, edge marks and grid-corner
 //                                       marks, with digits under them
 //   pen-tool-extras-opacity-dialog.png  the settings dialog with its Opacity slider

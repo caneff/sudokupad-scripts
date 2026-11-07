@@ -1,5 +1,5 @@
 // Takes a picture of Pen Tool Extras' page button on each pen page, with dashes (dash 3) and with dots (dash 0):
-// docs/research/<label>-page-button.png, the pen buttons on page 3: <label>-page-3-pen-buttons.png, and an arrow line on the grid at the default thickness: <label>-grid-arrow-line.png, for #228. Run from the repo root:
+// docs/research/pen-tool-extras/<label>-page-button.png, the pen buttons on page 3: <label>-page-3-pen-buttons.png, and an arrow line on the grid at the default thickness: <label>-grid-arrow-line.png, for #228. Run from the repo root:
 // node docs/research/pen-tool-extras/pen-tool-extras-page-button-screenshot.mjs <label> [script path]
 /* global Framework */
 import { chromium } from 'playwright'

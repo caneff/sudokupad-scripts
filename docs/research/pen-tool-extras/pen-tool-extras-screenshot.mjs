@@ -1,4 +1,4 @@
-// Takes the Pen Tool Extras pictures in docs/research/, the mascot hidden:
+// Takes the Pen Tool Extras pictures in docs/research/pen-tool-extras/, the mascot hidden:
 //                                    marks (X, arrows, circle) in several pen colors, at the defaults
 //   pen-tool-extras-dialog.png       the merged settings dialog, its thickness slider at the default 5
 //   pen-tool-extras-thin.png         the same drawing at thickness 2

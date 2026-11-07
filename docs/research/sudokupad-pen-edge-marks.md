@@ -79,8 +79,8 @@ edge marks. Only the result text was read.
 - Dark Page's kept rectangle: an X centred on an outer corner reaches 8 units (plus half the stroke) past the
   cell box on two sides, the same as an edge X reaches past an outer edge, so it is inside `SOLVER_REACH`
   (checked on all four outer corners at the default thickness).
-- Pictures: `pen-tool-extras-corners-grid.png`, `pen-tool-extras-corners-dialog.png`
-  (`pen-tool-extras-corners-screenshot.mjs`).
+- Pictures: `pen-tool-extras/pen-tool-extras-corners-grid.png`, `pen-tool-extras/pen-tool-extras-corners-dialog.png`
+  (`pen-tool-extras/pen-tool-extras-corners-screenshot.mjs`).
 
 ## Pen values past `z`, 2026-11-06 (v0.611.0, `script.js`; run on the page with `sudokupad-pen-alphabet-probe.mjs`)
 

@@ -1,4 +1,4 @@
-// Takes the Pen Tool Extras panel pictures in docs/research/, at 1200x900, the mascot hidden:
+// Takes the Pen Tool Extras panel pictures in docs/research/pen-tool-extras/, at 1200x900, the mascot hidden:
 //   pen-tool-extras-panel.png         the pen tool's panel with the two sliders at their defaults
 //   pen-tool-extras-panel-moved.png   the same panel, Thickness near the top and Opacity low, after real drags
 //   pen-tool-extras-panel-letter.png  the panel with the letter tool and Color by Digit also on, to show no overlap

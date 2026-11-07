@@ -1,4 +1,4 @@
-// Takes the Pen Tool Extras pen color preset picture in docs/research/:
+// Takes the Pen Tool Extras pen color preset picture in docs/research/pen-tool-extras/:
 //   pen-tool-extras-presets.png  the settings dialog's Pen colors section, from its heading to the last row of pickers, with the
 //                                preset pulldown showing "Darker page 1", the set a fresh install saves
 // Run from the repo root: node docs/research/pen-tool-extras/pen-tool-extras-presets-screenshot.mjs

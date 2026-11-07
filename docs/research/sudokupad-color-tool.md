@@ -238,7 +238,7 @@ marks in conflict with a given 5, in the corner at row 1 and the centre at row 2
 Run live on sudokupad.app 0.611.0 in headless Chromium, ticket #13, which replaces #10's
 outline. Not run through Tampermonkey or on `crackingthecryptic.com`. Screenshot at real size,
 1200x900 viewport, same puzzle: `docs/research/color-by-digit/digit-color-conflict-circle.png` (conflicting
-corner 5s, 4 and a centre 1 and 5), to be read beside `digit-color-conflict-outline.png`.
+corner 5s, 4 and a centre 1 and 5), to be read beside `color-by-digit/digit-color-conflict-outline.png`.
 
 - Chris ruled the 2px outline a muddy fringe at real size. SVG text has no background, so the
   script draws `circle` elements in its own `g#digit-color-circles`, inserted just before

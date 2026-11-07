@@ -1,4 +1,4 @@
-// Takes the Pen Tool Extras grid-corner mark pictures in docs/research/, the mascot hidden:
+// Takes the Pen Tool Extras grid-corner mark pictures in docs/research/pen-tool-extras/, the mascot hidden:
 //   pen-tool-extras-corners-grid.png    inner and outer grid corners marked with X and circles in several pen
 //                                       colors, one edge mark and one cell mark beside them
 //   pen-tool-extras-corners-dialog.png  the settings dialog with its Corner marks boxes
