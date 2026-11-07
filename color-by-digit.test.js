@@ -1410,7 +1410,7 @@ test('renderEditor marks only the brush as selected', () => {
 test('renderEditor lays the swatches and the digit keys out as one grid, three swatch columns and a three-key pad beside them', () => {
   const html = editor([], twoPages(), 0, 'a1')
   assert.deepEqual([...html.matchAll(/data-act="digit"[^>]*data-digit="(\d)"/g)].map((m) => m[1]), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'])
-  assert.deepEqual(paintRows(html).slice(0, 3).map((r) => r.slice(0, 7)), [
+  assert.deepEqual(paintRows(html).slice(0, 3), [
     ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit'],
     ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit'],
     ['color', 'color', 'color', 'gap', 'digit', 'digit', 'digit']
@@ -1418,15 +1418,16 @@ test('renderEditor lays the swatches and the digit keys out as one grid, three s
   assert.match(STYLE_CSS, /\[data-role="paint"\] \{[^}]*grid-template-columns: repeat\(3, [^)]*\) \d+px repeat\(3, /)
 })
 
-// Each row of the paint grid is the cell kinds it holds, left to right; every row is the grid's width.
+// Each row of the paint grid is the cell kinds it holds, left to right.
+const PAINT_ROW_CELLS = 3 + 1 + 3 // swatches, gap, digit keys
 function paintRows (html) {
   const cells = [...html.matchAll(/<(?:button|span)[^>]*(data-act="color"|data-act="digit"|data-empty="[a-z]+")[^>]*>/g)].map((m) => m[1].replace(/data-(act|empty)="|"/g, ''))
   const rows = []
-  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7))
+  for (let i = 0; i < cells.length; i += PAINT_ROW_CELLS) rows.push(cells.slice(i, i + PAINT_ROW_CELLS))
   return rows
 }
 
-test('renderEditor puts 0 on a fourth row under 7, left of nothing, when the page has a 0 swatch', () => {
+test('renderEditor puts 0 on a fourth row under 7 when the page has a 0 swatch', () => {
   const [lit] = layoutPages([keys('z a1 a2 a3 a4 a5 a6 a7 a8 a9')], 0, colorOf)
   const rows = paintRows(editor([], [lit]))
   assert.equal(rows.length, 4)
