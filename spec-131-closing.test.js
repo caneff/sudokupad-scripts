@@ -31,9 +31,9 @@ function warningWithoutGetApp (name) {
   return warnings
 }
 
-// Spec 131's acceptance as one pass over its scripts, at `npm test`; Digit Color, its third, was merged into
-// Color by Digit and deleted by spec 279. This seam is blind to real SudokuPad: the Framework calls, rendering
-// and undo are `npm run test:live`'s, and neither run covers a real Tampermonkey install or crackingthecryptic.com.
+// Spec 131's acceptance as one pass over its scripts that are still in the repo, at `npm test`. This seam is blind
+// to real SudokuPad: the Framework calls, rendering and undo are `npm run test:live`'s, and neither run covers a real
+// Tampermonkey install or crackingthecryptic.com.
 test('Color by Digit and Dark Page hold spec 131 together', () => {
   const { editGroupsFor, rowAfterKey, layoutPages } = colorByDigit
   const colors = [{ key: 'a' }, { key: 'b' }]

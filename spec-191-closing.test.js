@@ -7,8 +7,8 @@ const { join } = require('node:path')
 const read = (file) => readFileSync(join(__dirname, file), 'utf8')
 const extras = require('./pen-tool-extras.user.js')
 
-// Each script's line count and @version at 159d79f, the commit spec 191 measured, typed out as the independent source. Digit Color,
-// also measured, was deleted by spec 279.
+// Each script's line count and @version at 159d79f, the commit spec 191 measured, typed out as the independent source, for
+// the scripts still in the repo.
 const BEFORE = {
   'no-tab-letters.user.js': [72, '0.1.0'],
   'dark-page.user.js': [342, '0.3.7'],

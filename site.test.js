@@ -209,7 +209,7 @@ test(`${DETAILS} shows the pen panel as one annotated picture whose alt text nam
   }
 })
 
-test(`${HOME} has no Digit Color entry: it was merged into Color by Digit`, () => {
+test(`${HOME} names no Digit Color script and links no digit-color file`, () => {
   const page = read(HOME)
   assert.doesNotMatch(page, /Digit Color|digit-color/)
 })
