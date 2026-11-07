@@ -26,7 +26,12 @@ export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GRO
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
-export const SLIDERS = '.draw-tool-sliders'
+// The row of Size and Outline buttons under the controls, each button, the menu one opens and a menu's items.
+export const MENUS = '.draw-tool-menus'
+export const SIZE_BUTTON = '.draw-tool-menu-button[data-menu="size"]'
+export const OUTLINE_BUTTON = '.draw-tool-menu-button[data-menu="outline"]'
+export const MENU = '.draw-tool-menu'
+export const MENU_ITEM = '.draw-tool-menu-item'
 export const CLEAR_BUTTON = '.draw-tool-clear'
 export const SETTINGS_BUTTON = '.draw-tool-settings'
 export const BACKGROUND_BUTTON = '.draw-tool-background'
@@ -38,7 +43,7 @@ export const COLOR_KEY = 'DrawTool_color'
 export const WIDTH_KEY = 'DrawTool_width'
 export const COLORS_KEY = 'DrawTool_colors'
 export const BACKGROUND_KEY = 'DrawTool_background'
-export const SIZE_SLIDER = '#draw-tool-size'
+export const OUTLINE_KEY = 'DrawTool_outline'
 
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
@@ -63,6 +68,19 @@ export async function holdForPickers (p, selector, button, state) {
 export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
 
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
+// What a menu button's face shows: the number of Size, the choice of Outline.
+export const face = (p, button) => p.locator(`${button} span:last-child`).textContent()
+// The items of the open menu, as their texts, and the one highlighted (none, when no item is).
+export const menuItems = (p) => p.locator(MENU_ITEM).allTextContents()
+export const menuCurrent = (p) => p.locator(`${MENU_ITEM}.draw-tool-menu-current`).allTextContents()
+// Opens the menu of `button` and picks `text` in it, with real mouse input.
+export async function pickMenu (p, button, text) {
+  await p.click(button)
+  await p.locator(MENU).waitFor({ state: 'visible' })
+  await p.locator(MENU_ITEM, { hasText: new RegExp(`^${text}$`) }).click()
+  await p.locator(MENU).waitFor({ state: 'detached' })
+}
+
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)
 
 // The puzzle's key, as the script keys its drawing: its id, or the page URL when it has none, as the recorded puzzle does.

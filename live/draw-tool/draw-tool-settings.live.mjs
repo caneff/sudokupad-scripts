@@ -8,7 +8,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { closeDialogWith, dialogButton, headerVersion, openScriptDialog } from '../settings.mjs'
 
-const { COLORS_KEY, SETTINGS_BUTTON, SIZE_SLIDER, WIDTH_KEY, pickDraw, script } = draw
+const { COLORS_KEY, SETTINGS_BUTTON, WIDTH_KEY, pickDraw, script } = draw
 const EDITOR = '#draw-tool-dialog'
 const PRESET = `${EDITOR} select[data-role="color-choice"]`
 const STATUS = '.dialog [data-role="settings-status"]'
@@ -110,7 +110,8 @@ describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
       await other.p.locator(STATUS).filter({ hasText: 'Pasted 2 settings.' }).waitFor()
       assert.deepEqual(await savedColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
       assert.deepEqual(await dialogColors(other.p), { ...SUDOKUPAD_COLORS, 2: '#123456' })
-      assert.equal(await read(other.p, (a) => Number(document.querySelector(a).value), SIZE_SLIDER), 3.5)
+      // A size of 3.5 is a text size of 15, and the nearest the Size menu has is 14.
+      assert.equal(await draw.face(other.p, draw.SIZE_BUTTON), '14')
       assert.equal(await dialogButton(other.p, 'Save').count(), 1)
       assert.deepEqual(other.errors, [])
     } finally {

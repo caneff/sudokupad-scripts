@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, haloEm } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -392,15 +392,77 @@ const red20 = textItem([0, 0], 'a', 4, 20)
 const red14Boxed = textItem([0, 0], 'b', 4, 14, true)
 const blue20Boxed = textItem([0, 0], 'c', 6, 20, true)
 
-test('the panel shows a selection that agrees on everything as its color, size and background', () => {
-  assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, width: 6, bg: false })
-  assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, width: 6, bg: true })
+test('the panel shows a selection that agrees on everything as its color, size, outline and background', () => {
+  assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, size: 20, outline: 'medium', bg: false })
+  assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, size: 20, outline: 'medium', bg: true })
 })
 
-test('a mixed selection shows no color and no background state, and the size of its first note', () => {
-  assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, width: 3, bg: true })
-  assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, width: 6, bg: null })
-  assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, width: 6, bg: null })
+test('a mixed selection shows no color, size, outline or background state where its notes differ', () => {
+  assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, size: null, outline: 'medium', bg: true })
+  assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, size: null, outline: 'medium', bg: null })
+  assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, size: 20, outline: 'medium', bg: null })
+  assert.deepEqual(panelLooks([red20, withOutline(red20, 'thick')]).outline, null)
+  assert.deepEqual(panelLooks([withOutline(red20, 'thin'), withOutline(red14Boxed, 'thin')]).outline, 'thin')
+})
+
+test('the size menu has six sizes that cover the slider\'s range and include the default size', () => {
+  assert.equal(SIZE_MENU.length, 6)
+  assert.equal(SIZE_MENU[0], textSizeFor(MIN_WIDTH))
+  assert.equal(SIZE_MENU.at(-1), textSizeFor(MAX_WIDTH))
+  assert.ok(SIZE_MENU.includes(textSizeFor(DEFAULT_WIDTH)))
+  assert.deepEqual(SIZE_MENU, [...SIZE_MENU].sort((a, b) => a - b))
+})
+
+test('a size not in the menu reads as the nearest size in it', () => {
+  for (const size of SIZE_MENU) assert.equal(nearestMenuSize(size), size)
+  assert.equal(nearestMenuSize(textSizeFor(7.5)), 20) // 23 is as near 20 as 26: the smaller wins
+  assert.equal(nearestMenuSize(24), 26)
+  assert.equal(nearestMenuSize(12.5), 14)
+  assert.equal(nearestMenuSize(11), 10)
+  assert.equal(nearestMenuSize(1000), 40)
+})
+
+test('an outline is none, thin, medium or thick, and a note with no outline field reads as medium', () => {
+  assert.deepEqual(OUTLINES, ['none', 'thin', 'medium', 'thick'])
+  assert.equal(DEFAULT_OUTLINE, 'medium')
+  assert.equal(readOutline(red20), 'medium')
+  assert.equal(readOutline({ ...red20, outline: 'thick' }), 'thick')
+  assert.equal(readOutline(withOutline(red20, 'none')), 'none')
+  for (const saved of [null, undefined, 'huge', 3, {}]) assert.equal(readSavedOutline(saved), 'medium', JSON.stringify(saved))
+  for (const saved of OUTLINES) assert.equal(readSavedOutline(saved), saved)
+})
+
+test('a note keeps its outline in its own field, and medium is the absence of one', () => {
+  assert.deepEqual(withOutline(red20, 'thick'), { ...red20, outline: 'thick' })
+  assert.deepEqual(withOutline({ ...red20, outline: 'thick' }, 'medium'), red20)
+  assert.deepEqual(readDrawing([{ ...red20, outline: 'none' }]), [{ ...red20, outline: 'none' }])
+  assert.throws(() => readDrawing([{ ...red20, outline: 'huge' }]), /not a list of texts/)
+})
+
+test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline\'s reach and grows from thin to thick; none has no shadow', () => {
+  assert.equal(haloShadow('none', 'red'), 'none')
+  const radii = OUTLINES.slice(1).map((outline) => {
+    const shadows = haloShadow(outline, 'red').split(', ')
+    assert.equal(shadows.length, 16)
+    const offsets = shadows.map((shadow) => {
+      const match = /^(-?[\d.]+)em (-?[\d.]+)em 0 red$/.exec(shadow)
+      assert.ok(match, shadow)
+      return [Number(match[1]), Number(match[2])]
+    })
+    // No shadow reaches past the outline's radius, and each is on the ring.
+    for (const [x, y] of offsets) assert.ok(Math.abs(Math.hypot(x, y) - haloEm(outline)) < 0.002, `${outline} ${x} ${y}`)
+    return haloEm(outline)
+  })
+  assert.deepEqual(radii, [...radii].sort((a, b) => a - b))
+  assert.equal(haloEm('medium'), 0.14)
+  assert.equal(haloEm('none'), 0)
+})
+
+test('a note\'s padding is its outline\'s reach, none for none', () => {
+  const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
+  const box = (outline) => noteScreenBox(withOutline(textItem([100, 50], 'sum', 1, 20), outline), map)
+  assert.equal(Math.round((box('thick').right - box('none').right) * 1000) / 1000, Math.round(haloEm('thick') * 20 * 1000) / 1000)
+  assert.equal(Math.round((box('medium').right - box('none').right) * 1000) / 1000, 2.8)
 })
 
 // A note's text as styled runs, one list of runs per line; a flag is set only on the runs it applies to.
