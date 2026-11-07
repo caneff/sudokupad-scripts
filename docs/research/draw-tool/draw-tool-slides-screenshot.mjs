@@ -1,4 +1,4 @@
-// Takes the nine slides of Draw Tool's slideshow on site/index.html, each the board patch beside the Draw panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
+// Takes the ten slides of Draw Tool's slideshow on site/index.html, each the board patch beside the Draw panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in:
 //   draw-tool-slide-1-line.png      a freehand line
 //   draw-tool-slide-2-straight.png  a Shift+drag, which draws a straight line
 //   draw-tool-slide-3-opacity.png   the Size slider up and the Opacity slider down: a thick, see-through line over a thin solid one
@@ -8,6 +8,7 @@
 //   draw-tool-slide-7-colors.png    a hold on a color button: a picker over each color, one recolored, and the line in it recolored too
 //   draw-tool-slide-8-erase.png     the pointer on a line with a red ring round it, where a right click erases it
 //   draw-tool-slide-9-erased.png    the same board after the right click: the line gone
+//   draw-tool-slide-10-move.png     a line dragged to a new place, its old place dashed, a ring on the point it is held by
 // Every stroke is a real mouse drag, click or key. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool/draw-tool-slides-screenshot.mjs
@@ -185,5 +186,35 @@ async function scene () {
   await s.p.evaluate(() => { for (const el of document.querySelectorAll('body > div[style*="z-index:9999"]')) el.remove() })
   await s.p.mouse.move(0, 0)
   await s.shoot('9-erased')
+}
+
+// 10: a line dragged by a point on it; the old place is a dashed gray line and a ring marks where the pointer holds it.
+{
+  const s = await scene()
+  await s.pick(GREEN, OLD_WIDTHS[1])
+  const LINE = [[4.3, 4.4], [7.3, 8.6]]
+  const BY = [-1.4, -1.6]
+  await s.landed(await s.drag(LINE))
+  const placed = await s.p.locator('#draw-tool-layer path').first().getAttribute('d')
+  const [x0, y0] = s.at(LINE[0])
+  const [x1, y1] = s.at(LINE[1])
+  const grip = s.at([(LINE[0][0] + LINE[1][0]) / 2, (LINE[0][1] + LINE[1][1]) / 2])
+  const to = s.at([(LINE[0][0] + LINE[1][0]) / 2 + BY[0], (LINE[0][1] + LINE[1][1]) / 2 + BY[1]])
+  await s.p.mouse.move(...grip)
+  await s.p.mouse.down()
+  await s.p.mouse.move(...to, { steps: DRAG_STEPS })
+  await s.p.mouse.up()
+  const moved = await s.p.locator('#draw-tool-layer path').first().getAttribute('d')
+  if ((await s.items('path')) !== 1 || moved === placed) throw new Error('the drag did not leave one moved line')
+  await s.p.evaluate(([ax, ay, bx, by, px, py]) => {
+    const old = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    old.setAttribute('style', 'position:fixed;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:99998')
+    old.innerHTML = `<line x1="${ax}" y1="${ay}" x2="${bx}" y2="${by}" stroke="#666" stroke-width="3" stroke-dasharray="7 6" stroke-linecap="round"/>`
+    document.body.appendChild(old)
+    const ring = document.createElement('div')
+    ring.style.cssText = `position:fixed;left:${px}px;top:${py}px;width:34px;height:34px;margin:-17px 0 0 -17px;box-sizing:border-box;border-radius:50%;border:3px solid #d32f2f;pointer-events:none;z-index:99998`
+    document.body.appendChild(ring)
+  }, [x0, y0, x1, y1, to[0], to[1]])
+  await s.shoot('10-move')
 }
 await browser.close()

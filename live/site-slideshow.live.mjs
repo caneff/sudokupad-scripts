@@ -34,11 +34,11 @@ const SHOWS = [
     heading: 'Draw Tool',
     row: 3,
     details: 'draw-tool.html',
-    slides: 9,
+    slides: 10,
     first: ['draw-tool-slide-1-line.png', 'Draw a line'],
     second: ['draw-tool-slide-2-straight.png', 'Hold Shift for a straight line'],
-    last: ['draw-tool-slide-9-erased.png', 'The whole line is gone'],
-    beforeLast: ['draw-tool-slide-8-erase.png', 'Erase: right-click a line']
+    last: ['draw-tool-slide-10-move.png', 'Move: drag a line, shape or text'],
+    beforeLast: ['draw-tool-slide-9-erased.png', 'The whole line is gone']
   }
 ]
 

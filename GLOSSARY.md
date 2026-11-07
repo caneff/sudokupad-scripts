@@ -209,3 +209,4 @@
   Neither changes an item already drawn; both are saved under `DrawTool_width` and `DrawTool_opacity`.
 - **erase** — Draw's right click, or right-drag as an extra: every stroke and text the pointer passes near, and every shape whose outline it passes near, is removed whole. Clear all erases the whole
   drawing, after asking.
+- **move** — Draw's left-drag that starts on an existing item (found the way erase finds one, the topmost): the item follows the pointer, and its stored coordinates change once, on release. A click with no drag does what it did before, and a drag that starts off every item draws.
