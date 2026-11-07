@@ -1,5 +1,5 @@
 // Live check of pen-tool-extras.user.js's edge and corner marks and its opacity slider on sudokupad.app, in headless Chromium.
-// Replay playback on a puzzle page stays untested.
+// Playback of a replay with every script installed is live/replay-playback.live.mjs's.
 // Every click is a real mouse click on the page at an edge's pixel position.
 /* global Replay, Framework, ToolPen, MouseEvent, Node, createImageBitmap, OffscreenCanvas */
 import { after, before, beforeEach, describe, it } from 'node:test'

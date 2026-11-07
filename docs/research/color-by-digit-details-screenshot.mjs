@@ -1,59 +1,69 @@
-// Takes the pictures for site/color-by-digit.html from the real script on the live page:
-// color-by-digit-details-cell.png (the grid in Cell), color-by-digit-details-digit.png (the same grid in Digit, with a
-// corner 5 that conflicts and so has its red circle) and color-by-digit-details-menu.png (the profile menu open above the
-// button). All on the Each digit profile, picked from the menu. The mascot is hidden.
-// Run from the repo root: node docs/research/color-by-digit-details-screenshot.mjs
+// Takes the pictures for site/color-by-digit.html from the real script on the live page, on the shared example of
+// color-by-digit-example.mjs (two boxes, one given, the default Low/5/High profile): color-by-digit-details-cell.png (Cell),
+// color-by-digit-details-digit.png (the same boxes in Digit, with the red circles of its marks that conflict with the given 5),
+// color-by-digit-details-modes.gif (an animation: the two boxes and the button stepping Cell, Digit, Both and Off by real presses, 1.5 s a frame, joined with Python's PIL)
+// and color-by-digit-details-menu.png (the profile menu open above the button, Each digit picked). The mascot is hidden.
+// Needs python3 with Pillow for the GIF. Run from the repo root: node docs/research/color-by-digit-details-screenshot.mjs
 import { chromium } from 'playwright'
-import { readFileSync } from 'node:fs'
-import { openPage, startPuzzle } from '../../live/page.mjs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { BUTTON, exampleClip, MODES, openExample, pressTo, waitForCircles } from './color-by-digit-example.mjs'
 
-const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
-const out = (name) => new URL(`./color-by-digit-details-${name}.png`, import.meta.url).pathname
-
-// [row, column, digits], 0-based, each a step of the puzzle's solution except the corner 5 at (0, 8).
-const DIGITS = [[0, 2, '4'], [0, 3, '6'], [0, 5, '8'], [1, 1, '7'], [1, 2, '2'], [2, 0, '1'], [2, 3, '3']]
-const CORNER = [[0, 6, '19'], [0, 8, '25'], [2, 5, '24']]
-const CENTRE = [[0, 7, '12'], [1, 6, '34']]
+const out = (name, ext = 'png') => new URL(`./color-by-digit-details-${name}.${ext}`, import.meta.url).pathname
+const FRAME_MS = 1500
+// Puts each frame's grid and button side by side, the button centered on the grid's height with its mode named under it, on white, and saves one looping GIF.
+const JOIN = `
+import sys
+from PIL import Image, ImageDraw, ImageFont
+frames, target, ms, modes = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4:]
+font = ImageFont.load_default(size=36)
+GAP = 40
+images = []
+for i, mode in enumerate(modes):
+    grid = Image.open(f'{frames}/{i}-grid.png').convert('RGB')
+    button = Image.open(f'{frames}/{i}-button.png').convert('RGB')
+    sheet = Image.new('RGB', (grid.width + GAP + button.width, grid.height), 'white')
+    sheet.paste(grid, (0, 0))
+    sheet.paste(button, (grid.width + GAP, (grid.height - button.height) // 2))
+    # The button's own label is too small to read at a phone's width, so each frame names its mode again under the button.
+    top = (grid.height - button.height) // 2 + button.height + 12
+    ImageDraw.Draw(sheet).text((grid.width + GAP + button.width // 2, top), mode.capitalize(), fill='black', font=font, anchor='mt')
+    images.append(sheet)
+# One palette for every frame, so a color only one frame has (the red circles, the darker shades) keeps its own entry.
+strip = Image.new('RGB', (images[0].width, images[0].height * len(images)))
+for i, im in enumerate(images):
+    strip.paste(im, (0, i * im.height))
+palette = strip.quantize(colors=64)
+images = [im.quantize(palette=palette, dither=Image.Dither.NONE) for im in images]
+images[0].save(target, save_all=True, append_images=images[1:], duration=ms, loop=0, optimize=True)
+`
 
 const browser = await chromium.launch()
-const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
-await startPuzzle(p)
-await p.addStyleTag({ content: '#svenpeek { display: none !important }' })
-await p.addScriptTag({ content: script })
-const button = p.locator('#control-colorbydigit')
-await button.waitFor({ state: 'visible' })
-const pick = async () => {
-  await p.click('#control-colorbydigit [data-role="menu"]')
-  await p.locator('#color-by-digit-menu [data-act=pick]').filter({ hasText: 'Each digit' }).click()
+const p = await openExample(browser)
+await pressTo(p, 'CELL')
+await p.screenshot({ path: out('cell'), clip: await exampleClip(p) })
+
+// The two boxes and, beside them, the button, one frame per mode, each after a real press; PIL joins them into the GIF.
+const frames = mkdtempSync(join(tmpdir(), 'cbd-modes-'))
+const button = p.locator(BUTTON)
+for (const [i, mode] of MODES.entries()) {
+  await pressTo(p, mode)
+  if (mode === 'DIGIT' || mode === 'BOTH') await waitForCircles(p)
+  if (mode === 'DIGIT') await p.screenshot({ path: out('digit'), clip: await exampleClip(p) })
+  await p.mouse.move(0, 0)
+  await p.screenshot({ path: join(frames, `${i}-grid.png`), clip: await exampleClip(p) })
+  await button.screenshot({ path: join(frames, `${i}-button.png`) })
 }
-await pick()
-const enter = async (tool, list) => {
-  await p.click(tool)
-  for (const [row, col, digits] of list) {
-    await p.evaluate(([row, col]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(row, col)) }, [row, col])
-    for (const d of digits) await p.keyboard.press(d)
-  }
-}
-await enter('#control-normal', DIGITS)
-await enter('#control-corner', CORNER)
-await enter('#control-centre', CENTRE)
-await p.click('#control-normal')
-await p.evaluate(() => Framework.app.deselect())
-const press = async (want) => {
-  const box = await button.boundingBox()
-  await p.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.6)
-  await p.waitForFunction((want) => document.querySelector('#control-colorbydigit [data-role="mode"]').textContent === want, want)
-  await p.waitForTimeout(500)
-}
-const grid = async (name) => p.screenshot({ path: out(name), clip: await p.locator('#svgrenderer').boundingBox() })
-await p.waitForFunction(() => document.querySelector('#control-colorbydigit [data-role="mode"]').textContent === 'CELL')
-await p.waitForTimeout(500)
-await grid('cell')
-await press('DIGIT')
-// Throws when the conflict circle is not drawn within the timeout.
-await p.waitForFunction(() => document.querySelectorAll('#color-by-digit-circles circle').length === 1, null, { timeout: 10000 })
-await grid('digit')
-await p.click('#control-colorbydigit [data-role="menu"]')
+const joined = spawnSync('python3', ['-I', '-c', JOIN, frames, out('modes', 'gif'), String(FRAME_MS), ...MODES], { encoding: 'utf8' })
+rmSync(frames, { recursive: true })
+if (joined.status !== 0) throw new Error(`joining the frames failed: ${joined.error ?? joined.stderr}`)
+
+await pressTo(p, 'DIGIT')
+await p.click(`${BUTTON} [data-role="menu"]`)
+await p.locator('#color-by-digit-menu [data-act=pick]').filter({ hasText: 'Each digit' }).click()
+await p.click(`${BUTTON} [data-role="menu"]`)
 await p.locator('#color-by-digit-menu').waitFor({ state: 'visible' })
 await p.waitForTimeout(300)
 const b = await button.boundingBox()

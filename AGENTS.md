@@ -12,6 +12,8 @@ script is one `*.user.js` file with no build step and no ties to any other repo.
 - **`GLOSSARY.md`**: the vocabulary.
 - **A change to what a script shows** (its panel, buttons, dialog or drawing) updates that script's text in `site/` and retakes the site pictures that
   show it, with their scripts in `docs/research/` (`*-screenshot.mjs` that write a picture `site/` links), in the same PR (Chris, 2026-11-06).
+  After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
+  and `site.test.js` fails until you do. README pictures, if added, follow the same rule.
 - **SudokuPad's own dark mode** (`.setting-darkmode`) is not supported, in any script, and no change is checked or styled for it (Chris,
   2026-11-06). A dark page means Dark Page.
 
