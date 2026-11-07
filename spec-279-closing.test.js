@@ -9,11 +9,12 @@ const byDigit = require('./color-by-digit.user.js')
 
 const storeOf = (saved) => ({ getData: (key) => saved[key] ?? null })
 const group = (key, digits) => ({ key, digits })
-// Typed out as the independent source: Odd/Even, a profile of two groups, and SudokuPad's black, its givens' color.
+// Typed out as the independent source: Odd/Even, a profile of two groups, SudokuPad's black (its givens' color) and the
+// default palette colors these use (tool-color.css).
 const ODD_EVEN = [group('1', ['1', '3', '5', '7', '9']), group('2', ['0', '2', '4', '6', '8'])]
 const SPLIT = [group('4', ['1', '2', '3', '4', '5']), group('6', ['8', '9'])]
 const GIVEN_BLACK = '#000000'
-const PALETTE = { 1: 'rgb(214, 214, 214)', 2: 'rgb(124, 124, 124)', 4: 'rgb(179, 229, 106)', 5: 'rgb(232, 124, 241)', 6: 'rgb(228, 150, 50)', 7: 'rgb(245, 58, 55)', 8: 'rgb(252, 235, 63)', 9: 'rgb(61, 153, 245)', e: 'rgb(238, 153, 170)', h: 'rgb(160, 90, 30)', j: 'rgb(145, 30, 180)', m: 'rgb(76, 175, 80)' }
+const PALETTE = { 1: 'rgb(214, 214, 214)', 2: 'rgb(124, 124, 124)', 3: 'rgb(-36, -36, -36)', 4: 'rgb(179, 229, 106)', 5: 'rgb(232, 124, 241)', 6: 'rgb(228, 150, 50)', 7: 'rgb(245, 58, 55)', 8: 'rgb(252, 235, 63)', 9: 'rgb(61, 153, 245)', e: 'rgb(238, 153, 170)', h: 'rgb(160, 90, 30)', j: 'rgb(145, 30, 180)', m: 'rgb(76, 175, 80)' }
 const colorOf = (key) => PALETTE[key] ?? ''
 const digitsIn = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m[1]))].sort()
 
