@@ -9,7 +9,7 @@ import { openScriptDialog } from './settings.mjs'
 
 const code = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 const STATUS = '.dialog [data-role="settings-status"]'
-// Pen Tool Extras' two buttons are icons, so every script's pair is found by its act, not its words.
+// Every script's two buttons are icons, so each pair is found by its act, not its words.
 const actButton = (p, act) => p.locator(`.dialog button[data-act="${act}"]`)
 const ODD_EVEN = [{ key: '1', digits: ['1', '3', '5', '7', '9'] }, { key: '2', digits: ['0', '2', '4', '6', '8'] }]
 
@@ -44,6 +44,13 @@ for (const script of SCRIPTS) {
       await openScriptDialog(p, script.entry, script.editor)
     })
     after(async () => { await context?.close() })
+
+    it('has the two icons in the title row and no text button for either', async () => {
+      const icons = await p.$$eval('.dialog [class$="title-row"] button[data-act]', (bs) => bs.map((b) => [b.dataset.act, b.textContent.trim()]))
+      assert.deepEqual(icons, [['copy-settings', ''], ['paste-settings', '']])
+      assert.equal(await actButton(p, 'copy-settings').count(), 1)
+      assert.equal(await actButton(p, 'paste-settings').count(), 1)
+    })
 
     it('copies the saved key to the clipboard', async () => {
       await p.evaluate(([key, value]) => Framework.setData(key, value), [script.key, script.saved])

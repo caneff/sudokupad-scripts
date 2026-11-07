@@ -43,8 +43,8 @@ test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is 
 
   // Copy carries the mode; a paste from before the mode turns auto mode into Cell or Off.
   assert.equal(JSON.parse(copiedSettings(storeOf({ ColorByDigit_mode: 'digit' }))).ColorByDigit_mode, 'digit')
-  assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: true })).values.ColorByDigit_mode, 'cell')
-  assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: false })).values.ColorByDigit_mode, 'off')
+  assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: true }), byDigit.READERS, byDigit.withModeFromAuto).values.ColorByDigit_mode, 'cell')
+  assert.equal(pastedSettings(JSON.stringify({ ColorByDigit_auto: false }), byDigit.READERS, byDigit.withModeFromAuto).values.ColorByDigit_mode, 'off')
 
   // Leaving cell coloring takes every group color off and keeps a hand color in no group, with the same SudokuPad actions
   // whether Multi-color is on or off.
