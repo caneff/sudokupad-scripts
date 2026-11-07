@@ -8,10 +8,8 @@
 //   node docs/research/site-draw-tool-screenshot.mjs
 // Not part of any test.
 import { chromium } from 'playwright'
-import { readFileSync } from 'node:fs'
-import { openPage, startPuzzle } from '../../live/page.mjs'
+import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 
-const script = readFileSync(new URL('../../draw-tool.user.js', import.meta.url), 'utf8')
 const out = new URL('./site-draw-tool.png', import.meta.url).pathname
 
 // Mouse moves per segment of a drag, so the drag reads as a hand-drawn stroke and not a jump.
@@ -23,15 +21,7 @@ const FIRST_COL = 4
 const MARGIN = 4
 
 const browser = await chromium.launch()
-const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 1 } })
-await startPuzzle(p)
-await p.addStyleTag({ content: '#svenpeek { display: none !important }' })
-await p.addScriptTag({ content: script })
-await p.locator('#control-draw').waitFor({ state: 'visible' })
-for (let i = 0; i < 20 && (await p.evaluate(() => Framework.app.tool)) !== 'draw'; i++) {
-  await p.click('#control-draw')
-  await p.waitForTimeout(300)
-}
+const p = await openDrawPage(browser, 1)
 
 const [x0, y0, cell] = await p.evaluate(() => {
   const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()

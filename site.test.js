@@ -90,10 +90,11 @@ for (const { page: file, script, name } of DETAIL_PAGES) {
 
 // The warning sits directly under the page title, so it is read before any install link.
 const WARNING = /<\/h1>\s*<p class="warning">([\s\S]*?)<\/p>/
+const DETAILS_WARNING = "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad."
 const WARNINGS = {
   [HOME]: "These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.",
-  [DETAILS]: "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad.",
-  [DRAW]: "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad."
+  [DETAILS]: DETAILS_WARNING,
+  [DRAW]: DETAILS_WARNING
 }
 
 for (const [name, text] of Object.entries(WARNINGS)) {
@@ -111,9 +112,9 @@ for (const [name, text] of Object.entries(WARNINGS)) {
 
 // The details page text is pinned word for word: "What it adds" says what you can do.
 const items = html => [...html.matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1])
-const section = (page, heading) => {
-  const m = page.match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
-  assert.ok(m, `site/ has no <h2>${heading}</h2> followed by a list`)
+const section = (file, heading) => {
+  const m = read(file).match(new RegExp(`<h2>${heading}</h2>\\s*<ul>([\\s\\S]*?)</ul>`))
+  assert.ok(m, `site/${file} has no <h2>${heading}</h2> followed by a list`)
   return items(m[1]).map(plain)
 }
 // An item's opening words are its bold lead-in: the first <strong> of the item.
@@ -127,7 +128,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
 })
 
 test(`${DETAILS} lists what the script adds to drawing, one item per feature`, () => {
-  assert.deepEqual(section(read(DETAILS), 'What it adds'), [
+  assert.deepEqual(section(DETAILS, 'What it adds'), [
     'Customizable pen colors. Hold a pen color button, or pick a preset in the settings.',
     'Dashed lines and arrow lines. Two more pages of pens.',
     'Marks on cell edges. Click an edge for an X, a circle or an arrow. Right-click goes back.',
@@ -179,7 +180,7 @@ test(`${DETAILS} has no picture on the erase item and no large example figure`, 
 })
 
 test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
-  assert.deepEqual(section(read(DETAILS), 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
+  assert.deepEqual(section(DETAILS, 'Good to know'), ['Others see your dashed and arrow lines only if they have the script too.'])
 })
 
 test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, () => {
@@ -251,7 +252,7 @@ const DRAW_LEAD_INS = ['Freehand lines.', 'Text.', 'Erasing.', 'Stays on the cel
 test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
   assert.ok(m, `site/${HOME} has no Draw Tool description`)
-  assert.equal(m[1], `${DRAW_SUMMARY} <a href="draw-tool.html">Details</a>`)
+  assert.equal(m[1], `${DRAW_SUMMARY} <a href="${DRAW}">Details</a>`)
 })
 
 test('draw-tool.user.js\'s @description is the homepage summary', () => {
@@ -266,7 +267,7 @@ test(`${DRAW} intro says what the script adds, with SudokuPad linked`, () => {
 })
 
 test(`${DRAW} lists what the script adds, one item per feature`, () => {
-  assert.deepEqual(section(read(DRAW), 'What it adds'), [
+  assert.deepEqual(section(DRAW, 'What it adds'), [
     'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
     'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
     'Erasing. Drag with the right mouse button across a line or text to erase it. Clear all, which asks first, erases everything.',
@@ -302,15 +303,17 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
 })
 
 test(`${DRAW} good to know says the drawing stays in this browser`, () => {
-  assert.deepEqual(section(read(DRAW), 'Good to know'), ['The drawing is kept in this browser only, so another browser or device does not show it.'])
+  assert.deepEqual(section(DRAW, 'Good to know'), ['The drawing is kept in this browser only, so another browser or device does not show it.'])
 })
 
-test('every picture the site links has the script that takes it in docs/research/', () => {
+// A script in docs/research/ takes a picture when its header names the picture's file.
+test('every Draw Tool picture the site links is named by a screenshot script in docs/research/', () => {
   const research = path.join(__dirname, 'docs', 'research')
-  const shots = [DRAW].flatMap(name => screenshots(read(name)))
-  for (const shot of shots) assert.equal(fs.existsSync(path.join(__dirname, shot)), true, `${shot} is missing`)
-  for (const script of ['draw-tool-bullets-screenshot.mjs', 'draw-tool-panel-annotated-screenshot.mjs', 'site-draw-tool-details-screenshot.mjs']) {
-    assert.equal(fs.existsSync(path.join(research, script)), true, `docs/research/${script} is missing`)
+  const scripts = fs.readdirSync(research).filter(f => f.endsWith('-screenshot.mjs')).map(f => fs.readFileSync(path.join(research, f), 'utf8'))
+  const pictures = [...screenshots(read(DRAW)), ...screenshots(read(HOME)).filter(t => /site-draw-tool\.png$/.test(t))]
+  assert.ok(pictures.length > 0, 'no Draw Tool pictures found')
+  for (const shot of pictures) {
+    assert.ok(scripts.some(text => text.includes(path.basename(shot))), `no screenshot script in docs/research/ names ${shot}`)
   }
 })
 

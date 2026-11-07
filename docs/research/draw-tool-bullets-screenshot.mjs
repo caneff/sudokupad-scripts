@@ -8,10 +8,9 @@
 //   node docs/research/draw-tool-bullets-screenshot.mjs
 // Not part of any test.
 import { chromium } from 'playwright'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { openPage, startPuzzle } from '../../live/page.mjs'
+import { writeFileSync } from 'node:fs'
+import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 
-const script = readFileSync(new URL('../../draw-tool.user.js', import.meta.url), 'utf8')
 const DRAG_STEPS = 10
 const MARGIN = 4
 
@@ -19,15 +18,7 @@ const browser = await chromium.launch()
 
 // A page with Draw on, its drawing helpers, and the grid's top left and cell size.
 async function drawPage () {
-  const { p } = await openPage(browser, { contextOptions: { deviceScaleFactor: 2 } })
-  await startPuzzle(p)
-  await p.addStyleTag({ content: '#svenpeek { display: none !important }' })
-  await p.addScriptTag({ content: script })
-  await p.locator('#control-draw').waitFor({ state: 'visible' })
-  for (let i = 0; i < 20 && (await p.evaluate(() => Framework.app.tool)) !== 'draw'; i++) {
-    await p.click('#control-draw')
-    await p.waitForTimeout(300)
-  }
+  const p = await openDrawPage(browser, 2)
   const [x0, y0, cell] = await p.evaluate(() => {
     const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
     return [box.x, box.y, box.width]

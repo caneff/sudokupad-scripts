@@ -7,10 +7,9 @@
 // Run from the repo root with Playwright's Chromium installed: node docs/research/draw-tool-panel-annotated-screenshot.mjs
 // Not part of any test.
 import { chromium } from 'playwright'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { openPage, startPuzzle } from '../../live/page.mjs'
+import { writeFileSync } from 'node:fs'
+import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 
-const script = readFileSync(new URL('../../draw-tool.user.js', import.meta.url), 'utf8')
 const out = new URL('./draw-tool-panel-annotated.png', import.meta.url).pathname
 
 // Page pixels of space around the panel for the labels, and of padding around the whole picture.
@@ -25,15 +24,7 @@ const BOTTOM_ROOM = 6
 const LINE_COLOR = '#6a1b9a'
 
 const browser = await chromium.launch()
-const { p: page } = await openPage(browser, { contextOptions: { deviceScaleFactor: 3 } })
-await startPuzzle(page)
-await page.addStyleTag({ content: '#svenpeek { display: none !important }' })
-await page.addScriptTag({ content: script })
-await page.locator('#control-draw').waitFor({ state: 'visible' })
-for (let i = 0; i < 20 && (await page.evaluate(() => Framework.app.tool)) !== 'draw'; i++) {
-  await page.click('#control-draw')
-  await page.waitForTimeout(300)
-}
+const page = await openDrawPage(browser, 3)
 await page.locator('.draw-tool-panel-box').waitFor({ state: 'visible' })
 await page.mouse.move(5, 5)
 
