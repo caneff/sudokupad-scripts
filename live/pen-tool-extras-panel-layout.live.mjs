@@ -1,15 +1,19 @@
 // Live check of pen-tool-extras.user.js's pen panel layout (#254) at 1200x900 on sudokupad.app in headless Chromium: the panel's outer size,
-// the shorter color buttons, the row of three controls and the tray under them, and the three control icons' ink measured from a screenshot.
+// the shorter color buttons, the row of three controls and the tray under them, the three control icons' ink measured from a screenshot, and the edit mode pickers (#275).
 // A real touch screen stays untested. Pages 2 and 3 of the color buttons and the tray on Dark Page are judged by sight in the PR.
 /* global Framework, getComputedStyle, Image, document */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
 import { openPenTool } from './pen.mjs'
 import { dialogButton, openExtrasEditor } from './settings.mjs'
 
+const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../pen-tool-extras.user.js')
+// The pickers appear only when the hold timer fires.
+const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 const script = readFileSync(new URL('../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
 // The panel's outer rectangle that SudokuPad gives it, measured on this recording at 1200x900: x, y, width, height of `.controls-input`.
@@ -194,6 +198,51 @@ describe('the pen panel layout', { concurrency: false }, () => {
       assert.deepEqual(await Promise.all(['.pen-tool-extras-mode', '.pen-tool-extras-sliders'].map(rect)), before)
     } finally {
       await p.evaluate(() => Framework.setSetting('flipkeypad', false))
+    }
+  })
+
+  // Hold a color button and the pickers appear: they must leave the grid alone and follow their buttons (#275). A hold on a picker ends edit mode, as in live/pen-tool-extras.live.mjs.
+  it('in edit mode every color button keeps its box, and each picker sits over its own button, also with Keypad Flipped on', async () => {
+    const boxes = () => Promise.all([1, 2, 3, 4, 5, 6, 7, 8, 9].map(key))
+    const pickers = (n) => p.locator(`.pen-tool-extras-picker input[data-pen="${n}"]`)
+    const hold = async (selector) => {
+      const box = await p.locator(selector).boundingBox()
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await p.mouse.down()
+    }
+    const overOwnButton = async (buttons, what) => {
+      for (let n = 1; n <= 9; n++) {
+        const picker = await rect(`.pen-tool-extras-picker input[data-pen="${n}"]`)
+        const button = buttons[n - 1]
+        const inside = picker.x >= button.x - NEAR_PX && picker.y >= button.y - NEAR_PX && picker.right <= button.right + NEAR_PX && picker.bottom <= button.bottom + NEAR_PX
+        assert.equal(inside, true, `${what}: picker ${n} ${JSON.stringify(picker)} over button ${JSON.stringify(button)}`)
+        near(picker.x + picker.width / 2, button.x + button.width / 2, `${what}: picker ${n} centre x`)
+        near(picker.y + picker.height / 2, button.y + button.height / 2, `${what}: picker ${n} centre y`)
+      }
+    }
+    const before = await boxes()
+    const panelBefore = await rect('.tool-pen .controls-input')
+    await hold('.tool-pen button[data-key="1"]')
+    try {
+      await pickers(9).waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
+    } finally {
+      await p.mouse.up()
+    }
+    try {
+      assert.deepEqual(await boxes(), before, 'the color buttons')
+      assert.deepEqual(await rect('.tool-pen .controls-input'), panelBefore, 'the panel')
+      await overOwnButton(before, 'unflipped')
+      await p.evaluate(() => Framework.setSetting('flipkeypad', true))
+      try {
+        await p.locator('body.setting-flipkeypad').waitFor()
+        await overOwnButton(await boxes(), 'flipped')
+      } finally {
+        await p.evaluate(() => Framework.setSetting('flipkeypad', false))
+      }
+    } finally {
+      await hold('.pen-tool-extras-picker input[data-pen="4"]')
+      await p.locator('.pen-tool-extras-picker').first().waitFor({ state: 'detached', timeout: HOLD_WAIT_MS })
+      await p.mouse.up()
     }
   })
 })
