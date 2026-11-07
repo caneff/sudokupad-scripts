@@ -17,6 +17,9 @@ const MARGIN = 4
 const browser = await chromium.launch()
 
 // A page with Draw on, its drawing helpers, and the grid's top left and cell size.
+// The Size slider's values for the thin, middle and thick lines (a text takes 2 x the width + 8: 14, 20, 28).
+const OLD_WIDTHS = [3, 6, 10]
+
 async function drawPage () {
   const p = await openDrawPage(browser, 2)
   const [x0, y0, cell] = await p.evaluate(() => {
@@ -27,7 +30,7 @@ async function drawPage () {
   const strokes = () => p.locator('#draw-tool-layer path').count()
   const pick = async (color, widthIndex) => {
     await p.click(`.controls-input button[data-key="${color}"]`)
-    await p.click(`.draw-tool-panel-box button[data-width] >> nth=${widthIndex}`)
+    await p.locator('#draw-tool-size').fill(String(OLD_WIDTHS[widthIndex]))
   }
   const drag = async (points, shift = false) => {
     const before = await strokes()
@@ -64,7 +67,7 @@ const linesPng = await lines.shoot([3.5, 4], [9, 9])
 
 const text = await drawPage()
 await text.pick(3, 1)
-await text.p.click('.draw-tool-panel-box button[data-text-size] >> nth=2')
+await text.p.locator('#draw-tool-size').fill(String(OLD_WIDTHS[2]))
 await text.p.mouse.click(...text.at([7.25, 6.3]))
 await text.p.keyboard.type('17')
 await text.p.keyboard.press('Enter')

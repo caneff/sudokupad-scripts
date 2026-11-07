@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, WIDTHS, DEFAULT_COLOR, DEFAULT_WIDTH, penColor, readColor, readWidth, drawnLine, touchesStroke, ERASE_TOLERANCE, TEXT_SIZES, DEFAULT_TEXT_SIZE, readTextSize, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP } = require('./draw-tool.user.js')
+const { VERSION, TOOL_NAME, simplifyPath, strokePath, straightLine, toolNamesFor, strokeItem, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, penColor, readColor, readWidth, readOpacity, textSizeFor, itemOpacity, drawnLine, touchesStroke, ERASE_TOLERANCE, textItem, textBox, textAt, touchesItem, isClick, CLICK_SLOP } = require('./draw-tool.user.js')
 
 // A mouse path as the browser reports it: a point every pixel or so along a quarter circle of radius 100.
 const denseArc = () => Array.from({ length: 160 }, (_, i) => {
@@ -71,12 +71,12 @@ test('toolNamesFor keeps Draw for anything else: a keydown already dispatched, a
 })
 
 test('a drawing saved as JSON reads back equal, stroke for stroke', () => {
-  const drawing = [strokeItem([[1, 2], [30.5, 40.25], [64, 128]], 1, 6), strokeItem([[0, 0], [5, 5]], 3, 6)]
+  const drawing = [strokeItem([[1, 2], [30.5, 40.25], [64, 128]], 1, 6, 100), strokeItem([[0, 0], [5, 5]], 3, 7.5, 35)]
   assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
 })
 
-test('a stroke item holds its kind, pen color number, width and its points rounded to a tenth of a board unit', () => {
-  assert.deepEqual(strokeItem([[0.123, 1.06], [10.55, 5.04]], 1, 6), { kind: 'stroke', color: 1, width: 6, points: [[0.1, 1.1], [10.6, 5]] })
+test('a stroke item holds its kind, pen color number, width, opacity and its points rounded to a tenth of a board unit', () => {
+  assert.deepEqual(strokeItem([[0.123, 1.06], [10.55, 5.04]], 1, 6, 50), { kind: 'stroke', color: 1, width: 6, opacity: 50, points: [[0.1, 1.1], [10.6, 5]] })
 })
 
 test('a puzzle with no saved drawing starts empty', () => {
@@ -87,7 +87,7 @@ test('a puzzle with no saved drawing starts empty', () => {
 test('saved data that is not a drawing throws, and is never read as an empty drawing', () => {
   const stroke = { kind: 'stroke', color: 1, width: 6, points: [[0, 0]] }
   assert.deepEqual(readDrawing([stroke]), [stroke])
-  for (const saved of ['[{"kind":"stroke"', {}, 'text', [{ ...stroke, points: [] }], [{ kind: 'blob' }], [{ ...stroke, color: 42 }], [{ ...stroke, color: 0 }], [{ ...stroke, width: -1 }], [{ ...stroke, width: 7 }]]) {
+  for (const saved of ['[{"kind":"stroke"', {}, 'text', [{ ...stroke, points: [] }], [{ kind: 'blob' }], [{ ...stroke, color: 42 }], [{ ...stroke, color: 0 }], [{ ...stroke, width: -1 }], [{ ...stroke, width: 0.5 }], [{ ...stroke, width: 17 }], [{ ...stroke, width: 6.25 }], [{ ...stroke, opacity: 0 }], [{ ...stroke, opacity: 15 }], [{ ...stroke, opacity: 101 }], [{ ...stroke, opacity: 52 }], [{ ...stroke, opacity: '50' }]]) {
     assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
   }
 })
@@ -155,12 +155,17 @@ test('an index with no saved data is empty, and one that is not a list of keys t
   for (const saved of ['oops', { a: 1 }, [1, 2]]) assert.throws(() => readIndex(saved), /saved index/, JSON.stringify(saved))
 })
 
-test('the three widths, middle first by default, and pen color 1 by default', () => {
-  assert.equal(WIDTHS.length, 3)
-  assert.deepEqual([...WIDTHS].sort((a, b) => a - b), WIDTHS)
-  assert.equal(DEFAULT_WIDTH, WIDTHS[1])
-  assert.equal(DEFAULT_WIDTH, 6)
+test('the size slider runs 1 to 16 and starts at 6, the opacity slider 20 to 100 and starts at 100, and pen color 1 is the default', () => {
+  assert.deepEqual([MIN_WIDTH, MAX_WIDTH, DEFAULT_WIDTH], [1, 16, 6])
+  assert.equal(DEFAULT_OPACITY, 100)
   assert.equal(DEFAULT_COLOR, 1)
+})
+
+test('a text is 2 x the width + 8 tall: 10 to 40, and 20 at the default width', () => {
+  assert.equal(textSizeFor(1), 10)
+  assert.equal(textSizeFor(16), 40)
+  assert.equal(textSizeFor(DEFAULT_WIDTH), 20)
+  assert.equal(textSizeFor(7.5), 23)
 })
 
 // A keypad button's data-value is text; Framework.getData parses a saved 3 back as the number 3.
@@ -177,9 +182,30 @@ test('a saved color reads back, and a missing or bad one reads as pen color 1', 
   for (const saved of [null, undefined, 0, 12, 'red', '', {}]) assert.equal(readColor(saved), DEFAULT_COLOR, JSON.stringify(saved))
 })
 
-test('a saved width reads back, and a missing or bad one reads as the middle width', () => {
-  for (const width of WIDTHS) assert.equal(readWidth(width), width)
-  for (const saved of [null, undefined, 0, 5, 7, '6', 'wide', {}]) assert.equal(readWidth(saved), DEFAULT_WIDTH, JSON.stringify(saved))
+test('a saved width reads back for any slider value, and a missing or bad one reads as the default width', () => {
+  for (const width of [1, 3, 6, 6.5, 10, 15.5, 16]) assert.equal(readWidth(width), width)
+  for (const saved of [null, undefined, 0, 0.5, 16.5, 17, 6.25, '6', 'wide', {}, NaN]) assert.equal(readWidth(saved), DEFAULT_WIDTH, JSON.stringify(saved))
+})
+
+test('a saved opacity reads back for any slider value, and a missing or bad one reads as the default opacity', () => {
+  for (const opacity of [20, 25, 75, 100]) assert.equal(readOpacity(opacity), opacity)
+  for (const saved of [null, undefined, 0, 15, 22, 105, '50', 'faint', {}, NaN]) assert.equal(readOpacity(saved), DEFAULT_OPACITY, JSON.stringify(saved))
+})
+
+test('an item with no opacity reads as the default opacity, and one with an opacity as its own', () => {
+  assert.equal(itemOpacity({ kind: 'stroke', color: 1, width: 6, points: [[0, 0]] }), DEFAULT_OPACITY)
+  assert.equal(itemOpacity(strokeItem([[0, 0]], 1, 6, 40)), 40)
+  assert.equal(itemOpacity(textItem([0, 0], '1', 1, 20, 65)), 65)
+})
+
+test('an old drawing, with the three old widths and text sizes and no opacity, reads back as it was', () => {
+  const old = [
+    { kind: 'stroke', color: 1, width: 3, points: [[0, 0], [5, 5]] },
+    { kind: 'stroke', color: 2, width: 10, points: [[0, 0], [5, 5]] },
+    { kind: 'text', color: 3, size: 14, text: '9', at: [1, 1] },
+    { kind: 'text', color: 3, size: 28, text: '9', at: [1, 1] }
+  ]
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(old))), old)
 })
 
 // Board units: a cell is 64 wide. A stroke of width 6 along row 1's middle, from x 0 to x 192.
@@ -238,32 +264,21 @@ test('the drawn line of a two-point stroke is its two points', () => {
 })
 
 // A cage sum "15" at size 20, centred on (100, 50) in board units.
-const sum = textItem([100, 50], '15', 3, 20)
+const sum = textItem([100, 50], '15', 3, 20, 100)
 
-test('a text item holds its kind, pen color number, text size, text and its point rounded to a tenth of a board unit', () => {
-  assert.deepEqual(textItem([10.04, 20.06], '15', 3, 20), { kind: 'text', color: 3, size: 20, text: '15', at: [10, 20.1] })
+test('a text item holds its kind, pen color number, text size, opacity, text and its point rounded to a tenth of a board unit', () => {
+  assert.deepEqual(textItem([10.04, 20.06], '15', 3, 20, 55), { kind: 'text', color: 3, size: 20, opacity: 55, text: '15', at: [10, 20.1] })
 })
 
 test('a drawing of strokes and text saved as JSON reads back equal, item for item', () => {
-  const drawing = [strokeItem([[1, 2], [64, 128]], 1, 6), sum, textItem([5, 5], 'a b', 9, TEXT_SIZES[0])]
+  const drawing = [strokeItem([[1, 2], [64, 128]], 1, 6, 100), sum, textItem([5, 5], 'a b', 9, 23, 20)]
   assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
 })
 
 test('saved text that is not a text item throws', () => {
-  for (const item of [{ ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, size: 1e6 }, { ...sum, color: null }, { ...sum, color: 42 }]) {
+  for (const item of [{ ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, size: 1e6 }, { ...sum, size: 9 }, { ...sum, size: 41 }, { ...sum, size: 20.5 }, { ...sum, opacity: 10 }, { ...sum, color: null }, { ...sum, color: 42 }]) {
     assert.throws(() => readDrawing([item]), /saved drawing/, JSON.stringify(item))
   }
-})
-
-test('the three text sizes, smallest first, the middle one by default', () => {
-  assert.equal(TEXT_SIZES.length, 3)
-  assert.deepEqual([...TEXT_SIZES].sort((a, b) => a - b), TEXT_SIZES)
-  assert.equal(DEFAULT_TEXT_SIZE, TEXT_SIZES[1])
-})
-
-test('a saved text size reads back, and a missing or bad one reads as the middle size', () => {
-  for (const size of TEXT_SIZES) assert.equal(readTextSize(size), size)
-  for (const saved of [null, undefined, 0, 6, String(TEXT_SIZES[0]), 'big', {}]) assert.equal(readTextSize(saved), DEFAULT_TEXT_SIZE, JSON.stringify(saved))
 })
 
 test('a text\'s box is centred on its point, as tall as its size and wider with more characters', () => {

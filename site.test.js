@@ -312,7 +312,7 @@ test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, (
 
 // Draw Tool's entry and details page.
 const DRAW_SUMMARY = 'Adds a Draw tool for freehand lines and typed text, such as cage sums, in the pen colors. Each puzzle keeps its own drawing.'
-const DRAW_LEAD_INS = ['Freehand lines.', 'Text.', 'Erasing.', 'Stays on the cells.', 'Kept for each puzzle.']
+const DRAW_LEAD_INS = ['Freehand lines.', 'Text.', 'Size and opacity.', 'Erasing.', 'Stays on the cells.', 'Kept for each puzzle.']
 
 test(`${HOME} describes Draw Tool in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Draw Tool<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -324,6 +324,7 @@ test(`${DRAW} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Freehand lines. Drag on the puzzle to draw; hold Shift for a straight line.',
     'Text. Click without dragging to type, such as a cage sum. Enter or a click elsewhere finishes it, Escape drops it, and a click on text changes it.',
+    'Size and opacity. The Size slider sets the width of the next line and the size of the next text, and the Opacity slider how solid it is. A line or text keeps the size and opacity it was drawn with.',
     'Erasing. Drag with the right mouse button across a line or text to erase it. Clear all, which asks first, erases everything.',
     'Stays on the cells. Lines and text stay on the cells you drew them on, and stay visible when you switch back to entering digits.',
     'Kept for each puzzle. A reload keeps the drawing, for the 50 puzzles you drew on last, and Restart clears it. If a drawing cannot be saved, a message says so.'
@@ -338,7 +339,7 @@ test(`${DRAW} shows the Draw panel as one annotated picture whose alt text names
   assert.equal(found.length, 1, 'the Draw panel section is not one picture')
   assert.ok(found[0].includes(`src="${RAW}docs/research/draw-tool-panel-annotated.png"`))
   const alt = (found[0].match(/alt="([^"]*)"/) || [])[1] || ''
-  for (const label of ['Pen color buttons', 'Width buttons', 'Text size buttons', 'Clear all']) {
+  for (const label of ['Pen color buttons', 'Size slider', 'Opacity slider', 'Clear all']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   assert.match(alt, /digit keys 1 to 9/)

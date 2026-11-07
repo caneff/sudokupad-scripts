@@ -65,7 +65,7 @@ describe('Draw Tool\'s saved drawing', { concurrency: false }, () => {
 
   it('the drawing is saved under the puzzle\'s key, as a list of stroke items in pen color 1', async () => {
     const items = await saved()
-    assert.deepEqual(items.map(({ kind, color, width }) => [kind, color, width]), [['stroke', 1, 6], ['stroke', 1, 6]])
+    assert.deepEqual(items.map(({ kind, color, width, opacity }) => [kind, color, width, opacity]), [['stroke', 1, 6, 100], ['stroke', 1, 6, 100]])
     assert.deepEqual(await read((key) => Framework.getData(key), INDEX_KEY), [await puzzleKey()])
   })
 

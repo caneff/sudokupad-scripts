@@ -12,6 +12,8 @@ import { openDrawPage } from './draw-tool-screenshot-page.mjs'
 
 const out = new URL('./site-draw-tool.png', import.meta.url).pathname
 
+// The Size slider's values for the thin, middle and thick lines (a text takes 2 x the width + 8: 14, 20, 28).
+const OLD_WIDTHS = [3, 6, 10]
 // Mouse moves per segment of a drag, so the drag reads as a hand-drawn stroke and not a jump.
 const DRAG_STEPS = 10
 // The picture's left edge, in cells from the grid's left; it runs from there past the tool buttons, and from the
@@ -32,7 +34,7 @@ const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
 const strokes = () => p.locator('#draw-tool-layer path').count()
 const pick = async (color, widthIndex) => {
   await p.click(`.controls-input button[data-key="${color}"]`)
-  await p.click(`.draw-tool-panel-box button[data-width] >> nth=${widthIndex}`)
+  await p.locator('#draw-tool-size').fill(String(OLD_WIDTHS[widthIndex]))
 }
 const drag = async (points, shift = false) => {
   const before = await strokes()
@@ -61,7 +63,7 @@ await drag([[8.6, 4.9], [8.1, 5.4], [7.3, 5.5], [6.65, 5.2]])
 await drag([[6.95, 4.85], [6.62, 5.18], [6.9, 5.55]])
 // A cage sum, 17, in r8c7's top left corner.
 await pick(3, 1)
-await p.click('.draw-tool-panel-box button[data-text-size] >> nth=2')
+await p.locator('#draw-tool-size').fill(String(OLD_WIDTHS[2]))
 await p.mouse.click(...at([7.25, 6.3]))
 await p.keyboard.type('17')
 await p.keyboard.press('Enter')
