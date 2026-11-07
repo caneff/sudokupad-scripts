@@ -437,11 +437,11 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
 
   // Real key presses into the name field: SudokuPad listens for keys on the page, and a digit or letter
   // must reach the field.
-  const NAME_BOX = `${EDITOR} [data-role=profile-name]`
+  const NAME_FIELD = `${EDITOR} [data-role=profile-name]`
   const typeName = async (text) => {
-    await p.locator(NAME_BOX).press('Control+a')
-    await p.locator(NAME_BOX).pressSequentially(text)
-    assert.equal(await p.inputValue(NAME_BOX), text)
+    await p.locator(NAME_FIELD).press('Control+a')
+    await p.locator(NAME_FIELD).pressSequentially(text)
+    assert.equal(await p.inputValue(NAME_FIELD), text)
   }
   const handle = (i) => p.locator(`${ROWS} [data-role=handle]`).nth(i)
   const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
@@ -483,19 +483,19 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.deepEqual(await t.pulldownNames('cell-profile'), ['Odd/Even', 'Low/5/High', 'Four'])
     assert.deepEqual(await t.pulldownNames('digit-profile'), ['Same as cell', 'Odd/Even', 'Low/5/High', 'Four', 'None'])
     assert.match(await heading(), /3 of 6/)
-    assert.equal(await p.inputValue(NAME_BOX), 'Odd/Even')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Odd/Even')
     assert.deepEqual(await p.$$eval(`${ROWS} [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4', '1', '5', '9', '1', '3', '5'])
   })
 
   const groupCount = () => p.locator(`${EDITOR} button[data-act=remove]`).count()
 
-  it('a click anywhere on a row but its handle, name box and × selects it without making it the cell profile: one row is highlighted, the name box and the groups follow it', async () => {
+  it('a click anywhere on a row but its handle, name field and × selects it without making it the cell profile: one row is highlighted, the name field and the groups follow it', async () => {
     assert.equal(await groupCount(), 2)
     await p.click(`${ROWS}:nth-child(2) [data-role=chip]`)
     assert.equal(await t.selectedRow(), 1)
     assert.equal(await p.locator(`${ROWS}[aria-checked=true]`).count(), 1)
     assert.equal(await groupCount(), 3)
-    assert.equal(await p.inputValue(NAME_BOX), 'Low/5/High')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Low/5/High')
     await p.click(`${ROWS}:nth-child(3)`, { position: { x: 4, y: 4 } })
     assert.equal(await t.selectedRow(), 2)
     assert.equal(await groupCount(), 4)
@@ -606,7 +606,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal(await t.cellProfile(), '1')
     assert.deepEqual(await t.pulldownNames('cell-profile'), ['Four', 'Odd/Even', 'Low/5/High', 'Odd/Even copy'])
     assert.match(await heading(), /4 of 6/)
-    assert.equal(await p.inputValue(NAME_BOX), 'Odd/Even copy')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Odd/Even copy')
     assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-role')), 'profile-name')
     // A copy of Odd/Even: its shown digits are 5 and 4.
     assert.deepEqual(await p.$$eval(`${ROWS}:nth-child(4) [data-role=chip]`, (es) => es.map((e) => e.textContent)), ['5', '4'])
@@ -624,12 +624,12 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.click(`${ROWS}:nth-child(3)`, { position: { x: 4, y: 4 } })
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
     await p.click(`${ROWS}:nth-child(1)`, { position: { x: 4, y: 4 } })
-    await p.locator(NAME_BOX).press('End')
-    for (let i = 0; i < 'Mine'.length; i++) await p.locator(NAME_BOX).press('Backspace')
-    assert.equal(await p.inputValue(NAME_BOX), '')
+    await p.locator(NAME_FIELD).press('End')
+    for (let i = 0; i < 'Mine'.length; i++) await p.locator(NAME_FIELD).press('Backspace')
+    assert.equal(await p.inputValue(NAME_FIELD), '')
     assert.deepEqual(await t.rowNames(), ['Mine', 'Odd/Even', 'Low/5/High'])
-    await p.locator(NAME_BOX).press('Enter')
-    assert.equal(await p.inputValue(NAME_BOX), 'Mine')
+    await p.locator(NAME_FIELD).press('Enter')
+    assert.equal(await p.inputValue(NAME_FIELD), 'Mine')
     assert.equal(await p.evaluate(() => document.activeElement.getAttribute('data-role')), 'profile-name')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await t.names(), ['Four', 'Odd/Even', 'Low/5/High'])

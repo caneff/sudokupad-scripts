@@ -341,7 +341,7 @@ test('setProfileGroups replaces only the chosen profile\'s groups', () => {
   assert.equal(next.active, 1)
 })
 
-// The digit profile: "Sync digit profile with cell profile" and "Use digit colors".
+// The digit profile: following the cell profile ("synced"), on a profile of its own, and the digit colors on or off.
 const synced = { profiles: [{ name: 'A', groups: LOW }, { name: 'B', groups: ODD }, { name: 'C', groups: ENTROPIC }], active: 1 }
 const apart = setDigitActive(setSync(synced, false), 2)
 
@@ -443,64 +443,63 @@ test('the right column has no name box: the groups come straight after the Group
   assert.match(html, /<div class="cbd-column"><div class="cbd-heading">Groups/)
 })
 
-const apartState = { ...profileStateBase(), digitActive: 0 }
-function profileStateBase () { return { profiles: [{ name: 'Low <b>', groups: [] }, { name: 'Odd/Even', groups: [] }, { name: 'Third', groups: [] }], active: 1 } }
+// `synced` with a first name that needs escaping, and the same with the digits on that first profile.
+const hostile = renameProfile(synced, 0, 'Low <b>')
+const hostileApart = setDigitActive(setSync(hostile, false), 0)
 const selectOf = (html, role) => html.match(new RegExp(`<select data-role="${role}">(.*?)</select>`, 's'))[1]
 const optionsOf = (html, role) => [...selectOf(html, role).matchAll(/<option value="([^"]*)"([^>]*)>([^<]*)<\/option>/g)].map((m) => `${m[1]}|${m[3]}${m[2].includes(' selected') ? '*' : ''}`)
 
 test('digitChoice reads the digit pulldown off the state: same as cell, a profile index, or none', () => {
-  const base = profileStateBase()
-  assert.equal(digitChoice(base), 'same')
-  assert.equal(digitChoice(apartState), '0')
-  assert.equal(digitChoice({ ...apartState, useDigitColors: false }), 'none')
-  assert.equal(digitChoice({ ...base, useDigitColors: false }), 'none')
+  assert.equal(digitChoice(hostile), 'same')
+  assert.equal(digitChoice(hostileApart), '0')
+  assert.equal(digitChoice({ ...hostileApart, useDigitColors: false }), 'none')
+  assert.equal(digitChoice({ ...hostile, useDigitColors: false }), 'none')
 })
 
-test('chooseDigit saves the state the old controls did: Same as cell is Sync ticked, a name is Sync unticked with that profile, None is Use digit colors unticked', () => {
-  const base = profileStateBase()
-  assert.deepEqual(chooseDigit(apartState, 'same'), base)
-  assert.deepEqual(chooseDigit(base, '2'), setDigitActive(setUseDigitColors(base, true), 2))
-  assert.equal(chooseDigit(base, '2').digitActive, 2)
-  assert.equal('useDigitColors' in chooseDigit(base, '2'), false)
-  assert.deepEqual(chooseDigit(apartState, 'none'), setUseDigitColors(apartState, false))
-  assert.equal(chooseDigit(apartState, 'none').useDigitColors, false)
-  assert.equal(chooseDigit(chooseDigit(base, 'none'), '2').digitActive, 2)
-  assert.equal(usesDigitColors(chooseDigit(chooseDigit(base, 'none'), '2')), true)
-  assert.equal(isSynced(chooseDigit(chooseDigit(apartState, 'none'), 'same')), true)
-  assert.equal(usesDigitColors(chooseDigit(chooseDigit(apartState, 'none'), 'same')), true)
+test('chooseDigit: Same as cell makes the digits follow the cells, a name makes them follow that profile, None turns digit colors off', () => {
+  assert.deepEqual(chooseDigit(hostileApart, 'same'), hostile)
+  assert.deepEqual(chooseDigit(hostile, '2'), setDigitActive(setUseDigitColors(hostile, true), 2))
+  assert.equal(chooseDigit(hostile, '2').digitActive, 2)
+  assert.equal('useDigitColors' in chooseDigit(hostile, '2'), false)
+  assert.deepEqual(chooseDigit(hostileApart, 'none'), setUseDigitColors(hostileApart, false))
+  assert.equal(chooseDigit(hostileApart, 'none').useDigitColors, false)
+  assert.equal(chooseDigit(chooseDigit(hostile, 'none'), '2').digitActive, 2)
+  assert.equal(usesDigitColors(chooseDigit(chooseDigit(hostile, 'none'), '2')), true)
+  assert.equal(isSynced(chooseDigit(chooseDigit(hostileApart, 'none'), 'same')), true)
+  assert.equal(usesDigitColors(chooseDigit(chooseDigit(hostileApart, 'none'), 'same')), true)
 })
 
 test('the three pulldowns: Mode, Cell and Digit, in that order, with no checkbox and no mode button', () => {
-  const html = renderPulldowns(profileStateBase(), 'both')
+  const html = renderPulldowns(hostile, 'both')
   assert.deepEqual([...html.matchAll(/<select data-role="([\w-]+)"/g)].map((m) => m[1]), ['mode-draft', 'cell-profile', 'digit-profile'])
   assert.deepEqual([...html.matchAll(/<label class="cbd-pulldown"><span>(\w+)<\/span>/g)].map((m) => m[1]), ['Mode', 'Cell', 'Digit'])
   assert.doesNotMatch(html, /type="checkbox"|<button|data-mode=/)
 })
 
 test('the Mode pulldown offers Cell, Digit, Both, Off, selects the draft mode, and offers only Cell and Off while Digit is None', () => {
-  assert.deepEqual(optionsOf(renderPulldowns(profileStateBase(), 'both'), 'mode-draft'), ['cell|Cell', 'digit|Digit', 'both|Both*', 'off|Off'])
-  const none = renderPulldowns({ ...profileStateBase(), useDigitColors: false }, 'digit')
+  assert.deepEqual(optionsOf(renderPulldowns(hostile, 'both'), 'mode-draft'), ['cell|Cell', 'digit|Digit', 'both|Both*', 'off|Off'])
+  const none = renderPulldowns({ ...hostile, useDigitColors: false }, 'digit')
   assert.deepEqual(optionsOf(none, 'mode-draft'), ['cell|Cell', 'off|Off*'])
-  assert.deepEqual(optionsOf(renderPulldowns({ ...profileStateBase(), useDigitColors: false }, 'both'), 'mode-draft'), ['cell|Cell*', 'off|Off'])
+  assert.deepEqual(optionsOf(renderPulldowns({ ...hostile, useDigitColors: false }, 'both'), 'mode-draft'), ['cell|Cell*', 'off|Off'])
 })
 
 test('the Cell pulldown lists every profile by name, escaped, selecting the cell profile', () => {
-  assert.deepEqual(optionsOf(renderPulldowns(profileStateBase(), 'cell'), 'cell-profile'), ['0|Low &lt;b&gt;', '1|Odd/Even*', '2|Third'])
+  assert.deepEqual(optionsOf(renderPulldowns(hostile, 'cell'), 'cell-profile'), ['0|Low &lt;b&gt;', '1|B*', '2|C'])
 })
 
 test('the Digit pulldown lists Same as cell, every profile, then None, and selects what the state says', () => {
-  const names = ['0|Low &lt;b&gt;', '1|Odd/Even', '2|Third']
+  const names = ['0|Low &lt;b&gt;', '1|B', '2|C']
   const all = (selected) => ['same|Same as cell', ...names, 'none|None'].map((o, i) => (i === selected ? `${o}*` : o))
-  assert.deepEqual(optionsOf(renderPulldowns(profileStateBase(), 'cell'), 'digit-profile'), all(0))
-  assert.deepEqual(optionsOf(renderPulldowns(apartState, 'cell'), 'digit-profile'), all(1))
-  assert.deepEqual(optionsOf(renderPulldowns({ ...apartState, useDigitColors: false }, 'cell'), 'digit-profile'), all(4))
+  assert.deepEqual(optionsOf(renderPulldowns(hostile, 'cell'), 'digit-profile'), all(0))
+  assert.deepEqual(optionsOf(renderPulldowns(hostileApart, 'cell'), 'digit-profile'), all(1))
+  assert.deepEqual(optionsOf(renderPulldowns({ ...hostileApart, useDigitColors: false }, 'cell'), 'digit-profile'), all(4))
 })
 
 test('each pulldown option that names a profile carries its index, so a rename can update the text in place', () => {
-  assert.equal(count(renderPulldowns(profileStateBase(), 'cell'), /<option value="\d" data-index="\d"/g), 6)
+  assert.equal(count(renderPulldowns(hostile, 'cell'), /<option value="\d" data-index="\d"/g), 6)
 })
 
-test('the pulldowns sit above the profile list and the groups in the dialog, and stack on a phone and sit in a row on a desktop', () => {
+test('the pulldowns sit above the profile list and the groups, in a grid that wraps by a minimum column width', () => {
   const html = renderEditor({ groups: [], pages: [], shown: [], pulldownsHtml: '<div id="pulldowns"></div>', profilesHtml: '<div id="mark-profiles"></div>' })
   assert.equal(html.indexOf('id="pulldowns"') < html.indexOf('mark-profiles'), true)
   const css = STYLE_CSS.replace(/\s+/g, ' ')
@@ -811,8 +810,8 @@ test('colorSteps clears a cell that loses a color and puts back the colors it ke
   assert.deepEqual(colorSteps(cells, []), [])
 })
 
-test('mode: the dialog opens with the mode choice at the top, on the draft it is given', () => {
-  const html = renderPulldowns(profileStateBase(), 'off')
+test('mode: the Mode pulldown offers all four modes and selects the draft mode it is given', () => {
+  const html = renderPulldowns(hostile, 'off')
   assert.deepEqual(optionsOf(html, 'mode-draft'), ['cell|Cell', 'digit|Digit', 'both|Both', 'off|Off*'])
   assert.doesNotMatch(html, /auto-draft/)
 })

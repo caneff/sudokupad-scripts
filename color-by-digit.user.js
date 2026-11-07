@@ -299,7 +299,6 @@
   const iconButton = (act, label, picture) =>
     `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
 
-  // The status sits between the title and the icons, so a long message wraps in the room the title leaves.
   const renderTitle = (version) => '<div class="cbd-title-row">' +
     `<span><b>Color by Digit</b> <small class="cbd-version">v${version}</small></span>` +
     '<span data-role="settings-status"></span>' +
@@ -426,7 +425,6 @@
 
   const setUseDigitColors = (state, on) => makeState(state.profiles.map(cloneProfile), state.active, state.digitActive, on)
 
-  // The Digit pulldown's value: 'same' (digits follow the cells), a profile index, or 'none' (no digit is colored).
   const digitChoice = (state) => (!usesDigitColors(state) ? 'none' : isSynced(state) ? 'same' : String(state.digitActive))
 
   function chooseDigit (state, choice) {
@@ -815,7 +813,6 @@
   const optionHtml = (value, label, selected, index) =>
     `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${esc(label)}</option>`
 
-  // The three drafts at the top of the dialog; the mode offers only what the Digit pulldown allows.
   function renderPulldowns (state, mode) {
     const shownMode = allowedMode(mode, usesDigitColors(state))
     const digit = digitChoice(state)
@@ -896,7 +893,9 @@
     [`${EDITOR} .cbd-chips`, 'display: flex; gap: 3px; flex: none'],
     [`${EDITOR} .cbd-name`, 'flex: 1; min-width: 0; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400'],
     [`${EDITOR} .cbd-new`, 'margin: 8px 0'],
-    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px 6px; margin: 0; font-size: .9rem; font-weight: 600'],
+    // Looks like the row's name until focused: no border or fill, then the box shows.
+    [`${EDITOR} [data-role="profile-name"]`, 'box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px 6px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit'],
+    [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
     [`${EDITOR} .cbd-profile .cbd-small`, 'flex: none; padding: 0 8px'], [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
     [`${EDITOR} .cbd-chip, ${MENU} .cbd-chip`, 'display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); font-family: sans-serif; font-weight: 600; line-height: 1'],
     [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
@@ -1398,11 +1397,14 @@
       draw()
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
-    // The draft mode is kept as chosen: picking None in Digit shows the mode's fallback, and picking a digit profile again before Save shows the mode again.
+    // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change for the option it already shows.
     const choose = (role, value) => {
       if (role === 'mode-draft') draftMode = value
       else if (role === 'cell-profile') draft = setActive(draft, Number(value))
-      else draft = chooseDigit(draft, value)
+      else {
+        draft = chooseDigit(draft, value)
+        draftMode = allowedMode(draftMode, usesDigitColors(draft))
+      }
       draw()
       box.querySelector(`select[data-role="${role}"]`).focus()
     }

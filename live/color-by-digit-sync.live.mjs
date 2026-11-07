@@ -249,6 +249,7 @@ describe('the dialog\'s Cell and Digit pulldowns, saved synced in Both, injected
   it('Cancel drops all three pulldowns', async () => {
     await t.openEditor()
     await p.selectOption(CELL_SELECT, '0')
+    await p.selectOption(`${EDITOR} select[data-role="mode-draft"]`, 'off')
     await t.chooseDigit('none')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.deepEqual(await t.getState().then((s) => [s.active, s.digitActive, s.useDigitColors]), [1, 1, undefined])
@@ -289,6 +290,10 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
     assert.deepEqual(await p.locator(`${DIGIT_SELECT} option`).evaluateAll((es) => es.map((e) => e.textContent)), ['Same as cell', 'Split', 'Odd/Even', 'None'])
     await t.chooseDigit('none')
     assert.deepEqual(await t.modeChoice(), ['cell*', 'off'])
+    // The draft mode moved with it: a digit profile picked again shows Cell, not the Both it fell back from.
+    await t.chooseDigit('1')
+    assert.deepEqual(await t.modeChoice(), ['cell*', 'digit', 'both', 'off'])
+    await t.chooseDigit('none')
     await t.save()
   })
 
@@ -318,7 +323,7 @@ describe('the Digit pulldown on None and back, saved unsynced in Both, injected 
     assert.deepEqual(await watch(fill('4')), [[DEFAULT_FILL]])
   })
 
-  it('a digit profile picked again: the four modes, and the cell profile as it was', async () => {
+  it('a digit profile picked again: the four modes with Cell still chosen, and the cell profile as it was', async () => {
     await t.openEditor()
     assert.equal(await p.locator(DIGIT_SELECT).inputValue(), 'none')
     await t.chooseDigit('1')

@@ -19,7 +19,7 @@ const PAGES = byDigit.layoutPages([['clear', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6',
 const count = (html, re) => (html.match(re) || []).length
 
 // Spec 300's acceptance as one pass over Color by Digit's pure functions and its details page, at `npm test`: the top
-// row's pulldowns (spec 333 replaced its checkboxes and mode buttons), the two-column layout's CSS, the selected row
+// row's pulldowns, the two-column layout's CSS, the selected row
 // apart from the cell and digit profiles, rename, "+ New profile", compact group rows with one open and the taken-digit dot, the three-chip
 // cap, and the details page's annotated dialog picture. This seam is blind to real SudokuPad: the Framework calls, the
 // dialog's rendering at 1200 and 390 px, Save reaching the puzzle and undo are `npm run test:live`'s
