@@ -17,7 +17,7 @@ const versionOf = (text) => /^\/\/ @version\s+(\S+)$/m.exec(text)[1]
 const inlineStyles = (html) => html.match(/\sstyle="[^"]*"/g) || []
 
 // Typed out from c126948, the commit spec 204 was written against, as the independent source.
-const SECTIONS = ['Core', 'Pen colors', 'Pen pages', 'Dashed lines', 'Arrow lines', 'Marks', 'Right and middle click erase', 'Line look', 'Pen panel', 'Settings dialog', 'Startup']
+const SECTIONS = ['Core', 'Pen colors', 'Pen pages', 'Dashed lines', 'Arrow lines', 'Marks', 'Right click erase', 'Line look', 'Pen panel', 'Settings dialog', 'Startup']
 const MARK_VALUES_BEFORE = ['3', '4', 'b', 'c', '5', '6', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'w', 'u', 'x', 'v', 'y']
 const VERSIONS_BEFORE = { 'pen-tool-extras.user.js': '1.14.11', 'color-by-digit.user.js': '0.5.6' }
 

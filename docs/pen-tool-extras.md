@@ -28,7 +28,7 @@ Pen Tool Extras in SudokuPad's settings, or the settings button in the pen panel
 1. **Pen colors** (left), with the preset pulldown above a 3 by 3 grid of square color inputs.
 2. **Line settings** (right, top): Thickness and Opacity, each with a "Slider in panel" box on a line under it. Under a divider, **Line styles**: a box before each of Dashed lines and Directional arrow lines, with a slider under it.
 3. **Marks to cycle** (left, below): one table, rows Edge and Corner, columns X, circle and up and down arrow heads (Directions).
-4. **Other** (right, below): White outlines (with Outline width under it) and Right and middle click erase.
+4. **Other** (right, below): White outlines (with Outline width under it) and Right click erase.
 
 The title row ends with two icon buttons, Copy settings (two overlapping squares) and Paste settings (a clipboard); their status message shows to their left. Under the grid, one row of buttons: Restore defaults as small underlined text at the left, Cancel and Save at the right. Every slider and box in it is a draft that takes effect on Save, and Cancel leaves what was in force. All five sliders start at the same x and are 96px long. On a screen too narrow for two columns, the sections stack in one column in the same order.
 
@@ -160,17 +160,17 @@ A click within 0.2 of a cell of a grid corner, inner or outer, cycles an X, then
 - A corner shared by four cells is one mark.
 - They're half the Thickness slider, like edge marks, and are saved with the edge mark settings.
 
-## Right and middle click
+## Right click
 
-The dialog's Right and middle click erase box is on by default and saved under `PenColor_middleerase` (the key is older than the right click and keeps its name so old saves read the same; removed when on, `false` when off). Off, both buttons are left wholly to SudokuPad and the browser: no erase, no default prevented, the autoscroll as stock, and SudokuPad's own right click (which acts as a left click, so it steps a mark forward) and menu.
+The dialog's Right click erase box is on by default and saved under `PenColor_middleerase` (the key is older than the right click and keeps its name so old saves read the same; removed when on, `false` when off). Off, the right button is left wholly to SudokuPad and the browser: no erase, no default prevented, and SudokuPad's own right click (which acts as a left click, so it steps a mark forward) and menu.
 
-With the box on and the pen tool on, a right or middle click over the grid erases what is under the pointer, as one undo step:
+With the box on and the pen tool on, a right click over the grid erases what is under the pointer, as one undo step:
 
 - On a line: the whole line, every piece joined to it where two pieces meet at a cell middle or a cell corner, and drawn with the same pen, so a branch or a crossing of that pen at such a point is included (two diagonals of one pen that cross mid-cell meet at no point and stay separate), but not a piece of another pen (on page 3, both direction characters of a pen count as one pen) and no mark.
 - On an edge mark or a grid-corner mark with no line under the pointer: that mark, whatever its shape. Lines win over marks when both are under the pointer. A cell's circle and cross are not edge or corner marks and stay.
 - On nothing, including a cell's middle: nothing, and no mark is made.
 
-A right-drag or middle-drag erases every line and mark it crosses, as one undo step, the way Draw's right-drag does. The browser's menu stays shut over the grid in the pen tool, and the middle button's autoscroll is off there. Outside the pen tool, or off the grid, both buttons and the menu are left to SudokuPad and the browser.
+A right-drag erases every line and mark it crosses, as one undo step, the way Draw's right-drag does. The browser's menu stays shut over the grid in the pen tool. Outside the pen tool, or off the grid, the right button and the menu are left to SudokuPad and the browser.
 
 A left click steps an edge or a corner mark forward, and a right click does not step it. Touch is unchanged.
 
@@ -180,7 +180,7 @@ The pen panel's controls row holds a line mode button, the first of the three, t
 
 ## Restore defaults
 
-The dialog's Restore defaults picks the Darker page 1 preset, or SudokuPad colors when the color tool has no page 1 to read. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and line style boxes, the White outlines box (on), the Outline width slider (2) and the Right and middle click erase box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults picks the Darker page 1 preset, or SudokuPad colors when the color tool has no page 1 to read. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and line style boxes, the White outlines box (on), the Outline width slider (2) and the Right click erase box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 
@@ -196,4 +196,4 @@ The settings dialog names the skipped steps in one line at its top, for example 
 | drag highlight | the pen tool's `drawLineHint` | The highlight of a line being dragged fades with the opacity setting and takes the white outline |
 | marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X). The arrows, circles and corner marks you drew stay stored in the puzzle and its replay, and draw as nothing |
 | pen panel | the pen tool (`ToolPen.tool`), or the `.penlinemode` element in its panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders, the tray and the three control buttons (line mode, line type and settings), which would take its rows, are left out. Tab still turns pages |
-| line erase | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | A right or middle click is SudokuPad's own click, and the browser's menu opens |
+| line erase | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | A right click is SudokuPad's own click, and the browser's menu opens |
