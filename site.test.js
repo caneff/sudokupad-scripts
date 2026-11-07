@@ -473,10 +473,11 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const word of ['profiles', 'groups', 'pulldowns', 'Copy settings', 'Paste settings']) assert.ok(text.includes(word), `the dialog text does not mention ${word}`)
 })
 
-test(`${CBD} good to know gives the undo behavior and the Multi-color caveat`, () => {
+test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
   assert.deepEqual(section(CBD, 'Good to know'), [
     'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
-    "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had."
+    "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
+    "Where the button is: it sits in the bottom row with Undo, Redo, Check and Select. When that row already holds five or more buttons, as it can once other extensions add theirs, it goes in a second row under it. Color by Digit never moves another script's button."
   ])
 })
 

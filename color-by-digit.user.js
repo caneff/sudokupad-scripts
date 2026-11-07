@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.17.0
+// @version      0.18.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.17.0'
+  const VERSION = '0.18.0'
   const SETTINGS_GROUP = 'experimental'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
@@ -604,11 +604,29 @@
   // The mode in words, which the chips' look alone does not say.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
+  // The shared rule for a crowded bottom row: a button joins the first row while it holds fewer than FULL_ROW
+  // buttons, else the second row, which a script that finds none makes. Checked once, when the button is added.
+  // With no first row it names that row anyway: Framework then skips the button, as it always has.
+  const BOTTOM_ROW = '.controls-aux'
+  const SECOND_ROW = '.controls-aux-extensions'
+  const FULL_ROW = 5
+
+  function findOrMakeButtonRow (doc) {
+    const first = doc.querySelector(BOTTOM_ROW)
+    if (!first || first.querySelectorAll('button').length < FULL_ROW) return BOTTOM_ROW
+    if (!doc.querySelector(SECOND_ROW)) {
+      const row = doc.createElement('div')
+      row.className = [BOTTOM_ROW, SECOND_ROW].map((selector) => selector.slice(1)).join(' ')
+      first.after(row)
+    }
+    return SECOND_ROW
+  }
+
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a
   // button added later needs refreshControls. Its onClick is left empty: listenForButton takes every
   // press before SudokuPad sees it.
-  function installButton (framework, app, mode, groups, colorOf) {
-    framework.addAuxButton({ name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, groups, colorOf), onClick () {} })
+  function installButton (framework, app, mode, groups, colorOf, row) {
+    framework.addControlButton({ parent: row, name: 'colorbydigit', title: buttonLabel(mode), content: iconHtml(mode, groups, colorOf), onClick () {} })
     app.refreshControls()
   }
 
@@ -897,7 +915,7 @@
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n')
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, LIGHTNESS_FACTOR, copiedSettings, pastedSettings, pasteReport, installButton, findOrMakeButtonRow, FULL_ROW, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, iconGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, renderPulldowns, renderTitle, renderProfiles, renderMenu, renderChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1513,7 +1531,7 @@
     addPreloadsOnce()
     const state = loadState()
     mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))
-    installButton(Framework, app, mode, iconGroups(state, mode), readColor)
+    installButton(Framework, app, mode, iconGroups(state, mode), readColor, findOrMakeButtonRow(document))
     labelButton()
     installCellColoring(app)
     listenForButton(app, openEditor)
