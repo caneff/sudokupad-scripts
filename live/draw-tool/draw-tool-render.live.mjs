@@ -32,7 +32,7 @@ const MOVES_PER_FRAME = 4
 const DRAG_BY = [0.5, 0.5]
 // One frame at 60 Hz.
 const FRAME_MS = 16
-// A note's place and the rectangle's corner are kept to a tenth of a pixel or unit, so a point can land a pixel off the pointer's.
+// A note's place and the rectangle's corner are kept to a hundredth of a pixel or unit, so a point can land off the pointer's.
 const POINTER_NEAR_PX = 1
 const near = (got, want) => got.every((v, i) => Math.abs(v - want[i]) <= POINTER_NEAR_PX)
 

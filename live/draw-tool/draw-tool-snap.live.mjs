@@ -97,7 +97,7 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     const gap = line + 2 - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX)
     const { left } = await dragBy(gap, 0.5)
     assert.equal(Math.abs(left - line) < NEAR_PX, true, `the outline's line ${left} is on the line ${line} before the release`)
-    assert.equal(Math.abs(await outlineLeft() - left) < 0.5 + 0.05, true, 'the release moved the outline by more than the half pixel that puts it on a whole device pixel')
+    assert.equal(Math.abs(await outlineLeft() - left) < draw.CRISP_HALF_PX + 0.05, true, 'the release moved the outline by more than the half pixel that puts it on a whole device pixel')
     const [at] = (await draw.saved(p)).filter((item) => item.kind === 'text' && item.text === '15').map((item) => item.at)
     await draw.reload(p)
     await draw.pickDraw(p)

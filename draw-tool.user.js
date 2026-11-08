@@ -230,7 +230,6 @@
   const FADE_IN_EASE = 'cubic-bezier(0, 0, 0, 1)'
   const FADE_OUT_EASE = 'cubic-bezier(0.3, 0, 1, 1)'
   const MOTION_OK = '(prefers-reduced-motion: no-preference)'
-  // A note fading out stays in its group until the fade ends, takes no pointer and is skipped by every redraw.
   const FADING_CLASS = 'draw-tool-fading'
   // An open note with no text yet shows a faint box.
   const EMPTY_CLASS = 'draw-tool-empty'
@@ -312,7 +311,7 @@
   }
 
   const roundToTenth = (value) => Math.round(value * 10) / 10
-  // A note's point is kept to a hundredth, fine enough to put its drawn left and top on a whole device pixel.
+  // A placed note's point is kept to a hundredth, fine enough to put its drawn left and top on a whole device pixel.
   const roundToHundredth = (value) => Math.round(value * 100) / 100
 
   const cross = ([ax, ay], [bx, by], [cx, cy]) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
@@ -1825,6 +1824,8 @@
   // Each color button shows "Aa" in its draw color, so a recolor follows.
   const hoverShare = (percent) => `color-mix(in srgb, ${PANEL_COLOR} min(100%, calc(${percent}% / var(${NOTE_OPACITY_VAR}))), transparent)`
   const hoverLook = (outlinePercent, fillPercent) => `outline: 1px solid ${hoverShare(outlinePercent)}; outline-offset: 2px; background-image: linear-gradient(${hoverShare(fillPercent)}, ${hoverShare(fillPercent)});`
+  // A closed note that is not selected, under Text Anywhere: the one that shows a hover outline.
+  const IDLE_NOTE = `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS})`
   const PANEL_CSS = [
     ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
@@ -1853,15 +1854,16 @@
     // The fill is a background image because the note's inline background color, empty or its box, wins over any stylesheet color.
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: move; }`,
     // The outline is there and clear until the pointer comes, so its color is what fades in.
-    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}) { outline: 1px solid transparent; outline-offset: 2px; }`,
-    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}):hover { ${hoverLook(35, 4)} }`,
+    `${IDLE_NOTE} { outline: 1px solid transparent; outline-offset: 2px; }`,
+    `${IDLE_NOTE}:hover { ${hoverLook(35, 4)} }`,
     `.${TEXT_CLASS}.${FADING_CLASS} { pointer-events: none !important; }`,
     `.${TEXT_BOX_CLASS}.${EMPTY_CLASS} { min-width: 1em; outline: 1px solid color-mix(in srgb, currentColor 30%, transparent); }`,
     `html.${HELD_CURSOR_CLASS}, html.${HELD_CURSOR_CLASS} * { cursor: var(${HELD_CURSOR_VAR}) !important; }`,
     `@media ${MOTION_OK} {`,
-    `  .${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}):hover { transition: outline-color ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
+    `  ${IDLE_NOTE}:hover { transition: outline-color ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
     `  .${HANDLE_CLASS} { transition: opacity ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
-    `  .${TEXT_CLASS}.${FADING_CLASS} { transition: opacity ${FADE_OUT_MS}ms ${FADE_OUT_EASE}; }`,
+    // Important, since the pointer is still over the note when it starts to fade, and the hover rule's own transition would win.
+    `  .${TEXT_CLASS}.${FADING_CLASS} { transition: opacity ${FADE_OUT_MS}ms ${FADE_OUT_EASE} !important; }`,
     '}',
     `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
@@ -2598,8 +2600,9 @@
       showEditing(boardMap())
     } else if (drawing[index].box) {
       drawing[index] = autoSized(drawing[index])
-      saveNotes()
       renderDrawing()
+      snapToPixels([index])
+      saveNotes()
     }
   }
 
@@ -2736,7 +2739,7 @@
     return removed
   }
 
-  // The Delete key deletes at once; a keyboard action is not animated.
+  // Deletes the selected notes, which fade out unless `fade` is false.
   function deleteSelected (fade = true) {
     const gone = selected
     keepItems((_, i) => !gone.includes(i), fade)
@@ -2826,14 +2829,16 @@
     const before = index === -1 ? '' : drawing[index].text
     const typed = typedText(element)
     const text = typed === before ? typed : closedSymbols(typed)
+    const resized = index !== -1 && String(item.box) !== String(drawing[index].box)
     const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
       else drawing[index] = { ...item, text }
-      saveNotes()
     }
     renderDrawing()
+    if (changed && resized && text !== '') snapToPixels([index])
+    if (changed) saveNotes()
     showPanelValues()
   }
 
@@ -3052,7 +3057,8 @@
     keepDrawnPoints(selected, map)
     nudged = true
     redraw()
-    snapToPixels(selected)
+    // Below one device pixel a nudge is finer than the grid, and rounding to it would take a tap back to where it began.
+    if (NUDGE_PX * window.devicePixelRatio >= 1) snapToPixels(selected)
   }
 
   function saveNudge () {

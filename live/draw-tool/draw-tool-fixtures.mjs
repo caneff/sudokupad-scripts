@@ -51,8 +51,11 @@ export const FRAME_KEY = 'DrawTool_frame'
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
-// How far a release may move a note to put its left and top on whole device pixels: half a pixel on each axis.
-export const CRISP_PX = Math.hypot(0.5, 0.5)
+// How far a release may move a note to put its left and top on whole device pixels: half a pixel on each axis, and the two together.
+export const CRISP_HALF_PX = 0.5
+export const CRISP_PX = Math.hypot(CRISP_HALF_PX, CRISP_HALF_PX)
+// The resize handles on a note alone selected or open.
+export const HANDLES = '#draw-tool-layer .draw-tool-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
 export const SETTINGS_EDITOR = '#draw-tool-dialog'
