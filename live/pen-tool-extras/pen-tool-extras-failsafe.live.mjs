@@ -81,7 +81,7 @@ const CASES = [
     off: 'marks',
     warns: changed('marks'),
     edgeAgain: null,
-    source: planted('      if (isEdgeActs(queued)) {\n', "        throw new Error('planted in the click wrapper')\n")
+    source: planted('      if (planner !== null) {\n', "        throw new Error('planted in the click wrapper')\n")
   },
   // A throw in the render wrapper's own code, after SudokuPad's renderPen has drawn the mark.
   {
