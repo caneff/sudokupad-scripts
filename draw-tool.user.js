@@ -1526,12 +1526,17 @@
     return row
   }
 
+  // What each slider reads its value as, how it changes a note, and how it sets the next note.
+  const SLIDER_LOOKS = {
+    [SIZE_SLIDER]: { read: readWidth, change: (value) => (item) => ({ ...item, size: textSizeFor(value) }), setNext: setSize },
+    [OPACITY_SLIDER]: { read: readOpacity, change: (value) => (item) => ({ ...item, opacity: value }), setNext: setOpacity }
+  }
+
   // A move of a slider sets the open note's look, else the selected notes', else the next note's; a new open note's also becomes the next note's.
   function slideLook (input) {
-    const isSize = input.id === SIZE_SLIDER
-    const value = isSize ? readWidth(Number(input.value)) : readOpacity(Number(input.value))
-    const change = isSize ? (item) => ({ ...item, size: textSizeFor(value) }) : (item) => ({ ...item, opacity: value })
-    const setNext = isSize ? setSize : setOpacity
+    const { read, change: changeWith, setNext } = SLIDER_LOOKS[input.id]
+    const value = read(Number(input.value))
+    const change = changeWith(value)
     if (editing) changeOpen(change, () => setNext(value))
     else if (selected.length) changeSelected(change)
     else setNext(value)
@@ -2113,7 +2118,7 @@
   // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
   // pointer is released, even when the slider did not move.
   function keepNoteFocus (event) {
-    if (editing && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS}`)) event.preventDefault()
+    if (editing && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS} input`)) event.preventDefault()
   }
 
   // A drag ends its move or its selection rectangle on its release; a press that never moved does nothing more, unless `click` is given to run it.

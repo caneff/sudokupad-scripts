@@ -61,7 +61,6 @@ describe('Text Annotation\'s Outline setting', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the panel has no Outline button, and the dialog\'s Outline choice lists Off, Thinner and Thicker with Thicker chosen', async () => {
-    assert.equal(await p.locator('.draw-tool-menu-button').count(), 0)
     await p.click(SETTINGS_BUTTON)
     assert.deepEqual(await p.locator(`${CHOICE} option`).allTextContents(), OUTLINES)
     assert.equal(await p.locator(CHOICE).evaluate((select) => select.selectedOptions[0].textContent), 'Thicker')

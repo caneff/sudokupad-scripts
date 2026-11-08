@@ -123,6 +123,17 @@ describe('Text Annotation\'s Size and Transparency sliders', { concurrency: fals
     assert.deepEqual([await stored(WIDTH_KEY), await stored(OPACITY_KEY)], [12, 60], 'the next-note values are unchanged')
   })
 
+  it('a press on the sliders\' own padding, off both sliders, leaves an open note open with the focus in it', async () => {
+    await p.mouse.dblclick(...await gridPoint(p, A))
+    assert.equal(await p.locator(TEXT_BOX).count(), 1)
+    const box = await p.locator(SLIDERS).boundingBox()
+    await p.mouse.click(box.x + 4, box.y + box.height / 2)
+    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
+    await p.keyboard.type('Q')
+    assert.match(await p.locator(TEXT_BOX).textContent(), /Q$/)
+    await p.keyboard.press('Escape')
+  })
+
   it('a note saved with a size off the old menu\'s six keeps it, and a next-note size saved off them is kept as it is', async () => {
     await draw.plantDrawing(p, [{ kind: 'text', color: 1, size: 23, opacity: 100, text: 'odd', at: [96, 96] }])
     await p.evaluate(([key, value]) => Framework.setData(key, value), [WIDTH_KEY, 7.5])

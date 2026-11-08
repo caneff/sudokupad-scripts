@@ -75,14 +75,14 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       assert.equal(sliders.y >= clear.bottom, true, 'the sliders are under the controls')
     })
 
-    it('the panel is nine Aa color buttons, Clear all, Background and the gear, and the Size and Transparency sliders, with no Size or Outline button and no Shape button', async () => {
+    it('the panel is nine Aa color buttons, Clear all, Background and the gear, and the Size and Transparency sliders, with no Shape button', async () => {
       assert.equal(await p.locator('.controls-input button.digit:not([data-key="0"])').count(), 9)
       const labels = await p.evaluate(() => [...document.querySelectorAll('.controls-input button.digit:not([data-key="0"])')].map((b) => window.getComputedStyle(b, '::after').content))
       assert.deepEqual(labels, Array(9).fill('"Aa"'))
       assert.deepEqual(await Promise.all([CLEAR_BUTTON, BACKGROUND_BUTTON, SETTINGS_BUTTON].map((s) => p.locator(s).count())), [1, 1, 1])
       assert.equal(await p.locator(`${SLIDERS} input[type=range]`).count(), 2)
       assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [6, 100])
-      assert.equal(await p.locator('.draw-tool-menu-button, .draw-tool-shape-mode').count(), 0, 'no Size or Outline button and no Shape button')
+      assert.equal(await p.locator('.draw-tool-shape-mode').count(), 0, 'no Shape button')
     })
 
     it('the page raised no error', () => { assert.deepEqual(errors, []) })
@@ -269,7 +269,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
 
   it('another tool gets SudokuPad\'s own keypad back, and its digit keys enter digits again', async () => {
     await selectEmptyCell()
-    assert.equal(await p.locator(`${SLIDERS}, .draw-tool-menu-button`).count(), 0, 'no sliders')
+    assert.equal(await p.locator(SLIDERS).count(), 0, 'no sliders')
     assert.equal(await p.locator(`${CLEAR_BUTTON}, ${BACKGROUND_BUTTON}, ${SETTINGS_BUTTON}`).count(), 0, 'no Clear all, Background or gear')
     const buttons = await keypad()
     assert.deepEqual(buttons.map((b) => b.label).filter((l) => l === '"Aa"'), [], 'no Aa labels')

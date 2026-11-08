@@ -71,15 +71,17 @@ export async function holdForPickers (p, selector, button, state) {
 export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
 
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
+// The slider thumb's width in rem, as lib/panel.js's SLIDER_THUMB_REM draws it.
+const SLIDER_THUMB_REM = 1.1
 // A slider's value.
 export const valueOf = (p, slider) => p.evaluate((selector) => Number(document.querySelector(selector).value), slider)
 // Presses on `slider`'s track where `value` lies and releases, with real mouse input. The thumb's centre runs from half a thumb in from each end of the track.
 export async function slideTo (p, slider, value) {
-  const { box, min, max, thumb } = await p.evaluate((selector) => {
+  const { box, min, max, thumb } = await p.evaluate(([selector, rem]) => {
     const input = document.querySelector(selector)
     const { x, y, width, height } = input.getBoundingClientRect()
-    return { box: { x, y, width, height }, min: Number(input.min), max: Number(input.max), thumb: 1.1 * parseFloat(window.getComputedStyle(document.documentElement).fontSize) }
-  }, slider)
+    return { box: { x, y, width, height }, min: Number(input.min), max: Number(input.max), thumb: rem * parseFloat(window.getComputedStyle(document.documentElement).fontSize) }
+  }, [slider, SLIDER_THUMB_REM])
   const x = box.x + thumb / 2 + (box.width - thumb) * (value - min) / (max - min)
   await p.mouse.click(x, box.y + box.height / 2)
 }

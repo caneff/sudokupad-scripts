@@ -15,6 +15,7 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { openDrawPage } from './draw-tool-screenshot-page.mjs'
+import { slideTo, valueOf } from '../../../live/draw-tool/draw-tool-fixtures.mjs'
 
 const out = (name) => new URL(`./draw-tool-slide-${name}.png`, import.meta.url).pathname
 const DRAG_STEPS = 10
@@ -60,15 +61,11 @@ async function scene () {
   const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
   const clipRect = () => ({ x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
   const items = () => p.locator(NOTES).count()
-  // Sets the Size slider to the text size `size` (2 x width + 8) with a click on its track, where the thumb's centre runs from half a thumb in from each end.
+  // Sets the Size slider to the text size `size` (2 x width + 8), then checks it landed.
   const pickSize = async (size) => {
-    const { box, min, max, thumb } = await p.evaluate(() => {
-      const input = document.querySelector('#draw-tool-size')
-      return { box: input.getBoundingClientRect().toJSON(), min: Number(input.min), max: Number(input.max), thumb: 1.1 * parseFloat(window.getComputedStyle(document.documentElement).fontSize) }
-    })
     const width = (size - 8) / 2
-    await p.mouse.click(box.x + thumb / 2 + (box.width - thumb) * (width - min) / (max - min), box.y + box.height / 2)
-    const set = await p.evaluate(() => Number(document.querySelector('#draw-tool-size').value))
+    await slideTo(p, '#draw-tool-size', width)
+    const set = await valueOf(p, '#draw-tool-size')
     if (set !== width) throw new Error(`the Size slider is at ${set}, not ${width}`)
   }
   const pick = (color, size) => p.click(`.controls-input button[data-key="${color}"]`).then(() => pickSize(size))

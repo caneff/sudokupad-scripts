@@ -456,7 +456,7 @@ test('a mixed selection shows no color or background state where its notes diffe
 })
 
 test('a saved transparency reads back for any slider value, and a missing or bad one reads as the default', () => {
-  assert.equal([MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY].every((v) => readOpacity(v) === v), true)
+  for (const saved of [MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY]) assert.equal(readOpacity(saved), saved)
   assert.equal(readOpacity(55), 55)
   for (const saved of [null, undefined, 0, 19, 101, 57, '60', 'faint', {}, NaN]) assert.equal(readOpacity(saved), DEFAULT_OPACITY, JSON.stringify(saved))
 })
