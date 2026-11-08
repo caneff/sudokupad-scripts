@@ -10,6 +10,7 @@ const { SLIDERS, TEXT_BOX, pickDraw } = draw
 const WINDOW = { width: 1920, height: 1080 }
 // SudokuPad's own rules pane is 14rem wide (224px at the default font): wider is the resizer's doing.
 const SUDOKUPAD_RULES_PX = 224
+const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -25,7 +26,7 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     return [b.x + b.width / 2, b.y + b.height / 2]
   })
   // Every point of the controls box with a plain, background-less, text-less div under it: no visible control is there.
-  const emptySpots = () => p.evaluate(() => {
+  const emptySpots = () => p.evaluate((transparent) => {
     const box = document.querySelector('#controls').getBoundingClientRect()
     const spots = []
     for (let y = box.y + 2; y < box.bottom; y += 6) {
@@ -34,16 +35,16 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
         const plain = (e) => {
           const s = window.getComputedStyle(e)
           const ownText = [...e.childNodes].some((n) => n.nodeType === window.Node.TEXT_NODE && n.textContent.trim())
-          return e.tagName === 'DIV' && !ownText && s.backgroundColor === 'rgba(0, 0, 0, 0)' && s.backgroundImage === 'none'
+          return e.tagName === 'DIV' && !ownText && s.backgroundColor === transparent && s.backgroundImage === 'none'
         }
         if (stack.length && stack.every(plain)) spots.push({ at: [x, y], target: `${stack[0].tagName}.${stack[0].className}` })
       }
     }
     return spots
-  })
+  }, TRANSPARENT)
 
   before(async () => {
-    ;({ context, p, errors } = await openWithAllScripts(browser, { contextOptions: { viewport: WINDOW } }))
+    ;({ context, p, errors } = await openWithAllScripts(browser, { contextOptions: { viewport: WINDOW, permissions: ['clipboard-write'] } }))
     await setLongRules(p)
     await pickDraw(p)
   })
@@ -68,6 +69,14 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     assert.deepEqual(failed, [], 'presses on these empty targets started no note')
   })
 
+  it('a press just below the widened rules pane opens a note', async () => {
+    const [x, y] = await p.locator('.puzzle-rules').evaluate((e) => { const b = e.getBoundingClientRect(); return [b.x + b.width / 2, b.bottom + 1] })
+    assert.ok((await p.evaluate(([px, py]) => document.elementFromPoint(px, py).closest('#controls') !== null, [x, y])), 'the point is inside the controls box')
+    await p.mouse.click(x, y)
+    assert.equal(await boxOpen(), true, 'a note opened below the rules')
+    await closeBox()
+  })
+
   it('a press on empty space in Text Anywhere\'s own panel, over its fill, does not open a note', async () => {
     // A point where the sliders' own transparent div is the target, with the tray's fill drawn under it.
     const at = await p.locator(SLIDERS).evaluate((sliders) => {
@@ -83,7 +92,8 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
   })
 
   it('a press on a tool button, the rules text or the timer (which pauses with its own dialog) does not open a note', async () => {
-    for (const selector of ['#control-draw', '.puzzle-rules', '.timer']) {
+    // The footer is a transparent div with text, the rules-copy icon a transparent div with a picture: each is a control.
+    for (const selector of ['#control-draw', '.puzzle-rules', '.controls-footer', '.rules-copy', '.timer']) {
       await p.mouse.click(...await centerOf(selector))
       assert.equal(await boxOpen(), false, `${selector} opened a note`)
     }

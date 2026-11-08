@@ -1783,9 +1783,9 @@
   // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
   const ABOVE_NOTES = '.dialog-overlay, #appmenu'
 
-  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer, an open dialog and the rules pane with its scroll bar.
-  const CONTROLS = `.topbar, ${ABOVE_NOTES}, .puzzle-rules, button, a, input, select, textarea`
-  // The controls column's box is larger than what is drawn in it: a div with no text, fill or picture of its own is only layout.
+  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer and an open dialog.
+  const CONTROLS = `.topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`
+  // The control panel's box is larger than what is drawn in it: a div with no text, fill or picture of its own is only layout.
   const CONTROLS_BOX = '#controls'
   const isLayoutOnly = (element) => {
     if (element.tagName !== 'DIV') return false
@@ -1797,8 +1797,8 @@
   const overControl = (event) => {
     if (!(event.target instanceof window.Element)) return false
     if (event.target.closest(CONTROLS) !== null) return true
-    if (event.target.closest(CONTROLS_BOX) === null) return false
-    const box = document.querySelector(CONTROLS_BOX)
+    const box = event.target.closest(CONTROLS_BOX)
+    if (box === null) return false
     return document.elementsFromPoint(event.clientX, event.clientY).some((element) => box.contains(element) && !isLayoutOnly(element))
   }
 

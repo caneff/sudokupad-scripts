@@ -86,9 +86,9 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     }
   })
 
-  // SudokuPad keeps a press on its panel or in a dialog from reaching any tool; a press on the top bar does reach Text
-  // Annotation, and only the script's own check of the controls keeps it from starting a note there.
-  it('a click on the controls\' blank space, on the top bar or in an open dialog starts no note', async () => {
+  // SudokuPad keeps a press in a dialog from reaching any tool; a press on the top bar, or on a drawn part of the control panel, does reach Text
+  // Anywhere, and only the script's own check of the controls keeps it from starting a note there.
+  it('a click beside the undo button, on the top bar or in an open dialog starts no note', async () => {
     const before = await saved()
     const controls = await p.locator('#controls').boundingBox()
     const undo = await p.locator('#control-undo').boundingBox()
