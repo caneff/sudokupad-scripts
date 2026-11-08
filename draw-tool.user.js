@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.38.0
+// @version      0.38.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.38.0'
+  const VERSION = '0.38.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -365,19 +365,20 @@
   }
 
   const BULLET_MARK = /^[-*] /
-  const CHECK_MARK = /^- \[([ xX])\] /
+  // Optional `- ` or `* `, then `[ ]`, `[]`, `[x]` or `[X]`, then a space or the end of the line, so an empty item still matches once `closedText` has dropped its trailing space.
+  const CHECK_MARK = /^([-*] )?\[([ xX]?)\](?: |$)/
   // A bullet line's first run is the bullet itself, `{ text: '•', bullet: true }`. A checklist line takes the bullet's place with `{ text: '☐' | '☑', bullet: true, checked }`.
   function parseBlock (line) {
     const check = CHECK_MARK.exec(line)
     if (check) {
-      const checked = check[1] !== ' '
+      const checked = check[2] !== '' && check[2] !== ' '
       return [{ text: checked ? '☑' : '☐', bullet: true, checked }, ...parseLine(line.slice(check[0].length))]
     }
     return BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
   }
 
   function toggledCheck (text, index) {
-    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, state) => `- [${state === ' ' ? 'x' : ' '}] `) : line).join('\n')
+    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, dash = '', state) => `${dash}[${state === '' || state === ' ' ? 'x' : ' '}]${mark.endsWith(' ') ? ' ' : ''}`) : line).join('\n')
   }
 
   // Symbols typed as ASCII. `sum` is a word of its own, so "summary" stays.
