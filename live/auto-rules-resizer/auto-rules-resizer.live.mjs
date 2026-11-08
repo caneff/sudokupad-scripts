@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
-import { openPenTool, penEntries } from '../pen.mjs'
+import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 
@@ -243,14 +243,11 @@ describe('a press on the left of a font button (#521)', { concurrency: false }, 
   })
   after(async () => { await context.close() })
 
-  it('reaches no tool on the board: the pen tool drew an X on the grid\'s right edge', async () => {
+  it('adds no pen mark: the pen tool used to draw an X on the grid\'s right edge', async () => {
     await hoverPane(p)
     await p.locator(FONT_BAR).waitFor({ state: 'visible' })
-    const box = await p.locator(`${FONT_BAR} button`, { hasText: 'f+' }).boundingBox()
-    await p.mouse.click(box.x + 3, box.y + box.height / 2)
-    // A sleep, allowed here: a "nothing happened in N ms" check.
-    await p.waitForTimeout(300)
-    assert.deepEqual(await penEntries(p), [])
+    const { added } = await clickLeftEdge(p, `${FONT_BAR} button:first-child`)
+    assert.deepEqual(added, [])
   })
 })
 

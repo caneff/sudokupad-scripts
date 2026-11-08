@@ -8,18 +8,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
-import { openPenTool, PAGE_BUTTON, padValues, penEntries } from '../pen.mjs'
+import { clickLeftEdge, openPenTool, PAGE_BUTTON, padValues } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const MODE_BUTTON = '.pen-tool-extras-mode'
 const SETTINGS_BUTTON = '.pen-tool-extras-settings'
 const EDITOR = '#pen-tool-extras-editor'
-// A click at the button's centre passes without the fix; the leak is in the part left of the grid's column 10.
-const LEFT_EDGE_PX = 3
-// How long the grid gets to show a mark that a click drew; a "nothing happened" check.
-const NO_MARK_MS = 300
-
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
@@ -28,14 +23,10 @@ describe('a click on the left of a Pen Tool Extras panel button', { concurrency:
   let context, p
 
   const lineMode = () => p.evaluate(() => ToolPen.tool.lineMode)
-  const clickLeftEdge = async (selector) => {
-    const box = await p.locator(selector).boundingBox()
-    await p.mouse.click(box.x + LEFT_EDGE_PX, box.y + box.height / 2)
-  }
-  const assertNoMark = async () => {
-    // A sleep, allowed here: a "nothing happened in N ms" check.
-    await p.waitForTimeout(NO_MARK_MS)
-    assert.deepEqual(await penEntries(p), [])
+  // The page and settings buttons sit more than a cell beyond the grid at this size, where a leaked press marks nothing, so what is asserted is that no `mousedown` reaches `window`.
+  const assertStopped = ({ added, leaked }) => {
+    assert.deepEqual(added, [])
+    assert.equal(leaked, 0, 'mousedowns that reached window')
   }
 
   before(async () => {
@@ -48,28 +39,28 @@ describe('a click on the left of a Pen Tool Extras panel button', { concurrency:
   })
   after(async () => { await context.close() })
 
-  it('on the line mode button changes the mode and adds no pen mark', async () => {
+  it('on the line mode button changes the mode and reaches no board', async () => {
     const before = await lineMode()
-    await clickLeftEdge(MODE_BUTTON)
+    const result = await clickLeftEdge(p, MODE_BUTTON)
     assert.equal(await settle(async () => (await lineMode()) !== before, true), true, 'the mode changed')
-    await assertNoMark()
+    assertStopped(result)
   })
 
-  it('on the page button turns the page and adds no pen mark', async () => {
+  it('on the page button turns the page and reaches no board', async () => {
     await p.locator(PAGE_BUTTON).waitFor({ state: 'visible' })
     const before = await padValues(p)
-    await clickLeftEdge(PAGE_BUTTON)
+    const result = await clickLeftEdge(p, PAGE_BUTTON)
     assert.equal(await settle(async () => (await padValues(p)) !== before, true), true, 'the page turned')
-    await assertNoMark()
+    assertStopped(result)
   })
 
-  it('on the settings button opens the dialog and adds no pen mark', async () => {
-    await clickLeftEdge(SETTINGS_BUTTON)
+  it('on the settings button opens the dialog and reaches no board', async () => {
+    const result = await clickLeftEdge(p, SETTINGS_BUTTON)
     await p.locator(EDITOR).waitFor({ state: 'visible' })
     // SudokuPad ignores a key until the zero-delay timer of showDialog has fired; a timer set after it fires after it.
     await p.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)))
     await p.keyboard.press('Escape')
     await p.locator(EDITOR).waitFor({ state: 'detached' })
-    await assertNoMark()
+    assertStopped(result)
   })
 })
