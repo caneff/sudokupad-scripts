@@ -220,6 +220,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await openPenTool(p)
     })
 
+    it('a pointer that leaves the grid right after a click leaves no ghost and no faded mark behind', async () => {
+      await restartPuzzle(p)
+      await selectPenOnPage(1, 3)
+      for (let click = 0; click < 4; click++) {
+        await p.mouse.click(...await gridPoint(p, [3.5, 4.0]))
+        await p.mouse.move(5, 5)
+        await p.mouse.click(5, 5) // a click off the grid, or the next press draws nothing
+      }
+      // four steps in, the next click would clear the mark: that is the state the leaving pointer must not leave faded
+      assert.equal(await settle(() => penEntries(p).then((all) => all.length), 1), 1, 'one mark after four clicks')
+      await sleep(200) // "nothing happened in 200 ms" check: the release's own refresh has had its turn
+      assert.equal(await ghostOf(), null, 'no ghost')
+      assert.deepEqual(await fadedStrokes(), [], 'no faded mark')
+      await undoAll()
+    })
+
     it('a ghost is drawn at most once per 32 ms of moves: a burst of moves leaves the one ghost of the last point', async () => {
       await restartPuzzle(p)
       await selectPenOnPage(1, 3)

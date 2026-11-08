@@ -1827,6 +1827,7 @@
     let timer = null
     let latest = null
     let lastAt = -Infinity
+    let moves = 0
     const hide = () => {
       clearTimeout(timer)
       timer = null
@@ -1860,14 +1861,18 @@
     }
     window.addEventListener('pointermove', guarded((event) => {
       latest = event
+      moves++
       if (timer !== null) return
       timer = setTimeout(guarded(() => { timer = null; lastAt = performance.now(); update(latest) }), Math.max(0, lastAt + PREVIEW_EVERY_MS - performance.now()))
     }), true)
     window.addEventListener('pointerdown', guarded(hide), true)
     window.addEventListener('keydown', guarded(hide), true)
     document.documentElement.addEventListener('pointerleave', guarded(hide))
-    // SudokuPad stores a click on `mouseup`, after the `pointerup`.
-    window.addEventListener('mouseup', guarded((event) => setTimeout(guarded(() => update(event)))), true)
+    // SudokuPad stores a click on `mouseup`, after the `pointerup`. A pointer that has moved since is the move's to place, not the release's.
+    window.addEventListener('mouseup', guarded((event) => {
+      const movesAtRelease = moves
+      setTimeout(guarded(() => { if (moves === movesAtRelease) update(event) }))
+    }), true)
   }
 
   // 7. Right click erase
