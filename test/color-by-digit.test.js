@@ -915,7 +915,10 @@ function fire (type, inside = {}, extra = {}) {
 const BUTTON_SELECTOR = '#control-colorbydigit'
 const press = () => { fire('pointerdown', { [BUTTON_SELECTOR]: {} }); fire('pointerup', { [BUTTON_SELECTOR]: {} }) }
 // A click on a profile menu row: `target` is 'cells' or 'digits'.
-const pickRow = (target, index) => fire('click', { '#color-by-digit-menu [data-act]': { dataset: { act: 'pick', target, index: String(index) } } })
+const pickRow = (target, index) => {
+  const row = { dataset: { act: 'pick', target, index: String(index) }, style: {}, closest: () => row }
+  return fire('click', { '#color-by-digit-menu [data-act]': row })
+}
 
 const pageWindow = () => ({ getComputedStyle: () => ({ getPropertyValue: () => '#3e63dd', color: 'rgb(62, 99, 221)' }), addEventListener: () => {}, MutationObserver: class { observe () {} } })
 
@@ -1486,7 +1489,7 @@ test('the editor and the profile list carry inline only the styles that depend o
 })
 
 test('the stylesheet scopes every rule to the editor, the dialog and its options row, or Color by Digit\'s own classes', () => {
-  const selectors = [...STYLE_CSS.matchAll(/^([^{}\n]+) \{/gm)].flatMap((m) => m[1].split(', '))
+  const selectors = [...STYLE_CSS.matchAll(/^ *([^{}@\n]+) \{/gm)].flatMap((m) => m[1].split(', '))
   assert.ok(selectors.length > 20)
   const scope = /^(#color-by-digit-editor|#color-by-digit-menu|\.dialog:has\(#color-by-digit-editor\)|\.cbd-)/
   assert.deepEqual(selectors.filter((s) => !scope.test(s)), [])

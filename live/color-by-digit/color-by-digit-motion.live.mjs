@@ -27,7 +27,7 @@ const alphaOf = (color) => Number(/(?:,|\/)\s*([\d.]+)\)$/.exec(color)[1])
 // Records the menu's look at every change inside it, so a fade that lasts 100 ms is read without racing it.
 const watchMenu = (p) => p.evaluate((menuSelector) => {
   window.menuSeen = []
-  new MutationObserver(() => {
+  new window.MutationObserver(() => {
     const menu = document.querySelector(menuSelector)
     if (!menu) return
     const style = window.getComputedStyle(menu)

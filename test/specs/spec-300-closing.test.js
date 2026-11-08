@@ -65,7 +65,7 @@ test('spec 300: the Color by Digit settings dialog edits a selected profile in t
   assert.equal(count(paint, /<select [^>]*data-role="color-choice"/g), 1)
   assert.equal(count(paint, /data-act="digit"/g), 10)
   assert.equal(count(paint, /aria-pressed="true"/g), 1)
-  assert.match(paint, /data-digit="1" data-key="a3" style="background:#a3"/)
+  assert.match(paint, /data-digit="1" data-key="a3" style="background:color-mix\(in srgb, #a3 60%, transparent\)"/)
   assert.match(paint, /data-digit="0" data-key=""/)
   assert.doesNotMatch(paint, /data-act="(open|remove|add-group)"|data-role="numpad"/)
   assert.deepEqual(byDigit.paintDigit(LOW_HIGH, '1', 'a4').map((g) => g.digits), [['1', '5'], ['2', '3', '4'], ['6', '7', '8', '9']])
