@@ -198,6 +198,62 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
+  // The plant removes the size slider while the panel stays on the page, so showPanelValues throws; the page errors it causes are taken out of `errors` and checked here.
+  const plantRedrawFailure = () => p.evaluate((slider) => document.querySelector(slider).remove(), draw.SIZE_SLIDER)
+  const planted = (first) => {
+    const raised = errors.splice(first)
+    assert.match(raised.join('\n'), /TypeError/, 'the plant made the redraw throw')
+  }
+  const selectNote = async () => {
+    await draw.plantDrawing(p, [NOTE])
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    await pickDraw()
+    await p.locator(TEXTS).click()
+  }
+
+  it('a note is stored before the panel redraw, so a redraw that throws never loses it', async () => {
+    await reload()
+    await pickDraw()
+    await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+    await p.keyboard.type('15')
+    await plantRedrawFailure()
+    const first = errors.length
+    await p.keyboard.press('Escape')
+    assert.deepEqual((await saved()).map((item) => item.text), ['15'], 'stored before the redraw failed')
+    planted(first)
+    await reload()
+    assert.deepEqual(await settle(texts, ['15']), ['15'])
+    await restartFromDialog()
+  })
+
+  it('a recolor and a delete of a selected note are stored before the panel redraw', async () => {
+    await selectNote()
+    await plantRedrawFailure()
+    let first = errors.length
+    await p.click(`${draw.KEYPAD} button[data-key="6"]`)
+    assert.deepEqual((await saved()).map((item) => item.color), [6], 'the recolor is stored')
+    planted(first)
+    first = errors.length
+    await p.keyboard.press('Delete')
+    assert.equal(await saved(), null, 'the delete is stored')
+    planted(first)
+    await reload()
+    await restartFromDialog()
+  })
+
+  it('a panel that is not on the page is not redrawn: typing a note raises no error', async () => {
+    await reload()
+    await pickDraw()
+    const first = errors.length
+    await p.evaluate(([tray, sliders]) => { document.querySelector(tray).remove(); document.querySelector(sliders).remove() }, [draw.TRAY, draw.SLIDERS])
+    await typeText([2.5, 2.5], '15')
+    assert.deepEqual(await texts(), ['15'])
+    assert.deepEqual((await saved()).map((item) => item.text), ['15'])
+    assert.deepEqual(errors.slice(first), [])
+    await restartFromDialog()
+  })
+
   // Loads the puzzle on the page again through the page's own loader, as a puzzle with `id`, in place and with no reload.
   const openPuzzleAs = async (id) => {
     await p.addScriptTag({ content: 'window.pageLoader = PuzzleLoader' })
