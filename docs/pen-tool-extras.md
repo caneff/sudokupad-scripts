@@ -30,7 +30,7 @@ Pen Tool Extras in SudokuPad's settings, or the settings button in the pen panel
 3. **Marks to cycle** (left, below): one table, rows Edge and Corner, columns X, circle and up and down arrow heads (Directions).
 4. **Other** (right, below): White outlines (with Outline width under it) and Right click erase.
 
-The title row ends with two icon buttons, Copy settings (two overlapping squares) and Paste settings (a clipboard); their status message shows to their left. Under the grid, one row of buttons: Restore defaults as small underlined text at the left, Cancel and Save at the right. Every slider and box in it is a draft that takes effect on Save, and Cancel leaves what was in force. All five sliders start at the same x and are 96px long. On a screen too narrow for two columns, the sections stack in one column in the same order.
+The title row ends with two icon buttons, Copy settings (two overlapping squares) and Paste settings (a clipboard); their status message shows to their left. Under the grid, one row of buttons: Save and Cancel at the left, then Restore defaults as small underlined text at the right. Every slider and box in it is a draft that takes effect on Save, and Cancel leaves what was in force. All five sliders start at the same x and are 96px long. On a screen too narrow for two columns, the sections stack in one column in the same order.
 
 ## Colors
 
