@@ -2953,7 +2953,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     ].join('\n')
   }
 
-  // Under the script's own settings: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
+  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
   function renderErrorLogRow (prefix) {
     return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
@@ -3067,8 +3067,9 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
-        { tag: 'text', innerHTML: renderErrorLogRow(prefix) },
-        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) },
+        // Below the footer, so the script's own layout still runs down to the footer line.
+        { tag: 'text', innerHTML: renderErrorLogRow(prefix) }
       ]
     })
     const body = doc.getElementById(bodyId)
