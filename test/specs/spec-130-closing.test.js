@@ -56,8 +56,8 @@ test('Pen Tool Extras holds spec 130 together', () => {
   }
 
   // Missing SudokuPad pieces are named: an app with nothing holds back every step with a requirement.
-  const lacking = [...extras.lackingInternals({}, undefined).values()].flat().sort()
-  assert.deepEqual(lacking, ['arrowLines', 'colors', 'dragHint', 'lineErase', 'marks', 'pages', 'penPanel'])
+  const lacking = [...extras.lackingInternals(Object.entries(extras.penRequirements({}, undefined, {}))).keys()].sort()
+  assert.deepEqual(lacking, ['arrowLines', 'colorSave', 'colors', 'dragHint', 'lineErase', 'marks', 'pages', 'penPanel', 'settings', 'settingsEntry'])
 
   // Saved mark settings under the old names load under the new ones, keeping their values.
   const marks = extras.normalizeMarkSettings({ dot: false, cornerDot: false })
