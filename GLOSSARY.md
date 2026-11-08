@@ -218,7 +218,7 @@
   since a note saves the number. The digit keys 1 to 9 pick one. A color button shows "Aa" in its color.
 - **text** (a note) — a short string typed onto the notes, in a note color, with its own size and opacity (the **Size slider** and **Transparency slider** set them; a saved note keeps its own), starting at the
   point clicked: its stored point is the top left of its text. It is typed in place, in the **text box**: the note's own element, open for typing, which a click anywhere
-  on the page but SudokuPad's controls (the control panel, the top bar, the menu and an open dialog) opens while nothing is
+  on the page but SudokuPad's controls (what is drawn in the control panel, the top bar, the menu and an open dialog; the panel's empty space opens one) opens while nothing is
   **selected**, and a double-click on a text reopens. A text put on the board is pinned to its cells (stored in board units under `at`); one put off the board is
   fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). When the window puts a fixed text's box partly past its edge, the text is drawn at the nearest point wholly inside the window, and its saved point stays as it was, so it is
   back in its own place once the window or layout allows; only the solver's own move or resize saves a new point. Both are drawn at the

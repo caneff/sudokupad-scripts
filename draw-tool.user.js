@@ -1845,9 +1845,24 @@
   // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
   const ABOVE_NOTES = '.dialog-overlay, #appmenu'
 
-  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the control panel, the top bar, the menu drawer and an open dialog.
-  const CONTROLS = `#controls, .topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`
-  const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
+  // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the top bar, the menu drawer and an open dialog.
+  const CONTROLS = `.topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`
+  // The control panel's box is larger than what is drawn in it: a div with no text, fill or picture of its own is only layout.
+  const CONTROLS_BOX = '#controls'
+  const isLayoutOnly = (element) => {
+    if (element.tagName !== 'DIV') return false
+    const style = window.getComputedStyle(element)
+    const ownText = [...element.childNodes].some((node) => node.nodeType === window.Node.TEXT_NODE && node.textContent.trim() !== '')
+    return !ownText && style.backgroundColor === 'rgba(0, 0, 0, 0)' && style.backgroundImage === 'none'
+  }
+  // Inside the controls box, a press is on a control when anything drawn under the pointer there is not layout only (a panel's fill sits under its empty divs).
+  const overControl = (event) => {
+    if (!(event.target instanceof window.Element)) return false
+    if (event.target.closest(CONTROLS) !== null) return true
+    const box = event.target.closest(CONTROLS_BOX)
+    if (box === null) return false
+    return document.elementsFromPoint(event.clientX, event.clientY).some((element) => box.contains(element) && !isLayoutOnly(element))
+  }
 
   // The notes' layer covers the page, above the board's digits and SudokuPad's clock and rules copy (z-index 10) and below its dialogs and menu drawer (1000).
   const LAYER_Z = 20
