@@ -59,6 +59,22 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     return [x + width / 2, y + height / 2]
   }
 
+  // Opens the note at A_AT, drags its resize handle, presses `key` mid-drag and releases: the size is back and the note is still open.
+  const resizeUndoneBy = async (key) => {
+    await draw.reopen(p, await gridPoint(p, A_AT))
+    const open = await p.locator(TEXT_BOX).boundingBox()
+    const [ox, oy] = await handleMiddle()
+    await p.mouse.move(ox, oy)
+    await p.mouse.down()
+    await p.mouse.move(ox + 90, oy + 50, { steps: 6 })
+    assert.ok((await p.locator(TEXT_BOX).boundingBox()).width > open.width + 20, 'the drag resized the open note')
+    await p.keyboard.press(key)
+    await p.mouse.up()
+    assert.equal(await boxOpen(), true, 'the note stays open')
+    const back = await p.locator(TEXT_BOX).boundingBox()
+    assert.ok(Math.abs(back.width - open.width) < 1 && Math.abs(back.height - open.height) < 1, `size back to ${open.width}x${open.height}, now ${back.width}x${back.height}`)
+  }
+
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
     await draw.boot(p)
@@ -224,18 +240,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     assert.deepEqual(await selectedTexts(), ['Az'])
     await p.keyboard.press('Escape')
 
-    await draw.reopen(p, await gridPoint(p, A_AT))
-    const open = await p.locator(TEXT_BOX).boundingBox()
-    const [ox, oy] = await handleMiddle()
-    await p.mouse.move(ox, oy)
-    await p.mouse.down()
-    await p.mouse.move(ox + 90, oy + 50, { steps: 6 })
-    assert.ok((await p.locator(TEXT_BOX).boundingBox()).width > open.width + 20, 'the drag resized the open note')
-    await p.keyboard.press('Escape')
-    await p.mouse.up()
-    assert.equal(await boxOpen(), true, 'the note stays open')
-    const back = await p.locator(TEXT_BOX).boundingBox()
-    assert.ok(Math.abs(back.width - open.width) < 1 && Math.abs(back.height - open.height) < 1, 'size back')
+    await resizeUndoneBy('Escape')
     await p.keyboard.press('Escape')
     assert.equal(await boxOpen(), false, 'a second Escape closes it')
     assert.equal((await savedNote('Az')).box, undefined)
@@ -248,7 +253,13 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     await p.keyboard.press('Shift+Enter')
     assert.equal(await boxOpen(), true, 'Shift+Enter keeps the note open')
     await p.keyboard.type('two')
+    // Closing trims trailing newlines, so only the box's own edits can show a line the key inserted.
+    await p.evaluate((selector) => {
+      window.draftEdits = new window.MutationObserver(() => {})
+      window.draftEdits.observe(document.querySelector(selector), { childList: true, characterData: true, subtree: true })
+    }, TEXT_BOX)
     await p.keyboard.press('Control+Enter')
+    assert.equal(await p.evaluate(() => window.draftEdits.takeRecords().length), 0, 'Ctrl+Enter edited the text')
     assert.equal(await boxOpen(), false, 'Ctrl+Enter closed the note')
     assert.deepEqual(await selectedTexts(), ['one\ntwo'])
     assert.deepEqual((await saved()).map((item) => item.text), ['Az', 'X', 'S', 'one\ntwo'])
@@ -266,18 +277,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   })
 
   it('Ctrl+Enter during a resize puts the size back like Escape, and the note stays open', async () => {
-    await draw.reopen(p, await gridPoint(p, A_AT))
-    const open = await p.locator(TEXT_BOX).boundingBox()
-    const [ox, oy] = await handleMiddle()
-    await p.mouse.move(ox, oy)
-    await p.mouse.down()
-    await p.mouse.move(ox + 90, oy + 50, { steps: 6 })
-    assert.ok((await p.locator(TEXT_BOX).boundingBox()).width > open.width + 20, 'the drag resized the open note')
-    await p.keyboard.press('Control+Enter')
-    await p.mouse.up()
-    assert.equal(await boxOpen(), true, 'the note stays open')
-    const back = await p.locator(TEXT_BOX).boundingBox()
-    assert.ok(Math.abs(back.width - open.width) < 1 && Math.abs(back.height - open.height) < 1, 'size back')
+    await resizeUndoneBy('Control+Enter')
     await p.keyboard.press('Control+Enter')
     assert.equal(await boxOpen(), false, 'a second Ctrl+Enter closes it')
     assert.equal((await savedNote('Az')).box, undefined)

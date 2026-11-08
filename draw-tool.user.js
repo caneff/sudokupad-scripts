@@ -2346,6 +2346,7 @@
   let resizing = null
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
+  // Set when Ctrl+Enter or Cmd+Enter closes a note, until that Enter is released or another key is pressed.
   let endedByEnter = false
   let drawing = []
   // The saved entries that are not notes, strokes or shapes (a note that failed its check, say): never drawn, and saved back as they were.
@@ -3016,7 +3017,9 @@
   // a key typed in the box is stopped in the window's capture phase, before them all. Its default is left alone, so
   // the note types, edits, pastes and composes as any editable text does, and F5 does what it does anywhere.
   function keepBoxKeys (event) {
-    // The Enter that closed a note is released after the box is gone, and SudokuPad would end the selection on it.
+    // The Enter that closed a note is released after the box is gone, and SudokuPad would end the selection on it. A key
+    // pressed since means that release never came (a Mac sends no keyup for a key released under Cmd).
+    if (event.type === 'keydown') endedByEnter = false
     if (event.type === 'keyup' && event.key === 'Enter' && endedByEnter) {
       endedByEnter = false
       event.stopImmediatePropagation()
