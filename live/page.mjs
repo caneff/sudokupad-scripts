@@ -32,12 +32,18 @@ export const collectSkipLines = (page, errors, expectedSkips = []) => {
   })
 }
 
+// Collects into `errors` every uncaught page error as its stack (which starts with the name and message), so a suite that
+// asserts `errors` is empty prints where the error came from when it fails.
+export const collectPageErrors = (page, errors) => {
+  page.on('pageerror', (e) => errors.push(e?.stack || String(e)))
+}
+
 // A page of `context` served from the recording, with its uncaught errors and its skip lines collected into the returned
 // `errors`; `expectedSkips` (patterns) names the skip lines left out.
 export async function newPage (context, { expectedSkips } = {}) {
   const errors = []
   const p = await context.newPage()
-  p.on('pageerror', (e) => errors.push(String(e)))
+  collectPageErrors(p, errors)
   collectSkipLines(p, errors, expectedSkips)
   await routeSudokuPad(p)
   return { p, errors }
