@@ -187,3 +187,13 @@ turned on, so the live recording turns it on too.
   covers the page and stops the `mousedown`, so Draw never sees the press; the release of M ends it, and Draw is still
   current. An M typed in an open text box goes into the text, since Draw keeps the box's keys from every SudokuPad
   listener, `feature-markup.js`'s window one included. No page error.
+
+## Held keys (#498)
+
+SudokuPad v0.611.0 (`script.js`, the live recording), read 2026-11-07.
+
+- `App.handleKeydown` begins with `if(event.repeat) return`, before `handleToolEventForwarding('Keydown', ...)`. A tool's
+  `handleKeydown` sees the first keydown of a held key and never the OS repeats, so a held key does nothing more unless the
+  tool times it. Text Anywhere starts its own interval on the press and stops it on the key's keyup, a blur, or the
+  selection ending.
+- `handleKeyup` is forwarded without such a check, and `App.handleBlur` forwards `Blur` to tools after clearing its own keys.

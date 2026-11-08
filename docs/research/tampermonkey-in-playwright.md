@@ -136,3 +136,19 @@ Tampermonkey's own behaviour: its install page and update/rename matching, its
 `@run-at document-idle` timing, its `GM_info` absence handling. Since the
 question here is "does it work in Tampermonkey", it is a weaker stand-in; use
 it only if Tampermonkey's CRX proves unreachable from Actions.
+
+## Built (2026-11-07, #480)
+
+`npm run test:tampermonkey` (`live/tampermonkey/`) follows the recipe. What building it added:
+
+- Actions: run 42439298762 (`workflow_dispatch` on the `implement-480` branch, ubuntu-latest) fetched the CRX from
+  Google's endpoint and passed 15 of 15. The endpoint serves a runner's IP.
+- Warm-up: no ready signal was found, so the test reopens the install URL every 5 s until `ask.html` shows. The first
+  attempt after launch usually misses; the second shows it.
+- Install page buttons, all `input[type=button].install`, the action first: a new script shows "Install" and "Cancel";
+  a known one "Update", "Cancel" and "Disable Updates". The page closes itself after the action is clicked.
+- Dashboard: `tr.scripttr` rows include a header row and a `<New userscript>` row; a script's row is one whose
+  `td.script_version` has text, with its name in `td.script_name`.
+- A local `http.Server` serving the scripts must `closeAllConnections()` before `close()` resolves: Tampermonkey keeps
+  its connection open.
+- With all six installed, each script's representative action from `live/scripts.mjs` works on its own page.
