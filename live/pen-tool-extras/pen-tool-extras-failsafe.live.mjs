@@ -42,11 +42,12 @@ const CASES = [
   { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'ToolPen.tool.handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
   { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'ToolPen.tool.drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
   { name: 'marks missing', off: 'marks, line erase, mark preview', warns: missing('marks, line erase, mark preview', 'Framework.app.grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
-  // SudokuPad's own clicks read xyToRCExact too, so it is hidden from the script's startup check only, and SudokuPad's own is back after it.
+  // SudokuPad's own clicks read xyToRCExact too, so it is hidden from the script's startup check only, and SudokuPad's own is back after it. The marks need it for the size of their hit zones.
   {
     name: 'line erase missing',
-    off: 'line erase, mark preview',
-    warns: missing('line erase, mark preview', 'Framework.app.xyToRCExact'),
+    off: 'marks, line erase, mark preview',
+    warns: missing('marks, line erase, mark preview', 'Framework.app.xyToRCExact'),
+    edgeAgain: null,
     breaks: `Framework.app.xyToRCExact = undefined
       Framework.getApp().then(() => { delete Framework.app.xyToRCExact })`
   },
