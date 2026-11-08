@@ -19,6 +19,10 @@
   .note { position: absolute; transform: translate(-50%, -50%); color: #2f8ae0; font-size: 22px; line-height: 1.15; white-space: pre-wrap;
     padding: 0 3px; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; cursor: text; outline: none; }
   .note.sized { overflow: hidden; }
+  .f-lift .note.lifted { opacity: .6; }
+  .check { display: inline-block; width: .8em; height: .8em; border: 2px solid currentColor; border-radius: 3px; margin-right: .3em; vertical-align: -.05em; cursor: pointer; position: relative; }
+  .check.done::after { content: ''; position: absolute; left: .2em; top: -.05em; width: .25em; height: .5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+  .line.done { text-decoration: line-through; opacity: .6; }
   .note.editing { cursor: text !important; background: rgba(255,255,255,.6); outline: 1.5px solid var(--purple); }
   /* OLD looks */
   .note.sel { outline: 2px dashed #8a4fd0; outline-offset: 2px; }
@@ -41,7 +45,7 @@
 </style>
 </head>
 <body>
-<header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6. Snap: 4 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line; also to other notes' edges and middles. Each switch in the bar turns one idea on; off is today's look.
+<header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6, plus symbols as you type (-> != <= >= <- sum), checklists (a line starting - [ ] ), and a see-through note while dragging (60% opaque, so the board shows through). Snap: 4 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line; also to other notes' edges and middles. Each switch in the bar turns one idea on; off is today's look.
 Click a note to select it, drag to move it, drag on empty space to select several, double-click to edit, drag a corner to resize.</header>
 <div id="stage">
   <div id="board"></div>
@@ -56,6 +60,9 @@ Click a note to select it, drag to move it, drag on empty space to select severa
   <label><input type="checkbox" data-f="handles" checked> 3 Big handles</label>
   <label><input type="checkbox" data-f="select" checked> 4 Solid selection</label>
   <label><input type="checkbox" data-f="snap" checked> 6 Snap</label>
+  <label><input type="checkbox" data-f="symbols" checked> Symbols</label>
+  <label><input type="checkbox" data-f="checks" checked> Checklists</label>
+  <label><input type="checkbox" data-f="lift" checked> See-through drag</label>
   <label>pull <select id="snapPx"><option value="3">3 px</option><option value="4" selected>4 px</option><option value="5">5 px</option><option value="8">8 px</option></select></label>
   <label><input type="checkbox" id="guideOn" checked> show guide line</label>
   <label><input type="checkbox" id="notesOn" checked> snap to other notes</label>
@@ -70,7 +77,8 @@ const B = () => ({ left: boardEl.offsetLeft + 3, top: boardEl.offsetTop + 3, siz
 const flags = {}
 let notes = [
   { text: 'A=B+5', x: 440, y: 40 }, { text: 'X+Y=2Z', x: 610, y: 40 },
-  { text: 'r1: 4,6 in c7-9', x: 970, y: 98 }, { text: '15', x: 1075, y: 314 }, { text: 'odd', x: 520, y: 260 }
+  { text: 'r1: 4,6 in c7-9', x: 970, y: 98 }, { text: '15', x: 1075, y: 314 }, { text: 'odd', x: 520, y: 260 },
+  { text: '- [ ] r1 pair → c7\n- [x] 45 rule on box 5\n- [ ] r4c3 ≠ 8', x: 140, y: 440 }
 ].map((n, i) => ({ id: i, ...n }))
 let selected = [], editing = null, drag = null, lastSnap = { x: null, y: null }
 
@@ -81,8 +89,17 @@ function render () {
     el.className = 'note' + (selected.includes(n.id) ? ' sel' : '') + (editing === n.id ? ' editing' : '') + (n.w ? ' sized' : '')
     el.style.left = n.x + 'px'; el.style.top = n.y + 'px'
     if (n.w) { el.style.width = n.w + 'px'; el.style.height = n.h + 'px' }
-    el.textContent = n.text; el.dataset.id = n.id
-    if (editing === n.id) { el.contentEditable = 'true'; el.addEventListener('input', () => { n.text = el.textContent }) }
+    el.dataset.id = n.id
+    if (drag && drag.kind === 'move' && selected.includes(n.id)) el.classList.add('lifted', ...(drag.fresh ? ['lifting'] : []))
+    if (settle.includes(n.id)) el.classList.add('settling')
+    if (editing === n.id) {
+      el.textContent = n.text; el.contentEditable = 'true'
+      el.addEventListener('input', () => {
+        const raw = el.innerText.replace(/\n$/, ''), out = flags.symbols ? withSymbols(raw) : raw
+        n.text = out
+        if (out !== raw) { el.innerText = out; const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r) }
+      })
+    } else drawText(el, n)
     stage.append(el)
     if (editing === n.id) { el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r) }
   }
@@ -99,6 +116,26 @@ function render () {
   }
   showState()
 }
+
+// Symbols as you type: each pair of characters becomes its sign; `sum` only as a word of its own.
+const SYMBOLS = [[/->/g, '→'], [/<-/g, '←'], [/!=/g, '≠'], [/<=/g, '≤'], [/>=/g, '≥'], [/\bsum\b/g, 'Σ']]
+const withSymbols = (text) => SYMBOLS.reduce((t, [re, to]) => t.replace(re, to), text)
+
+// A line `- [ ] text` shows a box, `- [x] text` a ticked box with the line struck through; a click on the box ticks or unticks it.
+function drawText (el, n) {
+  el.textContent = ''
+  n.text.split('\n').forEach((line, i, all) => {
+    const m = flags.checks && line.match(/^- \[( |x)\] ?(.*)$/)
+    const span = document.createElement('span'); span.className = 'line'
+    if (m) {
+      const box = document.createElement('span'); box.className = 'check' + (m[1] === 'x' ? ' done' : '')
+      box.addEventListener('mousedown', (e) => { e.stopPropagation(); e.preventDefault(); const lines = n.text.split('\n'); lines[i] = `- [${m[1] === 'x' ? ' ' : 'x'}] ${m[2]}`; n.text = lines.join('\n'); render() })
+      span.append(box, m[2]); if (m[1] === 'x') span.classList.add('done')
+    } else span.textContent = line
+    el.append(span); if (i < all.length - 1) el.append('\n')
+  })
+}
+let settle = []
 
 function showState () {
   const on = Object.entries(flags).filter(([, v]) => v).map(([k]) => k).join(', ') || 'none (today)'
@@ -170,6 +207,7 @@ stage.addEventListener('mousedown', (e) => {
   }
   if (noteEl && editing === Number(noteEl.dataset.id)) return
   if (editing !== null) { editing = null }
+  if (noteEl && e.detail === 2) { editing = Number(noteEl.dataset.id); selected = []; drag = null; render(); return }
   if (noteEl) {
     e.preventDefault()
     const id = Number(noteEl.dataset.id)
@@ -177,7 +215,7 @@ stage.addEventListener('mousedown', (e) => {
     const lr = noteEl.getBoundingClientRect()
     const sr = stage.getBoundingClientRect()
     const others = [...stage.querySelectorAll('.note')].filter(el => !selected.includes(Number(el.dataset.id))).map(el => { const r = el.getBoundingClientRect(); return { l: r.left - sr.left, r: r.right - sr.left, t: r.top - sr.top, b: r.bottom - sr.top, text: el.textContent } })
-    drag = { kind: 'move', lead: id, others, size: [lr.width, lr.height], start: [px, py], from: selected.map(i => [i, notes[i].x, notes[i].y]) }
+    drag = { kind: 'move', fresh: true, lead: id, others, size: [lr.width, lr.height], start: [px, py], from: selected.map(i => [i, notes[i].x, notes[i].y]) }
   } else {
     selected = []
     drag = { kind: 'band', start: [px, py] }
@@ -194,7 +232,7 @@ window.addEventListener('mousemove', (e) => {
     const [sx, sy] = snapped(lead[1] + dx, lead[2] + dy, ...drag.size, drag.others)
     const [ax, ay] = [sx - lead[1], sy - lead[2]]
     for (const [i, x, y] of drag.from) { notes[i].x = x + ax; notes[i].y = y + ay }
-    render()
+    render(); drag.fresh = false
   } else if (drag.kind === 'band') {
     const [x0, y0] = drag.start
     Object.assign(band.style, { display: 'block', left: Math.min(x0, px) + 'px', top: Math.min(y0, py) + 'px', width: Math.abs(px - x0) + 'px', height: Math.abs(py - y0) + 'px' })
@@ -212,7 +250,8 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mouseup', () => {
   if (drag && drag.kind === 'band') band.style.display = 'none'
-  drag = null; gx.style.display = gy.style.display = 'none'; render()
+  settle = drag && drag.kind === 'move' && !drag.fresh ? [...selected] : []
+  drag = null; gx.style.display = gy.style.display = 'none'; render(); settle = []
 })
 
 stage.addEventListener('dblclick', (e) => {
