@@ -23,7 +23,7 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
   After retaking a picture, run `node tag-pictures.js`: it rewrites the `?v=` tag on every picture's address in `site/`, so browsers fetch the new file,
   and `test/site.test.js` fails until you do. README pictures, if added, follow the same rule.
   A small touch a user would not look for (a hover state, a fade, a snap feel, a cursor) gets no line in `site/`, on any script's page; only a feature a user
-  would look up gets one (Chris, 2026-11-08). Pictures are still retaken when a change alters what they show. No word count caps a page.
+  would look up gets one (Chris, 2026-11-08). Pictures are still retaken when a change alters what they show.
 - **Slideshows**: `site/slideshows.json` is the one source of every slideshow's pictures, `alt` text and captions. After editing it, or retaking a slide picture,
   run `node sync-slides.js`: it rewrites each `<!-- slideshow:id -->` block on the homepage and the details page, picture tags included.
   Never edit inside a block; `test/site.test.js` fails until you run it.
