@@ -9,8 +9,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 
-const { TEXT_BOX } = draw
-const SELECTED = '#draw-tool-layer .draw-tool-selected'
+const { SELECTED, TEXT_BOX } = draw
 const RECTANGLE = '#draw-tool-layer .draw-tool-selection-rectangle'
 const HANDLE = '#draw-tool-layer .draw-tool-resize'
 // In cells from the grid's top left: two notes, and empty space for new ones.
@@ -49,8 +48,7 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
   const typeNote = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   const near = (a, b) => Math.abs(a - b) <= NEAR_CELLS
   const handleMiddle = async () => {
@@ -104,12 +102,11 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     assert.deepEqual(await selectedTexts(), [])
   })
 
-  it('a click that slips opens a note on empty space, selects a note, and only ends a selection; a real rectangle still selects', async () => {
+  it('a click that slips opens a note on empty space and only ends a selection; a real rectangle still selects', async () => {
     await slip(EMPTY_TWO, 6, 3)
     assert.equal(await boxOpen(), true, 'a 6 px slip on empty space opened a note')
     await p.keyboard.type('S')
-    await p.keyboard.press('Escape')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual(await texts(), ['Az', 'B', 'X', 'S'])
     await clickAt(B_AT)
     await slip(FREE, 5, 5)
@@ -190,6 +187,20 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
     }
     assert.equal(await p.locator(RECTANGLE).count(), 0)
     await p.keyboard.press('Escape')
+  })
+
+  it('Escape during a selection rectangle drops the rectangle, and the release selects nothing', async () => {
+    const [x, y] = await gridPoint(p, [0.4, 0.4])
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(...await gridPoint(p, [3, 3]), { steps: 6 })
+    assert.equal(await p.locator(RECTANGLE).count(), 1, 'the rectangle shows')
+    await p.keyboard.press('Escape')
+    assert.equal(await p.locator(RECTANGLE).count(), 0, 'Escape dropped it')
+    await p.mouse.move(...await gridPoint(p, A_AT), { steps: 3 })
+    await p.mouse.up()
+    assert.deepEqual(await selectedTexts(), [], 'the release over a note selected nothing')
+    assert.equal(await boxOpen(), false)
   })
 
   it('Escape during a resize puts the size back: a selected note, and the open note, which stays open', async () => {

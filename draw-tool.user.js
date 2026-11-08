@@ -530,7 +530,6 @@
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
 
-  // Whether the rectangle from the press to the release is under RECTANGLE_CLICK_PX both ways.
   const isSmallRectangle = (points) => {
     const [[ax, ay], [bx, by]] = [points[0], points[points.length - 1]]
     return Math.abs(bx - ax) < RECTANGLE_CLICK_PX && Math.abs(by - ay) < RECTANGLE_CLICK_PX
@@ -2541,9 +2540,9 @@
     if (!resizing) return
     event.stopImmediatePropagation()
     flushFrame()
-    const { index, item, cancelled } = resizing
+    const { index, item } = resizing
     resizing = null
-    if (cancelled || editing || String(drawing[index]?.box) === String(item.box)) return
+    if (editing || String(drawing[index]?.box) === String(item.box)) return
     keepDrawnPoints([index], boardMap())
     saveNotes()
     renderDrawing()
@@ -2753,7 +2752,8 @@
   // The controls that work on the open note: a press on one leaves the note open.
   const isPanelControl = (target) => Boolean(target?.closest?.(`${PANEL} button.digit[data-key], ${PANEL} .${SLIDERS_CLASS}, ${PANEL} .${BACKGROUND_CLASS}`))
 
-  const typedText = (element) => closedText(element.textContent)
+  // Blank lines before and after the text are dropped; line breaks inside it stay.
+  const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
 
   // An empty box removes its text.
   // Takes the open note's element and handles off the page, and ends any resize.
@@ -2771,7 +2771,8 @@
     const { index, item, element } = closeEditing()
     const before = index === -1 ? '' : drawing[index].text
     const typed = typedText(element)
-    const text = typed === before ? typed : closedSymbols(typed)
+    // A last word `sum` becomes a sigma before the trailing spaces go, so a sigma the typist undid stays the word.
+    const text = typed === before ? typed : closedText(closedSymbols(typed))
     let left = index
     const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
@@ -3297,7 +3298,7 @@
         return true
       }
       // Enter reopens the one selected note, the caret at its end, and types no line break into it.
-      if (event.key === 'Enter' && selected.length === 1 && !editing && !drag) {
+      if (event.key === 'Enter' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && selected.length === 1 && !editing && !drag) {
         event.preventDefault()
         openText(selected[0])
         return true

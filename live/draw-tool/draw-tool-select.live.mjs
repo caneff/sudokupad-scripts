@@ -78,9 +78,9 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     await p.mouse.dblclick(...await gridPoint(p, NOTES.B))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'B', 'the double-click opened the note')
+    assert.deepEqual(await selectedTexts(), [], 'opening the note ended the selection its first click made')
     await draw.finishNote(p)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
-    assert.deepEqual(await selectedTexts(), [], 'opening the note ended the selection its first click made')
   })
 
   it('a click on empty space with a selection only ends it, and starts no note; Escape ends it too', async () => {
