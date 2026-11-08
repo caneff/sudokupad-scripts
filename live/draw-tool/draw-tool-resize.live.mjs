@@ -1,6 +1,6 @@
 // Live check of draw-tool.user.js's resize handles on sudokupad.app: the open note, and a note alone selected, show a handle on each of their four
 // corners, and several selected notes show none; dragging a handle sets the box, keeping the opposite corner and the note's focus, the text wraps and
-// scrolls to fit, and the size is saved and survives a reload; the box stops at about three characters by one line; a double-click on a handle sends
+// scrolls to fit, and the size is saved and survives a reload; the box stops at about three characters by one line, or at a short note's own size if that is smaller; a double-click on a handle sends
 // the note back to auto size; and a drag on the note's body moves it and never resizes it. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -16,6 +16,7 @@ const HANDLE = '#draw-tool-layer .draw-tool-resize'
 // In cells from the grid's top left: the note's middle, and a cell clear of it.
 const NOTE_AT = [3.5, 4.5]
 const EMPTY_AT = [8.5, 0.5]
+const SHORT_AT = [1.5, 7.5]
 const NOTE_TEXT = 'word '.repeat(12).trim()
 // A real mouse lands on whole page pixels.
 const NEAR_PX = 1.5
@@ -275,6 +276,53 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
     await p.keyboard.press('Escape')
     assert.deepEqual((await saved()).map((item) => item.text), [...before, 'second'])
+  })
+
+  it('a note narrower than three characters widened by a handle shrinks back to its own size and no further', async () => {
+    await p.mouse.click(...await gridPoint(p, SHORT_AT))
+    await p.keyboard.type('hi')
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await gridPoint(p, SHORT_AT))
+    const index = (await saved()).length - 1
+    const start = await box(TEXTS + ':last-of-type')
+    const startWidth = start.right - start.left
+    assert.ok(startWidth < MIN_EM[0] * start.em * start.scale - NEAR_PX, `${startWidth} wide is under the three characters of the minimum box`)
+    await dragHandle(80, 0)
+    const wide = await box(TEXTS + ':last-of-type')
+    assert.ok(wide.right - wide.left > startWidth + 40, `${wide.right - wide.left} wide after the widen`)
+    await dragHandle(-300, 0)
+    const back = await box(TEXTS + ':last-of-type')
+    assert.ok(back.right - back.left <= startWidth + NEAR_PX, `${back.right - back.left} wide after the shrink, started at ${startWidth}`)
+    assert.ok(near(back.bottom - back.top, start.bottom - start.top), 'the text did not wrap onto a second line')
+    assert.equal((await saved()).length, index + 1)
+    await p.keyboard.press('Delete')
+  })
+
+  it('a new note still open, shrunk by its handle, stops at the minimum box and not at one character', async () => {
+    await p.mouse.click(...await gridPoint(p, SHORT_AT))
+    await p.keyboard.type(NOTE_TEXT)
+    await dragHandle(-1000, -1000)
+    const smallest = await box(TEXT_BOX)
+    assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em), `${smallest.right - smallest.left} wide, em ${smallest.em}`)
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await gridPoint(p, SHORT_AT))
+    await p.keyboard.press('Delete')
+  })
+
+  it('pressing a handle of a scrolled note leaves its scroll where it was', async () => {
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await middleOfNote())
+    const scrolled = await read((s) => {
+      const note = document.querySelector(s)
+      note.scrollTop = 10
+      return note.scrollTop
+    }, TEXTS)
+    assert.ok(scrolled > 0, 'the note scrolls')
+    const [x, y] = await handleMiddle()
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.up()
+    assert.equal(await read((s) => document.querySelector(s).scrollTop, TEXTS), scrolled)
   })
 
   it('the page raised no error', () => {
