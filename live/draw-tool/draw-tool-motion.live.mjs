@@ -1,6 +1,6 @@
 // Live check of draw-tool.user.js's motion and precision touches on sudokupad.app (#535): the cursor holds during a drag or a resize, the hover outline and the
-// handles fade in, a note erased by the right button or the trash button fades out while the Delete key deletes at once, an empty new note shows a faint box, and a
-// note's drawn left and top land on whole device pixels after a move, a nudge or a resize. Reduced motion makes every fade instant. Real mouse and keyboard input.
+// handles fade in, a deleted note leaves at once, an empty new note shows a faint box, and a
+// note's drawn left and top land on whole device pixels after a move, a nudge or a resize. Reduced motion makes the fade in instant. Real mouse and keyboard input.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -9,8 +9,6 @@ import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 
 const { CLEAR_BUTTON, HANDLES: HANDLE, TEXTS, TEXT_BOX, middleOf, pickDraw } = draw
-// Every note element in the layer, the ones fading out as well.
-const ALL_NOTES = '#draw-tool-layer .draw-tool-text'
 const ITEMS = [
   { kind: 'text', color: 1, size: 20, opacity: 100, text: 'alpha', at: [160, 160] },
   { kind: 'text', color: 2, size: 20, opacity: 100, text: 'bravo', at: [352, 160] },
@@ -20,9 +18,6 @@ const ITEMS = [
 const EMPTY_AT = [7.5, 7.5]
 const FADE_IN_S = '0.08s'
 const FADE_IN_CURVE = 'cubic-bezier(0, 0, 0, 1)'
-const FADE_OUT_CURVE = 'cubic-bezier(0.3, 0, 1, 1)'
-// A deleted note's element is gone by about 200 ms; an element still there after this has not been taken off the page.
-const GONE_MS = 300
 const DEVICE_PIXEL_RATIO = 1.25
 const WHOLE_DEVICE_PX = 0.02
 
@@ -130,72 +125,29 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
   describe('a deleted note', () => {
     beforeEach(reset)
 
-    // Whether the note's element is still in the page right after `act`, fading notes counted.
+    // Whether the note's element is still in the page right after `act`.
     const lingersAfter = async (text, act) => {
       await act()
-      return p.evaluate(([selector, want]) => [...document.querySelectorAll(selector)].some((e) => e.textContent === want), [ALL_NOTES, text])
+      return p.evaluate(([selector, want]) => [...document.querySelectorAll(selector)].some((e) => e.textContent === want), [TEXTS, text])
     }
 
-    // Records, from the next press, each frame's pointer-events, opacity and timing function of the note that reads `text` until its element leaves the page, and the time that took.
-    const recordRemoval = (text) => p.evaluate(([selector, want, limit]) => {
-      const element = [...document.querySelectorAll(selector)].find((e) => e.textContent === want)
-      window.removal = new Promise((resolve) => {
-        window.addEventListener('mousedown', () => {
-          const pressed = performance.now()
-          const frames = []
-          const look = () => {
-            const style = window.getComputedStyle(element)
-            frames.push({ pointer: style.pointerEvents, opacity: Number(style.opacity), curve: style.transitionTimingFunction })
-            if (!element.isConnected) resolve({ ms: performance.now() - pressed, frames })
-            // A "nothing left by now" check: an element still there after the limit has not been taken off the page.
-            else if (performance.now() - pressed > limit) resolve({ ms: Infinity, frames })
-            else window.requestAnimationFrame(look)
-          }
-          window.requestAnimationFrame(look)
-        }, { capture: true, once: true })
-      })
-    }, [ALL_NOTES, text, GONE_MS])
-    const removal = () => p.evaluate(() => window.removal)
-    const assertFadedOut = ({ ms, frames }) => {
-      assert.equal(ms >= 100 && ms < GONE_MS, true, `the element left the page ${ms} ms after the press`)
-      const fading = frames.filter((frame) => frame.opacity > 0 && frame.opacity < 1)
-      assert.equal(fading.length > 0, true, `its opacity was seen between 1 and 0: ${JSON.stringify(frames)}`)
-      assert.equal(fading.every((frame) => frame.pointer === 'none'), true, 'it took no pointer while it faded')
-      assert.equal(fading.every((frame) => frame.curve === FADE_OUT_CURVE), true, `it faded on the accelerate curve, ${fading[0].curve}`)
-    }
-
-    it('fades out over about 120 ms on a right click, and the drawing lacks it at once', async () => {
+    it('goes at once on a right click', async () => {
       const [x, y] = await noteMiddle('alpha')
       await p.mouse.move(x, y)
-      await recordRemoval('alpha')
-      await p.mouse.click(x, y, { button: 'right' })
+      assert.equal(await lingersAfter('alpha', () => p.mouse.click(x, y, { button: 'right' })), false)
       assert.equal((await savedTexts()).includes('alpha'), false)
-      assertFadedOut(await removal())
     })
 
-    it('fades out the same way on the trash button', async () => {
+    it('goes at once on the trash button', async () => {
       await p.mouse.click(...await noteMiddle('bravo'))
-      await recordRemoval('bravo')
-      await p.click(CLEAR_BUTTON)
+      assert.equal(await lingersAfter('bravo', () => p.click(CLEAR_BUTTON)), false)
       assert.equal((await savedTexts()).includes('bravo'), false)
-      assertFadedOut(await removal())
     })
 
-    it('goes at once on the Delete key, with no fade', async () => {
+    it('goes at once on the Delete key', async () => {
       await p.mouse.click(...await noteMiddle('charlie'))
       assert.equal(await lingersAfter('charlie', () => p.keyboard.press('Delete')), false)
       assert.equal((await savedTexts()).includes('charlie'), false)
-    })
-
-    it('with reduced motion goes at once on a right click too', async () => {
-      await p.emulateMedia({ reducedMotion: 'reduce' })
-      try {
-        const [x, y] = await noteMiddle('delta')
-        await p.mouse.move(x, y)
-        assert.equal(await lingersAfter('delta', () => p.mouse.click(x, y, { button: 'right' })), false)
-      } finally {
-        await p.emulateMedia({ reducedMotion: 'no-preference' })
-      }
     })
   })
 
