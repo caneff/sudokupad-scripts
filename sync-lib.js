@@ -39,15 +39,17 @@ function bumpPatch (source) {
     source)
 }
 
-const GLOBAL_LINE = /^\/\* global ([^*]*)\*\//m
+const GLOBAL_COMMENT = /\/\*\s*globals?\s([^*]*)\*\//g
+const ESCAPE = /[.*+?^${}()|[\]\\]/g
 
-// Names a module reads from other modules, per its `/* global */` line.
-const globalNames = (module) => {
-  const line = GLOBAL_LINE.exec(module)
-  return line === null ? [] : line[1].split(',').map((n) => n.trim()).filter(Boolean)
-}
+// Names a module reads from other modules, per its `/* global */` comments (ESLint's `name:writable` form included).
+const globalNames = (module) => [...module.matchAll(GLOBAL_COMMENT)]
+  .flatMap((comment) => comment[1].split(','))
+  .map((name) => name.split(':')[0].trim())
+  .filter(Boolean)
 
-const definesName = (module, name) => new RegExp(`^(?:const|let|var|function\\*?|async function|class) ${name}\\b`, 'm').test(module)
+// Matches the one-declaration-per-line form every lib module uses for a top-level name.
+const definesName = (module, name) => new RegExp(`^(?:const|let|var|function\\*?|async function|class) ${name.replace(ESCAPE, '\\$&')}(?![\\w$])`, 'm').test(module)
 
 // One problem per name a copied module reads from a lib module the script does not copy. A name no other lib module defines is a
 // browser global or the script's own, and is allowed.
@@ -65,7 +67,7 @@ function dependencyProblems (copied, readModule, libNames) {
 // Rewrites every lib block of one script from readModule(name) (undefined for a missing module).
 // libNames lists every module in lib/, so a block's dependencies can be found.
 // Returns the new text, the names of the blocks that changed, and the problems found; a script with a problem is left as it was.
-function syncText (source, readModule, libNames = []) {
+function syncText (source, readModule, libNames) {
   const lines = source.split('\n')
   const out = []
   const changed = []
