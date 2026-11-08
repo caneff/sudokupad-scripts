@@ -104,6 +104,26 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
   })
 
+  describe('an open note near SudokuPad\'s controls', () => {
+    const controlBoxes = () => p.evaluate(() => [...document.querySelectorAll('#controls, .topbar')].map((e) => e.getBoundingClientRect().toJSON()).filter((b) => b.width > 0 && b.height > 0))
+
+    it('is kept clear of them as it grows, and its stored point is not moved', async () => {
+      const controls = await controlBoxes()
+      const nearest = controls.filter((b) => b.top < 600 && b.bottom > 500).map((b) => b.left)
+      assert.equal(nearest.length > 0, true, 'the controls lie beside row y 500')
+      const click = [Math.min(...nearest) - 40, 500]
+      await p.mouse.click(...click)
+      await p.keyboard.type('a long note of typed text, wider than the gap left to the controls')
+      const box = await p.locator(TEXT_BOX).boundingBox()
+      const overlapping = controls.filter((c) => box.x < c.right && box.x + box.width > c.left && box.y < c.bottom && box.y + box.height > c.top)
+      assert.deepEqual(overlapping, [], `the open note ${JSON.stringify(box)} overlaps a control`)
+      await p.keyboard.press('Escape')
+      const [x] = (await draw.saved(p)).find((item) => item.text.startsWith('a long note')).at
+      const [wantX] = await boardPoint(click)
+      assert.equal(Math.abs(x - wantX) < 1.5, true, `the saved x ${x} is the click's ${wantX}`)
+    })
+  })
+
   describe('Shift during a drag', () => {
     it('locks the move to the axis of greater movement, and releasing Shift frees it', async () => {
       const start = await noteBox('CC')

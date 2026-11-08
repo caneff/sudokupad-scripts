@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, keptInside, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -1114,22 +1114,26 @@ test('lockedAxis is the axis of lesser movement, and x on a tie', () => {
   assert.equal(lockedAxis([0, 0]), 1)
 })
 
-test('keptInside moves a box in from the window edge so it stays WINDOW_PAD_PX inside, and leaves one already inside alone', () => {
-  const win = { left: 0, top: 0, right: 1000, bottom: 800 }
+const WIN = { left: 0, top: 0, right: 1000, bottom: 800 }
+
+test('viewShift moves a box in from the window edge so it stays WINDOW_PAD_PX inside, and leaves one already inside alone', () => {
   assert.equal(WINDOW_PAD_PX, 20)
-  assert.deepEqual(keptInside({ left: 400, top: 300, right: 500, bottom: 330 }, win), [0, 0])
-  assert.deepEqual(keptInside({ left: 900, top: 300, right: 1010, bottom: 330 }, win), [-30, 0], 'past the right edge: right ends at 980')
-  assert.deepEqual(keptInside({ left: 985, top: 300, right: 1100, bottom: 330 }, win), [-120, 0], 'right ends at 980')
-  assert.deepEqual(keptInside({ left: -10, top: 790, right: 40, bottom: 805 }, win), [30, -25], 'left ends at 20 and bottom at 780')
-  assert.deepEqual(keptInside({ left: 981, top: 300, right: 990, bottom: 330 }, win), [-10, 0], 'inside the window but within the pad of the edge')
+  assert.deepEqual(viewShift({ left: 400, top: 300, right: 500, bottom: 330 }, WIN, []), [0, 0])
+  assert.deepEqual(viewShift({ left: 900, top: 300, right: 1010, bottom: 330 }, WIN, []), [-30, 0], 'past the right edge: right ends at 980')
+  assert.deepEqual(viewShift({ left: -10, top: 790, right: 40, bottom: 805 }, WIN, []), [30, -25], 'left ends at 20 and bottom at 780')
+  assert.deepEqual(viewShift({ left: 981, top: 300, right: 990, bottom: 330 }, WIN, []), [-10, 0], 'inside the window but within the pad of the edge')
 })
 
-test('a box too big for the window to hold with its pads starts at the left and top pads', () => {
-  const win = { left: 0, top: 0, right: 1000, bottom: 800 }
-  assert.deepEqual(keptInside({ left: -50, top: -40, right: 1100, bottom: 900 }, win), [70, 60])
+test('viewShift moves a box clear of a control it overlaps, by the nearest way', () => {
+  const control = { left: 700, right: 1000, top: 0, bottom: 800 }
+  const [dx, dy] = viewShift({ left: 650, top: 300, right: 750, bottom: 330 }, WIN, [control])
+  assert.equal(dy, 0)
+  assert.equal(750 + dx < 700, true, `its right edge ${750 + dx} is left of the control`)
+  assert.equal(650 + dx >= WINDOW_PAD_PX, true)
 })
 
-test('a box too big for the window crossing only the right and bottom edges is still moved to the left and top pads', () => {
-  const win = { left: 0, top: 0, right: 1000, bottom: 800 }
-  assert.deepEqual(keptInside({ left: 30, top: 30, right: 1100, bottom: 900 }, win), [-10, -10])
+test('viewShift leaves a box beside a control where it is, and puts a box too big for the window at the middle', () => {
+  assert.deepEqual(viewShift({ left: 400, top: 300, right: 500, bottom: 330 }, WIN, [{ left: 700, right: 1000, top: 0, bottom: 800 }]), [0, 0])
+  const [dx] = viewShift({ left: -50, top: 300, right: 1100, bottom: 330 }, WIN, [])
+  assert.equal((-50 + 1100) / 2 + dx, 500, 'centred on the window')
 })

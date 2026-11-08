@@ -1625,10 +1625,12 @@
 
   // The open note is kept this many px inside the window.
   const WINDOW_PAD_PX = 20
-  // How far a screen box must move to lie WINDOW_PAD_PX inside `win` on each axis; a box too big for that starts at the left and top pads.
-  function keptInside (box, win) {
-    const fit = (lo, hi, winLo, winHi) => hi - lo > winHi - winLo - 2 * WINDOW_PAD_PX || lo < winLo + WINDOW_PAD_PX ? winLo + WINDOW_PAD_PX - lo : hi > winHi - WINDOW_PAD_PX ? winHi - WINDOW_PAD_PX - hi : 0
-    return [fit(box.left, box.right, win.left, win.right), fit(box.top, box.bottom, win.top, win.bottom)]
+  // How far the open note's screen box must move to lie WINDOW_PAD_PX inside `win` and clear of the `blockers`, by the same rule a dropped note is kept reachable by.
+  function viewShift (box, win, blockers) {
+    const room = { left: win.left + WINDOW_PAD_PX - REACH_MARGIN_PX, top: win.top + WINDOW_PAD_PX - REACH_MARGIN_PX, right: win.right - WINDOW_PAD_PX + REACH_MARGIN_PX, bottom: win.bottom - WINDOW_PAD_PX + REACH_MARGIN_PX }
+    const middle = [(box.left + box.right) / 2, (box.top + box.bottom) / 2]
+    const [x, y] = reachablePoint(middle, [box.right - box.left, box.bottom - box.top], room, blockers)
+    return [x - middle[0], y - middle[1]]
   }
   function nudgeStep (heldMs, shift) {
     if (heldMs < NUDGE_REPEAT_MS) return 0
@@ -1636,7 +1638,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, keptInside, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2510,7 +2512,7 @@
     return roundPoint(reached.map((v, i) => v - toMiddle[i]))
   }
 
-  // Restyles the open note and puts the handles on its corners. The note is shown moved in from the window's edge when its box would cross it: the view of it,
+  // Restyles the open note and puts the handles on its corners. The note is shown moved in from the window's edge and clear of SudokuPad's controls when its box would cross them: the view of it,
   // `editing.shift`, is a translation of its element, and its item's point is never changed.
   function showEditing (map) {
     const { element, item } = editing
@@ -2519,7 +2521,7 @@
     element.classList.toggle(EMPTY_CLASS, typedText(element) === '')
     markScrolling(element)
     const { left, top, right, bottom } = element.getBoundingClientRect()
-    const shift = keptInside({ left, top, right, bottom }, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight })
+    const shift = viewShift({ left, top, right, bottom }, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }, layoutBlockers())
     element.style.translate = `${shift[0]}px ${shift[1]}px`
     editing.shift = shift
     editing.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
