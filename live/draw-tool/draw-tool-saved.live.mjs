@@ -19,7 +19,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s saved notes', { concurrency: false }, () => {
+describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   let context, p, errors
   const warnings = []
 

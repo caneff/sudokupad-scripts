@@ -1,4 +1,4 @@
-// Live check of the Text Annotation tool button's icon on sudokupad.app: SudokuPad's toolbar CSS fills the paths of a tool button's icon,
+// Live check of the Text Anywhere tool button's icon on sudokupad.app: SudokuPad's toolbar CSS fills the paths of a tool button's icon,
 // which would turn the outlined sticky note into a solid square.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -10,7 +10,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation tool button icon, injected after Start Puzzle', { concurrency: false }, () => {
+describe('Text Anywhere tool button icon, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p
 
   before(async () => {

@@ -24,12 +24,12 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s moving', { concurrency: false }, () => {
+describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const saved = () => draw.saved(p)
-  // A reload leaves Text Annotation not current.
+  // A reload leaves Text Anywhere not current.
   const reload = async () => {
     await draw.reload(p)
     await draw.pickDraw(p)

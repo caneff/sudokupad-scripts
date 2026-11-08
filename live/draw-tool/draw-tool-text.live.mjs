@@ -23,7 +23,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s typed text', { concurrency: false }, () => {
+describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)

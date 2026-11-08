@@ -1,4 +1,4 @@
-// Live check of the place of Text Annotation's button among the tool buttons, on sudokupad.app in headless Chromium.
+// Live check of the place of Text Anywhere's button among the tool buttons, on sudokupad.app in headless Chromium.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -29,7 +29,7 @@ async function startWithSavedPen (p) {
   await p.locator(DRAW_BUTTON).waitFor({ state: 'visible' })
 }
 
-describe('Text Annotation: its button is the last tool button', { concurrency: false }, () => {
+describe('Text Anywhere: its button is the last tool button', { concurrency: false }, () => {
   let context, p, errors
 
   before(async () => { ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1280, height: 720 } } })) })
@@ -59,7 +59,7 @@ describe('Text Annotation: its button is the last tool button', { concurrency: f
     assert.equal(ids.indexOf('control-later') < ids.indexOf('control-draw'), true, ids.join())
   })
 
-  it('the Text Annotation button, last, still makes it the current tool, with its panel, and a click still makes a note', async () => {
+  it('the Text Anywhere button, last, still makes it the current tool, with its panel, and a click still makes a note', async () => {
     assert.equal(await pickDraw(p), 'draw')
     await p.locator(SLIDERS).waitFor({ state: 'visible' })
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
@@ -73,7 +73,7 @@ describe('Text Annotation: its button is the last tool button', { concurrency: f
   it('no page error', () => { assert.deepEqual(errors, []) })
 })
 
-describe('Text Annotation: the pen tool on at startup and the tool keys', { concurrency: false }, () => {
+describe('Text Anywhere: the pen tool on at startup and the tool keys', { concurrency: false }, () => {
   let context, p
 
   before(async () => {

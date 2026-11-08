@@ -1,5 +1,5 @@
-// Text Annotation's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that boot
-// it after Start Puzzle, reload it and pick Text Annotation. Not a check itself, so `live/**/*.live.mjs` skips it.
+// Text Anywhere's live fixtures: the script, its storage keys and selectors, the puzzle key rule, and the helpers that boot
+// it after Start Puzzle, reload it and pick Text Anywhere. Not a check itself, so `live/**/*.live.mjs` skips it.
 // The keys are typed out here, not imported from the script (docs/adr/0001-live-tests-type-storage-keys.md).
 
 import { readFileSync } from 'node:fs'
@@ -152,7 +152,7 @@ export async function plantDrawing (p, items) {
 }
 
 // The tool buttons in the order they are drawn (the bar fills a column down, then the next one), not their order in the page:
-// Text Annotation's place comes from a CSS rule, so the page order does not change.
+// Text Anywhere's place comes from a CSS rule, so the page order does not change.
 export const buttonIds = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-tool > button')]
   .map((b) => ({ id: b.id, ...b.getBoundingClientRect().toJSON() }))
   .sort((a, b) => Math.round(a.left) - Math.round(b.left) || a.top - b.top)

@@ -29,7 +29,7 @@ const keypadBox = (p) => p.evaluate(() => {
 })
 
 for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720 }]) {
-  describe(`Text Annotation's panel at ${viewport.width} px`, { concurrency: false }, () => {
+  describe(`Text Anywhere's panel at ${viewport.width} px`, { concurrency: false }, () => {
     let context, p, errors
 
     before(async () => {
@@ -89,7 +89,7 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
   })
 }
 
-describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
+describe('Text Anywhere\'s colors and size', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -140,7 +140,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('nothing is saved for the colors until Text Annotation is first made current, which copies the nine pen colors and saves them', async () => {
+  it('nothing is saved for the colors until Text Anywhere is first made current, which copies the nine pen colors and saves them', async () => {
     assert.equal(await savedColors(), null)
     const pens = await Promise.all(NINE.map(penColor))
     await pickDraw()
@@ -148,7 +148,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     assert.deepEqual(NINE.map((n) => rgb(colors[n])), pens.map((c) => c.replace(/^rgb\(-\d+, -\d+, -\d+\)$/, 'rgb(0, 0, 0)')))
   })
 
-  it('with Text Annotation current the keypad shows Aa in each color, digits hidden, with color 1 marked, the default size, Clear all, Background off and the gear', async () => {
+  it('with Text Anywhere current the keypad shows Aa in each color, digits hidden, with color 1 marked, the default size, Clear all, Background off and the gear', async () => {
     const colors = await savedColors()
     const buttons = await keypad()
     assert.deepEqual(buttons.map((b) => b.swatch), NINE.map((n) => rgb(colors[n])))
@@ -168,8 +168,8 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     const [clearIcon, gearIcon] = await Promise.all([CLEAR_BUTTON, SETTINGS_BUTTON].map(iconLook))
     assert.equal(clearIcon.size.every((side, i) => Math.abs(side - gearIcon.size[i]) <= NEAR_PX), true, `Clear all's icon is the gear's size: ${clearIcon.size} against ${gearIcon.size}`)
     assert.deepEqual([...new Set(clearIcon.fills)], ['none'], 'Clear all\'s lines are not filled')
-    assert.equal(await p.locator(SETTINGS_BUTTON).getAttribute('title'), 'Text Annotation settings')
-    assert.equal(await p.locator(SETTINGS_BUTTON).getAttribute('aria-label'), 'Text Annotation settings')
+    assert.equal(await p.locator(SETTINGS_BUTTON).getAttribute('title'), 'Text Anywhere settings')
+    assert.equal(await p.locator(SETTINGS_BUTTON).getAttribute('aria-label'), 'Text Anywhere settings')
     assert.equal(await p.locator('.controls-input button[data-key="0"]').isVisible(), false)
     assert.equal(await p.locator('.controls-input button[data-control="delete"]').isVisible(), false)
   })
@@ -247,7 +247,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     await p.keyboard.press('7')
     await slideTo(p, SIZE_SLIDER, 12)
     await reload()
-    assert.deepEqual(await noteColors(), fills, 'the notes keep the recolor before Text Annotation is made current')
+    assert.deepEqual(await noteColors(), fills, 'the notes keep the recolor before Text Anywhere is made current')
     await pickDraw()
     assert.deepEqual(await currentKey(), ['7'])
     assert.equal((await keypad())[3].swatch, 'rgb(18, 52, 86)')

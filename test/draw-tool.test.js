@@ -11,11 +11,11 @@ const readPaste = (text) => pastedSettings(text, READERS)
 const keydown = (eventPhase) => ({ type: 'keydown', eventPhase })
 const NAMES = ['normal', 'corner', 'centre', 'colour', TOOL_NAME, 'pen']
 
-test('toolNamesFor leaves Text Annotation out while a keydown is being dispatched, so no tool key lands on it', () => {
+test('toolNamesFor leaves Text Anywhere out while a keydown is being dispatched, so no tool key lands on it', () => {
   assert.deepEqual(toolNamesFor(NAMES, keydown(1)), ['normal', 'corner', 'centre', 'colour', 'pen'])
 })
 
-test('toolNamesFor keeps Text Annotation for anything else: a keydown already dispatched, a mouse event, or none', () => {
+test('toolNamesFor keeps Text Anywhere for anything else: a keydown already dispatched, a mouse event, or none', () => {
   assert.deepEqual(toolNamesFor(NAMES, keydown(0)), NAMES)
   assert.deepEqual(toolNamesFor(NAMES, { type: 'mousedown', eventPhase: 3 }), NAMES)
   assert.deepEqual(toolNamesFor(NAMES, undefined), NAMES)
