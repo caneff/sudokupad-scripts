@@ -1,4 +1,5 @@
 'use strict'
+require('./fake-page-storage.js')
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')

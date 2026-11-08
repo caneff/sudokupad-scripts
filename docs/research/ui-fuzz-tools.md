@@ -4,8 +4,8 @@ Read 2026-11-08. The question: which maintained tool, if any, should drive seede
 random sequences of real user actions on sudokupad.app (Playwright, headless
 Chromium, every script injected), with shrinking to a minimal sequence and replay
 from a seed. Versions and dates below are from the npm registry
-(`https://registry.npmjs.org/<name>`) and the GitHub API as of today. Nothing was
-installed or run; every claim about behaviour is from the docs named beside it.
+(`https://registry.npmjs.org/<name>`) and the GitHub API as of today. Sections 1 to 4 were read from
+docs, not run; "Tried with Playwright" below is the one tool that was run.
 
 ## Summary
 
@@ -213,12 +213,59 @@ digit) and the `seed`/`path`/`replayPath` replay line, at the cost of one
 dependency with one transitive (`pure-rand`) and 1.5 MB. ddmin as in the Fuzzing
 Book only removes whole actions; it does not simplify their parameters.
 
+## Tried with Playwright
+
+Run 2026-11-08 (#592, under #590) with fast-check 4.10.2, Playwright 1.64 and headless Chromium on the recorded
+SudokuPad (`live/page.mjs`), all six scripts injected after Start Puzzle. The code is `live/fuzz/fuzz.mjs`
+(runner), `live/fuzz/run.mjs` (command line) and `live/fuzz/fuzz.proof.mjs` (the proof, `npm run test:fuzz`; five minutes, so
+not in `npm run test:live`).
+
+Verdict: it works. `fc.commands` + `fc.asyncModelRun` + Playwright found a planted failure, shrank it to the
+shortest sequence and replayed it from the printed numbers.
+
+What was run: three commands (click a free cell with the real mouse, type a digit 1 to 9, click Undo) and a
+planted rule, "no more than 2 digits entered", read from `Framework.app.puzzle.cells` after every command. Seed 1
+found it and shrank it to `click r1c3 | type 1 | click r1c4 | type 1 | click r1c6 | type 1`: six steps, which is the
+least that breaks the rule (three digits in three different cells, each needing its own click). The shrinker removed
+every Undo and every wasted click, and also simplified the arguments: every digit became `1` and the cells moved to the
+lowest indexes. A hand-rolled ddmin would not have done the second part. With the rule off, the same seed passes.
+
+Replay: a failure prints `seed`, `path` and the `replayPath` comment that `String(commands)` carries. Passing
+`{ seed, path, endOnFailure: true }` to `fc.check` and `{ replayPath }` to `fc.commands` ran one page and reproduced
+the same sequence and the same failure in about 2 seconds (`node live/fuzz/run.mjs --planted 2 --seed 1 --path ...
+--replay-path ...`).
+
+The #462 pattern (sleep 200 ms after `asyncModelRun`, then check error signals inside the same property) is in
+`runSequence`. It reads the `errors` that `openPage` collects (uncaught page errors and unexpected skip lines, plus
+`console.error` through `captureConsoleErrors`). A page error planted on a 50 ms timer after each command, so after
+the last command returns, failed the property and shrank to two steps (`click r1c3 | type 1`; why not one was not looked into): the pattern does make a late error shrink.
+
+Quirks and costs:
+
+- **A page cannot be reused between runs.** `Framework.app.restartPuzzle()` empties the board but is itself an
+  undoable action: the second Undo after it brings the earlier digits back. Clearing `puzzle.replayStack`,
+  `undoStack`, `redoStack` and `stateStack` did not stop that (the undo history is kept somewhere else, not found).
+  Without a fresh page, a run depends on the runs before it: the first attempt "found" a failure whose shrunk
+  sequence held only 2 digits, and the replay passed. Each run therefore opens its own context, loads the recording,
+  clicks Start Puzzle and injects the scripts: about 1.1 s a run.
+- **Cost is dominated by shrinking.** 25 passing runs take about 30 s. A failure found at seed 1 took 3m45s to shrink,
+  because every candidate is a page load. `numRuns` 25 and `maxCommands` 20 keep it there. Seeds 2, 3 and 592 did not
+  hit the planted failure in 25 runs, so the proof pins seed 1: the generator is random, and a short run is luck.
+- **Command size matters.** With the default `size` and a 3-digit planted rule, 50 runs of up to 30 commands found no
+  failure; `size: 'max'` with `maxCommands` found it. Not tested further why (likely that default sequences are short).
+- **`String(details.counterexample[0])` prints as `name,name /*replayPath="..."*/`** (no brackets, a space before the
+  comment, checked on 4.10.2). Command names must contain no comma, because the sequence is read back by splitting on it.
+- **`path` and `replayPath` are both needed** to replay: `path` selects the shrunk case, `replayPath` tells
+  `fc.commands` which of the generated commands actually ran. The replay needs the same command arbitraries; a change
+  to `commandsFor` makes an old pair unreplayable (fast-check discussion #6166).
+- **A planted failure is thrown inside the command**, so the shrinker sees it as an ordinary assertion error.
+
+Not tried: `scheduledModelRun`, `interruptAfterTimeLimit`, running several pages at once, or a model that predicts
+the board and compares it with the page (the planted rule reads the page only).
+
 ## Not verified
 
-- No tool was run; the fit with SudokuPad (timing, animation, the injected scripts'
-  async startup) is untested.
-- fast-check's behaviour with `asyncModelRun` and Playwright in particular is
-  inferred from the Selenium and Puppeteer reports, not from a Playwright example.
+- Only fast-check was run (see "Tried with Playwright"); the other tools were read about, not run.
 - The sizes are npm `unpackedSize`, not install size or bundle size.
 - The Medium article was read through a text fetcher; the claim that the Criteo
   examples use Selenium comes from fast-check issue #253, not from the article.
