@@ -32,7 +32,7 @@ const MOVES_PER_FRAME = 4
 const DRAG_BY = [0.5, 0.5]
 // One frame at 60 Hz.
 const FRAME_MS = 16
-// A note's place and the rectangle's corner are kept to a tenth of a pixel or unit, so a point can land a pixel off the pointer's.
+// A note's place and the rectangle's corner are kept to a hundredth of a pixel or unit, so a point can land off the pointer's.
 const POINTER_NEAR_PX = 1
 const near = (got, want) => got.every((v, i) => Math.abs(v - want[i]) <= POINTER_NEAR_PX)
 
@@ -168,7 +168,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, atCell(9)))
     const selected = await read(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-selected')].map((note) => note.textContent))
     // The pointer leaves the notes and the selection ends, so the board checks below see no hover or selection change of their own.
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.move(1, 899)
     assert.deepEqual({ selected, measures: await noteMeasures() }, { selected: [NOTE_TEXT(9)], measures: 0 })
   })
@@ -249,7 +249,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
       return [right, bottom]
     })
     await p.mouse.up()
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const [right, bottom] = [handle.x + handle.width, handle.y + handle.height]
     assert.deepEqual(look.straightAfter.map(Math.round), [right, bottom].map(Math.round))
     assert.deepEqual(look.afterFrame.map(Math.round), [right + 30, bottom + 15].map(Math.round))
@@ -260,7 +260,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     await p.mouse.down({ button: 'right' })
     // Through n29's middle (r8c3) and back, all in one task.
     const target = [...await steps([8.5, 1.5], [-1, 1], 2), ...await steps([7.5, 2.5], [1, -1], 2)]
-    const look = await movesInOneTask(target, 2, () => [...document.querySelectorAll('#draw-tool-layer .draw-tool-text')].some((n) => n.textContent === 'n29'))
+    const look = await movesInOneTask(target, 2, () => [...document.querySelectorAll('#draw-tool-layer .draw-tool-text:not(.draw-tool-fading)')].some((n) => n.textContent === 'n29'))
     await p.mouse.up({ button: 'right' })
     assert.deepEqual(look, { straightAfter: true, afterFrame: false })
     assert.equal(await p.locator(TEXT_BOX).count(), 0)

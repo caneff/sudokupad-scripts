@@ -28,7 +28,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
   const typeText = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   const reload = async () => {
     await draw.reload(p)
@@ -101,7 +101,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
     assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [6, 100], 'a mixed selection shows the first note\'s')
     await slideTo(p, SIZE_SLIDER, 3)
     await slideTo(p, OPACITY_SLIDER, 40)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await typeText(C, 'C')
     assert.deepEqual((await saved()).map((i) => [i.text, i.size, i.opacity]), [['A', 14, 40], ['B', 14, 40], ['C', 32, 60]])
     assert.deepEqual([await stored(WIDTH_KEY), await stored(OPACITY_KEY)], [12, 60], 'the next-note values are unchanged')
@@ -117,7 +117,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
     await slideTo(p, OPACITY_SLIDER, 75)
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
     await p.keyboard.type('x')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const note = await savedNote('Ax')
     assert.deepEqual([note?.size, note?.opacity], [27, 75])
     assert.deepEqual([await stored(WIDTH_KEY), await stored(OPACITY_KEY)], [12, 60], 'the next-note values are unchanged')
@@ -131,7 +131,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
     await p.keyboard.type('Q')
     assert.match(await p.locator(TEXT_BOX).textContent(), /Q$/)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('a note saved with a size off the old menu\'s six keeps it, and a next-note size saved off them is kept as it is', async () => {
@@ -142,7 +142,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
     assert.equal(await valueOf(p, SIZE_SLIDER), 7.5, 'the saved next-note size shows as it is')
     await clickAt(A)
     assert.equal(await valueOf(p, SIZE_SLIDER), 7.5, 'and so does the 23 of the note: width 7.5')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await typeText([7.5, 1.5], 'kept')
     assert.equal((await savedNote('kept')).size, 23)
     assert.equal((await savedNote('odd')).size, 23)

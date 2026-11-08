@@ -81,7 +81,7 @@ test('nudgedFontPx: one px per press from the automatic size, below SudokuPad\'s
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
 const VIEWPORT = { width: 2048, height: 1064 }
 function fakePane (chars, scale = 1, spareRoom = 0) {
-  const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '' }
+  const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '', overflowY: '' }
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
   const scrollHeight = () => Math.ceil((chars * font() * 0.5) / (width() - 32)) * font() * 1.2 + 32
@@ -200,10 +200,16 @@ test('autoPaneFit: SudokuPad\'s width and the largest font when the rules fit at
   assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 480, fontPx: 30 })
 })
 
-test('autoPaneFit: the least width at which SudokuPad\'s own size fits, else the limit', () => {
+test('autoPaneFit: the least width at which SudokuPad\'s own size fits, else a readable width up to the limit', () => {
   const fits = (width, font) => width >= 700 && font <= 17.6
   assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits }), { width: 700, fontPx: 17.6 })
   assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 17.6, nudgePx: 0, fits }), { width: 650, fontPx: 17.6 })
+  const readable = (px) => Math.round(600 + (px - 17.6) * 50) // 600 at SudokuPad's size, wider for a larger font
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 17.6, nudgePx: 0, fits, readable }), { width: 600, fontPx: 17.6 }, 'no width fits: the readable width, not the limit')
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 900, ownPx: 17.6, nudgePx: 0, fits, readable }), { width: 700, fontPx: 17.6 }, 'a width fits: widened as far as that takes, past the readable width')
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 17.6, nudgePx: 0, fits, readable: () => 300 }), { width: 480, fontPx: 17.6 }, 'never under SudokuPad\'s width')
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 17.6, nudgePx: 1, fits, readable }), { width: 650, fontPx: 18.6 }, 'f+ on rules that scroll anyway takes the readable width of the bigger font, not the full limit')
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 17.6, nudgePx: -1, fits, readable }), { width: 550, fontPx: 16.6 }, 'f- narrows to the readable width of the smaller font')
 })
 
 test('normalizeLimit: a positive whole number of css px, else no limit', () => {
@@ -290,12 +296,23 @@ test('fitRulesPane: with no room it puts the last fit back, the controls\' move 
   assert.equal(controls.style.translate, '0px -30px')
 })
 
+test('fitRulesPane: rules that fit lose SudokuPad\'s empty scrollbar track, rules that still scroll keep it, and a clear gives it back', () => {
+  const short = fakePane(140)
+  short.fit()
+  assert.equal(short.rules.style.overflowY, 'auto')
+  clearFit(short.rules, short.controls)
+  assert.equal(short.rules.style.overflowY, '')
+  const long = fakePane(20000)
+  long.fit()
+  assert.equal(long.rules.style.overflowY, '', 'rules that scroll even when widened keep SudokuPad\'s scroll')
+})
+
 test('fitRulesPane: a pane SudokuPad does not show (a puzzle with no rules) gets the fit and the drag taken off', () => {
   const { rules, controls, fit } = fakePane(140)
   fit({ box: { w: 0, h: 30, x: 0, y: -30 } })
   Object.defineProperty(rules, 'offsetWidth', { get: () => 0 })
   assert.equal(fit(), null)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '' })
+  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '', overflowY: '' })
   assert.equal(controls.style.translate, '')
 })
 
@@ -319,7 +336,7 @@ test('clearFit: takes the fit\'s output off the pane and the controls', () => {
   fit({ box: { w: -20, h: 30, x: 20, y: -30 } })
   assert.notEqual(controls.style.translate, '')
   clearFit(rules, controls)
-  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '' })
+  assert.deepEqual(rules.style, { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', overflowWrap: '', overflowY: '' })
   assert.equal(controls.style.translate, '')
 })
 
