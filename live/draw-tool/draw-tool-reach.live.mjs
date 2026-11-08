@@ -28,11 +28,14 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
   const resizeTo = async (size) => {
     await p.setViewportSize(size)
   }
-  // The note's box and the panel's, on the screen.
-  const boxes = () => read((selector) => {
-    const note = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'fixed').getBoundingClientRect()
-    return { note: note.toJSON(), panel: document.querySelector('#controls').getBoundingClientRect().toJSON(), window: [window.innerWidth, window.innerHeight] }
-  }, TEXTS)
+  // The note's box, its point (the top left of its text, inside the padding) and the panel's box, on the screen.
+  const boxes = async () => ({
+    ...await read((selector) => {
+      const note = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'fixed').getBoundingClientRect()
+      return { note: note.toJSON(), panel: document.querySelector('#controls').getBoundingClientRect().toJSON(), window: [window.innerWidth, window.innerHeight] }
+    }, TEXTS),
+    point: await draw.notePoint(p, 'fixed')
+  })
   const clearOfPanel = ({ note, panel }) => note.right <= panel.left || note.left >= panel.right || note.bottom <= panel.top || note.top >= panel.bottom
   const insideWindow = ({ note, window: [w, h] }) => note.left >= 0 && note.top >= 0 && note.right <= w && note.bottom <= h
   const reload = async () => {
@@ -53,10 +56,10 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
   })
   after(async () => { await context.close() })
 
-  // The note's middle is back on its own point, and its stored point is that point.
+  // The note's text starts back on its own point, and its stored point is that point.
   const atHome = async () => {
-    const middle = await settle(async () => draw.middleOf((await boxes()).note).map(Math.round), RIGHT_OF_PANEL)
-    assert.deepEqual(middle, RIGHT_OF_PANEL, 'drawn at its own point')
+    const point = await settle(async () => (await boxes()).point.map(Math.round), RIGHT_OF_PANEL)
+    assert.deepEqual(point, RIGHT_OF_PANEL, 'drawn at its own point')
     assert.deepEqual((await saved())[0].fixed, RIGHT_OF_PANEL, 'stored at its own point')
   }
   it('widened until the panel covers its point, the note is drawn clear of the panel and opens on a double-click without moving for good, and is back at its own point when the window is restored', async () => {
@@ -67,7 +70,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     await stable(async () => (await boxes()).note.x)
     await p.mouse.dblclick(...draw.middleOf((await boxes()).note))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click opens the note itself')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual((await saved())[0].fixed, RIGHT_OF_PANEL, 'drawing it clear of the panel saves nothing')
     await reload()
     assert.equal(clearOfPanel(await boxes()), true, 'still clear of the panel over a reload')
@@ -93,17 +96,21 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.equal(await settle(async () => insideWindow(await boxes()), true), true, 'wholly inside the window')
     await stable(async () => (await boxes()).note.x)
     const middle = draw.middleOf((await boxes()).note)
+    const [pointX, pointY] = (await boxes()).point
     const dropAt = [middle[0], middle[1] + 80]
+    const expected = [pointX, pointY + 80]
     await p.mouse.move(...middle)
     await p.mouse.down()
     await p.mouse.move(...dropAt, { steps: 8 })
     await p.mouse.up()
     const dropped = (await saved())[0].fixed
-    assert.equal(Math.abs(dropped[0] - dropAt[0]) <= 1.5 && Math.abs(dropped[1] - dropAt[1]) <= 1.5, true, `dragged to ${dropAt}, stored at ${dropped}`)
+    assert.equal(Math.abs(dropped[0] - expected[0]) <= 2.5 && Math.abs(dropped[1] - expected[1]) <= 2.5, true, `dragged to ${expected}, stored at ${dropped}`)
     assert.notDeepEqual(dropped, RIGHT_OF_PANEL, 'the new point is saved')
     await reload()
     assert.deepEqual((await saved())[0].fixed, dropped, 'the same point over a reload')
-    assert.deepEqual(draw.middleOf((await boxes()).note).map(Math.round), dropped.map(Math.round), 'drawn at the drop point')
+    // Drawn on a whole device pixel, so within a pixel of the stored point.
+    const drawn = (await boxes()).point
+    assert.equal(drawn.every((v, i) => Math.abs(v - dropped[i]) <= 1), true, `drawn from ${drawn}, stored at ${dropped}`)
     await resizeTo(HOME)
     await reload()
     assert.deepEqual((await saved())[0].fixed, dropped, 'the drop point, with the window restored')

@@ -19,7 +19,7 @@ const TALL_AT = [4.5, 4.5]
 const SHORT_AT = [7.5, 1.5]
 const EMPTY_AT = [7.5, 7.5]
 // Beside the grid, between it and the panel, clear of every control.
-const OFF_BOARD_AT = [2.5, 9.45]
+const OFF_BOARD_AT = [3.5, 9.45]
 // Narrow letters: the guess from the character count makes this two lines, and it is drawn on one.
 const NARROW_AT = [0.5, 1.5]
 const NARROW_TEXT = 'il '.repeat(15).trim()
@@ -85,7 +85,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
 
   it('a line longer than 16 em wraps inside a box 16 em wide, and does not scroll', async () => {
     await typeNote(LONG_AT, [LONG_TEXT])
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const long = await note('word')
     assert.ok(long.widthEm <= BOX_WIDTH_EM + 0.05 && long.widthEm > BOX_WIDTH_EM - 2, `${long.widthEm} em wide`)
     assert.ok(long.heightEm > 2 * LINE_HEIGHT - 0.05, `${long.heightEm} em high: wrapped onto more than one line`)
@@ -103,7 +103,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     assert.ok(caret.height > 0, 'the caret has a line box')
     assert.ok(caret.top >= -NEAR_PX && caret.bottom >= -NEAR_PX, `caret ${caret.top}px below the box's top and ${caret.bottom}px above its bottom`)
     assert.ok((await note('line 1', TEXT_BOX)).scrollTop > 0, 'the open box scrolled to its last line')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('a note of more than 8 lines stops growing at 8 lines high, and its text runs past the box', async () => {
@@ -158,7 +158,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     await p.mouse.wheel(0, -40)
     assert.equal((await note('line 1')).scrollTop, before)
     assert.deepEqual(await wheelsSeen(), [false])
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.locator(DIALOG).waitFor({ state: 'detached' })
   })
 
@@ -174,7 +174,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     const before = (await note('line 1')).scrollTop
     await p.mouse.click(...await gridPoint(p, TALL_AT))
     assert.equal((await note('line 1')).scrollTop, before)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('with a digit tool current the wheel over the tall note scrolls it, and a click on the cell under the note reaches SudokuPad', async () => {
@@ -195,7 +195,7 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
 
   it('the wheel over a short note, or over the board, reaches SudokuPad untouched, as before', async () => {
     await typeNote(SHORT_AT, ['15'])
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await wheelsSeen()
     await moveTo(SHORT_AT)
     await p.mouse.wheel(0, 40)
@@ -207,18 +207,18 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
 
   it('a click just under a wrapped note, where its characters alone would guess it reaches, misses it and opens a new note', async () => {
     await typeNote(NARROW_AT, [NARROW_TEXT])
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const narrow = await note('il')
     assert.ok(narrow.heightEm < 1.5 * LINE_HEIGHT, `drawn ${narrow.heightEm} em high: one line`)
     const [x, y] = await gridPoint(p, NARROW_AT)
     await p.mouse.click(x, y + 0.9 * LINE_HEIGHT * narrow.em)
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'a new note opened, so the click missed the note')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('a long note off the board wraps, stops at 8 lines and scrolls with the wheel, and is stored by its screen point', async () => {
     await typeNote(OFF_BOARD_AT, [OFF_TEXT, ...TALL_LINES.slice(0, 9)])
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const saved = (await draw.saved(p)).find((item) => item.text.startsWith('side'))
     assert.ok(saved.fixed, `stored off the board: ${JSON.stringify(saved)}`)
     const off = await note('side')

@@ -202,6 +202,9 @@ Picture at thickness 1, 5 and 16, and the page 3 pen panel: `pen-tool-extras/pen
   (`cell.renderContent(true)`).
 - **Dark Page.** A chevron reaches half its width plus half its stroke off its line: 15.6 units at thickness 16. Dark Page paints the
   whole `#svgrenderer` box white, and the svg clips what lies outside it, so the reach no longer matters to it (#444).
+- **The drag hint's life** (read from `tool-pen.js` 0.611.0, run live for #546). `drawLineHint(path)` makes `this.linePart` on its first call, only once `eraseMode` is set, and sets its `d` from `path` (points `{r, c}` in cell units); `handleDragStart` deletes the property, and `handleDragEnd` removes the element, so anything the script draws beside the hint goes with a wrap on `handleDragEnd`. `path` is the tool's own `currentPath`.
+- **Each stroke's element is `cell.childElems[className]`**, with the key `cell-pen pen-<value> pencolor-<color>` (the entry in `cell.pen` is value then color), for a path, an arrow line's group and a mark alike; a mark this script adds sits in the marks layer, the rest in `#cell-pen`. #546 fades them by class through it.
+- **`renderPen({ row, col, value, className })` can draw a lone copy** of any pen value without touching a cell: the wrapped one draws this script's marks too, so the ghost of #546 is one call and a move into the hint layer. A page that queries `.cell-pen` finds a ghost too (it keeps the class so thickness, dot fill and color rules apply), so a live check that counts strokes excludes `.pen-tool-extras-ghost`.
 - Not run: a touch screen, Windows, Tampermonkey.
 
 ## Holding a modifier leaves the pen tool (run on the page 2026-11-04, SudokuPad 0.611.0, headless Chromium, no script loaded)

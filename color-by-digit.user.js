@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.23.1
+// @version      0.25.1
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.23.1'
+  const VERSION = '0.25.1'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -204,6 +204,23 @@
   function rowAfterKey (key, index, count) {
     if (key === 'Enter' || key === ' ') return index
     if (ARROW_STEP[key]) return (index + ARROW_STEP[key] + count) % count
+    return null
+  }
+
+  // Where an arrow key moves within a grid `columns` wide: along the row or down the column to the next usable slot, null at the edge or for any other key.
+  const GRID_STEP = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }
+  function gridTarget (key, index, usable, columns) {
+    const step = GRID_STEP[key]
+    if (!step) return null
+    const rows = Math.ceil(usable.length / columns)
+    let column = index % columns + step[0]
+    let row = Math.floor(index / columns) + step[1]
+    while (column >= 0 && column < columns && row >= 0 && row < rows) {
+      const next = row * columns + column
+      if (usable[next]) return next
+      column += step[0]
+      row += step[1]
+    }
     return null
   }
 
@@ -695,10 +712,13 @@
 
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
+  const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
+
   // The dialog's color block: a pulldown above a grid of swatches, three to a row.
   // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
   // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
-  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '' }) {
+  // A `fillOpacity` under 1 draws the palette swatches that strong over what is behind them; the border and the pressed ring stay whole.
+  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '', fillOpacity = 1 }) {
     const palette = picked !== undefined
     const option = ({ value, label, selected, disabled }) =>
       `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(label)}</option>`
@@ -707,7 +727,7 @@
       const head = `class="${prefix}swatch" data-role="swatch"`
       if (!s) return `<span ${head} data-empty="slot"></span>`
       if (!palette) return `<input type="color" ${head} data-key="${escapeHtml(s.key)}" value="${escapeHtml(s.value)}" ${named(s)}>`
-      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${escapeHtml(s.value)}"></button>`
+      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${fillWithOpacity(escapeHtml(s.value), fillOpacity)}"></button>`
     }
     return `<div class="${prefix}color-block">` +
       `<select class="${prefix}color-choice" data-role="color-choice" aria-label="${escapeHtml(label)}">${options.map(option).join('')}</select>` +
@@ -898,18 +918,23 @@
       `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
+  // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
+  const MIN_TARGET_PX = 24
+  const ARROW_BOX_PX = 14
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
-    'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:14px;height:14px;' +
+    'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:' + ARROW_BOX_PX + 'px;height:' + ARROW_BOX_PX + 'px;' +
     `border:1.5px solid ${PURPLE};border-radius:3px;background:#fff;color:${PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
 
   const UNREADABLE_FILL = '#ccc'
+  // SudokuPad draws a cell color this strong on the board and on its own color buttons (tool-color.css, --cell-color-opacity).
+  const CELL_COLOR_OPACITY = 0.6
 
   // The icon is drawn in 100 by 100 units. A run of three cells reaches a little past its sides, into the button's margin,
   // and stays above the arrow box in the lower right.
   const ICON_CELL = 38
   function iconRun (mode, groups, colorOf, digitProfileGroups) {
     const chips = shownChips(mode, groups, digitProfileGroups ?? groups)
-    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, chips, x: 50 - chips.length * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
+    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, chips, x: 50 - (chips.length || CHIP_MAX_GROUPS) * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
   }
 
   // SudokuPad's own app buttons put their icon in <div class="icon">.
@@ -1038,7 +1063,7 @@
   // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
-    const look = !key ? '' : color ? ` style="background:${escapeHtml(color.value)}"` : ' class="cbd-unset"'
+    const look = !key ? '' : color ? ` style="background:${fillWithOpacity(escapeHtml(color.value), CELL_COLOR_OPACITY)}"` : ' class="cbd-unset"'
     return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${escapeHtml(key || '')}"${look}>${digit}</button>`
   }
 
@@ -1063,6 +1088,7 @@
       options: pages.map((p) => ({ value: String(p.page), label: pageLabel(p), selected: p === shown })),
       swatches: [...shown.rows.flat(), ...(shown.zero ? [shown.zero] : [])].map((slot) => slot && { ...slot, label: slot.key }),
       picked: brush,
+      fillOpacity: CELL_COLOR_OPACITY,
       beside: renderPad(groups, colors)
     })
   }
@@ -1070,20 +1096,33 @@
   // Each mode draws a cell the way it colors the board: the cell's fill and its digit's ink from the group color, and the run's line.
   // A group color that cannot be read keeps SudokuPad's own digit color, as the board does.
   const shadeOf = (color) => { const rgb = parseColor(color); return rgb ? darkenColor(rgb) : ENTERED_DIGIT_BLUE }
+  const DIM_LINE = '#aaa'
   const CHIP_LOOKS = {
     cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
     digit: (color, digitColor) => ({ fill: '#fff', ink: shadeOf(digitColor), line: '#000' }),
     both: (color, digitColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitColor), line: '#000' }),
-    off: () => ({ fill: '#fff', ink: '#999', line: '#aaa' })
+    off: () => ({ fill: '#fff', ink: '#999', line: DIM_LINE })
   }
   // One cell of the run, in the run's own units; the strokes stay 1 px at any size.
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
+  // A profile with no groups shows three blank cells, dashed like a color on no page, so the run does not read as broken.
+  function renderBlankChips (size, x, y) {
+    const width = CHIP_MAX_GROUPS * RUN_CELL
+    const dash = `stroke="${DIM_LINE}" stroke-dasharray="2 2"`
+    const cells = Array.from({ length: CHIP_MAX_GROUPS }, (_, i) => `<rect data-role="blank-chip" x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="#fff"/>`).join('')
+    const dividers = Array.from({ length: CHIP_MAX_GROUPS - 1 }, (_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" ${dash} ${STROKE}/>`).join('')
+    const place = x === undefined ? '' : ` x="${x}" y="${y}"`
+    return `<svg data-role="chips" width="${CHIP_MAX_GROUPS * size}" height="${size}"${place} viewBox="0 0 ${width} ${RUN_CELL}" overflow="visible" aria-hidden="true">` +
+      `${cells}${dividers}<rect x="0" y="0" width="${width}" height="${RUN_CELL}" fill="none" ${dash} ${STROKE}/></svg>`
+  }
+
   // A run of joined cells, one per shown chip (`chips` when given, else the mode's own pick): fills first, then single dividers and one outline over them, so no line is doubled.
   // `size` is one cell's width, in pixels or in the units of an enclosing SVG, which `x` and `y` place it in.
   function renderChips (groups, colorOf, { size, style = 'cell', x, y, digitProfileGroups = groups, chips = shownChips(style, groups, digitProfileGroups) }) {
     const shown = chips
+    if (shown.length === 0) return renderBlankChips(size, x, y)
     const width = shown.length * RUN_CELL
     const { line } = CHIP_LOOKS[style]('')
     const cells = shown.map(({ digit, cellKey, digitKey }, i) => {
@@ -1092,7 +1131,8 @@
       // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
       const ink = look.ink
-      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"/>` +
+      const tint = cellKey !== undefined && (style === 'cell' || style === 'both') ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
+      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"${tint}/>` +
         `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
     const dividers = shown.slice(1).map((_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" stroke="${line}" ${STROKE}/>`).join('')
@@ -1107,152 +1147,6 @@
   // Wide enough for the longest of Mode, Cell and Digit, so the three pulldowns start at one edge.
   const PULLDOWN_LABEL_WIDTH = 64
   const DIALOG_WIDTH = 640
-  const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
-  const EDITOR_ID = 'color-by-digit-editor'
-  const MENU = '#color-by-digit-menu'
-  const STYLE_ID = 'color-by-digit-style'
-
-  const MUTED = '#8a8496'
-  // One chip's size in pixels, in the dialog's profile list and the profile menu, and the width of a column of three:
-  // a pixel more, for the outline's stroke, which straddles the run's edge.
-  const CHIP_PX = 16
-  const CHIP_COLUMN_PX = CHIP_MAX_GROUPS * CHIP_PX + 1
-  const ACTIVE_FILL = '#f1ebfb'
-  const ACTIVE_RING = '#b79be0'
-  const ACTIVE_INK = '#5b2a9a'
-  const HOVER_FILL = '#f6f3f9'
-  // The name field's side padding; its border is 1 px.
-  const NAME_PAD = 6
-  function renderProfiles (state, colorOf, selected) {
-    const only = state.profiles.length <= 1
-    const rows = state.profiles.map((profile, i) => {
-      const chosen = i === selected
-      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
-        `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
-        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, { size: CHIP_PX })}</span>` +
-        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
-        `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
-    }).join('')
-    const full = state.profiles.length >= MAX_PROFILES
-    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
-      `<div role="radiogroup" aria-label="Profile to edit">${rows}</div>` +
-      `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ' disabled' : ''}>+ New profile</button>`
-  }
-
-  // Dense rows: the chips in a column of one width, so the names line up, and unsynced, a Cell dot and a Digit dot.
-  const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
-  const MENU_DOT_COLUMN = 44
-  const DOT_RING = '#cfc7da'
-  const chipColumn = (groups, colorOf) =>
-    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(groups, colorOf, { size: CHIP_PX })}</span>`
-  // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
-  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
-  const dotColumn = (role, html, align) => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}">${html}</span>`
-  const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
-
-  function menuDot (target, index, picked, name) {
-    const on = index === picked
-    return dotColumn('dot-column', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${escapeHtml(name)}" ` +
-      `style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;cursor:pointer;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`, 'display:flex;justify-content:center')
-  }
-
-  // Rows are not focusable, so the keyboard stays with the puzzle. Synced, a row picks its profile; unsynced, its two dots pick
-  // the cell profile and the digit profile, and the row itself picks nothing.
-  function renderMenu (state, colorOf) {
-    const split = usesDigitColors(state) && !isSynced(state)
-    const head = split
-      ? `<div style="${MENU_ROW};height:auto;padding-bottom:2px"><span style="flex:1"></span>` +
-        Object.values(TARGET_NAMES).map((word) => dotColumn('column-head', word, `text-align:center;font:600 11px/1 sans-serif;color:${MUTED}`)).join('') + '</div>'
-      : ''
-    const rows = state.profiles.map((profile, i) => {
-      const cells = chipColumn(profile.groups, colorOf) + menuName(profile.name)
-      const picked = { cells: state.active, digits: state.digitActive }
-      if (split) return `<div data-role="menu-row" style="${MENU_ROW}">${cells}${Object.keys(TARGET_NAMES).map((target) => menuDot(target, i, picked[target], profile.name)).join('')}</div>`
-      const active = i === state.active
-      return `<div data-role="menu-row" data-act="pick" data-target="cells" data-index="${i}" aria-checked="${active}" style="${MENU_ROW};cursor:pointer` +
-        `${active ? `;background:${ACTIVE_FILL};color:${ACTIVE_INK};font-weight:600` : ''}" role="menuitemradio">${cells}</div>`
-    }).join('')
-    return `${head}${rows}` +
-      '<div style="height:1px;background:#ece8f2;margin:4px"></div>' +
-      '<div role="menuitem" data-act="edit" style="padding:4px 6px;border-radius:6px;cursor:pointer;font-size:13px;color:#5d5868">&#9881; Edit profiles…</div>'
-  }
-
-  const optionHtml = (value, label, selected, index) =>
-    `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`
-
-  function renderPulldowns (state, mode) {
-    const shownMode = allowedMode(mode, usesDigitColors(state))
-    const digit = digitChoice(state)
-    const named = (picked) => state.profiles.map((p, i) => optionHtml(i, p.name, picked === String(i), i)).join('')
-    const pulldown = (role, label, options) => `<label class="cbd-pulldown"><span>${label}</span><select data-role="${role}">${options}</select></label>`
-    return '<div class="cbd-pulldowns">' +
-      pulldown('mode-draft', 'Mode', modesFor(usesDigitColors(state)).map((m) => optionHtml(m, MODE_NAMES[m], m === shownMode)).join('')) +
-      pulldown('cell-profile', 'Cell', named(String(state.active))) +
-      pulldown('digit-profile', 'Digit', optionHtml('same', 'Same as cell', digit === 'same') + named(digit) + optionHtml('none', 'None', digit === 'none')) +
-      '</div>'
-  }
-
-  // Matched as text, not by a selector, since a custom palette's key may hold a quote.
-  const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
-
-  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false }) {
-    const colors = layoutColors(pages)
-    const shown = pages[page] || pages[0]
-    const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
-    const paint = colors.length === 0
-      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
-      : renderPaint(groups, pages, shown, brush, colors)
-    const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
-    return `${kept}${pulldownsHtml}` +
-      `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
-      `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
-  }
-
-  // One stylesheet, every rule scoped to the editor, the dialog itself (its width), or the dialog's options row.
-  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
-  const EDITOR = `#${EDITOR_ID}`
-  const DIALOG = `.dialog:has(${EDITOR})`
-  const STYLE_CSS = [
-    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
-    [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
-    [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
-    [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
-    [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
-    [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
-    [`${EDITOR} .cbd-pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
-    [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
-    [`${EDITOR} .cbd-column`, 'min-width: 0'],
-    [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
-    [`${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
-    [EDITOR, 'user-select: none; -webkit-user-select: none'],
-    // The pad's columns: three digit keys; the 0 key sits under 7.
-    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}); touch-action: none`],
-    [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
-    [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
-    [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
-    [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 2px'],
-    [`${EDITOR} .cbd-profile`, 'cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px; border-radius: 6px'],
-    [`${EDITOR} .cbd-profile:hover`, `background: ${HOVER_FILL}`],
-    [`${EDITOR} .cbd-profile[aria-checked="true"]`, `background: ${ACTIVE_FILL}`],
-    // Hidden, not removed, so every row keeps its layout.
-    [`${EDITOR} .cbd-profile [data-role="handle"], ${EDITOR} .cbd-profile [data-act="delete"]`, 'visibility: hidden'],
-    [`${EDITOR} .cbd-profile:hover [data-role="handle"], ${EDITOR} .cbd-profile:hover [data-act="delete"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-role="handle"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-act="delete"]`, 'visibility: visible'],
-    [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
-    // One width for every run, so the names line up.
-    [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_COLUMN_PX}px`],
-    // Its left padding is the name field's padding and border, so a name starts where the selected row's does.
-    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400`],
-    [`${EDITOR} .cbd-text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
-    [`${EDITOR} .cbd-text-button:hover:not(:disabled)`, `background: ${HOVER_FILL}; color: #222`],
-    [`${EDITOR} .cbd-text-button:disabled`, 'opacity: .4; cursor: default'],
-    [`${EDITOR} [data-act="delete"]`, 'flex: none; font-size: 1.1rem; line-height: 1'],
-    [`${EDITOR} [data-act="new-profile"]`, 'margin: 4px 0'],
-    // Looks like the row's name until focused: no border or fill, then the box shows.
-    [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
-    [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
-    [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px']
-  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
-
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1261,6 +1155,11 @@
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
+  const FOCUS_RING = '#6a1b9a'
+  const CONTROL_HOVER = '#f3e5f5'
+  const SAVE_FILL = '#6b3fa0'
+  // An inset layer darkens whatever fill the control has.
+  const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
   const STATUS_ATTRIBUTE = 'data-role="settings-status"'
   const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
 
@@ -1328,6 +1227,7 @@
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
       `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
@@ -1349,7 +1249,11 @@
     return [
       `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
       `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
-      `${row} button[data-role="save"] { background: #6b3fa0 !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`
+      `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+      `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
+      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
+      `${row} button:active { ${PRESS_LAYER} !important; }`,
+      `${row} button:focus-visible { outline: 2px solid ${FOCUS_RING}; outline-offset: 2px; }`
     ].join('\n')
   }
 
@@ -1397,6 +1301,181 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
+  const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
+  const EDITOR_ID = 'color-by-digit-editor'
+  const MENU = '#color-by-digit-menu'
+  const STYLE_ID = 'color-by-digit-style'
+
+  const MUTED = '#8a8496'
+  // One chip's size in pixels, in the dialog's profile list and the profile menu, and the width of a column of three:
+  // a pixel more, for the outline's stroke, which straddles the run's edge.
+  const CHIP_PX = 16
+  const CHIP_COLUMN_PX = CHIP_MAX_GROUPS * CHIP_PX + 1
+  const ACTIVE_FILL = '#f1ebfb'
+  const ACTIVE_RING = '#b79be0'
+  const ACTIVE_INK = '#5b2a9a'
+  const HOVER_FILL = '#f6f3f9'
+  // The name field's side padding; its border is 1 px.
+  const NAME_PAD = 6
+  function renderProfiles (state, colorOf, selected) {
+    const only = state.profiles.length <= 1
+    const rows = state.profiles.map((profile, i) => {
+      const chosen = i === selected
+      return `<div class="cbd-profile" data-role="profile-row" data-act="select" data-index="${i}" role="radio" aria-checked="${chosen}" tabindex="${chosen ? 0 : -1}" aria-label="${escapeHtml(profile.name)}">` +
+        `<span data-role="handle" data-index="${i}" title="Drag to reorder">&#8942;&#8942;</span>` +
+        `<span class="cbd-chips">${renderChips(profile.groups, colorOf, { size: CHIP_PX })}</span>` +
+        (chosen ? `<input type="text" data-role="profile-name" maxlength="${MAX_NAME_LENGTH}" value="${escapeHtml(profile.name)}" aria-label="Profile name">` : `<span class="cbd-name">${escapeHtml(profile.name)}</span>`) +
+        `<button type="button" class="cbd-text-button" data-act="delete" data-index="${i}" aria-label="Delete profile ${escapeHtml(profile.name)}"${only ? ' disabled' : ''}>&#215;</button></div>`
+    }).join('')
+    const full = state.profiles.length >= MAX_PROFILES
+    return heading('Profiles', `<span class="cbd-count">${state.profiles.length} of ${MAX_PROFILES}</span>`) +
+      `<div role="radiogroup" aria-label="Profile to edit">${rows}</div>` +
+      `<button type="button" class="cbd-text-button" data-act="new-profile"${full ? ' disabled' : ''}>+ New profile</button>`
+  }
+
+  // Dense rows: the chips in a column of one width, so the names line up, and unsynced, a Cell dot and a Digit dot.
+  const MENU_ROW = 'display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 6px;border-radius:6px'
+  const MENU_DOT_COLUMN = 44
+  const DOT_RING = '#cfc7da'
+  const chipColumn = (groups, colorOf) =>
+    `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(groups, colorOf, { size: CHIP_PX })}</span>`
+  // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
+  const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
+  const dotColumn = (role, html, align, attributes = '') => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}"${attributes}>${html}</span>`
+  const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
+
+  function menuDot (target, index, picked, name) {
+    const on = index === picked
+    // The whole column picks, a target 44 by 26 px; the dot is only what is drawn.
+    const picks = ` data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${escapeHtml(name)}"`
+    return dotColumn('dot-column', `<span style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`,
+      'display:flex;justify-content:center;align-self:stretch;align-items:center;cursor:pointer', picks)
+  }
+
+  // Rows are not focusable, so the keyboard stays with the puzzle. Synced, a row picks its profile; unsynced, its two dots pick
+  // the cell profile and the digit profile, and the row itself picks nothing.
+  function renderMenu (state, colorOf) {
+    const split = usesDigitColors(state) && !isSynced(state)
+    const head = split
+      ? `<div style="${MENU_ROW};height:auto;padding-bottom:2px"><span style="flex:1"></span>` +
+        Object.values(TARGET_NAMES).map((word) => dotColumn('column-head', word, `text-align:center;font:600 11px/1 sans-serif;color:${MUTED}`)).join('') + '</div>'
+      : ''
+    const rows = state.profiles.map((profile, i) => {
+      const cells = chipColumn(profile.groups, colorOf) + menuName(profile.name)
+      const picked = { cells: state.active, digits: state.digitActive }
+      if (split) return `<div data-role="menu-row" style="${MENU_ROW}">${cells}${Object.keys(TARGET_NAMES).map((target) => menuDot(target, i, picked[target], profile.name)).join('')}</div>`
+      const active = i === state.active
+      return `<div data-role="menu-row" data-act="pick" data-target="cells" data-index="${i}" aria-checked="${active}" style="${MENU_ROW};cursor:pointer` +
+        `${active ? `;background:${ACTIVE_FILL};color:${ACTIVE_INK};font-weight:600` : ''}" role="menuitemradio">${cells}</div>`
+    }).join('')
+    return `${head}${rows}` +
+      '<div style="height:1px;background:#ece8f2;margin:4px"></div>' +
+      '<div role="menuitem" data-act="edit" style="padding:4px 6px;border-radius:6px;cursor:pointer;font-size:13px;color:#5d5868">&#9881; Edit profiles…</div>'
+  }
+
+  const optionHtml = (value, label, selected, index) =>
+    `<option value="${value}"${index === undefined ? '' : ` data-index="${index}"`}${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`
+
+  function renderPulldowns (state, mode) {
+    const shownMode = allowedMode(mode, usesDigitColors(state))
+    const digit = digitChoice(state)
+    const named = (picked) => state.profiles.map((p, i) => optionHtml(i, p.name, picked === String(i), i)).join('')
+    const pulldown = (role, label, options) => `<label class="cbd-pulldown"><span>${label}</span><select data-role="${role}">${options}</select></label>`
+    return '<div class="cbd-pulldowns">' +
+      pulldown('mode-draft', 'Mode', modesFor(usesDigitColors(state)).map((m) => optionHtml(m, MODE_NAMES[m], m === shownMode)).join('')) +
+      pulldown('cell-profile', 'Cell', named(String(state.active))) +
+      pulldown('digit-profile', 'Digit', optionHtml('same', 'Same as cell', digit === 'same') + named(digit) + optionHtml('none', 'None', digit === 'none')) +
+      '</div>'
+  }
+
+  // Matched as text, not by a selector, since a custom palette's key may hold a quote.
+  const swatchWithKey = (root, key) => [...root.querySelectorAll('button[data-role="swatch"]')].find((swatch) => swatch.dataset.key === key)
+
+  function renderEditor ({ groups, pages, page, brush, pulldownsHtml = '', profilesHtml = '', unreadable = false }) {
+    const colors = layoutColors(pages)
+    const shown = pages[page] || pages[0]
+    const clear = '<button type="button" class="cbd-button" data-act="clear">Clear all</button>'
+    const paint = colors.length === 0
+      ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
+      : renderPaint(groups, pages, shown, brush, colors)
+    const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
+    return `${kept}${pulldownsHtml}` +
+      `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
+      `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
+  }
+
+  // One stylesheet, every rule scoped to the editor, the dialog itself (its width), the dialog's options row, or the profile menu.
+  // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
+  const EDITOR = `#${EDITOR_ID}`
+  const DIALOG = `.dialog:has(${EDITOR})`
+  // Only for someone who has not asked the system for less motion; a fading menu takes no clicks.
+  const MENU_FADE_MS = 100
+  const ROW_SLIDE_MS = 80
+  const MOTION_CSS = [
+    `${MENU}.cbd-closing { pointer-events: none; }`,
+    '@media (prefers-reduced-motion: no-preference) {',
+    // Material's standard-accelerate easing, the one for something leaving.
+    `  ${MENU}.cbd-closing { opacity: 0; transition: opacity ${MENU_FADE_MS}ms cubic-bezier(0.3, 0, 1, 1); }`,
+    `  ${EDITOR} .cbd-profile { transition: transform ${ROW_SLIDE_MS}ms ease-out; }`,
+    '}'
+  ].join('\n')
+
+  const STYLE_CSS = [
+    [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
+    [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
+    [DIALOG, `width: ${DIALOG_WIDTH}px; max-width: calc(100vw - 16px); box-sizing: border-box`],
+    [`${EDITOR} .cbd-divider`, `border-top: 1px solid ${RULE_COLOR}; margin: 12px 0 0; padding-top: 10px`],
+    [`${EDITOR} .cbd-note`, 'margin: 6px 0'],
+    [`${EDITOR} .cbd-pulldowns`, 'display: grid; gap: 8px; margin: 0 0 10px'],
+    [`${EDITOR} .cbd-pulldown`, `display: grid; grid-template-columns: ${PULLDOWN_LABEL_WIDTH}px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 0; font-weight: 600; text-align: left`],
+    [`${EDITOR} .cbd-columns`, `display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(${COLUMN_MIN}px, 1fr))`],
+    [`${EDITOR} .cbd-column`, 'min-width: 0'],
+    [`${EDITOR} .cbd-button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: .9rem; font-weight: 500; padding: 0 14px; height: 34px; line-height: 32px; margin: 0; cursor: pointer'],
+    [`${EDITOR} .cbd-pulldown select`, `font-size: .95rem; padding: 4px 28px 4px 10px; border: 1px solid #b9b0c9; border-radius: 6px; background: #fff ${CHOICE_ARROW} no-repeat right 10px center; appearance: none; color: #222`],
+    [EDITOR, 'user-select: none; -webkit-user-select: none'],
+    // The pad's columns: three digit keys; the 0 key sits under 7.
+    [`${EDITOR} [data-role="paint"]`, `display: grid; gap: ${SWATCH_GAP_PX}px; grid-template-columns: repeat(${PAGE_COLUMNS}, ${KEY_SIZE}); touch-action: none`],
+    [`${EDITOR} [data-act="digit"]`, `box-sizing: border-box; display: block; width: ${KEY_SIZE}; height: ${KEY_SIZE}; margin: 0; padding: 0; border-radius: 0; border: 1px solid #000; background: #fff; color: #999; font-size: 1rem; font-weight: 700; cursor: pointer`],
+    [`${EDITOR} [data-act="digit"]:not([data-key=""])`, `color: ${ENTERED_DIGIT_BLUE}`],
+    [`${EDITOR} .cbd-unset`, 'border-style: dashed'],
+    [`${EDITOR} [role="radiogroup"]`, 'display: flex; flex-direction: column; gap: 2px'],
+    [`${EDITOR} .cbd-profile`, 'cursor: pointer; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px; border-radius: 6px'],
+    [`${EDITOR} .cbd-profile:hover`, `background: ${HOVER_FILL}`],
+    [`${EDITOR} .cbd-profile[aria-checked="true"]`, `background: ${ACTIVE_FILL}`],
+    // Hidden, not removed, so every row keeps its layout.
+    [`${EDITOR} .cbd-profile [data-role="handle"], ${EDITOR} .cbd-profile [data-act="delete"]`, 'visibility: hidden'],
+    [`${EDITOR} .cbd-profile:hover [data-role="handle"], ${EDITOR} .cbd-profile:hover [data-act="delete"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-role="handle"], ${EDITOR} .cbd-profile[aria-checked="true"] [data-act="delete"]`, 'visibility: visible'],
+    [`${EDITOR} [data-role="handle"]`, `cursor: grab; touch-action: none; user-select: none; color: ${MUTED}; font-size: 18px; line-height: 1`],
+    // One width for every run, so the names line up.
+    [`${EDITOR} .cbd-chips`, `display: flex; flex: none; width: ${CHIP_COLUMN_PX}px`],
+    // Its left padding is the name field's padding and border, so a name starts where the selected row's does.
+    [`${EDITOR} .cbd-name`, `flex: 1; min-width: 0; padding-left: ${NAME_PAD + 1}px; overflow-wrap: anywhere; text-align: left; font-size: .9rem; font-weight: 400`],
+    [`${EDITOR} .cbd-text-button`, `background: none; border: none; box-shadow: none; color: ${MUTED}; font-size: .9rem; font-weight: 500; padding: 2px 6px; margin: 0; width: auto; min-width: 0; height: auto; line-height: 1.4; border-radius: 6px; cursor: pointer`],
+    [`${EDITOR} .cbd-text-button:hover:not(:disabled)`, `background: ${HOVER_FILL}; color: #222`],
+    [`${EDITOR} .cbd-text-button:disabled`, 'opacity: .4; cursor: default'],
+    [`${EDITOR} [data-act="delete"]`, 'flex: none; font-size: 1.1rem; line-height: 1'],
+    [`${EDITOR} [data-act="new-profile"]`, 'margin: 4px 0'],
+    // Looks like the row's name until focused: no border or fill, then the box shows.
+    [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
+    [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
+    [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
+    // SudokuPad's `button:focus { outline: none }` hides the browser's ring, so the dialog draws its own, for the keyboard only.
+    [`${EDITOR} button:focus-visible, ${EDITOR} [data-role="swatch"]:focus-visible, ${EDITOR} .cbd-profile:focus-visible`, `outline: 2px solid ${FOCUS_RING}; outline-offset: 2px`],
+    // The pressed swatch's own outline takes the property, so its focus ring is drawn beside it.
+    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]`, 'position: relative'],
+    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible`, 'outline: 3px solid #000; outline-offset: 0'],
+    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible::after`, `content: ''; position: absolute; inset: -7px; border: 2px solid ${FOCUS_RING}; border-radius: 9px; pointer-events: none`],
+    [`${EDITOR} .cbd-button:hover`, `background: ${CONTROL_HOVER}`],
+    [`${EDITOR} [data-act="digit"]:not([style]):hover`, `background: ${CONTROL_HOVER}`],
+    [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${PURPLE}`],
+    [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${PURPLE}`],
+    [`${EDITOR} .cbd-button:active, ${EDITOR} [data-act="digit"]:active, ${EDITOR} [data-role="swatch"]:not([data-empty]):active`, PRESS_LAYER],
+    // At least 24 px each way (WCAG 2.2 SC 2.5.8).
+    [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, `display: inline-flex; align-items: center; justify-content: center; min-width: ${MIN_TARGET_PX}px; min-height: ${MIN_TARGET_PX}px; box-sizing: border-box`],
+    // The handle holds the pointer capture, so its cursor shows wherever the pointer goes; every element has its own, so it is forced.
+    [`${EDITOR}.cbd-dragging *`, 'cursor: grabbing !important']
+  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR) + '\n' + MOTION_CSS
+
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1759,7 +1838,9 @@
         'app.deselect': 'function',
         'app.on': 'function',
         'app.puzzle.cells': 'array',
-        'app.puzzle.selectedCells': 'array'
+        'app.puzzle.selectedCells': 'array',
+        'app.puzzle.undoStack': 'array',
+        'app.puzzle.redoStack': 'array'
       }
     },
     button: {
@@ -1797,10 +1878,24 @@
       needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function' }
     }
   }
+  const BUTTON = '#control-colorbydigit'
+  const ARROW = `${BUTTON} [data-role="menu"]`
+  const PRESSED_CLASS = 'cbd-pressed'
+  const DRAGGING_CLASS = 'cbd-dragging'
+  // The digit grid and the swatch grid; a slot that is no button is an empty cell of the layout.
+  const PAINT_GRIDS = '[data-role="paint"], .cbd-swatches'
+  const FOCUSABLE_SLOT = 'button'
+  // The pressed look is a class, set on pointerdown: the button's `mousedown` is cancelled, and an engine may then drop `:active`.
+  // The arrow's ::after widens its 14 px box to 24 px, outward over the button's corner (WCAG 2.2 SC 2.5.8).
+  const BUTTON_CSS = [
+    `${BUTTON}.${PRESSED_CLASS} { ${PRESS_LAYER} !important; }`,
+    `${ARROW}::after { content: ''; position: absolute; inset: -${(MIN_TARGET_PX - ARROW_BOX_PX) / 2}px; }`
+  ].join('\n')
+  const BUTTON_STYLE_ID = 'color-by-digit-button'
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1889,10 +1984,50 @@
 
   const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
 
+  // The mode steps that left an undo step, each `at` the undo stack's length after it, so Undo and Redo can move the mode along.
+  function createModeHistory () {
+    const done = []
+    let undone = []
+    let beforeRestart = null
+    return {
+      record (at, from, to) {
+        done.push({ at, from, to })
+        undone = []
+      },
+      // The mode before the earliest step an Undo down to `stackLength` took back.
+      undo (stackLength) {
+        const first = done.findIndex((step) => step.at > stackLength)
+        if (first < 0) return undefined
+        const taken = done.splice(first)
+        undone.push(...taken.reverse())
+        return taken[taken.length - 1].from
+      },
+      // The mode after the latest step a Redo up to `stackLength` put back.
+      redo (stackLength) {
+        const put = []
+        while (undone.length > 0 && undone[undone.length - 1].at <= stackLength) put.push(undone.pop())
+        if (put.length === 0) return undefined
+        done.push(...put)
+        return put[put.length - 1].to
+      },
+      forgetRedo () { undone = [] },
+      // A Restart empties the undo stack, but SudokuPad's next Undo on the empty stack brings back the board from before it, stack included.
+      restart () {
+        if (done.length > 0 || undone.length > 0) beforeRestart = { done: [...done], undone }
+        done.length = 0
+        undone = []
+      },
+      restoreBeforeRestart () {
+        if (!beforeRestart) return
+        done.splice(0, done.length, ...beforeRestart.done)
+        undone = beforeRestart.undone
+        beforeRestart = null
+      }
+    }
+  }
+
   let mode = 'off'
 
-  const BUTTON = '#control-colorbydigit'
-  const ARROW = `${BUTTON} [data-role="menu"]`
   // Loading progress resets the board, so a pass before it would be wiped.
   // With the wait off there is nothing to wait for, so `fn` runs at once.
   function whenProgressLoaded (app, fn) {
@@ -2030,14 +2165,39 @@
     digitColors.run(showDigitColors)
   }
 
-  // Leaving cell coloring takes the colors of `keys`, the group keys to take off, off every cell.
-  function setMode (app, next, keys = groupKeys(loadGroups())) {
-    const was = mode
+  function showMode (next) {
     mode = next
     writeData(MODE_KEY, next)
     redraw()
-    if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
-    if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
+  }
+
+  const modeHistory = createModeHistory()
+
+  // Runs `step`, which may color or clear cells, and records it as a mode step from `from` when it left an undo step.
+  function recordingModeStep (app, from, to, step) {
+    coloring.run(() => {
+      const before = app.puzzle.undoStack.length
+      step()
+      const after = app.puzzle.undoStack.length
+      if (after > before) modeHistory.record(after, from, to)
+    })
+  }
+
+  // Leaving cell coloring takes the colors of `keys`, the group keys to take off, off every cell.
+  function setMode (app, next, keys = groupKeys(loadGroups())) {
+    const was = mode
+    showMode(next)
+    recordingModeStep(app, was, next, () => {
+      if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
+      if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
+    })
+  }
+
+  // Undo and Redo move the mode with the board: a mode step that colored or cleared cells is an undo step, so taking it back or putting it again changes the mode too.
+  function followUndo (app, type) {
+    const stackLength = app.puzzle.undoStack.length
+    const target = type === 'undo' ? modeHistory.undo(stackLength) : modeHistory.redo(stackLength)
+    if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
   }
 
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
@@ -2050,10 +2210,10 @@
   }
 
   // A change SudokuPad already runs inside its own group (a paste) has its color changes added to that
-  // group; opening a second would end it early. Undo, redo, replays and loading progress bypass app.act.
+  // group; opening a second would end it early. Replays and loading progress bypass app.act; Undo and Redo go through it.
   function installCellColoring (app) {
     coloring.run(() => {
-      coloring.wrap(app, 'act', function (stock, action) {
+      const coloredEntry = (stock, action) => {
         if (!colorsCells(mode) || !isEntryAction(action)) return stock(action)
         const touched = [...app.puzzle.selectedCells]
         if (!touched.some((cell) => mayChange(action, cell))) return stock(action)
@@ -2067,18 +2227,61 @@
           return result
         }
         return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
+      }
+      coloring.wrap(app, 'act', function (stock, action) {
+        if (action?.type === 'undo' || action?.type === 'redo') {
+          // SudokuPad keeps the board from before a Restart in `preRestartSavedProgress`, and an Undo on the empty stack loads it.
+          const loadsBeforeRestart = action.type === 'undo' && app.puzzle.undoStack.length === 0 && app.preRestartSavedProgress !== undefined
+          const result = stock(action)
+          if (loadsBeforeRestart) modeHistory.restoreBeforeRestart()
+          else followUndo(app, action.type)
+          return result
+        }
+        // A new action empties SudokuPad's redo stack, and the mode steps that could have been redone go with it.
+        const hadRedo = app.puzzle.redoStack.length > 0
+        const result = coloredEntry(stock, action)
+        if (hadRedo && app.puzzle.redoStack.length === 0) modeHistory.forgetRedo()
+        return result
       })
-      app.on('restarted', () => { if (colorsCells(mode)) colorEnteredCells(app) })
+      app.on('restarted', () => {
+        modeHistory.restart()
+        // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
+        if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
+      })
     })
   }
 
   let menu = null
+  // The menu after a pick, fading out: no longer the open menu, so a click on the arrow or the button opens a new one.
+  let leavingMenu = null
+  let menuTimer = null
 
   const addStyle = (id = STYLE_ID, css = STYLE_CSS) => addStyleOnce(id, css)
 
+  const dropLeavingMenu = () => {
+    clearTimeout(menuTimer)
+    menuTimer = null
+    if (leavingMenu) leavingMenu.remove()
+    leavingMenu = null
+  }
   const closeMenu = () => {
+    dropLeavingMenu()
     if (menu) menu.remove()
     menu = null
+  }
+
+  const MENU_BLINK_MS = 60
+  function fadeMenu (pickedRow) {
+    if (!menu || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return closeMenu()
+    dropLeavingMenu()
+    const leaving = menu
+    leavingMenu = leaving
+    menu = null
+    pickedRow.style.background = ACTIVE_FILL
+    menuTimer = setTimeout(() => {
+      leaving.classList.add('cbd-closing')
+      menuTimer = setTimeout(dropLeavingMenu, MENU_FADE_MS)
+    }, MENU_BLINK_MS)
   }
 
   function openMenu () {
@@ -2101,9 +2304,9 @@
   }
 
   // A digit pick changes only the digit stylesheet: it touches no cell and is never an undo step.
-  function switchProfile (app, index, target) {
+  function switchProfile (app, index, target, pickedRow) {
     const state = loadState()
-    closeMenu()
+    fadeMenu(pickedRow)
     const digits = target === 'digits'
     if (index === (digits ? state.digitActive : state.active)) return
     const next = digits ? setDigitActive(state, index) : setActive(state, index)
@@ -2146,7 +2349,7 @@
         closeMenu()
         openEditor()
       } else {
-        switchProfile(app, Number(row.dataset.index), row.dataset.target)
+        switchProfile(app, Number(row.dataset.index), row.dataset.target, row.closest('[data-role="menu-row"]'))
       }
     }, true)
     listen('touchstart', (event) => {
@@ -2163,19 +2366,22 @@
       clearTimeout(hold)
       hold = null
     }
+    const setPressed = (on) => document.querySelector(BUTTON)?.classList.toggle(PRESSED_CLASS, on)
     listen('pointerdown', (event) => {
       if (menu && !within(event, MENU) && !onArrow(event)) closeMenu()
       endHold()
       if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== 0)) return
       const { clientX, clientY } = event
       const moved = (e) => Math.hypot(e.clientX - clientX, e.clientY - clientY) > HOLD_SLOP
+      setPressed(true)
       hold = setTimeout(() => {
         hold = null
         modeButton.run(openMenu)
       }, HOLD_MS)
       trackPointer(document, {
-        move: (e) => { if (moved(e)) endHold() },
+        move: (e) => { if (moved(e)) { endHold(); setPressed(false) } },
         end: (e) => {
+          setPressed(false)
           modeButton.run(() => { if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState()))) })
           endHold()
         }
@@ -2291,14 +2497,22 @@
       const rows = [...box.querySelectorAll('[data-role="profile-row"]')]
       const mids = rows.map((row) => { const r = row.getBoundingClientRect(); return r.top + r.height / 2 })
       let to = from
-      rows[from].style.opacity = '0.5'
+      // The rows between the dragged one and its drop place move one row aside; the dragged row follows the pointer, with no slide of its own.
+      const step = rows.length > 1 ? mids[1] - mids[0] : 0
+      const asideOf = (i) => (from < to && i > from && i <= to ? -step : from > to && i < from && i >= to ? step : 0)
+      Object.assign(rows[from].style, { opacity: '0.5', transition: 'none', position: 'relative', zIndex: '1' })
+      box.classList.add(DRAGGING_CLASS)
       handle.setPointerCapture(event.pointerId)
       trackPointer(handle, {
         move: (e) => {
           to = dropIndex(mids, from, e.clientY)
-          rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
+          rows.forEach((row, i) => {
+            const shift = i === from ? e.clientY - event.clientY : asideOf(i)
+            row.style.transform = shift ? `translateY(${shift}px)` : ''
+          })
         },
         end: (e) => {
+          box.classList.remove(DRAGGING_CLASS)
           if (e.type === 'pointerup') edit({ type: 'move', from, to })
           draw()
         }
@@ -2309,6 +2523,28 @@
       draw()
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
+    const focusDigitKey = (digit) => box.querySelector(`[data-act="digit"][data-digit="${digit}"]`)?.focus()
+    // The arrow keys move the focus within the swatch grid or the digit grid, and a typed digit paints that digit.
+    box.addEventListener('keydown', (event) => {
+      const grid = event.target.closest(PAINT_GRIDS)
+      if (!grid || event.ctrlKey || event.altKey || event.metaKey) return
+      const slots = [...grid.children]
+      const index = slots.indexOf(event.target)
+      const to = index < 0 ? null : gridTarget(event.key, index, slots.map((slot) => slot.matches(FOCUSABLE_SLOT)), PAGE_COLUMNS)
+      if (to !== null) {
+        event.preventDefault()
+        event.stopPropagation()
+        slots[to].focus()
+      } else if (/^[0-9]$/.test(event.key)) {
+        event.preventDefault()
+        event.stopPropagation()
+        // A held key repeats, and each repeat would toggle the paint again.
+        if (event.repeat) return
+        edit({ type: 'key-paint', digit: event.key })
+        draw()
+        focusDigitKey(event.key)
+      }
+    })
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="select"]')) return
       const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.state.profiles.length)
@@ -2358,10 +2594,7 @@
       }
       draw()
       // The redraw replaced the button; a keyboard user keeps the focus on its successor.
-      if (event.detail === 0 && act === 'digit') {
-        const next = box.querySelector(`[data-act="digit"][data-digit="${el.dataset.digit}"]`)
-        if (next) next.focus()
-      }
+      if (event.detail === 0 && act === 'digit') focusDigitKey(el.dataset.digit)
     })
   }
 
@@ -2378,6 +2611,7 @@
     const state = loadState()
     mode = allowedMode(startingMode(readData(MODE_KEY), readData(AUTO_KEY)), usesDigitColors(state))
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
+    addStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
       installButton(Framework, app, mode, activeGroups(state), readColor, digitGroups(state))
       labelButton()

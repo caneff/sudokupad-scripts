@@ -31,7 +31,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   const puzzleKey = () => draw.puzzleKey(p)
   const saved = () => draw.saved(p)
@@ -287,7 +287,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await planted(), 'not a drawing {', 'after a note')
     await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
     assert.equal(await planted(), 'not a drawing {', 'after a move')
-    await mouseDrag(p, [[2.2, 4.5], [2.8, 4.5]], { button: 'right' })
+    await mouseDrag(p, [[2.5, 4.2], [2.5, 5.2]], { button: 'right' })
     assert.deepEqual(await texts(), [])
     assert.equal(await planted(), 'not a drawing {', 'after an erase')
     assert.equal(await p.locator(DIALOG).count(), 0, 'the dialog is shown once a page')
@@ -348,7 +348,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await plantRedrawFailure()
     const first = errors.length
     const warnedBefore = warnings.length
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual((await saved()).map((item) => item.text), ['15'], 'stored before the redraw failed')
     planted(first, warnedBefore)
     await reload()

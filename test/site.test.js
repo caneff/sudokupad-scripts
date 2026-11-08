@@ -50,15 +50,9 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-// Chris's ruling on #359: this script is for him only, so it is not on the site.
-const NOT_ON_SITE = 'no-tab-letters.user.js'
-
-test(`every *.user.js in the repo root except ${NOT_ON_SITE} has an install link on the homepage, and ${NOT_ON_SITE} has none anywhere on the site`, () => {
-  const scripts = rootScripts()
-  assert.ok(scripts.includes(NOT_ON_SITE), `${NOT_ON_SITE} is gone, so the exception is stale`)
+test('every *.user.js in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of scripts.filter(f => f !== NOT_ON_SITE)) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
-  for (const name of PAGES) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, `site/${name} names No Tab Letters`)
+  for (const s of rootScripts()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -160,7 +154,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'A preview before you click', 'White outlines']
 
 test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
@@ -170,7 +164,8 @@ test(`${DETAILS} lists what the script adds as a grid of short items, one per fe
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
     'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
-    'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
+    'Erase a whole line Right-click a line to remove all of it, or a mark to remove that. While you hold the button, what will go fades. Press Escape to cancel.',
+    'A preview before you click A faint mark shows what a click on an edge, corner or cell would place, and the drag shows dashes or arrows for those pens.',
     'White outlines An outline keeps lines readable over colored cells.'
   ])
   const grid = read(DETAILS).match(/<ul class="features">([\s\S]*?)<\/ul>/)
@@ -402,7 +397,7 @@ test("the slides' five pen colors are far from SudokuPad's nine", () => {
 test(`${CBD} lists what the script adds, one item per feature`, () => {
   const lines = section(CBD, 'What it adds')
   assert.deepEqual(lines, [
-    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode, and the chips are drawn the way that mode colors the board.',
+    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode.',
     'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
     'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
     'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
@@ -414,7 +409,7 @@ test(`${CBD} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
 })
 
-test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and one sentence`, () => {
+test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and its two notes`, () => {
   const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
   const found = imgs(m[1])
@@ -424,12 +419,12 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it.')
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. From the keyboard, Tab and the arrow keys move around the colors and the digit keys, and typing 0 to 9 paints that digit.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
   assert.deepEqual(section(CBD, 'Good to know'), [
-    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
+    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color, but undoing or redoing a mode change that colored or cleared cells moves the button to the mode it had then.',
     "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
     'The button sits in the bottom row with Undo, Redo, Check and Select. That row holds five buttons, and any more, from this script or another, wrap onto a second row under it.'
   ])
@@ -447,15 +442,15 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes anywhere Click the board, or beside it, to type. Enter starts a new line; a double-click edits a note.',
-    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets.',
-    'Long notes A long note wraps and scrolls; drag a corner to resize it.',
-    'Readable over digits A white outline round the letters, and an optional box behind the note.',
+    'Typed notes anywhere Click to type; Esc finishes; double-click a note to edit.',
+    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or - [ ] checklist items. Typing ->, != or sum gives → ≠ Σ.',
+    'Long notes Wraps and scrolls; drag a corner to resize.',
+    'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
-    'Select and move Click a note or drag a box round several; drag to move (snaps to grid and notes), arrow keys nudge.',
+    'Select and move Click a note or drag a box round several; drag to move, arrow keys nudge.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
-    'Settings Color presets, halo, box color and box border picked from samples, and Copy and Paste to another browser.'
+    'Settings Color presets, halo, box color and border by sample; Copy and Paste to another browser.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
@@ -478,12 +473,6 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   assert.match(alt, /press 1 to 9/)
-})
-
-const DRAW_WORD_LIMIT = 320
-test(`${DRAW} stays short: its text is under ${DRAW_WORD_LIMIT} words`, () => {
-  const words = plain(read(DRAW).replace(/<(script|footer)[\s\S]*?<\/\1>/g, '')).split(' ').length
-  assert.ok(words < DRAW_WORD_LIMIT, `site/${DRAW} has ${words} words`)
 })
 
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {

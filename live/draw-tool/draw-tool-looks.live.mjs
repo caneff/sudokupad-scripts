@@ -31,7 +31,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   let context, p, errors
 
   const moveTo = async (at) => {
-    await p.mouse.move(...await gridPoint(p, at))
+    await p.mouse.move(...await draw.middleAt(p, await gridPoint(p, at)))
     await draw.frames(p)
   }
   // The computed values of `props` on the first element matching `selector` whose text is `text`, or the first at all.
@@ -50,6 +50,8 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
+    // The fade in has its own live check; here the outline is read as soon as the pointer is over the note.
+    await p.emulateMedia({ reducedMotion: 'reduce' })
     await draw.boot(p)
     await draw.forgetDrawings(p)
     await draw.plantDrawing(p, ITEMS)
@@ -60,7 +62,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
 
   it('a note under the pointer gets a faint purple outline and fill, and the note beside it and empty space get none', async () => {
     await moveTo(EMPTY)
-    assert.equal((await noteStyle('A', ['outlineStyle'])).outlineStyle, 'none')
+    assert.equal(alphaOf((await noteStyle('A', ['outlineColor'])).outlineColor), 0, 'a note the pointer is not over has a clear outline')
     await moveTo(A)
     const hovered = await noteStyle('A', ['outlineStyle', 'outlineWidth', 'outlineOffset', 'outlineColor'])
     assert.deepEqual({ style: hovered.outlineStyle, width: hovered.outlineWidth, offset: hovered.outlineOffset }, { style: 'solid', width: '1px', offset: '2px' })
@@ -70,7 +72,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     assert.match(fill.backgroundImage, /^linear-gradient\(/, 'a faint fill shows although the note\'s own background is transparent')
     const [fillColor] = fill.backgroundImage.match(/(?:rgba|color)\([^)]+\)/)
     assert.ok(alphaOf(fillColor) > 0 && alphaOf(fillColor) <= 0.1, `a very faint fill, was ${fillColor}`)
-    assert.equal((await noteStyle('B', ['outlineStyle'])).outlineStyle, 'none', 'the other note shows none')
+    assert.equal(alphaOf((await noteStyle('B', ['outlineColor'])).outlineColor), 0, 'the other note shows none')
   })
 
   it('a faded note keeps a hover outline about as visible as the note, and its box stays', async () => {
@@ -93,23 +95,23 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     await moveTo(A)
     assert.equal((await noteStyle('A', ['outlineStyle'])).outlineStyle, 'none', 'the selected note has no hover outline')
     assert.equal(await p.locator(SELECTION).count(), 1)
-    await p.keyboard.press('Escape')
-    await p.mouse.dblclick(...await gridPoint(p, A))
+    await draw.finishNote(p)
+    await draw.reopen(p, await gridPoint(p, A))
     await p.locator(TEXT_BOX).waitFor()
     await moveTo(A)
     const open = await styleOf(TEXT_BOX, ['outlineStyle', 'backgroundImage'])
     assert.notEqual(open.outlineStyle, 'solid', 'the open note has no hover outline')
     assert.equal(open.backgroundImage, 'none', 'and no hover fill')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('the cursor is move on a closed note and text in the open one', async () => {
     assert.equal((await noteStyle('B', ['cursor'])).cursor, 'move')
     assert.equal((await noteStyle('A', ['cursor'])).cursor, 'move')
-    await p.mouse.dblclick(...await gridPoint(p, B))
+    await draw.reopen(p, await gridPoint(p, B))
     await p.locator(TEXT_BOX).waitFor()
     assert.equal((await styleOf(TEXT_BOX, ['cursor'])).cursor, 'text')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('the resize handles are 11 px squares with a 2 px white border, a purple ring and a shadow', async () => {
@@ -132,7 +134,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   it('a selected note\'s outline is solid and 2 px', async () => {
     const outline = await styleOf(SELECTION, ['outlineStyle', 'outlineWidth'])
     assert.deepEqual(outline, { outlineStyle: 'solid', outlineWidth: '2px' })
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('the selection rectangle is a solid 1 px line with a faint fill', async () => {

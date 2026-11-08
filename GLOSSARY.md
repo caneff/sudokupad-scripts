@@ -24,7 +24,7 @@
   Both, Off; only Cell and Off while Digit is None), **Cell** (the cell profile, by name) and **Digit** (Same as
   cell, a profile by name, or None). They apply at Save; Cancel drops them.
 - **chips** — a profile's colors in Color by Digit, drawn as a run of joined square board cells: three at most,
-  one outline with single dividers, no gaps or rounded corners, each cell with a digit. In Cell and Off one cell per
+  one outline with single dividers, no gaps or rounded corners, each cell with a digit (a profile with no groups draws three blank dashed cells instead). In Cell and Off one cell per
   group of the cell profile, with the group's **shown digit**; in Digit the same from the digit profile; in Both the
   digits that reach the most groups of the two profiles (see **Cell strip**). The button draws them in the **mode**'s look; the profile menu and the dialog's profile
   list draw them as Cell does.
@@ -112,6 +112,8 @@
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type.
+- **mark preview** — Pen Tool Extras' faint copy of the mark the next left click under the pointer would place (the **ghost**, in the hint layer at 0.3 opacity), or, when that click clears the spot, the marks it would clear drawn faint. The install step is `mark preview`.
+- **faded stroke** — a pen stroke drawn at 0.3 opacity because the **pen erase** held under the right button will take it, or the **mark preview** says the next click clears it.
 - **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge, corner and cell marks it crosses, as one undo step. Text Anywhere's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle,
   cross and dot (pen values 5, 6 and z) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
@@ -168,7 +170,7 @@
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
 - **install step** — one of the parts Pen Tool Extras installs at startup, each a **feature** of the **SudokuPad guard**: colors, color save, pen pages, arrow
-  lines, drag highlight, marks, line erase, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
+  lines, drag highlight, marks, line erase, mark preview, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
   needs or its own code throws: one console warning names it, the **notice bar** and the settings dialog's "Off because SudokuPad changed" line list it,
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **SudokuPad guard** — `lib/sudokupad.js`: a script declares its **features**, each with a label and the SudokuPad internals it needs, and a
@@ -209,8 +211,8 @@
   read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a
   color button puts a color picker over each button, and a picked color recolors every note already made in that number,
   since a note saves the number. The digit keys 1 to 9 pick one. A color button shows "Aa" in its color.
-- **text** (a note) — a short string typed onto the notes, in a note color, with its own size and opacity (the **Size slider** and **Transparency slider** set them; a saved note keeps its own), centred on the
-  point clicked. It is typed in place, in the **text box**: the note's own element, open for typing, which a click anywhere
+- **text** (a note) — a short string typed onto the notes, in a note color, with its own size and opacity (the **Size slider** and **Transparency slider** set them; a saved note keeps its own), starting at the
+  point clicked: its stored point is the top left of its text. It is typed in place, in the **text box**: the note's own element, open for typing, which a click anywhere
   on the page but SudokuPad's controls (the control panel, the top bar, the menu and an open dialog) opens while nothing is
   **selected**, and a double-click on a text reopens. A text put on the board is pinned to its cells (stored in board units under `at`); one put off the board is
   fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). When the window or SudokuPad's layout puts a fixed text's box under the control panel or top bar, or
@@ -220,6 +222,9 @@
   clicked, above a pinned one; among texts of one kind the one made last is on top.
 - **bullet** (a note's) — a line of a note that starts with `- ` or `* `. A finished note shows it with a `•` hanging in the indent and its wrapped lines
   under the text, with the rest of the line read as markdown; the note open for typing shows the raw `- `. A `-` anywhere else in a line is plain text.
+- **checklist item** (a note's) — a line of a note that starts with `- [ ] ` (unchecked) or `- [x] ` (checked), in place of a bullet. A finished note draws a box in the indent; a click on the box,
+  while Text Anywhere is current, ticks or unticks it and saves the note, and a checked line is struck through and faded. The note open for typing shows the raw `- [ ] `.
+- **symbol** (a note's) — a sign typed as ASCII while a note is open and replaced as it is typed: `->` `<-` `!=` `<=` `>=` become → ← ≠ ≤ ≥, and the word `sum` becomes Σ (once a character follows it, or when the note closes).
 - **box** (a note's) — the room a Text Anywhere note's text takes. A note never resized has one 16 em wide and 8 lines high at its text size, which
   it fits up to; a resized one is exactly the size a **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
   or off it, since a note off the board is drawn at the board's scale too. A long line wraps inside it and text past its bottom scrolls: the wheel over
@@ -235,10 +240,10 @@
 - **background box color** — the setting, in Text Anywhere's settings dialog (its Box color row), for the color of the box behind every note that has one: five sample buttons, each a short "A=B" note in the text color on that box, Page (the default, `--body-bg`), White, Yellow (`#fff4b0`), Tint (15% of each note's own color over the page color) or Own (a #rrggbb color from a picker shown under the row while Own is picked). Global: it recolors every boxed note, old and new, since a note stores only `bg: true`. Saved under `DrawTool_box` as the preset's id or the hex color; a value that is not one reads as Page. The **halo** stays the page color.
 - **frame** — the settings dialog's Box border row, two sample buttons, None and Thin grey, each a boxed note: Thin grey, every boxed note gets a 1 screen pixel `#c4c4c4` ring round its box, drawn as a `box-shadow` so it takes no room; a note with no box gets none. Global, off by default, saved under `DrawTool_frame` (only `true` is on). Copy and Paste settings carry it and the box color.
 - **erase** — Text Anywhere's right click: the text the pointer is near is removed whole. Clear all (the trash button) erases every note, after asking, while nothing is selected; while texts are selected it deletes only them, without asking, as the Delete and Backspace keys do.
-- **move** — Text Anywhere's left-drag that starts on a text (the topmost): the **selection** follows the pointer, after the text is selected alone if it was not selected, and each text's stored place changes once, on release, pinned or fixed by where it is dropped. It stops at the last point inside the window and clear of the controls. A click with no drag selects the text. A left-drag that starts on a **resize handle** resizes the note and never moves it.
-- **nudge** — an arrow key pressed with notes **selected** and no **text box** open: it moves them 1 screen pixel, or 10 with Shift, and a key held down repeats it after 300 ms, the step growing over 1.5 s to 8 pixels (40 with Shift); no arrow key reaches
+- **move** — Text Anywhere's left-drag that starts on a text (the topmost): the **selection** follows the pointer, after the text is selected alone if it was not selected, and each text's stored place changes once, on release, pinned or fixed by where it is dropped, then shifted by up to half a device pixel so its left and top land on whole device pixels. It stops at the last point inside the window and clear of the controls. A click with no drag selects the text. A left-drag that starts on a **resize handle** resizes the note and never moves it.
+- **nudge** — an arrow key pressed with notes **selected** and no **text box** open: it moves them 1 screen pixel, or 10 with Shift (then up to half a device pixel more, to put each note on whole device pixels, unless a device pixel is wider than a screen pixel), and a key held down repeats it after 300 ms, the step growing over 1.5 s to 8 pixels (40 with Shift); no arrow key reaches
   SudokuPad's cell cursor. A nudge that would put a note out of reach moves none, and the move is saved when the key is released.
-- **selection** — the texts Text Anywhere has selected, each drawn with a solid 2 px purple outline, a box of its own in the layer beside the note so a faded note does not fade it. A click on a text selects it alone, Shift+click adds or removes it, and a left-drag that starts on empty space, on the board or off it, draws a **selection rectangle** and selects every text whose box it touches (with Shift, adds them). While there is one, the color buttons, the **Size slider**, the **Transparency slider** and **Background** show and change the selected texts and not the next text's settings; a color the texts do not share shows no button picked. A click on empty space, Escape, opening a text and leaving the tool end it. Not saved.
+- **selection** — the texts Text Anywhere has selected, each drawn with a solid 2 px purple outline, a box of its own in the layer beside the note so a faded note does not fade it. A click on a text selects it alone, Shift+click adds or removes it, and a left-drag that starts on empty space, on the board or off it, draws a **selection rectangle** and selects every text whose box it touches (with Shift, adds them). While there is one, the color buttons, the **Size slider**, the **Transparency slider** and **Background** show and change the selected texts and not the next text's settings; a color the texts do not share shows no button picked. A click on empty space, Escape, opening a text and leaving the tool end it, except that Escape in the middle of a drag or a resize puts the notes back and leaves the selection. Escape on an open text closes it and selects it, and Enter reopens the one selected text, the caret at its end. Not saved.
 - **halo** — the outline in the page's color round each letter of a Text Anywhere note, a ring of 16 zero-blur `text-shadow`s (a stroke joins with miters and grows spikes on A, V, W, M and 4), so a note reads over digits, pencil marks and colored cells. Its reach is the **Outline setting**. A note with a background box has none, since the box is that color already.
 - **unreadable value** — a saved value its script's reader refuses (`lib/store.js`), as a later version's shape would be after a downgrade. The script
   goes on with its defaults (Text Anywhere shows no notes and saves none on that puzzle until Clear all or Restart), and the value as it was is copied under the same key with `_unreadable` added (`_unreadable2` and on for a second,

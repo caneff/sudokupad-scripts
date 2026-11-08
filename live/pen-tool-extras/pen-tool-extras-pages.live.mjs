@@ -36,7 +36,7 @@ function group (title, extra = []) {
     const saved = (key) => read((k) => Framework.getData(k), key)
     const selected = () => read(() => ToolPen.tool.selectedColor)
     const currentButtonKey = () => read(() => { const b = document.querySelector('.tool-pen button.current'); return b && b.dataset.key })
-    const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
+    const strokeCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
     const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
     const styleOf = (selector) => read((s) => { const st = window.getComputedStyle(document.querySelector(s)); return { dash: st.strokeDasharray, stroke: st.stroke, width: st.strokeWidth } }, selector)
     const pageErrors = () => errors.slice()
@@ -137,7 +137,7 @@ function group (title, extra = []) {
       const colorOf3 = await read(() => window.getComputedStyle(document.documentElement).getPropertyValue('--puzzle-pencolor-3').trim())
       await drawFromColumn2(8)
       assert.deepEqual((await penStrings(p)).filter((v) => v.endsWith('c')), ['1c'])
-      const dashed = await styleOf('.cell-pen.pencolor-c')
+      const dashed = await styleOf('#cell-pen .cell-pen.pencolor-c')
       assert.notEqual(dashed.dash, 'none')
       // 3 line widths of 5 is a dash of 15 on a cell of 64, which holds whole periods.
       assert.match(dashed.dash, /^15(px)?[ ,]+\d/)
@@ -145,7 +145,7 @@ function group (title, extra = []) {
       await goToPage(PAGE_ONE)
       assert.equal(await settle(selected, '3'), '3')
       await drawFromColumn2(7)
-      assert.equal((await styleOf('.cell-pen.pencolor-3')).dash, 'none')
+      assert.equal((await styleOf('#cell-pen .cell-pen.pencolor-3')).dash, 'none')
     })
 
     it('a cell mark drawn with a page 2 pen stays solid', async () => {
@@ -154,7 +154,7 @@ function group (title, extra = []) {
       const [x, y] = await cellCentre(p, 2, 2)
       await p.mouse.click(x, y)
       assert.equal(await settle(async () => (await penStrings(p)).includes('5c'), true), true)
-      assert.equal((await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray)), 'none')
+      assert.equal((await read(() => window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pen-5.pencolor-c')).strokeDasharray)), 'none')
     })
 
     it('undo removes the page 2 marks, and the replay draws them again, dashed', async () => {
@@ -165,17 +165,17 @@ function group (title, extra = []) {
       await read((r) => Framework.app.loadReplay(r), replay)
       assert.equal(await settle(strokeCount, total), total)
       assert.deepEqual((await penStrings(p)).filter((v) => v.endsWith('c')), ['1c', '5c'])
-      assert.notEqual((await styleOf('.cell-pen.pencolor-c')).dash, 'none')
+      assert.notEqual((await styleOf('#cell-pen .cell-pen.pencolor-c')).dash, 'none')
     })
 
-    const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')).strokeDasharray))
+    const dashOn = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pen-1.pencolor-c')).strokeDasharray))
     // The page the button shows the line of, and the first dash of that line (0 for dots).
     const sample = () => p.locator(`${PAGE_BUTTON} [data-page-sample]`).getAttribute('data-page-sample')
     const sampleDash = () => p.locator(`${PAGE_BUTTON} [data-page-sample] path[stroke-dasharray]`).getAttribute('stroke-dasharray').then((v) => parseFloat(v))
     const range = () => editor().locator('input[data-setting="dash"]')
 
     it('the dialog\'s dash length starts at 3, which draws dashes; 0 draws dots, and a saved 0 stays; Cancel leaves it, Restore defaults and Save bring the dashes back, and each segment starts half a dash in', async () => {
-      const solidOn = () => read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-3')).strokeDasharray)
+      const solidOn = () => read(() => window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pen-1.pencolor-3')).strokeDasharray)
       await read(([k]) => Framework.removeData(k), [DASH_KEY])
       await read(([k]) => Framework.removeData(k), [THICKNESS_KEY])
       // 3 dashes of a line width of 5
@@ -192,7 +192,7 @@ function group (title, extra = []) {
       assert.equal(await settle(dashOn, 0), 0, 'a line already drawn takes the dots')
       assert.equal(await saved(DASH_KEY), 0, 'a 0 is saved, not cleared as the default')
       assert.equal(await solidOn(), 'none', 'page 1 lines stay solid')
-      assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pen-5.pencolor-c')).strokeDasharray), 'none', 'a cell mark stays solid')
+      assert.equal(await read(() => window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pen-5.pencolor-c')).strokeDasharray), 'none', 'a cell mark stays solid')
       await reload()
       assert.equal(await settle(dashOn, 0), 0, 'a saved 0 stays after a reload')
       await openToolAndPageButton()
@@ -209,7 +209,7 @@ function group (title, extra = []) {
       assert.equal(await settle(dashOn, 15), 15, 'the dashes are back')
       assert.equal(await saved(DASH_KEY), null)
       // Each segment starts half a dash in, so it is inked at both ends and the halves at a cell boundary make one whole dash.
-      const pattern = await read(() => { const st = window.getComputedStyle(document.querySelector('.cell-pen.pen-1.pencolor-c')); return { array: st.strokeDasharray.split(/[ ,]+/).map(parseFloat), offset: parseFloat(st.strokeDashoffset) } })
+      const pattern = await read(() => { const st = window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pen-1.pencolor-c')); return { array: st.strokeDasharray.split(/[ ,]+/).map(parseFloat), offset: parseFloat(st.strokeDashoffset) } })
       assert.equal(Math.abs(pattern.offset - pattern.array[0] / 2) < 1e-6, true, JSON.stringify(pattern))
     })
 
@@ -266,8 +266,8 @@ function group (title, extra = []) {
       assert.deepEqual(await saved(COLORS_KEY), ownSaved, 'all nine are saved, with the preset name')
       assert.deepEqual(await penStrings(p), marks, 'closing the dialog left no pen mark either')
       // Pen 3 on page 1 is 3, on page 2 c, on page 3 n and its reverse o: every page follows the color.
-      assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, rgbOf(own[2]))
-      assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, rgbOf(own[2]))
+      assert.equal((await styleOf('#cell-pen .cell-pen.pencolor-c')).stroke, rgbOf(own[2]))
+      assert.equal((await styleOf('#cell-pen .cell-pen.pencolor-3')).stroke, rgbOf(own[2]))
       await reload()
       assert.equal(await settle(colorOf3, own[2]), own[2], 'the saved colors are kept after a reload')
       // Restore defaults picks darker page 1 as a draft, and a later pick replaces it.
@@ -364,7 +364,7 @@ function group (title, extra = []) {
     it('Dashed lines unticked: Save moves a page 2 pen to page 1, the button, Tab and the wheel skip page 2, lines already drawn in it still draw, and it survives a reload', () => withStyles(async () => {
       await toPage(PAGE_TWO, 3)
       // The page 2 line the checks before this one left on the grid.
-      const before = await styleOf('.cell-pen.pencolor-c')
+      const before = await styleOf('#cell-pen .cell-pen.pencolor-c')
       assert.notEqual(before.dash, 'none', 'a page 2 line is dashed')
       await openExtrasEditor(p)
       const dashRow = editor().locator('[data-row="dash"]')
@@ -378,7 +378,7 @@ function group (title, extra = []) {
       assert.deepEqual(await saved(LINE_STYLES_KEY), { dashed: false, arrows: true })
       assert.equal(await settle(selected, '3'), '3', 'the page 2 pen became the same number on page 1')
       assert.equal(await padValues(p), PAGE_ONE)
-      assert.deepEqual(await styleOf('.cell-pen.pencolor-c'), before, 'the line drawn in page 2 still draws, dashed')
+      assert.deepEqual(await styleOf('#cell-pen .cell-pen.pencolor-c'), before, 'the line drawn in page 2 still draws, dashed')
       await p.locator(PAGE_BUTTON).click()
       assert.equal(await settle(() => padValues(p), PAGE_THREE), PAGE_THREE, 'the button skips page 2')
       await p.locator(PAGE_BUTTON).click()
@@ -458,10 +458,10 @@ function group (title, extra = []) {
       await p.mouse.up()
       await picker.fill('#123456')
       assert.deepEqual(await saved(COLORS_KEY).then((c) => c && c[3]), '#123456')
-      assert.equal((await styleOf('.cell-pen.pencolor-c')).stroke, 'rgb(18, 52, 86)')
+      assert.equal((await styleOf('#cell-pen .cell-pen.pencolor-c')).stroke, 'rgb(18, 52, 86)')
       await goToPage(PAGE_ONE)
       assert.equal(await settle(selected, '3'), '3')
-      assert.equal((await styleOf('.cell-pen.pencolor-3')).stroke, 'rgb(18, 52, 86)')
+      assert.equal((await styleOf('#cell-pen .cell-pen.pencolor-3')).stroke, 'rgb(18, 52, 86)')
       await goToPage(PAGE_TWO)
       assert.equal(await settle(selected, 'c'), 'c')
       await read((k) => Framework.removeData(k), COLORS_KEY)

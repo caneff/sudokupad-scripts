@@ -10,6 +10,7 @@
   .lede { max-width: 46rem; }
   .rows { margin: 1.75rem 0; border-top: 1px solid var(--frame-edge); }
   .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.5rem 0; border-bottom: 1px solid var(--frame-edge); }
+  .row-plain { grid-template-columns: 1fr; }
   .row-text { max-width: 36rem; }
   .row h2 { font-size: 1.25rem; margin-bottom: .35rem; }
   .row-text p { margin-bottom: .75rem; }
@@ -40,7 +41,7 @@
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-10-opacity.png?v=c2999f8" alt="Every line and mark faded, with the Opacity slider down" width="684" height="430">
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-11-outline-off.png?v=a34da8b" alt="A yellow line across dark cells with no white outline, harder to see" width="684" height="430">
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-12-outline-on.png?v=cabbe4c" alt="The same yellow line across dark cells with a white outline, easy to see" width="684" height="430">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-13-erase.png?v=e3366a1" alt="A red ring on the first line, where a right click lands" width="684" height="430">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-13-erase.png?v=7d79897" alt="A red ring on the first line, which has faded to show it is the line a right press will erase" width="684" height="430">
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/pen-tool-extras/pen-tool-extras-slide-14-erased.png?v=aa3a9a1" alt="The board with the first line gone and every other line and mark still there" width="684" height="430">
       </div>
       <div class="slide-bar">
@@ -57,7 +58,7 @@
           <p class="slide-caption">Opacity</p>
           <p class="slide-caption">White outlines off</p>
           <p class="slide-caption">White outlines on</p>
-          <p class="slide-caption">Right-click a line to delete it</p>
+          <p class="slide-caption">Hold a right click on a line and it fades; let go to delete it</p>
           <p class="slide-caption">The whole line is gone</p>
         </div>
       </div>
@@ -73,11 +74,11 @@
     <!-- slideshow:text-anywhere -->
     <div class="slideshow">
       <div class="slide-frame">
-        <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-1-type.png?v=39391d8" alt="Three orange lines typed with Enter in the margin beside the top rows, A=B+5, A+B=11 and B=3, A=8, with the Text Anywhere panel below them" width="1000" height="625">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-3-background.png?v=d3874a9" alt="A bold red formula, A+B=11, on a cell edge with no box, and a red formula, X+Y=2Z, in a page-colored box that hides the grid lines under it, with the Background button on" width="1000" height="625">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-6-select.png?v=4a3a9c7" alt="Three blue notes in the margin, A=B+5 and X+Y=2Z above the grid and r1: 4,6 in c7-9 beside row 1, each with a solid purple outline, selected by a solid purple drag box and recolored from orange to blue together" width="1000" height="625">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-9-long.png?v=5e97387" alt="A blue note in the margin, open for typing and made two lines tall with the handle on its bottom right corner, scrolled to the end to show 2B+5=11 and B=3, A=8, with its scroll bar beside the text" width="1000" height="625">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-7-erase.png?v=6d0db42" alt="A red ring on a green note above the grid reading A=B+5, which shows a faint purple outline under the pointer, where a right click lands" width="1000" height="625">
+        <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-1-type.png?v=b196435" alt="Three orange lines typed with Enter in the margin beside the top rows of the grid, A=B+5, A+B=11 and B=3, A=8" width="800" height="320">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-3-background.png?v=c37be99" alt="A bold red formula, A+B=11, on a cell edge with no box, and a red formula, X+Y=2Z, in a page-colored box that hides the grid lines under it" width="800" height="320">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-6-select.png?v=fc9a599" alt="Three blue notes in the margin, A=B+5 and X+Y=2Z above the grid and r1: 4,6 in c7-9 beside row 1, each with a solid purple outline, selected by a solid purple drag box and recolored from orange to blue together" width="800" height="320">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-9-long.png?v=fc44aac" alt="A blue note in the margin, open for typing and made two lines tall with the handle on its bottom right corner, scrolled to the end to show 2B+5=11 and B=3, A=8, with its scroll bar beside the text" width="800" height="320">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/draw-tool/draw-tool-slide-7-erase.png?v=52cc0d0" alt="A red ring on a green note above the grid reading A=B+5, which shows a faint purple outline under the pointer, where a right click lands" width="800" height="320">
       </div>
       <div class="slide-bar">
         <div class="slide-captions">
@@ -100,16 +101,16 @@
     <!-- slideshow:color-by-digit -->
     <div class="slideshow">
       <div class="slide-frame">
-        <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-1-start.png?v=7c85343" alt="The two boxes in Cell mode, with the Color by Digit button under them" width="900" height="391">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-2-type.png?v=cbd00b4" alt="A 1 typed in an empty cell, which fills with the red of its group" width="900" height="391">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-3-marks.png?v=f3e18cf" alt="Center marks 7 and 9 typed into the next cell, which fills with the yellow of their group" width="900" height="391">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-4-add.png?v=60b1b24" alt="A center mark 2 added to the same cell, from another group, so the fill goes" width="900" height="391">
+        <img class="slide current" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-1-start.png?v=468c965" alt="The two boxes in Cell mode, with the Color by Digit button under them" width="900" height="391">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-2-type.png?v=841e893" alt="A 1 typed in an empty cell, which fills with the red of its group" width="900" height="391">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-3-marks.png?v=bdf6871" alt="Center marks 7 and 9 typed into the next cell, which fills with the yellow of their group" width="900" height="391">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-4-add.png?v=edeae04" alt="A center mark 2 added to the same cell, from another group, so the fill goes" width="900" height="391">
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-5-digit.png?v=9f10eb8" alt="Digit mode: no cell is filled, digits and marks are in darker shades of their group colors, and the three marks that repeat the given 2 each have a red circle" width="900" height="391">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-6-both.png?v=af23eaf" alt="Both mode: the cells filled and the digits and marks in darker shades" width="900" height="391">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-6-both.png?v=6eb4a56" alt="Both mode: the cells filled and the digits and marks in darker shades" width="900" height="391">
         <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-7-off.png?v=4d2cf38" alt="Off mode: the plain boxes" width="900" height="391">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-8-menu.png?v=af22041" alt="The profile menu open beside the boxes, listing Entropic, no blue and Modular and Edit profiles" width="900" height="391">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-9-modular.png?v=c504e88" alt="Modular picked: the boxes recolored in its orange, pink and yellow groups" width="900" height="391">
-        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-10-split.png?v=045a06d" alt="Both mode with the cells filled in the first profile's red, green and yellow, and the digits and marks shaded in Modular's olive, purple and brown" width="900" height="391">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-8-menu.png?v=4a92a97" alt="The profile menu open beside the boxes, listing Entropic, no blue and Modular and Edit profiles" width="900" height="391">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-9-modular.png?v=fdc9a67" alt="Modular picked: the boxes recolored in its orange, pink and yellow groups" width="900" height="391">
+        <img class="slide" src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/color-by-digit/color-by-digit-slide-10-split.png?v=f2b1ea6" alt="Both mode with the cells filled in the first profile's red, green and yellow, and the digits and marks shaded in Modular's olive, purple and brown" width="900" height="391">
       </div>
       <div class="slide-bar">
         <div class="slide-captions">
@@ -135,22 +136,29 @@
   </section>
   <section class="row">
     <div>
-      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/dark-page/dark-page.png?v=46cf742" alt="A puzzle on a black page" width="360" height="270"></div>
+      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/dark-page/dark-page.png?v=02d713b" alt="A puzzle on a black page" width="360" height="270"></div>
     </div>
     <div class="row-text">
       <h2>Dark Page</h2>
-      <p>Turns the page black around the puzzle, or any color you pick, and darkens the control buttons when the color is dark. Puzzle colors stay as intended, unlike SudokuPad's dark mode.</p>
+      <p>Turns the page black around the puzzle, or any color you pick, and darkens the control buttons when the color is dark. The text under the puzzle stays readable on any color. Puzzle colors stay as intended, unlike SudokuPad's dark mode.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install<span class="visually-hidden"> Dark Page</span></a></p>
     </div>
   </section>
   <section class="row">
     <div>
-      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/auto-rules-resizer/auto-rules-resizer.png?v=0d15f0a" alt="A puzzle's long rules in a wider pane that shows them all, with the f+ and f- buttons above it and a drag corner at each end" width="669" height="343"></div>
+      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/auto-rules-resizer/auto-rules-resizer.png?v=e98c7ea" alt="A puzzle's long rules in a wider pane that shows them all, with the f+ and f- buttons above it and a drag corner at each end" width="669" height="343"></div>
     </div>
     <div class="row-text">
       <h2>Auto Rules Resizer</h2>
       <p>Fits the rules to your screen in landscape: the text grows as large as fits, and the pane widens only as far as long rules need. Thanks to Nell Gwynn, whose resizing scripts this grew from.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js">Install<span class="visually-hidden"> Auto Rules Resizer</span></a></p>
+    </div>
+  </section>
+  <section class="row row-plain">
+    <div class="row-text">
+      <h2>No Tab Letters</h2>
+      <p>Stops a stray Tab from switching SudokuPad's number pad to letters. The letter button and the / key still switch it. It adds nothing to the page, so there is no picture.</p>
+      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/no-tab-letters.user.js">Install<span class="visually-hidden"> No Tab Letters</span></a></p>
     </div>
   </section>
   </div>

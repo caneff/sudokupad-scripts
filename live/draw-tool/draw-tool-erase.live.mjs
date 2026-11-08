@@ -35,7 +35,7 @@ describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   const saved = () => draw.saved(p)
   const reload = () => draw.reload(p)

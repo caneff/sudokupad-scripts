@@ -16,3 +16,7 @@ not installed through Tampermonkey.
   applied to the first paint that has a board. `live/dark-page/dark-page.live.mjs` reads the stylesheet's
   text at injection to prove the saved color is in it.
 - Screenshot: `dark-page-color.png`, made by `dark-page-color-screenshot.mjs`.
+
+Update 2026-11-08 (#544): the script now runs at `@run-at document-start` and reads the saved color from `localStorage`
+itself, before `Framework` exists; `Framework.getData` corrects it at DOMContentLoaded. The white before the script, noted above,
+is gone: `load-flash.md`.

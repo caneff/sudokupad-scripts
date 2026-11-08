@@ -36,6 +36,8 @@ for (const { file, entry, editor, buttons } of SCRIPTS) {
 
     it('the buttons are one row at the dialog\'s right: Save filled purple left of Cancel, Cancel and any extra button plain', async () => {
       await openScriptDialog(p, entry, editor)
+      // The pointer is still where the last click was, which may be over a button; a hovered button reads its hover color.
+      await p.mouse.move(0, 0)
       const row = await p.evaluate(() => {
         const dialog = document.querySelector('.dialog').getBoundingClientRect()
         return [...document.querySelectorAll('.dialog-options button')].map((b) => {

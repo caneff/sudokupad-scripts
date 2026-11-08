@@ -22,9 +22,9 @@ export const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
 export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, .draw-tool-resize, .draw-tool-selection, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
 // Every element in the layer but the groups themselves.
 export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
-// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
-export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
-export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
+// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open, and a deleted one that is fading out.
+export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox, .draw-tool-fading)'
+export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox, .draw-tool-fading)'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 // The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'
@@ -51,6 +51,11 @@ export const FRAME_KEY = 'DrawTool_frame'
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
+// How far a release may move a note to put its left and top on whole device pixels: half a pixel on each axis, and the two together.
+export const CRISP_HALF_PX = 0.5
+export const CRISP_PX = Math.hypot(CRISP_HALF_PX, CRISP_HALF_PX)
+// The resize handles on a note alone selected or open.
+export const HANDLES = '#draw-tool-layer .draw-tool-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
 export const SETTINGS_EDITOR = '#draw-tool-dialog'
@@ -112,12 +117,42 @@ export const noteLooks = (p) => p.evaluate((selector) => {
   })
 }, TEXTS)
 
-// The middle of the note that reads `text`, in cells from the grid's top left, as [row, column] to a tenth.
-export const noteInCells = (p, text) => p.evaluate(([selector, want]) => {
-  const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
-  const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-  return [(box.y + box.height / 2 - cell.y) / cell.height, (box.x + box.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
+// Where the note that reads `text` starts, on the screen: the left edge of its text and the middle of its first line, where it was clicked.
+export const noteStart = (p, text) => p.evaluate(([selector, want]) => {
+  const range = document.createRange()
+  range.selectNodeContents([...document.querySelectorAll(selector)].find((e) => e.textContent === want))
+  const first = range.getClientRects()[0]
+  return [first.left, (first.top + first.bottom) / 2]
 }, [TEXTS, text])
+
+// The top left of the text of the note that reads `text`, inside its padding, on the screen: the point a fixed note stores. It stays put while the board's scale changes the note's size.
+export const notePoint = (p, text) => p.evaluate(([selector, want]) => {
+  const element = [...document.querySelectorAll(selector)].find((e) => e.textContent === want)
+  const box = element.getBoundingClientRect()
+  const style = window.getComputedStyle(element)
+  return [box.left + parseFloat(style.paddingLeft), box.top + parseFloat(style.paddingTop)]
+}, [TEXTS, text])
+
+// Where the note that reads `text` starts, in cells from the grid's top left, as [row, column] to a tenth.
+export async function noteInCells (p, text) {
+  const [x, y] = await noteStart(p, text)
+  const cell = await p.evaluate(() => Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect().toJSON())
+  return [(y - cell.y) / cell.height, (x - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
+}
+
+// The middle of the closed note that starts nearest screen point `[x, y]`: a note starts at the click that made it, so a press on it, which a handle or the edge may take at its start, goes to its middle.
+export const middleAt = (p, point) => p.evaluate(([selector, [x, y]]) => {
+  const boxes = [...document.querySelectorAll(selector)].map((e) => e.getBoundingClientRect())
+  const distance = (box) => Math.hypot(box.left - x, (box.top + box.bottom) / 2 - y)
+  const box = boxes.reduce((best, next) => distance(next) < distance(best) ? next : best)
+  return [box.x + box.width / 2, box.y + box.height / 2]
+}, [TEXTS, point])
+
+// Opens the closed note that starts nearest screen point `point` with a double-click in its middle, and takes the caret to the end of its text, where the cases type.
+export async function reopen (p, point) {
+  await p.mouse.dblclick(...await middleAt(p, point))
+  await p.keyboard.press('Control+End')
+}
 
 // For each note, what the page shows topmost at its middle: 'note' (itself), 'dialog' or 'other'. Under another tool the
 // notes take no pointer, so each note is made hit-testable for its one check.
@@ -134,6 +169,12 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 
 // Two frames: the pointer's work waits for the next one.
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+// Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.
+export const SELECTED = '#draw-tool-layer .draw-tool-selected'
+export async function finishNote (p) {
+  await p.keyboard.press('Escape')
+  if (await p.locator(SELECTED).count() > 0) await p.keyboard.press('Escape')
+}
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
 // Removes every saved drawing, every set of notes a Restart kept, and the index.
