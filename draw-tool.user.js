@@ -401,13 +401,12 @@
   // the stored point it was worked out for: a spread copies it and JSON leaves it out, so no save stores it, and a note given a new point is drawn at that one.
   const SHOWN_AT = Symbol('shown at')
 
-  // Where a fixed note is drawn on the screen.
-  const fixedPoint = (item) => item[SHOWN_AT]?.from === item.fixed ? item[SHOWN_AT].point : item.fixed
+  const drawnPoint = (item) => item[SHOWN_AT]?.from === item.fixed ? item[SHOWN_AT].point : item.fixed
 
   // The note in board units, wherever it is stored, so a selection rectangle and an erase test notes on and off the board alike.
-  const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(fixedPoint(item)) } : item
+  const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(drawnPoint(item)) } : item
 
-  const screenPoint = (item, toScreen) => item.fixed ? fixedPoint(item) : toScreen(item.at)
+  const screenPoint = (item, toScreen) => item.fixed ? drawnPoint(item) : toScreen(item.at)
 
   // The box a note's element takes on the screen, padding included, worked out from its item rather than measured: `map` has the maps between board
   // units and the screen.
@@ -1099,7 +1098,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1794,7 +1793,7 @@
   function showNote (element, item, map) {
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
-    const style = item.fixed ? noteStyle(item, fixedPoint(item), map.scale) : noteStyle(item, item.at, 1)
+    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale) : noteStyle(item, item.at, 1)
     const look = JSON.stringify(style)
     if (look !== shown.look) {
       Object.assign(element.style, style)
@@ -1864,7 +1863,7 @@
     const inserted = orderNotes(notes)
     measureNotes(notes, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
-    showFixedReachable(notes, map)
+    if (!drag?.move && !resizing) showFixedReachable(notes, map)
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
     else showHandles(drag?.move ? null : selectedBox(map))
@@ -1872,7 +1871,8 @@
   }
 
   // A fixed note the window or the layout has put out of reach is drawn at the nearest point inside the window and clear of the controls, and its stored
-  // point is left as it is: a short-lived small window (devtools opened, a window snap) never moves a note for good. Only the solver's own move saves a new point.
+  // point is left as it is: a short-lived small window (devtools opened, a window snap) never moves a note for good. Only the solver's own move or resize saves
+  // a new point. A note being dragged or resized is left to follow the pointer, and is drawn in reach once it is let go.
   function showFixedReachable (notes, map) {
     const fixed = notes.filter(({ item }) => item.fixed)
     if (fixed.length === 0) return
@@ -1881,10 +1881,9 @@
     for (const { element, item } of fixed) {
       const { left, right, top, bottom } = noteScreenBox(item, map, outline)
       const point = roundPoint(reachablePoint(item.fixed, [right - left, bottom - top], win, blockers))
-      const shown = fixedPoint(item)
       if (point[0] === item.fixed[0] && point[1] === item.fixed[1]) delete item[SHOWN_AT]
       else item[SHOWN_AT] = { from: item.fixed, point }
-      if (fixedPoint(item) !== shown) showNote(element, item, map)
+      showNote(element, item, map)
     }
   }
 
@@ -2011,9 +2010,7 @@
     resizing = null
     if (editing || String(drawing[index]?.box) === String(item.box)) return
     renderDrawing()
-    // A resize is the solver's own move, so a fixed note it carried out of reach keeps the point it is drawn at.
-    const resized = drawing[index]
-    if (resized.fixed) drawing[index] = { ...resized, fixed: fixedPoint(resized) }
+    keepDrawnPoints([index])
     save()
   }
 
@@ -2091,7 +2088,7 @@
     })
   }
 
-  // The texts no note has any more are parsed again if a note gets them back; every change to the notes' texts is saved.
+  // The texts no note has any more, forgotten whenever the notes are saved or loaded; a note that gets one back parses it again.
   function forgetParsedTexts () {
     const texts = new Set(drawing.map((item) => item.text))
     for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
@@ -2355,6 +2352,7 @@
     place(moved, map)
     nudged = true
     redraw()
+    keepDrawnPoints(selected)
   }
 
   function saveNudge () {
@@ -2368,7 +2366,13 @@
     place(movedBy(d.move, dragOffset(d), map), map)
     clearMove(d)
     renderDrawing()
+    keepDrawnPoints(d.move.map(({ index }) => index))
     save()
+  }
+
+  // The solver's own move or resize keeps the point a fixed note is drawn at, so a note dropped partly past the window's edge stays where it is seen.
+  function keepDrawnPoints (indices) {
+    for (const i of indices) if (drawing[i].fixed) drawing[i] = { ...drawing[i], fixed: drawnPoint(drawing[i]) }
   }
 
   function endErase () {
@@ -2398,6 +2402,7 @@
       drawing = []
       savable = false
     }
+    forgetParsedTexts()
     redraw()
   }
 

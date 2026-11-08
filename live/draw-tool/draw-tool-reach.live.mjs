@@ -59,19 +59,6 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.deepEqual(middle, RIGHT_OF_PANEL, 'drawn at its own point')
     assert.deepEqual((await saved())[0].fixed, RIGHT_OF_PANEL, 'stored at its own point')
   }
-  // Drags the note from its middle to `offset` screen pixels away; the stored point is the drop point.
-  const dragBy = async (offset) => {
-    const middle = draw.middleOf((await boxes()).note)
-    const dropAt = [middle[0] + offset[0], middle[1] + offset[1]]
-    await p.mouse.move(...middle)
-    await p.mouse.down()
-    await p.mouse.move(...dropAt, { steps: 8 })
-    await p.mouse.up()
-    const dropped = (await saved())[0].fixed
-    assert.equal(Math.abs(dropped[0] - dropAt[0]) <= 1.5 && Math.abs(dropped[1] - dropAt[1]) <= 1.5, true, `dragged to ${dropAt}, stored at ${dropped}`)
-    return dropped
-  }
-
   it('widened until the panel covers its point, the note is drawn clear of the panel and opens on a double-click without moving for good, and is back at its own point when the window is restored', async () => {
     await start()
     await resizeTo(WIDE)
@@ -105,7 +92,14 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     await resizeTo(NARROW)
     assert.equal(await settle(async () => insideWindow(await boxes()), true), true, 'wholly inside the window')
     await stable(async () => (await boxes()).note.x)
-    const dropped = await dragBy([0, 80])
+    const middle = draw.middleOf((await boxes()).note)
+    const dropAt = [middle[0], middle[1] + 80]
+    await p.mouse.move(...middle)
+    await p.mouse.down()
+    await p.mouse.move(...dropAt, { steps: 8 })
+    await p.mouse.up()
+    const dropped = (await saved())[0].fixed
+    assert.equal(Math.abs(dropped[0] - dropAt[0]) <= 1.5 && Math.abs(dropped[1] - dropAt[1]) <= 1.5, true, `dragged to ${dropAt}, stored at ${dropped}`)
     assert.notDeepEqual(dropped, RIGHT_OF_PANEL, 'the new point is saved')
     await reload()
     assert.deepEqual((await saved())[0].fixed, dropped, 'the same point over a reload')
