@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.1
+// @version      0.5.2
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.1'
+  const VERSION = '0.5.2'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -380,9 +380,11 @@
     let page = null
 
     const dismissKey = `${script}-notice`
+    // A store with no getData or setData (a SudokuPad that changed) cannot remember a dismissal, so it holds for this page load only.
+    const dismissedHere = []
     const dismissed = () => {
-      const saved = page.store.getData(dismissKey)
-      return saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []
+      const saved = typeof page.store.getData === 'function' ? page.store.getData(dismissKey) : null
+      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
     let bar = null
@@ -418,7 +420,8 @@
       dismiss.setAttribute('aria-label', 'Dismiss')
       dismiss.style.cssText = NOTICE_DISMISS_CSS
       dismiss.addEventListener('click', () => {
-        page.store.setData(dismissKey, { version: page.sudokupad, features: [...gone, ...shown.map((reason) => reason.name)] })
+        dismissedHere.push(...shown.map((reason) => reason.name))
+        if (typeof page.store.setData === 'function') page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() })
         showNotice()
       })
       bar.append(text, link, dismiss)
@@ -527,6 +530,7 @@
   // Read before the first paint so a saved color never shows the default first; Framework.getData
   // works as soon as Framework exists, before the app is ready. A page that cannot read it (a frame
   // with storage blocked) still gets the default darkening, which needs no Framework.
+  if (typeof Framework !== 'undefined') lackingInternals(FEATURES, { Framework }).forEach((names, missing) => names.forEach((name) => steps[name].skip(missing, false)))
   let pageColor = (typeof Framework === 'undefined' ? null : steps.savedColor.run(() => readSaved(Framework), () => null)) || DEFAULT_COLOR
 
   const style = document.createElement('style')

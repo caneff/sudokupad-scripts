@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad No Tab Letters
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.2
+// @version      0.1.3
 // @description  Stops a stray Tab from switching SudokuPad's number pad to letters. The letter button and the / key still switch it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -19,7 +19,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.2'
+  const VERSION = '0.1.3'
   const TOGGLE_KEY = '/'
   const TAB_KEY = 'Tab'
 
@@ -103,9 +103,11 @@
     let page = null
 
     const dismissKey = `${script}-notice`
+    // A store with no getData or setData (a SudokuPad that changed) cannot remember a dismissal, so it holds for this page load only.
+    const dismissedHere = []
     const dismissed = () => {
-      const saved = page.store.getData(dismissKey)
-      return saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []
+      const saved = typeof page.store.getData === 'function' ? page.store.getData(dismissKey) : null
+      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
     let bar = null
@@ -141,7 +143,8 @@
       dismiss.setAttribute('aria-label', 'Dismiss')
       dismiss.style.cssText = NOTICE_DISMISS_CSS
       dismiss.addEventListener('click', () => {
-        page.store.setData(dismissKey, { version: page.sudokupad, features: [...gone, ...shown.map((reason) => reason.name)] })
+        dismissedHere.push(...shown.map((reason) => reason.name))
+        if (typeof page.store.setData === 'function') page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() })
         showNotice()
       })
       bar.append(text, link, dismiss)

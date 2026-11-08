@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.6
+// @version      0.3.7
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.6'
+  const VERSION = '0.3.7'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -489,9 +489,11 @@
     let page = null
 
     const dismissKey = `${script}-notice`
+    // A store with no getData or setData (a SudokuPad that changed) cannot remember a dismissal, so it holds for this page load only.
+    const dismissedHere = []
     const dismissed = () => {
-      const saved = page.store.getData(dismissKey)
-      return saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []
+      const saved = typeof page.store.getData === 'function' ? page.store.getData(dismissKey) : null
+      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
     let bar = null
@@ -527,7 +529,8 @@
       dismiss.setAttribute('aria-label', 'Dismiss')
       dismiss.style.cssText = NOTICE_DISMISS_CSS
       dismiss.addEventListener('click', () => {
-        page.store.setData(dismissKey, { version: page.sudokupad, features: [...gone, ...shown.map((reason) => reason.name)] })
+        dismissedHere.push(...shown.map((reason) => reason.name))
+        if (typeof page.store.setData === 'function') page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() })
         showNotice()
       })
       bar.append(text, link, dismiss)

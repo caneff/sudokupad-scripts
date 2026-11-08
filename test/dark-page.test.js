@@ -151,7 +151,7 @@ function assertDarkens ({ style, appended }) {
 }
 
 test('a Framework without getApp warns that the settings entry was skipped, and the page still darkens', () => {
-  const page = startOnBoard({ getData: () => null })
+  const page = startOnBoard({})
   assert.equal(page.warnings.length, 1)
   assert.match(page.warnings[0], /^dark-page: .*getApp/)
   assertDarkens(page)

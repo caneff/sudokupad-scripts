@@ -3,14 +3,14 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const colorByDigit = require('../../color-by-digit.user.js')
 
-// The warning each script prints starting on a page whose Framework has no getApp (and reads nothing saved).
+// The warning each script prints starting on a page whose Framework has no getApp.
 function warningWithoutGetApp (name) {
   const file = require.resolve(`../../${name}.user.js`)
   const element = () => ({ style: { setProperty () {} } })
   const saved = { document: global.document, window: global.window }
   global.document = { createElement: element, head: { appendChild () {} }, body: { appendChild () {} }, querySelector: () => null, querySelectorAll: () => [], fonts: null }
   global.window = { MutationObserver: class { observe () {} }, addEventListener () {} }
-  global.Framework = { getData: () => null }
+  global.Framework = {}
   const warnings = []
   const realWarn = console.warn
   console.warn = (...args) => warnings.push(args.join(' '))
