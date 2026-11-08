@@ -216,7 +216,7 @@ test('autoPaneFit: the text shrinks only at the full width, and never under 70%'
   const fits = (width, font) => width >= 650 && font <= 14
   assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits }), { width: 650, fontPx: 14 }, 'at the limit and 70%')
   const half = (width, font) => width >= 650 && font <= 16
-  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: half }), { width: 650, fontPx: 16 }, 'smaller text, widest pane')
+  assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: half, readable: () => 500 }), { width: 650, fontPx: 16 }, 'smaller text at the widest pane, not the readable width')
   const never = (width, font) => font <= 10
   const readable = (px) => Math.round(px * 40)
   assert.deepEqual(autoPaneFit({ natural: 480, widthLimit: 650, ownPx: 20, nudgePx: 0, fits: never, readable }), { width: 560, fontPx: 14 }, 'too long at 70%: the readable width, and it scrolls')
