@@ -2222,11 +2222,13 @@
     if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
   }
 
-  // The undo stack stays as it was: the empty stack after a Restart is what makes SudokuPad's next Undo load the board from before it.
+  // An empty undo stack is what makes SudokuPad's next Undo load the board from before a Restart, so the coloring leaves the stack as it was.
   function colorEnteredCellsWithoutUndoStep (app) {
-    const kept = app.puzzle.undoStack.length
-    colorEnteredCells(app)
-    app.puzzle.undoStack.length = kept
+    coloring.run(() => {
+      const kept = app.puzzle.undoStack.length
+      colorEnteredCells(app)
+      app.puzzle.undoStack.length = kept
+    })
   }
 
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
@@ -2276,7 +2278,6 @@
       })
       app.on('restarted', () => {
         modeHistory.restart()
-        // The coloring is not left as an undo step: the empty stack is what makes SudokuPad's next Undo load the board from before the Restart.
         if (colorsCells(mode)) colorEnteredCellsWithoutUndoStep(app)
       })
     })

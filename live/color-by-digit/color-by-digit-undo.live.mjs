@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { coloredCountOn, labelOn, openSession, pressTo } from './color-by-digit-fixtures.mjs'
+import { coloredCountOn, givensColoredOn, labelOn, MODE_KEY, openSession, pressTo } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
 import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
 import { gridPoint } from '../pen.mjs'
@@ -130,20 +130,26 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('the first Undo after a Restart loads what it cleared and leaves the mode on Cell, the givens colored', async () => {
+  it('the first Undo after a Restart loads the board from before it, leaves the mode on Cell and saves it, the givens colored', async () => {
     await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
     await pressTo(p, 'Cell')
     assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
+    const givens = await givensColoredOn(p)
+    assert.equal(givens > 0, true)
     await p.evaluate(() => Framework.app.restartPuzzle())
-    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
-    // An empty undo stack is what makes SudokuPad's next Undo load the board from before the Restart.
-    assert.equal(await p.evaluate(() => Framework.app.puzzle.undoStack.length), 0)
+    assert.equal(await settle(() => givensColoredOn(p), givens), givens)
+    // SudokuPad keeps the board from before the Restart, and an empty undo stack is what makes the next Undo load it.
+    assert.deepEqual(await p.evaluate(() => [Framework.app.preRestartSavedProgress !== undefined, Framework.app.puzzle.undoStack.length]), [true, 0])
     await undo()
+    assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined && Framework.app.puzzle.undoStack.length > 0), true), true)
     assert.equal(await settle(label, 'Cell'), 'Cell')
-    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
+    assert.equal(await settle(() => givensColoredOn(p), givens), givens)
+    assert.equal(await p.evaluate((key) => Framework.getData(key), MODE_KEY), 'cell')
   })
+})
 
-  it('with Text Anywhere loaded, that Undo brings its note back too', async () => {
+describe('The first Undo after a Restart, with Text Anywhere loaded', { concurrency: false }, () => {
+  it('brings its note back too', async () => {
     const both = await openSession(browser, script)
     try {
       const q = both.p
