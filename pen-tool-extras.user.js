@@ -1342,7 +1342,7 @@
     // SudokuPad asks every tool's `handleKeydown` before its key handlers, and stops at the first that answers, so
     // answering a digit here keeps it from the tool's own digit handler, which never selects a pen, and
     // answering Tab here also keeps it from the letter tool's Tab binding (which does nothing in the pen tool in
-    // SudokuPad now, with No Tab Letters installed or not), and the key's default of moving the focus is stopped.
+    // SudokuPad now, with UI Tweaks' Tab option on or not), and the key's default of moving the focus is stopped.
     // Shift+Tab is left alone: a held Shift is the letter tool's own temporary switch.
     if (typeof tool.handleKeydown !== 'function') tool.handleKeydown = () => false
     steps.pages.wrap(tool, 'handleKeydown', function (stock, event) {

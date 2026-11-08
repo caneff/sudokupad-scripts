@@ -3,16 +3,15 @@
 // Replay under a real Tampermonkey install and on crackingthecryptic.com stays untested.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, TEXT_BOX, TOOL_KEYS, texts as drawTexts, tool } from './draw-tool/draw-tool-fixtures.mjs'
 import { openPage, startPuzzle } from './page.mjs'
+import { SCRIPT_FILES, seedOddEvenCells } from './puzzles.mjs'
 import { cellCentre, goToPenPage, gridPoint, mouseDrag, openPenTool, PAGE_ONE, PAGE_THREE, PAGE_TWO, penStrings } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
 const ROOT = new URL('../', import.meta.url)
-const SCRIPT_FILES = readdirSync(ROOT).filter((f) => f.endsWith('.user.js')).sort()
 
 const REPLAY_BUTTON = '#control-replay'
 const PLAY_BUTTON = '.controls-input button[data-key="2"]'
@@ -28,10 +27,7 @@ after(async () => { await browser?.close() })
 
 // A page with `files` injected after Start Puzzle, Color by Digit saved in Cell mode, and the pen and replay tools on.
 async function openSolver (files) {
-  const entries = Object.entries({ ...savedProfiles(SEED), [MODE_STORAGE_KEY]: 'cell' }).map(([k, v]) => [k, JSON.stringify(v)])
-  const opened = await openPage(browser, {
-    seed: (page) => page.addInitScript((list) => list.forEach(([k, v]) => window.localStorage.setItem(k, v)), entries)
-  })
+  const opened = await openPage(browser, { seed: seedOddEvenCells })
   await startPuzzle(opened.p)
   for (const file of files) await opened.p.addScriptTag({ content: readFileSync(new URL(file, ROOT), 'utf8') })
   await opened.p.evaluate(() => { Framework.setSetting('toolpen', true); Framework.setSetting('toolreplay', true) })
@@ -45,7 +41,7 @@ async function openSolver (files) {
 const INSTALL_ORDERS = [['alphabetical', SCRIPT_FILES], ['reverse', [...SCRIPT_FILES].reverse()]]
 
 for (const [order, files] of INSTALL_ORDERS) {
-  describe(`the replay tool plays a solve back with every script installed (${order} order)`, { concurrency: false }, () => {
+  describe(`attack 65: the replay tool plays a solve back with every script installed (${order} order)`, { concurrency: false }, () => {
     let context, p, errors, solved
     const read = (fn, arg) => p.evaluate(fn, arg)
 

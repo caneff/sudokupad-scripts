@@ -51,11 +51,10 @@ const runSlides = (count) => {
 // same slides, and the theme rules in style.css. This seam is blind to a real browser: clicking a real Next button, what the browser draws and the
 // hover and focus looks are `npm run test:live`'s (live/site-slideshow.live.mjs), and the Pages site after the merge is checked by hand.
 test('spec 359: the homepage is rows of slideshows, the details pages carry the same slides, and the slideshow steps and wraps', () => {
-  // Homepage: one row per script in order; No Tab Letters is the last, a text row with no picture.
+  // Homepage: one row per script in order; UI Tweaks is the last, with one picture.
   const home = read('index.html')
   const rows = rowsOf(home)
-  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'No Tab Letters'])
-  assert.equal(existsSync(join(ROOT, 'no-tab-letters.user.js')), true)
+  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'UI Tweaks'])
   assert.match(home, /\.row \{[^}]*grid-template-columns: 30rem 1fr/)
 
   // Dark Page and Auto Rules Resizer keep one picture and no pager; the other three rows are slideshows with a picture, caption and Install each.

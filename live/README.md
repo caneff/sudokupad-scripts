@@ -59,6 +59,16 @@ owns it; its header comment is the full rule.
 - A replayed request the recording lacks is aborted, and the process then exits 1 naming each such
   URL, with or without `LIVE_OFFLINE=1`. `LIVE_REFRESH=1` records again.
 
+## Puzzles other than the recorded one
+
+`live/puzzles.mjs` builds a puzzle as data (`puzzleData`: any grid size, boxes, givens, `overlays`, `foglight`, `metadata.bgimage`), turns it into
+an id with the page's own compression (`puzzleIdFor`) and opens it by that id in the same tab (`openPuzzleId`); the page document is
+served from the recording whatever the path, so no new recording is needed. Give every built puzzle its own `id`: an inline `scl` puzzle has none
+and SudokuPad then saves its progress under `progress_undefined`, shared by every such puzzle. `installAll` runs all six scripts at
+`DOMContentLoaded` of every load, as a userscript manager does, and answers the requests the recording lacks for the solved dialog (two icons) and for Tag
+Manager with empty files. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
+`resumeAfterHistory` turn on.
+
 ## The fuzz proof
 
 `live/fuzz/` proves fast-check can drive SudokuPad (#592; `docs/research/ui-fuzz-tools.md` § Tried with Playwright). `fuzz.mjs` runs random
