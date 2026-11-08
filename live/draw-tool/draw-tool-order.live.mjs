@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { buttonIds, DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
+import { buttonIds, finishNote, DIGIT_BUTTON, DRAW_BUTTON, SLIDERS, pickDraw, script, TOOL_KEYS, tool, texts } from './draw-tool-fixtures.mjs'
 import { injectAtIdle, openPage, startPuzzle } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
@@ -64,7 +64,7 @@ describe('Text Anywhere: its button is the last tool button', { concurrency: fal
     await p.locator(SLIDERS).waitFor({ state: 'visible' })
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
     await p.keyboard.type('15')
-    await p.keyboard.press('Escape')
+    await finishNote(p)
     assert.deepEqual(await settle(() => texts(p), ['15']), ['15'])
     await p.click(DIGIT_BUTTON)
     assert.equal(await tool(p), 'normal')

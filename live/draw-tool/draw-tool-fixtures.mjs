@@ -139,6 +139,12 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 
 // Two frames: the pointer's work waits for the next one.
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+// Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.
+export const SELECTED = '#draw-tool-layer .draw-tool-selected'
+export async function finishNote (p) {
+  await p.keyboard.press('Escape')
+  if (await p.locator(SELECTED).count() > 0) await p.keyboard.press('Escape')
+}
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
 // Removes every saved drawing, every set of notes a Restart kept, and the index.
