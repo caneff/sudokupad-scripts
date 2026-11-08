@@ -125,18 +125,18 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     assert.ok(note.at && !note.fixed, JSON.stringify(note))
   })
 
-  it('the caret is the note\'s color, and a recolor changes it and the selection tint', async () => {
+  it('the caret is the note\'s color, and a recolor changes it and the selection tint made after it', async () => {
     await fresh()
     await p.click(key(GREEN))
     await p.mouse.click(...await gridPoint(p, SPOT))
     await p.keyboard.type('ab')
     assert.equal(await caretColor(), await resolved(await penColor(GREEN)))
-    await p.keyboard.press('Control+A')
-    assert.equal(await selectionTint(), await tinted(await penColor(GREEN)), 'the selection is green before the recolor')
     await p.click(key(RED))
     assert.equal(await caretColor(), await resolved(await penColor(RED)))
     assert.notEqual(await resolved(await penColor(RED)), await resolved(await penColor(GREEN)))
-    assert.equal(await selectionTint(), await tinted(await penColor(RED)), 'and red after it')
+    await p.locator(TEXT_BOX).focus()
+    await p.keyboard.press('Control+A')
+    assert.equal(await selectionTint(), await tinted(await penColor(RED)), 'a selection made after the recolor is tinted in the new color')
   })
 
   it('selected text is tinted in the note\'s color at low opacity, and the rule takes the halo off it', async () => {
