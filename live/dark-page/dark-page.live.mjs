@@ -20,8 +20,10 @@ const settingsEntry = (group) => group.locator('button, [role=button]').filter({
 const BOARD_BOX = `#${BOARD_ID}`
 const STYLE = `#${STYLE_ID}`
 const BLACK = 'rgb(0, 0, 0)'
-const CREDIT_TEXT = 'rgb(221, 221, 221)'
-const DARK_TEXT = 'rgb(34, 34, 34)'
+const CREDIT_TEXT = 'rgb(255, 255, 255)'
+const DARK_TEXT = 'rgb(0, 0, 0)'
+const BUTTON_HOVER_BG = 'rgb(55, 52, 58)'
+const BUTTON_PRESS_BG = 'rgb(59, 55, 62)'
 // The color of the replay tool's readout, the ::after of .controls-input, on `page`.
 const readoutColor = (page) => page.evaluate(() => window.getComputedStyle(document.querySelector('.controls-input'), '::after').color)
 // The control buttons on a dark page: dark gray with light purple icons, and a purple border on
@@ -305,9 +307,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(onBorders, onBorders.map(() => BUTTON_BORDER))
   })
 
-  it('hover on a button changes nothing the script set, and brightens a digit as it does with the script off', async () => {
+  it('hover on a dark button lightens its fill, and brightens a digit as it does with the script off', async () => {
     await p.hover('#control-undo')
-    assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
+    assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_HOVER_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
     const hovered = () => computed('.controls-input button.digit', 'filter')
     await p.hover('.controls-input button.digit')
     const on = await hovered()
@@ -317,6 +319,34 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.mouse.move(5, 5)
     assert.notEqual(on, 'none')
     assert.equal(on, off)
+    assert.equal((await readButton('#control-undo')).bg, BUTTON_BG)
+  })
+
+  it('a pressed dark button takes the press fill', async () => {
+    const box = await p.locator('#control-undo').boundingBox()
+    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await p.mouse.down()
+    try {
+      assert.equal((await readButton('#control-undo')).bg, BUTTON_PRESS_BG)
+    } finally {
+      // Moving off before the release keeps the click from undoing anything.
+      await p.mouse.move(5, 5)
+      await p.mouse.up()
+    }
+  })
+
+  it('a keyboard-focused dark button shows a 2px light purple outline, and a mouse-focused one does not', async () => {
+    await p.mouse.move(5, 5)
+    await read(() => document.querySelector('#control-undo').focus())
+    // A script's focus() after a mouse press does not match :focus-visible; a Tab does.
+    await p.keyboard.press('Tab')
+    await p.keyboard.press('Shift+Tab')
+    const focused = await read(() => document.activeElement.id)
+    const outline = await computed(`#${focused}`, 'outlineColor')
+    assert.equal(outline, BUTTON_ACCENT)
+    assert.equal(await computed(`#${focused}`, 'outlineWidth'), '2px')
+    assert.equal(await computed(`#${focused}`, 'outlineStyle'), 'solid')
+    await read(() => document.activeElement.blur())
   })
 
   it('the puzzle is kept: no pixel of the board differs with the script off', async () => {
@@ -462,11 +492,32 @@ describe('the page color dialog', { concurrency: false }, () => {
     await load()
     const firstCss = await p.evaluate(() => window.__firstCss)
     assert.ok(firstCss.includes(`${BOARD} { background-color: #ffcc00 !important }`), firstCss)
-    assert.doesNotMatch(firstCss, /#000000/)
+    assert.doesNotMatch(firstCss, /background-color: #000000/)
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     await openDialog()
     assert.equal(await p.locator(`.dialog ${PICKER}`).inputValue(), '#ffcc00')
     await dialogButton('Cancel').click()
+  })
+
+  it('the credit line and the readout reach 4.5:1 on #808080 and #767676', async () => {
+    const ratio = (a, b) => {
+      const lum = (rgb) => { const [r, g, bl] = rgb.map((c) => c / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * bl }
+      const [x, y] = [lum(a) + 0.05, lum(b) + 0.05]
+      return Math.max(x, y) / Math.min(x, y)
+    }
+    const channels = (css) => css.match(/\d+/g).slice(0, 3).map(Number)
+    for (const grey of ['#808080', '#767676']) {
+      await openDialog()
+      await p.locator(`.dialog ${PICKER}`).fill(grey)
+      await dialogButton('Save').click()
+      const page = channels(await bodyColor())
+      for (const text of [await footerColor(), await readoutColor(p)]) {
+        assert.ok(ratio(channels(text), page) >= 4.5, `${text} on ${grey}`)
+      }
+    }
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
+    await dialogButton('Save').click()
   })
 
   it('Save of a dark color switches the buttons dark without a reload', async () => {
@@ -486,6 +537,36 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Cancel').click()
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('moving the picker applies the color to the page at once, and Cancel puts the saved color back', async () => {
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#00ff00')
+    assert.equal(await bodyColor(), 'rgb(0, 255, 0)')
+    assert.equal(await footerColor(), DARK_TEXT)
+    await dialogButton('Cancel').click()
+    await p.locator('.dialog').waitFor({ state: 'detached' })
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
+    assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('Escape closes the dialog and puts the saved color back', async () => {
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#00ff00')
+    assert.equal(await bodyColor(), 'rgb(0, 255, 0)')
+    await p.keyboard.press('Escape')
+    await p.locator('.dialog').waitFor({ state: 'detached' })
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
+    assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('the Black button previews black, and Cancel puts the saved color back', async () => {
+    await openDialog()
+    await dialogButton('Black').click()
+    assert.equal(await bodyColor(), BLACK)
+    await dialogButton('Cancel').click()
+    await p.locator('.dialog').waitFor({ state: 'detached' })
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
   })
 
   it('Black then Save returns to the default black with light text, and saves nothing', async () => {
