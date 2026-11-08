@@ -33,7 +33,7 @@ export const collectSkipLines = (page, errors, expectedSkips = []) => {
 }
 
 // Collects into `errors` every uncaught page error as its stack (which starts with the name and message), so a suite that
-// asserts `errors` is empty prints where the error came from when it fails. A thrown value with no stack is collected as its text.
+// asserts `errors` is empty prints where the error came from when it fails.
 export const collectPageErrors = (page, errors) => {
   page.on('pageerror', (e) => errors.push(e?.stack || String(e)))
 }

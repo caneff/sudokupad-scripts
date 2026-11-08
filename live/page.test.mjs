@@ -1,22 +1,21 @@
-// `captureConsoleErrors` and `collectSkipLines` of the live checks, run against a fake page so no browser is needed.
+// `captureConsoleErrors`, `collectPageErrors` and `collectSkipLines` of the live checks, run against a fake page so no browser is needed.
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { captureConsoleErrors, collectPageErrors, collectSkipLines } from './page.mjs'
 
-// A page whose `console` listener is fed messages by the test.
+// A page whose `console` and `pageerror` listeners are fed messages by the test.
 const fakePage = () => {
-  let listener
-  return { on: (event, fn) => { if (event === 'console') listener = fn }, say: (type, text) => listener({ type: () => type, text: () => text }) }
+  const listeners = {}
+  return {
+    on: (event, fn) => { listeners[event] = fn },
+    say: (type, text) => listeners.console({ type: () => type, text: () => text }),
+    raise: (e) => listeners.pageerror(e)
+  }
 }
 
 describe('collectPageErrors', () => {
-  const pageWith = () => {
-    let listener
-    return { on: (event, fn) => { if (event === 'pageerror') listener = fn }, raise: (e) => listener(e) }
-  }
-
   it('collects an uncaught error with its message and stack, so a failing assertion shows where it came from', () => {
-    const page = pageWith()
+    const page = fakePage()
     const errors = []
     collectPageErrors(page, errors)
     const e = new TypeError('boom')
@@ -26,12 +25,14 @@ describe('collectPageErrors', () => {
     assert.equal(errors[0], e.stack)
   })
 
-  it('falls back to the text of a thrown value that has no stack', () => {
-    const page = pageWith()
+  it('falls back to the text when the error has an empty stack, as Playwright sends a thrown string', () => {
+    const page = fakePage()
     const errors = []
     collectPageErrors(page, errors)
-    page.raise('plain string')
-    assert.deepEqual(errors, ['plain string'])
+    const e = new Error('plain string')
+    e.stack = ''
+    page.raise(e)
+    assert.deepEqual(errors, ['Error: plain string'])
   })
 })
 
