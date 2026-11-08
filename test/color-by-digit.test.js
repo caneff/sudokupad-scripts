@@ -864,7 +864,7 @@ test('installButton: adds an icon button titled "Color by digit" in the bottom r
   assert.equal(spec.name, 'colorbydigit')
   assert.equal(spec.parent, '.controls-aux')
   assert.equal(spec.title, 'Color by digit: Off')
-  assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="menu"[\s\S]*<\/span><\/div>$/)
+  assert.match(spec.content, /^<div class="icon"[^>]*>[\s\S]*<svg[\s\S]*<\/svg><span data-role="mode"[\s\S]*<\/span><span data-role="menu"[\s\S]*<\/span><\/div>$/)
   assert.equal(typeof spec.onClick, 'function')
 })
 
@@ -1663,13 +1663,16 @@ test('renderChips gives a group whose palette color is unreadable a grey cell, a
   assert.deepEqual(look('both'), [['#ccc', 'rgb(29, 106, 229)']])
 })
 
-test('iconHtml draws the run of cells in the mode\'s look, with no word strip, and keeps the menu arrow box', () => {
+test('iconHtml draws the run of cells in the mode\'s look under the mode word, and keeps the menu arrow box', () => {
   const groups = [{ key: 'a', digits: ['3'] }, { key: 'b', digits: ['7'] }]
   for (const mode of ['cell', 'digit', 'both', 'off']) {
     const html = iconHtml(mode, groups, colorFor)
     const run = /<svg data-role="chips"[\s\S]*?<\/svg>/.exec(html)[0]
     assert.deepEqual(runCells(run), runCells(renderChips(groups, colorFor, { size: 1, style: mode })), mode)
-    assert.doesNotMatch(html, /data-role="mode"|CELL|DIGIT|BOTH|OFF/)
+    const word = /<span data-role="mode" style="([^"]*)">([^<]*)<\/span>/.exec(html)
+    assert.equal(word[2], mode.toUpperCase())
+    assert.match(word[1], /pointer-events:none/)
+    assert.match(word[1], mode === 'off' ? /color:#b3acbf/ : /color:#6a1b9a/)
     assert.match(html, /data-role="menu"[^>]*aria-haspopup="menu"[^>]*right:[^;"]*;bottom:/)
   }
 })

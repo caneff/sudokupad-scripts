@@ -102,6 +102,13 @@ export const labelOn = async (p) => {
   return label?.startsWith(LABEL_PREFIX) ? label.slice(LABEL_PREFIX.length) : label
 }
 
+// The mode word drawn above the chips, and the boxes of the word, the chips and the arrow box, to judge that they do not overlap.
+export const wordOn = (p) => p.locator(`${BUTTON} [data-role="mode"]`).textContent()
+export const buttonBoxesOn = (p) => p.locator(BUTTON).evaluate((button) => {
+  const box = (selector) => { const r = button.querySelector(selector).getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+  return { word: box('[data-role="mode"]'), chips: box('svg[data-role="chips"]'), arrow: box('[data-role="menu"]') }
+})
+
 // A profile row's top-left corner in the dialog, clear of its drag handle.
 export const ROW_CORNER = { position: { x: 2, y: 2 } }
 

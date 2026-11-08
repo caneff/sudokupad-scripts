@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVENS, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, shadeReaders, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVENS, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, shadeReaders, startInjected, watch, wordOn } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, MODES } from '../page.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -427,6 +427,33 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
 
   it('no uncaught page errors', () => {
     assert.deepEqual(errors, [])
+  })
+})
+
+describe('the mode word on the button, injected after Start Puzzle (#509)', { concurrency: false }, () => {
+  let context, p
+  before(async () => { ({ context, p } = await openSession(browser, script, { saved: savedProfiles(SEED) })) })
+  after(async () => { await context.close() })
+
+  it('shows the word of each mode as a press steps Cell, Digit, Both, Off', async () => {
+    const words = []
+    for (const want of ['Digit', 'Both', 'Off', 'Cell']) {
+      if (words.length === 0) words.push(await wordOn(p))
+      await pressTo(p, want)
+      words.push(await wordOn(p))
+    }
+    assert.deepEqual(words, ['CELL', 'DIGIT', 'BOTH', 'OFF', 'CELL'])
+  })
+
+  it('keeps the word, the chips and the arrow box apart in every mode', async () => {
+    const apart = (a, b) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top
+    for (const want of ['Digit', 'Both', 'Off', 'Cell']) {
+      await pressTo(p, want)
+      const { word, chips, arrow } = await buttonBoxesOn(p)
+      assert.equal(apart(word, chips), true, `${want}: word over chips ${JSON.stringify([word, chips])}`)
+      assert.equal(apart(chips, arrow), true, `${want}: chips over arrow ${JSON.stringify([chips, arrow])}`)
+      assert.equal(apart(word, arrow), true, `${want}: word over arrow ${JSON.stringify([word, arrow])}`)
+    }
   })
 })
 

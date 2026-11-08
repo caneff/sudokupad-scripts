@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.9
+// @version      0.23.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.9'
+  const VERSION = '0.23.0'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -867,6 +867,14 @@
   }
 
   const PURPLE = '#6a1b9a'
+  const GREY = '#b3acbf'
+
+  // No pointer events, so a press on the label is a press on the button.
+  function modeLabelHtml (mode) {
+    const on = mode !== 'off'
+    return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-3px;top:-2px;' +
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
+  }
 
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
     'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:14px;height:14px;' +
@@ -885,9 +893,9 @@
   // SudokuPad's own app buttons put their icon in <div class="icon">.
   const iconHtml = (mode, groups, colorOf, digitProfileGroups) =>
     '<div class="icon" style="position:relative"><svg viewBox="0 0 100 100" overflow="visible" xmlns="http://www.w3.org/2000/svg">' +
-    iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + ARROW_BOX_HTML + '</div>'
+    iconRun(mode, groups, colorOf, digitProfileGroups) + '</svg>' + modeLabelHtml(mode) + ARROW_BOX_HTML + '</div>'
 
-  // The mode in words, which the chips' look alone does not say.
+  // The title and aria-label name the mode in words, as the word above the chips does.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
   // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
