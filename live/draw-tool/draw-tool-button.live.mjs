@@ -19,7 +19,7 @@ describe('Text Annotation tool button icon, injected after Start Puzzle', { conc
   })
   after(async () => { await context.close() })
 
-  const fills = () => p.locator(`${DRAW_BUTTON} svg path`).evaluateAll((paths) => paths.map((path) => getComputedStyle(path).fill))
+  const fills = () => p.locator(`${DRAW_BUTTON} svg path`).evaluateAll((paths) => paths.map((path) => window.getComputedStyle(path).fill))
 
   it('every path of the icon is unfilled, with the tool not selected and selected', async () => {
     await p.click(DIGIT_BUTTON)
