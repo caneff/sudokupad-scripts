@@ -418,17 +418,17 @@ const toBoard = ([x, y]) => [(x - 100) / 2, (y - 50) / 2]
 const toScreen = ([x, y]) => [x * 2 + 100, y * 2 + 50]
 const board = { box: { left: 100, top: 50, right: 1300, bottom: 1250 }, toBoard }
 
-test('a note placed on the board is stored in board units, rounded to a tenth, and keeps the rest of the item', () => {
+test('a note placed on the board is stored in board units, rounded to a hundredth, and keeps the rest of the item', () => {
   const note = textItem([50, 60], 'hi', 3, 20, true)
-  assert.deepEqual(placedItem(note, [300.06, 250], board), { ...note, at: [100, 100] })
+  assert.deepEqual(placedItem(note, [300.06, 250], board), { ...note, at: [100.03, 100] })
   assert.deepEqual(placedItem(note, [100, 1250], board).at, [0, 600], 'on the board\'s edge')
   assert.deepEqual(note.at, [50, 60])
 })
 
 test('a note placed off the board is stored as a fixed screen point in its own key, with no board point an older version could read', () => {
   const note = textItem([50, 60], 'hi', 3, 20, true)
-  const off = placedItem(note, [40.04, 700], board)
-  assert.deepEqual(off, { kind: 'text', color: 3, size: 20, opacity: 100, bg: true, text: 'hi', fixed: [40, 700] })
+  const off = placedItem(note, [40.044, 700], board)
+  assert.deepEqual(off, { kind: 'text', color: 3, size: 20, opacity: 100, bg: true, text: 'hi', fixed: [40.04, 700] })
   assert.equal('at' in off, false)
   assert.deepEqual(placedItem(off, [300, 250], board), { ...note, at: [100, 100] }, 'moved back onto the board, it is pinned again')
 })

@@ -12,7 +12,7 @@ import { closeDialogWith } from '../settings.mjs'
 import { settle, stable } from '../settle.mjs'
 
 const { DIALOG, TEXT_BOX, TEXTS } = draw
-// A real mouse lands on whole page pixels, and a note's place is rounded to a tenth.
+// A real mouse lands on whole page pixels, and a note's place is rounded to a hundredth.
 const NEAR_PX = 1.5
 // In cells from the grid's top left: the on-board note's spot, at r3c3.
 const ON_AT = [2.5, 2.5]

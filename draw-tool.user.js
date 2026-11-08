@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.34.0
+// @version      0.35.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.34.0'
+  const VERSION = '0.35.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -224,6 +224,21 @@
   const DONE_OPACITY = 0.6
   // A note being moved is drawn at this share of its own opacity, so the board shows through.
   const MOVING_OPACITY = 0.6
+  // The hover outline and the handles fade in over this long, and a note deleted by the right button or the trash button fades out over FADE_OUT_MS; each with Material's
+  // decelerate curve to enter and accelerate curve to exit, and only when the solver has not asked for reduced motion.
+  const FADE_IN_MS = 80
+  const FADE_OUT_MS = 120
+  const FADE_IN_EASE = 'cubic-bezier(0, 0, 0, 1)'
+  const FADE_OUT_EASE = 'cubic-bezier(0.3, 0, 1, 1)'
+  const MOTION_OK = '(prefers-reduced-motion: no-preference)'
+  const FADING_CLASS = 'draw-tool-fading'
+  // An open note with no text yet shows a faint box.
+  const EMPTY_CLASS = 'draw-tool-empty'
+  // A handle is made with this class and loses it a frame later, which is what starts its fade in.
+  const ENTERING_CLASS = 'draw-tool-entering'
+  // While a note is moved or a handle dragged, every element on the page shows the cursor this property holds.
+  const HELD_CURSOR_CLASS = 'draw-tool-holding-cursor'
+  const HELD_CURSOR_VAR = '--draw-tool-held-cursor'
   // The notes' two groups in the layer: the notes on the board, in board units under the board's own transform, and the fixed notes, in screen pixels,
   // drawn above them.
   const BOARD_NOTES_CLASS = 'draw-tool-board'
@@ -298,6 +313,8 @@
   }
 
   const roundToTenth = (value) => Math.round(value * 10) / 10
+  // A placed note's point is kept to a hundredth, fine enough to put its drawn left and top on a whole device pixel.
+  const roundToHundredth = (value) => Math.round(value * 100) / 100
 
   const cross = ([ax, ay], [bx, by], [cx, cy]) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
   const segmentsCross = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0
@@ -451,7 +468,7 @@
     return corners.some((corner, i) => segmentsCross(from, to, corner, corners[(i + 1) % 4]))
   }
 
-  const roundPoint = ([x, y]) => [roundToTenth(x), roundToTenth(y)]
+  const roundPoint = ([x, y]) => [roundToHundredth(x), roundToHundredth(y)]
 
   // A note put down at screen point `point` is pinned to the grid in board units when the point is over the board, and is
   // fixed on the screen, under its own `fixed` field, when it is not: an older version reads every note's `at` as board units.
@@ -490,6 +507,8 @@
 
   // The gap left to the window's edge and to a control, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
   const REACH_MARGIN_PX = 1
+  // A note already this close to a whole device pixel is not moved to it.
+  const PIXEL_SNAP_EPSILON_PX = 0.005
 
   // The point nearest `[x, y]` for the middle of a note box `width` by `height` that lies wholly inside `win` and overlaps none of the `blockers`, all in screen pixels.
   // A box too big for the window is centred on it; with no free point it is kept inside the window alone; a window with no area leaves the point as it is.
@@ -1633,8 +1652,8 @@
     const pad = notePadding(item, outline)
     const [padX, padY] = pad.map(px)
     return {
-      left: `${roundToTenth(x - pad[0] * scale)}px`,
-      top: `${roundToTenth(y - pad[1] * scale)}px`,
+      left: `${roundToHundredth(x - pad[0] * scale)}px`,
+      top: `${roundToHundredth(y - pad[1] * scale)}px`,
       caretColor: itemColor(item.color),
       fontSize: px(item.size),
       width,
@@ -1816,6 +1835,8 @@
   // Each color button shows "Aa" in its draw color, so a recolor follows.
   const hoverShare = (percent) => `color-mix(in srgb, ${PANEL_COLOR} min(100%, calc(${percent}% / var(${NOTE_OPACITY_VAR}))), transparent)`
   const hoverLook = (outlinePercent, fillPercent) => `outline: 1px solid ${hoverShare(outlinePercent)}; outline-offset: 2px; background-image: linear-gradient(${hoverShare(fillPercent)}, ${hoverShare(fillPercent)});`
+  // A closed note that is not selected, under Text Anywhere: the one that shows a hover outline.
+  const IDLE_NOTE = `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS})`
   const PANEL_CSS = [
     ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
@@ -1843,7 +1864,19 @@
     // The hover look is drawn on the note itself, so each share is divided by the note's opacity, to a cap of all of it: a faded note's cue stays about as visible as the note.
     // The fill is a background image because the note's inline background color, empty or its box, wins over any stylesheet color.
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: move; }`,
-    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}):hover { ${hoverLook(35, 4)} }`,
+    // The outline is there and clear until the pointer comes, so its color is what fades in.
+    `${IDLE_NOTE} { outline: 1px solid transparent; outline-offset: 2px; }`,
+    `${IDLE_NOTE}:hover { ${hoverLook(35, 4)} }`,
+    `.${TEXT_CLASS}.${FADING_CLASS} { pointer-events: none !important; }`,
+    `.${TEXT_BOX_CLASS}.${EMPTY_CLASS} { min-width: 1em; outline: 1px solid color-mix(in srgb, currentColor 30%, transparent); }`,
+    `html.${HELD_CURSOR_CLASS}, html.${HELD_CURSOR_CLASS} * { cursor: var(${HELD_CURSOR_VAR}) !important; }`,
+    `@media ${MOTION_OK} {`,
+    `  ${IDLE_NOTE}:hover { transition: outline-color ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
+    `  .${HANDLE_CLASS} { transition: opacity ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
+    // Important, since the pointer is still over the note when it starts to fade, and the hover rule's own transition would win.
+    `  .${TEXT_CLASS}.${FADING_CLASS} { transition: opacity ${FADE_OUT_MS}ms ${FADE_OUT_EASE} !important; }`,
+    '}',
+    `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
     `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
@@ -2317,17 +2350,22 @@
     shownNotes.set(element, { ...shown, item, text: item.text, look })
   }
 
+  const skipFading = (node) => {
+    while (node?.classList.contains(FADING_CLASS)) node = node.nextSibling
+    return node
+  }
+
   // Puts each group's notes in drawing order, moving only the elements out of place. The elements it put back in the page.
   function orderNotes (notes) {
     const kept = new Set(notes.map(({ element }) => element))
-    for (const group of [groups.board, groups.screen]) for (const child of [...group.children]) if (!kept.has(child)) child.remove()
+    for (const group of [groups.board, groups.screen]) for (const child of [...group.children]) if (!kept.has(child) && !child.classList.contains(FADING_CLASS)) child.remove()
     const inserted = []
     for (const group of [groups.board, groups.screen]) {
-      let next = group.firstChild
+      let next = skipFading(group.firstChild)
       for (const { element, item } of notes) {
         if ((item.fixed ? groups.screen : groups.board) !== group) continue
         if (element === next) {
-          next = next.nextSibling
+          next = skipFading(next.nextSibling)
           continue
         }
         group.insertBefore(element, next)
@@ -2415,6 +2453,7 @@
   function showEditing (map) {
     const { element, item } = editing
     styleNote(element, item, map)
+    element.classList.toggle(EMPTY_CLASS, typedText(element) === '')
     markScrolling(element)
     const { left, top, right, bottom } = element.getBoundingClientRect()
     editing.box = { left, top, right, bottom }
@@ -2447,6 +2486,16 @@
     })
   }
 
+  const cornerCursor = (corner) => corner[0] * corner[1] > 0 ? 'nwse-resize' : 'nesw-resize'
+
+  // Every element on the page shows `cursor` until this is called with null, so a drag keeps its cursor when the pointer runs ahead of what it drags.
+  function holdCursor (cursor) {
+    const root = document.documentElement
+    root.classList.toggle(HELD_CURSOR_CLASS, cursor !== null)
+    if (cursor === null) root.style.removeProperty(HELD_CURSOR_VAR)
+    else root.style.setProperty(HELD_CURSOR_VAR, cursor)
+  }
+
   // The handles on the corners of screen box `box`, made when there are none; null takes them off the page.
   function showHandles (box) {
     if (!box) {
@@ -2457,14 +2506,17 @@
     if (handles.length === 0) {
       handles = Object.values(CORNERS).map((corner) => {
         const element = document.createElement('div')
-        element.className = HANDLE_CLASS
-        element.style.cursor = corner[0] * corner[1] > 0 ? 'nwse-resize' : 'nesw-resize'
+        element.className = `${HANDLE_CLASS} ${ENTERING_CLASS}`
+        element.style.cursor = cornerCursor(corner)
         element.addEventListener('mousedown', under(textTool, (event) => startResize(event, corner)))
         element.addEventListener('dblclick', under(textTool, resetSize))
         element.addEventListener('touchstart', (event) => event.stopPropagation())
         drawingLayer().append(element)
         return { element, corner }
       })
+      // A layout read settles the handles at opacity 0, and dropping the class then is what fades them in.
+      window.getComputedStyle(handles[0].element).getPropertyValue('opacity')
+      for (const { element } of handles) element.classList.remove(ENTERING_CLASS)
     }
     for (const { element, corner } of handles) {
       const [x, y] = cornerPoint(box, corner)
@@ -2499,6 +2551,7 @@
     const anchor = cornerPoint(box, corner, true)
     const autoSize = unresizedSize(element, unit)
     resizing = { index, item, corner, anchor, offset: [grabbed[0] - x, grabbed[1] - y], autoSize, to: null }
+    holdCursor(cornerCursor(corner))
   }
 
   // The size in board units the note has with no box, measured live because a typed or resized note's stored size is stale. Clearing the box styles for one synchronous
@@ -2547,10 +2600,12 @@
     flushFrame()
     const { index, item } = resizing
     resizing = null
+    holdCursor(null)
     if (editing || String(drawing[index]?.box) === String(item.box)) return
     keepDrawnPoints([index], boardMap())
-    saveNotes()
     renderDrawing()
+    snapToPixels([index])
+    saveNotes()
   }
 
   // A double-click on a handle sends the note back to auto size.
@@ -2562,8 +2617,9 @@
       showEditing(boardMap())
     } else if (drawing[index].box) {
       drawing[index] = autoSized(drawing[index])
-      saveNotes()
       renderDrawing()
+      snapToPixels([index])
+      saveNotes()
     }
   }
 
@@ -2673,8 +2729,19 @@
     redraw()
   }
 
-  // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went.
-  function keepItems (keep) {
+  // A deleted note's element stays for the fade out, takes no pointer and is skipped by every redraw until it leaves the page; with reduced motion it leaves with the redraw.
+  function fadeOut (items) {
+    if (!window.matchMedia(MOTION_OK).matches) return
+    for (const element of items.map((item) => item[NOTE_ELEMENT]).filter(Boolean)) {
+      element.classList.add(FADING_CLASS)
+      element.classList.remove(SELECTED_CLASS)
+      element.style.opacity = '0'
+      setTimeout(() => element.remove(), FADE_OUT_MS)
+    }
+  }
+
+  // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went. The ones that went fade out unless `fade` is false.
+  function keepItems (keep, fade = true) {
     const kept = []
     const stillSelected = []
     drawing.forEach((item, i) => {
@@ -2683,14 +2750,16 @@
       kept.push(item)
     })
     const removed = kept.length !== drawing.length
+    if (fade) fadeOut(drawing.filter((item) => !kept.includes(item)))
     drawing = kept
     selected = stillSelected
     return removed
   }
 
-  function deleteSelected () {
+  // Deletes the selected notes, which fade out unless `fade` is false.
+  function deleteSelected (fade = true) {
     const gone = selected
-    keepItems((_, i) => !gone.includes(i))
+    keepItems((_, i) => !gone.includes(i), fade)
     saveNotes()
     redraw()
   }
@@ -2813,6 +2882,7 @@
     const open = editing
     editing = null
     resizing = null
+    holdCursor(null)
     open.element.remove()
     showHandles(null)
     return open
@@ -2823,14 +2893,16 @@
     const before = index === -1 ? '' : drawing[index].text
     const typed = typedText(element)
     const text = typed === before ? typed : closedSymbols(typed)
+    const resized = index !== -1 && String(item.box) !== String(drawing[index].box)
     const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
       else drawing[index] = { ...item, text }
-      saveNotes()
     }
     renderDrawing()
+    if (changed && resized && text !== '') snapToPixels([index])
+    if (changed) saveNotes()
     showPanelValues()
   }
 
@@ -2874,6 +2946,7 @@
   function endDrag (click = () => {}) {
     const ended = drag
     drag = null
+    holdCursor(null)
     if (ended.rectangle) ended.rectangle.remove()
     if (isClick(ended.points)) click(ended)
     else if (ended.move) endMove(ended)
@@ -2959,7 +3032,12 @@
     const offset = raw.map((v, axis) => v + (snaps[axis]?.shift ?? 0))
     // The pull may carry a note past what the pointer left reachable, so then the note stays where the pointer put it.
     if (!movedBy(d.move, offset, map).every(({ middle }) => reachable(middle))) return { offset: raw, guides: [] }
-    return { offset, guides: snaps.map((snap) => snap?.guide ?? null) }
+    // The pressed note then lands on whole device pixels, as it will once let go, and a guide moves with it so the outline lies on its guide.
+    const ratio = window.devicePixelRatio
+    // Read at the first move, before any translation moves the note, and not at the press, which a click never needs.
+    d.origin ??= (({ left, top }) => [left, top])(item[NOTE_ELEMENT].getBoundingClientRect())
+    const crisp = d.origin.map((side, axis) => Math.round((side + offset[axis]) * ratio) / ratio - side - offset[axis])
+    return { offset: offset.map((v, axis) => v + crisp[axis]), guides: snaps.map((snap, axis) => snap ? snap.guide + crisp[axis] : null) }
   }
 
   // The faint guide lines across the page at `[x, y]` (null for an axis that is not snapped); none for null.
@@ -2988,8 +3066,10 @@
     const map = boardMap()
     for (const point of d.pending.splice(0)) if (!d.move || moveKeepsReachable(d, point, map)) d.points.push(point)
     if (isClick(d.points)) return
-    if (d.move) showMove(d, map)
-    else if (d.start === -1) showRectangle(d)
+    if (d.move) {
+      holdCursor('move')
+      showMove(d, map)
+    } else if (d.start === -1) showRectangle(d)
   }
 
   // Each moving note with the screen point `offset` takes it to.
@@ -3003,6 +3083,26 @@
   // Each note keeps its offset from the pointer, and its own drop point decides whether it is pinned to the grid or fixed on the screen.
   function place (moved, map) {
     for (const { index, item, point } of moved) drawing[index] = placedItem(item, point, map)
+  }
+
+  // Moves each note of `indices` by the part of a device pixel that puts its drawn left and top on whole device pixels, so its text is never rendered soft between pixels,
+  // and draws them again when any moved. Run after the notes are drawn where they were put, since it reads their elements.
+  function snapToPixels (indices) {
+    const ratio = window.devicePixelRatio
+    const map = boardMap()
+    const shifts = indices.flatMap((index) => {
+      const element = drawing[index][NOTE_ELEMENT]
+      if (!element?.isConnected) return []
+      const { left, top } = element.getBoundingClientRect()
+      return [{ index, shift: [left, top].map((side) => Math.round(side * ratio) / ratio - side) }]
+    })
+    const moving = shifts.filter(({ shift }) => shift.some((side) => Math.abs(side) > PIXEL_SNAP_EPSILON_PX))
+    if (moving.length === 0) return
+    for (const { index, shift } of moving) {
+      const [x, y] = screenPoint(drawing[index], map.toScreen)
+      drawing[index] = placedItem(drawing[index], [x + shift[0], y + shift[1]], map)
+    }
+    renderDrawing()
   }
 
   // A note stays where a press can still reach it: its middle inside the window and clear of the controls. The page under the notes' layer answers.
@@ -3028,6 +3128,8 @@
     keepDrawnPoints(selected, map)
     nudged = true
     redraw()
+    // Below one device pixel a nudge is finer than the grid, and rounding to it would take a tap back to where it began.
+    if (NUDGE_PX * window.devicePixelRatio >= 1) snapToPixels(selected)
   }
 
   function saveNudge () {
@@ -3076,9 +3178,11 @@
     const map = boardMap()
     place(movedBy(d.move, snappedOffset(d, map).offset, map), map)
     clearMove(d)
-    keepDrawnPoints(d.move.map(({ index }) => index), map)
-    saveNotes()
+    const indices = d.move.map(({ index }) => index)
+    keepDrawnPoints(indices, map)
     renderDrawing()
+    snapToPixels(indices)
+    saveNotes()
   }
 
   // The solver's own move or resize keeps the point a fixed note will be drawn at, so a note dropped partly past the window's edge stays where it is seen.
@@ -3099,6 +3203,7 @@
     drag = null
     erasing = null
     resizing = null
+    holdCursor(null)
     selected = []
     if (editing) closeEditing()
   }
@@ -3308,7 +3413,7 @@
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
       else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
-      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
+      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected(false)
       else return false
       return true
     },
