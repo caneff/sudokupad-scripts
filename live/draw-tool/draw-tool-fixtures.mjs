@@ -18,20 +18,18 @@ export const DRAW_BUTTON = '#control-draw'
 export const DIGIT_BUTTON = '#control-normal'
 // The layer's two groups of notes: those on the board, and the fixed ones.
 export const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
-// Anything in the notes' layer that is not a note or one of its groups, such as a stroke or shape an earlier version drew: none is drawn now.
-export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
+// Anything in the notes' layer that is not a note, a resize handle or one of the groups, such as a stroke or shape an earlier version drew: none is drawn now.
+export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, .draw-tool-resize, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
 // Every element in the layer but the groups themselves.
 export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
 // The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
 export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
 export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
-// The menu row of Size and Outline buttons under the controls, each button, the menu one opens and a menu's items.
-export const MENU_ROW = '.draw-tool-menu-row'
-export const SIZE_BUTTON = '.draw-tool-menu-button[data-menu="size"]'
-export const OUTLINE_BUTTON = '.draw-tool-menu-button[data-menu="outline"]'
-export const MENU = '.draw-tool-menu'
-export const MENU_ITEM = '.draw-tool-menu-item'
+// The sliders under the controls, and the Size and Transparency sliders in them.
+export const SLIDERS = '.draw-tool-sliders'
+export const SIZE_SLIDER = '#draw-tool-size'
+export const OPACITY_SLIDER = '#draw-tool-opacity'
 export const CLEAR_BUTTON = '.draw-tool-clear'
 export const SETTINGS_BUTTON = '.draw-tool-settings'
 export const BACKGROUND_BUTTON = '.draw-tool-background'
@@ -44,12 +42,17 @@ export const WIDTH_KEY = 'DrawTool_width'
 export const COLORS_KEY = 'DrawTool_colors'
 export const BACKGROUND_KEY = 'DrawTool_background'
 export const OUTLINE_KEY = 'DrawTool_outline'
+export const OPACITY_KEY = 'DrawTool_opacity'
+export const BOX_KEY = 'DrawTool_box'
+export const FRAME_KEY = 'DrawTool_frame'
 
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
+export const SETTINGS_EDITOR = '#draw-tool-dialog'
+export const SETTINGS_STATUS = '.dialog [data-role="settings-status"]'
 export const PICKER_BOX = '.draw-tool-picker'
 
 // A press held on the middle of `selector` with `button`, until the pickers reach `state`.
@@ -68,17 +71,19 @@ export async function holdForPickers (p, selector, button, state) {
 export const middleOf = ({ x, y, width, height }) => [x + width / 2, y + height / 2]
 
 export const tool = (p) => p.evaluate(() => Framework.app.tool)
-// What a menu button's face shows: the number of Size, the choice of Outline.
-export const face = (p, button) => p.locator(`${button} span:last-child`).textContent()
-// The items of the open menu, as their texts, and the one highlighted (none, when no item is).
-export const menuItems = (p) => p.locator(MENU_ITEM).allTextContents()
-export const menuCurrent = (p) => p.locator(`${MENU_ITEM}.draw-tool-menu-current`).allTextContents()
-// Opens the menu of `button` and picks `text` in it, with real mouse input.
-export async function pickMenu (p, button, text) {
-  await p.click(button)
-  await p.locator(MENU).waitFor({ state: 'visible' })
-  await p.locator(MENU_ITEM, { hasText: new RegExp(`^${text}$`) }).click()
-  await p.locator(MENU).waitFor({ state: 'detached' })
+// The slider thumb's width in rem, as lib/panel.js's SLIDER_THUMB_REM draws it.
+const SLIDER_THUMB_REM = 1.1
+// A slider's value.
+export const valueOf = (p, slider) => p.evaluate((selector) => Number(document.querySelector(selector).value), slider)
+// Presses on `slider`'s track where `value` lies and releases, with real mouse input. The thumb's centre runs from half a thumb in from each end of the track.
+export async function slideTo (p, slider, value) {
+  const { box, min, max, thumb } = await p.evaluate(([selector, rem]) => {
+    const input = document.querySelector(selector)
+    const { x, y, width, height } = input.getBoundingClientRect()
+    return { box: { x, y, width, height }, min: Number(input.min), max: Number(input.max), thumb: rem * parseFloat(window.getComputedStyle(document.documentElement).fontSize) }
+  }, [slider, SLIDER_THUMB_REM])
+  const x = box.x + thumb / 2 + (box.width - thumb) * (value - min) / (max - min)
+  await p.mouse.click(x, box.y + box.height / 2)
 }
 
 export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS)
@@ -106,8 +111,8 @@ export const noteInCells = (p, text) => p.evaluate(([selector, want]) => {
   return [(box.y + box.height / 2 - cell.y) / cell.height, (box.x + box.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
 }, [TEXTS, text])
 
-// For each note, what the page shows topmost at its middle: 'note' (itself), 'dialog' or 'other'. The layer takes no
-// pointer, so each note is made hit-testable for its one check.
+// For each note, what the page shows topmost at its middle: 'note' (itself), 'dialog' or 'other'. Under another tool the
+// notes take no pointer, so each note is made hit-testable for its one check.
 export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((note) => {
   const { x, y, width, height } = note.getBoundingClientRect()
   note.style.pointerEvents = 'auto'
@@ -119,6 +124,8 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
   }
 }), TEXTS)
 
+// Two frames: the pointer's work waits for the next one.
+export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
 // Removes every saved drawing and the index.

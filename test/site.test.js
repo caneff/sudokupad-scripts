@@ -240,9 +240,9 @@ const PEN_SLIDES = [
   ['11-outline-off', 'White outlines off'], ['12-outline-on', 'White outlines on'], ['13-erase', 'Right-click a line to delete it'], ['14-erased', 'The whole line is gone']
 ]
 const DRAW_SLIDES = [
-  ['1-type', 'Left click to type a note'], ['2-size', 'Size menu: pick a text size'], ['3-background', 'Background: a box behind the next note'],
+  ['1-type', 'Left click to type a note'], ['2-size', 'Size slider: drag to set a text size'], ['3-background', 'Background: a box behind the next note'],
   ['4-colors', 'Your own colors: hold a color button'], ['5-move', 'Move: drag a note, on or off the grid'],
-  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag the corner to resize'], ['7-erase', 'Erase: right-click a note'], ['8-erased', 'The note is gone']
+  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note'], ['8-erased', 'The note is gone']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
@@ -446,7 +446,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 // Text Annotation's entry and details page.
 const DRAW_SUMMARY = 'Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes', 'Long notes', 'Bold, italic and strikethrough', 'Readable over digits', 'Colors of its own', 'Text size', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
+const DRAW_LEAD_INS = ['Typed notes', 'Long notes', 'Bold, italic and strikethrough', 'Bulleted lists', 'Readable over digits', 'Colors of its own', 'Size and transparency', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Text Annotation in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Text Annotation<\/h2>\s*<p>([\s\S]*?)<\/p>/)
@@ -456,17 +456,18 @@ test(`${HOME} describes Text Annotation in a short summary ending in a Details l
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it. While a note is open, the color buttons and the Size and Outline menus change that note, and it stays open. On a note you are still writing, the pick is also the next note\'s color or size; on one you reopened, it changes only that note.',
-    'Long notes A long line wraps, and a note stops growing at 8 lines and scrolls: turn the wheel over it, and a thin scroll bar shows while the pointer is on it. While you type, drag the handle on the note\'s bottom right corner to make its box wider, narrower, taller or shorter; the note keeps that size.',
+    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it. While a note is open, the color buttons and the Size and Transparency sliders change that note, and it stays open. On a note you are still writing, the change is also the next note\'s color, size or transparency; on one you reopened, it changes only that note.',
+    'Long notes A long line wraps, and a note stops growing at 8 lines and scrolls: turn the wheel over it, and a thin scroll bar shows while the pointer is on it. Select a note, or open it to type, and a small square shows on each of its four corners: drag any of them to make the note\'s box wider, narrower, taller or shorter, with the opposite corner staying where it is. The note keeps that size, and a double-click on a square sets it back to auto size. With several notes selected, no squares show.',
     'Bold, italic and strikethrough Write **bold**, *italic* (or _italic_) and ~~strikethrough~~ in a note, and nest them, such as **bold *and italic***. The markers show while you type and are hidden once the note is finished; a marker with no partner shows as typed.',
-    'Readable over digits Each note has a halo, a round outline of its letters in the page color, so it reads over digits, pencil marks and colored cells. The Outline menu makes it Off, Thinner or Thicker, which is the default.',
+    'Bulleted lists A line that starts with - or * (a dash or star, then a space) shows as a bulleted line once the note is finished, with a hanging indent, and bold, italic and strikethrough work inside it. While you type, the - shows as typed.',
+    'Readable over digits Each note has a halo, a round outline of its letters in the page color, so it reads over digits, pencil marks and colored cells. The Outline choice in the settings makes it Off, Thinner or Thicker, which is the default, for every note.',
     "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
-    'Text size The Size button opens a menu of six sizes, from 10 to 40. A note keeps the size it was typed with until you select it and pick another.',
-    'Background Turn it on and the next note gets a page-colored box behind it, so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',
-    'Select Click a note to select it, Shift+click to add or remove one, or drag a box round several from empty space. The colors, the Size and Outline menus and Background then change the selected notes, and Escape or a click on empty space ends the selection.',
-    'Move Drag a note to move it, on the board or off it. Drag one of the selected notes and they all move.',
+    'Size and transparency The Size slider sets how large the next note is, from small to large, and the Transparency slider how faint, down to 20%. A note keeps the look it was typed with until you select it and move a slider.',
+    'Background Turn it on and the next note gets a box behind it (page-colored unless the settings choose another color), so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',
+    'Select Click a note to select it, Shift+click to add or remove one, or drag a box round several from empty space. The colors, the Size and Transparency sliders and Background then change the selected notes, and Escape or a click on empty space ends the selection.',
+    'Move Drag a note to move it, on the board or off it. Drag one of the selected notes and they all move. With notes selected and no note open, the arrow keys nudge them 1 pixel a press on the screen, and Shift+arrow 10, without moving SudokuPad\'s cell cursor; with nothing selected the arrow keys work as they always do.',
     'Erasing Right-click a note to erase it. Delete or Backspace, or the trash button in the panel, deletes the selected notes; with none selected the trash button erases every note.',
-    'Settings Color presets, a color picker for each of the nine colors, and Copy and Paste to move them to another browser.',
+    "Settings Color presets, a color picker for each of the nine colors, the color of the box behind notes (Page, White, Sticky yellow, Tint of each note's own color, or a Custom color) for every note that has one, the Outline round the letters (Off, Thinner or Thicker) for every note, a Frame checkbox that draws a thin light gray line round each box, and Copy and Paste to move them all to another browser.",
     'Stays on the cells A note on the board stays on its cells when the board resizes, and one beside it stays where you put it on the screen, unless the window or the controls would cover it or push it past the window\'s edge, when it moves to the nearest free spot and stays there. Both stay visible when you switch back to entering digits.',
     'Kept for each puzzle A reload keeps the notes, for the last 50 puzzles you made notes on.'
   ])
@@ -487,7 +488,7 @@ test(`${DRAW} shows the Text Annotation panel as an intro and one annotated pict
   assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the Text Annotation panel section is the intro and the picture only')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool/draw-tool-panel-annotated.png"`))
   const alt = altOf(found[0])
-  for (const label of ['Color buttons', 'Background', 'Clear all', 'Settings', 'Size', 'Outline']) {
+  for (const label of ['Color buttons', 'Background', 'Clear all', 'Settings', 'Size', 'Transparency']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
   assert.match(alt, /press 1 to 9/)

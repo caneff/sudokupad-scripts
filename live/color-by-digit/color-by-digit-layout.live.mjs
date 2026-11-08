@@ -59,14 +59,14 @@ for (const [viewport, columns] of [[DESKTOP, 2], [PHONE, 1]]) {
       assert.equal(overflow.doc <= overflow.win, true, JSON.stringify(overflow))
     })
 
-    it('puts Copy settings and Paste settings as two icons at the right end of the title row, and only Cancel and Save in the bottom row', async () => {
+    it('puts Copy settings and Paste settings as two icons at the right end of the title row, and only Save and Cancel in the bottom row', async () => {
       const icons = await p.locator('.cbd-title-row [data-act$="-settings"]').evaluateAll((es) => es.map((e) => ({ act: e.dataset.act, label: e.getAttribute('aria-label'), title: e.title, text: e.textContent.trim(), ...(({ x, y, right, width, height }) => ({ x, y, right, width, height }))(e.getBoundingClientRect()) })))
       assert.deepEqual(icons.map((i) => [i.act, i.label, i.title, i.text]), [['copy-settings', 'Copy settings', 'Copy settings', ''], ['paste-settings', 'Paste settings', 'Paste settings', '']])
       const row = await rect('.cbd-title-row')
       assert.equal(row.right - icons[1].right <= 12, true, `paste icon sits at the row's right end: ${JSON.stringify([row, icons])}`)
       assert.equal(icons[1].x >= icons[0].right - NEAR_PX && Math.abs(icons[0].y - icons[1].y) <= NEAR_PX, true, JSON.stringify(icons))
       for (const i of icons) assert.equal(i.width >= 20 && i.height >= 20 && i.height <= 40, true, `icon size: ${JSON.stringify(i)}`)
-      assert.deepEqual(await p.locator('.dialog-options button').evaluateAll((es) => es.map((e) => e.textContent.trim())), ['Cancel', 'Save'])
+      assert.deepEqual(await p.locator('.dialog-options button').evaluateAll((es) => es.map((e) => e.textContent.trim())), ['Save', 'Cancel'])
     })
 
     it('lists the profiles in rows about 30 px tall, the drag handle and delete shown on the selected row and on a hovered one only', async () => {

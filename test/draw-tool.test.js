@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -211,21 +211,70 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
   assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
 })
 
-test('Copy settings holds the colors and the size, default included, and no notes, color pick or background', () => {
-  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, DrawTool_color: 4, DrawTool_drawing_x: [] })))
-  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3 })
+test('Copy settings holds the colors, size, transparency, outline, box color and frame, defaults included, and no notes, color pick or background', () => {
+  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, DrawTool_color: 4, DrawTool_drawing_x: [] })))
+  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true })
 })
 
 test('Copy settings leaves the colors out until they are saved', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH })
+  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false })
 })
 
-test('Paste settings returns the colors and size, ignores other scripts\' keys, the old opacity and counts a refused value as skipped', () => {
-  const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, DrawTool_opacity: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
-  assert.deepEqual(readPaste(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5 }, skipped: 0 })
-  const bad = readPaste(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99 }))
-  assert.deepEqual(bad, { values: {}, skipped: 2 })
+test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
+  assert.equal(DEFAULT_BOX, 'page')
+  for (const preset of ['page', 'white', 'yellow', 'tint']) assert.equal(readBox(preset), preset)
+  assert.equal(readBox('#A1b2C3'), '#a1b2c3')
+  for (const bad of [undefined, null, 5, true, {}, 'red', '#abc', '#12345g', 'custom', 'Tint']) assert.equal(readBox(bad), 'page', String(bad))
+})
+
+test('the box choice is the preset, and Custom for a color', () => {
+  assert.deepEqual(['page', 'white', 'yellow', 'tint', '#123456'].map(boxChoice), ['page', 'white', 'yellow', 'tint', 'custom'])
+  assert.deepEqual(Object.keys(BOX_PRESETS), ['page', 'white', 'yellow', 'tint'])
+})
+
+test('the box is filled with the page color, white, the yellow, a tint of the note\'s own color, or the custom color', () => {
+  assert.equal(boxFill('page', 'var(--c)'), 'var(--body-bg, #fff)')
+  assert.equal(boxFill('white', 'var(--c)'), '#ffffff')
+  assert.equal(boxFill('yellow', 'var(--c)'), BOX_YELLOW)
+  assert.equal(boxFill('#123456', 'var(--c)'), '#123456')
+  assert.equal(boxFill('tint', 'var(--c)'), 'color-mix(in srgb, var(--c) 15%, var(--body-bg, #fff))')
+  assert.notEqual(boxFill('tint', 'red'), boxFill('tint', 'blue'))
+})
+
+test('the yellow keeps every one of SudokuPad\'s nine colors about as readable as white does', () => {
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math.min(luminance(a), luminance(b)) + 0.05)
+  for (const hex of Object.values(SUDOKUPAD_PEN_COLORS)) {
+    assert.equal(contrast(hex, BOX_YELLOW) >= 0.8 * contrast(hex, '#ffffff'), true, `${hex} on the yellow ${BOX_YELLOW}: ${contrast(hex, BOX_YELLOW).toFixed(2)} against ${contrast(hex, '#ffffff').toFixed(2)} on white`)
+  }
+})
+
+test('the frame setting is on only for true, and a frame is a thin light gray ring round a boxed note and nothing otherwise', () => {
+  assert.deepEqual([true, false, undefined, null, 1, 'true'].map(readFrame), [true, false, false, false, false, false])
+  assert.equal(frameShadow(false), 'none')
+  assert.equal(frameShadow(true), `0 0 0 var(--draw-tool-px, 1px) ${FRAME_COLOR}`)
+})
+
+test('Paste settings returns the colors, size and transparency, ignores other scripts\' keys and counts a refused value as skipped', () => {
+  const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
+  assert.deepEqual(readPaste(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35 }, skipped: 0 })
+  const bad = readPaste(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99, [OPACITY_KEY]: 10 }))
+  assert.deepEqual(bad, { values: {}, skipped: 3 })
   assert.deepEqual(readPaste(JSON.stringify({ [COLORS_KEY]: {} })), { values: {}, skipped: 1 }, 'colors with no color in them')
+})
+
+test('Paste settings returns the box color and the frame, and an invalid value reads as Page and as off', () => {
+  assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: 'yellow', [FRAME_KEY]: true })), { values: { [BOX_KEY]: 'yellow', [FRAME_KEY]: true }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: '#00FF00' })).values, { [BOX_KEY]: '#00ff00' })
+  assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' })), { values: { [BOX_KEY]: 'page', [FRAME_KEY]: false }, skipped: 0 })
+})
+
+test('Paste settings returns the outline, and an invalid one reads as Thicker without counting as skipped', () => {
+  assert.deepEqual(readPaste(JSON.stringify({ [OUTLINE_KEY]: 'none' })), { values: { [OUTLINE_KEY]: 'none' }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [OUTLINE_KEY]: 'huge' })), { values: { [OUTLINE_KEY]: 'medium' }, skipped: 0 })
 })
 
 test('Paste settings fills a missing color with SudokuPad\'s and refuses text that is not settings', () => {
@@ -288,20 +337,6 @@ test('a text\'s box is centred on its point, as tall as its line and wider with 
   assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
 })
 
-test('a click on a text lands on it, and a click beside it, or on a stroke or shape, on none', () => {
-  const drawing = [oldStroke, sum, oldShape]
-  assert.equal(textAt(drawing, [100, 50]), 1)
-  assert.equal(textAt(drawing, [textBox(sum).right - 1, textBox(sum).top + 1]), 1)
-  assert.equal(textAt(drawing, [100, 80]), -1)
-  assert.equal(textAt(drawing, [textBox(sum).right + 3, 50]), -1)
-  assert.equal(textAt(drawing, [10, 50]), -1, 'on the hidden stroke')
-  assert.equal(textAt([], [100, 50]), -1)
-})
-
-test('a click on two texts that overlap lands on the one drawn last', () => {
-  assert.equal(textAt([sum, textItem([104, 52], '7', 1, 20)], [102, 51]), 1)
-})
-
 test('a drag across a text touches it, and one that passes clear of it does not', () => {
   const box = textBox(sum)
   assert.equal(touchesText(sum, [100, 0], [100, 100]), true, 'across its middle')
@@ -337,7 +372,8 @@ test('the board view of a note gives an off-board note its board point under the
   const off = placedItem(on, [40, 700], board)
   assert.deepEqual(boardView(on, toBoard), on)
   assert.deepEqual(boardView(off, toBoard).at, [-30, 325])
-  assert.equal(textAt([on, off].map((item) => boardView(item, toBoard)), toBoard([40, 700])), 1)
+  const point = toBoard([40, 700])
+  assert.deepEqual(notesTouched([on, off].map((item) => boardView(item, toBoard)), point, point), [1])
 })
 
 test('a note\'s screen point is its fixed point off the board, and its board point taken to the screen on it', () => {
@@ -352,14 +388,14 @@ test('saved off-board notes read back, and a note with both a board point and a 
   for (const saved of [[{ ...off, at: [1, 1] }], [{ ...sum, at: undefined }], [{ ...off, fixed: [1] }]]) assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
 })
 
-test('a note with a background answers to the box drawn behind it: a click and an erase just outside its text land on it', () => {
+test('a note with a background answers to the box drawn behind it: a selection rectangle and an erase just outside its text land on it', () => {
   const plain = textItem([100, 50], '15', 3, 20)
   const boxed = textItem([100, 50], '15', 3, 20, true)
   const edge = [textBox(boxed).right + 3, 50]
-  assert.equal(textAt([plain], edge), -1)
-  assert.equal(textAt([boxed], edge), 0)
+  assert.deepEqual(notesTouched([plain], edge, edge), [])
+  assert.deepEqual(notesTouched([boxed], edge, edge), [0])
   const past = textBox(boxed).right + 20 * 0.35 + 0.1
-  assert.equal(textAt([boxed], [past, 50]), -1, 'past the box')
+  assert.deepEqual(notesTouched([boxed], [past, 50], [past, 50]), [], 'past the box')
   assert.equal(touchesText(boxed, [past + ERASE_TOLERANCE - 0.2, 0], [past + ERASE_TOLERANCE - 0.2, 100]), true, 'an erase within the tolerance of the box')
   assert.deepEqual(noteBox(plain), textBox(plain))
 })
@@ -392,51 +428,44 @@ const red20 = textItem([0, 0], 'a', 4, 20)
 const red14Boxed = textItem([0, 0], 'b', 4, 14, true)
 const blue20Boxed = textItem([0, 0], 'c', 6, 20, true)
 
-test('the panel shows a selection that agrees on everything as its color, size, outline and background', () => {
-  assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, size: 20, outline: 'medium', bg: false })
-  assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, size: 20, outline: 'medium', bg: true })
+test('the panel shows a selection that agrees on everything as its color, size, transparency and background', () => {
+  assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, width: 6, opacity: 100, bg: false })
+  assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, width: 6, opacity: 100, bg: true })
 })
 
-test('a mixed selection shows no color, size, outline or background state where its notes differ', () => {
-  assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, size: null, outline: 'medium', bg: true })
-  assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, size: null, outline: 'medium', bg: null })
-  assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, size: 20, outline: 'medium', bg: null })
-  assert.deepEqual(panelLooks([red20, withOutline(red20, 'none')]).outline, null)
-  assert.deepEqual(panelLooks([withOutline(red20, 'thin'), withOutline(red14Boxed, 'thin')]).outline, 'thin')
+test('a mixed selection shows no color or background state where its notes differ, and the first note\'s size and transparency', () => {
+  assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, width: 3, opacity: 100, bg: true })
+  assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, width: 6, opacity: 100, bg: null })
+  assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, width: 6, opacity: 100, bg: null })
+  assert.equal(panelLooks([{ ...red20, opacity: 40 }, red20]).opacity, 40)
+  assert.equal(panelLooks([red20, { ...red20, opacity: 40 }]).opacity, 100)
+  assert.equal(panelLooks([{ ...red20, size: textSizeFor(7.5) }, red20]).width, 7.5)
 })
 
-test('the size menu has six sizes that run from the text size of the smallest width to the largest and include the default size', () => {
-  assert.equal(SIZE_MENU.length, 6)
-  assert.equal(SIZE_MENU[0], textSizeFor(MIN_WIDTH))
-  assert.equal(SIZE_MENU.at(-1), textSizeFor(MAX_WIDTH))
-  assert.ok(SIZE_MENU.includes(textSizeFor(DEFAULT_WIDTH)))
-  assert.deepEqual(SIZE_MENU, [...SIZE_MENU].sort((a, b) => a - b))
+test('a saved transparency reads back for any slider value, and a missing or bad one reads as the default', () => {
+  for (const saved of [MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY]) assert.equal(readOpacity(saved), saved)
+  assert.equal(readOpacity(55), 55)
+  for (const saved of [null, undefined, 0, 19, 101, 57, '60', 'faint', {}, NaN]) assert.equal(readOpacity(saved), DEFAULT_OPACITY, JSON.stringify(saved))
 })
 
-test('a size not in the menu reads as the nearest size in it', () => {
-  for (const size of SIZE_MENU) assert.equal(nearestMenuSize(size), size)
-  assert.equal(nearestMenuSize(textSizeFor(7.5)), 20) // 23 is as near 20 as 26: the smaller wins
-  assert.equal(nearestMenuSize(24), 26)
-  assert.equal(nearestMenuSize(12.5), 14)
-  assert.equal(nearestMenuSize(11), 10)
-  assert.equal(nearestMenuSize(1000), 40)
+test('a new note carries the transparency it is given, and 100 when none is', () => {
+  assert.equal(textItem([0, 0], 'a', 1, 20, false, 60).opacity, 60)
+  assert.equal(textItem([0, 0], 'a', 1, 20).opacity, 100)
 })
 
-test('an outline is none, thin or medium, and a note with no outline field reads as medium', () => {
+test('an outline is none, thin or medium, Off, Thinner or Thicker in the dialog, and anything else reads as medium', () => {
   assert.deepEqual(OUTLINES, ['none', 'thin', 'medium'])
   assert.equal(DEFAULT_OUTLINE, 'medium')
-  assert.equal(readOutline(red20), 'medium')
-  assert.equal(readOutline({ ...red20, outline: 'thin' }), 'thin')
-  assert.equal(readOutline(withOutline(red20, 'none')), 'none')
-  for (const saved of [null, undefined, 'huge', 3, {}]) assert.equal(readSavedOutline(saved), 'medium', JSON.stringify(saved))
-  for (const saved of OUTLINES) assert.equal(readSavedOutline(saved), saved)
+  assert.deepEqual(OUTLINES.map((name) => OUTLINE_LABELS[name]), ['Off', 'Thinner', 'Thicker'])
+  for (const saved of [null, undefined, 'huge', 3, {}]) assert.equal(readOutline(saved), 'medium', JSON.stringify(saved))
+  for (const saved of OUTLINES) assert.equal(readOutline(saved), saved)
 })
 
-test('a note keeps its outline in its own field, and medium is the absence of one', () => {
-  assert.deepEqual(withOutline(red20, 'thin'), { ...red20, outline: 'thin' })
-  assert.deepEqual(withOutline({ ...red20, outline: 'thin' }, 'medium'), red20)
+test('a note\'s own outline field is ignored: it loads, stays as saved and is not read', () => {
   assert.deepEqual(readDrawing([{ ...red20, outline: 'none' }]), [{ ...red20, outline: 'none' }])
-  assert.throws(() => readDrawing([{ ...red20, outline: 'huge' }]), /not a list of texts/)
+  assert.deepEqual(readDrawing([{ ...red20, outline: 'huge' }]), [{ ...red20, outline: 'huge' }])
+  const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
+  assert.deepEqual(noteScreenBox({ ...red20, outline: 'none' }, map, 'medium'), noteScreenBox(red20, map, 'medium'))
 })
 
 test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline\'s reach and grows from thin to medium; none has no shadow', () => {
@@ -460,7 +489,7 @@ test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline
 
 test('a note\'s padding is its outline\'s reach, none for none', () => {
   const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
-  const box = (outline) => noteScreenBox(withOutline(textItem([100, 50], 'sum', 1, 20), outline), map)
+  const box = (outline) => noteScreenBox(textItem([100, 50], 'sum', 1, 20), map, outline)
   assert.equal(Math.round((box('thin').right - box('none').right) * 1000) / 1000, Math.round(OUTLINE_EM.thin * 20 * 1000) / 1000)
   assert.equal(Math.round((box('medium').right - box('none').right) * 1000) / 1000, 2.8)
 })
@@ -486,7 +515,7 @@ test('an unmatched marker, or one with a space inside it, shows as typed', () =>
   assert.deepEqual(runs('5 ** 2'), [{ text: '5 ** 2' }])
   assert.deepEqual(runs('**a *b**'), [{ text: '**a ' }, { text: 'b', italic: true }, { text: '*' }])
   assert.deepEqual(runs('*a *'), [{ text: '*a *' }], 'a closing marker after a space')
-  assert.deepEqual(runs('* a*'), [{ text: '* a*' }], 'an opening marker before a space')
+  assert.deepEqual(runs('x * a*'), [{ text: 'x * a*' }], 'an opening marker before a space')
   assert.deepEqual(runs('~~~'), [{ text: '~~~' }])
   assert.deepEqual(runs('****'), [{ text: '****' }])
 })
@@ -501,6 +530,21 @@ test('each line is read on its own, so a marker does not reach across a line bre
   assert.deepEqual(parseMarkdown('**a\nb**'), [[{ text: '**a' }], [{ text: 'b**' }]])
   assert.deepEqual(parseMarkdown('x\n*y*'), [[{ text: 'x' }], [{ text: 'y', italic: true }]])
   assert.deepEqual(parseMarkdown(''), [[]])
+})
+
+test('a line starting with "- " or "* " is a bullet: a bullet run, then the rest read as markdown', () => {
+  assert.deepEqual(parseMarkdown('- one\n- **two**'), [[{ text: '•', bullet: true }, { text: 'one' }], [{ text: '•', bullet: true }, { text: 'two', bold: true }]])
+  assert.deepEqual(parseMarkdown('* star'), [[{ text: '•', bullet: true }, { text: 'star' }]])
+})
+
+test('a dash that does not start a line, or has no space after it, is not a bullet', () => {
+  assert.deepEqual(parseMarkdown('a - b'), [[{ text: 'a - b' }]])
+  assert.deepEqual(parseMarkdown('-one'), [[{ text: '-one' }]])
+  assert.deepEqual(parseMarkdown(' - one'), [[{ text: ' - one' }]])
+})
+
+test('a line that starts with italic markers and no space is italic, not a bullet', () => {
+  assert.deepEqual(parseMarkdown('*one* and'), [[{ text: 'one', italic: true }, { text: ' and' }]])
 })
 
 const width = (item) => textBox(item).right - textBox(item).left
@@ -538,21 +582,44 @@ test('a saved size reads back, and a note without one has none', () => {
   for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.throws(() => readDrawing([{ ...sum, box }]), /saved drawing/, JSON.stringify(box))
 })
 
-// The resize keeps the box's top left still: on the board the stub's scale is 2 screen pixels a board unit.
-test('dragging a note\'s corner sets its box in board units and moves its point so its top left stays put', () => {
+// A resize keeps the corner opposite the dragged one still: on the board the stub's scale is 2 screen pixels a board unit.
+test('dragging a note\'s bottom right corner sets its box in board units and moves its point so its top left stays put', () => {
   const on = textItem([50, 60], 'hi', 3, 20)
-  const resized = resizedItem(on, [200, 170], [600, 290], { ...board, scale: 2 })
+  const resized = resizedItem(on, [200, 170], [600, 290], { ...board, scale: 2 }, CORNERS.bottomRight)
   assert.deepEqual(resized, { ...on, box: [200, 60], at: [150, 90] })
+})
+
+test('dragging each other corner keeps the opposite corner still and sets the same box', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  const scaled = { ...board, scale: 2 }
+  // The box is 200 x 60 board units, 400 x 120 pixels, with its opposite corner at (600, 290), (200, 290), (600, 170) and (200, 170).
+  assert.deepEqual(resizedItem(on, [600, 290], [200, 170], scaled, CORNERS.topLeft), { ...on, box: [200, 60], at: [150, 90] })
+  assert.deepEqual(resizedItem(on, [200, 290], [600, 170], scaled, CORNERS.topRight), { ...on, box: [200, 60], at: [150, 90] })
+  assert.deepEqual(resizedItem(on, [600, 170], [200, 290], scaled, CORNERS.bottomLeft), { ...on, box: [200, 60], at: [150, 90] })
+})
+
+test('dragging a corner past its opposite one still leaves the minimum box on the corner\'s own side', () => {
+  const on = textItem([50, 60], 'hi', 3, 20)
+  // The top left dragged to the right of and below the fixed bottom right: the box is the minimum and ends at the bottom right.
+  const resized = resizedItem(on, [600, 290], [900, 500], { ...board, scale: 2 }, CORNERS.topLeft)
+  assert.deepEqual(resized.box, [60, 23])
+  assert.deepEqual(resized.at, [220, 108.5])
 })
 
 test('a note off the board keeps its fixed point\'s kind, and its box is in board units too, as its text is', () => {
   const off = placedItem(textItem([50, 60], 'hi', 3, 20), [40, 700], board)
-  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }), { ...off, box: [200, 60], fixed: [200, 740] })
+  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }, CORNERS.bottomRight), { ...off, box: [200, 60], fixed: [200, 740] })
 })
 
 test('a resize stops at about three characters wide and one line high', () => {
   const on = textItem([50, 60], 'hi', 3, 20)
-  assert.deepEqual(resizedItem(on, [200, 170], [190, 160], { ...board, scale: 2 }).box, [60, 23])
+  assert.deepEqual(resizedItem(on, [200, 170], [190, 160], { ...board, scale: 2 }, CORNERS.bottomRight).box, [60, 23])
+})
+
+test('a note sent back to auto size loses its box and keeps its point', () => {
+  const resized = { ...textItem([50, 60], 'hi', 3, 20), box: [200, 60] }
+  assert.deepEqual(autoSized(resized), textItem([50, 60], 'hi', 3, 20))
+  assert.equal('box' in autoSized(resized), false)
 })
 
 test('once a note is drawn its box is the size drawn, not the guess from its characters, and a resized note keeps its stored box', () => {
@@ -599,19 +666,9 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   const near = (box) => Object.fromEntries(Object.entries(box).map(([side, v]) => [side, Math.round(v * 1e6) / 1e6]))
   const pinned = { ...textItem([100, 50], 'sum', 1, 20), box: [40, 23] }
   // Without a background the padding is the halo's reach, 0.14 of 20 units.
-  assert.deepEqual(near(noteScreenBox(pinned, map)), { left: 164.4, right: 255.6, top: 91.4, bottom: 148.6 })
+  assert.deepEqual(near(noteScreenBox(pinned, map, 'medium')), { left: 164.4, right: 255.6, top: 91.4, bottom: 148.6 })
   // With one it is the background's, 7 units across and 3 down.
-  assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map)), { left: 156, right: 264, top: 91, bottom: 149 })
+  assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
-  assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map)), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
-})
-
-test('a fixed note is drawn above the notes on the board, so a click where they overlap lands on it, whichever was made last', () => {
-  const { at, ...rest } = textItem([0, 0], 'off', 1, 20)
-  const fixed = { ...rest, fixed: [100, 50] }
-  const pinned = textItem([100, 50], 'on', 1, 20)
-  // The drawing gives the fixed note's place in board units, as boardView does.
-  const asDrawn = [{ ...fixed, at: [100, 50] }, pinned]
-  assert.equal(textAt(asDrawn, [100, 50]), 0)
-  assert.equal(textAt([pinned, { ...fixed, at: [100, 50] }], [100, 50]), 1)
+  assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
 })

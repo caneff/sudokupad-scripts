@@ -102,7 +102,7 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
   const percentile = (values, share) => [...values].sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * share))]
   const summary = (values) => `median ${percentile(values, 0.5).toFixed(2)} ms, 90th ${percentile(values, 0.9).toFixed(2)} ms, max ${Math.max(...values).toFixed(2)} ms over ${values.length} frames of ${MOVES_PER_FRAME} moves`
   const noteMeasures = () => read(() => window.__noteMeasures)
-  const hovered = () => read(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-hover')].map((note) => note.textContent))
+  const hovered = () => read((selector) => [...document.querySelectorAll(`${selector}:hover`)].map((note) => note.textContent), TEXTS)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
@@ -154,13 +154,12 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     t.diagnostic(`another tool, hover: ${summary(busy)}`)
     const measures = await noteMeasures()
     // n5, at r2c3: the moves above ended past it.
+    // The hover is the browser's :hover, which only real mouse input moves.
     const over = await gridPoint(p, atCell(5))
-    await read((point) => window.__move(point, 0), over)
-    await read(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+    await p.mouse.move(...over)
     const otherTool = await hovered()
     await draw.pickDraw(p)
-    await read((point) => window.__move(point, 0), over)
-    await read(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+    await p.mouse.move(over[0] + 1, over[1])
     assert.deepEqual({ measures, otherTool, textAnnotation: await hovered() }, { measures: 0, otherTool: [], textAnnotation: [NOTE_TEXT(5)] })
   })
 
@@ -240,13 +239,13 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
   it('a resize shows only after the next frame, to the last pointer move', async () => {
     await p.mouse.click(...await gridPoint(p, [8.5, 6.5]))
     await p.keyboard.type('resize me')
-    const handle = await p.locator('#draw-tool-layer .draw-tool-resize').boundingBox()
+    const handle = await p.locator('#draw-tool-layer .draw-tool-resize').last().boundingBox()
     const from = draw.middleOf(handle)
     await p.mouse.move(...from)
     await p.mouse.down()
     const target = [1, 2, 3].map((k) => [from[0] + 10 * k, from[1] + 5 * k])
     const look = await movesInOneTask(target, 1, () => {
-      const { right, bottom } = document.querySelector('#draw-tool-layer .draw-tool-resize').getBoundingClientRect()
+      const { right, bottom } = [...document.querySelectorAll('#draw-tool-layer .draw-tool-resize')].at(-1).getBoundingClientRect()
       return [right, bottom]
     })
     await p.mouse.up()

@@ -120,7 +120,8 @@ describe('Text Annotation\'s moving', { concurrency: false }, () => {
       const { point } = await reachable()
       await p.mouse.move(...point)
       await p.mouse.down()
-      await p.mouse.move(...to, { steps: 8 })
+      // Steps shorter than the note, so each move's point lies under the note as last drawn, which takes the pointer.
+      await p.mouse.move(...to, { steps: 80 })
       // A held drag shows its last moves at the next frame.
       await read(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
       const held = await reachable()

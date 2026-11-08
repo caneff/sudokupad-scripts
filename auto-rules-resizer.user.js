@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.7
+// @version      0.3.9
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.7'
+  const VERSION = '0.3.9'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -368,6 +368,54 @@
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
+  }
+
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
+  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
+  function buttonRowCss (bodyId) {
+    const row = `.dialog:has(#${bodyId}) .dialog-options`
+    return [
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: #6b3fa0 !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`
+    ].join('\n')
+  }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) addStyleOnce(styleId, css, doc)
+    const close = () => closeDialogKeepingGrid(framework, win)
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
@@ -813,46 +861,38 @@
   }
 
   const CLASS_PREFIX = 'rules-resizer-'
+  const DIALOG_ID = 'rules-resizer-dialog'
 
   function openDialog () {
     const row = (id, label, value) => `<label for="${id}">${label}</label>` +
       `<input type="number" id="${id}" min="1" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
       '<span>px</span>'
-    Framework.showDialog({
-      centerOverBoard: true,
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Rules Resizer', version: VERSION }) },
-        {
-          tag: 'text',
-          innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
-            row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
-            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
-        },
-        {
-          tag: 'options',
-          options: [
-            {
-              tag: 'button',
-              content: 'Save',
-              handler: () => steps.settings.run(() => {
-                limits = {
-                  maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
-                  maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
-                }
-                saveLimits(Framework, limits)
-                Framework.closeDialog()
-                fitPage()
-              })
-            },
-            { tag: 'button', content: 'Cancel', action: 'close' }
-          ]
-        }
-      ]
+    const typedLimits = () => ({
+      maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
+      maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
     })
+    const body = showSettingsDialog(Framework, {
+      prefix: CLASS_PREFIX,
+      name: 'Rules Resizer',
+      version: VERSION,
+      bodyId: DIALOG_ID,
+      changed: () => {
+        const typed = typedLimits()
+        return typed.maxWidth !== limits.maxWidth || typed.maxHeight !== limits.maxHeight
+      },
+      save: () => steps.settings.run(() => {
+        limits = typedLimits()
+        saveLimits(Framework, limits)
+        fitPage()
+      })
+    })
+    if (!body) return
+    body.innerHTML = '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
+      row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
+      '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
     const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
     const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
-    if (!widthInput || !heightInput) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
-    wireCopyPaste(widthInput.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
+    wireCopyPaste(body.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
       saveLimits(Framework, limits)
       if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''
