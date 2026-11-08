@@ -69,13 +69,37 @@ and SudokuPad then saves its progress under `progress_undefined`, shared by ever
 Manager with empty files. A history move (Back, Forward) or a second puzzle leaves the pen and replay tools off again, which `startWithTools` and
 `resumeAfterHistory` turn on.
 
-## The fuzz proof
+## The fuzz run
 
-`live/fuzz/` proves fast-check can drive SudokuPad (#592; `docs/research/ui-fuzz-tools.md` § Tried with Playwright). `fuzz.mjs` runs random
-click / type / undo sequences, each on a page of its own, against a planted rule ("no more than 2 digits entered") and a planted page error;
-`fuzz.proof.mjs` checks that each is found, shrunk to the shortest sequence and, for the rule, replayed. A failure prints
-`node live/fuzz/run.mjs --seed ... --path ... --replay-path ...`, which reproduces it. The proof takes about five minutes, nearly all of it
-shrinking, so it is not a `*.live.mjs` and `npm run test:live` skips it: `npm run test:fuzz` runs it.
+`npm run test:fuzz` (#593, from #590) tries to break the six scripts with random sequences of what a user does, on real SudokuPad
+(`live/fuzz/`): fast-check generates a list of actions, each list runs on a page of its own with every script installed the way a userscript
+manager does, and the run fails on a crash signal. It runs for 2 minutes. It is not in `npm test`, `npm run test:live` or `land.testcmd`.
+
+```
+npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed path>] [--shrink-minutes <m>]
+```
+
+- **The seed picks the puzzle**: an even seed the recorded 9x9 (`live/puzzle-url.txt`), an odd one a 6x6 with 2x3 boxes (`PUZZLES` in `fuzz.mjs`).
+  Without `--seed` one is drawn and printed. `--runs` ends the run after that many action lists, whichever of it and `--minutes` comes first.
+- **The actions** (`actions.mjs`) are weighted so ordinary use is the bulk: ordinary use of every script and of SudokuPad (click, digit, undo,
+  redo, a tool key, Tab, pen lines and erase, the pen page, notes placed and moved, the Color by Digit button); interruptions in the middle of a
+  gesture (a pen drag, a held right-click erase or a note drag, each cut by Escape, Delete, a tool key, Ctrl+Z, a window resize, a second button,
+  a blur, or the pointer leaving the window); and page events (blur and focus, a reload, a window resize, the Dark Page dialog saved or cancelled
+  with a dark color: Dark Page has no off switch). Every action leaves the mouse up, so a shrunk list is plain steps and replays from numbers alone.
+- **A crash signal** (`signals.mjs`) after every action, and once more 200 ms after the last (fast-check issue #462, so a late error still fails and
+  still shrinks): an uncaught page error, a `console.error`, a skip line, or a row in the notice bar. Each action also waits 40 ms before it is read, so
+  a late error is blamed on the action that caused it: fast-check never removes the last action of a list while shrinking.
+- **A failure** is shrunk (for 10 minutes at most) and printed with the seed, the shortest list that still fails as numbered steps, the one command that
+  replays it (`npm run test:fuzz -- --seed <n> --path <path>`, which runs that one list and does not shrink) and the newest records of the shared error log
+  (kept in the page's `localStorage` by the scripts' guard) when the page has any. The exit is 1.
+- **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo (`docs/research/ui-fuzz-tools.md`).
+- **The tests**: `actions.test.mjs`, `signals.test.mjs` and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
+  seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.
+  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 6 minutes, nearly all of it shrinking) is the live test: short fixed-seed runs pass on both
+  puzzles, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
+  interrupted step and replayed from the command it prints.
+
+Each failure the run finds is fixed in a ticket of its own, whose PR adds the shrunk list as a named fixed live test.
 
 ## The daily watch
 
