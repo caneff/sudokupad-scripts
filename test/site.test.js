@@ -200,7 +200,7 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
 
 // One row per script, in this order; Details only where a details page exists; a script whose file name is not its shown name gives the file name third.
 const ROWS = [
-  ['Color by Digit', CBD], ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
 ]
 const rowsOf = html => html.split('<section class="row">').slice(1)
 
