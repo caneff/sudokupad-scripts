@@ -1698,7 +1698,7 @@
   let layerFont = ''
   let lastLayout = ''
 
-  // The key of the puzzle the drawing was loaded for, so a save lands there even when the page's puzzle has changed since. Null before the first load.
+  // The key of the puzzle these notes were loaded for, so a save lands there even when the page's puzzle has changed since. Null before the first load, when there are no notes to save and a save does nothing.
   let loadedKey = null
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
   const selectedNotes = () => selected.map((i) => drawing[i])
