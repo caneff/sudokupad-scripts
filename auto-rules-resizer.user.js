@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.14
+// @version      0.3.15
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.14'
+  const VERSION = '0.3.15'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -574,6 +574,9 @@
 
   const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
 
+  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
+  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
+
   function save (store, key, data) {
     store.setData(key, { v: STORE_VERSION, data })
   }
@@ -886,8 +889,7 @@
   const getStyle = (el) => window.getComputedStyle(el)
   const rulesPane = () => document.querySelector('.puzzle-rules')
   const controlsColumn = () => document.getElementById('controls')
-  // A puzzle with no id of its own (a replay or a pack) is told apart by its URL.
-  const dragKey = () => String(Framework.app.puzzle.puzzleId || window.location.href)
+  const dragKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
 
   function addStyle () {
     const style = document.createElement('style')
