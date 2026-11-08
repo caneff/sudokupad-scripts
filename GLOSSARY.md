@@ -200,8 +200,10 @@
 - **Text Anywhere** — the script `draw-tool.user.js` (the file keeps its old name so installed copies keep updating), and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. It takes no
   tool key. Called Draw Tool before 0.17.0, when it also drew lines and shapes, and Text Annotation until 0.27.0.
 - **notes** — everything Text Anywhere has put on one puzzle: its texts, oldest first. Saved per puzzle (keyed by
-  the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles noted on last, under the storage keys it always used (`DrawTool_drawing_*`, `DrawTool_index`); it is not in the replay, Undo
-  does not touch it, and Restart and Clear all empty it. A stored item of kind `stroke` or `shape`, from before 0.17.0, is never drawn, and a save, Clear all and Restart leave it as it is.
+  the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles noted on last, under the storage keys it always used (`DrawTool_drawing_*`, `DrawTool_index`); it is not in the replay, and Restart and Clear all empty it.
+  Restart keeps the notes it cleared (`DrawTool_restarted_*`), and the Undo that finds SudokuPad's undo stack empty, the one that brings back
+  what Restart cleared, brings them back too; any other change to the notes, the next Restart, or loading the puzzle again drops them. Undo
+  touches the notes in no other way. A stored item of kind `stroke` or `shape`, from before 0.17.0, is never drawn, and a save, Clear all and Restart leave it as it is.
 - **note color** — one of Text Anywhere's nine colors, numbered 1 to 9, saved under `DrawTool_colors`. With none saved, it copies the
   pen colors once, when it is first made current; after that they no longer follow the pen colors. A saved value it cannot
   read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a
