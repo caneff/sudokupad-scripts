@@ -164,8 +164,8 @@
 - **page button** — the second button of the **controls row**, also called the line type button. It shows the line the next enabled page draws,
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
-- **install step** — one of the parts Pen Tool Extras installs at startup, each run in its own guard: colors, pen pages, arrow
-  lines, drag highlight, marks, line erase, pen panel. A step is **skipped** when SudokuPad lacks an internal it
+- **install step** — one of the parts Pen Tool Extras installs at startup, each run in its own guard (`lib/steps.js`): saved settings, line erase, arrow
+  lines, marks, pen pages, drag highlight, colors, pen panel, style, dialog overlay, settings entry, color save. A step is **skipped** when SudokuPad lacks an internal it
   needs or its own code throws: one console warning names it, the settings dialog's "Off because SudokuPad changed" line lists it,
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **settings button** — the third button of the **controls row**, an outline gear. A click or tap opens
@@ -224,3 +224,8 @@
   SudokuPad's cell cursor. A nudge that would put a note out of reach moves none, and the move is saved when the key is released.
 - **selection** — the texts Text Anywhere has selected, each drawn with a dashed purple outline, a box of its own in the layer beside the note so a faded note does not fade it. A click on a text selects it alone, Shift+click adds or removes it, and a left-drag that starts on empty space, on the board or off it, draws a **selection rectangle** and selects every text whose box it touches (with Shift, adds them). While there is one, the color buttons, the **Size slider**, the **Transparency slider** and **Background** show and change the selected texts and not the next text's settings; a color the texts do not share shows no button picked. A click on empty space, Escape, opening a text and leaving the tool end it. Not saved.
 - **halo** — the outline in the page's color round each letter of a Text Anywhere note, a ring of 16 zero-blur `text-shadow`s (a stroke joins with miters and grows spikes on A, V, W, M and 4), so a note reads over digits, pencil marks and colored cells. Its reach is the **Outline setting**. A note with a background box has none, since the box is that color already.
+- **unreadable value** — a saved value its script's reader refuses (`lib/store.js`), as a later version's shape would be after a downgrade. The script
+  goes on with its defaults, and the value as it was is copied under the same key with `_unreadable` added (`_unreadable2` and on for a second,
+  different one) before any save can write over it; a kept copy is never replaced. Color by Digit's profiles and Auto Rules Resizer's two limits are
+  read this way, saved as `{ v, data }` (a value saved before that is version 0, and a version above the script's own is unreadable), and Color by
+  Digit's dialog shows one line saying saved profiles could not be read and are kept, for as long as a copy is kept.

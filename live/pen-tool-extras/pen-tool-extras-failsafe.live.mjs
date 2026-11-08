@@ -2,7 +2,7 @@
 // sudokupad.app in headless Chromium.
 //
 // A case either takes away an internal a step needs before the script's startup check reads it (a snippet run on `Framework.getApp()`,
-// ahead of the script's own), makes a call the script makes fail while SudokuPad's own use of it goes on, or plants a throw in the
+// ahead of the script's own), makes a call the script makes fail while SudokuPad's own use of it goes on, changes how SudokuPad sends a click, or plants a throw in the
 // script's own code inside a wrapper. Each then checks the console warning that names the step, the dialog's line, that SudokuPad's own
 // action still works on the event that failed and after it, and that the other steps still work. A removed internal also goes from
 // SudokuPad's own code, so a case that removes one draws only with what it does not serve.
@@ -22,8 +22,8 @@ const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
-const missing = (steps, internal) => new RegExp(`^pen-tool-extras: ${steps} skipped because SudokuPad has no ${internal.replace('.', '\\.')}$`)
-const changed = (step) => new RegExp(`^pen-tool-extras: ${step} skipped because SudokuPad changed: `)
+const missing = (step, internal) => new RegExp(`^pen-tool-extras: ${step} skipped: SudokuPad has no ${internal.replace('.', '\\.')}$`)
+const changed = (step) => new RegExp(`^pen-tool-extras: ${step} skipped: SudokuPad changed: `)
 
 // The script with `line` put in after `anchor`, which it must hold exactly once, so a moved anchor fails here and not as a quiet pass.
 function planted (anchor, line) {
@@ -31,18 +31,19 @@ function planted (anchor, line) {
   return script.replace(anchor, anchor + line)
 }
 
-// What each case leaves different: `noPageButton` and `noSettings` for a panel without those buttons, `noSliders` for a panel without the
+// `warns` holds one pattern per skip line the case logs, one line to a step. What each case leaves different: `noPageButton` and `noSettings` for a panel without those buttons, `noSliders` for a panel without the
 // sliders, `pulldown` for SudokuPad's line mode pulldown ('hidden' unless the pen panel step is skipped), `edgeAgain` null when a second
-// click on an edge is SudokuPad's own toggle off rather than this script's arrow 'm', `noDrag` for a case that removes what a drag needs.
+// click on an edge is SudokuPad's own toggle off rather than this script's arrow 'm', `noDrag` for a case that removes what a drag needs, `noEntry`
+// for a case with no settings entry, whose dialog is opened from the panel's settings button.
 const CASES = [
-  { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
-  { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
-  { name: 'marks missing', off: 'marks, line erase', warns: missing('marks, line erase', 'grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
+  { name: 'pen pages missing', off: 'pen pages', warns: [missing('pen pages', 'handleToolExit')], noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
+  { name: 'drag highlight missing', off: 'drag highlight', warns: [missing('drag highlight', 'drawLineHint')], noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
+  { name: 'marks missing', off: 'marks, line erase', warns: [missing('marks', 'grid.rows'), missing('line erase', 'grid.rows')], edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
   // Cell color page 1 cannot be read when the install save darkens it.
   {
     name: 'colors',
     off: 'colors',
-    warns: changed('colors'),
+    warns: [changed('colors')],
     breaks: `const pages = Framework.app.tools.colour.palette.pages
       pages[0] = new Proxy(pages[0], { get (page, key) { if (key === 'length') throw new TypeError('no length'); return page[key] } })`
   },
@@ -50,7 +51,7 @@ const CASES = [
   {
     name: 'panel row',
     off: 'pen panel',
-    warns: /^pen-tool-extras: pen panel skipped because SudokuPad changed: the pen tool panel has no \.penlinemode$/,
+    warns: [/^pen-tool-extras: pen panel skipped: SudokuPad changed: the pen tool panel has no \.penlinemode$/],
     noPageButton: true,
     noSettings: true,
     noSliders: true,
@@ -62,7 +63,7 @@ const CASES = [
   {
     name: 'arrow lines',
     off: 'arrow lines',
-    warns: changed('arrow lines'),
+    warns: [changed('arrow lines')],
     breaks: `const renderPart = Framework.app.svgRenderer.renderPart
       Framework.app.svgRenderer.renderPart = function (opts) { if (opts && opts.type === 'g') throw new TypeError('renderPart has no group'); return renderPart.apply(this, arguments) }`
   },
@@ -70,7 +71,7 @@ const CASES = [
   {
     name: 'right click',
     off: 'line erase',
-    warns: changed('line erase'),
+    warns: [changed('line erase')],
     breaks: `const xyToRCExact = Framework.app.xyToRCExact
       window.addEventListener('pointerdown', (e) => { window.right = e.button === 2 && !window.rightFailed; setTimeout(() => { window.right = false }) }, true)
       Framework.app.xyToRCExact = function () { if (window.right) { window.right = false; window.rightFailed = true; throw new TypeError('xyToRCExact is gone') } return xyToRCExact.apply(this, arguments) }`
@@ -79,15 +80,32 @@ const CASES = [
   {
     name: 'click wrapper throws',
     off: 'marks',
-    warns: changed('marks'),
+    warns: [changed('marks')],
     edgeAgain: null,
     source: planted('      if (isEdgeActs(queued)) {\n', "        throw new Error('planted in the click wrapper')\n")
+  },
+  // SudokuPad's click queues its actions and never calls `actSend`: marks go off and the click lands as SudokuPad's own, the next one with `actSend` as before.
+  {
+    name: 'click queues but never sends',
+    off: 'marks',
+    warns: [changed('marks')],
+    edgeAgain: null,
+    breaks: `const click = ToolPen.tool.clickCell
+      window.dropSend = false
+      ToolPen.tool.clickCell = function () {
+        if (!window.dropSend) return click.apply(this, arguments)
+        window.dropSend = false
+        const hadOwn = Object.prototype.hasOwnProperty.call(this, 'actSend')
+        const own = this.actSend
+        this.actSend = function () {}
+        try { return click.apply(this, arguments) } finally { if (hadOwn) this.actSend = own; else delete this.actSend }
+      }`
   },
   // A throw in the render wrapper's own code, after SudokuPad's renderPen has drawn the mark.
   {
     name: 'render wrapper throws',
     off: 'marks',
-    warns: changed('marks'),
+    warns: [changed('marks')],
     edgeAgain: null,
     source: planted('  function keepMarksAbove (part, isMark) {\n', "    if (isMark) throw new Error('planted in the render wrapper')\n")
   },
@@ -97,6 +115,8 @@ const CASES = [
     off: NOTHING_OFF,
     breaks: 'Framework.app.tools.colour.palette = null'
   },
+  // SudokuPad's settings menu takes no entry: the pen features install all the same.
+  { name: 'settings entry missing', off: 'settings entry', warns: [missing('settings entry', 'Framework.addSetting')], noEntry: true, breaks: 'Framework.addSetting = undefined' },
   { name: 'nothing broken', off: NOTHING_OFF }
 ]
 
@@ -104,8 +124,9 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-async function dialogLineOf (p) {
-  await openExtrasEditor(p)
+async function dialogLineOf (p, noEntry = false) {
+  if (noEntry) await p.locator('.pen-tool-extras-settings').click()
+  else await openExtrasEditor(p)
   const text = await p.locator('#pen-tool-extras-editor').innerText()
   const line = /Off because SudokuPad changed: (.*)/.exec(text)
   await closeExtrasEditorWith(p, 'Cancel')
@@ -129,7 +150,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       // The pen value of each stored entry, without its color character.
       const edgeValues = async () => (await penEntries(p)).map((v) => v.split(':')[1][0])
       const undoAll = async () => { while ((await penEntries(p)).length) await p.click('#control-undo') }
-      const dialogLine = () => dialogLineOf(p)
+      const dialogLine = () => dialogLineOf(p, kase.noEntry)
 
       before(async () => {
         warned = []
@@ -183,22 +204,39 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click that failed')
           await undoAll()
         }
+        if (kase.name === 'click queues but never sends') {
+          await read(() => { window.dropSend = true })
+          await clickEdge()
+          assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click whose acts were never sent')
+          await undoAll()
+        }
         if (kase.name === 'render wrapper throws') {
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'])
           assert.equal(await read(() => document.querySelectorAll('#cell-pen .pen-4').length), 1, 'the X is drawn once on the render that failed')
           await undoAll()
         }
-        if (kase.warns) assert.equal(await settle(async () => warned.length, 1, 20000, Infinity), 1, 'the warning came')
+        if (kase.warns) assert.equal(await settle(async () => warned.length, kase.warns.length, 20000, Infinity), kase.warns.length, 'the warnings came')
       }
 
-      it('one console warning names the step, or none comes when nothing broke', async () => {
+      it('one console warning names each skipped step, or none comes when nothing broke', async () => {
         await triggerFailure()
-        if (kase.warns) {
-          assert.equal(warned.length, 1, warned.join('\n'))
-          assert.match(warned[0], kase.warns)
-        } else assert.deepEqual(warned, [])
+        const warns = kase.warns || []
+        assert.equal(warned.length, warns.length, warned.join('\n'))
+        warns.forEach((pattern, i) => assert.match(warned[i], pattern))
       })
+
+      // The dialog opened from the panel is still this script's: a press on its overlay closes it, and the release never reaches the page.
+      if (kase.noEntry) {
+        it('a press on the dialog\'s overlay closes it and no release reaches the page', async () => {
+          await p.locator('.pen-tool-extras-settings').click()
+          await p.locator('#pen-tool-extras-editor').waitFor({ state: 'visible' })
+          await read(() => { window.releases = 0; window.addEventListener('mouseup', () => { window.releases++ }) })
+          await p.mouse.click(2, 2)
+          await p.locator('#pen-tool-extras-editor').waitFor({ state: 'detached' })
+          assert.equal(await read(() => window.releases), 0)
+        })
+      }
 
       it('the dialog names the skipped step in one line, or says nothing when none is', async () => {
         assert.equal(await dialogLine(), kase.off)
@@ -244,7 +282,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
       it('nothing throws, and no further warning came', () => {
         assert.deepEqual(errors, [])
-        assert.equal(warned.length, kase.warns ? 1 : 0, warned.join('\n'))
+        assert.equal(warned.length, (kase.warns || []).length, warned.join('\n'))
       })
     })
   }
