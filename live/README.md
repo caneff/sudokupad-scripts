@@ -28,6 +28,8 @@ owns it; its header comment is the full rule.
 - `LIVE_REFRESH=1` records again at once, whatever the version. It needs the network.
 - `LIVE_OFFLINE=1` never touches the network: it replays what is there and fails when there is no
   recording.
+- A recording must hold fabric.js, which Test Markup loads only when it is on and Text Anywhere's live check needs. A
+  fresh recording without it is not written and the run fails; an existing one without it is recorded again at once.
 - A replayed request the recording lacks is aborted, and the process then exits 1 naming each such
   URL, with or without `LIVE_OFFLINE=1`. `LIVE_REFRESH=1` records again.
 
@@ -56,3 +58,21 @@ artifact. A run on an unchanged version, inside its week, makes one request to S
 GitHub turns off a public repository's scheduled workflows after 60 days with no repository activity. To turn it
 back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow" (or run
 `gh workflow enable watch.yml`).
+
+## The Tampermonkey test
+
+`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every `*.user.js` into a real
+Tampermonkey in Playwright's Chromium, the way a user does: open the script's URL, click Install. Each script's copy on
+main goes in first, from `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it.
+Tampermonkey must offer the second as an update and its dashboard must list each script once, at the checkout's
+`@version`, which is what a changed `@name` or `@namespace` breaks. Then each script must start on the puzzle page,
+served from the recording, and its representative action from `live/scripts.mjs` must work. The recipe and its caveats are `docs/research/tampermonkey-in-playwright.md`.
+
+- Tampermonkey is closed-source freeware: its CRX is fetched at run time from Google's update endpoint into
+  `tampermonkey/` beside the recording, again once it is a day old, and never committed.
+- It needs `tampermonkey.net`, `raw.githubusercontent.com` and Google's CRX endpoint (`clients2.google.com`), so it
+  stays out of `npm test` and `npm run test:live`.
+- It runs when a change touches any line of a `// ==UserScript==` header, at the controller's merge check for such a PR,
+  and every night in the daily watch, after `watch:live`, so a new Tampermonkey shows up within a day. Chromium changes
+  only when `package-lock.json`'s Playwright does. A red nightly run files one `bug` issue, and none while it is open.
+- It does not cover the Chrome Web Store install, the browser's own prompts or Tampermonkey's scheduled update check.

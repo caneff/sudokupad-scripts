@@ -27,7 +27,7 @@ Pen Tool Extras in SudokuPad's settings, or the settings button in the pen panel
 
 1. **Pen colors** (left), with the preset pulldown above a 3 by 3 grid of square color inputs.
 2. **Line settings** (right, top): Thickness and Opacity, each with a "Slider in panel" box on a line under it. Under a divider, **Line styles**: a box before each of Dashed lines and Directional arrow lines, with a slider under it.
-3. **Marks to cycle** (left, below): one table, rows Edge and Corner, columns X, circle and up and down arrow heads (Directions).
+3. **Marks to cycle** (left, below): one table, rows Edge, Corner and Cell, columns X, circle, up and down arrow heads (Directions) and a filled dot.
 4. **Other** (right, below): White outlines (with Outline width under it) and Right click erase.
 
 The title row ends with two icon buttons, Copy settings (two overlapping squares) and Paste settings (a clipboard); their status message shows to their left. Under the grid, one row of buttons at the right, the same row in every script's dialog: Save (filled purple), Cancel, then Restore defaults, the last two plain. Every slider and box in it is a draft that takes effect on Save, and Cancel leaves what was in force. All five sliders start at the same x and are 96px long. On a screen too narrow for two columns, the sections stack in one column in the same order.
@@ -56,12 +56,12 @@ Both sliders sit in the pen tool's panel, across its full width under the three 
 
 | Slider | Range | Default | Changes | Saved under |
 | --- | --- | --- | --- | --- |
-| Thickness | 1 to 16, in steps of 0.5 | 5 | Lines, cell circles and crosses, and edge and corner marks, by the same factor | `PenColor_thickness` |
+| Thickness | 1 to 16, in steps of 0.5 | 5 | Lines, cell circles, crosses and dots, and edge and corner marks, by the same factor | `PenColor_thickness` |
 | Opacity | 20 to 100%, in steps of 5 | 80 | How see-through every pen mark is | `PenColor_opacity` |
 
-**Mark growth:** above thickness 5, edge and corner marks also get longer, evenly to 1.6 times at 16, staying centred with the same stroke width, so the whole of an edge X clears a line of the same thickness. Lines don't. It's a CSS scale, so marks already drawn grow too. Dark Page keeps the largest of them inside its rectangle.
+**Mark growth:** above thickness 5, edge and corner marks and the cell dot also get larger, evenly to 1.6 times at 16, staying centred with the same stroke width, so the whole of an edge X clears a line of the same thickness. Lines don't. It's a CSS scale, so marks already drawn grow too. Dark Page keeps the largest of them inside its rectangle.
 
-**Marks above lines:** every edge mark, corner mark and cell circle and cross is drawn above every pen line, whichever cell holds it. SudokuPad draws strokes in cell order, which used to bury a mark under a line in a later cell. A mark in the same color as the line under it still doesn't stand out on a thick line; it shows only by its shape.
+**Marks above lines:** every edge mark, corner mark and cell circle, cross and dot is drawn above every pen line, whichever cell holds it. SudokuPad draws strokes in cell order, which used to bury a mark under a line in a later cell. A mark in the same color as the line under it still doesn't stand out on a thick line; it shows only by its shape.
 
 **Opacity on the whole layer:** strokes that overlap don't darken at the joins. Where two colors cross, the later stroke covers the earlier one instead of blending with it. The drag and erase highlights keep SudokuPad's own look at every value.
 
@@ -100,7 +100,7 @@ There are three pages of nine pens, for 27, using the same nine colors.
 
 Each pen color button shows a picture of its line in the pen's color: a solid line on page 1, dashes on page 2, two arrows on page 3. The lines are 3 wide on a 24 unit grid; the dashes keep a width 2 layout, each dash 1 shorter and each gap 1 longer, and the two arrows sit a quarter and three quarters along whatever the Arrow spacing. The color tool's buttons keep SudokuPad's own swatches.
 
-Only lines change with the page. A cell circle, a cross and the edge and corner marks stay solid.
+Only lines change with the page. A cell circle, a cross, a dot and the edge and corner marks stay solid.
 
 **Changing page**, the way the cell color tool does:
 
@@ -162,6 +162,14 @@ A click within 0.2 of a cell of a grid corner, inner or outer, cycles an X, then
 - A corner shared by four cells is one mark.
 - They're half the Thickness slider, like edge marks, and are saved with the edge mark settings.
 
+## Cell marks
+
+A click in a cell's middle cycles SudokuPad's own circle, then its cross, then a dot, then empty.
+
+- The dot is a filled disc in the pen's color, about a fifth of the cell across, stored as the pen value `z`. Without the script it is stored but draws as nothing.
+- The Cell row of the Marks table has a Cell Cross, a Cell Circle and a Cell Dot box, in the X, circle and dot columns, all ticked by default. An unticked mark is skipped. With all three off, a click in a cell's middle does nothing, as an edge click does with the Edge row all off.
+- Settings saved before the Cell row existed read as all three ticked.
+
 ## Right click
 
 The dialog's Right click erase box is on by default and saved under `PenColor_middleerase` (the key is older than the right click and keeps its name so old saves read the same; removed when on, `false` when off). Off, the right button is left wholly to SudokuPad and the browser: no erase, no default prevented, and SudokuPad's own right click (which acts as a left click, so it steps a mark forward) and menu.
@@ -169,12 +177,12 @@ The dialog's Right click erase box is on by default and saved under `PenColor_mi
 With the box on and the pen tool on, a right click over the grid erases what is under the pointer, as one undo step:
 
 - On a line: the whole line, every piece joined to it where two pieces meet at a cell middle or a cell corner, and drawn with the same pen, so a branch or a crossing of that pen at such a point is included (two diagonals of one pen that cross mid-cell meet at no point and stay separate), but not a piece of another pen (on page 3, both direction characters of a pen count as one pen) and no mark.
-- On an edge mark or a grid-corner mark with no line under the pointer: that mark, whatever its shape. Lines win over marks when both are under the pointer. A cell's circle and cross are not edge or corner marks and stay.
-- On nothing, including a cell's middle: nothing, and no mark is made.
+- On an edge mark, a grid-corner mark or a cell's circle, cross or dot with no line under the pointer: that mark, whatever its shape. Lines win over marks when both are under the pointer.
+- On nothing: nothing, and no mark is made.
 
 A right-drag erases every line and mark it crosses, as one undo step, the way Draw's right-drag does. The browser's menu stays shut over the grid in the pen tool. Outside the pen tool, or off the grid, the right button and the menu are left to SudokuPad and the browser.
 
-A left click steps an edge or a corner mark forward, and a right click does not step it. Touch is unchanged.
+A left click steps an edge, corner or cell mark forward, and a right click does not step it. Touch is unchanged.
 
 ## Line mode
 
@@ -182,7 +190,7 @@ The pen panel's controls row holds a line mode button, the first of the three, t
 
 ## Restore defaults
 
-The dialog's Restore defaults picks the Darker page 1 preset, or SudokuPad colors when the color tool has no page 1 to read. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and line style boxes, the White outlines box (on), the Outline width slider (2) and the Right click erase box (on) back to their defaults. It leaves the five mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
+The dialog's Restore defaults picks the Darker page 1 preset, or SudokuPad colors when the color tool has no page 1 to read. It also sets the dialog's Thickness, Opacity, Dash length (3) and Arrow spacing (5) sliders, the Slider in panel and line style boxes, the White outlines box (on), the Outline width slider (2) and the Right click erase box (on) back to their defaults. It leaves the mark boxes as they are. All of it waits for Save, and Cancel leaves what was in force.
 
 ## If SudokuPad changes
 
@@ -196,7 +204,7 @@ The settings dialog names the skipped steps in one line at its top, for example 
 | pen pages | the pen tool's `setSelectedColor`, `handleToolEnter` or `handleToolExit` | Only SudokuPad's nine pens. Tab, the mouse wheel, the digit keys and the page button do nothing, and a pen on page 2 or 3 that was selected is replaced by the same color on page 1. Lines already stored with a page 2 or page 3 pen keep their color |
 | arrow lines | the renderer's `renderPen` or `renderPart`, the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, or the app's `puzzle.cells` | Page 3 lines draw as plain lines of the pen's color, and a line dragged with a page 3 pen is stored in the pen's own character, with no direction |
 | drag highlight | the pen tool's `drawLineHint` | The highlight of a line being dragged fades with the opacity setting and takes the white outline |
-| marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X). The arrows, circles and corner marks you drew stay stored in the puzzle and its replay, and draw as nothing |
+| marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X), and a click in a cell's middle is SudokuPad's own circle and cross. The arrows, circles, corner marks and dots you drew stay stored in the puzzle and its replay, and draw as nothing |
 | pen panel | the pen tool (`ToolPen.tool`), or the `.penlinemode` element in its panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders, the tray and the three control buttons (line mode, line type and settings), which would take its rows, are left out. Tab still turns pages |
 | line erase | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | A right click is SudokuPad's own click, and the browser's menu opens |
 | saved settings | Framework's `getData`, `setData` or `removeData` | The settings and pen colors start from their defaults, and nothing is kept |

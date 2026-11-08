@@ -1,6 +1,7 @@
 // Shared by the live checks: opening SudokuPad's puzzle page and getting it past Start Puzzle, with a script
 // injected at any of the three times a userscript can load. Not a check itself, so `live/**/*.live.mjs` skips it.
 
+import { readdirSync } from 'node:fs'
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
 
 export { START }
@@ -22,13 +23,23 @@ export async function newPage (context) {
   return { p, errors }
 }
 
-// Collects the page's `console.error` lines into `errors`, leaving out a resource that failed to load, which a
-// replay's aborted trackers print. Fits `openPage`'s `seed` as it is. `take(text)`, when given, is asked first:
-// a line it returns true for is the caller's, and stays out of `errors`.
+// The six scripts' ids, read from the `*.user.js` at the repo root, so a seventh script is matched without an edit here.
+const SCRIPT_IDS = readdirSync(new URL('../', import.meta.url)).filter((f) => f.endsWith('.user.js')).map((f) => f.replace('.user.js', ''))
+
+// A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
+// (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
+export const SKIP_LINE = new RegExp(`^(?:${SCRIPT_IDS.join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
+
+// Collects into `errors` the page's `console.error` lines (leaving out a resource that failed to load, which a
+// replay's aborted trackers print) and a script's skip line, of any console type, so a test that asserts `errors`
+// is empty fails when a script lost a feature. Fits `openPage`'s `seed` as it is. `take(text)`, when given, is
+// asked first: a line it returns true for is the caller's.
 export const captureConsoleErrors = (page, errors, take = () => false) => {
   page.on('console', (m) => {
-    if (m.type() !== 'error' || /Failed to load resource/.test(m.text()) || take(m.text())) return
-    errors.push(`console.error: ${m.text()}`)
+    const text = m.text()
+    if (take(text)) return
+    if (m.type() === 'error' && !/Failed to load resource/.test(text)) errors.push(`console.error: ${text}`)
+    else if (SKIP_LINE.test(text)) errors.push(`console.${m.type() === 'warning' ? 'warn' : m.type()}: ${text}`)
   })
 }
 

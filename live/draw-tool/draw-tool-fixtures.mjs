@@ -38,6 +38,7 @@ export const PICKER = '.draw-tool-picker input'
 export const DIALOG = '.dialog'
 export const DRAWING_PREFIX = 'DrawTool_drawing_'
 export const INDEX_KEY = 'DrawTool_index'
+export const RESTARTED_PREFIX = 'DrawTool_restarted_'
 export const COLOR_KEY = 'DrawTool_color'
 export const WIDTH_KEY = 'DrawTool_width'
 export const COLORS_KEY = 'DrawTool_colors'
@@ -91,8 +92,14 @@ export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool
 
 // The puzzle's key, as the script keys its drawing: its id, or the page URL when it has none, as the recorded puzzle does.
 export const puzzleKey = (p) => p.evaluate(() => String(Framework.app.puzzle.puzzleId || window.location.href))
-// The drawing saved for the puzzle on the page.
-export const saved = async (p) => p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p))
+// The drawing saved for the puzzle on the page: the list inside the `{ v, data }` the store saves (or a planted list, not yet saved over), or null when nothing is saved.
+export const drawingOf = (value) => {
+  if (value === null || value === undefined) return null
+  if (Array.isArray(value)) return value
+  if (Array.isArray(value.data)) return value.data
+  throw new Error(`not a saved drawing: ${JSON.stringify(value)}`)
+}
+export const saved = async (p) => drawingOf(await p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p)))
 
 // Each note drawn: its text, its computed color and its size in board units, its font size on the screen over the board's scale.
 export const noteLooks = (p) => p.evaluate((selector) => {
@@ -129,11 +136,11 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
-// Removes every saved drawing and the index.
-export const forgetDrawings = (p) => p.evaluate(([prefix, index]) => {
-  Object.keys(window.localStorage).filter((k) => k.includes(prefix)).forEach((k) => window.localStorage.removeItem(k))
+// Removes every saved drawing, every set of notes a Restart kept, and the index.
+export const forgetDrawings = (p) => p.evaluate(([prefixes, index]) => {
+  Object.keys(window.localStorage).filter((k) => prefixes.some((prefix) => k.includes(prefix))).forEach((k) => window.localStorage.removeItem(k))
   Framework.removeData(index)
-}, [DRAWING_PREFIX, INDEX_KEY])
+}, [[DRAWING_PREFIX, RESTARTED_PREFIX], INDEX_KEY])
 
 export async function boot (p) {
   await startPuzzle(p)

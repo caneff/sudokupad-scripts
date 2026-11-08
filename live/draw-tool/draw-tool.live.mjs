@@ -3,6 +3,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { boot, DIGIT_BUTTON, DRAW_BUTTON, noteInCells as cellsOf, NOT_NOTES, pickDraw as pick, TEXTS, texts, TOOL_KEYS, topmostAtNotes, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { MARKUP_CANVAS } from '../cache.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
@@ -137,7 +138,7 @@ describe('Text Anywhere with SudokuPad\'s Test Markup turned on', { concurrency:
     ;({ context, p, errors } = await openPage(browser))
     await boot(p)
     await p.evaluate(() => Framework.setSetting('markup', true))
-    await p.locator('.fabcan canvas').first().waitFor({ state: 'attached' })
+    await p.locator(MARKUP_CANVAS).first().waitFor({ state: 'attached' })
   })
   after(async () => {
     await p.evaluate(() => Framework.setSetting('markup', false))

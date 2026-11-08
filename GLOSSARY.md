@@ -98,6 +98,9 @@
 - **edge cycle** — the order a left click on an edge steps through its marks: X,
   circle, first direction, second direction, empty, skipping any type unticked in
   the settings dialog.
+- **cell mark** — a pen mark in a cell's middle: SudokuPad's own circle (`5`) or cross (`6`), or the dot Pen Tool
+  Extras adds (`z`, a filled disc). The **cell cycle** is the order a left click in a cell's middle steps through
+  them: circle, cross, dot, empty, skipping any unticked in the dialog's Cell row.
 - **grid-corner mark** — a pen mark Pen Tool Extras draws centred on a corner of the grid, inner or outer: an
   X or a circle, the same shapes as the edge marks. The dialog's Marks table has a Corner row for them; SudokuPad's own
   "corner marks" are the small digits in a cell's corners, which this is not. Stored as one character in the pen
@@ -109,20 +112,20 @@
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type.
-- **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge and corner marks it crosses, as one undo step. Text Anywhere's **erase** is a different feature. The install step that does it is `line erase`.
-- **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle and
-  cross (pen values 5 and 6) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
-  SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle) and a grid-corner mark
-  is always half of it, so every width scales by one factor. Above 5 an edge or grid-corner mark also grows in length (the **mark growth**: a CSS scale about its own middle, 1 at 5 and 1.6 at 16, its stroke width divided by the scale so it stays as thick); lines never grow.
+- **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge, corner and cell marks it crosses, as one undo step. Text Anywhere's **erase** is a different feature. The install step that does it is `line erase`.
+- **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle,
+  cross and dot (pen values 5, 6 and z) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
+  SudokuPad's own is 5, which is the default; an edge mark (the edge X, an arrow, the edge circle), a grid-corner mark and the cell dot
+  are always half of it, so every width scales by one factor. Above 5 an edge or grid-corner mark or the cell dot also grows in size (the **mark growth**: a CSS scale about its own middle, 1 at 5 and 1.6 at 16, its stroke width divided by the scale so it stays as thick); lines never grow.
 - **pen panel sliders** — Thickness and Opacity, drawn in the pen tool's panel across its full width in the row under the **controls row**. SudokuPad gives its
   line mode pulldown (`.penlinemode`) the panel's last row, which the script hides. They sit with the controls row on a **tray**. They exist only while the pen tool is on, and have no Save or Cancel. The settings
   dialog also holds both sliders (drafts, applied on Save), each in a row of Line settings with a **slider box** on a sub-line under it,
   labelled "Slider in panel", saved under `PenColor_sliders`: a hidden slider is left out of the panel but its value still applies;
   its row stays as an empty row of the same height, and with both hidden the block is not drawn. Its Restore defaults
   sets both dialog sliders back to their defaults for Save, like the colors.
-- **marks layer** — the group (`#pen-tool-extras-marks`) that is the last child of the pen layer and holds every edge mark, grid-corner mark and the cell circle and cross, so a mark is drawn over every pen line whichever cell holds it. SudokuPad adds a cell's strokes to its pen layer in cell order, so without it a line in a later cell covers a mark in an earlier one. It is inside the pen layer, so the pen layer's opacity fades it with the lines as one picture.
-- **opacity** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting how see-through the pen layer is (lines, cell circles and
-  crosses, edge marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under
+- **marks layer** — the group (`#pen-tool-extras-marks`) that is the last child of the pen layer and holds every edge mark, grid-corner mark and cell mark, so a mark is drawn over every pen line whichever cell holds it. SudokuPad adds a cell's strokes to its pen layer in cell order, so without it a line in a later cell covers a mark in an earlier one. It is inside the pen layer, so the pen layer's opacity fades it with the lines as one picture.
+- **opacity** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting how see-through the pen layer is (lines, cell circles,
+  crosses and dots, edge marks, grid-corner marks), in percent from 20 to 100 in steps of 5, saved at once, on every move, under
   `PenColor_opacity`. SudokuPad's own is 80, set on each stroke (`.cell-pen { opacity: 0.8 }`); the script sets it on the
   whole pen layer (`#cell-pen`) instead, so overlapping strokes do not darken. 80 is the default; 100 is solid.
 - **white outline** — the dialog's White outlines box (on by default; saved under `PenColor_outline` only as `false`, since on is the default) and the
@@ -197,8 +200,10 @@
 - **Text Anywhere** — the script `draw-tool.user.js` (the file keeps its old name so installed copies keep updating), and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. It takes no
   tool key. Called Draw Tool before 0.17.0, when it also drew lines and shapes, and Text Annotation until 0.27.0.
 - **notes** — everything Text Anywhere has put on one puzzle: its texts, oldest first. Saved per puzzle (keyed by
-  the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles noted on last, under the storage keys it always used (`DrawTool_drawing_*`, `DrawTool_index`); it is not in the replay, Undo
-  does not touch it, and Restart and Clear all empty it. A stored item of kind `stroke` or `shape`, from before 0.17.0, is never drawn, and a save, Clear all and Restart leave it as it is.
+  the puzzle id, or the page URL for a puzzle with none) for the 50 puzzles noted on last, under the storage keys it always used (`DrawTool_drawing_*`, `DrawTool_index`); it is not in the replay, and Restart and Clear all empty it.
+  Restart keeps the notes it cleared (`DrawTool_restarted_*`), and the Undo that finds SudokuPad's undo stack empty, the one that brings back
+  what Restart cleared, brings them back too; any other change to the notes, the next Restart, or loading the puzzle again drops them. Undo
+  touches the notes in no other way. A stored item of kind `stroke` or `shape`, from before 0.17.0, and a stored note that fails its check (read against the stored format, not the slider ranges) are never drawn, and a save, Clear all and Restart leave them as they are; the solver is told once a puzzle at load that notes were set aside.
 - **note color** — one of Text Anywhere's nine colors, numbered 1 to 9, saved under `DrawTool_colors`. With none saved, it copies the
   pen colors once, when it is first made current; after that they no longer follow the pen colors. A saved value it cannot
   read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a
@@ -231,12 +236,12 @@
 - **frame** — the checkbox next to the **background box color**: on, every boxed note gets a 1 screen pixel `#c4c4c4` ring round its box, drawn as a `box-shadow` so it takes no room; a note with no box gets none. Global, off by default, saved under `DrawTool_frame` (only `true` is on). Copy and Paste settings carry it and the box color.
 - **erase** — Text Anywhere's right click: the text the pointer is near is removed whole. Clear all (the trash button) erases every note, after asking, while nothing is selected; while texts are selected it deletes only them, without asking, as the Delete and Backspace keys do.
 - **move** — Text Anywhere's left-drag that starts on a text (the topmost): the **selection** follows the pointer, after the text is selected alone if it was not selected, and each text's stored place changes once, on release, pinned or fixed by where it is dropped. It stops at the last point inside the window and clear of the controls. A click with no drag selects the text. A left-drag that starts on a **resize handle** resizes the note and never moves it.
-- **nudge** — an arrow key pressed with notes **selected** and no **text box** open: it moves them 1 screen pixel, or 10 with Shift, and no arrow key reaches
+- **nudge** — an arrow key pressed with notes **selected** and no **text box** open: it moves them 1 screen pixel, or 10 with Shift, and a key held down repeats it after 300 ms, the step growing over 1.5 s to 8 pixels (40 with Shift); no arrow key reaches
   SudokuPad's cell cursor. A nudge that would put a note out of reach moves none, and the move is saved when the key is released.
 - **selection** — the texts Text Anywhere has selected, each drawn with a dashed purple outline, a box of its own in the layer beside the note so a faded note does not fade it. A click on a text selects it alone, Shift+click adds or removes it, and a left-drag that starts on empty space, on the board or off it, draws a **selection rectangle** and selects every text whose box it touches (with Shift, adds them). While there is one, the color buttons, the **Size slider**, the **Transparency slider** and **Background** show and change the selected texts and not the next text's settings; a color the texts do not share shows no button picked. A click on empty space, Escape, opening a text and leaving the tool end it. Not saved.
 - **halo** — the outline in the page's color round each letter of a Text Anywhere note, a ring of 16 zero-blur `text-shadow`s (a stroke joins with miters and grows spikes on A, V, W, M and 4), so a note reads over digits, pencil marks and colored cells. Its reach is the **Outline setting**. A note with a background box has none, since the box is that color already.
 - **unreadable value** — a saved value its script's reader refuses (`lib/store.js`), as a later version's shape would be after a downgrade. The script
-  goes on with its defaults, and the value as it was is copied under the same key with `_unreadable` added (`_unreadable2` and on for a second,
-  different one) before any save can write over it; a kept copy is never replaced. Color by Digit's profiles and Auto Rules Resizer's two limits are
+  goes on with its defaults (Text Anywhere shows no notes and saves none on that puzzle until Clear all or Restart), and the value as it was is copied under the same key with `_unreadable` added (`_unreadable2` and on for a second,
+  different one) before any save can write over it; a kept copy is never replaced. Color by Digit's profiles, Auto Rules Resizer's two limits and Text Anywhere's drawings are
   read this way, saved as `{ v, data }` (a value saved before that is version 0, and a version above the script's own is unreadable), and Color by
   Digit's dialog shows one line saying saved profiles could not be read and are kept, for as long as a copy is kept.
