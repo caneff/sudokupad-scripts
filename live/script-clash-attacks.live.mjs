@@ -1,4 +1,4 @@
-// Live attacks on clashes between the scripts (#590, attacks 57-61): all six are loaded on one page and each test sets two
+// Live attacks on clashes between the scripts (#590, attacks 57-61): all of them are loaded on one page and each test sets two
 // of them against each other, then checks the crash signals (a skip line, a page error, a console error, a notice bar)
 // plus what the player expects to see.
 import { after, before, describe, it } from 'node:test'

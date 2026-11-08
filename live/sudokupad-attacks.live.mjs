@@ -1,4 +1,4 @@
-// Live attacks on SudokuPad itself with all six scripts loaded (#590, attacks 49-56): each test tries to break the scripts
+// Live attacks on SudokuPad itself with all the scripts loaded (#590, attacks 49-56): each test tries to break the scripts
 // with something a player does to SudokuPad, and checks the crash signals (a skip line, a page error, a console error, a
 // notice bar) plus what the player expects to see.
 import { after, before, describe, it } from 'node:test'
@@ -201,19 +201,19 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
   })
 
   // SudokuPad's own saves throw an uncaught error on a page whose whole localStorage is blocked, with no script loaded, and its
-  // settings save does too, which the harness's `ready` needs. So the keys the six scripts save under throw, and SudokuPad's own
+  // settings save does too, which the harness's `ready` needs. So the keys the scripts save under throw, and SudokuPad's own
   // (including `PenColor_pen` and `PenColor_colors`, which Pen Tool Extras only reads) do not.
   it('56 Blocked storage: every script loads, says what it could not save, and keeps working', async () => {
     const SAVED = [
       ['color-by-digit', 'saved settings'], ['dark-page', 'saved color'], ['auto-rules-resizer', 'max size settings'],
-      ['pen-tool-extras', 'saved settings'], ['draw-tool', 'saved notes and settings']
+      ['pen-tool-extras', 'saved settings'], ['draw-tool', 'saved notes and settings'], ['ui-tweaks', 'saved options']
     ]
     const said = []
     const { context, p, errors } = await openWithAllScripts(browser, {
       expectedSkips: SAVED.map(([script, feature]) => new RegExp(`^${script}: ${feature} skipped because SudokuPad changed: SecurityError: denied$`)),
       seed: (page) => page.on('console', (m) => { if (/ skipped because SudokuPad changed: SecurityError: denied$/.test(m.text())) said.push(m.text().split(' skipped')[0]) }),
       afterStart: (p) => p.evaluate(() => {
-        const scripts = new RegExp(`^${Framework.LocalDataPrefix}_([a-z-]+-notice$|ColorByDigit_|DarkPage_|AutoRulesResizer_|DrawTool_|EdgeMarks_|PenColor_(?!pen$|colors$))`)
+        const scripts = new RegExp(`^${Framework.LocalDataPrefix}_([a-z-]+-notice$|ColorByDigit_|DarkPage_|AutoRulesResizer_|DrawTool_|UiTweaks_|EdgeMarks_|PenColor_(?!pen$|colors$))`)
         for (const method of ['getItem', 'setItem', 'removeItem']) {
           const original = window.Storage.prototype[method]
           window.Storage.prototype[method] = function (key, ...rest) {
@@ -224,7 +224,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       })
     })
     try {
-      // The five scripts that save something each say so once and put up their own bar; No Tab Letters saves nothing.
+      // The six scripts that save something each say so once and put up their own bar; No Tab Letters saves only the dismissal of its notice, which it warns about and does not report as a skip.
       const scripts = SAVED.map(([script]) => script).sort()
       assert.deepEqual(await settle(() => p.locator(NOTICE_BAR).evaluateAll((bars) => bars.map((b) => b.dataset.script).sort()), scripts), scripts)
       assert.deepEqual(said.map((line) => line.split(': ')[0]).sort(), scripts, 'one declared skip line each')
