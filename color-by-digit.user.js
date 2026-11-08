@@ -913,7 +913,7 @@
   const PURPLE = '#6a1b9a'
   const OFF_WORD_GREY = '#b3acbf'
 
-  // A thin white outline, so the purple word reads on Dark Page's dark button. On the normal page's #eee button it shows only as a faint light edge.
+  // A thin white outline, so the word reads on Dark Page's dark button. On the normal page's #eee button it shows only as a faint light edge.
   const WORD_OUTLINE = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
     .map(([x, y]) => `${x}px ${y}px #fff`).join(',')
 
@@ -921,7 +921,7 @@
   function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-3px;top:-2px;' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}${on ? `;text-shadow:${WORD_OUTLINE}` : ''}">${MODE_NAMES[mode].toUpperCase()}</span>`
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY};text-shadow:${WORD_OUTLINE}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
