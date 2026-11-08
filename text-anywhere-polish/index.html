@@ -41,7 +41,7 @@
 </style>
 </head>
 <body>
-<header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6. Snap: 3 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line. Each switch in the bar turns one idea on; off is today's look.
+<header><b>Prototype, throwaway.</b> Text Anywhere polish ideas 1–4 and 6. Snap: 4 px pull to cell middles and to cell edges (a note's top, bottom, left or right meeting a cell line), with a guide line. Each switch in the bar turns one idea on; off is today's look.
 Click a note to select it, drag to move it, drag on empty space to select several, double-click to edit, drag a corner to resize.</header>
 <div id="stage">
   <div id="board"></div>
@@ -56,7 +56,7 @@ Click a note to select it, drag to move it, drag on empty space to select severa
   <label><input type="checkbox" data-f="handles" checked> 3 Big handles</label>
   <label><input type="checkbox" data-f="select" checked> 4 Solid selection</label>
   <label><input type="checkbox" data-f="snap" checked> 6 Snap</label>
-  <label>pull <select id="snapPx"><option value="3" selected>3 px</option><option value="5">5 px</option><option value="8">8 px</option></select></label>
+  <label>pull <select id="snapPx"><option value="3">3 px</option><option value="4" selected>4 px</option><option value="5">5 px</option><option value="8">8 px</option></select></label>
   <label><input type="checkbox" id="guideOn" checked> show guide line</label>
 </div>
 <script>
@@ -122,11 +122,16 @@ function axisSnap (c, half, start, px, label) {
   }
   return best
 }
+// How far past the note's box the middle of its selection outline's line lies: the outline's offset plus half its width, as drawn.
+function outlineReach () {
+  const el = stage.querySelector('.note.sel'); if (!el) return 0
+  const cs = getComputedStyle(el); return parseFloat(cs.outlineOffset) + parseFloat(cs.outlineWidth) / 2
+}
 function snapped (x, y, w, h) {
   lastSnap = { x: null, y: null }; gx.style.display = gy.style.display = 'none'
   if (!flags.snap) return [x, y]
   const px = Number(document.getElementById('snapPx').value), b = B(), guide = document.getElementById('guideOn').checked
-  const sx = axisSnap(x, w / 2, b.left, px, 'c'), sy = axisSnap(y, h / 2, b.top, px, 'r')
+  const out = outlineReach(), sx = axisSnap(x, w / 2 + out, b.left, px, 'c'), sy = axisSnap(y, h / 2 + out, b.top, px, 'r')
   if (sx) { x = sx.to; lastSnap.x = sx.name; if (guide) { gx.style.left = sx.guideAt + 'px'; gx.style.display = 'block' } }
   if (sy) { y = sy.to; lastSnap.y = sy.name; if (guide) { gy.style.top = sy.guideAt + 'px'; gy.style.display = 'block' } }
   return [x, y]
