@@ -339,7 +339,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.mouse.click(x, y)
     assert.equal(await settle(async () => (await penOf(['5,1'])).length, 1), 1)
     assert.deepEqual(await penOf(['5,1']), ['5,1:5n'])
-    const circle = await read(() => { const e = document.querySelector('.cell-pen.pen-5.pencolor-n'); return { tag: e.tagName.toLowerCase(), dash: window.getComputedStyle(e).strokeDasharray, parts: e.querySelectorAll('[data-arrow-line-part]').length } })
+    const circle = await read(() => { const e = document.querySelector('#cell-pen .cell-pen.pen-5.pencolor-n'); return { tag: e.tagName.toLowerCase(), dash: window.getComputedStyle(e).strokeDasharray, parts: e.querySelectorAll('[data-arrow-line-part]').length } })
     assert.deepEqual(circle, { tag: 'path', dash: 'none', parts: 0 })
     await undo()
   })
@@ -381,7 +381,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await press(2)
     await drag(p, [[8.5, 0.5], [8.5, 2.5]])
     assert.deepEqual((await penEntries(p)).filter((v) => v.startsWith('8,0:')), ['8,0:12'])
-    assert.equal(await read(() => document.querySelectorAll('.cell-pen.pen-1.pencolor-2').length), 2)
+    assert.equal(await read(() => document.querySelectorAll('#cell-pen .cell-pen.pen-1.pencolor-2').length), 2)
     assert.equal(await read(() => document.querySelectorAll('#cell-pen > g.cell-pen.pencolor-2').length), 0, 'a page 1 line is a plain path')
   })
 

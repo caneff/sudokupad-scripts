@@ -464,7 +464,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const slider = () => p.locator('#pen-tool-extras-thickness')
     const setThickness = (value) => setSlider(p, '#pen-tool-extras-thickness', value)
     const savedThickness = () => read((k) => Framework.getData(k), THICKNESS_KEY)
-    const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
+    const widths = (n) => async () => [...new Set(await read((n) => [...document.querySelectorAll(`#cell-pen .cell-pen.pencolor-${n}`)].map((e) => parseFloat(window.getComputedStyle(e).strokeWidth)), n))]
     const probeWidth = (value) => probeStrokeWidth(p, value, '#cell-pen')
     const FULL = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
     const HALF = ['3', '4', 'b', 'c', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
@@ -705,7 +705,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await saved(), { ...toObject(PAGE_PENS[0]), 4: FOUR.hex })
       // The edit saves the colors only: no thickness is written, and the lines keep SudokuPad's 5.
       assert.equal(await read((k) => Framework.getData(k), THICKNESS_KEY), null)
-      assert.equal(await read(() => window.getComputedStyle(document.querySelector('.cell-pen.pencolor-4:not(.pen-5)')).strokeWidth), '5px')
+      assert.equal(await read(() => window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pencolor-4:not(.pen-5)')).strokeWidth), '5px')
       assert.equal(await undoDepth(), depth)
       await leaveEditMode()
       await openExtrasEditor(p)

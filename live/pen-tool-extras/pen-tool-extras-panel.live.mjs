@@ -35,10 +35,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
   const strokeCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
   const activeElementTag = () => read(() => document.activeElement.tagName)
-  const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).strokeWidth))
+  const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pencolor-1')).strokeWidth))
   const effectiveOpacity = async (selector) => (await effectiveOpacities(p, selector))[0]
-  const lineOpacity = () => effectiveOpacity('.cell-pen.pencolor-1')
-  const strokeOwnOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).opacity))
+  const lineOpacity = () => effectiveOpacity('#cell-pen .cell-pen.pencolor-1')
+  const strokeOwnOpacity = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('#cell-pen .cell-pen.pencolor-1')).opacity))
 
   const dragSlider = async (selector, toX) => {
     const box = await p.locator(selector).boundingBox()
