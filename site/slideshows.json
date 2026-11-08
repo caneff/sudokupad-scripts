@@ -135,17 +135,17 @@
   },
   "text-anywhere": {
     "dir": "docs/research/draw-tool/",
-    "width": 1000,
-    "height": 625,
+    "width": 800,
+    "height": 320,
     "slides": [
       {
         "picture": "draw-tool-slide-1-type.png",
-        "alt": "Three orange lines typed with Enter in the margin beside the top rows, A=B+5, A+B=11 and B=3, A=8, with the Text Anywhere panel below them",
+        "alt": "Three orange lines typed with Enter in the margin beside the top rows of the grid, A=B+5, A+B=11 and B=3, A=8",
         "caption": "Left click to type a note"
       },
       {
         "picture": "draw-tool-slide-3-background.png",
-        "alt": "A bold red formula, A+B=11, on a cell edge with no box, and a red formula, X+Y=2Z, in a page-colored box that hides the grid lines under it, with the Background button on",
+        "alt": "A bold red formula, A+B=11, on a cell edge with no box, and a red formula, X+Y=2Z, in a page-colored box that hides the grid lines under it",
         "caption": "Background: a box behind the next note"
       },
       {
