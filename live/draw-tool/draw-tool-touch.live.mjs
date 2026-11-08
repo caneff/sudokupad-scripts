@@ -139,23 +139,6 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
   })
 
-  describe('Shift released mid-drag', () => {
-    it('never leaves a note out of the window: the move goes back to the last point that is reachable', async () => {
-      const start = await noteBox('AA')
-      const [px, py] = middle(start)
-      await p.mouse.move(px, py)
-      await p.mouse.down()
-      await p.keyboard.down('Shift')
-      // Locked to y this reaches (px, py + 300); free it would put the note's middle 60 px left of the window.
-      await p.mouse.move(px - start.x - start.width, py + 300, { steps: 2 })
-      await p.keyboard.up('Shift')
-      await draw.frames(p)
-      await p.mouse.up()
-      const dropped = await noteBox('AA')
-      assert.equal(dropped.x + dropped.width / 2 >= 0, true, `the note's middle is at ${dropped.x + dropped.width / 2}, inside the window`)
-    })
-  })
-
   describe('a press on another note while one is open', () => {
     it('picks it from 3 px outside its box too', async () => {
       await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })

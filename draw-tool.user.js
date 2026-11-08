@@ -2999,8 +2999,6 @@
     const d = drag
     const map = boardMap()
     for (const point of d.pending.splice(0)) if (!d.move || moveKeepsReachable(d, point, map)) d.points.push(point)
-    // Letting go of Shift frees the move the lock was keeping reachable, so the move goes back to the last point that is reachable as it now is.
-    while (d.move && d.points.length > 1 && !moveKeepsReachable(d, d.points[d.points.length - 1], map)) d.points.pop()
     if (isClick(d.points)) return
     if (d.move) showMove(d, map)
     else if (d.start === -1) showRectangle(d)
