@@ -91,9 +91,22 @@ describe('Text Anywhere and the empty space in SudokuPad\'s controls box', { con
     assert.equal(await boxOpen(), false, 'the panel opened a note')
   })
 
+  it('a press on the copy-rules icon\'s own div, which has only a picture, does not open a note', async () => {
+    const at = await p.locator('.rules-copy').evaluate((copy) => {
+      const b = copy.getBoundingClientRect()
+      for (let y = b.y + 1; y < b.bottom; y += 2) {
+        for (let x = b.x + 1; x < b.right; x += 2) if (document.elementFromPoint(x, y) === copy) return [x, y]
+      }
+      return null
+    })
+    assert.notEqual(at, null, 'the icon\'s div has a spot of its own')
+    await p.mouse.click(...at)
+    assert.equal(await boxOpen(), false, 'the copy-rules icon opened a note')
+  })
+
   it('a press on a tool button, the rules text or the timer (which pauses with its own dialog) does not open a note', async () => {
-    // The footer is a transparent div with text, the rules-copy icon a transparent div with a picture: each is a control.
-    for (const selector of ['#control-draw', '.puzzle-rules', '.controls-footer', '.rules-copy', '.timer']) {
+    // The footer is a transparent div with text: a control.
+    for (const selector of ['#control-draw', '.puzzle-rules', '.controls-footer', '.timer']) {
       await p.mouse.click(...await centerOf(selector))
       assert.equal(await boxOpen(), false, `${selector} opened a note`)
     }
