@@ -197,7 +197,7 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
 
 // One row per script, in this order; Details only where a details page exists; a script whose file name is not its shown name gives the file name third.
 const ROWS = [
-  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined], ['UI Tweaks', undefined]
 ]
 const rowsOf = html => html.split('<section class="row">').slice(1)
 
@@ -442,7 +442,7 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
     'Typed notes anywhere Click to type; Esc finishes; double-click a note to edit.',
-    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or - [ ] checklist items. Typing ->, != or sum gives → ≠ Σ.',
+    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or [ ] checklist items (- [ ] and [] work too). Typing ->, != or sum gives → ≠ Σ.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
@@ -483,7 +483,7 @@ test(`${DRAW} good to know says the notes stay in this browser, and what clears 
 test('the README has a Text Anywhere row with a Details link, and the Settings sentence is kept', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
   assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
-  assert.match(readme, /Each script except No Tab Letters adds an entry to SudokuPad's settings/)
+  assert.match(readme, /Each script adds an entry to SudokuPad's settings/)
 })
 
 test('the README has a Color by Digit row with the short summary and a Details link', () => {

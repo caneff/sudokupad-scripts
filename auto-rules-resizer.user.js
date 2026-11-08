@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.4
-// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
+// @version      0.5.0
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes the height SudokuPad leaves it, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,12 +17,12 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.4'
+  const VERSION = '0.5.0'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
-  const MIN_FONT_PX = 8 // the smallest font f- goes to
-  const MAX_FONT_PX = 200
+  const MIN_FONT_RATIO = 0.7 // the smallest font, as a share of SudokuPad's own
+  const MAX_FONT_RATIO = 1.5 // the largest font, as a share of SudokuPad's own
   const READABLE_CHARS = 90 // characters a line, on average, that rules too long to fit are widened to
   const REM_PX = 16
   const RULES_MIN = { width: 15 * REM_PX, height: 7 * REM_PX } // the pane's floor under a drag, css px
@@ -100,17 +100,22 @@
     return Math.max(natural, maxWidth === null ? edge : Math.min(edge, maxWidth))
   }
 
-  // Never under SudokuPad's own size, so rules too long to fit still scroll at the size SudokuPad gives them.
+  // The largest font that fits, from 70% to 150% of SudokuPad's own size. Where none fits it is 70%, and the rules scroll.
   function autoFontPx (fits, ownPx) {
-    const px = largestSize(fits, Math.ceil(ownPx), MAX_FONT_PX)
-    return px > ownPx && fits(px) ? px : ownPx
+    const floor = ownPx * MIN_FONT_RATIO
+    if (fits(ownPx)) {
+      const px = largestSize(fits, Math.ceil(ownPx), Math.floor(ownPx * MAX_FONT_RATIO))
+      return px > ownPx && fits(px) ? px : ownPx
+    }
+    const px = largestSize(fits, Math.ceil(floor), Math.floor(ownPx))
+    return px < ownPx && fits(px) ? px : floor
   }
 
-  function nudgedFontPx (autoPx, nudgePx) {
-    return Math.max(MIN_FONT_PX, autoPx + nudgePx)
+  function nudgedFontPx (autoPx, nudgePx, ownPx) {
+    return Math.min(ownPx * MAX_FONT_RATIO, Math.max(ownPx * MIN_FONT_RATIO, autoPx + nudgePx))
   }
 
-  const nudgedAutoFontPx = (fits, ownPx, nudgePx) => nudgedFontPx(autoFontPx(fits, ownPx), nudgePx)
+  const nudgedAutoFontPx = (fits, ownPx, nudgePx) => nudgedFontPx(autoFontPx(fits, ownPx), nudgePx, ownPx)
 
   // The pane's max-height is the room or a drag's, so a size fits when the rules take no more than the room.
   const fitsRoom = (rules, room) => rules.scrollHeight <= Math.min(room, rules.clientHeight)
@@ -123,19 +128,26 @@
     rules.style.fontSize = `${nudgedAutoFontPx(fits, ownPx, nudgePx)}px`
   }
 
-  // `fits(width, font)` is true from some width up. Where one does, f+ widens for the bigger font, which is the nudge on
-  // the automatic size at the width before it. Rules no width keeps from scrolling at SudokuPad's size stay at its size
-  // and get only the `readable(font)` width, because a wider pane would shorten the scroll and lengthen every line.
+  // The pane has all the height already; `fits(width, font)` is true from some width up. The order is width first, at
+  // SudokuPad's font, then a smaller font at the widest width, then the scroll. Rules that fit at SudokuPad's font may
+  // grow it, and f+ then widens for the bigger font. Rules that scroll even at 70% get only the `readable(font)` width,
+  // because a wider pane would shorten the scroll and lengthen every line.
   function autoPaneFit ({ natural, widthLimit: limit, ownPx, nudgePx, fits, readable = () => Infinity }) {
-    if (!fits(limit, ownPx)) {
-      const fontPx = nudgedFontPx(ownPx, nudgePx)
-      return { width: Math.max(natural, Math.min(limit, readable(fontPx))), fontPx }
-    }
     const narrowest = (from, fitsAt) => limit - largestSize((slack) => fitsAt(limit - slack), 0, limit - from)
+    // `nudgePx` comes back as the nudge that took effect, so a press the floor or cap cancelled is not kept.
+    const nudged = (autoPx) => {
+      const fontPx = nudgedFontPx(autoPx, nudgePx, ownPx)
+      return { fontPx, nudgePx: fontPx - autoPx }
+    }
+    if (!fits(limit, ownPx)) {
+      const autoPx = autoFontPx((n) => fits(limit, n), ownPx)
+      const font = nudged(autoPx)
+      return { width: fits(limit, autoPx) ? limit : Math.max(natural, Math.min(limit, readable(font.fontPx))), ...font }
+    }
     let width = fits(natural, ownPx) ? natural : narrowest(natural, (w) => fits(w, ownPx))
-    const fontPx = nudgedAutoFontPx((n) => fits(width, n), ownPx, nudgePx)
-    if (nudgePx > 0 && !fits(width, fontPx)) width = narrowest(width, (w) => fits(w, fontPx))
-    return { width, fontPx }
+    const font = nudged(autoFontPx((n) => fits(width, n), ownPx))
+    if (font.nudgePx > 0 && !fits(width, font.fontPx)) width = narrowest(width, (w) => fits(w, font.fontPx))
+    return { width, ...font }
   }
 
   function setPaneWidth (rules, width, natural) {
@@ -198,7 +210,7 @@
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
   // Every style property the fit writes on the pane; it also moves the controls column by its `translate`.
-  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'overflowY']
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'minHeight', 'overflowY']
 
   function clearFit (rules, controls) {
     for (const k of FIT_STYLES) rules.style[k] = ''
@@ -208,7 +220,7 @@
   // Fits the pane to the room below it at SudokuPad's width, widening only as the rules need, and returns the
   // drag it applied. `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with
   // the fit taken off, or has no room yet, with the last fit put back.
-  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box, limits = noLimits(), readable }) {
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, onNudge = () => {}, box, limits = noLimits(), readable }) {
     const before = FIT_STYLES.map((k) => rules.style[k])
     const movedBefore = controls.style.translate
     // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
@@ -245,7 +257,7 @@
       rules.style.fontSize = `${font}px`
       return fitsRoom(rules, autoRoom)
     }
-    const { width, fontPx } = autoPaneFit({
+    const { width, fontPx, nudgePx: appliedNudge } = autoPaneFit({
       natural,
       widthLimit: rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width, maxWidth: limits.maxWidth }),
       ownPx,
@@ -253,6 +265,7 @@
       fits: fitsAt,
       readable
     })
+    onNudge(appliedNudge)
     const column = controls.getBoundingClientRect()
     const applied = clampDrag(box, {
       pane: { left: home.left, right: home.left + width * scale },
@@ -260,14 +273,29 @@
       boardRight,
       viewport
     })
-    // A drag that changes the height starts from the pane's own height, not the room under it, so the pane
-    // grows by what the corner moved.
-    const fitted = draggedPane({ width, room: applied.h ? home.height / scale : autoRoom, box: applied, scale })
-    if (applied.h) rules.style.maxHeight = `${fitted.room}px`
+    // A height drag starts from SudokuPad's own pane height so the pane grows by what the corner moved. A sideways
+    // drag has no height of its own to add, so it holds the fitted pane's.
+    const sideways = Boolean(applied.w && !applied.h)
+    let startRoom = autoRoom
+    if (applied.h) startRoom = home.height / scale
+    else if (sideways) {
+      fitsAt(width, fontPx)
+      startRoom = rules.offsetHeight
+    }
+    const dragging = Boolean(applied.w || applied.h)
+    const fitted = draggedPane({ width, room: startRoom, box: applied, scale })
+    if (dragging) rules.style.maxHeight = `${fitted.room}px`
     if (applied.x || applied.y) controls.style.translate = `${applied.x}px ${applied.y}px`
     setPaneWidth(rules, fitted.width, natural)
-    if (applied.w || applied.h) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
+    if (dragging) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
     else rules.style.fontSize = `${fontPx}px`
+    // The text may shrink to the held height, never grow into it.
+    if (sideways) {
+      if (parseFloat(rules.style.fontSize) > fontPx) rules.style.fontSize = `${fontPx}px`
+      // A wider pane reflows to fewer lines; the height stays, with blank space below the text (Chris, 2026-11-08).
+      rules.style.minHeight = `${startRoom}px`
+      rules.style.minHeight = `${startRoom - (rules.offsetHeight - startRoom)}px`
+    }
     // SudokuPad sets `overflow-y: scroll`, which draws an empty track beside rules that fit.
     if (rules.scrollHeight <= rules.clientHeight) rules.style.overflowY = 'auto'
     return applied
@@ -284,18 +312,23 @@
     }
   }
 
+  // A hand dragging sideways drifts a few px up or down.
+  const VERTICAL_DEAD_PX = 4
+
   // Move and release are heard on the window, so a fast drag that outruns the corner holds.
   function watchCornerDrag (corner, win, onMove, onActive) {
     corner.addEventListener('pointerdown', (e) => {
       e.preventDefault()
       let x = e.clientX
       let y = e.clientY
+      let inDeadZone = true
       trackPointer(win, {
         move: (m) => {
           const dx = m.clientX - x
-          const dy = m.clientY - y
           x = m.clientX
-          y = m.clientY
+          if (Math.abs(m.clientY - e.clientY) >= VERTICAL_DEAD_PX) inDeadZone = false
+          const dy = inDeadZone ? 0 : m.clientY - y
+          if (!inDeadZone) y = m.clientY
           if (dx || dy) onMove(dx, dy)
         },
         end: () => onActive(false)
@@ -307,6 +340,8 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -381,6 +416,51 @@
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
+  // SudokuPad styles a dialog's buttons by tag, so a button that is to look like bare text or a bare icon has each of these forced.
+  const BARE_BUTTON = 'background: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; cursor: pointer;'
+  const ERROR_LOG_ATTRIBUTE = 'data-role="error-log"'
+  const ERROR_LOG_SELECTOR = `[${ERROR_LOG_ATTRIBUTE}]`
+
+  function errorLogCss (prefix) {
+    return [
+      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
+      `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+    ].join('\n')
+  }
+
+  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
+  function renderErrorLogRow (prefix) {
+    return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
+  }
+
+  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
+  function wireErrorLog (dialog, win) {
+    const say = (message) => setDialogStatus(dialog, message)
+    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'clear-error-log') {
+          win.localStorage.removeItem(ERROR_LOG_KEY)
+          say('Error log cleared.')
+          return
+        }
+        const log = readErrorLog(win.localStorage)
+        if (log.length === 0) {
+          say(formatErrorLog(log))
+          return
+        }
+        await win.navigator.clipboard.writeText(formatErrorLog(log))
+        say('Error log copied.')
+      } catch (error) {
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+      }
+    })
+  }
+
   function dialogTitleCss (prefix) {
     const tools = `.${prefix}tools`
     return [
@@ -388,7 +468,7 @@
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
-      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
@@ -463,12 +543,15 @@
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
-        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) },
+        // Below the footer, so the script's own layout still runs down to the footer line.
+        { tag: 'text', innerHTML: renderErrorLogRow(prefix) }
       ]
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    wireErrorLog(body.closest('.dialog'), win)
     const row = body.closest('.dialog')?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
@@ -658,6 +741,35 @@
     return found ? found[1] : null
   }
 
+  // One key for every script, so a reader finds every feature any script turned off.
+  const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
+  const ERROR_LOG_LIMIT = 50
+  // A report is a URL, and GitHub refuses a long one.
+  const REPORT_STACK_LIMIT = 1200
+
+  // Oldest first. Throws when the storage is blocked or the saved text is not a list, so a caller never mistakes either for an empty log.
+  function readErrorLog (storage) {
+    const saved = storage.getItem(ERROR_LOG_KEY)
+    if (saved === null) return []
+    const log = JSON.parse(saved)
+    if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
+    return log
+  }
+
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
+
+  function formatErrorLog (log) {
+    if (log.length === 0) return 'The error log is empty.'
+    return [...log].reverse().map((record) => [
+      `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
+      `  ${record.url}`,
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
+    ].join('\n')).join('\n\n')
+  }
+
   // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
@@ -666,7 +778,7 @@
       `Script: ${name} ${version}`,
       `SudokuPad version: ${shownVersion}`,
       '',
-      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : String(why)}`)
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : withStack(String(why), why && why.stack).slice(0, REPORT_STACK_LIMIT)}`)
     ].join('\n')
     return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
   }
@@ -702,6 +814,26 @@
     const dismissed = () => {
       const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
+    let sudokupad = null
+    let logFailed = false
+    function recordFeatureOff (label, why) {
+      if (logFailed) return
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      try {
+        const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
+        log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
+        globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
+      } catch (error) {
+        logFailed = true
+        console.warn(`${script}: the error log cannot be saved, so ${label} and later features turned off are not recorded:`, error)
+      }
     }
 
     let bar = null
@@ -753,6 +885,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
+          recordFeatureOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {
@@ -810,11 +943,12 @@
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
     function probe ({ roots, store, doc = document }) {
+      sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
         console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
       })
-      page = { store, doc, sudokupad: sudokupadVersion(doc) }
+      page = { store, doc, sudokupad }
       showNotice()
     }
 
@@ -1091,6 +1225,7 @@
         viewport: { width: window.innerWidth, height: window.innerHeight },
         boardRight: board ? board.getBoundingClientRect().right : 0,
         nudgePx,
+        onNudge: (px) => { nudgePx = px },
         box,
         limits,
         readable: (fontPx) => readableWidth(rules, fontPx)
