@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.29.5
+// @version      0.30.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.29.5'
+  const VERSION = '0.30.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -265,11 +265,11 @@
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
   // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. The settings dialog sets one for every note: medium is
-  // Thicker, none is Off and thin is Thinner. A note's own `outline` field, saved by an earlier version, is never read.
+  // Thick, none is None and thin is Thin. A note's own `outline` field, saved by an earlier version, is never read.
   const OUTLINE_EM = { none: 0, thin: 0.07, medium: 0.14 }
   const OUTLINES = Object.keys(OUTLINE_EM)
   const DEFAULT_OUTLINE = 'medium'
-  const OUTLINE_LABELS = { none: 'Off', thin: 'Thinner', medium: 'Thicker' }
+  const OUTLINE_LABELS = { none: 'None', thin: 'Thin', medium: 'Thick' }
   const readOutline = (saved) => OUTLINES.includes(saved) ? saved : DEFAULT_OUTLINE
   // text-shadow joins with round corners, which -webkit-text-stroke does not: its miters grow spikes on A, V, W, M and 4. The ring of shadows is in em, so it follows the font size.
   const HALO_SHADOWS = 16
@@ -497,8 +497,9 @@
   const readFlag = (saved) => saved === true
   const readBackground = readFlag
   // The color behind every note with a box: a preset, or a #rrggbb color the dialog's Custom picks. The page's own color is the default.
-  const BOX_PRESETS = { page: 'Page', white: 'White', yellow: 'Sticky yellow', tint: 'Tint' }
+  const BOX_PRESETS = { page: 'Page', white: 'White', yellow: 'Yellow', tint: 'Tint' }
   const BOX_CUSTOM = 'custom'
+  const BOX_CUSTOM_LABEL = 'Own'
   const BOX_WHITE = '#ffffff'
   const DEFAULT_BOX = 'page'
   const BOX_YELLOW = '#fff4b0'
@@ -516,6 +517,25 @@
   const FRAME_COLOR = '#c4c4c4'
   const readFrame = readFlag
   const frameShadow = (on) => on ? `0 0 0 var(${PIXEL_VAR}, 1px) ${FRAME_COLOR}` : 'none'
+  // The settings dialog's three rows of samples: the halo, the box color and the box border, each button a picture of its result in the current text color.
+  const HALO_CELL_COLOR = '#8fb8e8'
+  const SAMPLE_BOX_STYLE = 'display:inline-block;padding:0.15em 0.35em;border-radius:0.3em'
+  const FRAME_CHOICES = [['off', 'None'], ['on', 'Thin grey']]
+  function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
+    const pickButton = (role, value, label, pressed, sample) =>
+      `<button type="button" class="draw-tool-pick" data-role="${role}" data-value="${value}" aria-label="${escapeHtml(label)}" aria-pressed="${pressed}">${sample}<span class="draw-tool-pick-label">${escapeHtml(label)}</span></button>`
+    const row = (title, note, buttons, after = '') => `<div class="draw-tool-section-title">${title}</div><div class="draw-tool-pick-note">${note}</div><div class="draw-tool-pick-row">${buttons.join('')}</div>${after}`
+    const halo = (name) => `<span class="draw-tool-sample" data-cell style="background:${HALO_CELL_COLOR};color:${escapeHtml(textColor)};font-size:26px;text-shadow:${escapeHtml(haloShadow(name, PAGE_COLOR))}">A</span>`
+    const boxed = (fill, framed) => `<span class="draw-tool-sample" style="color:${escapeHtml(textColor)};font-size:18px"><span style="${SAMPLE_BOX_STYLE};background:${escapeHtml(fill)};box-shadow:${frameShadow(framed)}">A=B</span></span>`
+    const choice = boxChoice(box)
+    const fillFor = (id) => id === BOX_CUSTOM ? custom : boxFill(id, textColor)
+    return row('Halo round the letters', 'For notes without a box, so they read over digits and grid lines.', OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
+      row('Box color', 'For notes made with the Background button on.',
+        [...Object.keys(BOX_PRESETS), BOX_CUSTOM].map((id) => pickButton('box-pick', id, BOX_PRESETS[id] ?? BOX_CUSTOM_LABEL, choice === id, boxed(fillFor(id), frame))),
+        choice === BOX_CUSTOM ? `<input type="color" class="draw-tool-swatch" data-role="box-custom" value="${escapeHtml(custom)}" aria-label="Own box color" title="Own box color">` : '') +
+      row('Box border', 'The line round a note with a box.',
+        FRAME_CHOICES.map(([value, label]) => pickButton('frame-pick', value, label, frame === (value === 'on'), boxed(fillFor(choice), value === 'on'))))
+  }
   // Board units, as a text's height.
   const TEXT_SIZE_PER_WIDTH = 2
   const TEXT_SIZE_BASE = 8
@@ -906,7 +926,7 @@
     [COLORS_KEY]: readPastedColors,
     [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
     [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined,
-    // The ticket reads an invalid pasted outline as Thicker, box color as Page and frame as off, so none is counted as skipped.
+    // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped.
     [OUTLINE_KEY]: readOutline,
     [BOX_KEY]: readBox,
     [FRAME_KEY]: readFrame
@@ -1463,7 +1483,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1842,11 +1862,14 @@
   const CUSTOM_LABEL = 'Custom'
   const DIALOG_CSS = [
     `#${DIALOG_ID} .draw-tool-section-title { font-weight: 600; margin: 6px 0 0; }`,
-    `#${DIALOG_ID} .draw-tool-box-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
-    `#${DIALOG_ID} .draw-tool-box-row .draw-tool-color-choice { flex: 1 1 0; width: auto; min-width: 0; }`,
-    `#${DIALOG_ID} .draw-tool-frame-row { display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin: 6px 0; cursor: pointer; }`,
-    // SudokuPad stretches a dialog's inputs across the row, which left the box alone in the middle and the word at the far edge.
-    `#${DIALOG_ID} .draw-tool-frame-row input { flex: none; width: auto; min-width: 0; margin: 0; }`,
+    `#${DIALOG_ID} .draw-tool-pick-note { margin: 2px 0 0; font-size: 0.85em; opacity: 0.8; }`,
+    `#${DIALOG_ID} .draw-tool-pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }`,
+    `#${DIALOG_ID} .draw-tool-pick { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 4px; width: auto; height: auto; min-width: 0; margin: 0; padding: 4px 4px 6px; line-height: 1.2; border: 2px solid transparent; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }`,
+    `#${DIALOG_ID} .draw-tool-pick[aria-pressed="true"] { border-color: #000; }`,
+    `#${DIALOG_ID} .draw-tool-sample { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 64px; height: 44px; border-radius: 6px; font-weight: 600; line-height: 1; }`,
+    `#${DIALOG_ID} .draw-tool-sample[data-cell] { border: 1px solid rgb(0 0 0 / .25); }`,
+    `#${DIALOG_ID} .draw-tool-pick-label { font-size: 0.85em; }`,
+    `#${DIALOG_ID} input.draw-tool-swatch[data-role="box-custom"] { display: block; margin: 0 0 6px; }`,
     colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`)
   ].join('\n')
 
@@ -1901,15 +1924,10 @@
     if (!box) return
     const draw = () => {
       const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
-      const boxOptions = [...Object.entries(BOX_PRESETS), [BOX_CUSTOM, CUSTOM_LABEL]].map(([id, label]) => `<option value="${id}"${boxChoice(draftBox) === id ? ' selected' : ''}>${label}</option>`).join('')
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
-        '<div class="draw-tool-section-title">Outline</div>' +
-        `<div class="draw-tool-box-row"><select class="draw-tool-color-choice" data-role="outline" aria-label="Outline">${OUTLINES.map((name) => `<option value="${name}"${draftOutline === name ? ' selected' : ''}>${OUTLINE_LABELS[name]}</option>`).join('')}</select></div>` +
-        '<div class="draw-tool-section-title">Background box</div>' +
-        `<div class="draw-tool-box-row"><select class="draw-tool-color-choice" data-role="box-choice" aria-label="Background box color">${boxOptions}</select>${boxChoice(draftBox) === BOX_CUSTOM ? `<input type="color" class="draw-tool-swatch" data-role="box-custom" value="${draftCustom}" aria-label="Custom background box color" title="Custom background box color">` : ''}</div>` +
-        `<label class="draw-tool-frame-row"><input type="checkbox" data-role="frame"${draftFrame ? ' checked' : ''}> Frame</label>`
+        renderSamplePicks({ outline: draftOutline, box: draftBox, custom: draftCustom, frame: draftFrame, textColor: draft[color] })
     }
     draw()
     box.addEventListener('change', under(settingsUi, (event) => {
@@ -1921,21 +1939,26 @@
           colorsEdited = true
         }
         draw()
-      } else if (target.matches('[data-role="outline"]')) {
-        draftOutline = readOutline(target.value)
-      } else if (target.matches('[data-role="box-choice"]')) {
-        draftBox = target.value === BOX_CUSTOM ? draftCustom : target.value
-        draw()
       } else if (target.matches('[data-role="box-custom"]')) {
         draftCustom = draftBox = hexColor(target.value)
-      } else if (target.matches('[data-role="frame"]')) {
-        draftFrame = target.checked
+        draw()
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
         chosen = null
         colorsEdited = true
         draw()
       }
+    }))
+    box.addEventListener('click', under(settingsUi, (event) => {
+      const button = event.target.closest('button[data-role$="-pick"]')
+      if (!button) return
+      const { role, value } = button.dataset
+      if (role === 'outline-pick') draftOutline = readOutline(value)
+      else if (role === 'box-pick') draftBox = value === BOX_CUSTOM ? draftCustom : value
+      else if (role === 'frame-pick') draftFrame = value === 'on'
+      else return
+      draw()
+      box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
     }))
     wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS }, under(settingsUi, (values) => {
       applyPasted(values)

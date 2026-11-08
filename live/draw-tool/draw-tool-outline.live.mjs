@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Outline choice in the settings dialog on sudokupad.app in headless Chromium at 1280x720: Off, Thinner and Thicker (the default) for every
+// Live check of draw-tool.user.js's Outline choice in the settings dialog on sudokupad.app in headless Chromium at 1280x720: None, Thin and Thick (the default) for every
 // note at once on Save, Cancel leaving it, a reload keeping it, a note's own saved outline ignored, Copy then Paste carrying it, and the halo drawn as a round ring with no
 // spike past its radius. Real mouse input.
 import { after, before, describe, it } from 'node:test'
@@ -10,10 +10,12 @@ import { gridPoint } from '../pen.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 
 const { OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXT_BOX } = draw
-const CHOICE = `${EDITOR} select[data-role="outline"]`
-const OUTLINES = ['Off', 'Thinner', 'Thicker']
+const PICKS = `${EDITOR} button[data-role="outline-pick"]`
+const OUTLINES = ['None', 'Thin', 'Thick']
+const pick = (page, name) => page.locator(`${PICKS}[aria-label="${name}"]`)
+const pickedLabel = (page) => page.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('aria-label')
 // How far each outline reaches past the letters, as a share of the text size.
-const REACH_EM = { Thinner: 0.07, Thicker: 0.14 }
+const REACH_EM = { Thin: 0.07, Thick: 0.14 }
 const A = [1.5, 1.5]
 const B = [1.5, 3.5]
 
@@ -47,7 +49,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   }
   async function chooseOutline (name, how = 'Save') {
     await p.click(SETTINGS_BUTTON)
-    await p.locator(CHOICE).selectOption({ label: name })
+    await pick(p, name).click()
     await closeDialogWith(p, how, EDITOR)
   }
 
@@ -60,59 +62,59 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('the panel has no Outline button, and the dialog\'s Outline choice lists Off, Thinner and Thicker with Thicker chosen', async () => {
+  it('the panel has no Outline button, and the dialog\'s Outline choice has the None, Thin and Thick samples with Thick pressed', async () => {
     await p.click(SETTINGS_BUTTON)
-    assert.deepEqual(await p.locator(`${CHOICE} option`).allTextContents(), OUTLINES)
-    assert.equal(await p.locator(CHOICE).evaluate((select) => select.selectedOptions[0].textContent), 'Thicker')
+    assert.deepEqual(await p.locator(PICKS).evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label'))), OUTLINES)
+    assert.equal(await pickedLabel(p), 'Thick')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('Save applies the choice to every note, old and new, and a note saved with its own outline field is read as Thicker until then', async () => {
+  it('Save applies the choice to every note, old and new, and a note saved with its own outline field is read as Thick until then', async () => {
     await draw.plantDrawing(p, [{ kind: 'text', color: 1, size: 20, opacity: 100, outline: 'none', text: 'old', at: [224, 224] }])
     await reload()
     await typeText(A, 'A')
     await typeText(B, 'B')
     assert.ok(await reach('old') > 0, 'the note\'s own "none" is ignored')
-    await chooseOutline('Off')
+    await chooseOutline('None')
     assert.deepEqual([await reach('A'), await reach('B'), await reach('old')], [0, 0, 0])
     assert.equal(await stored(p, OUTLINE_KEY), 'none')
     await typeText([5.5, 5.5], 'C')
     assert.equal(await reach('C'), 0, 'a note made after it too')
     assert.equal((await draw.saved(p)).find((item) => item.text === 'C').outline, undefined, 'and no note gets an outline field of its own')
-    await chooseOutline('Thinner')
+    await chooseOutline('Thin')
     const thin = await reach('A')
     assert.ok(thin > 0, 'a ring')
-    await chooseOutline('Thicker')
+    await chooseOutline('Thick')
     const medium = await reach('A')
-    assert.ok(medium > thin * 1.4, `Thinner ${thin} em, Thicker ${medium} em`)
+    assert.ok(medium > thin * 1.4, `Thin ${thin} em, Thick ${medium} em`)
     assert.equal(await reach('old'), medium, 'the old note follows')
   })
 
   it('Cancel leaves the outline as it was, and a choice survives a reload', async () => {
     await p.click(SETTINGS_BUTTON)
-    await p.locator(CHOICE).selectOption({ label: 'Off' })
+    await pick(p, 'None').click()
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.ok(await reach('A') > 0)
     assert.equal(await stored(p, OUTLINE_KEY), 'medium')
-    await chooseOutline('Thinner')
+    await chooseOutline('Thin')
     await reload()
     await p.click(SETTINGS_BUTTON)
-    assert.equal(await p.locator(CHOICE).evaluate((select) => select.selectedOptions[0].textContent), 'Thinner')
+    assert.equal(await pickedLabel(p), 'Thin')
     await closeDialogWith(p, 'Cancel', EDITOR)
-    assert.ok(await reach('A') < REACH_EM.Thicker * 0.7, 'drawn Thinner')
+    assert.ok(await reach('A') < REACH_EM.Thick * 0.7, 'drawn Thin')
   })
 
-  it('a saved outline that is something else reads as Thicker, and the drawing still loads', async () => {
+  it('a saved outline that is something else reads as Thick, and the drawing still loads', async () => {
     await p.evaluate(([key, value]) => Framework.setData(key, value), [OUTLINE_KEY, 'huge'])
     await reload()
     await p.click(SETTINGS_BUTTON)
-    assert.equal(await p.locator(CHOICE).evaluate((select) => select.selectedOptions[0].textContent), 'Thicker')
+    assert.equal(await pickedLabel(p), 'Thick')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.ok(await reach('A') > 0)
   })
 
-  it('Copy then Paste in a fresh page carries the outline, and an invalid pasted one reads as Thicker', async () => {
-    await chooseOutline('Off')
+  it('Copy then Paste in a fresh page carries the outline, and an invalid pasted one reads as Thick', async () => {
+    await chooseOutline('None')
     await p.click(SETTINGS_BUTTON)
     await p.locator('.dialog button[data-act="copy-settings"]').click()
     await p.locator(STATUS).filter({ hasText: 'Settings copied.' }).waitFor()
@@ -129,7 +131,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
         await other.p.locator('.dialog button[data-act="paste-settings"]').click()
         await other.p.locator(STATUS).filter({ hasText: /Pasted \d+ settings?\./ }).waitFor()
         assert.equal(await stored(other.p, OUTLINE_KEY), outline)
-        assert.equal(await other.p.locator(CHOICE).evaluate((select) => select.value), outline, 'the dialog shows it')
+        assert.equal(await other.p.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('data-value'), outline, 'the dialog shows it')
         assert.equal(await dialogButton(other.p, 'Save').count(), 1)
         await closeDialogWith(other.p, 'Cancel', EDITOR)
       }
@@ -140,7 +142,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   })
 
   it('the halo is a round ring: no pixel of "AVWMk4" lies past the ring\'s radius from a letter, at every outline', async () => {
-    for (const outline of ['Thinner', 'Thicker']) {
+    for (const outline of ['Thin', 'Thick']) {
       await chooseOutline(outline)
       const shadow = await textShadowOf('A')
       const fontSize = await fontSizeOf('A')
