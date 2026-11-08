@@ -28,6 +28,8 @@ owns it; its header comment is the full rule.
 - `LIVE_REFRESH=1` records again at once, whatever the version. It needs the network.
 - `LIVE_OFFLINE=1` never touches the network: it replays what is there and fails when there is no
   recording.
+- A recording must hold fabric.js, which Test Markup loads only when it is on and Text Anywhere's live check needs. A
+  fresh recording without it is not written and the run fails; an existing one without it is recorded again at once.
 - A replayed request the recording lacks is aborted, and the process then exits 1 naming each such
   URL, with or without `LIVE_OFFLINE=1`. `LIVE_REFRESH=1` records again.
 
