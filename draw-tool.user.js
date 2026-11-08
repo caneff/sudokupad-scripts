@@ -3931,7 +3931,6 @@
       return true
     },
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
-    // Ctrl or Cmd released would leave and re-enter the tool, as pressed would have left it.
     handleKeyup (event) {
       holdShift = event.shiftKey
       if (event.key === 'Shift' && drag?.move) inFrame('drag', dragMoves)
@@ -3939,7 +3938,7 @@
         copyPasteCode = null
         return true
       }
-      return Framework.app.tool === TOOL_NAME && (isCommandKey(event.key) || (selected.length > 0 && Boolean(ARROWS[event.key])))
+      return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])
     }
   }
 
