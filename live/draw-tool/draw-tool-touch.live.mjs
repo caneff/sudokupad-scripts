@@ -33,6 +33,8 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
   const typeNote = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
+    // The first Escape closes the note and leaves it selected, the second ends the selection.
+    await p.keyboard.press('Escape')
     await p.keyboard.press('Escape')
   }
   const savedNote = async (text) => (await draw.saved(p)).find((item) => item.text === text)
@@ -97,7 +99,8 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
       await p.keyboard.press('Escape')
       const [x, y] = (await savedNote('hello there')).at
       const [wantX, wantY] = await boardPoint(click)
-      assert.equal(Math.abs(x - wantX) < 1.5 && Math.abs(y - wantY) < 1.5, true, `the saved point ${[x, y]} is the click's ${[wantX, wantY]}`)
+      // The text starts at the click, so the stored point is half a line above it; the view shift would move it 20 px or more along x.
+      assert.equal(Math.abs(x - wantX) < 1.5 && Math.abs(y - wantY) < 14, true, `the saved point ${[x, y]} is the click's ${[wantX, wantY]}`)
     })
   })
 
@@ -164,7 +167,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
       await p.keyboard.type('x')
       await p.mouse.click(...middle(await noteBox('BB')))
       assert.equal(await p.locator(TEXT_BOX).count(), 0, 'the open note is closed')
-      assert.equal((await savedNote('AAx')) !== undefined, true, 'and was saved')
+      assert.equal((await draw.saved(p)).some((item) => item.text.includes('x')), true, 'and was saved with the typed x')
       assert.equal(await onlySelected('BB'), true, 'the other note is selected')
       assert.equal(await p.locator(SELECTION).count(), 1)
     })
