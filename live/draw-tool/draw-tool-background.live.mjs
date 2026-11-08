@@ -33,7 +33,7 @@ describe('Text Anywhere\'s Background button', { concurrency: false }, () => {
   const savedBgs = async () => Object.fromEntries((await saved()).map((item) => [item.text, item.bg ?? false]))
   const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
   // A double-click opens a note already made.
-  const openAt = async (at) => p.mouse.dblclick(...await gridPoint(p, at))
+  const openAt = async (at) => draw.reopen(p, await gridPoint(p, at))
   const typeText = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)

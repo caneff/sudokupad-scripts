@@ -86,7 +86,7 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
 
   it('the dashed outline of a faded note open for typing stays solid too', async () => {
     await p.keyboard.press('Escape')
-    await p.mouse.dblclick(...await gridPoint(p, [1.5, 1.5]))
+    await draw.reopen(p, await gridPoint(p, [1.5, 1.5]))
     await p.locator(draw.TEXT_BOX).waitFor()
     assert.equal(await p.locator(SELECTION).count(), 1, 'one outline round the open note')
     assert.equal(await drawnOpacity(SELECTION), 1)
@@ -95,10 +95,10 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
   })
 
   it('selecting a second faded note outlines both, and ending the selection takes every outline off', async () => {
-    await p.mouse.click(...await gridPoint(p, [1.5, 1.5]))
+    await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, [1.5, 1.5])))
     await p.keyboard.down('Shift')
     try {
-      await p.mouse.click(...await gridPoint(p, [1.5, 4.5]))
+      await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, [1.5, 4.5])))
     } finally {
       await p.keyboard.up('Shift')
     }

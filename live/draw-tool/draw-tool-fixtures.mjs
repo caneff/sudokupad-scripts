@@ -112,12 +112,29 @@ export const noteLooks = (p) => p.evaluate((selector) => {
   })
 }, TEXTS)
 
-// The middle of the note that reads `text`, in cells from the grid's top left, as [row, column] to a tenth.
+// Where the note that reads `text` starts, in cells from the grid's top left, as [row, column] to a tenth: the middle of its first line and the left edge of its text.
 export const noteInCells = (p, text) => p.evaluate(([selector, want]) => {
-  const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
+  const element = [...document.querySelectorAll(selector)].find((e) => e.textContent === want)
+  const range = document.createRange()
+  range.selectNodeContents(element)
+  const first = range.getClientRects()[0]
   const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-  return [(box.y + box.height / 2 - cell.y) / cell.height, (box.x + box.width / 2 - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
+  return [((first.top + first.bottom) / 2 - cell.y) / cell.height, (first.left - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
 }, [TEXTS, text])
+
+// The middle of the closed note that starts nearest screen point `[x, y]`: a note starts at the click that made it, so a press on it, which a handle or the edge may take at its start, goes to its middle.
+export const middleAt = (p, point) => p.evaluate(([selector, [x, y]]) => {
+  const boxes = [...document.querySelectorAll(selector)].map((e) => e.getBoundingClientRect())
+  const distance = (box) => Math.hypot(box.left - x, (box.top + box.bottom) / 2 - y)
+  const box = boxes.reduce((best, next) => distance(next) < distance(best) ? next : best)
+  return [box.x + box.width / 2, box.y + box.height / 2]
+}, [TEXTS, point])
+
+// Opens the closed note that starts nearest screen point `point` with a double-click in its middle, and takes the caret to the end of its text, where the cases type.
+export async function reopen (p, point) {
+  await p.mouse.dblclick(...await middleAt(p, point))
+  await p.keyboard.press('Control+End')
+}
 
 // For each note, what the page shows topmost at its middle: 'note' (itself), 'dialog' or 'other'. Under another tool the
 // notes take no pointer, so each note is made hit-testable for its one check.

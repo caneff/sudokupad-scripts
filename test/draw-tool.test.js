@@ -394,10 +394,10 @@ test('the Background setting is on only when it was saved as true', () => {
   for (const saved of [false, null, undefined, 'true', 1, {}]) assert.equal(readBackground(saved), false, JSON.stringify(saved))
 })
 
-test('a text\'s box is centred on its point, as tall as its line and wider with more characters', () => {
+test('a text\'s box starts at its point, as tall as its line and wider with more characters', () => {
   const box = textBox(sum)
-  assert.equal((box.left + box.right) / 2, 100)
-  assert.equal((box.top + box.bottom) / 2, 50)
+  assert.equal(box.left, 100)
+  assert.equal(box.top, 50)
   assert.equal(box.bottom - box.top, 23)
   const longer = textBox(textItem([100, 50], '150', 3, 20))
   assert.ok(longer.right - longer.left > box.right - box.left, `'150' is ${longer.right - longer.left} wide, '15' ${box.right - box.left}`)
@@ -405,9 +405,9 @@ test('a text\'s box is centred on its point, as tall as its line and wider with 
 
 test('a drag across a text touches it, and one that passes clear of it does not', () => {
   const box = textBox(sum)
-  assert.equal(touchesText(sum, [100, 0], [100, 100]), true, 'across its middle')
+  assert.equal(touchesText(sum, [110, 0], [110, 100]), true, 'across it')
   assert.equal(touchesText(sum, [0, 0], [200, 100]), true, 'on a slant through it')
-  assert.equal(touchesText(sum, [100, 50], [100, 50]), true, 'a press on it')
+  assert.equal(touchesText(sum, [110, 60], [110, 60]), true, 'a press on it')
   assert.equal(touchesText(sum, [box.right + ERASE_TOLERANCE - 0.1, 0], [box.right + ERASE_TOLERANCE - 0.1, 100]), true, 'within the tolerance')
   assert.equal(touchesText(sum, [box.right + ERASE_TOLERANCE + 0.1, 0], [box.right + ERASE_TOLERANCE + 0.1, 100]), false, 'just past it')
   assert.equal(touchesText(sum, [0, 0], [200, 0]), false, 'above it')
@@ -488,8 +488,8 @@ test('a selection rectangle selects every note it touches, whichever way it was 
 test('a selection rectangle that only touches the corner of a note\'s box selects it, and one that stops short does not', () => {
   const { right, bottom } = noteBox(sum)
   assert.deepEqual(notesTouched([sum], [right, bottom], [130, 80]), [0], 'a rectangle whose corner is the box\'s corner')
-  assert.deepEqual(notesTouched([sum], [113, 0], [130, 80]), [])
-  assert.deepEqual(notesTouched([sum], [90, 62], [100, 80]), [])
+  assert.deepEqual(notesTouched([sum], [125, 0], [140, 80]), [])
+  assert.deepEqual(notesTouched([sum], [90, 74], [100, 80]), [])
 })
 
 test('a selection rectangle touches a note\'s background box, which reaches past its text', () => {
@@ -682,7 +682,7 @@ test('a note\'s box is as wide as its longest line shown, markers left out, and 
   const two = textItem([100, 50], '15\n150', 3, 20)
   assert.equal(width(two), width(textItem([100, 50], '150', 3, 20)))
   assert.equal(height(two), 46)
-  assert.equal((textBox(two).top + textBox(two).bottom) / 2, 50)
+  assert.equal(textBox(two).top, 50)
 })
 
 // A note of text size 20 has a line 1.15 x 20 = 23 board units high, so its automatic box is 16 x 20 = 320 wide and 8 x 23 = 184 high.
@@ -690,7 +690,7 @@ test('a line longer than the box wraps: the box stops at 16 em wide and is a lin
   const long = textItem([100, 50], 'x'.repeat(40), 3, 20)
   assert.equal(width(long), 320)
   assert.equal(height(long), 46)
-  assert.equal((textBox(long).left + textBox(long).right) / 2, 100)
+  assert.equal(textBox(long).left, 100)
 })
 
 test('a note of more than 8 lines stops growing at 8 lines high', () => {
@@ -698,9 +698,9 @@ test('a note of more than 8 lines stops growing at 8 lines high', () => {
   assert.equal(height(textItem([100, 50], Array(12).fill('a').join('\n'), 3, 20)), 184)
 })
 
-test('a resized note\'s box is its stored size, whatever its text, centred on its point', () => {
+test('a resized note\'s box is its stored size, whatever its text, from its point', () => {
   const resized = { ...textItem([100, 50], 'a', 3, 20), box: [200, 60] }
-  assert.deepEqual(textBox(resized), { left: 0, right: 200, top: 20, bottom: 80 })
+  assert.deepEqual(textBox(resized), { left: 100, right: 300, top: 50, bottom: 110 })
 })
 
 test('a saved size reads back, and a note without one has none', () => {
@@ -713,19 +713,19 @@ test('a saved size reads back, and a note without one has none', () => {
 const AUTO = [132, 23]
 
 // A resize keeps the corner opposite the dragged one still: on the board the stub's scale is 2 screen pixels a board unit.
-test('dragging a note\'s bottom right corner sets its box in board units and moves its point so its top left stays put', () => {
+test('dragging a note\'s bottom right corner sets its box in board units and puts its point on the box\'s top left', () => {
   const on = textItem([50, 60], 'hi', 3, 20)
   const resized = resizedItem(on, [200, 170], [600, 290], { ...board, scale: 2 }, CORNERS.bottomRight, AUTO)
-  assert.deepEqual(resized, { ...on, box: [200, 60], at: [150, 90] })
+  assert.deepEqual(resized, { ...on, box: [200, 60], at: [50, 60] })
 })
 
 test('dragging each other corner keeps the opposite corner still and sets the same box', () => {
   const on = textItem([50, 60], 'hi', 3, 20)
   const scaled = { ...board, scale: 2 }
   // The box is 200 x 60 board units, 400 x 120 pixels, with its opposite corner at (600, 290), (200, 290), (600, 170) and (200, 170).
-  assert.deepEqual(resizedItem(on, [600, 290], [200, 170], scaled, CORNERS.topLeft, AUTO), { ...on, box: [200, 60], at: [150, 90] })
-  assert.deepEqual(resizedItem(on, [200, 290], [600, 170], scaled, CORNERS.topRight, AUTO), { ...on, box: [200, 60], at: [150, 90] })
-  assert.deepEqual(resizedItem(on, [600, 170], [200, 290], scaled, CORNERS.bottomLeft, AUTO), { ...on, box: [200, 60], at: [150, 90] })
+  assert.deepEqual(resizedItem(on, [600, 290], [200, 170], scaled, CORNERS.topLeft, AUTO), { ...on, box: [200, 60], at: [50, 60] })
+  assert.deepEqual(resizedItem(on, [200, 290], [600, 170], scaled, CORNERS.topRight, AUTO), { ...on, box: [200, 60], at: [50, 60] })
+  assert.deepEqual(resizedItem(on, [600, 170], [200, 290], scaled, CORNERS.bottomLeft, AUTO), { ...on, box: [200, 60], at: [50, 60] })
 })
 
 test('dragging a corner past its opposite one still leaves the minimum box on the corner\'s own side', () => {
@@ -733,12 +733,12 @@ test('dragging a corner past its opposite one still leaves the minimum box on th
   // The top left dragged to the right of and below the fixed bottom right: the box is the minimum and ends at the bottom right.
   const resized = resizedItem(on, [600, 290], [900, 500], { ...board, scale: 2 }, CORNERS.topLeft, AUTO)
   assert.deepEqual(resized.box, [60, 23])
-  assert.deepEqual(resized.at, [220, 108.5])
+  assert.deepEqual(resized.at, [190, 97])
 })
 
 test('a note off the board keeps its fixed point\'s kind, and its box is in board units too, as its text is', () => {
   const off = placedItem(textItem([50, 60], 'hi', 3, 20), [40, 700], board)
-  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }, CORNERS.bottomRight, AUTO), { ...off, box: [200, 60], fixed: [200, 740] })
+  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }, CORNERS.bottomRight, AUTO), { ...off, box: [200, 60], fixed: [0, 680] })
 })
 
 test('a resize of a note wider than three characters stops at about three characters wide and one line high', () => {
@@ -768,8 +768,8 @@ test('a note sent back to auto size loses its box and keeps its point', () => {
 
 test('once a note is drawn its box is the size drawn, not the guess from its characters, and a resized note keeps its stored box', () => {
   const long = textItem([100, 50], 'x'.repeat(40), 3, 20)
-  assert.deepEqual(textBox({ ...long, [DRAWN_SIZE]: [300, 23] }), { left: -50, right: 250, top: 38.5, bottom: 61.5 })
-  assert.deepEqual(textBox({ ...long, box: [200, 60], [DRAWN_SIZE]: [300, 23] }), { left: 0, right: 200, top: 20, bottom: 80 })
+  assert.deepEqual(textBox({ ...long, [DRAWN_SIZE]: [300, 23] }), { left: 100, right: 400, top: 50, bottom: 73 })
+  assert.deepEqual(textBox({ ...long, box: [200, 60], [DRAWN_SIZE]: [300, 23] }), { left: 100, right: 300, top: 50, bottom: 110 })
 })
 
 // A 1000x900 window with a panel down its right side from x=800.
@@ -810,11 +810,11 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   const near = (box) => Object.fromEntries(Object.entries(box).map(([side, v]) => [side, Math.round(v * 1e6) / 1e6]))
   const pinned = { ...textItem([100, 50], 'sum', 1, 20), box: [40, 23] }
   // Without a background the padding is the halo's reach, 0.14 of 20 units.
-  assert.deepEqual(near(noteScreenBox(pinned, map, 'medium')), { left: 164.4, right: 255.6, top: 91.4, bottom: 148.6 })
+  assert.deepEqual(near(noteScreenBox(pinned, map, 'medium')), { left: 204.4, right: 295.6, top: 114.4, bottom: 171.6 })
   // With one it is the background's, 7 units across and 3 down.
-  assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
+  assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 196, right: 304, top: 114, bottom: 172 })
   const { at, ...rest } = pinned
-  assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
+  assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 294.4, right: 385.6, top: 394.4, bottom: 451.6 })
 })
 
 // A SudokuPad with every internal the features declare, and the helpers that take one away.

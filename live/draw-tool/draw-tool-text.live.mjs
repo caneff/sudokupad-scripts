@@ -37,7 +37,7 @@ describe('Text Anywhere\'s typed text', { concurrency: false }, () => {
   const cellState = () => read(() => JSON.stringify(Framework.app.puzzle.cells.map((c) => [c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), c.propGet('colour')])))
   const saved = () => draw.saved(p)
   const clickAt = async (at) => p.mouse.click(...await gridPoint(p, at))
-  const doubleClickAt = async (at) => p.mouse.dblclick(...await gridPoint(p, at))
+  const doubleClickAt = async (at) => draw.reopen(p, await gridPoint(p, at))
   // The computed color and the size in board units of the text that reads `content`: a color with no alpha is solid.
   const textStyle = async (content) => {
     const { color, size } = (await draw.noteLooks(p)).find((note) => note.text === content)

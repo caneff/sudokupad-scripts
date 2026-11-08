@@ -208,10 +208,11 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
   it('a move shows only after the next frame, at the last pointer move', async () => {
     // n4, at r2c1: a click selects it alone, and a press on it drags it.
     const from = [1.5, 0.5]
-    const point = await gridPoint(p, from)
+    const start = await gridPoint(p, from)
+    const point = await draw.middleAt(p, start)
     await p.mouse.click(...point)
     await p.mouse.down()
-    const target = await steps(from, [1, 1], 3)
+    const target = (await steps(from, [1, 1], 3)).map(([x, y]) => [x + point[0] - start[0], y + point[1] - start[1]])
     const look = await movesInOneTask(target, 1, () => {
       const note = [...document.querySelectorAll('#draw-tool-layer .draw-tool-text')].find((n) => n.textContent === 'n4').getBoundingClientRect()
       return [note.x, note.y]

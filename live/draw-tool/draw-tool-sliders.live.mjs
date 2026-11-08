@@ -110,7 +110,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
   })
 
   it('a move while a note is open changes that note only and keeps it open', async () => {
-    await p.mouse.dblclick(...await gridPoint(p, A))
+    await draw.reopen(p, await gridPoint(p, A))
     assert.equal(await p.locator(TEXT_BOX).count(), 1)
     assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [3, 40])
     await slideTo(p, SIZE_SLIDER, 9.5)
@@ -124,7 +124,7 @@ describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false 
   })
 
   it('a press on the sliders\' own padding, off both sliders, leaves an open note open with the focus in it', async () => {
-    await p.mouse.dblclick(...await gridPoint(p, A))
+    await draw.reopen(p, await gridPoint(p, A))
     assert.equal(await p.locator(TEXT_BOX).count(), 1)
     const box = await p.locator(SLIDERS).boundingBox()
     await p.mouse.click(box.x + 4, box.y + box.height / 2)
