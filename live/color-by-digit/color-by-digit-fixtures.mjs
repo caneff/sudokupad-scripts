@@ -28,6 +28,9 @@ export const ADDED_PRELOADS_STORAGE_KEY = storedAt('ColorByDigit_addedPreloads')
 export const ADDED_EACH_DIGIT_STORAGE_KEY = storedAt('ColorByDigit_addedEachDigit')
 // Saved profiles with the one-time adds (Entropic and Modular, then Each digit) already done, so a test sees exactly the profiles it seeded.
 export const savedProfiles = (state) => ({ [PROFILES_STORAGE_KEY]: state, [ADDED_PRELOADS_STORAGE_KEY]: true, [ADDED_EACH_DIGIT_STORAGE_KEY]: true })
+// The profiles as the script reads them back: the state inside the `{ v, data }` envelope it saves, or one seeded in the shape saved
+// before the envelope.
+export const savedState = (saved) => (saved !== null && Object.hasOwn(saved, 'data') ? saved.data : saved)
 export const MODE_KEY = 'ColorByDigit_mode'
 export const MODE_STORAGE_KEY = storedAt(MODE_KEY)
 // Auto mode's on/off from before the mode existed, read for the starting mode when no mode is saved.

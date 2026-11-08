@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVENS, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, shadeReaders, startInjected, watch, wordOn } from './color-by-digit-fixtures.mjs'
+import { ARROW, AUTO_KEY, AUTO_STORAGE_KEY, BUTTON, buttonBoxesOn, buttonPoint, chipLookOn, coloredCountOn, DEFAULT_FILL, EDITOR, GIVENS, givensColoredOn, labelOn, LOW_FIVE_HIGH, MENU, MODE_KEY, openSession, paintOn, paletteColorOn, pressTo, PROFILES_KEY, SEED, savedProfiles, savedState, shadeReaders, startInjected, watch, wordOn } from './color-by-digit-fixtures.mjs'
 import { gotoPuzzle, MODES } from '../page.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
@@ -43,7 +43,7 @@ describe('the mode, saved Off, injected after Start Puzzle', { concurrency: fals
   const marks = (r, c) => read(([r, c]) => Framework.app.grid.getCell(r, c).propGet('centre').join(''), [r, c])
   const valueAt = async (r, c) => String((await cellAt(r, c)).value || '')
   const getMode = () => read((key) => Framework.getData(key), MODE_KEY)
-  const getGroups = () => read((key) => { const d = Framework.getData(key); return d.profiles[d.active].groups }, PROFILES_KEY)
+  const getGroups = async () => { const d = savedState(await read((key) => Framework.getData(key), PROFILES_KEY)); return d.profiles[d.active].groups }
   const chooseProfile = (index) => p.selectOption(`${EDITOR} select[data-role=cell-profile]`, String(index))
   const label = () => labelOn(p)
   // The button's chips, Odd/Even's two cells, as the mode should draw them: the cell fill and the digit color, per the ticket's table.
