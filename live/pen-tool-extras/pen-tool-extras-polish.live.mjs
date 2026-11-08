@@ -34,11 +34,12 @@ const boot = async (p) => {
   await p.locator('.tool-pen button[data-key="1"]').click()
 }
 
-// From now until `stopWatchingCopies`, the SVG elements that join the page, whatever their class: an erase only takes strokes away, so any that join are a copy of the erased line.
+// From now until `stopWatchingCopies`, the SVG elements that join the page, whatever their class, except in SudokuPad's own cell highlights, which the click redraws: an erase only takes strokes away,
+// so any other that join are a copy of the erased line.
 const watchCopies = (p) => p.evaluate(() => {
   window.__added = []
   window.__copyWatch = new window.MutationObserver((records) => {
-    window.__added.push(...records.flatMap((r) => [...r.addedNodes]).filter((n) => n instanceof window.SVGElement).map((n) => `${n.outerHTML.slice(0, 120)} in ${n.parentNode.id || n.parentNode.getAttribute('class')}`))
+    for (const record of records) if (record.target.id !== 'cell-highlights') for (const node of record.addedNodes) if (node instanceof window.SVGElement) window.__added.push(node.localName)
   })
   window.__copyWatch.observe(document.documentElement, { childList: true, subtree: true })
 })
