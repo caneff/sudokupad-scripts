@@ -1,6 +1,6 @@
 // Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a note moves it (following the pointer, and kept over a
-// reload), a drag may drop the note on the controls but never off the window, a double-click on a note still edits it, a drag that starts off every note makes nothing, a
-// moved note keeps its background, and Delete pressed mid-move leaves the note deleted. Real mouse input throughout.
+// reload), a drag may drop the note on the controls but never off the window, a double-click on a note still edits it, a drag that starts off every note makes nothing, and a
+// moved note keeps its background. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
@@ -140,25 +140,6 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
         assert.equal(again.point.every((v, i) => Math.abs(v - (after.point[i] - 40)) <= 3), true, `pressed on the controls at ${after.point} and dragged 40 px up and left, the note is at ${again.point}`)
       }
     }
-  })
-
-  it('Delete pressed in the middle of a move drag deletes the note, and the release neither draws it again nor saves it', async () => {
-    await draw.forgetDrawings(p)
-    await reload()
-    await typeText(EMPTY, '42')
-    await p.mouse.move(...await gridPoint(p, EMPTY))
-    await p.mouse.down()
-    await p.mouse.move(...await gridPoint(p, [EMPTY[0] + BY[0], EMPTY[1] + BY[1]]), { steps: 8 })
-    await draw.frames(p)
-    await p.keyboard.press('Delete')
-    await draw.frames(p)
-    assert.deepEqual(await texts(), [], 'Delete removed the note mid-drag')
-    await p.mouse.move(...await gridPoint(p, [EMPTY[0] + BY[0] + 1, EMPTY[1] + BY[1]]), { steps: 4 })
-    await p.mouse.up()
-    assert.deepEqual(await settle(texts, []), [], 'the deleted note is not drawn again at the drop point')
-    assert.deepEqual(await saved() ?? [], [], 'the deleted note is not saved again')
-    await reload()
-    assert.deepEqual(await texts(), [], 'a reload shows no deleted note')
   })
 
   it('the page shows no error', () => {

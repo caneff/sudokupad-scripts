@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.8
+// @version      0.25.12
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.8'
+  const VERSION = '0.25.12'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -100,8 +100,8 @@
 
   const everyIndex = (cells) => cells.map((_, i) => i)
 
-  // A cell with no digit and no centre marks is left alone, so a group color painted on it by hand stays.
-  const enteredIndices = (cells) => cells.flatMap((cell, index) => (String(cell.given || cell.value || '') === '' && cell.centre.length === 0 ? [] : [index]))
+  // A cell with no digit and no centre marks is left alone, so a group color painted on it by hand stays. A fogged given is not left alone: a color put on it before the fog was honored comes off.
+  const enteredIndices = (cells) => cells.flatMap((cell, index) => (!cell.fogged && String(cell.given || cell.value || '') === '' && cell.centre.length === 0 ? [] : [index]))
 
   const groupKeys = (groups) => [...new Set(groups.map((g) => g.key))]
 
@@ -170,8 +170,11 @@
     return cell.propVisible('centre') ? cell.propGet('centre') : []
   }
 
+  const isFogged = (cell) => cell.hideclue === true
+
+  // A given the fog hides is not a digit the solver can see, so it has none here and takes no color.
   function toPlanCell (cell) {
-    return { given: cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
+    return { fogged: isFogged(cell), given: isFogged(cell) ? '' : cell.given, value: cell.value, colours: cell.colours, centre: readCentreMarks(cell) }
   }
 
   // A group is the digits that share a color. 0 counts after 9 in the order of groups; a group's own digits are listed 0 first, as the preloads save them.
@@ -950,12 +953,18 @@
   // The mode in words for the title and aria-label, which the chips' look alone does not say.
   const buttonLabel = (mode) => `Color by digit: ${MODE_NAMES[mode]}`
 
-  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
+  // <lib:bottom-row>
+  // Generated from lib/bottom-row.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // SudokuPad's bottom row of tool buttons.
   const BOTTOM_ROW = '.controls-aux'
   // SudokuPad's own rules make this row wrap and size its buttons in rem under a scale transform, so a cap in rem holds five a row at every window size, whichever script added which button.
   const BOTTOM_ROW_CSS = `${BOTTOM_ROW} { max-width: 21.6rem; }`
+  /* eslint-enable no-unused-vars */
+  // </lib:bottom-row>
   const BOTTOM_ROW_STYLE_ID = 'color-by-digit-row'
 
+  // The button joins the bottom row SudokuPad already wraps; with no such row Framework skips it.
   // SudokuPad binds button handlers only to buttons present when the controls were built, so a
   // button added later needs refreshControls. Its onClick is left empty: listenForButton takes every
   // press before SudokuPad sees it.
@@ -1155,6 +1164,8 @@
   // <lib:settings-dialog>
   // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  // Reads ERROR_LOG_KEY, readErrorLog and formatErrorLog from sudokupad.
+  /* global ERROR_LOG_KEY, readErrorLog, formatErrorLog */
   // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
   // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
@@ -1229,6 +1240,51 @@
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
+  // SudokuPad styles a dialog's buttons by tag, so a button that is to look like bare text or a bare icon has each of these forced.
+  const BARE_BUTTON = 'background: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; cursor: pointer;'
+  const ERROR_LOG_ATTRIBUTE = 'data-role="error-log"'
+  const ERROR_LOG_SELECTOR = `[${ERROR_LOG_ATTRIBUTE}]`
+
+  function errorLogCss (prefix) {
+    return [
+      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
+      `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+    ].join('\n')
+  }
+
+  // Under the footer buttons: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
+  function renderErrorLogRow (prefix) {
+    return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
+  }
+
+  // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
+  function wireErrorLog (dialog, win) {
+    const say = (message) => setDialogStatus(dialog, message)
+    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
+      const act = event.target.closest('button[data-act]')?.dataset.act
+      if (act !== 'copy-error-log' && act !== 'clear-error-log') return
+      event.preventDefault()
+      event.stopPropagation()
+      try {
+        if (act === 'clear-error-log') {
+          win.localStorage.removeItem(ERROR_LOG_KEY)
+          say('Error log cleared.')
+          return
+        }
+        const log = readErrorLog(win.localStorage)
+        if (log.length === 0) {
+          say(formatErrorLog(log))
+          return
+        }
+        await win.navigator.clipboard.writeText(formatErrorLog(log))
+        say('Error log copied.')
+      } catch (error) {
+        say(`Could not ${act === 'copy-error-log' ? 'copy' : 'clear'} the error log: ${errorText(error)}`)
+      }
+    })
+  }
+
   function dialogTitleCss (prefix) {
     const tools = `.${prefix}tools`
     return [
@@ -1236,7 +1292,7 @@
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
-      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
@@ -1311,12 +1367,15 @@
       parts: [
         { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
         { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
-        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) },
+        // Below the footer, so the script's own layout still runs down to the footer line.
+        { tag: 'text', innerHTML: renderErrorLogRow(prefix) }
       ]
     })
     const body = doc.getElementById(bodyId)
     if (!body) return null
     // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    wireErrorLog(body.closest('.dialog'), win)
     const row = body.closest('.dialog')?.querySelector('.dialog-options')
     if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
     return body
@@ -1681,6 +1740,35 @@
     return found ? found[1] : null
   }
 
+  // One key for every script, so a reader finds every feature any script turned off.
+  const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
+  const ERROR_LOG_LIMIT = 50
+  // A report is a URL, and GitHub refuses a long one.
+  const REPORT_STACK_LIMIT = 1200
+
+  // Oldest first. Throws when the storage is blocked or the saved text is not a list, so a caller never mistakes either for an empty log.
+  function readErrorLog (storage) {
+    const saved = storage.getItem(ERROR_LOG_KEY)
+    if (saved === null) return []
+    const log = JSON.parse(saved)
+    if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
+    return log
+  }
+
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
+
+  function formatErrorLog (log) {
+    if (log.length === 0) return 'The error log is empty.'
+    return [...log].reverse().map((record) => [
+      `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
+      `  ${record.url}`,
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
+    ].join('\n')).join('\n\n')
+  }
+
   // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
@@ -1689,7 +1777,7 @@
       `Script: ${name} ${version}`,
       `SudokuPad version: ${shownVersion}`,
       '',
-      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : String(why)}`)
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : withStack(String(why), why && why.stack).slice(0, REPORT_STACK_LIMIT)}`)
     ].join('\n')
     return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
   }
@@ -1725,6 +1813,26 @@
     const dismissed = () => {
       const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
+    let sudokupad = null
+    let logFailed = false
+    function recordFeatureOff (label, why) {
+      if (logFailed) return
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      try {
+        const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
+        log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
+        globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
+      } catch (error) {
+        logFailed = true
+        console.warn(`${script}: the error log cannot be saved, so ${label} and later features turned off are not recorded:`, error)
+      }
     }
 
     let bar = null
@@ -1776,6 +1884,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
+          recordFeatureOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {
@@ -1833,11 +1942,12 @@
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
     function probe ({ roots, store, doc = document }) {
+      sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
         console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
       })
-      page = { store, doc, sudokupad: sudokupadVersion(doc) }
+      page = { store, doc, sudokupad }
       showNotice()
     }
 
@@ -1917,7 +2027,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, enteredIndices, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2222,6 +2332,34 @@
     if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
   }
 
+  // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
+  function colorAfterRestart (app) {
+    if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
+  }
+
+  // The board an Undo loads from before a Restart ends in the Restart's clears. Its coloring joins their undo step, so taking that step back changes no mode,
+  // and its replay entries go, because SudokuPad puts the Restart's own coloring back on the replay once the board has loaded.
+  function colorLoadedBoard (app) {
+    if (!colorsCells(mode)) return
+    coloring.run(() => {
+      const { undoStack, replayStack } = app.puzzle
+      const replayLength = replayStack.length
+      const end = undoStack.pop()
+      app.puzzle.inGroup = true
+      try {
+        colorEnteredCells(app)
+      } finally {
+        app.puzzle.inGroup = false
+        undoStack.push(end)
+      }
+      replayStack.length = replayLength
+    })
+  }
+
+  // The undo stack's length once the last Restart's coloring was done: SudokuPad loads the board from before a Restart on an Undo that finds the stack empty,
+  // and the stack holds that coloring, so the Undo that finds only it is shown an empty stack. Null once that board has loaded.
+  let restartDepth = null
+
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
   // stack and leaves a dead undo step.
   function mayChange (action, cell) {
@@ -2242,9 +2380,12 @@
         const all = allCells(app)
         const indices = touched.map((cell) => all.indexOf(cell))
         const before = touched.map((cell) => entrySignature(toPlanCell(cell)))
+        const foggedBefore = all.map(isFogged)
         const enter = () => {
           const result = stock(action)
-          const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
+          const entryChanged = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
+          const fogChanged = changedIndices(foggedBefore, allCells(app).map(isFogged))
+          const changed = [...new Set([...entryChanged, ...fogChanged])]
           recolor(app, (plans) => planCellColors(plans, loadGroups(), changed))
           return result
         }
@@ -2253,7 +2394,14 @@
       coloring.wrap(app, 'act', function (stock, action) {
         if (action?.type === 'undo' || action?.type === 'redo') {
           // SudokuPad keeps the board from before a Restart in `preRestartSavedProgress`, and an Undo on the empty stack loads it.
-          const loadsBeforeRestart = action.type === 'undo' && app.puzzle.undoStack.length === 0 && app.preRestartSavedProgress !== undefined
+          const loadsBeforeRestart = action.type === 'undo' && app.preRestartSavedProgress !== undefined &&
+            (app.puzzle.undoStack.length === 0 || app.puzzle.undoStack.length === restartDepth)
+          if (loadsBeforeRestart) {
+            restartDepth = null
+            // The board it loads ends in the Restart's clears, and arrives after `act` returns.
+            app.puzzle.addEventListener('progressloaded', () => colorLoadedBoard(app), { once: true })
+            coloring.run(() => { app.puzzle.undoStack.length = 0 })
+          }
           const result = stock(action)
           if (loadsBeforeRestart) modeHistory.restoreBeforeRestart()
           else followUndo(app, action.type)
@@ -2267,8 +2415,8 @@
       })
       app.on('restarted', () => {
         modeHistory.restart()
-        // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
-        if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
+        colorAfterRestart(app)
+        restartDepth = app.puzzle.undoStack.length
       })
     })
   }

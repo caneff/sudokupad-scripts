@@ -1,4 +1,4 @@
-// Live check of no-tab-letters.user.js on sudokupad.app, in headless Chromium.
+// Live check of the Tab option of ui-tweaks.user.js on sudokupad.app, in headless Chromium.
 // The letter tool is switched on through its setting after the script is in, as a player does.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -6,16 +6,17 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
 import { keydownDefaults } from '../pen.mjs'
-import { LETTER_MODE_KEY as MODE_KEY } from '../scripts.mjs'
+import { openSettings } from '../settings.mjs'
+import { LETTER_MODE_KEY as MODE_KEY, numberPadText } from '../scripts.mjs'
 import { settle } from '../settle.mjs'
 
-const script = readFileSync(new URL('../../no-tab-letters.user.js', import.meta.url), 'utf8')
+const script = readFileSync(new URL('../../ui-tweaks.user.js', import.meta.url), 'utf8')
 
 const DIGITS = '1234567890'
 const LETTERS = 'ABCDEFGHIO'
 const TOGGLE_BUTTON = 'button[data-control="toggleletter"]'
-const WARNING = /no-tab-letters/
-const BAR = '#sudokupad-scripts-notices [data-script="no-tab-letters"]'
+const WARNING = /ui-tweaks/
+const BAR = '#sudokupad-scripts-notices [data-script="ui-tweaks"]'
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -26,7 +27,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   // The tests below are one ordered sequence on one page: each starts from the letter mode the one
   // before left (digits, with the saved mode null, then false once a toggle has saved it).
-  const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
+  const pad = () => numberPadText(p)
   const saved = () => p.evaluate((key) => Framework.getData(key), MODE_KEY)
 
   before(async () => {
@@ -142,7 +143,7 @@ describe('the Tab binding is not found', () => {
       assert.deepEqual(handlers, ['/', 'fn'])
       assert.equal(warnings.filter((w) => WARNING.test(w)).length, 1, JSON.stringify(warnings))
       await p.locator(BAR).waitFor({ state: 'attached' })
-      assert.match(await p.locator(BAR).textContent(), /^No Tab Letters: Tab key is off — SudokuPad changed\.Report/)
+      assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: Tab key is off — SudokuPad changed\.Report/)
     } finally {
       await context.close()
     }
@@ -154,7 +155,7 @@ describe('the Tab binding is not found', () => {
 describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false }, () => {
   let context, p, errors
   const warned = []
-  const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
+  const pad = () => numberPadText(p)
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
@@ -173,12 +174,12 @@ describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false },
 
   it('one console warning names the feature', async () => {
     assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
-    assert.equal(warned[0], 'no-tab-letters: Tab key skipped because SudokuPad has no ToolLetter.tool.keyHandlers')
+    assert.equal(warned[0], 'ui-tweaks: Tab key skipped because SudokuPad has no ToolLetter.tool.keyHandlers')
   })
 
   it('the bar names the feature with a Report link, and goes when dismissed', async () => {
     const bar = p.locator(BAR)
-    assert.match(await bar.textContent(), /^No Tab Letters: Tab key is off — SudokuPad changed\.Report/)
+    assert.match(await bar.textContent(), /^UI Tweaks: Tab key is off — SudokuPad changed\.Report/)
     assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
     await bar.locator('button[aria-label="Dismiss"]').click()
     assert.equal(await bar.count(), 0)
@@ -195,5 +196,64 @@ describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false },
   it('the page raised no error, and no further warning came', () => {
     assert.deepEqual(errors, [])
     assert.equal(warned.length, 1, warned.join('\n'))
+  })
+})
+
+// Each of these breaks one SudokuPad internal at startup or after it, and the script's guard turns off only what needs it.
+describe('SudokuPad has no Framework.getData', { concurrency: false }, () => {
+  let context, p, errors
+  const warned = []
+
+  before(async () => {
+    ;({ context, p, errors } = await openPage(browser, {
+      expectedSkips: [WARNING],
+      seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) }
+    }))
+    await startPuzzle(p)
+    const breaks = 'const original = Framework.getData; Framework.getData = undefined; Framework.getApp().then(() => { Framework.getData = original })'
+    await p.addScriptTag({ content: `;Framework.getApp().then(() => { ${breaks} });\n${script}` })
+    await p.evaluate(() => Framework.setSetting('toolletter', true))
+    await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
+  })
+  after(async () => { await context.close() })
+
+  it('one console warning names the saved options, and the bar says they are off', async () => {
+    assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
+    assert.equal(warned[0], 'ui-tweaks: saved options skipped because SudokuPad has no Framework.getData')
+    assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: saved options is off — SudokuPad changed\.Report/)
+  })
+
+  it('the Tab option still works with its default, and the settings entry is still there', async () => {
+    assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
+    assert.equal(await numberPadText(p), DIGITS)
+    await openSettings(p)
+    await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: /^\s*UI Tweaks\s*$/ }).first().waitFor({ state: 'visible' })
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('SudokuPad loses Framework.app.tools after startup', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await openPage(browser, { expectedSkips: [WARNING] }))
+    await startPuzzle(p)
+    await p.addScriptTag({ content: script })
+    await p.evaluate(() => Framework.setSetting('toolletter', true))
+    await p.locator(TOGGLE_BUTTON).waitFor({ state: 'attached' })
+    await p.evaluate(() => { Framework.app.tools = undefined })
+  })
+  after(async () => { await context.close() })
+
+  // SudokuPad's own keydown handler throws on the missing tools too, so page errors say nothing here; the bar is the script's guard catching its own.
+  it('a held Tab turns the Tab option off and the bar says so', async () => {
+    await p.keyboard.down('Tab')
+    await p.keyboard.down('Tab')
+    await p.keyboard.up('Tab')
+    await p.locator(BAR).waitFor({ state: 'attached' })
+    assert.match(await p.locator(BAR).textContent(), /^UI Tweaks: Tab key is off — SudokuPad changed\.Report/)
   })
 })
