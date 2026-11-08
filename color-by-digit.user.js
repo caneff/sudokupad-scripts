@@ -2329,14 +2329,14 @@
     if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
   }
 
-  // An empty undo stack is what makes SudokuPad's next Undo load the board from before a Restart, so the coloring leaves the stack as it was.
-  function colorEnteredCellsWithoutUndoStep (app) {
-    coloring.run(() => {
-      const kept = app.puzzle.undoStack.length
-      colorEnteredCells(app)
-      app.puzzle.undoStack.length = kept
-    })
+  // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
+  function colorAfterRestart (app) {
+    if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
   }
+
+  // The undo stack's length once the last Restart's coloring was done: SudokuPad loads the board from before a Restart on an Undo that finds the stack empty,
+  // and the stack holds that coloring, so the Undo that finds only it is shown an empty stack. Null once that board has loaded.
+  let restartDepth = null
 
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
   // stack and leaves a dead undo step.
@@ -2369,9 +2369,14 @@
       coloring.wrap(app, 'act', function (stock, action) {
         if (action?.type === 'undo' || action?.type === 'redo') {
           // SudokuPad keeps the board from before a Restart in `preRestartSavedProgress`, and an Undo on the empty stack loads it.
-          const loadsBeforeRestart = action.type === 'undo' && app.puzzle.undoStack.length === 0 && app.preRestartSavedProgress !== undefined
-          // The board it loads ends in the Restart's clears, and arrives after `act` returns.
-          if (loadsBeforeRestart) app.puzzle.addEventListener('progressloaded', () => { if (colorsCells(mode)) colorEnteredCellsWithoutUndoStep(app) }, { once: true })
+          const loadsBeforeRestart = action.type === 'undo' && app.preRestartSavedProgress !== undefined &&
+            (app.puzzle.undoStack.length === 0 || app.puzzle.undoStack.length === restartDepth)
+          if (loadsBeforeRestart) {
+            restartDepth = null
+            // The board it loads ends in the Restart's clears, and arrives after `act` returns.
+            app.puzzle.addEventListener('progressloaded', () => colorAfterRestart(app), { once: true })
+            coloring.run(() => { app.puzzle.undoStack.length = 0 })
+          }
           const result = stock(action)
           if (loadsBeforeRestart) modeHistory.restoreBeforeRestart()
           else followUndo(app, action.type)
@@ -2385,7 +2390,8 @@
       })
       app.on('restarted', () => {
         modeHistory.restart()
-        if (colorsCells(mode)) colorEnteredCellsWithoutUndoStep(app)
+        colorAfterRestart(app)
+        restartDepth = app.puzzle.undoStack.length
       })
     })
   }

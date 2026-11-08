@@ -138,8 +138,7 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
     assert.equal(givens > 0, true)
     await p.evaluate(() => Framework.app.restartPuzzle())
     assert.equal(await settle(() => givensColoredOn(p), givens), givens)
-    // SudokuPad keeps the board from before the Restart, and an empty undo stack is what makes the next Undo load it.
-    assert.deepEqual(await p.evaluate(() => [Framework.app.preRestartSavedProgress !== undefined, Framework.app.puzzle.undoStack.length]), [true, 0])
+    assert.equal(await p.evaluate(() => Framework.app.preRestartSavedProgress !== undefined), true, 'SudokuPad kept the board from before the Restart')
     await undo()
     assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined && Framework.app.puzzle.undoStack.length > 0), true), true)
     assert.equal(await settle(label, 'Cell'), 'Cell')
