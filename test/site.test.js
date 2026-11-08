@@ -160,7 +160,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Erase a whole line', 'White outlines']
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
 
 test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
@@ -169,6 +169,7 @@ test(`${DETAILS} lists what the script adds as a grid of short items, one per fe
     'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
+    'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
     'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
     'White outlines An outline keeps lines readable over colored cells.'
   ])
@@ -451,7 +452,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Long notes A long note wraps and scrolls; drag a corner to resize it.',
     'Readable over digits A white outline round the letters, and an optional box behind the note.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
-    'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge.',
+    'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge, hold to keep nudging.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
     'Settings Color presets, the box color, the outline, a frame round boxes, and Copy and Paste to another browser.'

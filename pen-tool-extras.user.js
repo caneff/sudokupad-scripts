@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.28.8
+// @version      1.29.1
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.28.8'
+  const VERSION = '1.29.1'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -39,7 +39,7 @@
   // The outline's width on each side of the pen layer's shape, in cell units. It does not scale with the thickness; 2 shows over a colored cell and a digit without covering the digits beside a line.
   const OUTLINE_WIDTH = { min: 1, max: 8, step: 1, fallback: 2 }
   // The pen values (the `pen-<value>` class of a stroke) SudokuPad draws at the full width, from `docs/research/sudokupad-pen-edge-marks.md`: the free lines, and 5 and 6
-  // (the cell circle and cross). Not 3, 4, b and c (the edge X marks, half the width), nor h to y (the marks this script adds, also half).
+  // (the cell circle and cross). Not 3, 4, b and c (the edge X marks, half the width), nor h to z (the marks this script adds, also half).
   const FULL_WIDTH_VALUES = ['1', '2', '5', '6', '7', '8', '9', 'a', 'd', 'e', 'f', 'g']
   // The lines among them, which a dashed page draws as dashes: the cell circle and cross (5 and 6) stay solid. The diagonal ones span a cell's diagonal, 64 * sqrt(2); the others, 64.
   const DIAGONAL_LINES = ['d', 'e', 'f', 'g']
@@ -328,7 +328,7 @@
       { section: 'Line styles', labels: { dashed: 'Dashed lines', arrows: 'Directional arrow lines' } }),
     show: flags('PenColor_sliders', ['thickness', 'opacity'], adoptShow, { title: 'Show this slider in the pen panel' }),
     // The marks table is built by hand in the dialog, so this row has no section.
-    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle'], doNothing, {}, normalizeMarkSettings)
+    marks: flags('EdgeMarks_marks', ['x', 'directions', 'circle', 'cornerX', 'cornerCircle', 'cellCircle', 'cellCross', 'cellDot'], doNothing, {}, normalizeMarkSettings)
   }
   const SETTING_NAMES = Object.keys(SETTINGS)
 
@@ -498,6 +498,7 @@
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
       buildPagesCss(inForce.thickness, inForce.dash),
+      DOT_FILL_CSS,
       pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
@@ -1463,8 +1464,8 @@
     redrawArrowLines()
   }
 
-  // 6. Marks: edge marks, grid-corner marks and the marks layer
-  // Every edge mark, grid-corner mark and cell circle and cross is drawn here, last in the pen layer: SudokuPad adds a cell's strokes in cell order, so a later
+  // 6. Marks: edge marks, grid-corner marks, cell marks and the marks layer
+  // Every edge mark, grid-corner mark and cell circle, cross and dot is drawn here, last in the pen layer: SudokuPad adds a cell's strokes in cell order, so a later
   // cell's line would otherwise cover an earlier cell's mark. The pen layer's opacity then fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
   // Keyed by the pen value of SudokuPad's own edge X on a cell's right, bottom, left and top edge. An edge between two cells is stored on one of them, so a click on it is always
@@ -1498,20 +1499,36 @@
   // cells is stored once; `tl` is the top left corner, for the grid's top and left edge; `far` is the top right corner of the top row's last cell or the bottom left corner of the
   // bottom row's first, the two grid corners the other kinds cannot reach. Each kind lists the X, then the circle.
   const CORNER_VALUES = { tl: ['t', 'w'], br: ['u', 'x'], far: ['v', 'y'] }
+  // A click in a cell's middle cycles SudokuPad's own circle (5) and cross (6), then the dot, `z`, the last lowercase ASCII value left.
+  const CELL_CYCLE = {
+    types: ['circle', 'cross', 'dot'],
+    setting: { circle: 'cellCircle', cross: 'cellCross', dot: 'cellDot' },
+    values: { circle: '5', cross: '6', dot: 'z' }
+  }
+  const CELL_VALUES = CELL_CYCLE.types.map((type) => CELL_CYCLE.values[type])
+  // The two of them SudokuPad's own cell click toggles.
+  const STOCK_CELL_VALUES = [CELL_CYCLE.values.circle, CELL_CYCLE.values.cross]
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
-  // Each pen value this script draws, to its `edge` or corner `kind`, its type in the edge cycle or corner cycle, and its shape.
+  const DOT = '.'
+  // About a fifth of a cell across with the default stroke: 2 * 0.65 * 8 + 2.5 is 12.9 of 64 units.
+  const DOT_RADIUS_PER_HALF_SIZE = 0.65
+  // A pen stroke has no fill, so the dot is filled in its pen's color by the color character it was stored with, on every page.
+  const DOT_FILL_CSS = PEN_PAGES.flatMap((page) => page.chars.flatMap((char, i) => [char, ...(page.reverse ? [page.reverse[i]] : [])]
+    .map((c) => `:root:root .cell-pen.pen-${CELL_CYCLE.values.dot}.pencolor-${c} { fill: var(--puzzle-pencolor-${PEN_COLOR_KEYS[i]}); }`))).join('\n')
+  // Each pen value this script draws, to its `edge`, corner `kind` or `cell`, its type in its cycle, and its shape.
   const ADDED_MARKS = new Map([
     ...Object.entries(EDGES).flatMap(([edge, { added, arrows }]) =>
       ADDED_ORDER.map((type, i) => [added[i], { edge, type, shape: type === 'circle' ? CIRCLE : arrows[i] }])),
     ...Object.entries(CORNER_VALUES).flatMap(([kind, values]) =>
-      CORNER_CYCLE.types.map((type, i) => [values[i], { kind, type, shape: type === 'x' ? 'x' : CIRCLE }]))
+      CORNER_CYCLE.types.map((type, i) => [values[i], { kind, type, shape: type === 'x' ? 'x' : CIRCLE }])),
+    [CELL_CYCLE.values.dot, { cell: true, type: 'dot', shape: DOT }]
   ])
   // The marks that grow with thickness: the edge X marks and every mark this script adds.
   const GROWING_MARKS = [...EDGE_X, ...ADDED_MARKS.keys()]
   const MARK_VALUES = [...EDGE_X, '5', '6', ...ADDED_MARKS.keys()]
 
-  // Data saved before the corner boxes existed has no corner entry, so both read as ticked. A circle box saved under its old name reads as the new one, which wins when both are
+  // Data saved before the corner boxes or the cell boxes existed has no entry for them, so they read as ticked. A circle box saved under its old name reads as the new one, which wins when both are
   // there; the result holds only the new names, so the next save writes those.
   function normalizeMarkSettings (data) {
     const saved = isPlainObject(data) ? data : {}
@@ -1551,6 +1568,10 @@
     return planCycleClick(CORNER_CYCLE, (type) => CORNER_VALUES[kind][CORNER_CYCLE.types.indexOf(type)], present, settings)
   }
 
+  function planCellClick (present, settings) {
+    return planCycleClick(CELL_CYCLE, (type) => CELL_CYCLE.values[type], present, settings)
+  }
+
   // A point just outside the grid is measured too, so the outer corners can be clicked.
   function cornerAt (r, c, rows, cols) {
     const row = Math.max(0, Math.min(rows, Math.round(r)))
@@ -1583,6 +1604,10 @@
       case 'v': return ` m ${-s},${-0.6 * s} l${s},${1.2 * s} l${s},${-1.2 * s}`
       case 'x': return ` m ${-s},${-s} l${2 * s},${2 * s} m ${-2 * s},0 l${2 * s},${-2 * s}`
       case CIRCLE: return ` m ${-r},0 a ${r},${r} 0 1,0 ${2 * r},0 a ${r},${r} 0 1,0 ${-2 * r},0`
+      case DOT: {
+        const d = DOT_RADIUS_PER_HALF_SIZE * s
+        return ` m ${-d},0 a ${d},${d} 0 1,0 ${2 * d},0 a ${d},${d} 0 1,0 ${-2 * d},0`
+      }
       default: throw new Error(`pen-tool-extras: no shape named ${shape}`)
     }
   }
@@ -1592,14 +1617,36 @@
     return [row + dr, col + dc]
   }
 
+  function markPoint (mark, row, col, cols) {
+    if (mark.edge) return edgeMidpoint(mark.edge, row, col)
+    if (mark.cell) return [row + 0.5, col + 0.5]
+    return cornerPoint(mark.kind, row, col, cols)
+  }
+
   function addedMark (value, row, col, cols) {
     const mark = ADDED_MARKS.get(value)
     if (!mark) return null
-    return { point: mark.edge ? edgeMidpoint(mark.edge, row, col) : cornerPoint(mark.kind, row, col, cols), shape: mark.shape }
+    return { point: markPoint(mark, row, col, cols), shape: mark.shape }
   }
 
   function isEdgeActs (acts) {
     return acts !== null && acts.length === 2 && acts[0].type === 'select' && acts[1].type === 'pen' && EDGE_X.includes(acts[1].arg)
+  }
+
+  // SudokuPad's own cell click queues a `select` and then one or two toggles of its circle and cross.
+  function isCellActs (acts) {
+    return acts !== null && acts.length >= 2 && acts[0].type === 'select' && acts.slice(1).every((act) => act.type === 'pen' && STOCK_CELL_VALUES.includes(act.arg))
+  }
+
+  // What SudokuPad's own click hit, from the actions it queued: an edge or a cell's middle, as the cell that stores its marks, every value of
+  // those marks, and `plan(present, settings)`, the click's step through them. null when it hit neither.
+  function clickedMarks (acts) {
+    if (isEdgeActs(acts)) {
+      const edge = acts[1].arg
+      return { cell: acts[0].arg[0], values: ['x', ...ADDED_ORDER].map((type) => valueOfType(edge, type)), plan: (present, settings) => planClick(edge, present, settings) }
+    }
+    if (isCellActs(acts)) return { cell: acts[0].arg[0], values: CELL_VALUES, plan: planCellClick }
+    return null
   }
 
   function penValuesOf (cell) {
@@ -1695,11 +1742,11 @@
       const queued = queuedActs(this, () => stock.sudokupad(() => original.apply(this, args), false))
       if (queued === null) return
       let acts = queued
-      if (isEdgeActs(queued)) {
-        const cell = queued[0].arg[0]
-        const plan = planClick(queued[1].arg, penValuesOf(cell), inForce.marks)
+      const clicked = clickedMarks(queued)
+      if (clicked !== null) {
+        const plan = clicked.plan(penValuesOf(clicked.cell), inForce.marks)
         if (plan === null) return
-        acts = planActs(cell, plan)
+        acts = planActs(clicked.cell, plan)
       }
       stock.sudokupad(() => sendActs(this, acts))
     })
@@ -1802,7 +1849,7 @@
     return withOwnProperty(tool, 'getInputRc', () => ({ r, c }), () => queuedActs(tool, () => stockClick.apply(tool, [])))
   }
 
-  // The marks at the point as `{ cell, values }`, or null: a grid corner first, as a click does, then the edge SudokuPad's own click would take. A cell's middle is not an edge.
+  // The marks at the point as `{ cell, values }`, or null: a grid corner first, as a click does, then the edge or cell middle SudokuPad's own click would take.
   function marksAt (tool, stockClick, point) {
     const { rows, cols } = Framework.app.grid
     const corner = cornerAt(point.r, point.c, rows, cols)
@@ -1816,8 +1863,8 @@
       const found = held(cell, CORNER_VALUES[kind])
       if (found !== null) return found
     }
-    const queued = stockClickActsAt(tool, stockClick, point)
-    return isEdgeActs(queued) ? held(queued[0].arg[0], ['x', ...ADDED_ORDER].map((type) => valueOfType(queued[1].arg, type))) : null
+    const clicked = clickedMarks(stockClickActsAt(tool, stockClick, point))
+    return clicked === null ? null : held(clicked.cell, clicked.values)
   }
 
   // A press or a drag with the right button gathers everything it crosses, and the release erases it as one undo step. At each point a line wins over a mark.
@@ -2292,7 +2339,8 @@
   const MARK_PICTURES = {
     x: ['16', '<path d="M3 3 L13 13 M13 3 L3 13"/>'],
     directions: ['30', '<path d="M3 11 L8 5 L13 11 M17 5 L22 11 L27 5"/>'],
-    circle: ['16', '<circle cx="8" cy="8" r="5.2"/>']
+    circle: ['16', '<circle cx="8" cy="8" r="5.2"/>'],
+    dot: ['16', '<circle cx="8" cy="8" r="3.2" fill="currentColor"/>']
   }
   const markPicture = (key) => {
     const [width, shapes] = MARK_PICTURES[key]
@@ -2312,6 +2360,13 @@
   const COLUMN_GAP_PX = 24
   const SLIDER_PX = 96
   const MARK_CELL_PX = 28
+  // The marks table's columns, each headed by its MARK_PICTURES picture; a row's boxes are listed per column, null for no box.
+  const MARK_COLUMNS = ['x', 'circle', 'directions', 'dot']
+  const MARK_ROWS = [
+    ['Edge', [['x', 'Edge X Mark'], ['circle', 'Edge Circle'], ['directions', 'Edge Directions'], null]],
+    ['Corner', [['cornerX', 'Corner X Mark'], ['cornerCircle', 'Corner Circle'], null, null]],
+    ['Cell', [['cellCross', 'Cell Cross'], ['cellCircle', 'Cell Circle'], null, ['cellDot', 'Cell Dot']]]
+  ]
   const ONE_COLUMN_BELOW_PX = 600
   const SLIDER_COLUMNS = 'pen-tool-extras-columns'
   const CELL = 'pen-tool-extras-cell'
@@ -2369,11 +2424,11 @@
     `${EDITOR} .pen-tool-extras-check-row.pen-tool-extras-sub { padding-left: ${INDENT_EM}em; color: ${INDENTED_COLOR}; margin: 0 0 4px; }`,
     `${EDITOR} .pen-tool-extras-check { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-check-row { margin: 4px 0; display: flex; justify-content: flex-start; align-items: center; gap: 6px; }`,
-    `${EDITOR} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(3, ${MARK_CELL_PX}px); margin: 6px 0 0; }`,
+    `${EDITOR} .pen-tool-extras-marks-table { display: grid; grid-template-columns: max-content repeat(${MARK_COLUMNS.length}, ${MARK_CELL_PX}px); margin: 6px 0 0; }`,
     `${EDITOR} .pen-tool-extras-marks-table > * { display: flex; align-items: center; justify-content: center; height: ${MARK_CELL_PX}px; box-sizing: border-box; margin: 0; }`,
-    `${EDITOR} .pen-tool-extras-marks-table > :nth-child(4n+1) { justify-content: flex-start; padding-right: 10px; }`,
-    `${EDITOR} .pen-tool-extras-marks-table > :not(:nth-child(4n+1)) { border-left: 1px solid ${MARKS_LINE_COLOR}; }`,
-    `${EDITOR} .pen-tool-extras-marks-table > :nth-child(n+5) { border-top: 1px solid ${MARKS_LINE_COLOR}; }`,
+    `${EDITOR} .pen-tool-extras-marks-table > :nth-child(${MARK_COLUMNS.length + 1}n+1) { justify-content: flex-start; padding-right: 10px; }`,
+    `${EDITOR} .pen-tool-extras-marks-table > :not(:nth-child(${MARK_COLUMNS.length + 1}n+1)) { border-left: 1px solid ${MARKS_LINE_COLOR}; }`,
+    `${EDITOR} .pen-tool-extras-marks-table > :nth-child(n+${MARK_COLUMNS.length + 2}) { border-top: 1px solid ${MARKS_LINE_COLOR}; }`,
     `${EDITOR} .pen-tool-extras-mark input { margin: 0; }`,
     `${EDITOR} .pen-tool-extras-mark-head { color: ${INDENTED_COLOR}; }`,
     `${EDITOR} .pen-tool-extras-mark-head svg { stroke-width: 2.6; overflow: visible; }`,
@@ -2420,12 +2475,10 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       return labelled(name, state[name], SETTINGS[name].dialog.label) + rowsUnder(name)
     }
     const section = (title) => sectionTitle(title) + SETTING_NAMES.filter((name) => SETTINGS[name].dialog.section === title).map(settingRows).join('')
-    const markRow = (label, cellsMarkup) => `<div>${label}</div>${cellsMarkup}`
+    const markRow = ([label, boxes]) => `<div>${label}</div>` + boxes.map((b) => b === null ? '<div></div>' : markBox(...b)).join('')
     const columnHead = (picture) => `<div class="pen-tool-extras-mark-head">${markPicture(picture)}</div>`
     const marksTable = '<div class="pen-tool-extras-marks-table">' +
-      '<div></div>' + columnHead('x') + columnHead('circle') + columnHead('directions') +
-      markRow('Edge', markBox('x', 'Edge X Mark') + markBox('circle', 'Edge Circle') + markBox('directions', 'Edge Directions')) +
-      markRow('Corner', markBox('cornerX', 'Corner X Mark') + markBox('cornerCircle', 'Corner Circle') + '<div></div>') +
+      '<div></div>' + MARK_COLUMNS.map(columnHead).join('') + MARK_ROWS.map(markRow).join('') +
       '</div>'
     const cell = (markup) => `<div class="${CELL}">${markup}</div>`
     return offNote(state.off) + '<div class="pen-tool-extras-layout">' +
@@ -2739,7 +2792,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

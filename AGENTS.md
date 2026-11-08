@@ -67,7 +67,11 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   its startup changed); the full suite runs once, at the controller's merge check.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- It does not cover a real Tampermonkey install: a PR names that as still owed. `crackingthecryptic.com` only redirects to
+- `npm run test:tampermonkey` installs every script into a real Tampermonkey; `live/README.md` § The Tampermonkey test
+  says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
+  `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
+  runs it then too.
+- A PR names as owed only what that section says the test does not cover. `crackingthecryptic.com` only redirects to
   SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`. Run it before you hand off a change:
