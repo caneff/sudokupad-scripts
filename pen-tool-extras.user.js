@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.28.0
+// @version      1.28.1
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.28.0'
+  const VERSION = '1.28.1'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1480,11 +1480,13 @@
     }
   }
 
-  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back.
+  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back. Acts queued and never sent mean SudokuPad changed how a click is sent: that throws
+  // an error marked `unsent`, before the list is cleared.
   function queuedActs (tool, click) {
     let queued = null
     try {
       withOwnProperty(tool, 'actSend', function () { queued = this._actList.slice() }, click)
+      if (queued === null && tool._actList.length) throw Object.assign(new Error('clickCell queued its acts but never sent them'), { unsent: true })
     } finally {
       tool._actList.length = 0
     }
@@ -1523,7 +1525,18 @@
         const acts = cornerActs(corner)
         return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
       }
-      const queued = stock.sudokupad(() => queuedActs(this, () => original.apply(this, args)), false)
+      // A throw inside `stock.sudokupad` is SudokuPad's own and passes through, so the unsent case is carried out and thrown here as the script's.
+      let unsent = null
+      const queued = stock.sudokupad(() => {
+        try {
+          return queuedActs(this, () => original.apply(this, args))
+        } catch (error) {
+          if (!error.unsent) throw error
+          unsent = error
+          return null
+        }
+      }, false)
+      if (unsent) throw unsent
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {

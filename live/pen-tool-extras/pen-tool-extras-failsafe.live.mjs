@@ -83,6 +83,23 @@ const CASES = [
     edgeAgain: null,
     source: planted('      if (isEdgeActs(queued)) {\n', "        throw new Error('planted in the click wrapper')\n")
   },
+  // SudokuPad's click queues its actions and never calls `actSend`: marks go off and the click lands as SudokuPad's own, the next one with `actSend` as before.
+  {
+    name: 'click queues but never sends',
+    off: 'marks',
+    warns: changed('marks'),
+    edgeAgain: null,
+    breaks: `const click = ToolPen.tool.clickCell
+      window.dropSend = false
+      ToolPen.tool.clickCell = function () {
+        if (!window.dropSend) return click.apply(this, arguments)
+        window.dropSend = false
+        const hadOwn = Object.prototype.hasOwnProperty.call(this, 'actSend')
+        const own = this.actSend
+        this.actSend = function () {}
+        try { return click.apply(this, arguments) } finally { if (hadOwn) this.actSend = own; else delete this.actSend }
+      }`
+  },
   // A throw in the render wrapper's own code, after SudokuPad's renderPen has drawn the mark.
   {
     name: 'render wrapper throws',
@@ -181,6 +198,12 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         if (kase.name === 'click wrapper throws') {
           await clickEdge()
           assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click that failed')
+          await undoAll()
+        }
+        if (kase.name === 'click queues but never sends') {
+          await read(() => { window.dropSend = true })
+          await clickEdge()
+          assert.deepEqual(await settle(edgeValues, ['4']), ['4'], 'SudokuPad\'s own X on the click whose acts were never sent')
           await undoAll()
         }
         if (kase.name === 'render wrapper throws') {
