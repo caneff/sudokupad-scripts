@@ -241,7 +241,7 @@ const PEN_SLIDES = [
 ]
 const DRAW_SLIDES = [
   ['1-type', 'Left click to type a note'], ['3-background', 'Background: a box behind the next note'],
-  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note']
+  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.0
+// @version      0.27.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.0'
+  const VERSION = '0.27.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -234,7 +234,7 @@
   const TEXT_KIND = 'text'
   // Kinds an earlier version saved; they stay in storage and are never drawn.
   const HIDDEN_KINDS = ['stroke', 'shape']
-  const TEXT_GLYPH = '<path d="M8 15l4-8 4 8M9.5 12.5h5"/>'
+  const TEXT_GLYPH = '<path d="M8 16.5l4-8 4 8M9.5 14h5"/>'
   // The tool button is a sticky note; the Background button keeps the letter.
   const STICKY_NOTE = '<path d="M4 4h16v11l-5 5H4z"/><path d="M15 20v-5h5"/><path d="M8 9h8M8 13h5"/>'
   const BUTTON_ICON = `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STICKY_NOTE}</svg>`
