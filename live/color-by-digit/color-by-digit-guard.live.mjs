@@ -5,7 +5,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { BUTTON, coloredCountOn, EDITOR, GIVENS, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF } from './color-by-digit-fixtures.mjs'
+import { BUTTON, coloredCountOn, EDITOR, GIVEN_COUNT, MODE_STORAGE_KEY, ODD_EVEN, openSession, pressTo, savedProfiles, SEEDED_OFF } from './color-by-digit-fixtures.mjs'
 import { openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 
@@ -13,7 +13,6 @@ const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.
 
 const WARNING = /^color-by-digit: /
 const BAR = '#sudokupad-scripts-notices [data-script="color-by-digit"]'
-const GIVEN_COUNT = [...GIVENS].filter((d) => d !== '0').length
 const DIGIT_STYLE = 'color-by-digit-digits'
 
 let browser
