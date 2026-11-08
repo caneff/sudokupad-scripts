@@ -2164,8 +2164,7 @@
   }
 
   // Without getApp there is no app: the features that need one are off, and the rest start without it.
-  const appReady = typeof Framework.getApp === 'function' ? Framework.getApp() : Promise.resolve(undefined)
-  appReady.then((app) => {
+  const start = (app) => {
     guard.probe({ roots: { Framework, app }, store: Framework })
     const openEditor = () => editor.run(() => {
       Framework.closeDialog()
@@ -2188,5 +2187,7 @@
     // The puzzle's own palette is in the page's colors once it has loaded: the icon and the digit shades show those.
     whenProgressLoaded(app, redraw)
     if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
-  })
+  }
+  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
+  else start(undefined)
 })()
