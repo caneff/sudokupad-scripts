@@ -23,3 +23,12 @@ https://support.discord.com/hc/en-us/articles/210298617-Markdown-Text-101-Chat-F
 | Masked link | `[text](url)` |
 
 The page does not document checklists (`- [ ]`); those come from GitHub-flavored Markdown.
+
+## Standard Markdown (CommonMark) differs on `__`
+
+CommonMark Spec 0.31.2 (John MacFarlane, 2024-01-28), § 6.2 "Emphasis and strong emphasis",
+https://spec.commonmark.org/0.31.2/#emphasis-and-strong-emphasis, quoting Gruber's original Markdown description:
+"Text wrapped with one `*` or `_` will be wrapped with an HTML `<em>` tag; double `*`'s or `_`'s will be wrapped with an
+HTML `<strong>` tag." So in standard Markdown `__a__` is **bold**, like `**a**`, and there is no underline syntax at all.
+Strikethrough (`~~`) is not in CommonMark either; it is a GitHub-flavored Markdown extension.
+Discord reuses `__` for underline, which is its own extension.
