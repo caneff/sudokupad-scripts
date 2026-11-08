@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.0
+// @version      1.31.2
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,11 +21,9 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.0'
+  const VERSION = '1.31.2'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
-  // SudokuPad gives `.grid` the hand (`cursor: pointer`) under every tool; the pen draws at the exact point, so it gets the crosshair. `.controls-main` carries `tool-pen` while the pen is the current tool.
-  const CROSSHAIR_CSS = `:root:has(.controls-main.tool-pen) .grid, :root:has(.controls-main.tool-pen) ${GRID_SELECTOR} { cursor: crosshair; }`
   const PEN_LAYER = '#cell-pen'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
   const RIGHT_BUTTON = 2
@@ -505,7 +503,6 @@
       buildPagesCss(inForce.thickness, inForce.dash),
       buildFeedbackCss(inForce.dash),
       DOT_FILL_CSS,
-      CROSSHAIR_CSS,
       pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
@@ -1869,9 +1866,6 @@
   const RIGHT_BIT = 2
   // A drag is tested every this many cells along its way, so a fast move cannot step over a line (LINE_HIT_RADIUS) or a mark.
   const ERASE_SAMPLE_STEP = 0.1
-  // An erased line fades out over this long; short enough that the next stroke is not waiting on it.
-  const ERASE_FADE_MS = 120
-  const ERASING_CLASS = 'pen-tool-extras-erasing'
 
   // An arrow pen's two direction characters are one pen.
   function lineIdentityOf (color) {
@@ -2004,29 +1998,11 @@
     return [...lines, ...marks]
   }
 
-  // Copies of what an erase is about to remove, taken before the puzzle changes. They sit in the highlight layer, which takes no pointer, and the group is outlined as the pen layer is.
-  function erasedCopies (erase) {
-    const group = document.createElementNS(SVG_NAMESPACE, 'g')
-    group.setAttribute('class', ERASING_CLASS)
-    erasedElements(erase).forEach((element) => group.appendChild(element.cloneNode(true)))
-    return group
-  }
-
-  const fadesErases = () => Boolean(hintLayer()) && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-  // The copies start where the erase preview left the strokes: at the faded opacity, under the pen layer's.
-  function fadeOut (group) {
-    hintLayer().appendChild(group)
-    group.animate([{ opacity: FADED_OPACITY * inForce.opacity / 100 }, { opacity: 0 }], { duration: ERASE_FADE_MS, easing: 'ease-out' }).onfinish = () => group.remove()
-  }
-
   function finishErase (tool, erase) {
     const marks = [...erase.marks].map(([cell, values]) => ({ cell, values: [...values] }))
     const acts = eraseActs([...erase.lines], marks, (row, col) => Framework.app.grid.getCell(row, col))
-    const copies = fadesErases() ? erasedCopies(erase) : null
     tool.actStart()
     sendActs(tool, acts)
-    if (copies !== null) fadeOut(copies)
   }
 
   // A right press over the grid in the pen tool starts an erase and has its default prevented, which stops SudokuPad's own draw. A prevented `pointerdown` also stops the browser sending `mousedown`, `mouseup` and so SudokuPad's `clickCell` (checked live), so no pen mark or drag
@@ -2153,7 +2129,7 @@
 
   // A filter runs on the layer's picture before its opacity does, so the outline fades with the marks. The highlight (`.penhint`) is in its own group beside the layer, so it is not outlined.
   function buildOutlineCss (outline) {
-    return outline ? `:root:root ${PEN_LAYER}, :root:root .${ERASING_CLASS} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
+    return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
   }
 
   // The layer's alpha is grown in the two steps described at OUTLINE_SQUARE_SHARE, as one shape, so the outline does not cut across where lines join or cross. The filter works
