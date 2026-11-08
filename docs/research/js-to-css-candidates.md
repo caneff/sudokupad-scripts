@@ -6,8 +6,8 @@ premise checked in a browser: SudokuPad's `.controls-tool` is `display: grid`, s
 | # | Where | Now | CSS | Verdict |
 |---|---|---|---|---|
 | 1 | draw-tool `keepButtonLast` | MutationObserver on `.controls-tool` re-appends the Draw button whenever another tool button lands after it | `.controls-tool #control-draw { order: 1 }` | Win: drops an observer and its reorder race. Done (#380) |
-| 2 | pen-tool-extras dialog `showRows` | Slider rows hidden by inline `display:none`, recomputed from the draft | `:has(input[data-box=...]:checked)` selectors | Small win: less code |
-| 3 | color-by-digit and pen-tool-extras, class stamped on SudokuPad's `.dialog` after open | Script adds a class so styles can target the dialog | `.dialog:has(#<editor id>)` | Small win: no unstyled first frame |
+| 2 | pen-tool-extras dialog `showRows` | Slider rows hidden by inline `display:none`, recomputed from the draft | `:has(input[data-box=...]:checked)` selectors | Small win: less code. Done: `hiddenRowCss` in pen-tool-extras uses `:has(input[data-box=...]:checked)` (found 2026-11-07) |
+| 3 | color-by-digit and pen-tool-extras, class stamped on SudokuPad's `.dialog` after open | Script adds a class so styles can target the dialog | `.dialog:has(#<editor id>)` | Small win: no unstyled first frame. Done: both scripts and `lib/settings-dialog.js` select `.dialog:has(...)` (found 2026-11-07) |
 | 4 | dark-page `updateRect` | Measured rectangle round board and text, body-wide observer | `body:has(#svgrenderer)` page color, `#svgrenderer { background-color: var(--body-bg) }` | Win: drops the observer, the measuring and the resize listeners. Done (#444); the white is the whole board box, 12-20 px wider past outside clues on a 6x6 |
 | 5 | auto-rules-resizer `place` | Font bar and corners placed by measurement, clamped to the window | none without losing the clamp | Needs JS |
 
