@@ -245,7 +245,7 @@
   const withModeFromAuto = (data) => (!Object.hasOwn(data, MODE_KEY) && Object.hasOwn(data, AUTO_KEY) ? { ...data, [MODE_KEY]: modeFromAuto(data[AUTO_KEY]) } : data)
   // The profiles in force, which carry groups saved before profiles existed, and the mode in force, so a paste can switch either.
   function copiedSettings (store) {
-    const copied = { [PROFILES_KEY]: stateFromStored(store).state, [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
+    const copied = { [PROFILES_KEY]: stateFromStored(store), [MODE_KEY]: startingMode(store.getData(MODE_KEY), store.getData(AUTO_KEY)) }
     ADDED_PRELOADS.forEach(({ key }) => { if (store.getData(key) === true) copied[key] = true })
     return JSON.stringify(copied)
   }
@@ -268,13 +268,8 @@
 
   const preloadProfiles = () => Object.keys(PRELOADS).map((name) => ({ name, groups: cloneGroups(PRELOADS[name]) }))
 
-  // The profiles in force, and `unreadable` when the saved ones could not be read: they are then kept under `<key>_unreadable`, and the
-  // preloads, or groups saved before profiles existed, stand in.
-  function stateFromStored (store) {
-    const { value, unreadable } = load(store, { key: PROFILES_KEY, read: readProfiles })
-    const state = value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
-    return unreadable === undefined ? { state } : { state, unreadable }
-  }
+  // Groups saved before profiles existed, else the preloads, stand in for profiles not saved or not readable.
+  const stateFromStored = (store) => load(store, { key: PROFILES_KEY, read: readProfiles }).value ?? stateFromLegacy(store.getData(LEGACY_GROUPS_KEY))
 
   const saveProfiles = (store, state) => save(store, PROFILES_KEY, state)
 
@@ -1125,7 +1120,7 @@
     const paint = colors.length === 0
       ? '<div class="cbd-note">No palette colors found: digits cannot be painted.</div>' + renderPad(groups, colors)
       : renderPaint(groups, pages, shown, brush, colors)
-    const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Your saved profiles could not be read; they were kept, under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
+    const kept = unreadable ? `<div class="cbd-note" data-role="unreadable">Profiles saved earlier could not be read; they are kept under ${PROFILES_KEY}${UNREADABLE_SUFFIX}.</div>` : ''
     return `${kept}${pulldownsHtml}` +
       `<div class="cbd-columns cbd-divider"><div class="cbd-column">${profilesHtml}</div>` +
       `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
@@ -1363,30 +1358,48 @@
   // Reads isPlainObject from plain.
   /* global isPlainObject */
   // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
-  // version 0, and so is every shape saved so far.
+  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
   const STORE_VERSION = 0
   const UNREADABLE_SUFFIX = '_unreadable'
 
   const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
 
-  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A refused or throwing read copies the raw value to
-  // `<key>_unreadable` before anything can save over it; the first copy is kept, since it holds what was there before things went wrong.
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  function keptSlot (store, key, raw) {
+    const same = JSON.stringify(raw)
+    for (let n = 1; ; n++) {
+      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const held = store.getData(slot)
+      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
+    }
+  }
+
+  function readSaved (raw, read) {
+    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
+    const value = read(isEnvelope(raw) ? raw.data : raw)
+    if (value === undefined) throw new Error('its reader refused it')
+    return value
+  }
+
+  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
+  // anything can save over it.
   function load (store, { key, read }) {
     const raw = store.getData(key)
     if (raw === null) return { value: undefined }
-    let unreadable
     try {
-      const value = read(isEnvelope(raw) ? raw.data : raw)
-      if (value !== undefined) return { value }
-      unreadable = 'its reader refused it'
+      return { value: readSaved(raw, read) }
     } catch (error) {
-      unreadable = error.message
+      const unreadable = error.message || String(error) || 'its reader threw'
+      const { slot, copied } = keptSlot(store, key, raw)
+      if (copied) {
+        store.setData(slot, raw)
+        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
+      }
+      return { value: undefined, unreadable }
     }
-    const kept = key + UNREADABLE_SUFFIX
-    if (store.getData(kept) === null) store.setData(kept, raw)
-    console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${kept}`)
-    return { value: undefined, unreadable }
   }
+
+  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
 
   function save (store, key, data) {
     store.setData(key, { v: STORE_VERSION, data })
@@ -1409,7 +1422,7 @@
   }
 
   const saveState = (state) => saveProfiles(Framework, state)
-  const loadState = () => stateFromStored(Framework).state
+  const loadState = () => stateFromStored(Framework)
 
   function addPreloadsOnce () {
     for (const { key, names } of ADDED_PRELOADS) {
@@ -1783,9 +1796,8 @@
 
   function openDialog (app) {
     const pages = readPages()
-    const loaded = stateFromStored(Framework)
-    let savedState = loaded.state
-    let unreadable = 'unreadable' in loaded
+    let savedState = loadState()
+    const unreadable = hasUnreadable(Framework, PROFILES_KEY)
     let draft = savedState
     let draftMode = mode
     let selected = draft.active
@@ -1830,7 +1842,6 @@
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
-      unreadable = false
       reshow(savedState, savedState.active)
       draftMode = mode
       draw()

@@ -272,8 +272,9 @@ describe('the max auto width and height', { concurrency: false }, () => {
   describe('saved before the script starts, as after a reload', { concurrency: false }, () => {
     let context, p, errors
 
+    // Saved as the script saves it, so a start that skipped the envelope would read no limit.
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved(600, null), LONG_RULES))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved({ v: 0, data: 600 }, null), LONG_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })

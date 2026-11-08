@@ -159,16 +159,15 @@ const names = (state) => state.profiles.map((p) => p.name)
 const PROFILES = 'ColorByDigit_profiles'
 const LEGACY = 'ColorByDigit_groups'
 // The state in force with `profiles` and `legacy` saved; null or undefined is a key not saved.
-const fromStored = (profiles, legacy) => quietly(() => stateFromStored(fakeStore({ ...(profiles != null && { [PROFILES]: profiles }), ...(legacy != null && { [LEGACY]: legacy }) }))).result.state
+const fromStored = (profiles, legacy) => quietly(() => stateFromStored(fakeStore({ ...(profiles != null && { [PROFILES]: profiles }), ...(legacy != null && { [LEGACY]: legacy }) }))).result
 
-test('garbage under the profiles key shows the preloads, says so, and is still in _unreadable after the preloads are saved', () => {
+test('garbage under the profiles key gives the preloads, and is still in _unreadable after the preloads are saved', () => {
   const store = fakeStore({ [PROFILES]: 'garbage from a newer version' })
-  const { result: { state, unreadable } } = quietly(() => stateFromStored(store))
+  const { result: state } = quietly(() => stateFromStored(store))
   assert.deepEqual(names(state), ALL_PRELOAD_NAMES)
-  assert.equal(typeof unreadable, 'string')
   saveProfiles(store, state)
   assert.equal(store.data[`${PROFILES}_unreadable`], 'garbage from a newer version')
-  assert.deepEqual(stateFromStored(store), { state })
+  assert.deepEqual(stateFromStored(store), state)
 })
 
 test('a fresh install has the five preloads, with Low/5/High active', () => {
@@ -226,8 +225,7 @@ test('one unusable saved profile refuses the whole state, as a paste of it is re
   const saved = { profiles: [{ name: 'A', groups: [] }, { name: '', groups: [] }, { name: 'C', groups: LOW }], active: 2 }
   const store = fakeStore({ [PROFILES]: saved, [LEGACY]: cloneOf(ODD) })
   const { result } = quietly(() => stateFromStored(store))
-  assert.deepEqual(result.state, fromStored(null, cloneOf(ODD)))
-  assert.equal(typeof result.unreadable, 'string')
+  assert.deepEqual(result, fromStored(null, cloneOf(ODD)))
   assert.deepEqual(store.data[`${PROFILES}_unreadable`], saved)
   assert.deepEqual(readPaste(JSON.stringify({ [PROFILES]: saved })), { values: {}, skipped: 1 })
 })
@@ -458,9 +456,9 @@ test('the right column has no name box: the digit keys come straight after the D
   assert.match(html, /<div class="cbd-column"><div class="cbd-heading">Digits/)
 })
 
-test('renderEditor shows one line, first, saying the saved profiles could not be read and were kept, only when they could not', () => {
+test('renderEditor shows one line, first, saying saved profiles could not be read and are kept, only while a copy is kept', () => {
   const editor = (unreadable) => renderEditor({ groups: [], pages: [], page: 0, brush: null, unreadable })
-  assert.match(editor(true), /^<div class="cbd-note" data-role="unreadable">[^<]*could not be read[^<]*kept[^<]*<\/div>/)
+  assert.match(editor(true), /^<div class="cbd-note" data-role="unreadable">[^<]*could not be read[^<]*kept under ColorByDigit_profiles_unreadable[^<]*<\/div>/)
   assert.doesNotMatch(editor(false), /data-role="unreadable"/)
 })
 

@@ -220,19 +220,19 @@ describe('saved profiles that cannot be read, injected after Start Puzzle', { co
   })
   after(async () => { await context.close() })
 
-  it('the dialog shows the preloads under one line saying the saved profiles could not be read and were kept', async () => {
+  it('the dialog shows the preloads under one line saying the saved profiles could not be read and are kept', async () => {
     await t.openEditor()
-    assert.match(await p.locator(`${EDITOR} [data-role=unreadable]`).textContent(), /could not be read; they were kept/)
+    assert.match(await p.locator(`${EDITOR} [data-role=unreadable]`).textContent(), new RegExp(`could not be read; they are kept under ${PROFILES_KEY}_unreadable`))
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
-  it('a save of another pick leaves the unreadable value under _unreadable, and the line goes', async () => {
+  it('a save of another pick leaves the unreadable value under _unreadable, and the line stays while it is kept', async () => {
     await t.openMenuByArrow()
     await t.pick('Odd/Even')
     assert.equal(await settle(async () => (await t.getState()).active, 1), 1)
     assert.deepEqual(await p.evaluate((key) => Framework.getData(`${key}_unreadable`), PROFILES_KEY), UNREADABLE)
     await t.openEditor()
-    assert.equal(await p.locator(`${EDITOR} [data-role=unreadable]`).count(), 0)
+    assert.equal(await p.locator(`${EDITOR} [data-role=unreadable]`).count(), 1)
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
