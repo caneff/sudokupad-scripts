@@ -32,7 +32,15 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
   }, index)
   const resolved = (color) => p.evaluate((c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = window.getComputedStyle(d).color; d.remove(); return v }, color)
   const penColor = (n) => p.evaluate((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
-  const caretColor = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).caretColor)
+  // The color of the caret the note sets itself: the computed caret-color is the text color when none is set, so the note's own declaration is read.
+  const caretColor = () => p.locator(TEXT_BOX).evaluate((e) => {
+    const probe = document.createElement('i')
+    probe.style.color = e.style.caretColor
+    document.body.append(probe)
+    const color = window.getComputedStyle(probe).color
+    probe.remove()
+    return color
+  })
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
