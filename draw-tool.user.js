@@ -2970,6 +2970,8 @@
     if (!movedBy(d.move, offset, map).every(({ point }) => reachable(point))) return { offset: raw, guides: [] }
     // The pressed note then lands on whole device pixels, as it will once let go, and a guide moves with it so the outline lies on its guide.
     const ratio = window.devicePixelRatio
+    // Read at the first move, before any translation moves the note, and not at the press, which a click never needs.
+    d.origin ??= (({ left, top }) => [left, top])(item[NOTE_ELEMENT].getBoundingClientRect())
     const crisp = d.origin.map((side, axis) => Math.round((side + offset[axis]) * ratio) / ratio - side - offset[axis])
     return { offset: offset.map((v, axis) => v + crisp[axis]), guides: snaps.map((snap, axis) => snap ? snap.guide + crisp[axis] : null) }
   }
@@ -3283,8 +3285,7 @@
       const shift = event.shiftKey
       if (start !== -1 && !shift && !selected.includes(start)) select([start])
       const move = start === -1 || shift ? null : selected.map((index) => ({ index, item: drawing[index] }))
-      const { left, top } = move ? note.getBoundingClientRect() : {}
-      drag = { start, move, origin: move ? [left, top] : null, points: [point], pending: [], shift, detail: event.detail, rectangle: null }
+      drag = { start, move, points: [point], pending: [], shift, detail: event.detail, rectangle: null }
       return true
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
