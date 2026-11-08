@@ -2249,5 +2249,8 @@ test('digitKeyPen: a bare digit 1 to 9 picks that pen on the page showing, and n
   assert.equal(digitKeyPen(key('0'), 0), null, 'key 0 stays unused')
   assert.equal(digitKeyPen(key('a'), 0), null)
   assert.equal(digitKeyPen(key('12'), 0), null)
+  const field = { closest: (selector) => (selector.includes('input') ? {} : null) }
+  assert.equal(digitKeyPen(key('3', { target: field }), 0), null, 'a key typed into a field')
+  assert.equal(digitKeyPen(key('3', { target: { closest: () => null } }), 0), '3', 'a key on a non-field')
   for (const mod of ['ctrlKey', 'altKey', 'metaKey', 'shiftKey']) assert.equal(digitKeyPen(key('3', { [mod]: true }), 0), null, mod)
 })

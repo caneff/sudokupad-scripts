@@ -895,9 +895,13 @@
     return PEN_PAGES[page].chars[PEN_COLOR_KEYS.indexOf(number)]
   }
 
-  // A bare digit key 1 to 9 is pen N on the page showing; the pen's button is found by its number, so Keypad Flipped changes nothing.
+  const hasModifier = (event) => event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
   function digitKeyPen (event, page) {
-    if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return null
+    if (hasModifier(event) || typedIntoField(event)) return null
     return PEN_COLOR_KEYS.includes(event.key) ? penCharOn(page, event.key) : null
   }
 
@@ -1066,18 +1070,20 @@
       setPadPage(0)
     })
     // SudokuPad asks every tool's `handleKeydown` before its key handlers, and stops at the first that answers, so
+    // answering a digit here keeps it from the tool's own digit handler, which never selects a pen, and
     // answering Tab here also keeps it from the letter tool's Tab binding (which does nothing in the pen tool in
     // SudokuPad now, with No Tab Letters installed or not), and the key's default of moving the focus is stopped.
     // Shift+Tab is left alone: a held Shift is the letter tool's own temporary switch.
     if (typeof tool.handleKeydown !== 'function') tool.handleKeydown = () => false
     steps.pages.wrap(tool, 'handleKeydown', function (stock, event) {
-      const digitPen = Framework.app.tool === this.name && digitKeyPen(event, currentPage())
+      const penToolOn = Framework.app.tool === this.name
+      const digitPen = penToolOn && digitKeyPen(event, currentPage())
       if (digitPen) {
         event.preventDefault()
         tool.setSelectedColor(digitPen)
         return true
       }
-      if (!hasPageToTurnTo() || Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return stock(event)
+      if (!hasPageToTurnTo() || !penToolOn || event.code !== 'Tab' || hasModifier(event)) return stock(event)
       event.preventDefault()
       turnPage(1)
       return true

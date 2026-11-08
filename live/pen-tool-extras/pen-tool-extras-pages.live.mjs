@@ -311,6 +311,17 @@ function group (title, extra = []) {
       assert.equal(await settle(selected, 'c'), 'c')
     })
 
+    it('a digit key does not pick a pen while another tool is current', async () => {
+      assert.equal(await selected(), 'c')
+      try {
+        await read(() => Framework.app.changeTool('normal'))
+        await p.keyboard.press('5')
+        assert.equal(await selected(), 'c', 'key 5 left the pen alone')
+      } finally {
+        await openPenTool(p)
+      }
+    })
+
     it('the mouse wheel over the page button turns the page: down forward, up back; over a slider or elsewhere in the panel it does not', async () => {
       await turnPageWithWheel(100)
       assert.equal(await settle(selected, 'n'), 'n')

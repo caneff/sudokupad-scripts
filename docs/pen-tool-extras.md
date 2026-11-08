@@ -108,7 +108,7 @@ Only lines change with the page. A cell circle, a cross and the edge and corner 
 - Press Tab. Tab does nothing else in the pen tool with this script on, with or without No Tab Letters. Shift+Tab is left to SudokuPad.
 - Turn the mouse wheel over the page button, as SudokuPad's color tool does over its own page button: down for the next page, up for the previous. Over the rest of the pen panel the wheel is left to SudokuPad.
 
-**Picking a pen with a digit key**: with the pen tool on, a bare digit key 1 to 9 picks pen N on the page showing, as a click on that color button does: on page 2, key 3 picks page 2's pen 3. The key follows the button's number, so Keypad Flipped changes nothing. Key 0 and a digit with Ctrl, Alt, Meta or Shift held are left to SudokuPad, which does nothing with them in the pen tool.
+**Picking a pen with a digit key**: with the pen tool on, a bare digit key 1 to 9 picks pen N on the page showing, as a click on that color button does: on page 2, key 3 picks page 2's pen 3. The key follows the button's number, so Keypad Flipped changes nothing. Key 0, a digit with Ctrl, Alt, Meta or Shift held, and a digit typed into a text field are left to SudokuPad and the browser.
 
 Besides Tab and the wheel, which SudokuPad's color tool uses the same way (`docs/research/sudokupad-color-tool-paging.md`), the digit keys are the one input the script takes that SudokuPad's pen tool ignores.
 
