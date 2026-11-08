@@ -27,6 +27,19 @@ as narrow a pattern as the break allows: a pattern for a whole script lets a sec
 suite also counts its warnings.
 `live/skip-lines.live.mjs` plants a skip with no declaration and checks it lands in `errors`.
 
+## The predefined attacks
+
+`live/sudokupad-attacks.live.mjs` (attacks 49-56, things a player does to SudokuPad) and `live/script-clash-attacks.live.mjs`
+(attacks 57-61, scripts set against each other) are the fixed "try to break it" tests of #590: all six scripts on one page
+(`live/attacks.mjs`), each test named for its attack number, checking the crash signals (a skip line, a page error, a console
+error, the notice bar) and what a player expects to see. The ones for one script's own gestures are in `live/<script name>/`.
+
+- A test that finds a bug on main is marked `{ todo: '#<bug>' }` with a filed `bug` ticket, so the suite stays green; the fix
+  PR removes the mark.
+- Headless Chromium has no zoom keys, so attack 54 sets the page's CSS size and pixel ratio, which is what zoom changes.
+- Attack 56 blocks only the keys the scripts save under: SudokuPad's own saves throw uncaught errors on a page whose whole
+  localStorage is blocked, with no script loaded.
+
 ## The recording
 
 SudokuPad is served from a recording, not from sudokupad.app on every page load. `live/cache.mjs`
