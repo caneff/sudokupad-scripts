@@ -18,6 +18,7 @@ const OUTLINE_MIDDLE_PX = 3
 const TEXT_AT = [7.5, 5.5]
 const OTHER_AT = [2.5, 2.5]
 const COLUMN_LINE = 5
+const RIGHT_LINE = 9
 const NEAR_PX = 0.6
 const OUTLINE_ON_GUIDE_PX = 0.25
 // What an earlier version saved, planted as it wrote it, and a note.
@@ -203,6 +204,31 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await draw.reload(p)
     await draw.pickDraw(p)
     assert.equal(Math.abs((await noteBox('15')).x - OUTLINE_MIDDLE_PX - line) < NEAR_PX, true, `the saved note ${at} is drawn on the line again after a reload`)
+  })
+
+  it('a note dragged to 2 px right of the board\'s right line is pulled back onto it: its outline lies on the line and the guide shows', async () => {
+    const line = await lineX(RIGHT_LINE)
+    const { left, guides, guideBox } = await dragBy(line + 2 - ((await noteBox('15')).x - OUTLINE_MIDDLE_PX), 0, true)
+    assert.equal(guides, 1, 'the guide shows while snapped')
+    assert.equal(Math.abs(left - line) < NEAR_PX, true, `the outline's line ${left} is on the board's right line ${line}`)
+    await assertOnGuide(left, guideBox)
+  })
+
+  it('a note dragged to 2 px from the middle of the cell outside the board lands with its middle there and the guide on it', async () => {
+    const [, , size] = await cellCentre(p, 0, 0)
+    const middle = (await lineX(RIGHT_LINE)) + size / 2
+    const noteMiddle = async () => { const box = await noteBox('15'); return box.x + box.width / 2 }
+    const { guides, guideBox } = await dragBy(middle + 2 - await noteMiddle(), 0, true)
+    assert.equal(guides, 1, 'the guide shows while snapped')
+    assert.equal(Math.abs(guideBox.x + guideBox.width / 2 - middle) < NEAR_PX, true, `the guide is at ${guideBox.x}, the outer cell's middle at ${middle}`)
+    assert.equal(Math.abs(await noteMiddle() - middle) < NEAR_PX, true, `the note's middle ${await noteMiddle()} is on the outer cell's middle ${middle}`)
+  })
+
+  it('a note dragged to 2 px from the line two cells outside the board stays where the pointer put it', async () => {
+    const [, , size] = await cellCentre(p, 0, 0)
+    const line = (await lineX(RIGHT_LINE)) + 2 * size
+    const { guides } = await dragBy(line - 2 - ((await noteBox('15')).x + (await noteBox('15')).width + OUTLINE_MIDDLE_PX))
+    assert.equal(guides, 0, 'no guide')
   })
 
   it('a note dragged to 2 px from another note\'s left edge lands with the two left edges equal and the guide where its outline lies', async () => {
