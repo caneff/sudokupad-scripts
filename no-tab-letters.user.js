@@ -39,7 +39,7 @@
   }
 
   // SudokuPad's keydown handler returns early on an auto-repeat, so the swapped Tab entry never sees a held Tab. A repeated Tab is stopped
-  // here instead, only while the letter tool is on and no dialog is open, so a dialog keeps its normal Tab.
+  // here instead, so a dialog keeps its normal Tab.
   function isHeldTabToStop (event, { toolOn, dialogOpen }) {
     return event.key === TAB_KEY && event.repeat === true && toolOn && !dialogOpen
   }
@@ -249,7 +249,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
   // The letter tool is read once `Framework.getApp` says the app is ready.
-  const FEATURES = { tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array' } } }
+  const FEATURES = { tab: { label: 'Tab key', needs: { 'Framework.getApp': 'function', 'ToolLetter.tool.keyHandlers': 'array', 'Framework.app.tools': 'object' } } }
   const guard = createGuard({ script: 'no-tab-letters', name: 'No Tab Letters', version: VERSION, features: FEATURES })
 
   if (typeof module !== 'undefined' && module.exports) {

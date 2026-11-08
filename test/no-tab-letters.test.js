@@ -66,7 +66,7 @@ test('the header names the script and points updates at its own file', () => {
 })
 
 test('without getApp or the letter tool\'s key list, the Tab feature is lacking, and a SudokuPad that has both lacks nothing', () => {
-  const roots = () => ({ Framework: { getApp () {} }, ToolLetter: { tool: { keyHandlers: [] } } })
+  const roots = () => ({ Framework: { getApp () {}, app: { tools: {} } }, ToolLetter: { tool: { keyHandlers: [] } } })
   assert.deepEqual(lackingInternals(FEATURES, roots()), new Map())
   for (const remove of [(r) => { delete r.ToolLetter.tool.keyHandlers }, (r) => { delete r.ToolLetter.tool }, (r) => { r.ToolLetter = undefined }]) {
     const broken = roots()
@@ -76,6 +76,9 @@ test('without getApp or the letter tool\'s key list, the Tab feature is lacking,
   const noApp = roots()
   delete noApp.Framework.getApp
   assert.deepEqual(lackingInternals(FEATURES, noApp), new Map([['Framework.getApp', ['tab']]]))
+  const noTools = roots()
+  delete noTools.Framework.app.tools
+  assert.deepEqual(lackingInternals(FEATURES, noTools), new Map([['Framework.app.tools', ['tab']]]))
 })
 
 // Starts the script on a page with `framework` as its Framework; returns the warnings and the notice bar's text, or null for none.

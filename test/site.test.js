@@ -50,7 +50,7 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-test('every *.user.js in the repo root has an install link on the homepage (Chris, #545: no script is left off)', () => {
+test('every *.user.js in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
   for (const s of rootScripts()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
