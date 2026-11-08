@@ -159,6 +159,7 @@ The table's columns are X Mark, Circle and Directions (one box for both directio
 
 A click within 0.2 of a cell of a grid corner, inner or outer, cycles an X, then a circle, then empty.
 
+- On a grid with small cells the zone is held to at least 10 px, so it stays easy to hit, and to at most 0.3 of a cell, so an edge click 0.3 from a corner is still an edge click. A cell over 50 px wide is not affected.
 - There are no arrows, since a corner has no edge direction.
 - The Corner row of the Marks table has an X Mark and a Circle box, which turn each on or off. With both off, a click near a corner is SudokuPad's own edge click again.
 - A corner shared by four cells is one mark.
@@ -186,11 +187,20 @@ With the box on and the pen tool on, a right click over the grid erases what is 
 - On an edge mark, a grid-corner mark or a cell's circle, cross or dot with no line under the pointer: that mark, whatever its shape. Lines win over marks when both are under the pointer.
 - On nothing: nothing, and no mark is made.
 
-While the right button is held, everything the erase has gathered so far is drawn at 0.3 opacity: the whole line the press hit with its branches, and the marks. Releasing erases it. Escape while the button is held cancels the erase: the fade goes, nothing is erased and there is no undo step.
+While the right button is held, everything the erase has gathered so far is drawn at 0.3 opacity: the whole line the press hit with its branches, and the marks. Releasing erases it, and the line and marks then fade out from that opacity over 120 ms; the puzzle changes at once and undo is unaffected. Under reduced motion there is no fade. Escape while the button is held cancels the erase: the fade goes, nothing is erased and there is no undo step.
+
+A line is hit within 0.2 of a cell of it, held to at least 10 px on small cells and at most 0.24 of a cell, so a centre line and the edge line beside it (0.5 apart) are never both hit.
 
 A right-drag erases every line and mark it crosses, as one undo step, the way Draw's right-drag does. The browser's menu stays shut over the grid in the pen tool. Outside the pen tool, or off the grid, the right button and the menu are left to SudokuPad and the browser.
 
 A left click steps an edge, corner or cell mark forward, and a right click does not step it. Touch is unchanged.
+
+## Small touches
+
+- The grid shows a crosshair, not SudokuPad's hand, while the pen is the current tool.
+- The panel's buttons shrink to 0.97 over 120 ms while pressed. The panel is shared with Text Anywhere, which gets the same press state.
+- Edit mode's pickers fade and scale in from 0.95 over 150 ms.
+- With the system set to reduce motion, the fade on an erased line, the press and the pickers' entrance are all off.
 
 ## Line mode
 
@@ -212,7 +222,7 @@ The settings dialog names the skipped steps in one line at its top, for example 
 | pen pages | the pen tool's `setSelectedColor`, `handleToolEnter` or `handleToolExit` | Only SudokuPad's nine pens. Tab, the mouse wheel, the digit keys and the page button do nothing, and a pen on page 2 or 3 that was selected is replaced by the same color on page 1. Lines already stored with a page 2 or page 3 pen keep their color |
 | arrow lines | the renderer's `renderPen` or `renderPart`, the pen tool's `clickCell`, `actStart`, `actAdd`, `actSend` or `_actList`, or the app's `puzzle.cells` | Page 3 lines draw as plain lines of the pen's color, and a line dragged with a page 3 pen is stored in the pen's own character, with no direction |
 | drag highlight | the pen tool's `drawLineHint` | The highlight of a line being dragged fades with the opacity setting and takes the white outline, and it is the same solid stroke for every pen |
-| marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X), and a click in a cell's middle is SudokuPad's own circle and cross. The arrows, circles, corner marks and dots you drew stay stored in the puzzle and its replay, and draw as nothing |
+| marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `xyToRCExact` or `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X), and a click in a cell's middle is SudokuPad's own circle and cross. The arrows, circles, corner marks and dots you drew stay stored in the puzzle and its replay, and draw as nothing |
 | pen panel | the pen tool (`ToolPen.tool`), or the `.penlinemode` element in its panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders, the tray and the three control buttons (line mode, line type and settings), which would take its rows, are left out. Tab still turns pages |
 | line erase | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | A right click is SudokuPad's own click, and the browser's menu opens |
 | mark preview | the marks step being on, and the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | No faint mark shows under the pointer before a click |
