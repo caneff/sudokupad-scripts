@@ -513,7 +513,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     it('painting with a key the default palette lacks colors the digit key in the page\'s color', async () => {
       await digitKey('4').click()
       assert.equal(await keyOf('4'), 'u')
-      assert.equal(await digitKey('4').evaluate((e) => window.getComputedStyle(e).backgroundColor), 'rgb(10, 20, 30)')
+      // rgb(10, 20, 30) at SudokuPad's 60% cell opacity
+      assert.equal(await digitKey('4').evaluate((e) => window.getComputedStyle(e).backgroundColor), 'color(srgb 0.0392157 0.0784314 0.117647 / 0.6)')
     })
   })
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.24.1
+// @version      0.25.0
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.24.1'
+  const VERSION = '0.25.0'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -709,10 +709,13 @@
 
   const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
+  const fillWithOpacity = (color, opacity) => opacity < 1 ? `color-mix(in srgb, ${color} ${opacity * 100}%, transparent)` : color
+
   // The dialog's color block: a pulldown above a grid of swatches, three to a row.
   // Free mode (no `picked`) makes each swatch a color input; palette mode makes each a button, `picked` the pressed one, and a null swatch an empty cell.
   // `options` are `{ value, label, selected, disabled }`; `beside` goes in the grid's row, after it.
-  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '' }) {
+  // A `fillOpacity` under 1 draws the palette swatches that strong over what is behind them; the border and the pressed ring stay whole.
+  function renderColorBlock ({ prefix, label, options, swatches, picked, beside = '', fillOpacity = 1 }) {
     const palette = picked !== undefined
     const option = ({ value, label, selected, disabled }) =>
       `<option value="${escapeHtml(value)}"${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}>${escapeHtml(label)}</option>`
@@ -721,7 +724,7 @@
       const head = `class="${prefix}swatch" data-role="swatch"`
       if (!s) return `<span ${head} data-empty="slot"></span>`
       if (!palette) return `<input type="color" ${head} data-key="${escapeHtml(s.key)}" value="${escapeHtml(s.value)}" ${named(s)}>`
-      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${escapeHtml(s.value)}"></button>`
+      return `<button type="button" ${head} data-key="${escapeHtml(s.key)}" aria-pressed="${s.key === picked}" ${named(s)} style="background:${fillWithOpacity(escapeHtml(s.value), fillOpacity)}"></button>`
     }
     return `<div class="${prefix}color-block">` +
       `<select class="${prefix}color-choice" data-role="color-choice" aria-label="${escapeHtml(label)}">${options.map(option).join('')}</select>` +
@@ -918,13 +921,15 @@
     `border:1.5px solid ${PURPLE};border-radius:3px;background:#fff;color:${PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
 
   const UNREADABLE_FILL = '#ccc'
+  // SudokuPad draws a cell color this strong on the board and on its own color buttons (tool-color.css, --cell-color-opacity).
+  const CELL_COLOR_OPACITY = 0.6
 
   // The icon is drawn in 100 by 100 units. A run of three cells reaches a little past its sides, into the button's margin,
   // and stays above the arrow box in the lower right.
   const ICON_CELL = 38
   function iconRun (mode, groups, colorOf, digitProfileGroups) {
     const chips = shownChips(mode, groups, digitProfileGroups ?? groups)
-    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, chips, x: 50 - chips.length * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
+    return renderChips(groups, colorOf, { size: ICON_CELL, style: mode, chips, x: 50 - (chips.length || CHIP_MAX_GROUPS) * ICON_CELL / 2, y: 50 - ICON_CELL / 2 })
   }
 
   // SudokuPad's own app buttons put their icon in <div class="icon">.
@@ -1053,7 +1058,7 @@
   // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
-    const look = !key ? '' : color ? ` style="background:${escapeHtml(color.value)}"` : ' class="cbd-unset"'
+    const look = !key ? '' : color ? ` style="background:${fillWithOpacity(escapeHtml(color.value), CELL_COLOR_OPACITY)}"` : ' class="cbd-unset"'
     return `<button type="button" data-act="digit" data-digit="${digit}" data-key="${escapeHtml(key || '')}"${look}>${digit}</button>`
   }
 
@@ -1078,6 +1083,7 @@
       options: pages.map((p) => ({ value: String(p.page), label: pageLabel(p), selected: p === shown })),
       swatches: [...shown.rows.flat(), ...(shown.zero ? [shown.zero] : [])].map((slot) => slot && { ...slot, label: slot.key }),
       picked: brush,
+      fillOpacity: CELL_COLOR_OPACITY,
       beside: renderPad(groups, colors)
     })
   }
@@ -1085,20 +1091,33 @@
   // Each mode draws a cell the way it colors the board: the cell's fill and its digit's ink from the group color, and the run's line.
   // A group color that cannot be read keeps SudokuPad's own digit color, as the board does.
   const shadeOf = (color) => { const rgb = parseColor(color); return rgb ? darkenColor(rgb) : ENTERED_DIGIT_BLUE }
+  const DIM_LINE = '#aaa'
   const CHIP_LOOKS = {
     cell: (color) => ({ fill: color || UNREADABLE_FILL, ink: ENTERED_DIGIT_BLUE, line: '#000' }),
     digit: (color, digitColor) => ({ fill: '#fff', ink: shadeOf(digitColor), line: '#000' }),
     both: (color, digitColor) => ({ fill: color || UNREADABLE_FILL, ink: shadeOf(digitColor), line: '#000' }),
-    off: () => ({ fill: '#fff', ink: '#999', line: '#aaa' })
+    off: () => ({ fill: '#fff', ink: '#999', line: DIM_LINE })
   }
   // One cell of the run, in the run's own units; the strokes stay 1 px at any size.
   const RUN_CELL = 10
   const STROKE = 'stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="crispEdges"'
 
+  // A profile with no groups shows three blank cells, dashed like a color on no page, so the run does not read as broken.
+  function renderBlankChips (size, x, y) {
+    const width = CHIP_MAX_GROUPS * RUN_CELL
+    const dash = `stroke="${DIM_LINE}" stroke-dasharray="2 2"`
+    const cells = Array.from({ length: CHIP_MAX_GROUPS }, (_, i) => `<rect data-role="blank-chip" x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="#fff"/>`).join('')
+    const dividers = Array.from({ length: CHIP_MAX_GROUPS - 1 }, (_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" ${dash} ${STROKE}/>`).join('')
+    const place = x === undefined ? '' : ` x="${x}" y="${y}"`
+    return `<svg data-role="chips" width="${CHIP_MAX_GROUPS * size}" height="${size}"${place} viewBox="0 0 ${width} ${RUN_CELL}" overflow="visible" aria-hidden="true">` +
+      `${cells}${dividers}<rect x="0" y="0" width="${width}" height="${RUN_CELL}" fill="none" ${dash} ${STROKE}/></svg>`
+  }
+
   // A run of joined cells, one per shown chip (`chips` when given, else the mode's own pick): fills first, then single dividers and one outline over them, so no line is doubled.
   // `size` is one cell's width, in pixels or in the units of an enclosing SVG, which `x` and `y` place it in.
   function renderChips (groups, colorOf, { size, style = 'cell', x, y, digitProfileGroups = groups, chips = shownChips(style, groups, digitProfileGroups) }) {
     const shown = chips
+    if (shown.length === 0) return renderBlankChips(size, x, y)
     const width = shown.length * RUN_CELL
     const { line } = CHIP_LOOKS[style]('')
     const cells = shown.map(({ digit, cellKey, digitKey }, i) => {
@@ -1107,7 +1126,8 @@
       // A digit in no cell group is left uncolored on the board, so its chip is white, not the grey of an unreadable color.
       const fill = cellKey === undefined ? '#fff' : look.fill
       const ink = look.ink
-      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"/>` +
+      const tint = cellKey !== undefined && (style === 'cell' || style === 'both') ? ` fill-opacity="${CELL_COLOR_OPACITY}"` : ''
+      return `<g data-role="chip" data-key="${escapeHtml(key ?? '')}"><rect x="${i * RUN_CELL}" y="0" width="${RUN_CELL}" height="${RUN_CELL}" fill="${escapeHtml(fill)}"${tint}/>` +
         `<text x="${i * RUN_CELL + RUN_CELL / 2}" y="${RUN_CELL * 0.74}" font-family="sans-serif" font-weight="800" font-size="${RUN_CELL * 0.68}" text-anchor="middle" fill="${escapeHtml(ink)}">${escapeHtml(digit)}</text></g>`
     }).join('')
     const dividers = shown.slice(1).map((_, i) => `<line x1="${(i + 1) * RUN_CELL}" y1="0" x2="${(i + 1) * RUN_CELL}" y2="${RUN_CELL}" stroke="${line}" ${STROKE}/>`).join('')
@@ -1379,10 +1399,22 @@
       `<div class="cbd-column">${heading('Digits', clear)}${paint}</div></div>`
   }
 
-  // One stylesheet, every rule scoped to the editor, the dialog itself (its width), or the dialog's options row.
+  // One stylesheet, every rule scoped to the editor, the dialog itself (its width), the dialog's options row, or the profile menu.
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
+  // Only for someone who has not asked the system for less motion; a fading menu takes no clicks.
+  const MENU_FADE_MS = 100
+  const ROW_SLIDE_MS = 80
+  const MOTION_CSS = [
+    `${MENU}.cbd-closing { pointer-events: none; }`,
+    '@media (prefers-reduced-motion: no-preference) {',
+    // Material's standard-accelerate easing, the one for something leaving.
+    `  ${MENU}.cbd-closing { opacity: 0; transition: opacity ${MENU_FADE_MS}ms cubic-bezier(0.3, 0, 1, 1); }`,
+    `  ${EDITOR} .cbd-profile { transition: transform ${ROW_SLIDE_MS}ms ease-out; }`,
+    '}'
+  ].join('\n')
+
   const STYLE_CSS = [
     [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
@@ -1437,7 +1469,7 @@
     [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, `display: inline-flex; align-items: center; justify-content: center; min-width: ${MIN_TARGET_PX}px; min-height: ${MIN_TARGET_PX}px; box-sizing: border-box`],
     // The handle holds the pointer capture, so its cursor shows wherever the pointer goes; every element has its own, so it is forced.
     [`${EDITOR}.cbd-dragging *`, 'cursor: grabbing !important']
-  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
+  ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR) + '\n' + MOTION_CSS
 
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
@@ -2215,12 +2247,36 @@
   }
 
   let menu = null
+  // The menu after a pick, fading out: no longer the open menu, so a click on the arrow or the button opens a new one.
+  let leavingMenu = null
+  let menuTimer = null
 
   const addStyle = (id = STYLE_ID, css = STYLE_CSS) => addStyleOnce(id, css)
 
+  const dropLeavingMenu = () => {
+    clearTimeout(menuTimer)
+    menuTimer = null
+    if (leavingMenu) leavingMenu.remove()
+    leavingMenu = null
+  }
   const closeMenu = () => {
+    dropLeavingMenu()
     if (menu) menu.remove()
     menu = null
+  }
+
+  const MENU_BLINK_MS = 60
+  function fadeMenu (pickedRow) {
+    if (!menu || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return closeMenu()
+    dropLeavingMenu()
+    const leaving = menu
+    leavingMenu = leaving
+    menu = null
+    pickedRow.style.background = ACTIVE_FILL
+    menuTimer = setTimeout(() => {
+      leaving.classList.add('cbd-closing')
+      menuTimer = setTimeout(dropLeavingMenu, MENU_FADE_MS)
+    }, MENU_BLINK_MS)
   }
 
   function openMenu () {
@@ -2243,9 +2299,9 @@
   }
 
   // A digit pick changes only the digit stylesheet: it touches no cell and is never an undo step.
-  function switchProfile (app, index, target) {
+  function switchProfile (app, index, target, pickedRow) {
     const state = loadState()
-    closeMenu()
+    fadeMenu(pickedRow)
     const digits = target === 'digits'
     if (index === (digits ? state.digitActive : state.active)) return
     const next = digits ? setDigitActive(state, index) : setActive(state, index)
@@ -2288,7 +2344,7 @@
         closeMenu()
         openEditor()
       } else {
-        switchProfile(app, Number(row.dataset.index), row.dataset.target)
+        switchProfile(app, Number(row.dataset.index), row.dataset.target, row.closest('[data-role="menu-row"]'))
       }
     }, true)
     listen('touchstart', (event) => {
@@ -2436,13 +2492,19 @@
       const rows = [...box.querySelectorAll('[data-role="profile-row"]')]
       const mids = rows.map((row) => { const r = row.getBoundingClientRect(); return r.top + r.height / 2 })
       let to = from
-      rows[from].style.opacity = '0.5'
+      // The rows between the dragged one and its drop place move one row aside; the dragged row follows the pointer, with no slide of its own.
+      const step = rows.length > 1 ? mids[1] - mids[0] : 0
+      const asideOf = (i) => (from < to && i > from && i <= to ? -step : from > to && i < from && i >= to ? step : 0)
+      Object.assign(rows[from].style, { opacity: '0.5', transition: 'none', position: 'relative', zIndex: '1' })
       box.classList.add(DRAGGING_CLASS)
       handle.setPointerCapture(event.pointerId)
       trackPointer(handle, {
         move: (e) => {
           to = dropIndex(mids, from, e.clientY)
-          rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
+          rows.forEach((row, i) => {
+            const shift = i === from ? e.clientY - event.clientY : asideOf(i)
+            row.style.transform = shift ? `translateY(${shift}px)` : ''
+          })
         },
         end: (e) => {
           box.classList.remove(DRAGGING_CLASS)
