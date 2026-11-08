@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.29.7
+// @version      1.30.0
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.29.7'
+  const VERSION = '1.30.0'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -461,6 +461,19 @@
     lineErase: {
       label: 'line erase',
       needs: { ...APP, ...PEN_ACTIONS, 'ToolPen.tool.getInputRc': 'function', 'Framework.app.xyToRCExact': 'function', ...GRID_SIZE, ...CELLS }
+    },
+    // The faint mark under the pointer is hit-tested like the erase and drawn like a mark.
+    markPreview: {
+      label: 'mark preview',
+      needs: {
+        ...APP,
+        ...PEN_ACTIONS,
+        'ToolPen.tool.getInputRc': 'function',
+        'Framework.app.xyToRCExact': 'function',
+        ...GRID_SIZE,
+        'Framework.app.svgRenderer.renderPen': 'function',
+        ...CELLS
+      }
     }
   }
   const inForce = settingDefaults()
@@ -500,6 +513,7 @@
       buildOpacityCss(inForce.opacity),
       buildOutlineCss(inForce.outline),
       buildPagesCss(inForce.thickness, inForce.dash),
+      buildFeedbackCss(inForce.dash),
       DOT_FILL_CSS,
       pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
@@ -1488,6 +1502,33 @@
   }
 
   // 6. Marks: edge marks, grid-corner marks, cell marks and the marks layer
+  // Faded strokes: what the right-click erase will take and what the next click on a mark will clear are drawn at this opacity, a little under tldraw's 0.32 for the same.
+  const FADED_OPACITY = 0.3
+  const FADED_CLASS = 'pen-tool-extras-faded'
+  const CLEARING_CLASS = 'pen-tool-extras-clearing'
+  const GHOST_CLASS = 'pen-tool-extras-ghost'
+
+  // `Cell.renderPropPen` keeps each stroke's element in `childElems` under the class it was drawn with (docs/research/sudokupad-pen-tool.md). A stroke with no element throws,
+  // which turns off the feature that asked, rather than leaving the stroke unfaded.
+  function strokeElementOf (cell, valueColor) {
+    const className = `cell-pen pen-${valueColor[0]} pencolor-${valueColor.slice(1)}`
+    const element = cell.childElems[className]
+    if (!element) throw new Error(`pen-tool-extras: cell ${cell.row},${cell.col} holds no element for ${className}`)
+    return element
+  }
+
+  // Exactly `elements` carry `className`.
+  function fadeClass (className, elements) {
+    document.querySelectorAll(`.${className}`).forEach((el) => { if (!elements.includes(el)) el.classList.remove(className) })
+    elements.forEach((el) => el.classList.add(className))
+  }
+
+  // Whether `event` is over the grid in the pen tool.
+  const overGridInPenTool = (app, event) => app.tool === 'pen' && Boolean(event.target.closest && event.target.closest(GRID_SELECTOR))
+
+  // A handler that runs under `step` and puts `fallback` in place of a failure.
+  const guardedBy = (step, fallback) => (handler) => (event) => step.run(() => handler(event), fallback)
+
   // Every edge mark, grid-corner mark and cell circle, cross and dot is drawn here, last in the pen layer: SudokuPad adds a cell's strokes in cell order, so a later
   // cell's line would otherwise cover an earlier cell's mark. The pen layer's opacity then fades marks and lines as one picture.
   const MARKS_LAYER_ID = 'pen-tool-extras-marks'
@@ -1729,11 +1770,9 @@
     return queued
   }
 
-  // null also while both corner boxes are unticked, so the original hit test handles every click as it did before. SudokuPad's `clickCell` hit-tests `getInputRc()`, the pointer in
-  // cell units, and so does this.
-  function cornerUnderPointer (tool) {
+  // null also while both corner boxes are unticked, so the original hit test handles every click as it did before.
+  function cornerAtPoint ({ r, c }) {
     if (!inForce.marks.cornerX && !inForce.marks.cornerCircle) return null
-    const { r, c } = tool.getInputRc()
     const { rows, cols } = Framework.app.grid
     return cornerAt(r, c, rows, cols)
   }
@@ -1745,9 +1784,19 @@
     return { kind, cell: Framework.app.grid.getCell(row, col) }
   }
 
-  function cornerActs (corner) {
+  // The cell a click on `corner` or on what SudokuPad's own click hit (`clickedMarks`) steps, and the plan of that step.
+  function cornerPlan (corner) {
     const { kind, cell } = cornerCellOf(corner)
-    return planActs(cell, planCornerClick(kind, penValuesOf(cell), inForce.marks))
+    return { cell, plan: planCornerClick(kind, penValuesOf(cell), inForce.marks) }
+  }
+
+  function clickedPlan (clicked) {
+    return { cell: clicked.cell, plan: clicked.plan(penValuesOf(clicked.cell), inForce.marks) }
+  }
+
+  function cornerActs (corner) {
+    const { cell, plan } = cornerPlan(corner)
+    return planActs(cell, plan)
   }
 
   // A click within CORNER_RADIUS of a grid corner is a corner click, checked first. Otherwise the original `clickCell` runs unchanged, so its edge-versus-cell hit test decides what
@@ -1756,7 +1805,8 @@
   function wrapClickCell (tool, original) {
     steps.marks.wrap(tool, 'clickCell', function (stock, ...args) {
       if (lastButton === RIGHT_BUTTON && inForce.eraseClicks) return stock(...args)
-      const corner = cornerUnderPointer(this)
+      // SudokuPad's own `clickCell` hit-tests `getInputRc()`, the pointer in cell units, and so does this.
+      const corner = cornerAtPoint(this.getInputRc())
       if (corner !== null) {
         const acts = cornerActs(corner)
         return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
@@ -1767,9 +1817,9 @@
       let acts = queued
       const clicked = clickedMarks(queued)
       if (clicked !== null) {
-        const plan = clicked.plan(penValuesOf(clicked.cell), inForce.marks)
+        const { cell, plan } = clickedPlan(clicked)
         if (plan === null) return
-        acts = planActs(clicked.cell, plan)
+        acts = planActs(cell, plan)
       }
       stock.sudokupad(() => sendActs(this, acts))
     })
@@ -1785,6 +1835,80 @@
 
   function marksLayer () {
     return layerIn(MARKS_LAYER_ID, false)
+  }
+
+  // The mark a left click at `point` would place: the cell that stores it and the click's plan through that spot's cycle, or null when the click would put no mark of this script's.
+  // It hit-tests the point it is given, as `wrapClickCell` does the pointer, and sends nothing.
+  function clickPlanAt (tool, stockClick, point) {
+    const corner = cornerAtPoint(point)
+    const clicked = corner === null ? clickedMarks(stockClickActsAt(tool, stockClick, point)) : null
+    const found = corner !== null ? cornerPlan(corner) : clicked === null ? null : clickedPlan(clicked)
+    return found === null || found.plan === null ? null : found
+  }
+
+  // The preview is hit-tested at most this often while the pointer moves.
+  const PREVIEW_EVERY_MS = 32
+
+  // The ghost: a faint copy of the mark the next click under the pointer would place, in the hint layer in the pen's color, or, when that click clears the spot, the marks it
+  // would clear drawn faint. The pointer asks again after a release, once SudokuPad has stored the click.
+  function installMarkPreview (app, tool, stockClick) {
+    let ghost = null
+    let clearing = []
+    let shown = null
+    let tick = null
+    let afterRelease = null
+    let latest = null
+    let lastAt = -Infinity
+    const hide = () => {
+      if (ghost !== null) ghost.remove()
+      ghost = null
+      shown = null
+      clearing = []
+      fadeClass(CLEARING_CLASS, clearing)
+    }
+    // A press, a key or the pointer leaving also cancels the refreshes that are waiting, which would show the preview again.
+    const hideAndCancel = () => {
+      clearTimeout(tick)
+      clearTimeout(afterRelease)
+      tick = afterRelease = null
+      hide()
+    }
+    const guarded = guardedBy(steps.markPreview, hideAndCancel)
+    const show = ({ cell, plan }, pen) => {
+      const key = JSON.stringify([cell.row, cell.col, plan.remove, plan.add, pen])
+      if (key === shown) return
+      const layer = plan.add === null ? null : hintLayer()
+      if (plan.add !== null && !layer) return
+      hide()
+      shown = key
+      if (plan.add === null) {
+        clearing = cell.pen.filter((valueColor) => plan.remove.includes(valueColor[0])).map((valueColor) => strokeElementOf(cell, valueColor))
+        fadeClass(CLEARING_CLASS, clearing)
+        return
+      }
+      ghost = app.svgRenderer.renderPen({ row: cell.row, col: cell.col, value: plan.add, className: `cell-pen pen-${plan.add} pencolor-${pen} ${GHOST_CLASS}` })
+      layer.appendChild(ghost)
+    }
+    // With the marks step off the click is SudokuPad's own, which this script's cycle would not match.
+    const update = (event) => {
+      const found = !steps.marks.off && event.buttons === 0 && overGridInPenTool(app, event)
+        ? clickPlanAt(tool, stockClick, app.xyToRCExact(event.clientX, event.clientY))
+        : null
+      if (found === null) hide()
+      else show(found, selectedPen())
+    }
+    window.addEventListener('pointermove', guarded((event) => {
+      latest = event
+      // The pointer's own tick outranks the refresh after a release.
+      clearTimeout(afterRelease)
+      if (tick !== null) return
+      tick = setTimeout(guarded(() => { tick = null; lastAt = performance.now(); update(latest) }), Math.max(0, lastAt + PREVIEW_EVERY_MS - performance.now()))
+    }), true)
+    window.addEventListener('pointerdown', guarded(hideAndCancel), true)
+    window.addEventListener('keydown', guarded(hideAndCancel), true)
+    document.documentElement.addEventListener('pointerleave', guarded(hideAndCancel))
+    // SudokuPad stores a click on `mouseup`, after the `pointerup`.
+    window.addEventListener('mouseup', guarded((event) => { afterRelease = setTimeout(guarded(() => update(event))) }), true)
   }
 
   // 7. Right click erase
@@ -1918,6 +2042,13 @@
     erase.at = to
   }
 
+  // The element of each stroke `erase` has gathered: its segments, and every stroke of a gathered mark's values.
+  function erasedElements (erase) {
+    const lines = [...erase.lines].map(({ value, row, col, color }) => strokeElementOf(Framework.app.grid.getCell(row, col), value + color))
+    const marks = [...erase.marks].flatMap(([cell, values]) => cell.pen.filter((valueColor) => values.has(valueColor[0])).map((valueColor) => strokeElementOf(cell, valueColor)))
+    return [...lines, ...marks]
+  }
+
   function finishErase (tool, erase) {
     const marks = [...erase.marks].map(([cell, values]) => ({ cell, values: [...values] }))
     const acts = eraseActs([...erase.lines], marks, (row, col) => Framework.app.grid.getCell(row, col))
@@ -1935,9 +2066,10 @@
     let menuOwed = false
     // A press that was not over the grid (just off its edge) still reaches `clickCell` on the release: it makes no mark.
     steps.lineErase.wrap(tool, 'clickCell', (stock, ...args) => lastButton === RIGHT_BUTTON && inForce.eraseClicks ? undefined : stock(...args))
-    const erasePress = (event) => inForce.eraseClicks && event.button === RIGHT_BUTTON && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
+    const erasePress = (event) => inForce.eraseClicks && event.button === RIGHT_BUTTON && overGridInPenTool(app, event)
     const pointOf = (event) => app.xyToRCExact(event.clientX, event.clientY)
-    const guarded = (handler) => (event) => steps.lineErase.run(() => handler(event), () => { erase = null; menuOwed = false })
+    const showErasing = () => fadeClass(FADED_CLASS, erase === null ? [] : erasedElements(erase))
+    const guarded = guardedBy(steps.lineErase, () => { erase = null; menuOwed = false; showErasing() })
     window.addEventListener('pointerdown', guarded((event) => {
       erase = null
       menuOwed = false
@@ -1949,22 +2081,33 @@
       erase = started
       menuOwed = true
       crossPoint(marksAtPoint, started, point)
+      showErasing()
       // A `pointerup` comes only once the last button is up, whichever it is, so a drag with a second button pressed ends at that release.
       trackPointer(window, {
         move: guarded((moveEvent) => {
-          if (erase === started && (moveEvent.buttons & RIGHT_BIT)) crossTo(marksAtPoint, started, pointOf(moveEvent))
+          if (erase === started && (moveEvent.buttons & RIGHT_BIT)) {
+            crossTo(marksAtPoint, started, pointOf(moveEvent))
+            showErasing()
+          }
         }),
         end: guarded((endEvent) => {
           if (erase !== started) return
           erase = null
+          showErasing()
           if (endEvent.type === 'pointercancel') return
           crossTo(marksAtPoint, started, pointOf(endEvent))
           finishErase(tool, started)
         })
       })
     }), true)
+    // The release then finds no erase and sends nothing; the menu is still owed its refusal.
+    window.addEventListener('keydown', guarded((event) => {
+      if (event.key !== 'Escape' || erase === null) return
+      erase = null
+      showErasing()
+    }), true)
     document.addEventListener('contextmenu', guarded((event) => {
-      const overGrid = inForce.eraseClicks && app.tool === 'pen' && event.target.closest && event.target.closest(GRID_SELECTOR)
+      const overGrid = inForce.eraseClicks && overGridInPenTool(app, event)
       if (overGrid || menuOwed) event.preventDefault()
       menuOwed = false
     }), true)
@@ -2017,6 +2160,24 @@
     return `:root:root .cell-pen { opacity: 1; }\n:root:root ${PEN_LAYER} { opacity: ${opacity / 100}; }`
   }
 
+  // SudokuPad's `.penhint` is 16 wide and 0.6 opaque whatever the pen (tool-pen.css).
+  const HINT_WIDTH = 16
+  const HINT_OPACITY = 0.6
+  const HINT_ARROWS_CLASS = 'pen-tool-extras-hint-arrows'
+
+  // The faded strokes and the ghost, which are `.cell-pen`s, and the drag hint in the pen's style: a dashed page's dashes, laid out for the hint's width as a line's are for its own, and the
+  // fill of the arrowheads beside an arrow page's hint. `:root:root` outranks SudokuPad's rules whichever stylesheet loads last.
+  function buildFeedbackCss (dash) {
+    const colorsOf = (pages) => pages.flatMap((page) => page.chars.map((char, i) => [char, PEN_COLOR_KEYS[i]]))
+    const dashed = PEN_PAGES.filter((page) => page.dashed).flatMap((page) => page.chars)
+    return [
+      `:root:root .cell-pen:is(.${FADED_CLASS}, .${CLEARING_CLASS}, .${GHOST_CLASS}) { opacity: ${FADED_OPACITY}; }`,
+      `:root:root .penhint:is(${dashed.map((char) => `.pencolor-${char}`).join(', ')}) { ${dashDeclarations(HINT_WIDTH, dash, CELL_UNITS)} }`,
+      ...colorsOf(PEN_PAGES.filter((page) => page.arrowLines)).map(([char, key]) =>
+        `:root:root .${HINT_ARROWS_CLASS}.pencolor-${char} { fill: var(--puzzle-pencolor-${key}); stroke: none; opacity: ${HINT_OPACITY}; }`)
+    ].join('\n')
+  }
+
   // A filter runs on the layer's picture before its opacity does, so the outline fades with the marks. The highlight (`.penhint`) is in its own group beside the layer, so it is not outlined.
   function buildOutlineCss (outline) {
     return outline ? `:root:root ${PEN_LAYER} { filter: url(#${OUTLINE_FILTER_ID}); }` : ''
@@ -2066,7 +2227,34 @@
       stock(...args)
       const layer = hintLayer()
       if (layer && this.linePart && this.linePart.parentNode !== layer) layer.appendChild(this.linePart)
+      drawHintArrows(this, layer, args[0])
     })
+    // SudokuPad removes the hint itself on the release's `mouseup`, and the arrowheads go with the press.
+    PRESS_END_EVENTS.forEach((type) => window.addEventListener(type, () => steps.dragHint.run(removeHintArrows), true))
+  }
+
+  // The hint is one fat stroke whatever the pen, so an arrow pen's drag shows its arrowheads beside it, sized for the hint's width.
+  let hintArrows = null
+
+  function removeHintArrows () {
+    if (hintArrows !== null) hintArrows.remove()
+    hintArrows = null
+  }
+
+  // One run of arrows to each segment of the drag, pointing the way it went; `path` holds `{ r, c }` points in cell units.
+  function hintArrowsPath (path, spacing) {
+    return path.slice(1).map((to, i) => arrowRun([path[i].c * CELL_UNITS, path[i].r * CELL_UNITS], [to.c * CELL_UNITS, to.r * CELL_UNITS], HINT_WIDTH, spacing)).join('')
+  }
+
+  function drawHintArrows (tool, layer, path) {
+    const pen = selectedPen()
+    if (!layer || !tool.linePart || tool.eraseMode || arrowLineWayOf(pen) === null || !Array.isArray(path) || path.length < 2) return removeHintArrows()
+    if (hintArrows === null) {
+      hintArrows = document.createElementNS(SVG_NAMESPACE, 'path')
+      hintArrows.setAttribute('class', `${HINT_ARROWS_CLASS} pencolor-${pen}`)
+      layer.appendChild(hintArrows)
+    }
+    hintArrows.setAttribute('d', hintArrowsPath(path, inForce.arrowSpacing))
   }
 
   // 9. Pen panel: the pen panel sliders and line mode
@@ -2834,7 +3022,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { planCellClick, clickedMarks, DOT_FILL_CSS, VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, buildFeedbackCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return
@@ -2852,6 +3040,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     steps.lineErase.run(() => installLineErase(app, ToolPen.tool, sudokupadClick))
     steps.arrowLines.run(() => installArrowLines(app, ToolPen.tool))
     steps.marks.run(() => installMarks(app, ToolPen.tool, sudokupadClick))
+    steps.markPreview.run(() => installMarkPreview(app, ToolPen.tool, sudokupadClick))
     steps.pages.run(() => installPenPages(ToolPen.tool))
     steps.dragHint.run(() => installHintLayer(ToolPen.tool))
     steps.colors.run(installPenPickers)

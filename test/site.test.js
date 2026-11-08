@@ -154,7 +154,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'A preview before you click', 'White outlines']
 
 test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
@@ -164,7 +164,8 @@ test(`${DETAILS} lists what the script adds as a grid of short items, one per fe
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
     'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
-    'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
+    'Erase a whole line Right-click a line to remove all of it, or a mark to remove that. While you hold the button, what will go fades. Press Escape to cancel.',
+    'A preview before you click A faint mark shows what a click on an edge, corner or cell would place, and the drag shows dashes or arrows for those pens.',
     'White outlines An outline keeps lines readable over colored cells.'
   ])
   const grid = read(DETAILS).match(/<ul class="features">([\s\S]*?)<\/ul>/)

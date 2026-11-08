@@ -63,7 +63,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
   const editor = () => p.locator('#pen-tool-extras-editor')
 
-  const penCount = () => read(() => document.querySelectorAll('.cell-pen').length)
+  const penCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
 
   // A point 2 px inside the cell, next to the given side: a real click there is an edge click.
@@ -82,13 +82,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const e = Framework.app.puzzle.cells.find((x) => x.row === Math.min(r, rows - 1) && x.col === Math.min(c, cols - 1)).elem.getBoundingClientRect()
     return [e.x + (c >= cols ? e.width : 0) + ox * e.width, e.y + (r >= rows ? e.height : 0) + oy * e.height]
   }, [row, col, dx, dy])
+  // Every click leaves the pointer off the grid, so the faint next mark (or the fade of a mark the next click clears) that the preview shows under a resting pointer is not in what a check reads.
+  const clickAndLeave = async (x, y, button = 'left') => {
+    await p.mouse.click(x, y, { button })
+    await p.mouse.move(5, 5)
+  }
   const clickCorner = async (row, col, button = 'left', dx = 0, dy = 0) => {
     const [x, y] = await cornerPoint(row, col, dx, dy)
-    await p.mouse.click(x, y, { button })
+    await clickAndLeave(x, y, button)
   }
   const clickEdge = async (row, col, side, button = 'left') => {
     const [x, y] = await edgePoint(row, col, side)
-    await p.mouse.click(x, y, { button })
+    await clickAndLeave(x, y, button)
   }
   // Whether the page's own `contextmenu` listeners left each right click's menu alone
   // (false) or prevented it (true), in order. The listener sits on `window`, in the bubble
@@ -100,7 +105,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   const clickCellCentre = async (row, col) => {
     const [x, y] = await cellCentre(p, row, col)
-    await p.mouse.click(x, y)
+    await clickAndLeave(x, y)
   }
   const pickColor = async (n) => p.locator(`.tool-pen button[data-key="${n}"]`).click()
   // Clears every cell that holds a pen mark. Pen value 0 clears a cell, through an act so that the
@@ -143,7 +148,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         await clickEdge(edge.row, edge.col, edge.side)
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), value === null ? [] : [value]), value === null ? [] : [value], `${name} after a click`)
         // every drawn mark has a path with data: a mark with no `d` shows nothing
-        const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
+        const drawn = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => e.getAttribute('d')))
         assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
         assert.equal(drawn.length, value === null ? 0 : 1)
       }
@@ -266,11 +271,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       for (const value of [...cycle, cycle[0]]) {
         await clickCorner(...corner)
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after a click`)
-        const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
+        const drawn = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => e.getAttribute('d')))
         assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
         assert.equal(drawn.length, value === null ? 0 : 1)
         if (value !== null) {
-          const centre = await read(() => { const r = document.querySelector('.cell-pen').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })
+          const centre = await read(() => { const r = document.querySelector('#cell-pen .cell-pen').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })
           assert.equal(Math.abs(centre[0] - cx) < 1 && Math.abs(centre[1] - cy) < 1, true, `mark centre ${centre} is not the corner ${[cx, cy]}`)
         }
       }
@@ -383,7 +388,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await read((r) => Framework.app.loadReplay(r), replay)
     assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
     assert.deepEqual(await settle(() => penValuesAt(p, 0, SIZE - 1), ['y']), ['y'])
-    const drawn = await read(() => [...document.querySelectorAll('.cell-pen.pen-u, .cell-pen.pen-y')].map((e) => e.getAttribute('d')))
+    const drawn = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen.pen-u, #cell-pen .cell-pen.pen-y')].map((e) => e.getAttribute('d')))
     assert.deepEqual(drawn.filter((d) => !d), [])
     assert.equal(new Set(drawn).size, 2, 'the X on the inner corner and the circle on the far corner')
     await clearMarks()
@@ -396,7 +401,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
     assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
     assert.deepEqual(await settle(() => penValuesAt(p, 8, 8), ['u']), ['u'])
-    const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
+    const drawn = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => e.getAttribute('d')))
     assert.deepEqual(drawn.filter((d) => !d), [])
     assert.equal(drawn.length, 2)
     await clearMarks()
@@ -411,8 +416,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }, selector)
     // [kind of click, clicks to reach it, the mark it draws]: SudokuPad's own edge X, the circle, an arrow, the other arrow, a corner X and a corner circle.
     const marks = [
-      ['edge', 1, '.cell-pen.pen-3'], ['edge', 2, '.cell-pen.pen-j'], ['edge', 3, '.cell-pen.pen-h'], ['edge', 4, '.cell-pen.pen-i'],
-      ['corner', 1, '.cell-pen.pen-u'], ['corner', 2, '.cell-pen.pen-x'], ['cell', 3, '.cell-pen.pen-z']
+      ['edge', 1, '#cell-pen .cell-pen.pen-3'], ['edge', 2, '#cell-pen .cell-pen.pen-j'], ['edge', 3, '#cell-pen .cell-pen.pen-h'], ['edge', 4, '#cell-pen .cell-pen.pen-i'],
+      ['corner', 1, '#cell-pen .cell-pen.pen-u'], ['corner', 2, '#cell-pen .cell-pen.pen-x'], ['cell', 3, '#cell-pen .cell-pen.pen-z']
     ]
     const clickOf = { edge: () => clickEdge(3, 3, 'right'), corner: () => clickCorner(3, 3), cell: () => clickCellCentre(3, 3) }
     for (const [kind, clicks, selector] of marks) {
@@ -446,7 +451,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }, [row, col, values])
     // The paths drawn, and whether every mark path follows every line path in the document, and sits in the marks layer, which is the pen layer's last child.
     const stacking = () => read(([markValues, layerId]) => {
-      const paths = [...document.querySelectorAll('.cell-pen')].map((e) => ({ e, mark: markValues.includes([...e.classList].find((c) => c.startsWith('pen-')).slice(4)) }))
+      const paths = [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => ({ e, mark: markValues.includes([...e.classList].find((c) => c.startsWith('pen-')).slice(4)) }))
       const lines = paths.filter((x) => !x.mark).map((x) => x.e)
       const marks = paths.filter((x) => x.mark).map((x) => x.e)
       const layer = document.getElementById(layerId)
@@ -508,7 +513,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await pickColor(4)
     await clickEdge(3, 3, 'right')
     await clickEdge(3, 3, 'right')
-    const stroke = () => read(() => [...document.querySelectorAll('.cell-pen.pen-j')].map((e) => ({ cls: e.getAttribute('class'), stroke: window.getComputedStyle(e).stroke })))
+    const stroke = () => read(() => [...document.querySelectorAll('#cell-pen .cell-pen.pen-j')].map((e) => ({ cls: e.getAttribute('class'), stroke: window.getComputedStyle(e).stroke })))
     assert.deepEqual(await settle(stroke, [{ cls: 'cell-pen pen-j pencolor-4', stroke: PEN_4 }]), [{ cls: 'cell-pen pen-j pencolor-4', stroke: PEN_4 }])
     await p.click('#control-undo')
     await p.click('#control-redo')
@@ -525,7 +530,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         const m = /^m -([\d.]+),0 a ([\d.]+),([\d.]+) 0 1,0 ([\d.]+),0 a \2,\3 0 1,0 -\4,0$/.exec(d)
         return Boolean(m) && m[1] === m[2] && m[2] === m[3] && Math.abs(2 * m[2] - m[4]) < 0.01
       }
-      const e = document.querySelector('.cell-pen.pen-j')
+      const e = document.querySelector('#cell-pen .cell-pen.pen-j')
       if (!e) return null
       const s = window.getComputedStyle(e)
       return { cap: s.strokeLinecap, width: s.strokeWidth, fill: s.fill, circle: isCircle(e.getAttribute('d').replace(/^M[\d. ]+ /, '')) }
@@ -540,7 +545,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     for (let i = 0; i < 3; i++) await clickCellCentre(...CELL_MARK)
     const [cx, cy] = await cellCentre(p, ...CELL_MARK)
     const dot = () => read(() => {
-      const e = document.querySelector('.cell-pen.pen-z')
+      const e = document.querySelector('#cell-pen .cell-pen.pen-z')
       if (!e) return null
       const s = window.getComputedStyle(e)
       const r = e.getBoundingClientRect()
@@ -610,7 +615,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'], 'after the replay')
     await reload()
     assert.deepEqual(await settle(() => penValuesAt(p, ...CELL_MARK), ['z']), ['z'], 'after a reload')
-    const drawn = await read(() => [...document.querySelectorAll('.cell-pen.pen-z')].map((e) => e.getAttribute('d')))
+    const drawn = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen.pen-z')].map((e) => e.getAttribute('d')))
     assert.equal(drawn.length, 1)
     assert.notEqual(drawn[0], null, 'drawn with path data')
     await clearMarks()
@@ -844,8 +849,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
     // The pen value (`pen-<value>` class) and the opacity each drawn mark shows at, without repeats.
     const opacities = async () => {
-      const shown = await effectiveOpacities(p, '.cell-pen')
-      const values = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
+      const shown = await effectiveOpacities(p, '#cell-pen .cell-pen')
+      const values = await read(() => [...document.querySelectorAll('#cell-pen .cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
       return [...new Set(values.map((v, i) => `${v}:${shown[i]}`))].sort()
     }
     const drawAll = async () => {
@@ -1167,11 +1172,11 @@ describe('without the script', { concurrency: false }, () => {
       const pen = await bare.evaluate(() => {
         const cell = Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3)
         cell.renderContent(true)
-        return { held: cell.pen.map((v) => v[0]).join(''), drawn: document.querySelectorAll('.cell-pen').length }
+        return { held: cell.pen.map((v) => v[0]).join(''), drawn: document.querySelectorAll('#cell-pen .cell-pen').length }
       })
       assert.equal(pen.held, 'hijklmnopqrstuvwxy')
       // the unknown values draw as paths with no data, so nothing is visible
-      assert.equal(await bare.evaluate(() => [...document.querySelectorAll('.cell-pen')].filter((e) => e.getAttribute('d')).length), 0)
+      assert.equal(await bare.evaluate(() => [...document.querySelectorAll('#cell-pen .cell-pen')].filter((e) => e.getAttribute('d')).length), 0)
       assert.deepEqual(errors, [])
     } finally {
       await context.close()
