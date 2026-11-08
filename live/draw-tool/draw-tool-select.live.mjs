@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's selection on sudokupad.app: a click selects a note and a double-click edits it, a drag on empty space selects every
-// note its rectangle touches, Shift+click adds or removes one, a click on empty space or Escape ends the selection, the panel's colors, Size menu and
+// note its rectangle touches, Shift+click adds or removes one, a click on empty space or Escape ends the selection, the panel's colors, Size slider and
 // Background change only the selected notes, a drag on a selected note moves them all and keeps every one reachable, a right-click erase or leaving the
 // tool keeps the selection right, and Clear all, Delete and Backspace delete only the selection. Real mouse and keyboard input throughout, at a desktop size.
 import { after, before, describe, it } from 'node:test'
@@ -129,10 +129,10 @@ describe('Text Annotation\'s selection', { concurrency: false }, () => {
     assert.equal((await savedNote('E')).color, nextColor ?? 1)
   })
 
-  it('the Size menu and Background change only the selected notes, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
+  it('the Size slider and Background change only the selected notes, a mixed selection shows no color and no background state, and Background then boxes them all', async () => {
     const nextWidth = await p.evaluate((key) => Framework.getData(key), WIDTH_KEY)
     await selectThree()
-    await draw.pickMenu(p, draw.SIZE_BUTTON, '32')
+    await draw.slideTo(p, draw.SIZE_SLIDER, 12)
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => (await savedNote(t)).size)), [32, 32, 32, 20])
     assert.equal(await p.evaluate((key) => Framework.getData(key), WIDTH_KEY), nextWidth, 'the next-note size is unchanged')
     assert.equal(await backgroundPressed(), 'false')

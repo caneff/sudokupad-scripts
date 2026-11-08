@@ -45,11 +45,11 @@ test('spec 301: Text Annotation has its own colors, one Size slider and a settin
   assert.deepEqual(draw.presetColors('sudokupad', [], null, readPen), SUDOKUPAD)
   assert.deepEqual(draw.presetColors('pen', [], null, readPen), PEN)
 
-  // Copy carries the colors, the size and the box color and frame (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad box color or frame reads as its default).
+  // Copy carries the colors, the size, transparency, outline, box color and frame (defaults here) and no notes; Paste keeps its own values, skips a bad size or colors and counts them (a bad outline, box color or frame reads as its default).
   const copied = JSON.parse(draw.copiedSettings(storeOf({ DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_drawing_x: [text] })))
-  assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_box: 'page', DrawTool_frame: false })
+  assert.deepEqual(copied, { DrawTool_colors: PEN, DrawTool_width: 3.5, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false })
   const pasted = draw.pastedSettings(JSON.stringify({ ...copied, DrawTool_width: 99, PenToolExtras_x: 1 }), draw.READERS)
-  assert.deepEqual(pasted, { values: { DrawTool_colors: PEN, DrawTool_box: 'page', DrawTool_frame: false }, skipped: 1 })
+  assert.deepEqual(pasted, { values: { DrawTool_colors: PEN, DrawTool_opacity: 100, DrawTool_outline: 'medium', DrawTool_box: 'page', DrawTool_frame: false }, skipped: 1 })
   assert.throws(() => draw.pastedSettings('not settings', draw.READERS))
 
   // The site: the homepage summary and @description name the notes and the tool's own colors, the details page has a bullet for
@@ -58,6 +58,6 @@ test('spec 301: Text Annotation has its own colors, one Size slider and a settin
   assert.match(read('site/index.html'), summary)
   assert.match(read('draw-tool.user.js'), summary)
   const details = read('site/draw-tool.html')
-  for (const lead of ['Typed notes', 'Colors of its own', 'Text size', 'Background', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
+  for (const lead of ['Typed notes', 'Colors of its own', 'Size and transparency', 'Background', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
   assert.match(read('README.md'), /Each script except No Tab Letters adds an entry/)
 })

@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's panel on sudokupad.app: the nine colors copied from the pen colors on first use, the nine "Aa" color buttons,
-// the controls row (Clear all, Background and the gear) and the row of Size and Outline buttons inside the keypad's height at the two desktop sizes, the digit keys,
+// the controls row (Clear all, Background and the gear) and the Size and Transparency sliders inside the keypad's height at the two desktop sizes, the digit keys,
 // a hold that opens the color pickers and a recolor of notes already made, the choices kept over a reload, and SudokuPad's
 // own keypad back under another tool.
 import { after, before, describe, it } from 'node:test'
@@ -10,7 +10,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from '../settle.mjs'
 
-const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_BUTTON, MENU_ROW, TEXTS, WIDTH_KEY, face, pickMenu } = draw
+const { BACKGROUND_BUTTON, BACKGROUND_KEY, CLEAR_BUTTON, COLOR_KEY, COLORS_KEY, DIGIT_BUTTON, NEAR_PX, NINE, PICKER, SETTINGS_BUTTON, SIZE_SLIDER, OPACITY_SLIDER, SLIDERS, TEXTS, WIDTH_KEY, slideTo, valueOf } = draw
 // r1c3 of the recorded puzzle, empty.
 const EMPTY_CELL = [0, 2]
 // #rrggbb as the browser computes it.
@@ -38,9 +38,9 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
     })
     after(async () => { await context.close() })
 
-    it('keeps the height SudokuPad gives the keypad, and its buttons, the controls row and the menu buttons all fit inside it', async () => {
+    it('keeps the height SudokuPad gives the keypad, and its buttons, the controls row and the sliders all fit inside it', async () => {
       await draw.pickDraw(p)
-      await p.locator(MENU_ROW).waitFor({ state: 'visible' })
+      await p.locator(SLIDERS).waitFor({ state: 'visible' })
       // SudokuPad's own keypad for this tool: the script's stylesheet off and the parts it adds hidden, for one reading.
       const own = await p.evaluate(([styleId, parts]) => {
         const style = document.getElementById(styleId)
@@ -51,17 +51,17 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
         style.disabled = false
         added.forEach((e) => { e.style.display = '' })
         return height
-      }, ['draw-tool-style', '.draw-tool-tray, .draw-tool-clear, .draw-tool-background, .draw-tool-settings, .draw-tool-menu-row'])
+      }, ['draw-tool-style', '.draw-tool-tray, .draw-tool-clear, .draw-tool-background, .draw-tool-settings, .draw-tool-sliders'])
       const panel = await keypadBox(p)
       assert.equal(Math.abs(panel.height - own) <= NEAR_PX, true, `the panel is ${panel.height} px tall, SudokuPad's keypad ${own} px`)
       assert.equal(panel.partsTop >= panel.top - NEAR_PX, true, `the top part ${panel.partsTop} starts inside the panel's top ${panel.top}`)
       assert.equal(panel.partsBottom <= panel.bottom + NEAR_PX, true, `the bottom part ${panel.partsBottom} ends inside the panel's bottom ${panel.bottom}`)
     })
 
-    it('the color buttons are short, three to a row, and Clear all, Background and the gear sit full height in the row under them, with the Size and Outline row under that', async () => {
+    it('the color buttons are short, three to a row, and Clear all, Background and the gear sit full height in the row under them, with the sliders under that', async () => {
       const rect = (selector) => p.locator(selector).evaluate((e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, bottom: r.bottom } })
       const keys = await Promise.all(NINE.map((n) => rect(`.controls-input button[data-key="${n}"]`)))
-      const [clear, background, gear, sliders] = await Promise.all([CLEAR_BUTTON, BACKGROUND_BUTTON, SETTINGS_BUTTON, MENU_ROW].map(rect))
+      const [clear, background, gear, sliders] = await Promise.all([CLEAR_BUTTON, BACKGROUND_BUTTON, SETTINGS_BUTTON, SLIDERS].map(rect))
       for (const [i, k] of keys.entries()) assert.equal(Math.abs(k.height / k.width - 2.5 / 4) < 0.01, true, `key ${i + 1} is 2.5 by 4: ${JSON.stringify(k)}`)
       assert.deepEqual([keys[1].y, keys[2].y], [keys[0].y, keys[0].y], 'keys 1 to 3 share a row')
       assert.equal(keys[3].y > keys[0].y && keys[6].y > keys[3].y, true, 'keys 4 and 7 start the next rows')
@@ -72,17 +72,17 @@ for (const viewport of [{ width: 1200, height: 900 }, { width: 1280, height: 720
       assert.equal(Math.abs(clear.x - keys[6].x) <= NEAR_PX, true, 'Clear all is under key 7')
       assert.equal(Math.abs(background.x - keys[7].x) <= NEAR_PX, true, 'Background is under key 8')
       assert.equal(Math.abs(gear.x - keys[8].x) <= NEAR_PX, true, 'the gear is under key 9')
-      assert.equal(sliders.y >= clear.bottom, true, 'the Size and Outline row is under the controls')
+      assert.equal(sliders.y >= clear.bottom, true, 'the sliders are under the controls')
     })
 
-    it('the panel is nine Aa color buttons, Clear all, Background and the gear, and the Size and Outline buttons, with no slider, no opacity slider and no Shape button', async () => {
+    it('the panel is nine Aa color buttons, Clear all, Background and the gear, and the Size and Transparency sliders, with no Shape button', async () => {
       assert.equal(await p.locator('.controls-input button.digit:not([data-key="0"])').count(), 9)
       const labels = await p.evaluate(() => [...document.querySelectorAll('.controls-input button.digit:not([data-key="0"])')].map((b) => window.getComputedStyle(b, '::after').content))
       assert.deepEqual(labels, Array(9).fill('"Aa"'))
       assert.deepEqual(await Promise.all([CLEAR_BUTTON, BACKGROUND_BUTTON, SETTINGS_BUTTON].map((s) => p.locator(s).count())), [1, 1, 1])
-      assert.deepEqual(await p.locator(`${MENU_ROW} button`).allTextContents(), ['Size20', 'OutlineThicker'])
-      assert.equal(await p.locator('.controls-input input[type=range]').count(), 0, 'no slider')
-      assert.equal(await p.locator('#draw-tool-opacity, .draw-tool-shape-mode').count(), 0, 'no opacity slider and no Shape button')
+      assert.equal(await p.locator(`${SLIDERS} input[type=range]`).count(), 2)
+      assert.deepEqual([await valueOf(p, SIZE_SLIDER), await valueOf(p, OPACITY_SLIDER)], [6, 100])
+      assert.equal(await p.locator('.draw-tool-shape-mode').count(), 0, 'no Shape button')
     })
 
     it('the page raised no error', () => { assert.deepEqual(errors, []) })
@@ -106,7 +106,8 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     }))
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
   const currentKey = async () => (await keypad()).filter((b) => b.current).map((b) => b.key)
-  const sizeShown = async () => Number(await face(p, SIZE_BUTTON))
+  // The text size the Size slider's width gives.
+  const sizeShown = async () => 2 * await valueOf(p, SIZE_SLIDER) + 8
   const savedColors = () => read((key) => Framework.getData(key) ?? null, COLORS_KEY)
   // The computed color and the size in board units of the last and the first note on the board.
   const look = ({ color, size }) => ({ color, size })
@@ -192,9 +193,9 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
     assert.equal((await lastNote()).color, rgb((await savedColors())[6]))
   })
 
-  it('the Size menu sets the next note\'s size only: earlier notes keep theirs', async () => {
+  it('the Size slider sets the next note\'s size only: earlier notes keep theirs', async () => {
     assert.equal((await firstNote()).size, 20)
-    await pickMenu(p, SIZE_BUTTON, '26')
+    await slideTo(p, SIZE_SLIDER, 9)
     await makeNote()
     assert.equal((await lastNote()).size, 26)
     assert.equal((await firstNote()).size, 20, 'the earlier note did not change')
@@ -244,7 +245,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
   it('the colors, the color picked and the size come back after a reload', async () => {
     const fills = await noteColors()
     await p.keyboard.press('7')
-    await pickMenu(p, SIZE_BUTTON, '32')
+    await slideTo(p, SIZE_SLIDER, 12)
     await reload()
     assert.deepEqual(await noteColors(), fills, 'the notes keep the recolor before Text Annotation is made current')
     await pickDraw()
@@ -268,7 +269,7 @@ describe('Text Annotation\'s colors and size', { concurrency: false }, () => {
 
   it('another tool gets SudokuPad\'s own keypad back, and its digit keys enter digits again', async () => {
     await selectEmptyCell()
-    assert.equal(await p.locator(`${MENU_ROW}, .draw-tool-menu-button`).count(), 0, 'no Size or Outline buttons')
+    assert.equal(await p.locator(SLIDERS).count(), 0, 'no sliders')
     assert.equal(await p.locator(`${CLEAR_BUTTON}, ${BACKGROUND_BUTTON}, ${SETTINGS_BUTTON}`).count(), 0, 'no Clear all, Background or gear')
     const buttons = await keypad()
     assert.deepEqual(buttons.map((b) => b.label).filter((l) => l === '"Aa"'), [], 'no Aa labels')

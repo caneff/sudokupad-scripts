@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's panel while a note is open: it shows the open note's color and size, a color button or the Size menu changes that note
+// Live check of draw-tool.user.js's panel while a note is open: it shows the open note's color and size, a color button or the Size and Transparency sliders change that note
 // and leaves the next-note settings alone (a brand-new note's color and size also become the next note's), the press keeps the note open with its caret, and finishing the note brings the next-note values back. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -7,7 +7,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 
-const { COLOR_KEY, SIZE_BUTTON, TEXT_BOX, WIDTH_KEY, face, pickMenu } = draw
+const { COLOR_KEY, OPACITY_KEY, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, WIDTH_KEY, slideTo, valueOf } = draw
 const BLACK = 1
 const GREEN = 3
 const RED = 4
@@ -24,7 +24,7 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
   const key = (n) => `.controls-input button[data-key="${n}"]`
   const currentKeys = () => read(() => [...document.querySelectorAll('.controls-input button.digit.current')].map((b) => Number(b.dataset.key)))
   const stored = (name) => read((k) => Framework.getData(k) ?? null, name)
-  const size = async () => Number(await face(p, SIZE_BUTTON))
+  const size = () => valueOf(p, SIZE_SLIDER)
   const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
   const boxColor = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).color)
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
@@ -34,7 +34,7 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
     await draw.forgetDrawings(p)
-    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY])
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, OPACITY_KEY])
     await draw.reload(p)
     await draw.pickDraw(p)
     // One green note, made with green as the next-note color; black is then the next-note color again.
@@ -72,27 +72,40 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
     assert.deepEqual(await currentKeys(), [BLACK])
   })
 
-  it('the Size menu resizes the open note only, and the next-note size is unchanged', async () => {
+  it('the Size slider resizes the open note only, and the next-note size is unchanged', async () => {
     const nextSize = await size()
     await openAt()
     const before = (await draw.saved(p))[0].size
-    await pickMenu(p, SIZE_BUTTON, '40')
+    await slideTo(p, SIZE_SLIDER, 16)
     assert.equal(await boxOpen(), true, 'the note is still open')
     assert.equal(await stored(WIDTH_KEY), null, 'the next-note size was never saved')
-    assert.equal(await size(), 40, 'the button shows the open note\'s size')
+    assert.equal(await size(), 16, 'the slider shows the open note\'s size')
     await p.keyboard.type('Z')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'aXbZ', 'typing continues in the note')
     await p.keyboard.press('Escape')
     const after = (await draw.saved(p))[0].size
     assert.ok(after > before, `the note grew (${before} to ${after})`)
-    assert.equal(await size(), nextSize, 'the button shows the next-note size again')
+    assert.equal(await size(), nextSize, 'the slider shows the next-note size again')
   })
 
-  it('a press on the Size button that picks nothing leaves the note open with the focus in it, so typing goes into the note', async () => {
+  it('the Transparency slider fades the open note only, and the next-note transparency is unchanged', async () => {
     await openAt()
-    await p.click(SIZE_BUTTON)
+    await slideTo(p, OPACITY_SLIDER, 50)
+    assert.equal(await boxOpen(), true, 'the note is still open')
+    assert.equal(await valueOf(p, OPACITY_SLIDER), 50)
+    assert.equal(await stored(OPACITY_KEY), null, 'the next-note transparency was never saved')
     await p.keyboard.press('Escape')
-    assert.equal(await boxOpen(), true, 'Escape closed the menu and not the note')
+    assert.equal((await draw.saved(p))[0].opacity, 50, 'a note reopened and only faded is saved with the change')
+    assert.equal(await valueOf(p, OPACITY_SLIDER), 100, 'the slider shows the next-note transparency again')
+  })
+
+  it('a press on a slider that moves nothing leaves the note open with the focus back in it, so typing goes into the note', async () => {
+    await openAt()
+    await slideTo(p, SIZE_SLIDER, 6)
+    const value = await size()
+    await slideTo(p, SIZE_SLIDER, 6)
+    assert.equal(await size(), value, 'the second press moved nothing')
+    assert.equal(await boxOpen(), true)
     await p.keyboard.type('Q')
     assert.equal(await boxOpen(), true, 'the key stayed in the note')
     assert.match(await p.locator(TEXT_BOX).textContent(), /Q$/)
@@ -106,7 +119,7 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
     assert.equal((await draw.saved(p))[0].color, GREEN)
     await openAt()
     const before = (await draw.saved(p))[0].size
-    await pickMenu(p, SIZE_BUTTON, '10')
+    await slideTo(p, SIZE_SLIDER, 1)
     await p.keyboard.press('Escape')
     assert.ok((await draw.saved(p))[0].size < before, 'the smaller size was saved')
   })
@@ -121,7 +134,7 @@ describe('Text Annotation\'s panel while a brand-new note is open', { concurrenc
   const key = (n) => `.controls-input button[data-key="${n}"]`
   const currentKeys = () => read(() => [...document.querySelectorAll('.controls-input button.digit.current')].map((b) => Number(b.dataset.key)))
   const stored = (name) => read((k) => Framework.getData(k) ?? null, name)
-  const size = async () => Number(await face(p, SIZE_BUTTON))
+  const size = () => valueOf(p, SIZE_SLIDER)
   const openNew = async () => {
     await p.mouse.click(...await gridPoint(p, SPOT))
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'a new note is open')
@@ -131,7 +144,7 @@ describe('Text Annotation\'s panel while a brand-new note is open', { concurrenc
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
     await draw.forgetDrawings(p)
-    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY])
+    await read((keys) => keys.forEach((k) => Framework.removeData(k)), [COLOR_KEY, WIDTH_KEY, OPACITY_KEY])
     await draw.reload(p)
     await draw.pickDraw(p)
   })
@@ -155,14 +168,16 @@ describe('Text Annotation\'s panel while a brand-new note is open', { concurrenc
     const before = await size()
     await openNew()
     await p.keyboard.type('ab')
-    await pickMenu(p, SIZE_BUTTON, '32')
+    await slideTo(p, SIZE_SLIDER, 12)
+    await slideTo(p, OPACITY_SLIDER, 55)
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
     const picked = await size()
     assert.ok(picked > before, 'the size went up')
     assert.equal(await stored(WIDTH_KEY), 12, 'the next-note size is the one picked')
+    assert.equal(await stored(OPACITY_KEY), 55, 'and so is the next-note transparency')
     await p.keyboard.press('Escape')
-    assert.equal(await size(), picked, 'the button still shows it after the note is saved')
-    assert.ok((await draw.saved(p))[0].size > 20, 'the new note was saved larger than the 20 px a default-size note has')
+    assert.deepEqual([await size(), await valueOf(p, OPACITY_SLIDER)], [picked, 55], 'the sliders still show them after the note is saved')
+    assert.deepEqual([(await draw.saved(p))[0].size, (await draw.saved(p))[0].opacity], [32, 55], 'the new note was saved with both')
   })
 
   it('no page error', () => { assert.deepEqual(errors, []) })

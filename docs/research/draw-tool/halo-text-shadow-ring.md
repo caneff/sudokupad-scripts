@@ -12,7 +12,7 @@ Chris, 2026-11-07: the halo "looks funky on some letters, like capital A".
   (the same ring, `haloShadow(outline, '#fff')` with `0` or `1px` for the blur). At desktop sizes the hard ring shows faint
   facets at the largest sizes; a 1px blur smooths them but also softens the Thinner edge, and sixteen blurred shadows cost more to
   draw per note. Kept **no blur**.
-- **The check.** `live/draw-tool/draw-tool-menus.live.mjs` draws "AVWMk4" as letters and as the ring alone, and counts ring
+- **The check.** `live/draw-tool/draw-tool-outline.live.mjs` draws "AVWMk4" as letters and as the ring alone, and counts ring
   pixels more than 1.5px past the radius from any letter pixel, the radius being the outline's reach typed into the test: none
   at Thinner or Thicker. It applies the note's computed `text-shadow` to an overlay it builds, so it checks the ring, not
   the note's other CSS; `live/draw-tool/draw-tool-text.live.mjs` checks the note has no `-webkit-text-stroke`. A ring with

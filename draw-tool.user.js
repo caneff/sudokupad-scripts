@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.24.0
+// @version      0.25.0
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,14 +16,14 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.24.0'
+  const VERSION = '0.25.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
   const MAX_WIDTH = 16
   const WIDTH_STEP = 0.5
   const DEFAULT_WIDTH = 6
-  // Percent. A note has no opacity control; one saved with an opacity keeps it, and one saved without reads as the default.
+  // Percent. The Transparency slider sets it; a note saved without one reads as the default.
   const MIN_OPACITY = 20
   const MAX_OPACITY = 100
   const OPACITY_STEP = 5
@@ -174,6 +174,7 @@
   // The next note's size is saved as a width, 1 to 16 in steps of 0.5, as it always was; a text size is 2 x the width + 8.
   const WIDTH_KEY = 'DrawTool_width'
   const OUTLINE_KEY = 'DrawTool_outline'
+  const OPACITY_KEY = 'DrawTool_opacity'
   const BACKGROUND_KEY = 'DrawTool_background'
   const BOX_KEY = 'DrawTool_box'
   const FRAME_KEY = 'DrawTool_frame'
@@ -209,13 +210,12 @@
   const HANDLE_PX = 10
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
-  // The row under the controls: the Size and Outline buttons and an empty slot, and the menu a press on one opens.
-  const MENU_ROW_CLASS = 'draw-tool-menu-row'
-  const MENU_BUTTON_CLASS = 'draw-tool-menu-button'
-  const MENU_CLASS = 'draw-tool-menu'
-  const MENU_ITEM_CLASS = 'draw-tool-menu-item'
-  const MENU_CURRENT_CLASS = 'draw-tool-menu-current'
-  const MENU_SLOT_CLASS = 'draw-tool-menu-slot'
+  const SLIDERS_CLASS = 'draw-tool-sliders'
+  const SLIDER_ROW_CLASS = 'draw-tool-slider'
+  const SIZE_SLIDER = 'draw-tool-size'
+  const OPACITY_SLIDER = 'draw-tool-opacity'
+  const SIZE_LABEL = 'Size'
+  const OPACITY_LABEL = 'Transparency'
   const CLASS_PREFIX = 'draw-tool-'
   const COLORS_STYLE_ID = 'draw-tool-colors'
   const PANEL_STYLE_ID = 'draw-tool-style'
@@ -240,16 +240,13 @@
   const BACKGROUND_PAD_X = 0.35
   const BACKGROUND_PAD_Y = 0.15
   const BACKGROUND_RADIUS = 0.3
-  // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. A note with no `outline` field has the medium one,
-  // which the menu calls Thicker; none is Off and thin is Thinner.
+  // An outline is the halo round a note's letters: how far it reaches past them, as a share of the text size. The settings dialog sets one for every note: medium is
+  // Thicker, none is Off and thin is Thinner. A note's own `outline` field, saved by an earlier version, is never read.
   const OUTLINE_EM = { none: 0, thin: 0.07, medium: 0.14 }
   const OUTLINES = Object.keys(OUTLINE_EM)
   const DEFAULT_OUTLINE = 'medium'
   const OUTLINE_LABELS = { none: 'Off', thin: 'Thinner', medium: 'Thicker' }
-  const readOutline = (item) => item.outline ?? DEFAULT_OUTLINE
-  const readSavedOutline = (saved) => OUTLINES.includes(saved) ? saved : DEFAULT_OUTLINE
-  // The medium outline is the absence of the field, so a note saved before outlines is the same as one given the medium outline.
-  const withOutline = ({ outline, ...rest }, next) => next === DEFAULT_OUTLINE ? rest : { ...rest, outline: next }
+  const readOutline = (saved) => OUTLINES.includes(saved) ? saved : DEFAULT_OUTLINE
   // text-shadow joins with round corners, which -webkit-text-stroke does not: its miters grow spikes on A, V, W, M and 4. The ring of shadows is in em, so it follows the font size.
   const HALO_SHADOWS = 16
   function haloShadow (outline, color) {
@@ -342,17 +339,18 @@
     return { left: x - halfWidth, right: x + halfWidth, top: y - halfHeight, bottom: y + halfHeight }
   }
 
-  // The room round a note's text, in board units across and down: its background's, or its halo's reach.
-  function notePadding (item) {
-    const halo = OUTLINE_EM[readOutline(item)]
-    return (item.bg ? [BACKGROUND_PAD_X, BACKGROUND_PAD_Y] : [halo, halo]).map((share) => share * item.size)
+  const backgroundPadding = (item) => [BACKGROUND_PAD_X, BACKGROUND_PAD_Y].map((share) => share * item.size)
+
+  // The room round a note's text, in board units across and down: its background's, or the halo's reach of `outline`.
+  function notePadding (item, outline) {
+    return item.bg ? backgroundPadding(item) : Array(2).fill(OUTLINE_EM[outline] * item.size)
   }
 
   // What a note answers to: its text's box, and with a background the box drawn behind it.
   function noteBox (item) {
     const box = textBox(item)
     if (!item.bg) return box
-    const [padX, padY] = notePadding(item)
+    const [padX, padY] = backgroundPadding(item)
     return { left: box.left - padX, right: box.right + padX, top: box.top - padY, bottom: box.bottom + padY }
   }
 
@@ -401,9 +399,9 @@
 
   // The box a note's element takes on the screen, padding included, worked out from its item rather than measured: `map` has the maps between board
   // units and the screen.
-  function noteScreenBox (item, map) {
+  function noteScreenBox (item, map, outline) {
     const box = textBox(boardView(item, map.toBoard))
-    const [padX, padY] = notePadding(item)
+    const [padX, padY] = notePadding(item, outline)
     const [left, top] = map.toScreen([box.left - padX, box.top - padY])
     const [right, bottom] = map.toScreen([box.right + padX, box.bottom + padY])
     return { left, right, top, bottom }
@@ -489,19 +487,14 @@
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
-  // The next note's width for a saved or pasted one: the width of the menu size nearest its text size.
-  const snappedWidth = (saved) => widthFor(nearestMenuSize(textSizeFor(saved)))
   const isTextSize = (value) => Number.isInteger(value) && isWidth(widthFor(value))
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
+  const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
 
-  // The sizes the Size menu offers: the text sizes of widths 1 to 16, with the default 20, spaced so each step shows.
-  const SIZE_MENU = [10, 14, 20, 26, 32, 40]
-  const nearestMenuSize = (size) => SIZE_MENU.reduce((best, option) => Math.abs(option - size) < Math.abs(best - size) ? option : best)
-
-  // A color, size, outline or background the notes do not share is null.
+  // A color or background the notes do not share is null; a slider must show one value, so it shows the first note's (the oldest).
   function panelLooks (items) {
     const shared = (values) => values.every((v) => v === values[0]) ? values[0] : null
-    return { color: shared(items.map((item) => item.color)), size: shared(items.map((item) => item.size)), outline: shared(items.map(readOutline)), bg: shared(items.map((item) => Boolean(item.bg))) }
+    return { color: shared(items.map((item) => item.color)), width: widthFor(items[0].size), opacity: itemOpacity(items[0]), bg: shared(items.map((item) => Boolean(item.bg))) }
   }
 
   const isNumber = (value) => typeof value === 'number' && Number.isFinite(value)
@@ -817,32 +810,34 @@
     return { ...paletteColors(preset, pages, readCell).colors }
   }
 
-  // Copy and Paste carry the colors, size, box color and frame, and not the notes, the color picked or the background button.
+  // Copy and Paste carry the colors, size, transparency, outline, box color and frame, and not the notes, the color picked or the background button.
   const readPastedColors = (data) => isPlainObject(data) && COLOR_NUMBERS.some((n) => n in data) && COLOR_NUMBERS.every((n) => !(n in data) || savedHex(data[n])) ? readDrawColors(data) : undefined
   const READERS = {
     [COLORS_KEY]: readPastedColors,
     [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
-    // The ticket reads an invalid pasted box color as Page and an invalid frame as off, so neither is counted as skipped.
+    [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined,
+    // The ticket reads an invalid pasted outline as Thicker, box color as Page and frame as off, so none is counted as skipped.
+    [OUTLINE_KEY]: readOutline,
     [BOX_KEY]: readBox,
     [FRAME_KEY]: readFrame
   }
 
-  // The size, box color and frame in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
+  // The size, transparency, outline, box color and frame in force, default included, so a paste can put them back to their defaults; the colors only once they are saved.
   function copiedSettings (store) {
-    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [BOX_KEY]: readBox(store.getData(BOX_KEY)), [FRAME_KEY]: readFrame(store.getData(FRAME_KEY)) }
+    const copied = { [WIDTH_KEY]: readWidth(store.getData(WIDTH_KEY)), [OPACITY_KEY]: readOpacity(store.getData(OPACITY_KEY)), [OUTLINE_KEY]: readOutline(store.getData(OUTLINE_KEY)), [BOX_KEY]: readBox(store.getData(BOX_KEY)), [FRAME_KEY]: readFrame(store.getData(FRAME_KEY)) }
     const savedColors = readDrawColors(store.getData(COLORS_KEY))
     if (savedColors) copied[COLORS_KEY] = savedColors
     return JSON.stringify(copied)
   }
 
   // A note is a text item. `bg` is set only on a note made with the Background button on, so a note saved without it has no box.
-  const textItem = ([x, y], text, color, size, background) => ({ kind: TEXT_KIND, color, size, opacity: DEFAULT_OPACITY, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
+  const textItem = ([x, y], text, color, size, background, opacity = DEFAULT_OPACITY) => ({ kind: TEXT_KIND, color, size, opacity, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
   const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
   const isBox = (box) => isPoint(box) && box.every((side) => side > 0)
   const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
-    (item.bg === undefined || item.bg === true) && (item.outline === undefined || OUTLINES.includes(item.outline)) && (item.box === undefined || isBox(item.box)) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
@@ -1020,7 +1015,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1039,7 +1034,7 @@
   const ABOVE_NOTES = '.dialog-overlay, #appmenu'
 
   // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the control panel, the top bar, the menu drawer and an open dialog.
-  const CONTROLS = `${LAYOUT_CONTROLS}, ${ABOVE_NOTES}, .${MENU_CLASS}, button, a, input, select, textarea`
+  const CONTROLS = `${LAYOUT_CONTROLS}, ${ABOVE_NOTES}, button, a, input, select, textarea`
   const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
 
   // The notes' layer covers the page, above the board's digits and SudokuPad's clock and rules copy (z-index 10) and below its dialogs and menu drawer (1000).
@@ -1082,7 +1077,7 @@
     const px = (units) => `${roundToTenth(units * scale)}px`
     const [width, height] = item.box ? item.box.map(px) : ['', '']
     const limit = item.box ? 'none' : ''
-    const [padX, padY] = notePadding(item).map(px)
+    const [padX, padY] = notePadding(item, outline).map(px)
     return {
       left: `${roundToTenth(x)}px`,
       top: `${roundToTenth(y)}px`,
@@ -1094,7 +1089,7 @@
       color: textColor(item),
       backgroundColor: item.bg ? boxFill(boxColor, itemColor(item.color)) : 'transparent',
       boxShadow: item.bg ? frameShadow(frame) : 'none',
-      textShadow: item.bg ? 'none' : haloShadow(readOutline(item), PAGE_COLOR),
+      textShadow: item.bg ? 'none' : haloShadow(outline, PAGE_COLOR),
       padding: `${padY} ${padX}`,
       borderRadius: item.bg ? px(BACKGROUND_RADIUS * item.size) : '0'
     }
@@ -1220,16 +1215,13 @@
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   const COLOR_LABEL_REM = 1.7
-  // The Size and Outline buttons are as tall as the row under the controls leaves room for.
-  const MENU_BUTTON_REM = 3
-  const MENU_ITEM_REM = 2.2
   // The column of each control in its row: Clear all, the Background button and the settings gear.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [BACKGROUND_CLASS]: 2, [SETTINGS_CLASS]: 3 }
   const PANEL = '.tool-draw .controls-input'
   const controlButtons = Object.keys(CONTROL_COLUMNS).map((name) => `${PANEL} button.${name}`).join(', ')
   // Each color button shows "Aa" in its draw color, so a recolor follows.
   const PANEL_CSS = [
-    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: MENU_ROW_CLASS }),
+    ...panelCss({ panel: PANEL, colorButton: 'button.digit', controlButtons, tray: TRAY_CLASS, sliders: SLIDERS_CLASS, sliderRow: SLIDER_ROW_CLASS, wedgeSlider: SIZE_SLIDER, fadeSlider: OPACITY_SLIDER }),
     `${PANEL} button.digit { text-indent: -999em; overflow: hidden; color: transparent; }`,
     `${PANEL} button.digit:not(.current) { background-color: var(--body-bg); }`,
     `${PANEL} button.digit::after { content: "Aa"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-indent: 0; font-size: ${COLOR_LABEL_REM}rem; font-weight: 600; line-height: 1; }`,
@@ -1243,16 +1235,6 @@
     `.${BACKGROUND_CLASS}[aria-pressed="mixed"] { outline: 2px dashed ${PANEL_COLOR}; }`,
     ...COLOR_NUMBERS.map((n) => `${PANEL} button[data-key="${n}"] { grid-row: ${Math.ceil(n / PANEL_COLUMNS)} / span 1; grid-column: ${(n - 1) % PANEL_COLUMNS + 1} / span 1; }`),
     pickerCss(CLASS_PREFIX, TOOL_NAME),
-    // Three columns the width of the controls' above, so each button sits under its own control; an empty slot keeps its place.
-    `.${MENU_ROW_CLASS} { display: grid; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); justify-items: center; align-items: stretch; margin-left: 0; margin-right: 0; padding: 0; }`,
-    `${PANEL} button.${MENU_BUTTON_CLASS} { box-sizing: border-box; width: ${PANEL_BUTTON_REM}rem; height: ${MENU_BUTTON_REM}rem; min-width: 0; min-height: 0; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1rem; background-color: var(--body-bg); color: ${PANEL_COLOR}; line-height: 1; }`,
-    `${PANEL} button.${MENU_BUTTON_CLASS}[aria-expanded="true"] { outline: 2px solid ${PANEL_COLOR}; }`,
-    `${PANEL} .${MENU_BUTTON_CLASS} span:first-child { font-size: 0.65rem; opacity: 0.75; }`,
-    `${PANEL} .${MENU_BUTTON_CLASS} span:last-child { font-size: 0.8rem; font-weight: 600; white-space: nowrap; }`,
-    `${PANEL} .${MENU_BUTTON_CLASS} span:last-child::after { content: " \\25BE"; }`,
-    `.${MENU_CLASS} { position: fixed; z-index: ${LAYER_Z + 10}; box-sizing: border-box; display: flex; flex-direction: column; padding: 0.3rem; background: ${TRAY_COLOR}; border: 2px solid ${PANEL_COLOR}; border-radius: ${TRAY_RADIUS_PX}px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); }`,
-    `.${MENU_CLASS} .${MENU_ITEM_CLASS} { box-sizing: border-box; width: 100%; min-width: 5.5rem; height: ${MENU_ITEM_REM}rem; min-height: 0; margin: 0; padding: 0 0.8rem; display: block; border: none; border-radius: 8px; background: transparent; color: ${PANEL_COLOR}; font-size: 1rem; text-align: left; }`,
-    `.${MENU_CLASS} .${MENU_ITEM_CLASS}.${MENU_CURRENT_CLASS} { background: ${PANEL_COLOR}; color: #fff; }`,
     `#${LAYER_ID} { position: fixed; inset: 0; z-index: ${LAYER_Z}; pointer-events: none; overflow: hidden; }`,
     // A line as tall as the hit box, so a note's background box is as tall as a digit and covers one under it.
     // SudokuPad sizes every box border-box; a note's sizes are its text's, as its hit box is, with the padding around them.
@@ -1280,11 +1262,12 @@
   const CLEAR_ICON = '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/>'
   let color = DEFAULT_COLOR
   let width = DEFAULT_WIDTH
-  // The outline of the next note, as the Outline menu sets it, and remembered.
-  let outline = DEFAULT_OUTLINE
+  // The transparency of the next note, as the Transparency slider sets it, and remembered.
+  let opacity = DEFAULT_OPACITY
   // Whether the next note is made with a background. The Background button turns it on and off, and it is remembered.
   let background = false
-  // The box color and the frame of every note with a box, as the settings dialog sets them.
+  // The outline of every note and the box color and frame of every note with a box, as the settings dialog sets them.
+  let outline = DEFAULT_OUTLINE
   let boxColor = DEFAULT_BOX
   let frame = false
   // Text Annotation's nine colors, or null until they are first copied from the pen colors.
@@ -1339,19 +1322,25 @@
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
   }
 
-  // The next note's size is saved for the next visit, and a paste sets it as a pick from the Size menu would.
+  // The next note's size and transparency are saved for the next visit, and a paste sets them as a move of the slider would.
   function setSize (value) {
     width = value
     Framework.setData(WIDTH_KEY, value)
   }
 
-  function setOutline (next) {
-    outline = next
-    Framework.setData(OUTLINE_KEY, next)
+  function setOpacity (value) {
+    opacity = value
+    Framework.setData(OPACITY_KEY, value)
   }
 
   function showBoxes () {
     if (Framework.app.puzzle.currentPuzzle) redraw()
+  }
+
+  function saveOutline (next) {
+    outline = next
+    Framework.setData(OUTLINE_KEY, next)
+    showBoxes()
   }
 
   function saveBoxColor (next) {
@@ -1366,7 +1355,7 @@
     showBoxes()
   }
 
-  // The settings dialog: nine color pickers and a preset list, the box color and the frame, which fill a draft Save writes, and Copy and Paste settings, which act at once.
+  // The settings dialog: nine color pickers and a preset list, the outline, the box color and the frame, which fill a draft Save writes, and Copy and Paste settings, which act at once.
   const DIALOG_ID = 'draw-tool-dialog'
   const DIALOG_STYLE_ID = 'draw-tool-dialog-style'
   const CUSTOM_LABEL = 'Custom'
@@ -1383,11 +1372,11 @@
 
   // A pasted value is saved and shown at once, whether or not Text Annotation is current.
   function applyPasted (values) {
-    if (WIDTH_KEY in values) {
-      setSize(snappedWidth(values[WIDTH_KEY]))
-      showPanelValues()
-    }
+    if (WIDTH_KEY in values) setSize(values[WIDTH_KEY])
+    if (OPACITY_KEY in values) setOpacity(values[OPACITY_KEY])
+    showPanelValues()
     if (COLORS_KEY in values) saveColors(values[COLORS_KEY])
+    if (OUTLINE_KEY in values) saveOutline(values[OUTLINE_KEY])
     if (BOX_KEY in values) saveBoxColor(values[BOX_KEY])
     if (FRAME_KEY in values) saveFrame(values[FRAME_KEY])
   }
@@ -1403,6 +1392,7 @@
     let draft = colors ?? copiedPenColors(readPenColor)
     let chosen = null
     let changed = false
+    let draftOutline = outline
     let draftBox = boxColor
     let draftCustom = savedHex(boxColor) ?? BOX_WHITE
     let draftFrame = frame
@@ -1423,7 +1413,7 @@
           tag: 'options',
           options: [
             { tag: 'button', content: CANCEL_LABEL, action: 'close' },
-            { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); if (draftBox !== boxColor) saveBoxColor(draftBox); if (draftFrame !== frame) saveFrame(draftFrame); Framework.closeDialog() } }
+            { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); if (draftOutline !== outline) saveOutline(draftOutline); if (draftBox !== boxColor) saveBoxColor(draftBox); if (draftFrame !== frame) saveFrame(draftFrame); Framework.closeDialog() } }
           ]
         }
       ]
@@ -1436,6 +1426,8 @@
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
+        '<div class="draw-tool-section-title">Outline</div>' +
+        `<div class="draw-tool-box-row"><select class="draw-tool-color-choice" data-role="outline" aria-label="Outline">${OUTLINES.map((name) => `<option value="${name}"${draftOutline === name ? ' selected' : ''}>${OUTLINE_LABELS[name]}</option>`).join('')}</select></div>` +
         '<div class="draw-tool-section-title">Background box</div>' +
         `<div class="draw-tool-box-row"><select class="draw-tool-color-choice" data-role="box-choice" aria-label="Background box color">${boxOptions}</select>${boxChoice(draftBox) === BOX_CUSTOM ? `<input type="color" class="draw-tool-swatch" data-role="box-custom" value="${draftCustom}" aria-label="Custom background box color" title="Custom background box color">` : ''}</div>` +
         `<label class="draw-tool-frame-row"><input type="checkbox" data-role="frame"${draftFrame ? ' checked' : ''}> Frame</label>`
@@ -1450,6 +1442,8 @@
           changed = true
         }
         draw()
+      } else if (target.matches('[data-role="outline"]')) {
+        draftOutline = readOutline(target.value)
       } else if (target.matches('[data-role="box-choice"]')) {
         draftBox = target.value === BOX_CUSTOM ? draftCustom : target.value
         draw()
@@ -1466,6 +1460,7 @@
     })
     wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       applyPasted(values)
+      draftOutline = outline
       draftBox = boxColor
       draftCustom = savedHex(boxColor) ?? draftCustom
       draftFrame = frame
@@ -1518,107 +1513,33 @@
     showBackground()
   }
 
-  // The two menus the Size and Outline buttons open: each lists its options as [value, text], reads its value off the panel's looks, and says what its button's face shows.
-  const MENUS = {
-    size: { label: 'Size', options: SIZE_MENU.map((size) => [size, String(size)]), value: (looks) => looks.size, face: (looks) => looks.size === null ? '' : String(looks.size), change: (size) => (item) => ({ ...item, size }), setNext: (size) => setSize(widthFor(size)) },
-    outline: { label: 'Outline', options: OUTLINES.map((name) => [name, OUTLINE_LABELS[name]]), value: (looks) => looks.outline, face: (looks) => looks.outline === null ? '' : OUTLINE_LABELS[looks.outline], change: (name) => (item) => withOutline(item, name), setNext: setOutline }
-  }
-  const menuButtonOf = (kind) => document.querySelector(`.${MENU_BUTTON_CLASS}[data-menu="${kind}"]`)
-  // The open menu: its kind and element, or null.
-  let openMenu = null
+  const panelValues = () => editing ? panelLooks([editing.item]) : selected.length ? panelLooks(selectedNotes()) : { color, width, opacity }
 
-  function menuButton (kind) {
-    const button = document.createElement('button')
-    button.className = MENU_BUTTON_CLASS
-    button.dataset.menu = kind
-    button.setAttribute('aria-haspopup', 'menu')
-    button.setAttribute('aria-expanded', 'false')
-    button.setAttribute('aria-label', MENUS[kind].label)
-    button.title = MENUS[kind].label
-    button.append(Object.assign(document.createElement('span'), { textContent: MENUS[kind].label }), document.createElement('span'))
-    button.addEventListener('click', () => toggleMenu(kind))
-    return button
+  function sliderRow (id, label, range, value) {
+    const row = document.createElement('div')
+    row.className = SLIDER_ROW_CLASS
+    row.title = label
+    const input = document.createElement('input')
+    Object.assign(input, { type: 'range', id, min: range.min, max: range.max, step: range.step, value, tabIndex: -1 })
+    input.setAttribute('aria-label', label)
+    row.append(input)
+    return row
   }
 
-  const panelValues = () => editing ? panelLooks([editing.item]) : selected.length ? panelLooks(selectedNotes()) : { color, size: nearestMenuSize(textSizeFor(width)), outline }
-
-  // A pick sets the open note's look, else the selected notes', else the next note's; a new open note's also becomes the next note's.
-  function pickLook (kind, value) {
-    const { change, setNext } = MENUS[kind]
-    if (editing) changeOpen(change(value), () => setNext(value))
-    else if (selected.length) changeSelected(change(value))
-    else {
-      setNext(value)
-      showPanelValues()
-    }
+  // What each slider reads its value as, how it changes a note, and how it sets the next note.
+  const SLIDER_LOOKS = {
+    [SIZE_SLIDER]: { read: readWidth, change: (value) => (item) => ({ ...item, size: textSizeFor(value) }), setNext: setSize },
+    [OPACITY_SLIDER]: { read: readOpacity, change: (value) => (item) => ({ ...item, opacity: value }), setNext: setOpacity }
   }
 
-  function markMenuItems (looks) {
-    const current = MENUS[openMenu.kind].value(looks)
-    for (const item of openMenu.element.children) {
-      const on = item.dataset.value === String(current)
-      item.classList.toggle(MENU_CURRENT_CLASS, on)
-      item.setAttribute('aria-checked', String(on))
-    }
-  }
-
-  // The menu sits beside its button, moved clear of the board and the window's edge.
-  function placeMenu (menu, button) {
-    const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
-    const { left, right, top } = button.getBoundingClientRect()
-    const { width: menuWidth, height: menuHeight } = menu.getBoundingClientRect()
-    const [x, y] = reachablePoint([(left + right) / 2, top - menuHeight / 2], [menuWidth, menuHeight], win, [boardMap().box])
-    Object.assign(menu.style, { left: `${Math.round(x - menuWidth / 2)}px`, top: `${Math.round(y - menuHeight / 2)}px` })
-  }
-
-  function closeMenu () {
-    if (!openMenu) return
-    const { element, kind } = openMenu
-    openMenu = null
-    element.remove()
-    const button = menuButtonOf(kind)
-    if (button) button.setAttribute('aria-expanded', 'false')
-  }
-
-  function toggleMenu (kind) {
-    const reopen = openMenu?.kind !== kind
-    closeMenu()
-    if (!reopen) return
-    const button = menuButtonOf(kind)
-    const element = document.createElement('div')
-    element.className = MENU_CLASS
-    element.setAttribute('role', 'menu')
-    element.setAttribute('aria-label', MENUS[kind].label)
-    for (const [value, text] of MENUS[kind].options) {
-      const item = document.createElement('button')
-      item.className = MENU_ITEM_CLASS
-      item.dataset.value = String(value)
-      item.setAttribute('role', 'menuitemradio')
-      item.textContent = text
-      item.addEventListener('click', () => {
-        closeMenu()
-        pickLook(kind, value)
-      })
-      element.append(item)
-    }
-    document.body.append(element)
-    openMenu = { kind, element }
-    button.setAttribute('aria-expanded', 'true')
-    markMenuItems(panelValues())
-    placeMenu(element, button)
-  }
-
-  // A press anywhere but on the open menu or its button closes it.
-  function closeMenuOnPress (event) {
-    if (openMenu && !event.target.closest?.(`.${MENU_CLASS}, .${MENU_BUTTON_CLASS}`)) closeMenu()
-  }
-
-  // Escape closes the open menu and goes no further, so it does not also close the open note or clear the selection.
-  function closeMenuOnEscape (event) {
-    if (!openMenu || event.key !== 'Escape') return
-    closeMenu()
-    event.preventDefault()
-    event.stopImmediatePropagation()
+  // A move of a slider sets the open note's look, else the selected notes', else the next note's; a new open note's also becomes the next note's.
+  function slideLook (input) {
+    const { read, change: changeWith, setNext } = SLIDER_LOOKS[input.id]
+    const value = read(Number(input.value))
+    const change = changeWith(value)
+    if (editing) changeOpen(change, () => setNext(value))
+    else if (selected.length) changeSelected(change)
+    else setNext(value)
   }
 
   function showPanel () {
@@ -1638,12 +1559,13 @@
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
     backgroundButton.addEventListener('click', pressBackground)
-    const menuRow = document.createElement('div')
-    menuRow.className = MENU_ROW_CLASS
-    const slot = document.createElement('span')
-    slot.className = MENU_SLOT_CLASS
-    menuRow.append(...Object.keys(MENUS).map(menuButton), slot)
-    panelParts = [tray, clear, backgroundButton, settings, menuRow]
+    const sliders = document.createElement('div')
+    sliders.className = SLIDERS_CLASS
+    sliders.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, opacity))
+    // Arrow keys on a slider end in a change.
+    sliders.addEventListener('change', returnFocusToNote)
+    sliders.addEventListener('input', (event) => slideLook(event.target))
+    panelParts = [tray, clear, backgroundButton, settings, sliders]
     keypad().append(...panelParts)
     showPanelValues()
   }
@@ -1653,8 +1575,8 @@
     const looks = panelValues()
     unmarkColor()
     if (looks.color !== null) keypad().querySelector(`button[data-key="${looks.color}"]`).classList.add('current')
-    for (const [kind, menu] of Object.entries(MENUS)) menuButtonOf(kind).querySelector('span:last-child').textContent = menu.face(looks)
-    if (openMenu) markMenuItems(looks)
+    document.getElementById(SIZE_SLIDER).value = looks.width
+    document.getElementById(OPACITY_SLIDER).value = looks.opacity
     showBackground()
     const clear = document.querySelector(`.${CLEAR_CLASS}`)
     const label = selected.length ? DELETE_SELECTED_LABEL : CLEAR_LABEL
@@ -1663,7 +1585,6 @@
   }
 
   function hidePanel () {
-    closeMenu()
     for (const part of panelParts) part.remove()
     panelParts = []
   }
@@ -1806,7 +1727,7 @@
   }
 
   // A note's size depends on these, on the layer's font, and on the board's scale for a fixed note, which is drawn in screen pixels.
-  const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), readOutline(item), layerFont, item.fixed ? map.scale : null])
+  const measuredFor = (item, map) => JSON.stringify([item.text, item.size, item.box, Boolean(item.bg), outline, layerFont, item.fixed ? map.scale : null])
 
   // Measures the notes whose size may have changed, every read before every write: whether its text runs past its box, then, with its scroll bar's
   // room settled, its text's size in board units.
@@ -1850,7 +1771,7 @@
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
     if (!drag?.move && !resizing && keepFixedReachable(notes, map)) save()
     const onTop = [...notes.filter(({ item }) => !item.fixed), ...notes.filter(({ item }) => item.fixed)]
-    hitBoxes = onTop.map(({ element }) => ({ element, box: noteScreenBox(shownNotes.get(element).item, map) }))
+    hitBoxes = onTop.map(({ element }) => ({ element, box: noteScreenBox(shownNotes.get(element).item, map, outline) }))
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
     else showHandles(drag?.move ? null : selectedBox())
@@ -1866,7 +1787,7 @@
     const blockers = layoutBlockers()
     let moved = false
     for (const note of fixed) {
-      const { left, right, top, bottom } = noteScreenBox(note.item, map)
+      const { left, right, top, bottom } = noteScreenBox(note.item, map, outline)
       const point = roundPoint(reachablePoint(note.item.fixed, [right - left, bottom - top], win, blockers))
       if (point[0] === note.item.fixed[0] && point[1] === note.item.fixed[1]) continue
       note.item = drawing[note.index] = { ...note.item, fixed: point }
@@ -2108,7 +2029,7 @@
   function openText (index, point) {
     selected = []
     const map = boardMap()
-    const item = index === -1 ? placedItem(withOutline(textItem(map.toBoard(point), '', color, textSizeFor(width), background), outline), point, map) : { ...drawing[index] }
+    const item = index === -1 ? placedItem(textItem(map.toBoard(point), '', color, textSizeFor(width), background, opacity), point, map) : { ...drawing[index] }
     const element = newTextBox(item, map)
     element.contentEditable = 'plaintext-only'
     element.spellcheck = false
@@ -2142,7 +2063,7 @@
   }
 
   // The controls that work on the open note: a press on one leaves the note open.
-  const isPanelControl = (target) => Boolean(target?.closest?.(`${PANEL} button.digit[data-key], ${PANEL} .${BACKGROUND_CLASS}, ${PANEL} .${MENU_BUTTON_CLASS}, .${MENU_CLASS}`))
+  const isPanelControl = (target) => Boolean(target?.closest?.(`${PANEL} button.digit[data-key], ${PANEL} .${SLIDERS_CLASS}, ${PANEL} .${BACKGROUND_CLASS}`))
 
   // Blank lines before and after the text are dropped; line breaks inside it stay.
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
@@ -2162,7 +2083,7 @@
     const { index, item, element } = closeEditing()
     const before = index === -1 ? '' : drawing[index].text
     const text = typedText(element)
-    const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
+    const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
@@ -2194,9 +2115,10 @@
     finishText()
   }
 
-  // A press on a panel button keeps the focus in the open note, so its caret stays.
+  // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
+  // pointer is released, even when the slider did not move.
   function keepNoteFocus (event) {
-    if (editing && isPanelControl(event.target)) event.preventDefault()
+    if (editing && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS} input`)) event.preventDefault()
   }
 
   // A drag ends its move or its selection rectangle on its release; a press that never moved does nothing more, unless `click` is given to run it.
@@ -2267,7 +2189,7 @@
       element.style.translate = `${tx}px ${ty}px`
       const hit = hitBoxes.find((entry) => entry.element === element)
       if (!hit) continue
-      const { left, right, top, bottom } = noteScreenBox(item, map)
+      const { left, right, top, bottom } = noteScreenBox(item, map, outline)
       hit.box = { left: left + dx, right: right + dx, top: top + dy, bottom: bottom + dy }
     }
   }
@@ -2490,8 +2412,9 @@
 
   Framework.getApp().then((app) => {
     color = readColor(Framework.getData(COLOR_KEY))
-    width = snappedWidth(readWidth(Framework.getData(WIDTH_KEY)))
-    outline = readSavedOutline(Framework.getData(OUTLINE_KEY))
+    width = readWidth(Framework.getData(WIDTH_KEY))
+    opacity = readOpacity(Framework.getData(OPACITY_KEY))
+    outline = readOutline(Framework.getData(OUTLINE_KEY))
     background = readBackground(Framework.getData(BACKGROUND_KEY))
     colors = readDrawColors(Framework.getData(COLORS_KEY))
     boxColor = readBox(Framework.getData(BOX_KEY))
@@ -2513,15 +2436,15 @@
     window.addEventListener('contextmenu', suppressMenu)
     installColorPickers()
     window.addEventListener('blur', endGesture)
-    window.addEventListener('pointerdown', closeMenuOnPress, { capture: true })
+    installSliderGuards(`.${SLIDERS_CLASS}`)
     window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
     window.addEventListener('mousedown', keepNoteFocus, { capture: true })
+    // After the slider guards' own release handler, which takes the focus off the slider.
     window.addEventListener('pointerup', returnFocusToNote, { capture: true })
     window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
     window.addEventListener('wheel', scrollNote, { capture: true, passive: false })
     window.addEventListener('mousemove', resizeMove, { capture: true })
     window.addEventListener('mouseup', endResize, { capture: true })
-    window.addEventListener('keydown', closeMenuOnEscape, { capture: true })
     for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
     if (app.puzzle.currentPuzzle) showSavedDrawing()
   })

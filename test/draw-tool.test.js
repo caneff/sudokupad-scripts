@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -211,13 +211,13 @@ test('a Darker page preset the palette lacks, or an unknown one, throws', () => 
   assert.throws(() => presetColors('nope', [], () => undefined, () => undefined), /not a preset/)
 })
 
-test('Copy settings holds the colors, size, box color and frame, defaults included, and no notes, color pick or background', () => {
-  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, [BOX_KEY]: 'tint', [FRAME_KEY]: true, DrawTool_color: 4, DrawTool_drawing_x: [] })))
-  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3, [BOX_KEY]: 'tint', [FRAME_KEY]: true })
+test('Copy settings holds the colors, size, transparency, outline, box color and frame, defaults included, and no notes, color pick or background', () => {
+  const copied = JSON.parse(copiedSettings(storeOf({ [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true, DrawTool_color: 4, DrawTool_drawing_x: [] })))
+  assert.deepEqual(copied, { [COLORS_KEY]: hexes('#112233'), [WIDTH_KEY]: 3.5, [OPACITY_KEY]: 55, [OUTLINE_KEY]: 'thin', [BOX_KEY]: 'tint', [FRAME_KEY]: true })
 })
 
 test('Copy settings leaves the colors out until they are saved', () => {
-  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [BOX_KEY]: 'page', [FRAME_KEY]: false })
+  assert.deepEqual(JSON.parse(copiedSettings(storeOf({}))), { [WIDTH_KEY]: DEFAULT_WIDTH, [OPACITY_KEY]: DEFAULT_OPACITY, [OUTLINE_KEY]: 'medium', [BOX_KEY]: 'page', [FRAME_KEY]: false })
 })
 
 test('the box color setting reads a preset or a #rrggbb color and anything else as Page', () => {
@@ -258,11 +258,11 @@ test('the frame setting is on only for true, and a frame is a thin light gray ri
   assert.equal(frameShadow(true), `0 0 0 var(--draw-tool-px, 1px) ${FRAME_COLOR}`)
 })
 
-test('Paste settings returns the colors and size, ignores other scripts\' keys, the old opacity and counts a refused value as skipped', () => {
-  const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, DrawTool_opacity: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
-  assert.deepEqual(readPaste(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5 }, skipped: 0 })
-  const bad = readPaste(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99 }))
-  assert.deepEqual(bad, { values: {}, skipped: 2 })
+test('Paste settings returns the colors, size and transparency, ignores other scripts\' keys and counts a refused value as skipped', () => {
+  const text = JSON.stringify({ [COLORS_KEY]: hexes('#AABBCC'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35, PenColor_colors: hexes('#000000'), unrelated: 1 })
+  assert.deepEqual(readPaste(text), { values: { [COLORS_KEY]: hexes('#aabbcc'), [WIDTH_KEY]: 2.5, [OPACITY_KEY]: 35 }, skipped: 0 })
+  const bad = readPaste(JSON.stringify({ [COLORS_KEY]: { ...hexes('#aabbcc'), 4: 'red' }, [WIDTH_KEY]: 99, [OPACITY_KEY]: 10 }))
+  assert.deepEqual(bad, { values: {}, skipped: 3 })
   assert.deepEqual(readPaste(JSON.stringify({ [COLORS_KEY]: {} })), { values: {}, skipped: 1 }, 'colors with no color in them')
 })
 
@@ -270,6 +270,11 @@ test('Paste settings returns the box color and the frame, and an invalid value r
   assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: 'yellow', [FRAME_KEY]: true })), { values: { [BOX_KEY]: 'yellow', [FRAME_KEY]: true }, skipped: 0 })
   assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: '#00FF00' })).values, { [BOX_KEY]: '#00ff00' })
   assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' })), { values: { [BOX_KEY]: 'page', [FRAME_KEY]: false }, skipped: 0 })
+})
+
+test('Paste settings returns the outline, and an invalid one reads as Thicker without counting as skipped', () => {
+  assert.deepEqual(readPaste(JSON.stringify({ [OUTLINE_KEY]: 'none' })), { values: { [OUTLINE_KEY]: 'none' }, skipped: 0 })
+  assert.deepEqual(readPaste(JSON.stringify({ [OUTLINE_KEY]: 'huge' })), { values: { [OUTLINE_KEY]: 'medium' }, skipped: 0 })
 })
 
 test('Paste settings fills a missing color with SudokuPad\'s and refuses text that is not settings', () => {
@@ -436,51 +441,44 @@ const red20 = textItem([0, 0], 'a', 4, 20)
 const red14Boxed = textItem([0, 0], 'b', 4, 14, true)
 const blue20Boxed = textItem([0, 0], 'c', 6, 20, true)
 
-test('the panel shows a selection that agrees on everything as its color, size, outline and background', () => {
-  assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, size: 20, outline: 'medium', bg: false })
-  assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, size: 20, outline: 'medium', bg: true })
+test('the panel shows a selection that agrees on everything as its color, size, transparency and background', () => {
+  assert.deepEqual(panelLooks([red20, { ...red20, text: 'd' }]), { color: 4, width: 6, opacity: 100, bg: false })
+  assert.deepEqual(panelLooks([blue20Boxed]), { color: 6, width: 6, opacity: 100, bg: true })
 })
 
-test('a mixed selection shows no color, size, outline or background state where its notes differ', () => {
-  assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, size: null, outline: 'medium', bg: true })
-  assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, size: null, outline: 'medium', bg: null })
-  assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, size: 20, outline: 'medium', bg: null })
-  assert.deepEqual(panelLooks([red20, withOutline(red20, 'none')]).outline, null)
-  assert.deepEqual(panelLooks([withOutline(red20, 'thin'), withOutline(red14Boxed, 'thin')]).outline, 'thin')
+test('a mixed selection shows no color or background state where its notes differ, and the first note\'s size and transparency', () => {
+  assert.deepEqual(panelLooks([red14Boxed, blue20Boxed]), { color: null, width: 3, opacity: 100, bg: true })
+  assert.deepEqual(panelLooks([red20, red14Boxed]), { color: 4, width: 6, opacity: 100, bg: null })
+  assert.deepEqual(panelLooks([red20, blue20Boxed]), { color: null, width: 6, opacity: 100, bg: null })
+  assert.equal(panelLooks([{ ...red20, opacity: 40 }, red20]).opacity, 40)
+  assert.equal(panelLooks([red20, { ...red20, opacity: 40 }]).opacity, 100)
+  assert.equal(panelLooks([{ ...red20, size: textSizeFor(7.5) }, red20]).width, 7.5)
 })
 
-test('the size menu has six sizes that run from the text size of the smallest width to the largest and include the default size', () => {
-  assert.equal(SIZE_MENU.length, 6)
-  assert.equal(SIZE_MENU[0], textSizeFor(MIN_WIDTH))
-  assert.equal(SIZE_MENU.at(-1), textSizeFor(MAX_WIDTH))
-  assert.ok(SIZE_MENU.includes(textSizeFor(DEFAULT_WIDTH)))
-  assert.deepEqual(SIZE_MENU, [...SIZE_MENU].sort((a, b) => a - b))
+test('a saved transparency reads back for any slider value, and a missing or bad one reads as the default', () => {
+  for (const saved of [MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY]) assert.equal(readOpacity(saved), saved)
+  assert.equal(readOpacity(55), 55)
+  for (const saved of [null, undefined, 0, 19, 101, 57, '60', 'faint', {}, NaN]) assert.equal(readOpacity(saved), DEFAULT_OPACITY, JSON.stringify(saved))
 })
 
-test('a size not in the menu reads as the nearest size in it', () => {
-  for (const size of SIZE_MENU) assert.equal(nearestMenuSize(size), size)
-  assert.equal(nearestMenuSize(textSizeFor(7.5)), 20) // 23 is as near 20 as 26: the smaller wins
-  assert.equal(nearestMenuSize(24), 26)
-  assert.equal(nearestMenuSize(12.5), 14)
-  assert.equal(nearestMenuSize(11), 10)
-  assert.equal(nearestMenuSize(1000), 40)
+test('a new note carries the transparency it is given, and 100 when none is', () => {
+  assert.equal(textItem([0, 0], 'a', 1, 20, false, 60).opacity, 60)
+  assert.equal(textItem([0, 0], 'a', 1, 20).opacity, 100)
 })
 
-test('an outline is none, thin or medium, and a note with no outline field reads as medium', () => {
+test('an outline is none, thin or medium, Off, Thinner or Thicker in the dialog, and anything else reads as medium', () => {
   assert.deepEqual(OUTLINES, ['none', 'thin', 'medium'])
   assert.equal(DEFAULT_OUTLINE, 'medium')
-  assert.equal(readOutline(red20), 'medium')
-  assert.equal(readOutline({ ...red20, outline: 'thin' }), 'thin')
-  assert.equal(readOutline(withOutline(red20, 'none')), 'none')
-  for (const saved of [null, undefined, 'huge', 3, {}]) assert.equal(readSavedOutline(saved), 'medium', JSON.stringify(saved))
-  for (const saved of OUTLINES) assert.equal(readSavedOutline(saved), saved)
+  assert.deepEqual(OUTLINES.map((name) => OUTLINE_LABELS[name]), ['Off', 'Thinner', 'Thicker'])
+  for (const saved of [null, undefined, 'huge', 3, {}]) assert.equal(readOutline(saved), 'medium', JSON.stringify(saved))
+  for (const saved of OUTLINES) assert.equal(readOutline(saved), saved)
 })
 
-test('a note keeps its outline in its own field, and medium is the absence of one', () => {
-  assert.deepEqual(withOutline(red20, 'thin'), { ...red20, outline: 'thin' })
-  assert.deepEqual(withOutline({ ...red20, outline: 'thin' }, 'medium'), red20)
+test('a note\'s own outline field is ignored: it loads, stays as saved and is not read', () => {
   assert.deepEqual(readDrawing([{ ...red20, outline: 'none' }]), [{ ...red20, outline: 'none' }])
-  assert.throws(() => readDrawing([{ ...red20, outline: 'huge' }]), /not a list of texts/)
+  assert.deepEqual(readDrawing([{ ...red20, outline: 'huge' }]), [{ ...red20, outline: 'huge' }])
+  const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
+  assert.deepEqual(noteScreenBox({ ...red20, outline: 'none' }, map, 'medium'), noteScreenBox(red20, map, 'medium'))
 })
 
 test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline\'s reach and grows from thin to medium; none has no shadow', () => {
@@ -504,7 +502,7 @@ test('a halo is a ring of sixteen zero-blur shadows, whose radius is the outline
 
 test('a note\'s padding is its outline\'s reach, none for none', () => {
   const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
-  const box = (outline) => noteScreenBox(withOutline(textItem([100, 50], 'sum', 1, 20), outline), map)
+  const box = (outline) => noteScreenBox(textItem([100, 50], 'sum', 1, 20), map, outline)
   assert.equal(Math.round((box('thin').right - box('none').right) * 1000) / 1000, Math.round(OUTLINE_EM.thin * 20 * 1000) / 1000)
   assert.equal(Math.round((box('medium').right - box('none').right) * 1000) / 1000, 2.8)
 })
@@ -666,11 +664,11 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   const near = (box) => Object.fromEntries(Object.entries(box).map(([side, v]) => [side, Math.round(v * 1e6) / 1e6]))
   const pinned = { ...textItem([100, 50], 'sum', 1, 20), box: [40, 23] }
   // Without a background the padding is the halo's reach, 0.14 of 20 units.
-  assert.deepEqual(near(noteScreenBox(pinned, map)), { left: 164.4, right: 255.6, top: 91.4, bottom: 148.6 })
+  assert.deepEqual(near(noteScreenBox(pinned, map, 'medium')), { left: 164.4, right: 255.6, top: 91.4, bottom: 148.6 })
   // With one it is the background's, 7 units across and 3 down.
-  assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map)), { left: 156, right: 264, top: 91, bottom: 149 })
+  assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
-  assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map)), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
+  assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
 })
 
 test('a fixed note is drawn above the notes on the board, so a click where they overlap lands on it, whichever was made last', () => {
