@@ -19,7 +19,7 @@ const TALL_AT = [4.5, 4.5]
 const SHORT_AT = [7.5, 1.5]
 const EMPTY_AT = [7.5, 7.5]
 // Beside the grid, between it and the panel, clear of every control.
-const OFF_BOARD_AT = [2.5, 9.45]
+const OFF_BOARD_AT = [3.5, 9.45]
 // Narrow letters: the guess from the character count makes this two lines, and it is drawn on one.
 const NARROW_AT = [0.5, 1.5]
 const NARROW_TEXT = 'il '.repeat(15).trim()

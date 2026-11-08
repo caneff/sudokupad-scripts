@@ -28,7 +28,7 @@ describe('Text Anywhere\'s panel while a note is open', { concurrency: false }, 
   const boxOpen = async () => (await p.locator(TEXT_BOX).count()) === 1
   const boxColor = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e).color)
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
-  const openAt = async () => p.mouse.dblclick(...await gridPoint(p, SPOT))
+  const openAt = async () => draw.reopen(p, await gridPoint(p, SPOT))
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
