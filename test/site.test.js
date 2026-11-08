@@ -455,7 +455,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge, hold to keep nudging.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
-    'Settings Color presets, the box color, the outline, a frame round boxes, and Copy and Paste to another browser.'
+    'Settings Color presets, halo, box color and box border picked from samples, and Copy and Paste to another browser.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${DRAW} has no <ul class="features">`)

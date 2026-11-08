@@ -1,4 +1,4 @@
-// Live check of draw-tool.user.js's Background box setting and Frame checkbox on sudokupad.app: each preset and a custom color recolor every boxed note
+// Live check of draw-tool.user.js's Box color and Box border sample buttons on sudokupad.app: each preset and a custom color recolor every boxed note
 // at Save and survive a reload, Tint tints each note from its own color, Cancel changes nothing, a note without a box gets neither, and Copy then Paste
 // in a fresh page carries both, an invalid pasted value reading as Page and as off.
 import { after, before, describe, it } from 'node:test'
@@ -8,10 +8,12 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { closeDialogWith } from '../settings.mjs'
 
-const { BOX_KEY, FRAME_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, pickDraw } = draw
-const CHOICE = `${EDITOR} select[data-role="box-choice"]`
+const { BOX_KEY, FRAME_KEY, OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXTS, pickDraw } = draw
+const PICKS = `${EDITOR} button[data-role="box-pick"]`
 const CUSTOM = `${EDITOR} input[data-role="box-custom"]`
-const FRAME = `${EDITOR} input[data-role="frame"]`
+const FRAME_PICKS = `${EDITOR} button[data-role="frame-pick"]`
+const FRAME_ON = `${FRAME_PICKS}[data-value="on"]`
+const FRAME_OFF = `${FRAME_PICKS}[data-value="off"]`
 const ITEMS = [
   { kind: 'text', color: 1, size: 20, opacity: 100, bg: true, text: 'one', at: [30, 30] },
   { kind: 'text', color: 6, size: 20, opacity: 100, bg: true, text: 'six', at: [90, 30] },
@@ -43,7 +45,9 @@ const dialog = async (p, work, close = 'Save') => {
   await work()
   await closeDialogWith(p, close, EDITOR)
 }
-const choose = (p, value) => p.locator(CHOICE).selectOption(value)
+const choose = (p, value) => p.locator(`${PICKS}[data-value="${value}"]`).click()
+const pickedBox = (p) => p.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('data-value')
+const frameOn = async (p) => await p.locator(FRAME_ON).getAttribute('aria-pressed') === 'true'
 
 describe('Text Anywhere\'s background box color and frame', { concurrency: false }, () => {
   let context, p, errors
@@ -62,20 +66,11 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     const page = await pageColor(p)
     assert.deepEqual(await looks(p), { one: { fill: page, shadow: 'none' }, six: { fill: page, shadow: 'none' }, bare: { fill: TRANSPARENT, shadow: 'none' } })
     await p.click(SETTINGS_BUTTON)
-    assert.equal(await p.locator(CHOICE).inputValue(), 'page')
-    assert.deepEqual(await p.locator(`${CHOICE} option`).allTextContents(), ['Page', 'White', 'Sticky yellow', 'Tint', 'Custom'])
-    assert.equal(await p.locator(FRAME).isChecked(), false)
+    assert.equal(await pickedBox(p), 'page')
+    assert.deepEqual(await p.locator(PICKS).evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label'))), ['Page', 'White', 'Yellow', 'Tint', 'Own'])
+    assert.equal(await frameOn(p), false)
+    assert.equal(await p.locator(FRAME_OFF).getAttribute('aria-pressed'), 'true')
     assert.equal(await p.locator(CUSTOM).count(), 0)
-    // SudokuPad stretches a dialog's inputs: the checkbox must stay its own size, on the pulldown's left edge, with its word right beside it.
-    const { check, word, choice } = await p.evaluate(() => {
-      const row = document.querySelector('#draw-tool-dialog .draw-tool-frame-row')
-      const range = document.createRange()
-      range.selectNodeContents([...row.childNodes].find((node) => node.nodeType === window.Node.TEXT_NODE && node.textContent.trim()))
-      return { check: row.querySelector('input').getBoundingClientRect(), word: range.getBoundingClientRect(), choice: document.querySelector('#draw-tool-dialog select[data-role="box-choice"]').getBoundingClientRect() }
-    })
-    assert.equal(check.width < 30, true, `the checkbox is ${check.width}px wide`)
-    assert.equal(Math.abs(check.left - choice.left) <= 2, true, `the checkbox is at ${check.left}, the pulldown at ${choice.left}`)
-    assert.equal(word.left >= check.right && word.left - check.right <= 16, true, `the word starts ${word.left - check.right}px from the checkbox`)
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
@@ -94,7 +89,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     }
   })
 
-  it('White and Sticky yellow recolor every boxed note at Save and survive a reload', async () => {
+  it('White and Yellow recolor every boxed note at Save and survive a reload', async () => {
     for (const [preset, fill] of [['white', 'rgb(255, 255, 255)'], ['yellow', 'rgb(255, 244, 176)']]) {
       await dialog(p, () => choose(p, preset))
       assert.equal(await stored(p, BOX_KEY), preset)
@@ -122,6 +117,9 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     await dialog(p, async () => {
       await choose(p, 'custom')
       await p.locator(CUSTOM).fill('#ffc0cb')
+      // The Own sample and the border samples show the new color at once, not at the next pick.
+      assert.match(await p.locator(`${PICKS}[data-value="custom"] span[style*="background"]`).last().getAttribute('style'), /background:#ffc0cb/)
+      assert.match(await p.locator(`${FRAME_ON} span[style*="background"]`).last().getAttribute('style'), /background:#ffc0cb/)
     })
     assert.equal(await stored(p, BOX_KEY), '#ffc0cb')
     const fill = 'rgb(255, 192, 203)'
@@ -130,7 +128,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     await pickDraw(p)
     assert.equal((await looks(p)).one.fill, fill)
     await p.click(SETTINGS_BUTTON)
-    assert.equal(await p.locator(CHOICE).inputValue(), 'custom')
+    assert.equal(await pickedBox(p), 'custom')
     assert.equal(await p.locator(CUSTOM).inputValue(), '#ffc0cb')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
@@ -139,7 +137,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     const before = await looks(p)
     await dialog(p, async () => {
       await choose(p, 'white')
-      await p.locator(FRAME).check()
+      await p.locator(FRAME_ON).click()
     }, 'Cancel')
     assert.deepEqual(await looks(p), before)
     assert.equal(await stored(p, BOX_KEY), '#ffc0cb')
@@ -147,7 +145,7 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
   })
 
   it('Frame on frames every boxed note with a thin light gray ring and no other, off removes it, and both survive a reload', async () => {
-    await dialog(p, () => p.locator(FRAME).check())
+    await dialog(p, () => p.locator(FRAME_ON).click())
     assert.equal(await stored(p, FRAME_KEY), true)
     // The ring is one screen pixel, which on the board is 1 / scale of a board unit.
     const ring = (shadow) => assert.match(shadow, /^rgb\(196, 196, 196\) 0px 0px 0px [\d.]+px$/)
@@ -164,8 +162,8 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     await pickDraw(p)
     ring((await looks(p)).one.shadow)
     await dialog(p, async () => {
-      assert.equal(await p.locator(FRAME).isChecked(), true)
-      await p.locator(FRAME).uncheck()
+      assert.equal(await frameOn(p), true)
+      await p.locator(FRAME_OFF).click()
     })
     ;({ one, six, bare } = await looks(p))
     assert.deepEqual([one.shadow, six.shadow, bare.shadow], ['none', 'none', 'none'])
@@ -174,10 +172,34 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     assert.equal((await looks(p)).one.shadow, 'none')
   })
 
+  it('picking Thin, Tint and None, then Save, stores thin, tint and no frame, and redraws the notes', async () => {
+    await dialog(p, () => p.locator(FRAME_ON).click())
+    await dialog(p, async () => {
+      await p.locator(`${EDITOR} button[data-role="outline-pick"][data-value="thin"]`).click()
+      await choose(p, 'tint')
+      await p.locator(FRAME_OFF).click()
+      // The picked button keeps the keyboard focus through the redraw.
+      assert.equal(await p.evaluate(() => document.activeElement?.dataset.value), 'off')
+    })
+    assert.equal(await stored(p, OUTLINE_KEY), 'thin')
+    assert.equal(await stored(p, BOX_KEY), 'tint')
+    assert.equal(await stored(p, FRAME_KEY), false)
+    const { one, bare } = await looks(p)
+    assert.match(one.fill, /^color\(srgb /)
+    assert.equal(one.shadow, 'none')
+    // The unboxed note's halo reaches 0.07 of its text size, the thin one (thick is 0.14).
+    const reach = await p.evaluate((selector) => {
+      const style = window.getComputedStyle([...document.querySelectorAll(selector)].find((e) => e.textContent === 'bare'))
+      return Math.max(...[...style.textShadow.matchAll(/(-?[\d.]+)px (-?[\d.]+)px 0px/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2])))) / parseFloat(style.fontSize)
+    }, TEXTS)
+    assert.equal(Math.abs(reach - 0.07) < 0.005, true, `the halo reaches ${reach} of the text size`)
+    assert.equal(bare.fill, TRANSPARENT)
+  })
+
   it('Copy then Paste in a fresh page carries the box color and the frame, and an invalid pasted value reads as Page and off', async () => {
     await dialog(p, async () => {
       await choose(p, 'yellow')
-      await p.locator(FRAME).check()
+      await p.locator(FRAME_ON).click()
     })
     await p.click(SETTINGS_BUTTON)
     await p.locator('.dialog button[data-act="copy-settings"]').click()
@@ -200,8 +222,8 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
         await other.p.locator(STATUS).filter({ hasText: /^Pasted \d settings?\.$/ }).waitFor()
         assert.equal(await stored(other.p, BOX_KEY), box)
         assert.equal(await stored(other.p, FRAME_KEY), frame)
-        assert.equal(await other.p.locator(CHOICE).inputValue(), box)
-        assert.equal(await other.p.locator(FRAME).isChecked(), frame)
+        assert.equal(await pickedBox(other.p), box)
+        assert.equal(await other.p.locator(FRAME_ON).getAttribute('aria-pressed'), String(frame))
         assert.equal((await looks(other.p)).one.shadow === 'none', !frame, `the shadow is ${(await looks(other.p)).one.shadow}`)
         await closeDialogWith(other.p, 'Cancel', EDITOR)
       }
