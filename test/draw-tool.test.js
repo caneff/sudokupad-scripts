@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -880,4 +880,76 @@ test('each of the three sample rows has its sub-line', () => {
   contains(html, 'For notes without a box, so they read over digits and grid lines.')
   contains(html, 'For notes made with the Background button on.')
   contains(html, 'The line round a note with a box.')
+})
+
+// Ten column lines 64 px apart from 100: the board's span is 100..676, middles at 132, 196 ... 644.
+const LINES = Array.from({ length: 10 }, (_, k) => 100 + k * 64)
+
+test('snapAxis pulls a note\'s middle onto a cell\'s middle and guides at that middle', () => {
+  assert.deepEqual(snapAxis(150, 240, { lines: LINES }), { shift: 1, guide: 196 })
+})
+
+test('snapAxis pulls a note\'s near edge onto a cell line', () => {
+  assert.deepEqual(snapAxis(166, 200, { lines: LINES }), { shift: -2, guide: 164 })
+})
+
+test('snapAxis pulls a note\'s far edge onto a cell line', () => {
+  assert.deepEqual(snapAxis(120, 226, { lines: LINES }), { shift: 2, guide: 228 })
+})
+
+test('snapAxis reaches exactly SNAP_PX (4) and leaves a note 4.5 px from every target where it is', () => {
+  assert.equal(SNAP_PX, 4)
+  assert.deepEqual(snapAxis(168, 190, { lines: LINES }), { shift: -4, guide: 164 })
+  assert.equal(snapAxis(168.5, 190, { lines: LINES }), null)
+})
+
+test('snapAxis does not snap a note wholly outside the board\'s span on that axis', () => {
+  assert.equal(snapAxis(10, 99, { lines: LINES }), null)
+  assert.equal(snapAxis(677, 700, { lines: LINES }), null)
+})
+
+test('snapAxis still snaps a note that overlaps the span by an edge, so a note beside the board lines up with the rows', () => {
+  assert.deepEqual(snapAxis(50, 101, { lines: LINES }), { shift: -1, guide: 100 })
+})
+
+test('snapAxis picks the nearest target in reach', () => {
+  // near edge 2 px and far edge 1 px from a line, middle 0.5 px from a middle: the middle wins
+  assert.deepEqual(snapAxis(102, 163, { lines: LINES }), { shift: -0.5, guide: 132 })
+  // near edge 3 px from line 164, middle on the middle 196: the middle wins
+  assert.deepEqual(snapAxis(167, 225, { lines: LINES }), { shift: 0, guide: 196 })
+  // near edge 2 px from line 164, middle 3 px from middle 196: the edge wins
+  assert.deepEqual(snapAxis(166, 232, { lines: LINES }), { shift: -2, guide: 164 })
+})
+
+// Other notes are targets on the axis: their near edge, far edge and middle, each met by the same part of the dragged note, the guide where the outline (reach 3) lies.
+const NOTE = { lo: 300, hi: 340 }
+const NO_GRID = [0, 1]
+test('snapAxis lines a note\'s near edge up with another note\'s near edge, guiding where the outline lies', () => {
+  assert.deepEqual(snapAxis(303, 350, { lines: NO_GRID, others: [NOTE], reach: 3 }), { shift: -3, guide: 297 })
+})
+
+test('snapAxis lines a note\'s far edge up with another note\'s far edge, guiding where the outline lies', () => {
+  assert.deepEqual(snapAxis(270, 337, { lines: NO_GRID, others: [NOTE], reach: 3 }), { shift: 3, guide: 343 })
+})
+
+test('snapAxis lines a note\'s middle up with another note\'s middle', () => {
+  assert.deepEqual(snapAxis(290, 354, { lines: NO_GRID, others: [NOTE], reach: 3 }), { shift: -2, guide: 320 })
+})
+
+test('snapAxis does not line a note\'s edge up with the far side of another note', () => {
+  assert.equal(snapAxis(341, 380, { lines: NO_GRID, others: [NOTE], reach: 3 }), null)
+  assert.equal(snapAxis(250, 299, { lines: NO_GRID, others: [NOTE], reach: 3 }), null)
+})
+
+test('snapAxis lets the nearer of a cell target and a note target win', () => {
+  // outline near edge (box 166 - 3 = 163) is 1 px from line 164; the box edge is 4 px from the note edge 170
+  assert.deepEqual(snapAxis(166, 200, { lines: LINES, others: [{ lo: 170, hi: 400 }], reach: 3 }), { shift: 1, guide: 164 })
+  // the note edge is on the box edge, the cell line 1 px from the outline
+  assert.deepEqual(snapAxis(166, 200, { lines: LINES, others: [{ lo: 166, hi: 400 }], reach: 3 }), { shift: 0, guide: 163 })
+  // near edge exactly 0 px from a note edge and 2 px from a cell line
+  assert.deepEqual(snapAxis(165, 200, { lines: LINES, others: [{ lo: 165, hi: 400 }], reach: 3 }), { shift: 0, guide: 162 })
+})
+
+test('snapAxis snaps to a note beside the board even where the grid has no target', () => {
+  assert.deepEqual(snapAxis(800, 830, { lines: LINES, others: [{ lo: 802, hi: 900 }] }), { shift: 2, guide: 802 })
 })
