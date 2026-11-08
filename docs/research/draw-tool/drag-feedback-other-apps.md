@@ -1,0 +1,10 @@
+# How other editors show a text box being dragged (read 2026-11-08)
+
+Asked because Chris disliked a "lift" (shadow and 6% grow) on a dragged note in the polish prototype.
+
+- **PowerPoint**: red dashed smart guides appear while an object is moved, at edge and centre alignment with other objects and the slide; with three or more objects, double-headed arrows show equal spacing. Smart guides also appear while resizing, when sizes match. No lift or shadow is described. ([Microsoft support](https://support.microsoft.com/en-us/office/align-and-arrange-objects-on-a-slide-5f961535-a2ae-4914-a24a-94c669903ae3), [Indezine](https://www.indezine.com/products/powerpoint/learn/interface/365/smarter-guides.html))
+- **Google Slides**: red lines appear while dragging when an object's centre or edges line up with the slide's centre or other objects (Snap to Guides, on by default). No lift is described. ([Google support](https://support.google.com/docs/answer/1696521), [Advanced Google Slides PDF](https://davetaenzer.com/docs/Advanced_Google_Slides.pdf))
+- **Figma**: "Snap to objects" aligns centres and outer edges while moving or resizing, with a red guide; holding Control turns snapping off for the drag. Alt-hover shows red distance measurements. ([Figma: alignment and position](https://help.figma.com/hc/en-us/articles/360039956914-Adjust-alignment-rotation-position-and-dimensions), [Figma: measure distances](https://help.figma.com/hc/en-us/articles/360039956974-Measure-distances-between-layers))
+- **FigJam stickies**: the help pages describe placing, resizing and Alt-drag duplicating stickies; they cannot be rotated, and no drag lift is described. ([FigJam stickies](https://help.figma.com/hc/en-us/articles/1500004414322-Sticky-notes-in-FigJam))
+
+Takeaway: the editors' drag cue is the alignment guide, not a change to the dragged object. Text Anywhere's snap guide (#531) already follows that pattern. Not read: any app's behaviour seen first-hand; these are the vendors' and tutorial writers' descriptions.
