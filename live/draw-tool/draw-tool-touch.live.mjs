@@ -211,13 +211,13 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
 
     it('shows the hover outline 3 px outside the box, and not 6 px outside', async () => {
-      const outline = () => p.locator(TEXTS).filter({ hasText: /^BB$/ }).evaluate((e) => window.getComputedStyle(e).outlineStyle)
+      const CLEAR = 'rgba(0, 0, 0, 0)'
+      const outline = () => p.locator(TEXTS).filter({ hasText: /^BB$/ }).evaluate((e) => window.getComputedStyle(e).outlineColor)
       await p.mouse.move(...await outsideLeft(PAST_MARGIN_PX))
       await draw.frames(p)
-      assert.equal(await outline(), 'none')
+      assert.equal(await outline(), CLEAR)
       await p.mouse.move(...await outsideLeft(INSIDE_MARGIN_PX))
-      await draw.frames(p)
-      assert.equal(await outline(), 'solid')
+      await p.waitForFunction((clear) => window.getComputedStyle([...document.querySelectorAll('#draw-tool-layer .draw-tool-text')].find((e) => e.textContent === 'BB')).outlineColor !== clear, CLEAR)
     })
 
     it('drags the note from a press 3 px outside its box', async () => {
