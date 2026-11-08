@@ -11,7 +11,7 @@ const {
   copiedSettings, pastedSettings, READERS, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf,
   stepType, EDGE_CYCLE, planClick, normalizeMarkSettings, shapePath,
   CORNER_VALUES, cornerAt, cornerStorage, cornerPoint, planCornerClick,
-  PEN_PAGES, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
+  PEN_PAGES, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, buildPagesCss, pageSwatch, renderSettingsButton, PAGE_BUTTON_ANGLE, renderPageIcon, normalizeLineMode, LINE_MODES,
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS,
@@ -2239,4 +2239,15 @@ test('the dialog is styled through the editor inside the dialog; its button row 
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{ width: fit-content !important;/)
   assert.doesNotMatch(DIALOG_CSS, /data-role="(save|cancel|restore)"/)
   assert.doesNotMatch(DIALOG_CSS, /pen-tool-extras-dialog/)
+})
+
+test('digitKeyPen: a bare digit 1 to 9 picks that pen on the page showing, and nothing else does', () => {
+  const key = (k, extra = {}) => ({ key: k, ctrlKey: false, altKey: false, metaKey: false, shiftKey: false, ...extra })
+  assert.equal(digitKeyPen(key('3'), 0), '3')
+  assert.equal(digitKeyPen(key('3'), 1), 'c')
+  assert.equal(digitKeyPen(key('9'), 2), penCharOn(2, '9'))
+  assert.equal(digitKeyPen(key('0'), 0), null, 'key 0 stays unused')
+  assert.equal(digitKeyPen(key('a'), 0), null)
+  assert.equal(digitKeyPen(key('12'), 0), null)
+  for (const mod of ['ctrlKey', 'altKey', 'metaKey', 'shiftKey']) assert.equal(digitKeyPen(key('3', { [mod]: true }), 0), null, mod)
 })
