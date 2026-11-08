@@ -4,7 +4,7 @@
 //   draw-tool-slide-3-background.png  the Background button on: a formula in a page-colored box over the grid lines, beside one made with it off
 //   draw-tool-slide-6-select.png      three margin notes selected by a drag on empty space, the dragged box dashed, and recolored together from the panel
 //   draw-tool-slide-7-erase.png       the pointer on a note with a red ring round it, where a right click erases it (the click follows the shot and must erase the note)
-//   draw-tool-slide-9-long.png        a four-line note open for typing, made two lines tall with its bottom right handle of four, so it scrolls, its scroll bar visible
+//   draw-tool-slide-9-long.png        a four-line note open for typing, made two lines tall with its bottom right handle of four, so it scrolls to its last two lines, its scroll bar visible
 // Every note is typed with real clicks and keys. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
 // Run from the repo root with Playwright's Chromium installed:
 //   node docs/research/draw-tool/draw-tool-slides-screenshot.mjs
@@ -15,9 +15,11 @@ import { slideTo, valueOf } from '../../../live/draw-tool/draw-tool-fixtures.mjs
 
 const out = (name) => new URL(`./draw-tool-slide-${name}.png`, import.meta.url).pathname
 const DRAG_STEPS = 10
-// The picture's size, and its top left in cells from the grid's top left: it takes in the margin above the grid and the room beside it, down to the panel's bottom.
-const CLIP_SIZE = [1000, 625]
-const CLIP_CORNER = [2.3, -0.95]
+// The picture's size in page pixels, and its top in cells from the grid's top: it starts at the page's left edge and takes in the whole grid, the margins round it and the panel.
+const CLIP_SIZE = [1176, 735]
+const CLIP_TOP = -0.95
+// The picture is 1000 x 625: the page is shot at this scale, so the whole grid fits and a note looks as large as it does in SudokuPad.
+const SCALE = 0.85
 const GREEN = 1
 const ORANGE = 3
 const RED = 4
@@ -47,13 +49,13 @@ const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars']
 
 // A fresh page with Draw on and helpers working in cell units from the grid's top left.
 async function scene () {
-  const p = await openDrawPage(browser, 1)
+  const p = await openDrawPage(browser, SCALE)
   const [x0, y0, cell] = await p.evaluate(() => {
     const box = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
     return [box.x, box.y, box.width]
   })
   const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
-  const clipRect = () => ({ x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
+  const clipRect = () => ({ x: 0, y: y0 + CLIP_TOP * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
   const items = () => p.locator(NOTES).count()
   // Sets the Size slider to the text size `size` (2 x width + 8), then checks it landed.
   const pickSize = async (size) => {
@@ -213,8 +215,8 @@ const ABOVE_COL_8 = [-0.55, 7.3]
   if (!scrolls) throw new Error('the resized note does not scroll')
   const box = await open.boundingBox()
   await s.p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  // Scroll one line down, so the text has moved and the scroll bar's thumb is off the top.
-  await s.p.mouse.wheel(0, lineHeight)
+  // Scroll to the end, so the text has moved, the scroll bar's thumb is off the top and no part of a further line shows under the box.
+  await s.p.mouse.wheel(0, 10 * lineHeight)
   const end = await handle.boundingBox()
   await addRing(s.p, [end.x + end.width / 2, end.y + end.height / 2], 30)
   await s.shoot('9-long')
