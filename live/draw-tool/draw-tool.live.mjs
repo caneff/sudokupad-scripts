@@ -107,7 +107,7 @@ describe('Text Anywhere, injected after Start Puzzle', { concurrency: false }, (
     assert.deepEqual(await texts(p), ['15'], 'no note was made')
   })
 
-  it('the note takes the pointer only while Text Anywhere is current, and shows the board\'s cursor', async () => {
+  it('the note takes the pointer only while Text Anywhere is current, and shows the move cursor', async () => {
     const underNoteMiddle = () => p.evaluate((selector) => {
       const note = document.querySelector(selector)
       const { x, y, width, height } = note.getBoundingClientRect()
@@ -116,10 +116,10 @@ describe('Text Anywhere, injected after Start Puzzle', { concurrency: false }, (
     const otherTool = await underNoteMiddle()
     await pickDraw()
     const textAnnotation = await underNoteMiddle()
-    const cursors = await p.evaluate((selector) => [document.querySelector(selector), Framework.app.svgRenderer.getElem()].map((e) => window.getComputedStyle(e).cursor), TEXTS)
+    const cursor = await p.evaluate((selector) => window.getComputedStyle(document.querySelector(selector)).cursor, TEXTS)
     await p.click(DIGIT_BUTTON)
     assert.deepEqual({ otherTool, textAnnotation, back: await underNoteMiddle() }, { otherTool: false, textAnnotation: true, back: false })
-    assert.equal(cursors[0], cursors[1], 'the note shows the board\'s cursor')
+    assert.equal(cursor, 'move', 'the note shows the move cursor')
   })
 
   it('the page raised no error', () => {

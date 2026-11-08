@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.30.0
+// @version      0.31.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.30.0'
+  const VERSION = '0.31.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -228,7 +228,7 @@
   const HANDLE_CLASS = 'draw-tool-resize'
   const SELECTION_CLASS = 'draw-tool-selection'
   const OPEN_OUTLINE_CLASS = 'draw-tool-open-outline'
-  const HANDLE_PX = 10
+  const HANDLE_PX = 11
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
   const SLIDERS_CLASS = 'draw-tool-sliders'
@@ -1734,16 +1734,16 @@
     // A thin bar whose room is kept whether it shows or not, so the text does not wrap again as the pointer comes and goes.
     `.${TEXT_CLASS}.${SCROLLS_CLASS} { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}.${SCROLLS_CLASS}:hover { scrollbar-color: currentColor transparent; }`,
-    // Under every other tool a press or a move over a note goes to what lies under it, as if the notes were not there. A note keeps the cursor of the
-    // page around it: SudokuPad's pointer on the board, the arrow beside it.
-    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: default; }`,
-    `.${ACTIVE_CLASS} .${BOARD_NOTES_CLASS} .${TEXT_CLASS} { cursor: pointer; }`,
+    // Under every other tool a press or a move over a note goes to what lies under it, as if the notes were not there. Under this one a closed note shows
+    // the move cursor, and a note neither selected nor open shows a faint outline, so a click reads as selecting it and not as starting a new note.
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: move; }`,
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}):hover { outline: 1px solid color-mix(in srgb, ${PANEL_COLOR} 35%, transparent); outline-offset: 2px; background-color: color-mix(in srgb, ${PANEL_COLOR} 4%, transparent); }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     // The outline is a box of its own in the layer, since a note's opacity would fade an outline drawn on the note itself.
-    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,
+    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: 2px solid ${PANEL_COLOR}; outline-offset: 2px; }`,
     `.${SELECTION_CLASS}.${OPEN_OUTLINE_CLASS} { outline-width: 1px; outline-offset: 1px; }`,
-    `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
-    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; }`,
+    `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px solid ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 6%, transparent); }`,
+    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 0 1px ${PANEL_COLOR}, 0 1px 3px rgb(0 0 0 / .3); pointer-events: auto; }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; cursor: text; }`,
     // The tool bar is a grid and stock buttons have order 0, so Text Anywhere's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
