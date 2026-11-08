@@ -142,3 +142,15 @@ export async function clickLeftEdge (page, selector) {
   const after = await penEntries(page)
   return { added: after.filter((e) => !before.includes(e)), leaked: await page.evaluate(() => window.__leakedMousedowns) }
 }
+
+// How many pen strokes and marks are drawn on the board.
+export const penDrawnCount = (page) => page.evaluate(() => document.querySelectorAll('#cell-pen .cell-pen').length)
+
+// Presses Undo until the undo stack is empty, each press taking at least one step.
+export async function undoAll (page) {
+  const depth = () => page.evaluate(() => Framework.app.puzzle.undoStack.length)
+  for (let now = await depth(); now > 0; now = await depth()) {
+    await page.click('#control-undo')
+    assert.equal(await settle(async () => (await depth()) < now, true), true, 'an undo takes a step')
+  }
+}

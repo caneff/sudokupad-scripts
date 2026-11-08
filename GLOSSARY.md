@@ -222,8 +222,8 @@
   clicked, above a pinned one; among texts of one kind the one made last is on top.
 - **bullet** (a note's) — a line of a note that starts with `- ` or `* `. A finished note shows it with a `•` hanging in the indent and its wrapped lines
   under the text, with the rest of the line read as markdown; the note open for typing shows the raw `- `. A `-` anywhere else in a line is plain text.
-- **checklist item** (a note's) — a line of a note that starts with `- [ ] ` (unchecked) or `- [x] ` (checked), in place of a bullet. A finished note draws a box in the indent; a click on the box,
-  while Text Anywhere is current, ticks or unticks it and saves the note, and a checked line is struck through and faded. The note open for typing shows the raw `- [ ] `.
+- **checklist item** (a note's) — a line of a note that starts with an optional `- ` or `* `, then `[ ]` or `[]` (unchecked) or `[x]` (checked), then a space or the end of the line (so `[] milk`, `* [ ] milk` and an empty `- [ ]` all count), in place of a bullet. A finished note draws a box in the indent; a click on the box,
+  while Text Anywhere is current, ticks or unticks it and saves the note, and a checked line is struck through and faded. A click on an unchecked item keeps the form typed (`[]` becomes `[x]`); unchecking writes `[ ]`. The note open for typing shows the raw text.
 - **symbol** (a note's) — a sign typed as ASCII while a note is open and replaced as it is typed: `->` `<-` `!=` `<=` `>=` become → ← ≠ ≤ ≥, and the word `sum` becomes Σ (once a character follows it, or when the note closes).
 - **box** (a note's) — the room a Text Anywhere note's text takes. A note never resized has one 16 em wide and 8 lines high at its text size, which
   it fits up to; a resized one is exactly the size a **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
