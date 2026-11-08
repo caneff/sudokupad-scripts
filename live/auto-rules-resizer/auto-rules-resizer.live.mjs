@@ -452,10 +452,10 @@ describe('the text of the fitted pane', { concurrency: false }, () => {
   })
 
   it('keeps the font bar off SudokuPad\'s copy icon', async () => {
-    const boxes = await p.evaluate((icon) => {
+    const boxes = await p.evaluate(([icon, bar]) => {
       const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
-      return { icon: rect(document.querySelector(icon)), bar: rect(document.getElementById('auto-rules-resizer-font')) }
-    }, COPY_ICON)
+      return { icon: rect(document.querySelector(icon)), bar: rect(document.querySelector(bar)) }
+    }, [COPY_ICON, FONT_BAR])
     const apart = boxes.bar.left >= boxes.icon.right || boxes.bar.right <= boxes.icon.left || boxes.bar.top >= boxes.icon.bottom || boxes.bar.bottom <= boxes.icon.top
     assert.equal(apart, true, JSON.stringify(boxes))
   })
@@ -543,6 +543,16 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
     assert.equal(charsPerLine > READABLE_CHARS - 20, true, `${charsPerLine} characters a line: widened to the measure, not left narrow`)
   })
 
+  it('f- keeps them at 90 characters a line or fewer: the width follows the smaller font', async () => {
+    for (let i = 0; i < 3; i++) await clickFont(p, 'f-')
+    assert.equal(await settle(() => fontPx(p), 14.6), 14.6, 'f- three times, from SudokuPad\'s 17.6')
+    const { charsPerLine } = await lineStats(p)
+    assert.equal(charsPerLine <= READABLE_CHARS, true, `${charsPerLine} characters a line at ${await fontPx(p)} px`)
+    assert.equal(charsPerLine > READABLE_CHARS - 20, true, `${charsPerLine} characters a line: narrowed with the font, not left wide`)
+    for (let i = 0; i < 3; i++) await clickFont(p, 'f+')
+    assert.equal(await settle(() => fontPx(p), SUDOKUPAD_FONT_PX), SUDOKUPAD_FONT_PX, 'f+ back')
+  })
+
   it('keep the line at the top at the top after a resize', async () => {
     // The text offset of the line under the pane's top-left content corner; the width holds across both windows, so the lines break alike and the offset holds to a character or two. A pixel offset kept instead drifts a whole line (about 90).
     const topOffset = () => p.evaluate(() => {
@@ -565,6 +575,43 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
     }
     assert.equal(Math.abs((await refitTo(SMALLER)) - heldAt) <= 10, true, `smaller window: the top line was at text offset ${heldAt}`)
     assert.equal(Math.abs((await refitTo(LANDSCAPE)) - heldAt) <= 10, true, `back in the first window: the top line was at text offset ${heldAt}`)
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('rules with blank lines (SudokuPad sets each newline as a break)', { concurrency: false }, () => {
+  let context, p, errors
+
+  before(async () => {
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, `Top.${'\n'.repeat(150)}Bottom.`))
+    await inject(p)
+    await stable(() => pane(p))
+  })
+  after(async () => { await context.close() })
+
+  it('keep the blank line at the top at the top after resizes', async () => {
+    const topIndex = () => p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      const r = rules.getBoundingClientRect()
+      const style = window.getComputedStyle(rules)
+      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + parseFloat(style.paddingTop) + 2)
+      return { inRules: at.offsetNode === rules, offset: at.offset }
+    })
+    assert.equal((await pane(p)).scrolls, true, 'the blank lines scroll')
+    await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      rules.scrollTop = (rules.scrollHeight - rules.clientHeight) * 0.5
+    })
+    const held = await topIndex()
+    assert.deepEqual(held.inRules, true, 'the top of the pane is on a break of the pane itself')
+    for (const viewport of [SMALLER, { width: 1280, height: 720 }, LANDSCAPE]) {
+      await p.setViewportSize(viewport)
+      await stable(topIndex)
+    }
+    assert.deepEqual(await topIndex(), held, 'the same blank line is at the top after three refits')
   })
 
   it('the page raised no error', () => {

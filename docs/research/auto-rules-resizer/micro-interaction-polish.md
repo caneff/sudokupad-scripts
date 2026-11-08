@@ -167,11 +167,11 @@ Rows 1, 2, 3, 5, 6, 7, 9 and 10 as ruled, and row 4 added by Chris's ticket comm
 - **Row 2** was checked with a classic scrollbar: Playwright's Chromium launched with `ignoreDefaultArgs: ['--hide-scrollbars']`
   draws a 15 px track on SudokuPad's pane, and the fit removes it when the rules fit. This is Chromium on Linux, not Windows
   Chrome; the track logic is the engine's own. Not checked on Windows.
-- **Row 10, no flash.** SudokuPad's `Puzzle.loadPuzzle` calls `showMetaInfoUI` and then `this.app.resize()` in one task, and the script wraps
+- **Row 10, no flash in the script-first order only.** SudokuPad's `Puzzle.loadPuzzle` calls `showMetaInfoUI` and then `this.app.resize()` in one task, and the script wraps
   `resizeBoard`, so the fit runs before the first paint of those rules. A frame logger (`requestAnimationFrame`, 53 frames) with the script in first
   saw only the fitted size (18 px). The one order that showed SudokuPad's 17.6 px was the rules appearing before the script was injected, which a page
-  load under Tampermonkey's `document-idle` does only if the puzzle is painted before the script runs. Not seen live on sudokupad.app. No `@run-at
-  document-start` hiding was added. `live/auto-rules-resizer/auto-rules-resizer.live.mjs` holds the frame check.
+  load under Tampermonkey's `document-idle` does only if the puzzle is painted before the script runs. The rules-first order does flash: the probe saw 17.6 px for at least one frame before the fit. No real puzzle-URL load under Tampermonkey was recorded,
+  so which order a user gets is not shown live. No `@run-at document-start` hiding was added. `live/auto-rules-resizer/auto-rules-resizer.live.mjs` holds the frame check.
 - **Row 4** measures the rules' average character with a canvas at SudokuPad's font and widens only to 90 of them (plus the pane's padding). `90ch`
   would have been about 107 characters of English text, since Roboto's `0` is wider than the average letter.
 - **Row 9** keeps the text position under the pane's top-left content corner (`caretPositionFromPoint`), not a scroll ratio: a ratio drifted
