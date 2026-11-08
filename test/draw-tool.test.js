@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW, renderSamplePicks } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -453,10 +453,10 @@ test('a new note carries the transparency it is given, and 100 when none is', ()
   assert.equal(textItem([0, 0], 'a', 1, 20).opacity, 100)
 })
 
-test('an outline is none, thin or medium, Off, Thinner or Thicker in the dialog, and anything else reads as medium', () => {
+test('an outline is none, thin or medium, None, Thin or Thick in the dialog, and anything else reads as medium', () => {
   assert.deepEqual(OUTLINES, ['none', 'thin', 'medium'])
   assert.equal(DEFAULT_OUTLINE, 'medium')
-  assert.deepEqual(OUTLINES.map((name) => OUTLINE_LABELS[name]), ['Off', 'Thinner', 'Thicker'])
+  assert.deepEqual(OUTLINES.map((name) => OUTLINE_LABELS[name]), ['None', 'Thin', 'Thick'])
   for (const saved of [null, undefined, 'huge', 3, {}]) assert.equal(readOutline(saved), 'medium', JSON.stringify(saved))
   for (const saved of OUTLINES) assert.equal(readOutline(saved), saved)
 })
@@ -671,4 +671,72 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
+})
+
+// The dialog's three sample rows: the buttons of one row, in order, each as { role, value, label, pressed, style }.
+const pick = (html, role) => [...html.matchAll(new RegExp(`<button[^>]*data-role="${role}"[^>]*>`, 'g'))].map(([tag]) => ({
+  value: tag.match(/data-value="([^"]*)"/)[1],
+  label: tag.match(/aria-label="([^"]*)"/)[1],
+  pressed: tag.match(/aria-pressed="([^"]*)"/)[1]
+}))
+const samples = (over = {}) => renderSamplePicks({ outline: 'medium', box: 'page', custom: '#ffffff', frame: false, textColor: 'rgb(1, 2, 3)', ...over })
+
+test('the sample rows are three halo buttons, five box buttons and two border buttons', () => {
+  const html = samples()
+  assert.deepEqual(pick(html, 'outline-pick').map((b) => [b.value, b.label]), [['none', 'None'], ['thin', 'Thin'], ['medium', 'Thick']])
+  assert.deepEqual(pick(html, 'box-pick').map((b) => [b.value, b.label]), [['page', 'Page'], ['white', 'White'], ['yellow', 'Yellow'], ['tint', 'Tint'], ['custom', 'Own']])
+  assert.deepEqual(pick(html, 'frame-pick').map((b) => [b.value, b.label]), [['off', 'None'], ['on', 'Thin grey']])
+})
+
+test('exactly the picked button of each row is pressed', () => {
+  const pressed = (html, role) => pick(html, role).filter((b) => b.pressed === 'true').map((b) => b.value)
+  const html = samples({ outline: 'thin', box: 'tint', frame: true })
+  assert.deepEqual([pressed(html, 'outline-pick'), pressed(html, 'box-pick'), pressed(html, 'frame-pick')], [['thin'], ['tint'], ['on']])
+  const own = samples({ box: '#123456' })
+  assert.deepEqual(pressed(own, 'box-pick'), ['custom'])
+  assert.deepEqual(pressed(samples(), 'frame-pick'), ['off'])
+})
+
+test('each halo sample is one letter in the text color with its own reach of halo', () => {
+  const html = samples()
+  for (const name of OUTLINES) {
+    const sample = html.match(new RegExp(`data-role="outline-pick" data-value="${name}"[^>]*>(.*?)</button>`))[1]
+    assert.equal(sample.includes(`text-shadow:${haloShadow(name, 'var(--body-bg, #fff)')}`), true, name)
+    assert.equal(sample.includes('color:rgb(1, 2, 3)'), true, name)
+    assert.match(sample, />A</)
+  }
+  assert.equal(haloShadow('none', 'x'), 'none')
+})
+
+test('each box sample is "A=B" in the text color on its box color, Tint following the text color and Own the custom color', () => {
+  const html = samples({ custom: '#abcdef' })
+  const sample = (value) => html.match(new RegExp(`data-role="box-pick" data-value="${value}"[^>]*>(.*?)</button>`))[1]
+  assert.equal(sample('white').includes(`background:${boxFill('white', '')}`), true)
+  assert.equal(sample('yellow').includes(`background:${BOX_YELLOW}`), true)
+  assert.equal(sample('tint').includes(`background:${boxFill('tint', 'rgb(1, 2, 3)')}`), true)
+  assert.equal(sample('custom').includes('background:#abcdef'), true)
+  for (const value of ['page', 'white', 'yellow', 'tint', 'custom']) {
+    assert.match(sample(value), />A=B</, value)
+    assert.equal(sample(value).includes('color:rgb(1, 2, 3)'), true, value)
+  }
+})
+
+test('the box samples carry the current border, and the border samples show none and thin grey', () => {
+  const edge = (html, role, value) => html.match(new RegExp(`data-role="${role}" data-value="${value}"[^>]*>(.*?)</button>`))[1]
+  assert.equal(edge(samples({ frame: true }), 'box-pick', 'white').includes(frameShadow(true)), true)
+  assert.equal(edge(samples({ frame: false }), 'box-pick', 'white').includes(frameShadow(false)), true)
+  assert.equal(edge(samples(), 'frame-pick', 'on').includes(frameShadow(true)), true)
+  assert.equal(edge(samples(), 'frame-pick', 'off').includes(frameShadow(false)), true)
+})
+
+test('the Own color input shows under the row only while Own is picked', () => {
+  assert.equal(samples({ box: '#123456', custom: '#123456' }).includes('data-role="box-custom"'), true)
+  assert.equal(samples({ box: '#123456', custom: '#123456' }).includes('value="#123456"'), true)
+  assert.equal(samples({ box: 'white' }).includes('data-role="box-custom"'), false)
+})
+
+test('each sample row has the ticket\'s sub-line', () => {
+  const html = samples()
+  assert.equal(html.includes('For notes without a box, so they read over digits and grid lines.'), true)
+  assert.equal(html.includes('For notes made with the Background button on.'), true)
 })

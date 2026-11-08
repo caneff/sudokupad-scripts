@@ -10,8 +10,12 @@ import { gridPoint } from '../pen.mjs'
 import { closeDialogWith, dialogButton } from '../settings.mjs'
 
 const { OUTLINE_KEY, SETTINGS_BUTTON, SETTINGS_EDITOR: EDITOR, SETTINGS_STATUS: STATUS, TEXT_BOX } = draw
-const CHOICE = `${EDITOR} select[data-role="outline"]`
-const OUTLINES = ['Off', 'Thinner', 'Thicker']
+const PICKS = `${EDITOR} button[data-role="outline-pick"]`
+const OUTLINES = ['None', 'Thin', 'Thick']
+// The names the tests chose by before the dialog showed samples: Off is None, Thinner Thin and Thicker Thick.
+const NAMES = { Off: 'None', Thinner: 'Thin', Thicker: 'Thick' }
+const pick = (page, name) => page.locator(`${PICKS}[aria-label="${NAMES[name] ?? name}"]`)
+const pickedLabel = (page) => page.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('aria-label')
 // How far each outline reaches past the letters, as a share of the text size.
 const REACH_EM = { Thinner: 0.07, Thicker: 0.14 }
 const A = [1.5, 1.5]
@@ -47,7 +51,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   }
   async function chooseOutline (name, how = 'Save') {
     await p.click(SETTINGS_BUTTON)
-    await p.locator(CHOICE).selectOption({ label: name })
+    await pick(p, name).click()
     await closeDialogWith(p, how, EDITOR)
   }
 
@@ -62,8 +66,8 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
 
   it('the panel has no Outline button, and the dialog\'s Outline choice lists Off, Thinner and Thicker with Thicker chosen', async () => {
     await p.click(SETTINGS_BUTTON)
-    assert.deepEqual(await p.locator(`${CHOICE} option`).allTextContents(), OUTLINES)
-    assert.equal(await p.locator(CHOICE).evaluate((select) => select.selectedOptions[0].textContent), 'Thicker')
+    assert.deepEqual(await p.locator(PICKS).evaluateAll((buttons) => buttons.map((b) => b.getAttribute('aria-label'))), OUTLINES)
+    assert.equal(await pickedLabel(p), 'Thick')
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
@@ -79,7 +83,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
     await typeText([5.5, 5.5], 'C')
     assert.equal(await reach('C'), 0, 'a note made after it too')
     assert.equal((await draw.saved(p)).find((item) => item.text === 'C').outline, undefined, 'and no note gets an outline field of its own')
-    await chooseOutline('Thinner')
+    await chooseOutline('Thin')
     const thin = await reach('A')
     assert.ok(thin > 0, 'a ring')
     await chooseOutline('Thicker')
@@ -90,14 +94,14 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
 
   it('Cancel leaves the outline as it was, and a choice survives a reload', async () => {
     await p.click(SETTINGS_BUTTON)
-    await p.locator(CHOICE).selectOption({ label: 'Off' })
+    await pick(p, 'Off').click()
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.ok(await reach('A') > 0)
     assert.equal(await stored(p, OUTLINE_KEY), 'medium')
-    await chooseOutline('Thinner')
+    await chooseOutline('Thin')
     await reload()
     await p.click(SETTINGS_BUTTON)
-    assert.equal(await p.locator(CHOICE).evaluate((select) => select.selectedOptions[0].textContent), 'Thinner')
+    assert.equal(await pickedLabel(p), 'Thin')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.ok(await reach('A') < REACH_EM.Thicker * 0.7, 'drawn Thinner')
   })
@@ -106,7 +110,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
     await p.evaluate(([key, value]) => Framework.setData(key, value), [OUTLINE_KEY, 'huge'])
     await reload()
     await p.click(SETTINGS_BUTTON)
-    assert.equal(await p.locator(CHOICE).evaluate((select) => select.selectedOptions[0].textContent), 'Thicker')
+    assert.equal(await pickedLabel(p), 'Thick')
     await closeDialogWith(p, 'Cancel', EDITOR)
     assert.ok(await reach('A') > 0)
   })
@@ -129,7 +133,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
         await other.p.locator('.dialog button[data-act="paste-settings"]').click()
         await other.p.locator(STATUS).filter({ hasText: /Pasted \d+ settings?\./ }).waitFor()
         assert.equal(await stored(other.p, OUTLINE_KEY), outline)
-        assert.equal(await other.p.locator(CHOICE).evaluate((select) => select.value), outline, 'the dialog shows it')
+        assert.equal(await other.p.locator(`${PICKS}[aria-pressed="true"]`).getAttribute('data-value'), outline, 'the dialog shows it')
         assert.equal(await dialogButton(other.p, 'Save').count(), 1)
         await closeDialogWith(other.p, 'Cancel', EDITOR)
       }
