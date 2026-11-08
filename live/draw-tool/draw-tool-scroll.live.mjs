@@ -2,7 +2,7 @@
 // there and the wheel scrolls it without reaching SudokuPad, typing keeps the caret in view, a short note and the board keep the wheel,
 // the scroll bar shows only under the pointer, and markdown, line breaks and the halo still draw in a scrolled box. Ctrl+wheel and a dialog over a note keep
 // the wheel, a digit tool keeps the wheel's scroll while a click reaches the cell under the note, a click just under a wrapped note misses it,
-// and a note off the board wraps, scrolls and shows the page's cursor. Real mouse and keyboard input.
+// and a note off the board wraps, scrolls and shows the move cursor. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -228,16 +228,14 @@ describe('Text Anywhere\'s note box', { concurrency: false }, () => {
     await p.mouse.move(...draw.middleOf(await p.locator(TEXTS).filter({ hasText: 'side' }).boundingBox()))
     await p.mouse.wheel(0, 40)
     assert.ok((await note('side')).scrollTop > 0)
-    // A note beside the board shows the cursor of the page under it, not the board's; the page's auto there, over no text, is the arrow.
+    // A closed note shows the move cursor wherever it is, and a note beside the board does not take the board's own.
     const cursors = await read((selector) => {
       const off = [...document.querySelectorAll(selector)].find((n) => n.textContent.startsWith('side'))
-      const { x, y, width, height } = off.getBoundingClientRect()
-      const layer = document.querySelector('#draw-tool-layer')
-      const under = document.elementsFromPoint(x + width / 2, y + height / 2).find((e) => !layer.contains(e))
       const cursor = (e) => window.getComputedStyle(e).cursor
-      return { note: cursor(off), page: cursor(under) === 'auto' ? 'default' : cursor(under) }
+      return { note: cursor(off), board: cursor(Framework.app.svgRenderer.getElem()) }
     }, TEXTS)
-    assert.equal(cursors.note, cursors.page)
+    assert.equal(cursors.note, 'move')
+    assert.notEqual(cursors.note, cursors.board, 'not the board\'s cursor')
   })
 
   it('the page raised no error', () => {
