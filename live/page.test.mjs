@@ -38,7 +38,7 @@ describe('collectSkipLines', () => {
     const page = fakePage()
     const errors = []
     collectSkipLines(page, errors)
-    const scripts = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'draw-tool', 'no-tab-letters', 'pen-tool-extras', 'ui-tweaks']
+    const scripts = ['auto-rules-resizer', 'color-by-digit', 'dark-page', 'draw-tool', 'pen-tool-extras', 'ui-tweaks']
     const skips = scripts.map((s) => `${s}: marks skipped because SudokuPad has no grid.rows`)
     skips.push('pen-tool-extras: marks, line erase skipped because SudokuPad changed: TypeError: boom')
     for (const line of skips) page.say('warning', line)

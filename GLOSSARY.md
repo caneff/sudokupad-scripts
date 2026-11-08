@@ -170,7 +170,7 @@
   wheel works over its own page button, not over the rest of its panel).
 - **install step** — one of the parts Pen Tool Extras installs at startup, each a **feature** of the **SudokuPad guard**: colors, color save, pen pages, arrow
   lines, drag highlight, marks, line erase, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
-  needs or its own code throws: one console warning names it, the **notice bar** and the settings dialog's "Off because SudokuPad changed" line list it,
+  needs or its own code throws: one console warning names it, the **error log** records it, the **notice bar** and the settings dialog's "Off because SudokuPad changed" line list it,
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **SudokuPad guard** — `lib/sudokupad.js`: a script declares its **features**, each with a label and the SudokuPad internals it needs, and a
   feature that lacks one at startup, or whose own code throws, turns off alone while the rest of the script keeps working.
@@ -182,6 +182,10 @@
   its missing internal or error, and SudokuPad's version, and a × that dismisses it. A dismissal is saved per SudokuPad version, so a new
   version shows the bar again; until dismissed it shows on every page load. Where it cannot be saved (a page with no SudokuPad version, or a
   Framework whose saved data is missing or throws) a dismissal holds for the page load only.
+- **error log** — the guard's permanent record of every **feature** it turns off, shown on the **notice bar** or not: one list in the page's `localStorage`
+  shared by every script, the newest 50 records, each with the time, script and version, SudokuPad's version, the feature, the page address and either the
+  missing internal or the error's message and stack. A missing internal already recorded for the same script version and SudokuPad version is not recorded again.
+  Each script's settings dialog has a Copy error log button (the whole log, newest first, as text) and a Clear button for it.
 - **settings button** — the third button of the **controls row**, an outline gear. A click or tap opens
   Pen Tool Extras' settings dialog and leaves the selected tool and pen color alone.
 - **line mode** — SudokuPad's pen setting for where a dragged line snaps: center and edge, center only, or edge only. It is
@@ -197,8 +201,8 @@
 - **letter tool** — SudokuPad's tool, switched on by its "Enable Letter Tool" setting, that adds a toggle
   button before the delete button and lets the number pad type letters.
 - **letter mode** — whether the number pad types letters (`ABCDEFGHIO`) or digits. SudokuPad saves it per
-  browser under `ToolLetter_letterMode`. The button and `/` toggle it; UI Tweaks' Tab option (No Tab Letters before it) makes Tab do nothing in play instead.
-- **UI Tweaks** — the script `ui-tweaks.user.js`, which replaces No Tab Letters (`no-tab-letters.user.js`, kept so installed copies get a last version that points to it). Three **options** in one settings dialog: Tab never switches to letters (on at first), Hide the Toggle Selection button and Wrap buttons (off at first).
+  browser under `ToolLetter_letterMode`. The button and `/` toggle it; UI Tweaks' Tab option makes Tab do nothing in play instead.
+- **UI Tweaks** — the script `ui-tweaks.user.js`. Three **options** in one settings dialog: Tab never switches to letters (on at first), Hide the Toggle Selection button and Wrap buttons (off at first).
 - **bottom row** — SudokuPad's `.controls-aux`, the row of buttons under the number pad: undo, redo, check, the Toggle Selection button (`data-control="select"`), and the buttons other scripts add (Color by Digit's). Wrap buttons caps it at five a row.
 - **Text Anywhere** — the script `draw-tool.user.js` (the file keeps its old name so installed copies keep updating), and the tool it adds to SudokuPad's tool buttons, named **Text** on the button. It takes no
   tool key. Called Draw Tool before 0.17.0, when it also drew lines and shapes, and Text Annotation until 0.27.0.

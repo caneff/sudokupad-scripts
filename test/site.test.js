@@ -50,12 +50,9 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-// A retired script's file stays only so installed copies keep updating; the homepage sends new installs to its replacement.
-const RETIRED = ['no-tab-letters.user.js']
-
-test('every *.user.js in the repo root but a retired one has an install link on the homepage (Chris: no script is left off the site)', () => {
+test('every *.user.js in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of rootScripts().filter((file) => !RETIRED.includes(file))) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
+  for (const s of rootScripts()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -522,9 +519,3 @@ for (const { heading, page: file } of SHOWS) {
     assert.equal(sizes.size, 1, `slide sizes: ${[...sizes].join(', ')}`)
   })
 }
-
-test('the homepage links no retired script, and its replacement\'s row says it takes over', () => {
-  const home = read(HOME)
-  for (const file of RETIRED) assert.ok(!scriptLinks(home).includes(RAW + file), `${file} is retired but the homepage links it`)
-  assert.match(home, /It takes over from No Tab Letters\./)
-})

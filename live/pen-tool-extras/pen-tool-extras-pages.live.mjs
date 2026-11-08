@@ -3,7 +3,7 @@
 //
 // The script is injected into the page, not installed through Tampermonkey, so Tampermonkey's real
 // injection time and crackingthecryptic.com stay untested, and so does a touch screen. The script goes in after Start Puzzle, when the controls already exist; startup.live.mjs checks the other injection times.
-// Every press, wheel turn and line is real input. A last group runs with No Tab Letters installed too.
+// Every press, wheel turn and line is real input. A last group runs with UI Tweaks installed too.
 /* global Framework, ToolPen */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -16,7 +16,7 @@ import { cellCentre, goToPenPage, openPenTool, PAGE_BUTTON, PAGE_ONE, PAGE_THREE
 import { settle } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
-const noTabLetters = readFileSync(new URL('../../no-tab-letters.user.js', import.meta.url), 'utf8')
+const uiTweaks = readFileSync(new URL('../../ui-tweaks.user.js', import.meta.url), 'utf8')
 
 const PEN_KEY = 'PenColor_pen'
 const COLORS_KEY = 'PenColor_colors'
@@ -515,7 +515,7 @@ function group (title, extra = []) {
 }
 
 group('injected after Start Puzzle')
-group('injected after Start Puzzle, with No Tab Letters installed too', [noTabLetters])
+group('injected after Start Puzzle, with UI Tweaks installed too', [uiTweaks])
 
 // The script installed while the pen tool is already on, with SudokuPad's own selection of pen 3 read from storage
 // as the number 3: the first page turn must keep color number 3.

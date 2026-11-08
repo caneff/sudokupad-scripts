@@ -224,7 +224,7 @@ describe('SudokuPad-level attacks', { concurrency: 4 }, () => {
       })
     })
     try {
-      // The six scripts that save something each say so once and put up their own bar; No Tab Letters saves only the dismissal of its notice, which it warns about and does not report as a skip.
+      // Each of the six scripts says so once and puts up its own bar.
       const scripts = SAVED.map(([script]) => script).sort()
       assert.deepEqual(await settle(() => p.locator(NOTICE_BAR).evaluateAll((bars) => bars.map((b) => b.dataset.script).sort()), scripts), scripts)
       assert.deepEqual(said.map((line) => line.split(': ')[0]).sort(), scripts, 'one declared skip line each')

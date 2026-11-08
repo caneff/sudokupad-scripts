@@ -56,36 +56,26 @@ export const SCRIPTS = [
   {
     name: 'UI Tweaks',
     file: 'ui-tweaks.user.js',
+    // The letter tool's own button, which the Tab option leaves in place, shows once the tool is on.
     ready: async (p) => {
       await p.locator('#ui-tweaks-style').waitFor({ state: 'attached' })
+      await p.evaluate(() => Framework.setSetting('toolletter', true))
+      await p.locator(LETTER_TOGGLE).waitFor({ state: 'attached' })
     },
     control: (p) => settingsEntry(p, /^\s*UI Tweaks\s*$/),
-    // Hide the Toggle Selection button in the dialog and Save: the button goes. The Tab option is checked in live/ui-tweaks/, since No Tab Letters does the same alone.
+    // Tab is swallowed: it leaves the number pad on digits and saves no letter mode (the keydown default is prevented either way, since
+    // SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script). Then Hide the Toggle Selection button
+    // in the dialog and Save: the button goes.
     act: async (p) => {
+      assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
+      assert.equal(await settle(() => numberPadText(p), DIGITS), DIGITS, 'the number pad stayed on digits')
+      assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
       const select = p.locator('.controls-aux [data-control="select"]')
       await select.waitFor({ state: 'visible' })
       await openScriptDialog(p, 'UI Tweaks', '#ui-tweaks-dialog')
       await p.locator('#ui-tweaks-dialog input[data-option="hideSelect"]').check()
       await p.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).click()
       await select.waitFor({ state: 'hidden' })
-    }
-  },
-  {
-    name: 'No Tab Letters',
-    file: 'no-tab-letters.user.js',
-    // The script adds no control: the letter tool's own button, which it leaves in place, shows once the tool is on.
-    ready: async (p) => {
-      await p.evaluate(() => Framework.setSetting('toolletter', true))
-      await p.locator(LETTER_TOGGLE).waitFor({ state: 'attached' })
-    },
-    control: (p) => p.locator(LETTER_TOGGLE).waitFor({ state: 'visible' }),
-    // Tab is swallowed: it leaves the number pad on digits and saves no letter mode. The keydown default is prevented
-    // either way, since SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script. With UI Tweaks
-    // installed too, as the Tampermonkey test has it, this script leaves Tab to that one, so this check passes on UI Tweaks' Tab.
-    act: async (p) => {
-      assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
-      assert.equal(await settle(() => numberPadText(p), DIGITS), DIGITS, 'the number pad stayed on digits')
-      assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
     }
   },
   {

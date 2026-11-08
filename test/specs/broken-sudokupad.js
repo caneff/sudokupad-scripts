@@ -129,6 +129,7 @@ function startOnStandInPage (file, features, { missing = [] } = {}) {
     document: page('document'),
     navigator: page('element'),
     localStorage: { getItem: () => null, setItem () {}, removeItem () {} },
+    location: { href: 'https://sudokupad.app/test' },
     ...roots,
     console: { log () {}, info () {}, error () {}, warn: (...args) => warnings.push(args.map(String).join(' ')) },
     setTimeout: (fn) => { record.add({ where: 'setTimeout', on: 'timer', fn }); return 1 },
