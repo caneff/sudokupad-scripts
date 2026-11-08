@@ -80,6 +80,7 @@ describe('attacks on the puzzle changing under every script', { concurrency: fal
     await clickCell(4, 4)
     await p.keyboard.press('7')
     const b = await readUntil(() => boardOf(p), (x) => x.entered.length === 1)
+    assert.deepEqual([b.pen, b.notes, b.corner], [[], [], []], 'B starts with none of A\'s marks')
     for (let round = 1; round <= 2; round++) {
       await p.goBack({ waitUntil: 'load' })
       await resumeAfterHistory(p)
