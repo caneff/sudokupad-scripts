@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.3
+// @version      0.22.6
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.3'
+  const VERSION = '0.22.6'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1027,7 +1027,6 @@
   const PULLDOWN_LABEL_WIDTH = 64
   const DIALOG_WIDTH = 640
   const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
-  const SAVE_LABEL = 'Save'
   const EDITOR_ID = 'color-by-digit-editor'
   const MENU = '#color-by-digit-menu'
   const STYLE_ID = 'color-by-digit-style'
@@ -1131,7 +1130,6 @@
   // SudokuPad's own rules for the dialog's selects, buttons and labels size them otherwise; the editor's id inside each `:has` outranks those rules, so none needs !important.
   const EDITOR = `#${EDITOR_ID}`
   const DIALOG = `.dialog:has(${EDITOR})`
-  const OPTIONS = `${DIALOG} .dialog-options`
   const STYLE_CSS = [
     [`${EDITOR} .cbd-heading`, 'display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin: 0 0 6px'],
     [`${EDITOR} .cbd-count`, 'font-weight: 400; font-size: .8rem; color: #666'],
@@ -1170,10 +1168,7 @@
     // Looks like the row's name until focused: no border or fill, then the box shows.
     [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
-    [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
-    [OPTIONS, `display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid ${RULE_COLOR}; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%`],
-    [`${OPTIONS} button`, 'background: #f1eff5; color: #333; border: 1px solid #cfc9db; border-radius: 8px; font-size: 1rem; padding: 0 22px; height: 38px; line-height: 36px; margin: 0; width: auto; min-width: 0; flex: none; cursor: pointer'],
-    [`${OPTIONS} button[data-role="save"]`, 'background: #6b3fa0; color: #fff; border: 1px solid #5a3489; font-weight: 600']
+    [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px']
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
 
   // <lib:settings-dialog>
@@ -1246,6 +1241,54 @@
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
+  }
+
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
+  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
+  function buttonRowCss (bodyId) {
+    const row = `.dialog:has(#${bodyId}) .dialog-options`
+    return [
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: #6b3fa0 !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`
+    ].join('\n')
+  }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) addStyleOnce(styleId, css, doc)
+    const close = () => closeDialogKeepingGrid(framework, win)
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
@@ -1563,13 +1606,7 @@
 
   let menu = null
 
-  function addStyle (id = STYLE_ID, css = STYLE_CSS) {
-    if (document.getElementById(id)) return
-    const style = document.createElement('style')
-    style.id = id
-    style.textContent = css
-    document.head.appendChild(style)
-  }
+  const addStyle = (id = STYLE_ID, css = STYLE_CSS) => addStyleOnce(id, css)
 
   const closeMenu = () => {
     if (menu) menu.remove()
@@ -1704,27 +1741,17 @@
     let selected = draft.active
     // The selected profile's name when it was selected: an emptied name field keeps it.
     let keptName = draft.profiles[selected].name
-    addStyle()
-    Framework.showDialog({
-      centerOverBoard: true,
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Color by Digit', version: VERSION }) },
-        { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
-        {
-          tag: 'options',
-          options: [
-            { tag: 'button', content: 'Cancel', action: 'close' },
-            { tag: 'button', content: SAVE_LABEL, handler: () => { saveDialog(app, savedState, draft, draftMode); Framework.closeDialog() } }
-          ]
-        }
-      ]
+    const box = showSettingsDialog(Framework, {
+      prefix: CLASS_PREFIX,
+      name: 'Color by Digit',
+      version: VERSION,
+      bodyId: EDITOR_ID,
+      styleId: STYLE_ID,
+      css: STYLE_CSS,
+      changed: () => draftMode !== mode || JSON.stringify(draft) !== JSON.stringify(savedState),
+      save: () => saveDialog(app, savedState, draft, draftMode)
     })
-    const box = document.getElementById(EDITOR_ID)
     if (!box) return
-    const dialog = box.closest('.dialog')
-    // No selector tells Save from Cancel but its text, so the script marks it for the stylesheet.
-    const row = dialog && dialog.querySelector('.dialog-options')
-    if (row) row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     let brush
     let page
     const groupsShown = () => draft.profiles[selected].groups
