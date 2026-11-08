@@ -1745,12 +1745,12 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
     assert.equal(word[2], mode.toUpperCase())
     assert.match(word[1], /pointer-events:none/)
     assert.match(word[1], mode === 'off' ? /color:#b3acbf/ : /color:#6a1b9a/)
-    // A thin white halo in all eight directions, on the on-words only, so they read on Dark Page's dark button (#578).
+    // A thin white outline in all eight directions, on the on-words only, so they read on Dark Page's dark button.
     if (mode === 'off') assert.doesNotMatch(word[1], /text-shadow/)
     else {
       const shadow = /text-shadow:([^;"]*)/.exec(word[1])[1].split(',').map((s) => s.trim())
       assert.deepEqual(shadow.map((s) => s.split(/\s+/).slice(0, 2).join(' ')).sort(), ['-1px -1px', '-1px 0px', '-1px 1px', '0px -1px', '0px 1px', '1px -1px', '1px 0px', '1px 1px'])
-      assert.ok(shadow.every((s) => /#fff$/.test(s)), shadow.join())
+      assert.ok(shadow.every((s) => /^-?[01]px -?[01]px #fff$/.test(s)), shadow.join())
     }
     assert.match(html, /data-role="menu"[^>]*aria-haspopup="menu"[^>]*right:[^;"]*;bottom:/)
   }
