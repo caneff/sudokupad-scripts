@@ -2818,14 +2818,14 @@
     return next === -1 ? cursor : next
   }
 
-  // The note is typed in place: `index` names the text to reopen, with the caret at screen point `point`, or -1 for a new one starting at `point`. Opening a note ends the selection.
+  // The note is typed in place: `index` names the text to reopen, with the caret at screen point `point` (the end of its text with none), or -1 for a new one starting at `point`. Opening a note ends the selection.
   function openText (index, point) {
     selected = []
     const map = boardMap()
     const item = index === -1 ? newNote(point, map) : { ...drawing[index] }
     // The note the solver double-clicked shows its text without markers, and the open one shows them, so the caret is worked out against the closed one before it goes.
     const closed = index === -1 ? null : item[NOTE_ELEMENT]
-    const shownIndex = closed ? shownCaretIndex(closed, point) : null
+    const shownIndex = closed && point ? shownCaretIndex(closed, point) : null
     const shownText = closed?.textContent
     const element = newTextBox(item, map)
     element.contentEditable = 'plaintext-only'
