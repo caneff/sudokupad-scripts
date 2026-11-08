@@ -2041,7 +2041,7 @@ test('without a pen tool, every step that needs it is reported under the first i
 test('Pen Tool Extras declares its install steps through the shared guard, with no guard code of its own', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.js'), 'utf8')
   const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
-  assert.match(own, /createFeatures\(\{ script: 'pen-tool-extras'[^\n]*features: FEATURES \}\)/)
+  assert.match(own, /createGuard\(\{ script: 'pen-tool-extras'[^\n]*features: FEATURES \}\)/)
   for (const name of ['createStep', 'lackingInternals (', 'STEP_LABELS', 'checkSteps', 'console.warn(`pen-tool-extras: ${']) assert.equal(own.includes(name), false, name)
 })
 

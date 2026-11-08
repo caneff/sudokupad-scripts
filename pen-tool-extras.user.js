@@ -112,7 +112,7 @@
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
   // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
-  function createFeatures ({ script, name, version, color, features }) {
+  function createGuard ({ script, name, version, color, features }) {
     const off = []
     const reasons = []
     let page = null
@@ -2037,7 +2037,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:panel>
   // Made here, after PANEL_COLOR: the install steps run only from startup on.
-  const guard = createFeatures({ script: 'pen-tool-extras', name: 'Pen Tool Extras', version: VERSION, color: PANEL_COLOR, features: FEATURES })
+  const guard = createGuard({ script: 'pen-tool-extras', name: 'Pen Tool Extras', version: VERSION, color: PANEL_COLOR, features: FEATURES })
   const steps = guard.features
   const MODE_BUTTON = 'pen-tool-extras-mode'
   const SETTINGS_BUTTON = 'pen-tool-extras-settings'
