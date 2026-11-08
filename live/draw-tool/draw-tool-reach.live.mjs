@@ -29,12 +29,13 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     await p.setViewportSize(size)
   }
   // The note's box, its point (the top left of its text, inside the padding) and the panel's box, on the screen.
-  const boxes = () => read((selector) => {
-    const element = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'fixed')
-    const note = element.getBoundingClientRect()
-    const style = window.getComputedStyle(element)
-    return { note: note.toJSON(), point: [note.left + parseFloat(style.paddingLeft), note.top + parseFloat(style.paddingTop)], panel: document.querySelector('#controls').getBoundingClientRect().toJSON(), window: [window.innerWidth, window.innerHeight] }
-  }, TEXTS)
+  const boxes = async () => ({
+    ...await read((selector) => {
+      const note = [...document.querySelectorAll(selector)].find((e) => e.textContent === 'fixed').getBoundingClientRect()
+      return { note: note.toJSON(), panel: document.querySelector('#controls').getBoundingClientRect().toJSON(), window: [window.innerWidth, window.innerHeight] }
+    }, TEXTS),
+    point: await draw.notePoint(p, 'fixed')
+  })
   const clearOfPanel = ({ note, panel }) => note.right <= panel.left || note.left >= panel.right || note.bottom <= panel.top || note.top >= panel.bottom
   const insideWindow = ({ note, window: [w, h] }) => note.left >= 0 && note.top >= 0 && note.right <= w && note.bottom <= h
   const reload = async () => {

@@ -12,6 +12,8 @@ const GREEN = 3
 const RED = 4
 const SPOT = [2.5, 4.5]
 const START_TOLERANCE_PX = 2
+// The line's middle is read off the letter's box, whose height is the font's and not the line's, so it may sit a few pixels off the click.
+const FIRST_LINE_TOLERANCE_PX = 5
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -21,33 +23,48 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
   let context, p, errors
 
   const key = (n) => `.controls-input button[data-key="${n}"]`
-  // The screen box of one character of the first text node of the selector's element.
+  // The screen box of the character shown at `index` in the selector's element, counting the text of its runs and leaving out any marker it does not show.
   const letterBox = (selector, index) => p.locator(selector).evaluate((element, i) => {
-    const range = document.createRange()
-    const node = element.firstChild
-    range.setStart(node, i)
-    range.setEnd(node, i + 1)
-    const { left, right, top, bottom } = range.getBoundingClientRect()
-    return { left, right, top, bottom }
+    const walker = document.createTreeWalker(element, window.NodeFilter.SHOW_TEXT)
+    let left = i
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (left >= node.length) {
+        left -= node.length
+        continue
+      }
+      const range = document.createRange()
+      range.setStart(node, left)
+      range.setEnd(node, left + 1)
+      const box = range.getBoundingClientRect()
+      return { left: box.left, right: box.right, top: box.top, bottom: box.bottom }
+    }
+    throw new Error(`no character ${i}`)
   }, index)
-  const resolved = (color) => p.evaluate((c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = window.getComputedStyle(d).color; d.remove(); return v }, color)
-  const penColor = (n) => p.evaluate((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
-  // The color of the caret the note sets itself: the computed caret-color is the text color when none is set, so the note's own declaration is read.
-  const caretColor = () => p.locator(TEXT_BOX).evaluate((e) => {
+  // What a color value computes to, as the page's own elements show it.
+  const resolved = (color, property = 'color') => p.evaluate(([c, name]) => {
     const probe = document.createElement('i')
-    probe.style.color = e.style.caretColor
+    probe.style[name] = c
     document.body.append(probe)
-    const color = window.getComputedStyle(probe).color
+    const value = window.getComputedStyle(probe)[name]
     probe.remove()
-    return color
-  })
+    return value
+  }, [color, property])
+  const penColor = (n) => p.evaluate((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
+  // The caret color the note declares: its computed caret-color is the text color when none is declared, so the declaration is read.
+  const caretColor = async () => resolved(await p.locator(TEXT_BOX).evaluate((e) => e.style.caretColor))
+  const selectionTint = () => p.locator(TEXT_BOX).evaluate((e) => window.getComputedStyle(e, '::selection').backgroundColor)
+  // The tint written out here, so a change to the rule's percentage or color fails.
+  const tinted = (color) => resolved(`color-mix(in srgb, ${color} 25%, transparent)`, 'backgroundColor')
+  const fresh = async () => {
+    await draw.forgetDrawings(p)
+    await draw.reload(p)
+    await draw.pickDraw(p)
+  }
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser))
     await draw.boot(p)
-    await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await fresh()
   })
   after(async () => { await context.close() })
 
@@ -57,7 +74,7 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     await p.keyboard.type('Hi')
     const first = await letterBox(TEXT_BOX, 0)
     assert.ok(Math.abs(first.left - x) <= START_TOLERANCE_PX, `the first letter starts at ${first.left}, clicked at ${x}`)
-    assert.ok(Math.abs((first.top + first.bottom) / 2 - y) <= START_TOLERANCE_PX + 3, `the first line's middle is ${(first.top + first.bottom) / 2}, clicked at ${y}`)
+    assert.ok(Math.abs((first.top + first.bottom) / 2 - y) <= FIRST_LINE_TOLERANCE_PX, `the first line's middle is ${(first.top + first.bottom) / 2}, clicked at ${y}`)
     await p.keyboard.type(' there, a long note that wraps over a few lines because it keeps on going')
     assert.equal((await letterBox(TEXT_BOX, 0)).left, first.left, 'typing more left the start where it was')
     assert.equal((await letterBox(TEXT_BOX, 0)).top, first.top)
@@ -66,14 +83,12 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
   })
 
   it('a double-click in the middle of a word puts the caret at that letter and selects no word', async () => {
-    await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+    await fresh()
     await p.mouse.click(...await gridPoint(p, SPOT))
     await p.keyboard.type('abcdefgh')
     await p.keyboard.press('Escape')
-    const fourth = await letterBox(TEXTS, 4)
-    await p.mouse.dblclick(fourth.left + 1, (fourth.top + fourth.bottom) / 2)
+    const fifth = await letterBox(TEXTS, 4)
+    await p.mouse.dblclick(fifth.left + 1, (fifth.top + fifth.bottom) / 2)
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is open')
     await p.keyboard.type('X')
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'abcdXefgh')
@@ -88,31 +103,49 @@ describe('Text Anywhere\'s open note', { concurrency: false }, () => {
     await p.keyboard.press('Escape')
   })
 
-  it('the caret is the note\'s color, and a recolor changes it', async () => {
-    await draw.forgetDrawings(p)
-    await draw.reload(p)
-    await draw.pickDraw(p)
+  it('a double-click on a formatted note puts the caret at the letter shown, past the markers the open note adds', async () => {
+    await fresh()
+    await p.mouse.click(...await gridPoint(p, SPOT))
+    await p.keyboard.type('**ab**cdefgh')
+    await p.keyboard.press('Escape')
+    const fifth = await letterBox(TEXTS, 4)
+    await p.mouse.dblclick(fifth.left + 1, (fifth.top + fifth.bottom) / 2)
+    await p.keyboard.type('X')
+    assert.equal(await p.locator(TEXT_BOX).textContent(), '**ab**cdXefgh')
+    await p.keyboard.press('Escape')
+  })
+
+  it('a click just inside the board\'s top edge starts a note pinned to the board, though its stored point is half a line above the click', async () => {
+    await fresh()
+    const board = await p.evaluate(() => Framework.app.svgRenderer.getElem().getBoundingClientRect().toJSON())
+    await p.mouse.click(board.left + board.width / 2, board.top + 2)
+    await p.keyboard.type('top')
+    await p.keyboard.press('Escape')
+    const [note] = await draw.saved(p)
+    assert.ok(note.at && !note.fixed, JSON.stringify(note))
+  })
+
+  it('the caret is the note\'s color, and a recolor changes it and the selection tint', async () => {
+    await fresh()
     await p.click(key(GREEN))
     await p.mouse.click(...await gridPoint(p, SPOT))
     await p.keyboard.type('ab')
     assert.equal(await caretColor(), await resolved(await penColor(GREEN)))
+    await p.keyboard.press('Control+A')
+    assert.equal(await selectionTint(), await tinted(await penColor(GREEN)), 'the selection is green before the recolor')
     await p.click(key(RED))
     assert.equal(await caretColor(), await resolved(await penColor(RED)))
     assert.notEqual(await resolved(await penColor(RED)), await resolved(await penColor(GREEN)))
+    assert.equal(await selectionTint(), await tinted(await penColor(RED)), 'and red after it')
   })
 
-  it('selected text is tinted in the note\'s color, at low opacity, with no halo', async () => {
-    const color = await penColor(RED)
-    // The tint written out in the test, so a change to the rule's percentage or color fails here.
-    const wanted = await p.evaluate((c) => { const d = document.createElement('i'); d.style.backgroundColor = `color-mix(in srgb, ${c} 25%, transparent)`; document.body.append(d); const v = window.getComputedStyle(d).backgroundColor; d.remove(); return v }, color)
+  it('selected text is tinted in the note\'s color at low opacity, and the rule takes the halo off it', async () => {
     await p.locator(TEXT_BOX).focus()
     await p.keyboard.press('Control+A')
-    const selection = await p.locator(TEXT_BOX).evaluate((e) => {
-      const style = window.getComputedStyle(e, '::selection')
-      return { background: style.backgroundColor, shadow: style.textShadow }
-    })
-    assert.equal(selection.background, wanted)
-    assert.equal(selection.shadow, 'none')
+    assert.equal(await selectionTint(), await tinted(await penColor(RED)))
+    // A selection's computed text-shadow reads none whatever the rule says, so the rule itself is read.
+    const shadows = await p.evaluate(() => [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]).filter((rule) => rule.selectorText?.includes('.draw-tool-textbox::selection')).map((rule) => rule.style.textShadow))
+    assert.deepEqual(shadows, ['none'])
     await p.keyboard.press('Escape')
   })
 

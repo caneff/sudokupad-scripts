@@ -112,15 +112,28 @@ export const noteLooks = (p) => p.evaluate((selector) => {
   })
 }, TEXTS)
 
-// Where the note that reads `text` starts, in cells from the grid's top left, as [row, column] to a tenth: the middle of its first line and the left edge of its text.
-export const noteInCells = (p, text) => p.evaluate(([selector, want]) => {
-  const element = [...document.querySelectorAll(selector)].find((e) => e.textContent === want)
+// Where the note that reads `text` starts, on the screen: the left edge of its text and the middle of its first line, where it was clicked.
+export const noteStart = (p, text) => p.evaluate(([selector, want]) => {
   const range = document.createRange()
-  range.selectNodeContents(element)
+  range.selectNodeContents([...document.querySelectorAll(selector)].find((e) => e.textContent === want))
   const first = range.getClientRects()[0]
-  const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
-  return [((first.top + first.bottom) / 2 - cell.y) / cell.height, (first.left - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
+  return [first.left, (first.top + first.bottom) / 2]
 }, [TEXTS, text])
+
+// The top left of the text of the note that reads `text`, inside its padding, on the screen: the point a fixed note stores. It stays put while the board's scale changes the note's size.
+export const notePoint = (p, text) => p.evaluate(([selector, want]) => {
+  const element = [...document.querySelectorAll(selector)].find((e) => e.textContent === want)
+  const box = element.getBoundingClientRect()
+  const style = window.getComputedStyle(element)
+  return [box.left + parseFloat(style.paddingLeft), box.top + parseFloat(style.paddingTop)]
+}, [TEXTS, text])
+
+// Where the note that reads `text` starts, in cells from the grid's top left, as [row, column] to a tenth.
+export async function noteInCells (p, text) {
+  const [x, y] = await noteStart(p, text)
+  const cell = await p.evaluate(() => Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect().toJSON())
+  return [(y - cell.y) / cell.height, (x - cell.x) / cell.width].map((v) => Math.round(v * 10) / 10)
+}
 
 // The middle of the closed note that starts nearest screen point `[x, y]`: a note starts at the click that made it, so a press on it, which a handle or the edge may take at its start, goes to its middle.
 export const middleAt = (p, point) => p.evaluate(([selector, [x, y]]) => {

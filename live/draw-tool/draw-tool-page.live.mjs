@@ -40,20 +40,8 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const box = [...document.querySelectorAll(selector)].find((e) => e.textContent === want).getBoundingClientRect()
     return [box.x + box.width / 2, box.y + box.height / 2]
   }, [TEXTS, text])
-  // The top left of the text of the note that reads `text`, inside its padding, on the screen: what a fixed note stores. It stays put while the board's scale changes the note's size.
-  const notePoint = (text) => read(([selector, want]) => {
-    const element = [...document.querySelectorAll(selector)].find((e) => e.textContent === want)
-    const box = element.getBoundingClientRect()
-    const style = window.getComputedStyle(element)
-    return [box.left + parseFloat(style.paddingLeft), box.top + parseFloat(style.paddingTop)]
-  }, [TEXTS, text])
-  // Where the note that reads `text` starts, on the screen: the left edge of its text and the middle of its first line, where it was clicked.
-  const noteStart = (text) => read(([selector, want]) => {
-    const range = document.createRange()
-    range.selectNodeContents([...document.querySelectorAll(selector)].find((e) => e.textContent === want))
-    const first = range.getClientRects()[0]
-    return [first.left, (first.top + first.bottom) / 2]
-  }, [TEXTS, text])
+  const notePoint = (text) => draw.notePoint(p, text)
+  const noteStart = (text) => draw.noteStart(p, text)
   const noteInCells = (text) => draw.noteInCells(p, text)
   // Blank page points clear of the board and the controls: right of the controls, and below the board.
   const blankPoints = () => read(() => {

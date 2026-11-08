@@ -97,8 +97,6 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
 
   it('dragging the handle sets the box with its top left kept, the text wraps and scrolls to fit, and the note keeps the focus', async () => {
     await draw.reopen(p, await gridPoint(p, NOTE_AT))
-    // The double-click selects the word under it, as in any editable text.
-    await p.keyboard.press('Control+End')
     const before = await box(TEXT_BOX)
     const [width, height] = [before.em * 5, before.em * 1.5]
     await dragHandle(before.left + width - before.right, before.top + height - before.bottom)

@@ -482,6 +482,12 @@
     return { left, right, top, bottom }
   }
 
+  // The middle of a note's screen box, padding included.
+  function noteMiddle (item, map, outline) {
+    const { left, right, top, bottom } = noteScreenBox(item, map, outline)
+    return [(left + right) / 2, (top + bottom) / 2]
+  }
+
   // The gap left to the window's edge and to a control, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
   const REACH_MARGIN_PX = 1
 
@@ -1553,7 +1559,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2400,7 +2406,7 @@
     const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
     // The box is where the note is drawn now, which may not be its stored point, so the middle is taken from the stored point by the box's own offset from the drawn one.
     const drawn = drawnPoint(item)
-    const toMiddle = [(left + right) / 2 - drawn[0], (top + bottom) / 2 - drawn[1]]
+    const toMiddle = noteMiddle(item, map, outline).map((v, i) => v - drawn[i])
     const reached = reachablePoint(item.fixed.map((v, i) => v + toMiddle[i]), [right - left, bottom - top], win, blockers)
     return roundPoint(reached.map((v, i) => v - toMiddle[i]))
   }
@@ -2689,19 +2695,46 @@
     redraw()
   }
 
-  // A new note starts at screen point `point`: its first line's middle is on the point, so its point is a half line up.
+  // A new note starts at screen point `point`: its first line's middle is on the point, so its stored point is a half line up. Whether it is pinned to the board or fixed on the
+  // screen is decided by the point clicked.
   function newNote (point, map) {
     const size = textSizeFor(width)
-    const start = [point[0], point[1] - LINE_HEIGHT * size * map.scale / 2]
-    return placedItem(textItem(map.toBoard(start), '', color, size, background, opacity), start, map)
+    const placed = placedItem(textItem(map.toBoard(point), '', color, size, background, opacity), point, map)
+    const halfLine = LINE_HEIGHT * size / 2
+    return placed.fixed
+      ? { ...placed, fixed: roundPoint([placed.fixed[0], placed.fixed[1] - halfLine * map.scale]) }
+      : { ...placed, at: roundPoint([placed.at[0], placed.at[1] - halfLine]) }
   }
 
-  // Puts the caret in `element` at the letter under screen point `point`, and at the end of the text when the point is past it.
-  function placeCaret (element, [x, y]) {
+  // The text node and offset under screen point `[x, y]`: Chromium names the first call, older browsers only the second.
+  function caretAt ([x, y]) {
     const position = document.caretPositionFromPoint?.(x, y)
-    const found = position ? { node: position.offsetNode, offset: position.offset } : null
-    if (!found || !element.contains(found.node)) return
-    window.getSelection().collapse(found.node, found.offset)
+    if (position) return { node: position.offsetNode, offset: position.offset }
+    const range = document.caretRangeFromPoint?.(x, y)
+    return range ? { node: range.startContainer, offset: range.startOffset } : null
+  }
+
+  // How many characters of `element`'s shown text come before screen point `point`, or null when the point is not over the element's text.
+  function shownCaretIndex (element, point) {
+    const caret = caretAt(point)
+    if (!caret || !(element === caret.node || element.contains(caret.node))) return null
+    const range = document.createRange()
+    range.setStart(element, 0)
+    range.setEnd(caret.node, caret.offset)
+    return range.toString().length
+  }
+
+  // The offset in `raw` of the character that `shown` has at `index`: the shown text is the raw text with its markers left out and a bullet put in, so
+  // each shown character is matched to the next like one in the raw text, and a shown character with no like one after the last match has none. An index past the end is the end.
+  function rawOffset (raw, shown, index) {
+    let cursor = 0
+    for (let i = 0; i < Math.min(index, shown.length); i++) {
+      const found = raw.indexOf(shown[i], cursor)
+      if (found !== -1) cursor = found + 1
+    }
+    if (index >= shown.length) return raw.length
+    const next = raw.indexOf(shown[index], cursor)
+    return next === -1 ? cursor : next
   }
 
   // The note is typed in place: `index` names the text to reopen, with the caret at screen point `point`, or -1 for a new one starting at `point`. Opening a note ends the selection.
@@ -2709,6 +2742,10 @@
     selected = []
     const map = boardMap()
     const item = index === -1 ? newNote(point, map) : { ...drawing[index] }
+    // The note the solver double-clicked shows its text without markers, and the open one shows them, so the caret is worked out against the closed one before it goes.
+    const closed = index === -1 ? null : item[NOTE_ELEMENT]
+    const shownIndex = closed ? shownCaretIndex(closed, point) : null
+    const shownText = closed?.textContent
     const element = newTextBox(item, map)
     element.contentEditable = 'plaintext-only'
     element.spellcheck = false
@@ -2732,7 +2769,7 @@
     element.focus()
     window.getSelection().selectAllChildren(element)
     window.getSelection().collapseToEnd()
-    if (index !== -1) placeCaret(element, point)
+    if (shownIndex !== null && element.firstChild) window.getSelection().collapse(element.firstChild, rawOffset(item.text, shownText, shownIndex))
   }
 
   // A symbol the last typed character completed is typed over with its sign, as an insertion, so the caret stays after it and the browser's Undo can give the typed characters back.
@@ -2959,8 +2996,8 @@
   // `middle` is where the note's middle then is, which is what has to stay reachable.
   const movedBy = (moves, [dx, dy], map) => moves.map(({ index, item }) => {
     const [x, y] = screenPoint(item, map.toScreen)
-    const box = noteScreenBox(item, map, outline)
-    return { index, item, point: [x + dx, y + dy], middle: [(box.left + box.right) / 2 + dx, (box.top + box.bottom) / 2 + dy] }
+    const [middleX, middleY] = noteMiddle(item, map, outline)
+    return { index, item, point: [x + dx, y + dy], middle: [middleX + dx, middleY + dy] }
   })
 
   // Each note keeps its offset from the pointer, and its own drop point decides whether it is pinned to the grid or fixed on the screen.
