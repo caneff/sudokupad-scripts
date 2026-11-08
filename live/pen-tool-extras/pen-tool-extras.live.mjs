@@ -541,17 +541,17 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
     })
 
-    it('the buttons are one row under a divider: Restore defaults as small underlined grey text at the left, then Cancel (light) and Save (filled purple) at the right', async () => {
+    it('the buttons are one row under a divider: Save (filled purple), then Cancel (light), then Restore defaults as small underlined grey text at the right', async () => {
       await openExtrasEditor(p)
       // All three in one read, so a dialog still moving into place cannot put them in different frames.
-      const [restore, cancel, save] = await p.evaluate(() => ['Restore defaults', 'Cancel', 'Save'].map((text) => {
+      const [save, cancel, restore] = await p.evaluate(() => ['Save', 'Cancel', 'Restore defaults'].map((text) => {
         const el = [...document.querySelectorAll('.dialog button')].find((b) => b.textContent.trim() === text)
         const box = el.getBoundingClientRect()
         const style = window.getComputedStyle(el)
         return { x: box.x, y: Math.round(box.y + box.height / 2), height: Math.round(box.height), fontSize: parseFloat(style.fontSize), underline: style.textDecorationLine, background: style.backgroundColor, color: style.color }
       }))
       assert.deepEqual([restore.y, cancel.y].map((y) => Math.abs(y - save.y) <= 3), [true, true], 'one row')
-      assert.equal(restore.x < cancel.x && cancel.x < save.x, true, 'Restore defaults, Cancel, Save from the left')
+      assert.equal(restore.x < cancel.x && cancel.x < save.x, true, 'Save, Cancel, Restore defaults from the left')
       assert.equal(cancel.height, save.height)
       assert.equal(restore.fontSize < save.fontSize, true, 'small text')
       assert.match(restore.underline, /underline/)

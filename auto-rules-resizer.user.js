@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.5
+// @version      0.3.6
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.5'
+  const VERSION = '0.3.6'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -369,6 +369,41 @@
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
   }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // The frame every script's settings dialog shares: the title, a body container the script fills, then Save, Cancel and the script's extra buttons, in that order.
+  // Save writes only when `changed()` says something did. Escape needs nothing here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (css && !doc.getElementById(styleId)) {
+      const style = doc.createElement('style')
+      style.id = styleId
+      style.textContent = css
+      doc.head.appendChild(style)
+    }
+    const close = () => closeDialogKeepingGrid(framework, win)
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
+  }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
   // <lib:settings-transfer>
@@ -593,46 +628,38 @@
   }
 
   const CLASS_PREFIX = 'rules-resizer-'
+  const DIALOG_ID = 'rules-resizer-dialog'
 
   function openDialog () {
     const row = (id, label, value) => `<label for="${id}">${label}</label>` +
       `<input type="number" id="${id}" min="1" step="1" placeholder="no limit" value="${value ?? ''}" style="width:6em">` +
       '<span>px</span>'
-    Framework.showDialog({
-      centerOverBoard: true,
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Rules Resizer', version: VERSION }) },
-        {
-          tag: 'text',
-          innerHTML: '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
-            row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
-            '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
-        },
-        {
-          tag: 'options',
-          options: [
-            {
-              tag: 'button',
-              content: 'Save',
-              handler: () => {
-                limits = {
-                  maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
-                  maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
-                }
-                saveLimits(Framework, limits)
-                Framework.closeDialog()
-                fitPage()
-              }
-            },
-            { tag: 'button', content: 'Cancel', action: 'close' }
-          ]
-        }
-      ]
+    const typedLimits = () => ({
+      maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
+      maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
     })
+    const body = showSettingsDialog(Framework, {
+      prefix: CLASS_PREFIX,
+      name: 'Rules Resizer',
+      version: VERSION,
+      bodyId: DIALOG_ID,
+      changed: () => {
+        const typed = typedLimits()
+        return typed.maxWidth !== limits.maxWidth || typed.maxHeight !== limits.maxHeight
+      },
+      save: () => {
+        limits = typedLimits()
+        saveLimits(Framework, limits)
+        fitPage()
+      }
+    })
+    if (!body) return
+    body.innerHTML = '<div style="margin:6px 0;display:grid;grid-template-columns:auto auto auto;gap:6px 8px;align-items:center;justify-content:start">' +
+      row(MAX_WIDTH_INPUT_ID, 'Max auto width', limits.maxWidth) + row(MAX_HEIGHT_INPUT_ID, 'Max auto height', limits.maxHeight) +
+      '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
     const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
     const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
-    if (!widthInput || !heightInput) throw new Error('auto-rules-resizer: the dialog has no limit inputs')
-    wireCopyPaste(widthInput.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
+    wireCopyPaste(body.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
       saveLimits(Framework, limits)
       if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''

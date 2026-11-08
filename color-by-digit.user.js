@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.3
+// @version      0.22.4
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.3'
+  const VERSION = '0.22.4'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1027,7 +1027,6 @@
   const PULLDOWN_LABEL_WIDTH = 64
   const DIALOG_WIDTH = 640
   const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
-  const SAVE_LABEL = 'Save'
   const EDITOR_ID = 'color-by-digit-editor'
   const MENU = '#color-by-digit-menu'
   const STYLE_ID = 'color-by-digit-style'
@@ -1246,6 +1245,41 @@
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
+  }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // The frame every script's settings dialog shares: the title, a body container the script fills, then Save, Cancel and the script's extra buttons, in that order.
+  // Save writes only when `changed()` says something did. Escape needs nothing here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (css && !doc.getElementById(styleId)) {
+      const style = doc.createElement('style')
+      style.id = styleId
+      style.textContent = css
+      doc.head.appendChild(style)
+    }
+    const close = () => closeDialogKeepingGrid(framework, win)
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
@@ -1704,27 +1738,17 @@
     let selected = draft.active
     // The selected profile's name when it was selected: an emptied name field keeps it.
     let keptName = draft.profiles[selected].name
-    addStyle()
-    Framework.showDialog({
-      centerOverBoard: true,
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Color by Digit', version: VERSION }) },
-        { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
-        {
-          tag: 'options',
-          options: [
-            { tag: 'button', content: 'Cancel', action: 'close' },
-            { tag: 'button', content: SAVE_LABEL, handler: () => { saveDialog(app, savedState, draft, draftMode); Framework.closeDialog() } }
-          ]
-        }
-      ]
+    const box = showSettingsDialog(Framework, {
+      prefix: CLASS_PREFIX,
+      name: 'Color by Digit',
+      version: VERSION,
+      bodyId: EDITOR_ID,
+      styleId: STYLE_ID,
+      css: STYLE_CSS,
+      changed: () => draftMode !== mode || JSON.stringify(draft) !== JSON.stringify(savedState),
+      save: () => saveDialog(app, savedState, draft, draftMode)
     })
-    const box = document.getElementById(EDITOR_ID)
     if (!box) return
-    const dialog = box.closest('.dialog')
-    // No selector tells Save from Cancel but its text, so the script marks it for the stylesheet.
-    const row = dialog && dialog.querySelector('.dialog-options')
-    if (row) row.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === SAVE_LABEL) b.dataset.role = 'save' })
     let brush
     let page
     const groupsShown = () => draft.profiles[selected].groups

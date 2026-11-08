@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.27.4
+// @version      1.27.5
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.27.4'
+  const VERSION = '1.27.5'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -2149,11 +2149,11 @@
     // Sized to its content and centred in the window; the paragraph around the editor loses SudokuPad's bottom margin so the vertical line meets the footer's line.
     `.dialog:has(${EDITOR}) { width: fit-content !important; max-width: 96vw !important; }`,
     `.dialog p:has(> ${EDITOR}) { margin-bottom: 0 !important; }`,
-    `${OPTIONS} { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; justify-content: flex-end; border-top: 1px solid ${LINE_COLOR}; padding: 14px 4px 2px; margin-top: 0; box-sizing: border-box; width: 100%; }`,
+    `${OPTIONS} { display: flex !important; flex-direction: row !important; align-items: center; gap: 10px; justify-content: flex-start; border-top: 1px solid ${LINE_COLOR}; padding: 14px 4px 2px; margin-top: 0; box-sizing: border-box; width: 100%; }`,
     `${OPTIONS} button { width: auto !important; min-width: 0 !important; margin: 0 !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; border-radius: 8px !important; font-size: 1rem !important; flex: none; }`,
     `${OPTIONS} button[data-role="save"] { background: ${PANEL_COLOR} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
     `${OPTIONS} button[data-role="cancel"] { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; }`,
-    `${OPTIONS} button[data-role="restore"] { margin-right: auto !important; background: none !important; border: none !important; color: ${MUTED_COLOR} !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
+    `${OPTIONS} button[data-role="restore"] { margin-left: auto !important; background: none !important; border: none !important; color: ${MUTED_COLOR} !important; padding: 0 4px !important; font-size: 0.85rem !important; text-decoration: underline; text-underline-offset: 3px; }`,
     ...SETTING_NAMES.filter((name) => SETTINGS[name].dialog.under).map(hiddenRowCss),
     `${EDITOR} .${NOTE} { margin: 6px 0; max-width: 20em; }`,
     // In the first column the note wraps to the column set by the marks table; it never sets it.
@@ -2250,23 +2250,6 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     }, true)
   }
 
-  // The buttons are reordered only when all three of this dialog's are there; the stylesheet's row and button styles apply either way.
-  function arrangeButtons (editor) {
-    const dialog = editor.closest('.dialog')
-    const options = dialog && dialog.querySelector('.dialog-options')
-    if (!options) return
-    const roles = { Save: 'save', Cancel: 'cancel', 'Restore defaults': 'restore' }
-    const byRole = {}
-    options.querySelectorAll('button').forEach((button) => {
-      const role = roles[button.textContent.trim()]
-      if (!role) return
-      byRole[role] = button
-      button.dataset.role = role
-    })
-    if (Object.keys(byRole).length !== Object.keys(roles).length) return
-    options.replaceChildren(byRole.restore, byRole.cancel, byRole.save)
-  }
-
   function openDialog () {
     let set = active
     let pickedPreset = activePickedPreset
@@ -2294,32 +2277,21 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       draft = { ...settingDefaults(), marks: draft.marks }
       if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
     }
-    Framework.showDialog({
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Pen Tool Extras', version: VERSION }) },
-        { tag: 'text', innerHTML: `<div id="${EDITOR_ID}"></div>` },
-        {
-          tag: 'options',
-          options: [
-            {
-              tag: 'button',
-              content: 'Save',
-              handler: () => {
-                if (colorsChosen) saveColors(set, pickedPreset)
-                saveSettings(draft)
-                closeDialogKeepingGrid(Framework)
-              }
-            },
-            { tag: 'button', content: 'Cancel', handler: () => closeDialogKeepingGrid(Framework) },
-            { tag: 'button', content: 'Restore defaults', handler: restoreDefaults }
-          ]
-        }
-      ]
+    box = showSettingsDialog(Framework, {
+      prefix: CLASS_PREFIX,
+      name: 'Pen Tool Extras',
+      version: VERSION,
+      bodyId: EDITOR_ID,
+      centerOverBoard: false,
+      changed: () => colorsChosen || changedSettings(draft, inForce).length > 0,
+      save: () => {
+        if (colorsChosen) saveColors(set, pickedPreset)
+        saveSettings(draft)
+      },
+      extraButtons: [{ content: 'Restore defaults', role: 'restore', handler: restoreDefaults }]
     })
-    box = document.getElementById(EDITOR_ID)
     if (!box) throw new Error('pen-tool-extras: the dialog has no editor element')
     draw()
-    arrangeButtons(box)
     wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       const pasted = SETTING_NAMES.filter((name) => SETTINGS[name].key in values)
       const next = { ...inForce, ...Object.fromEntries(pasted.map((name) => [name, values[SETTINGS[name].key]])) }
@@ -2441,6 +2413,41 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
+  }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // The frame every script's settings dialog shares: the title, a body container the script fills, then Save, Cancel and the script's extra buttons, in that order.
+  // Save writes only when `changed()` says something did. Escape needs nothing here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    if (css && !doc.getElementById(styleId)) {
+      const style = doc.createElement('style')
+      style.id = styleId
+      style.textContent = css
+      doc.head.appendChild(style)
+    }
+    const close = () => closeDialogKeepingGrid(framework, win)
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
