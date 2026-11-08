@@ -492,10 +492,6 @@
   const HALO_CELL_COLOR = '#8fb8e8'
   const SAMPLE_BOX_STYLE = 'display:inline-block;padding:0.15em 0.35em;border-radius:0.3em'
   const FRAME_CHOICES = [['off', 'None'], ['on', 'Thin grey']]
-  const SAMPLE_NOTES = {
-    outline: 'For notes without a box, so they read over digits and grid lines.',
-    box: 'For notes made with the Background button on.'
-  }
   function renderSamplePicks ({ outline, box, custom, frame, textColor }) {
     const pickButton = (role, value, label, pressed, sample) =>
       `<button type="button" class="draw-tool-pick" data-role="${role}" data-value="${value}" aria-label="${escapeHtml(label)}" aria-pressed="${pressed}">${sample}<span class="draw-tool-pick-label">${escapeHtml(label)}</span></button>`
@@ -504,8 +500,8 @@
     const boxed = (fill, framed) => `<span class="draw-tool-sample" style="color:${escapeHtml(textColor)};font-size:18px"><span style="${SAMPLE_BOX_STYLE};background:${escapeHtml(fill)};box-shadow:${frameShadow(framed)}">A=B</span></span>`
     const choice = boxChoice(box)
     const fillFor = (id) => id === BOX_CUSTOM ? custom : boxFill(id, textColor)
-    return row('Halo round the letters', SAMPLE_NOTES.outline, OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
-      row('Box color', SAMPLE_NOTES.box,
+    return row('Halo round the letters', 'For notes without a box, so they read over digits and grid lines.', OUTLINES.map((name) => pickButton('outline-pick', name, OUTLINE_LABELS[name], outline === name, halo(name)))) +
+      row('Box color', 'For notes made with the Background button on.',
         [...Object.keys(BOX_PRESETS), BOX_CUSTOM].map((id) => pickButton('box-pick', id, BOX_PRESETS[id] ?? BOX_CUSTOM_LABEL, choice === id, boxed(fillFor(id), frame))),
         choice === BOX_CUSTOM ? `<input type="color" class="draw-tool-swatch" data-role="box-custom" value="${escapeHtml(custom)}" aria-label="Own box color" title="Own box color">` : '') +
       row('Box border', 'The line round a note with a box.',
@@ -845,7 +841,7 @@
     [COLORS_KEY]: readPastedColors,
     [WIDTH_KEY]: (data) => isWidth(data) ? data : undefined,
     [OPACITY_KEY]: (data) => isOpacity(data) ? data : undefined,
-    // The ticket reads an invalid pasted outline as Thicker, box color as Page and frame as off, so none is counted as skipped.
+    // The ticket reads an invalid pasted outline as Thick, box color as Page and frame as off, so none is counted as skipped.
     [OUTLINE_KEY]: readOutline,
     [BOX_KEY]: readBox,
     [FRAME_KEY]: readFrame
@@ -1545,7 +1541,7 @@
       box.innerHTML = '<div class="draw-tool-section-title">Colors</div>' +
         renderColorBlock({ prefix: CLASS_PREFIX, label: 'Text color preset', options, swatches: COLOR_NUMBERS.map((n) => ({ key: String(n), value: draft[n], label: `Text color ${n}` })) }) +
         (paletteNote ? `<div data-role="palette-note">${paletteNote}.</div>` : '') +
-        renderSamplePicks({ outline: draftOutline, box: draftBox, custom: draftCustom, frame: draftFrame, textColor: itemColor(color) })
+        renderSamplePicks({ outline: draftOutline, box: draftBox, custom: draftCustom, frame: draftFrame, textColor: draft[color] })
     }
     draw()
     box.addEventListener('change', (event) => {
@@ -1559,6 +1555,7 @@
         draw()
       } else if (target.matches('[data-role="box-custom"]')) {
         draftCustom = draftBox = hexColor(target.value)
+        draw()
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
         chosen = null
@@ -1572,8 +1569,10 @@
       const { role, value } = button.dataset
       if (role === 'outline-pick') draftOutline = readOutline(value)
       else if (role === 'box-pick') draftBox = value === BOX_CUSTOM ? draftCustom : value
-      else draftFrame = value === 'on'
+      else if (role === 'frame-pick') draftFrame = value === 'on'
+      else return
       draw()
+      box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
     })
     wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       applyPasted(values)

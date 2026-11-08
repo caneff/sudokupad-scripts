@@ -272,7 +272,7 @@ test('Paste settings returns the box color and the frame, and an invalid value r
   assert.deepEqual(readPaste(JSON.stringify({ [BOX_KEY]: 'plaid', [FRAME_KEY]: 'yes' })), { values: { [BOX_KEY]: 'page', [FRAME_KEY]: false }, skipped: 0 })
 })
 
-test('Paste settings returns the outline, and an invalid one reads as Thicker without counting as skipped', () => {
+test('Paste settings returns the outline, and an invalid one reads as Thick without counting as skipped', () => {
   assert.deepEqual(readPaste(JSON.stringify({ [OUTLINE_KEY]: 'none' })), { values: { [OUTLINE_KEY]: 'none' }, skipped: 0 })
   assert.deepEqual(readPaste(JSON.stringify({ [OUTLINE_KEY]: 'huge' })), { values: { [OUTLINE_KEY]: 'medium' }, skipped: 0 })
 })
@@ -673,6 +673,7 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
 })
 
+const contains = (text, part, message) => assert.match(text, new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), message)
 // The dialog's three sample rows: the buttons of one row, in order, each as { role, value, label, pressed, style }.
 const pick = (html, role) => [...html.matchAll(new RegExp(`<button[^>]*data-role="${role}"[^>]*>`, 'g'))].map(([tag]) => ({
   value: tag.match(/data-value="([^"]*)"/)[1],
@@ -701,8 +702,8 @@ test('each halo sample is one letter in the text color with its own reach of hal
   const html = samples()
   for (const name of OUTLINES) {
     const sample = html.match(new RegExp(`data-role="outline-pick" data-value="${name}"[^>]*>(.*?)</button>`))[1]
-    assert.equal(sample.includes(`text-shadow:${haloShadow(name, 'var(--body-bg, #fff)')}`), true, name)
-    assert.equal(sample.includes('color:rgb(1, 2, 3)'), true, name)
+    contains(sample, `text-shadow:${haloShadow(name, 'var(--body-bg, #fff)')}`, name)
+    contains(sample, 'color:rgb(1, 2, 3)', name)
     assert.match(sample, />A</)
   }
   assert.equal(haloShadow('none', 'x'), 'none')
@@ -711,32 +712,34 @@ test('each halo sample is one letter in the text color with its own reach of hal
 test('each box sample is "A=B" in the text color on its box color, Tint following the text color and Own the custom color', () => {
   const html = samples({ custom: '#abcdef' })
   const sample = (value) => html.match(new RegExp(`data-role="box-pick" data-value="${value}"[^>]*>(.*?)</button>`))[1]
-  assert.equal(sample('white').includes(`background:${boxFill('white', '')}`), true)
-  assert.equal(sample('yellow').includes(`background:${BOX_YELLOW}`), true)
-  assert.equal(sample('tint').includes(`background:${boxFill('tint', 'rgb(1, 2, 3)')}`), true)
-  assert.equal(sample('custom').includes('background:#abcdef'), true)
+  contains(sample('page'), `background:${boxFill('page', '')}`)
+  contains(sample('white'), `background:${boxFill('white', '')}`)
+  contains(sample('yellow'), `background:${BOX_YELLOW}`)
+  contains(sample('tint'), `background:${boxFill('tint', 'rgb(1, 2, 3)')}`)
+  contains(sample('custom'), 'background:#abcdef')
   for (const value of ['page', 'white', 'yellow', 'tint', 'custom']) {
     assert.match(sample(value), />A=B</, value)
-    assert.equal(sample(value).includes('color:rgb(1, 2, 3)'), true, value)
+    contains(sample(value), 'color:rgb(1, 2, 3)', value)
   }
 })
 
 test('the box samples carry the current border, and the border samples show none and thin grey', () => {
   const edge = (html, role, value) => html.match(new RegExp(`data-role="${role}" data-value="${value}"[^>]*>(.*?)</button>`))[1]
-  assert.equal(edge(samples({ frame: true }), 'box-pick', 'white').includes(frameShadow(true)), true)
-  assert.equal(edge(samples({ frame: false }), 'box-pick', 'white').includes(frameShadow(false)), true)
-  assert.equal(edge(samples(), 'frame-pick', 'on').includes(frameShadow(true)), true)
-  assert.equal(edge(samples(), 'frame-pick', 'off').includes(frameShadow(false)), true)
+  contains(edge(samples({ frame: true }), 'box-pick', 'white'), frameShadow(true))
+  contains(edge(samples({ frame: false }), 'box-pick', 'white'), frameShadow(false))
+  contains(edge(samples(), 'frame-pick', 'on'), frameShadow(true))
+  contains(edge(samples(), 'frame-pick', 'off'), frameShadow(false))
 })
 
 test('the Own color input shows under the row only while Own is picked', () => {
-  assert.equal(samples({ box: '#123456', custom: '#123456' }).includes('data-role="box-custom"'), true)
-  assert.equal(samples({ box: '#123456', custom: '#123456' }).includes('value="#123456"'), true)
-  assert.equal(samples({ box: 'white' }).includes('data-role="box-custom"'), false)
+  contains(samples({ box: '#123456', custom: '#123456' }), 'data-role="box-custom"')
+  contains(samples({ box: '#123456', custom: '#123456' }), 'value="#123456"')
+  assert.doesNotMatch(samples({ box: 'white' }), /data-role="box-custom"/)
 })
 
-test('each sample row has the ticket\'s sub-line', () => {
+test('each of the three sample rows has its sub-line', () => {
   const html = samples()
-  assert.equal(html.includes('For notes without a box, so they read over digits and grid lines.'), true)
-  assert.equal(html.includes('For notes made with the Background button on.'), true)
+  contains(html, 'For notes without a box, so they read over digits and grid lines.')
+  contains(html, 'For notes made with the Background button on.')
+  contains(html, 'The line round a note with a box.')
 })

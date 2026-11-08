@@ -117,6 +117,9 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
     await dialog(p, async () => {
       await choose(p, 'custom')
       await p.locator(CUSTOM).fill('#ffc0cb')
+      // The Own sample and the border samples show the new color at once, not at the next pick.
+      assert.match(await p.locator(`${PICKS}[data-value="custom"] span[style*="background"]`).last().getAttribute('style'), /background:#ffc0cb/)
+      assert.match(await p.locator(`${FRAME_ON} span[style*="background"]`).last().getAttribute('style'), /background:#ffc0cb/)
     })
     assert.equal(await stored(p, BOX_KEY), '#ffc0cb')
     const fill = 'rgb(255, 192, 203)'
@@ -175,6 +178,8 @@ describe('Text Anywhere\'s background box color and frame', { concurrency: false
       await p.locator(`${EDITOR} button[data-role="outline-pick"][data-value="thin"]`).click()
       await choose(p, 'tint')
       await p.locator(FRAME_OFF).click()
+      // The picked button keeps the keyboard focus through the redraw.
+      assert.equal(await p.evaluate(() => document.activeElement?.dataset.value), 'off')
     })
     assert.equal(await stored(p, OUTLINE_KEY), 'thin')
     assert.equal(await stored(p, BOX_KEY), 'tint')
