@@ -4,7 +4,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 
@@ -483,7 +483,6 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     assert.equal(await p.inputValue(NAME_FIELD), text)
   }
   const handle = (i) => p.locator(`${ROWS} [data-role=handle]`).nth(i)
-  const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
   const count = () => p.locator(ROWS).count()
   const heading = () => p.locator(EDITOR).innerText()
   // Where a drag of the handle of row `from` starts and ends: the end is just past the middle of row `to`,

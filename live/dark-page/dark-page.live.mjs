@@ -8,20 +8,23 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
+import { captureConsoleErrors, gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
-const { BOARD, BOARD_ID, STYLE_ID } = createRequire(import.meta.url)('../../dark-page.user.js')
+const { BOARD, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
+const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
 const DATA_KEY = 'DarkPage_color'
 
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark Page\s*$/ })
 const BOARD_BOX = `#${BOARD_ID}`
 const STYLE = `#${STYLE_ID}`
 const BLACK = 'rgb(0, 0, 0)'
-const CREDIT_TEXT = 'rgb(221, 221, 221)'
-const DARK_TEXT = 'rgb(34, 34, 34)'
+const CREDIT_TEXT = 'rgb(255, 255, 255)'
+const DARK_TEXT = 'rgb(0, 0, 0)'
+const BUTTON_HOVER_BG = 'rgb(55, 52, 58)'
+const BUTTON_PRESS_BG = 'rgb(59, 55, 62)'
 // The color of the replay tool's readout, the ::after of .controls-input, on `page`.
 const readoutColor = (page) => page.evaluate(() => window.getComputedStyle(document.querySelector('.controls-input'), '::after').color)
 // The control buttons on a dark page: dark gray with light purple icons, and a purple border on
@@ -305,9 +308,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.deepEqual(onBorders, onBorders.map(() => BUTTON_BORDER))
   })
 
-  it('hover on a button changes nothing the script set, and brightens a digit as it does with the script off', async () => {
+  it('hover on a dark button lightens its fill, and brightens a digit as it does with the script off', async () => {
     await p.hover('#control-undo')
-    assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
+    assert.deepEqual(await readButton('#control-undo'), { bg: BUTTON_HOVER_BG, fg: BUTTON_ACCENT, border: BUTTON_BORDER })
     const hovered = () => computed('.controls-input button.digit', 'filter')
     await p.hover('.controls-input button.digit')
     const on = await hovered()
@@ -317,6 +320,48 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await p.mouse.move(5, 5)
     assert.notEqual(on, 'none')
     assert.equal(on, off)
+    assert.equal((await readButton('#control-undo')).bg, BUTTON_BG)
+  })
+
+  it('a pressed dark button takes the press fill', async () => {
+    const box = await p.locator('#control-undo').boundingBox()
+    await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await p.mouse.down()
+    try {
+      assert.equal((await readButton('#control-undo')).bg, BUTTON_PRESS_BG)
+    } finally {
+      // Moving off before the release keeps the click from undoing anything.
+      await p.mouse.move(5, 5)
+      await p.mouse.up()
+    }
+  })
+
+  const outlineOfActive = () => read(() => { const c = window.getComputedStyle(document.activeElement); return { dark: Boolean(document.activeElement.closest('.controls-app, .controls-tool, .controls-aux')), outline: [c.outlineColor, c.outlineWidth, c.outlineStyle] } })
+
+  it('a dark button focused with no keyboard involved shows no outline', async () => {
+    // A mouse press on a SudokuPad button leaves no focus on it, so a button the mouse did focus stands in: Chromium matches :focus-visible for a script's focus() only when the element focused before it did.
+    await read(() => {
+      const button = document.createElement('button')
+      button.id = 'dark-page-live-mouse'
+      button.style.cssText = 'position: fixed; left: 600px; top: 80px; z-index: 99999'
+      document.body.appendChild(button)
+    })
+    try {
+      await p.click('#dark-page-live-mouse')
+      await read(() => document.querySelector('#control-redo').focus())
+      const { dark, outline } = await outlineOfActive()
+      assert.equal(dark, true)
+      assert.equal(outline[2], 'none')
+    } finally {
+      await read(() => { document.activeElement.blur(); document.getElementById('dark-page-live-mouse').remove() })
+    }
+  })
+
+  it('a dark button the keyboard focuses shows a 2px light purple outline', async () => {
+    await read(() => document.querySelector('#control-redo').focus())
+    await p.keyboard.press('Tab')
+    assert.deepEqual(await outlineOfActive(), { dark: true, outline: [BUTTON_ACCENT, '2px', 'solid'] })
+    await read(() => document.activeElement.blur())
   })
 
   it('the puzzle is kept: no pixel of the board differs with the script off', async () => {
@@ -409,8 +454,89 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
 })
 
+// `@run-at document-start`: the script runs before any of the page's own, so the page is never SudokuPad's white. A frame
+// sampler, installed before the script, records the body's color at every frame the board exists in; a white one is the
+// flash. (A frame between the body and the board, while the parser waits on SudokuPad's blocking scripts, is outside
+// `BOARD` by design and is not sampled: docs/research/dark-page/load-flash.md.) Framework does not exist yet, so the
+// saved color is read from localStorage, and `start` corrects it through Framework at DOMContentLoaded.
+describe('at document-start', { concurrency: false }, () => {
+  // `saved` is put in storage before the script runs; `atLoad` is a color put in, or `null` taking it out (`false`: no change), at
+  // DOMContentLoaded just before `start` (the sampler's listener is registered first, so it runs first).
+  const samples = async (saved, atLoad = false) => {
+    const { context, p, errors } = await openPage(browser, {
+      // Two init scripts run in order at document start, before the page's own: the sampler, then the script. At that point
+      // `document.documentElement` does not exist yet, as in an injector that runs the script first.
+      seed: async (page, errors) => {
+        captureConsoleErrors(page, errors)
+        await page.addInitScript(([key, color, atLoad, boardId]) => {
+          if (color) window.localStorage.setItem(key, color)
+          if (atLoad !== false) {
+            document.addEventListener('DOMContentLoaded', () => {
+              if (atLoad === null) window.localStorage.removeItem(key)
+              else window.localStorage.setItem(key, atLoad)
+            })
+          }
+          const frames = (window.__frames = [])
+          const tick = () => {
+            if (document.getElementById(boardId)) frames.push(window.getComputedStyle(document.body).backgroundColor)
+            if (frames.length < 600) window.requestAnimationFrame(tick)
+          }
+          window.requestAnimationFrame(tick)
+        }, [LOCAL_DATA_KEY, saved, atLoad, BOARD_ID])
+        await page.addInitScript({ content: script })
+      }
+    })
+    try {
+      await p.locator(STYLE).waitFor({ state: 'attached' })
+      await startPuzzle(p)
+      return {
+        errors,
+        frames: await p.evaluate(() => window.__frames),
+        color: await p.evaluate(() => window.getComputedStyle(document.body).backgroundColor),
+        entries: await settingsEntry(await openSettings(p)).count(),
+        stored: await p.evaluate((name) => {
+          Framework.setData(name, '#123456')
+          return [Framework.makeDataKey(name), window.localStorage.getItem(Framework.makeDataKey(name))]
+        }, DATA_KEY)
+      }
+    } finally {
+      await context.close()
+    }
+  }
+
+  it('paints the default black from the first frame with a board, never white, and `start` adds the settings entry', async () => {
+    const { frames, errors, color, entries } = await samples(null)
+    assert.ok(frames.length > 0, 'the sampler saw a frame with a board')
+    assert.deepEqual([...new Set(frames)], [BLACK])
+    assert.equal(color, BLACK)
+    assert.equal(entries, 1)
+    assert.deepEqual(errors, [])
+  })
+
+  it('paints the saved color from the first frame with a board, never white or black', async () => {
+    const { frames, errors, color } = await samples('#336699')
+    assert.ok(frames.length > 0, 'the sampler saw a frame with a board')
+    assert.deepEqual([...new Set(frames)], ['rgb(51, 102, 153)'])
+    assert.equal(color, 'rgb(51, 102, 153)')
+    assert.deepEqual(errors, [])
+  })
+
+  it('the key and the format the early read uses are Framework\'s own', async () => {
+    const { stored } = await samples(null)
+    assert.deepEqual(stored, [LOCAL_DATA_KEY, '#123456'])
+  })
+
+  it('Framework\'s saved color wins over the early read', async () => {
+    assert.equal((await samples('#336699', '#993366')).color, 'rgb(153, 51, 102)')
+  })
+
+  it('Framework\'s "nothing saved" wins over the early read, so the default comes back', async () => {
+    assert.equal((await samples('#336699', null)).color, BLACK)
+  })
+})
+
 // The options dialog changes the page color and keeps it. One context, so localStorage carries over
-// a reload; the script is injected at DOMContentLoaded, as `@run-at document-idle` approximates it.
+// a reload; the script is injected at DOMContentLoaded, after the page's own startup.
 describe('the page color dialog', { concurrency: false }, () => {
   let context, p, errors
   const bodyColor = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)
@@ -462,11 +588,27 @@ describe('the page color dialog', { concurrency: false }, () => {
     await load()
     const firstCss = await p.evaluate(() => window.__firstCss)
     assert.ok(firstCss.includes(`${BOARD} { background-color: #ffcc00 !important }`), firstCss)
-    assert.doesNotMatch(firstCss, /#000000/)
+    assert.doesNotMatch(firstCss, /background-color: #000000/)
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     await openDialog()
     assert.equal(await p.locator(`.dialog ${PICKER}`).inputValue(), '#ffcc00')
     await dialogButton('Cancel').click()
+  })
+
+  it('the credit line and the readout reach 4.5:1 on #808080 and #767676', async () => {
+    const channels = (css) => css.match(/\d+/g).slice(0, 3).map(Number)
+    for (const grey of ['#808080', '#767676']) {
+      await openDialog()
+      await p.locator(`.dialog ${PICKER}`).fill(grey)
+      await dialogButton('Save').click()
+      const page = channels(await bodyColor())
+      for (const text of [await footerColor(), await readoutColor(p)]) {
+        assert.ok(contrastRatio(channels(text), page) >= 4.5, `${text} on ${grey}`)
+      }
+    }
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#ffcc00')
+    await dialogButton('Save').click()
   })
 
   it('Save of a dark color switches the buttons dark without a reload', async () => {
@@ -486,6 +628,36 @@ describe('the page color dialog', { concurrency: false }, () => {
     await dialogButton('Cancel').click()
     assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
     assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('moving the picker applies the color to the page at once, and Cancel puts the saved color back', async () => {
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#00ff00')
+    assert.equal(await bodyColor(), 'rgb(0, 255, 0)')
+    assert.equal(await footerColor(), DARK_TEXT)
+    await dialogButton('Cancel').click()
+    await p.locator('.dialog').waitFor({ state: 'detached' })
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
+    assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('Escape closes the dialog and puts the saved color back', async () => {
+    await openDialog()
+    await p.locator(`.dialog ${PICKER}`).fill('#00ff00')
+    assert.equal(await bodyColor(), 'rgb(0, 255, 0)')
+    await p.keyboard.press('Escape')
+    await p.locator('.dialog').waitFor({ state: 'detached' })
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
+    assert.equal(await saved(), '#ffcc00')
+  })
+
+  it('the Black button previews black, and Cancel puts the saved color back', async () => {
+    await openDialog()
+    await dialogButton('Black').click()
+    assert.equal(await bodyColor(), BLACK)
+    await dialogButton('Cancel').click()
+    await p.locator('.dialog').waitFor({ state: 'detached' })
+    assert.equal(await bodyColor(), 'rgb(255, 204, 0)')
   })
 
   it('Black then Save returns to the default black with light text, and saves nothing', async () => {

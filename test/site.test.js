@@ -408,7 +408,7 @@ test(`${CBD} lists what the script adds, one item per feature`, () => {
   assert.deepEqual(leadIns(grid[1]), CBD_LEAD_INS)
 })
 
-test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and one sentence`, () => {
+test(`${CBD} shows the settings dialog as one annotated picture whose alt text names every label, with its intro and its two notes`, () => {
   const m = read(CBD).match(/<h2>The settings dialog<\/h2>([\s\S]*?)<h2>/)
   assert.ok(m, `site/${CBD} has no <h2>The settings dialog</h2>`)
   const found = imgs(m[1])
@@ -418,7 +418,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
   for (const label of ['Settings icons', 'Pulldowns', 'Selected profile', 'Profile list', 'Palette and digits', 'Bottom row']) {
     assert.ok(alt.includes(label), `the picture's alt text does not name "${label}"`)
   }
-  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it.')
+  assert.equal(plain(m[1]).trim(), 'Edit profiles, in the profile menu, opens it. A click on a digit already in the chosen color clears it. From the keyboard, Tab shows a purple ring on the control it reaches. The arrow keys then move around the colors and around the digit keys, and typing 0 to 9 on either paints that digit.')
 })
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
@@ -441,7 +441,7 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes anywhere Click the board or beside it to type; double-click to edit.',
+    'Typed notes anywhere Click the board or beside it; Esc finishes; double-click edits.',
     'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or - [ ] checklist items. Typing ->, != or sum gives → ≠ Σ.',
     'Long notes Wraps and scrolls; drag a corner to resize.',
     'Readable over digits A white outline round the letters, and an optional box behind them.',

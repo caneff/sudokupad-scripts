@@ -35,6 +35,12 @@ The ranking weighs how much the feel improves against the cost. "Today" says wha
 | 23 | **Tab inside an open note stays in the note** | A Tab keypress does not suddenly close the note. | Excalidraw: Tab indents and Shift+Tab outdents inside the text editor ([textWysiwyg.tsx L906-919][e-wys-tab]). Notion and Keynote: Tab indents a list item ([Notion shortcuts][notion], [Keynote shortcuts][keynote]). | Today Tab moves the focus away (the `keepBoxKeys` comment), and the `blur` closes the note. The smallest fix is `preventDefault()` on Tab in `keepBoxKeys`. Indenting a `- ` bullet would also need nested bullets in `parseMarkdown`, which they lack today. | M |
 | 24 | **Ctrl+Shift+> and < change the size** | Resize text without the slider. | Figma and Google Slides: Ctrl+Shift+> and < change the font size ([Slides shortcuts][slides]). Excalidraw runs its font-size actions inside the text editor ([textWysiwyg.tsx L883-886][e-wys-size]). | Step the Size slider's value by one notch for the open note, else for the selected notes, the same path as a slider move. | M |
 
+## What #535 found already there (2026-11-08)
+
+- **A steady cursor during a drag or resize (item 5): nothing did it.** `cursor: move` was set on a closed note's own element (#530) and each handle had its own resize cursor, so both reverted as soon as the pointer left the note or handle. Now one class on `<html>` holds the cursor for every element until the release.
+- **Whole-pixel positions (item 9): not covered.** `render-crisp-0.21.2.png` and `render-crisp-0.21.3.png` (`render-timing.md`) compare text sharpness at a fractional board scale after #426. They never place a note at a fractional point. Stored points were also kept to a tenth of a board unit, too coarse to hit a device pixel, so they are now kept to a hundredth.
+- **Trash button.** Only "Delete the selected notes" fades. With nothing selected the button asks first and clears every note at once with no fade, because it is a bulk clear and not a single deletion.
+
 ## Already done or filed
 
 Found in the sources and already in Text Anywhere, or filed:

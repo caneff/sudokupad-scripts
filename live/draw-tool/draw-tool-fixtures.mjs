@@ -22,9 +22,9 @@ export const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
 export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, .draw-tool-resize, .draw-tool-selection, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
 // Every element in the layer but the groups themselves.
 export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
-// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
-export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
-export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
+// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open, and a deleted one that is fading out.
+export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox, .draw-tool-fading)'
+export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox, .draw-tool-fading)'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 // The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'
@@ -51,6 +51,11 @@ export const FRAME_KEY = 'DrawTool_frame'
 // The pickers appear only when the hold timer fires.
 export const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
 export const NEAR_PX = 0.5
+// How far a release may move a note to put its left and top on whole device pixels: half a pixel on each axis, and the two together.
+export const CRISP_HALF_PX = 0.5
+export const CRISP_PX = Math.hypot(CRISP_HALF_PX, CRISP_HALF_PX)
+// The resize handles on a note alone selected or open.
+export const HANDLES = '#draw-tool-layer .draw-tool-resize'
 export const NINE = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 export const KEYPAD = '.controls-input'
 export const SETTINGS_EDITOR = '#draw-tool-dialog'
@@ -134,6 +139,12 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 
 // Two frames: the pointer's work waits for the next one.
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
+// Escape finishes the open note and leaves it selected; a second Escape ends that selection, so the next click on empty space opens a note again.
+export const SELECTED = '#draw-tool-layer .draw-tool-selected'
+export async function finishNote (p) {
+  await p.keyboard.press('Escape')
+  if (await p.locator(SELECTED).count() > 0) await p.keyboard.press('Escape')
+}
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
 // Removes every saved drawing, every set of notes a Restart kept, and the index.

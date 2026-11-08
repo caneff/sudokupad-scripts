@@ -37,6 +37,8 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
 
   before(async () => {
     ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
+    // The handles' fade in has its own live check; here they are read as soon as they appear.
+    await p.emulateMedia({ reducedMotion: 'reduce' })
     await draw.boot(p)
     await draw.forgetDrawings(p)
     await p.evaluate((key) => Framework.setData(key, true), FRAME_KEY)
@@ -85,12 +87,12 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
   })
 
   it('the dashed outline of a faded note open for typing stays solid too', async () => {
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.dblclick(...await gridPoint(p, [1.5, 1.5]))
     await p.locator(draw.TEXT_BOX).waitFor()
     assert.equal(await p.locator(SELECTION).count(), 1, 'one outline round the open note')
     assert.equal(await drawnOpacity(SELECTION), 1)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal(await p.locator(SELECTION).count(), 0)
   })
 
@@ -103,7 +105,7 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
       await p.keyboard.up('Shift')
     }
     assert.equal(await p.locator(SELECTION).count(), 2)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal(await p.locator(SELECTION).count(), 0)
   })
 })

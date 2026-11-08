@@ -76,7 +76,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     assert.equal(await boxText(), 'a->', 'Undo undid the replacement and gave back the typed characters')
     await p.keyboard.press('Control+A')
     await p.keyboard.type('1<=2')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual(await savedTexts(), ['1≤2'])
   })
 
@@ -90,7 +90,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     await p.keyboard.press('Control+A')
     await p.keyboard.type('r5 sum')
     assert.equal(await boxText(), 'r5 sum', 'sum waits for the character after it')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual(await savedTexts(), ['1≤2', 'r5 Σ'])
   })
 

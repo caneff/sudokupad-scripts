@@ -114,6 +114,9 @@ export const buttonBoxesOn = (p) => p.locator(BUTTON).evaluate((button) => {
   return { word: box('[data-role="mode"]'), chips: box('svg[data-role="chips"]'), arrow: box('[data-role="menu"]') }
 })
 
+// The middle of a located element, in page pixels.
+export const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
+
 // A profile row's top-left corner in the dialog, clear of its drag handle.
 export const ROW_CORNER = { position: { x: 2, y: 2 } }
 
