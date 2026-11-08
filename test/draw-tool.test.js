@@ -4,7 +4,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { failEachListener } = require('./specs/broken-sudokupad.js')
+const { VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -705,4 +706,50 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
+})
+
+// A SudokuPad with every internal the features declare, and the helpers that take one away.
+const completeRoots = () => {
+  const app = { on () {}, getToolNames () {}, puzzle: { on () {} } }
+  const Framework = { getApp () {}, getData () {}, setData () {}, removeData () {}, addTool () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { svgRenderer: { getElem () {} }, puzzle: { undoStack: [] }, tools: { colour: {} } } }
+  return { Framework, app }
+}
+const withoutPath = (roots, internal) => {
+  const [root, ...keys] = internal.split('.')
+  const last = keys.pop()
+  delete keys.reduce((owner, key) => owner[key], roots[root])[last]
+  return roots
+}
+
+test('Text Anywhere declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
+})
+
+test('without one internal, only the features that need it are lacking', () => {
+  const cases = [
+    ['Framework.addTool', ['tool']], ['app.getToolNames', ['tool']],
+    ['Framework.showDialog', ['tool', 'settings']],
+    ['Framework.getApp', ['notes', 'tool']],
+    ['Framework.app.svgRenderer.getElem', ['notes', 'tool']], ['Framework.app.puzzle', ['notes', 'tool', 'undoRestart']],
+    ['Framework.app.puzzle.undoStack', ['undoRestart']],
+    ['app.puzzle.on', ['notes', 'tool', 'undoRestart']], ['app.on', ['notes', 'tool']],
+    ['Framework.getData', ['saved']], ['Framework.setData', ['saved']], ['Framework.removeData', ['saved']],
+    ['Framework.addSetting', ['settings']], ['Framework.closeDialog', ['settings']],
+    ['Framework.app.tools.colour', ['presets']]
+  ]
+  for (const [internal, features] of cases) {
+    assert.deepEqual(lackingInternals(FEATURES, withoutPath(completeRoots(), internal)), new Map([[internal, features]]), internal)
+  }
+})
+
+// With the Text tool picked, so a listener reaches its own code past that check.
+const textToolPicked = ({ Framework }) => { Framework.app.tool = TOOL_NAME }
+
+test('a window listener of Text Anywhere whose own code throws turns its feature off, and the throw stays in the script', () => {
+  const runs = failEachListener(path.join(__dirname, '..', 'draw-tool.user.js'), FEATURES, 'window', textToolPicked)
+  assert.ok(runs.length >= 15, runs.map(({ where }) => where).join(', '))
+  for (const { where, escaped } of runs) assert.deepEqual(escaped.map(({ error }) => String(error)), [], where)
+  // Most listeners act only mid-gesture; the ones that read their event at once show the throw turning the Text tool off.
+  const warned = runs.filter(({ warnings }) => warnings.some((warning) => /^draw-tool: Text tool skipped because SudokuPad changed: Error: the listener read event\./.test(warning)))
+  assert.ok(warned.length >= 2, warned.map(({ where }) => where).join(', '))
 })

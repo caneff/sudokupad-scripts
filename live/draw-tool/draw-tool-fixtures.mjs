@@ -28,6 +28,7 @@ export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 // The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'
+export const TRAY = '.draw-tool-tray'
 export const SIZE_SLIDER = '#draw-tool-size'
 export const OPACITY_SLIDER = '#draw-tool-opacity'
 export const CLEAR_BUTTON = '.draw-tool-clear'

@@ -22,7 +22,7 @@ const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
-const missing = (steps, internal) => new RegExp(`^pen-tool-extras: ${steps} skipped because SudokuPad has no ${internal.replace('.', '\\.')}$`)
+const missing = (steps, internal) => new RegExp(`^pen-tool-extras: ${steps} skipped because SudokuPad has no ${internal.replaceAll('.', '\\.')}$`)
 const changed = (step) => new RegExp(`^pen-tool-extras: ${step} skipped because SudokuPad changed: `)
 
 // The script with `line` put in after `anchor`, which it must hold exactly once, so a moved anchor fails here and not as a quiet pass.
@@ -35,9 +35,17 @@ function planted (anchor, line) {
 // sliders, `pulldown` for SudokuPad's line mode pulldown ('hidden' unless the pen panel step is skipped), `edgeAgain` null when a second
 // click on an edge is SudokuPad's own toggle off rather than this script's arrow 'm', `noDrag` for a case that removes what a drag needs.
 const CASES = [
-  { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
-  { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
-  { name: 'marks missing', off: 'marks, line erase', warns: missing('marks, line erase', 'grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
+  { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'ToolPen.tool.handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
+  { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'ToolPen.tool.drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
+  { name: 'marks missing', off: 'marks, line erase', warns: missing('marks, line erase', 'Framework.app.grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
+  // SudokuPad's own clicks read xyToRCExact too, so it is hidden from the script's startup check only, and SudokuPad's own is back after it.
+  {
+    name: 'line erase missing',
+    off: 'line erase',
+    warns: missing('line erase', 'Framework.app.xyToRCExact'),
+    breaks: `Framework.app.xyToRCExact = undefined
+      Framework.getApp().then(() => { delete Framework.app.xyToRCExact })`
+  },
   // Cell color page 1 cannot be read when the install save darkens it.
   {
     name: 'colors',
@@ -225,6 +233,18 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
       it('the dialog names the skipped step in one line, or says nothing when none is', async () => {
         assert.equal(await dialogLine(), kase.off)
+      })
+
+      it('the bar at the bottom of the page names the skipped steps with a Report link and goes when dismissed, or no bar shows when none is', async () => {
+        const bar = p.locator('#sudokupad-scripts-notices [data-script="pen-tool-extras"]')
+        if (kase.off === NOTHING_OFF) {
+          assert.equal(await bar.count(), 0)
+          return
+        }
+        assert.match(await bar.textContent(), new RegExp(`^Pen Tool Extras: ${kase.off} (is|are) off — SudokuPad changed\\.Report`))
+        assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
+        await bar.locator('button[aria-label="Dismiss"]').click()
+        assert.equal(await bar.count(), 0)
       })
 
       it('SudokuPad\'s own edge X still draws, and the next click is this script\'s arrow, or SudokuPad\'s own toggle off when marks are off', async () => {
