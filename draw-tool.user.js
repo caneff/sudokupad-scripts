@@ -1263,9 +1263,10 @@
     // A thin bar whose room is kept whether it shows or not, so the text does not wrap again as the pointer comes and goes.
     `.${TEXT_CLASS}.${SCROLLS_CLASS} { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}.${SCROLLS_CLASS}:hover { scrollbar-color: currentColor transparent; }`,
-    // Under every other tool a press, a move or the wheel over a note goes to what lies under it, as if the notes were not there. The board's own
-    // cursor is SudokuPad's pointer, which a note over it keeps.
-    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: pointer; }`,
+    // Under every other tool a press or a move over a note goes to what lies under it, as if the notes were not there. A note keeps the cursor of the
+    // page around it: SudokuPad's pointer on the board, the arrow beside it.
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: default; }`,
+    `.${ACTIVE_CLASS} .${BOARD_NOTES_CLASS} .${TEXT_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     `.${SELECTED_CLASS} { outline: calc(2 * var(${PIXEL_VAR}, 1px)) dashed ${PANEL_COLOR}; outline-offset: calc(2 * var(${PIXEL_VAR}, 1px)); }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
@@ -1942,13 +1943,25 @@
   // The note an event's target is in, or null; only while Text Annotation is current is a note ever the target.
   const noteOf = (event) => event.target instanceof window.Element ? event.target.closest(`#${LAYER_ID} .${TEXT_CLASS}`) : null
 
+  // The note the wheel is over. Under another tool the notes take no pointer, so the topmost drawn note whose box holds the point answers, unless a
+  // dialog or the menu drawer, which sit above the notes, is the wheel's target.
+  function wheelNote (event) {
+    if (drawingLayer().classList.contains(ACTIVE_CLASS)) return noteOf(event)
+    if (!(event.target instanceof window.Element) || event.target.closest(ABOVE_NOTES)) return null
+    const map = boardMap()
+    const drawn = drawing.filter((item) => item.kind === TEXT_KIND && item[NOTE_ELEMENT]?.isConnected)
+    const onTop = [...drawn.filter((item) => !item.fixed), ...drawn.filter((item) => item.fixed)]
+    return onTop.findLast((item) => inBox(eventPoint(event), noteScreenBox(item, map, outline)))?.[NOTE_ELEMENT] ?? null
+  }
+
   // A wheel's lines and pages, as pixels of the note it scrolls.
   const WHEEL_UNITS = { [window.WheelEvent.DOM_DELTA_LINE]: (note) => parseFloat(window.getComputedStyle(note).fontSize) * LINE_HEIGHT, [window.WheelEvent.DOM_DELTA_PAGE]: (note) => note.clientHeight }
 
-  // The wheel over a note with text past its box scrolls it, and never reaches SudokuPad, until the note can scroll no further that way; Ctrl+wheel stays the browser's zoom.
+  // The wheel over a note with text past its box scrolls it, under any tool, and never reaches SudokuPad, until the note can scroll no further that
+  // way; Ctrl+wheel stays the browser's zoom.
   function scrollNote (event) {
     if (event.ctrlKey || event.deltaY === 0) return
-    const note = noteOf(event)
+    const note = wheelNote(event)
     if (!note || !note.classList.contains(SCROLLS_CLASS)) return
     const room = event.deltaY < 0 ? note.scrollTop : scrollRoom(note) - note.scrollTop
     if (room < 1) return

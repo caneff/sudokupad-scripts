@@ -1,7 +1,8 @@
 // Live check of draw-tool.user.js's note box on sudokupad.app: a long line wraps at 16 em, a note of more than 8 lines stops growing
 // there and the wheel scrolls it without reaching SudokuPad, typing keeps the caret in view, a short note and the board keep the wheel,
 // the scroll bar shows only under the pointer, and markdown, line breaks and the halo still draw in a scrolled box. Ctrl+wheel and a dialog over a note keep
-// the wheel, a click just under a wrapped note misses it, and a note off the board wraps and scrolls too. Real mouse and keyboard input.
+// the wheel, a digit tool keeps the wheel's scroll while a click reaches the cell under the note, a click just under a wrapped note misses it,
+// and a note off the board wraps, scrolls and shows the page's cursor. Real mouse and keyboard input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
@@ -176,6 +177,22 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
     await p.keyboard.press('Escape')
   })
 
+  it('with a digit tool current the wheel over the tall note scrolls it, and a click on the cell under the note reaches SudokuPad', async () => {
+    await p.click(draw.DIGIT_BUTTON)
+    await read(() => Framework.app.deselect())
+    await moveTo(TALL_AT)
+    const before = (await note('line 1')).scrollTop
+    await wheelsSeen()
+    await p.mouse.wheel(0, -40)
+    assert.ok((await note('line 1')).scrollTop < before, `scrolled up from ${before}px`)
+    assert.deepEqual(await wheelsSeen(), [], 'SudokuPad saw no wheel')
+    await p.mouse.click(...await gridPoint(p, TALL_AT))
+    const cells = await read(() => Framework.app.puzzle.selectedCells.map((cell) => [cell.row, cell.col]))
+    assert.deepEqual(cells, [TALL_AT.map(Math.floor)], 'the click selected the cell under the note')
+    await read(() => Framework.app.deselect())
+    await draw.pickDraw(p)
+  })
+
   it('the wheel over a short note, or over the board, reaches SudokuPad untouched, as before', async () => {
     await typeNote(SHORT_AT, ['15'])
     await p.keyboard.press('Escape')
@@ -211,6 +228,16 @@ describe('Text Annotation\'s note box', { concurrency: false }, () => {
     await p.mouse.move(...draw.middleOf(await p.locator(TEXTS).filter({ hasText: 'side' }).boundingBox()))
     await p.mouse.wheel(0, 40)
     assert.ok((await note('side')).scrollTop > 0)
+    // A note beside the board shows the cursor of the page under it, not the board's; the page's auto there, over no text, is the arrow.
+    const cursors = await read((selector) => {
+      const off = [...document.querySelectorAll(selector)].find((n) => n.textContent.startsWith('side'))
+      const { x, y, width, height } = off.getBoundingClientRect()
+      const layer = document.querySelector('#draw-tool-layer')
+      const under = document.elementsFromPoint(x + width / 2, y + height / 2).find((e) => !layer.contains(e))
+      const cursor = (e) => window.getComputedStyle(e).cursor
+      return { note: cursor(off), page: cursor(under) === 'auto' ? 'default' : cursor(under) }
+    }, TEXTS)
+    assert.equal(cursors.note, cursors.page)
   })
 
   it('the page raised no error', () => {

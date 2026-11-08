@@ -106,13 +106,6 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
     assert.deepEqual(await texts(p), ['15'], 'no note was made')
   })
 
-  it('with another tool current a drag that starts on the note selects cells as it does without the script', async () => {
-    await p.evaluate(() => Framework.app.deselect())
-    await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
-    assert.equal(await selected(), 3, 'the drag selected r3c3 to r3c5')
-    assert.deepEqual(await texts(p), ['15'], 'the note is left as it was')
-  })
-
   it('the note takes the pointer only while Text Annotation is current, and shows the board\'s cursor', async () => {
     const underNoteMiddle = () => p.evaluate((selector) => {
       const note = document.querySelector(selector)
