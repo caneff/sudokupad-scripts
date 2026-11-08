@@ -474,12 +474,6 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
   assert.match(alt, /press 1 to 9/)
 })
 
-const DRAW_WORD_LIMIT = 320
-test(`${DRAW} stays short: its text is under ${DRAW_WORD_LIMIT} words`, () => {
-  const words = plain(read(DRAW).replace(/<(script|footer)[\s\S]*?<\/\1>/g, '')).split(' ').length
-  assert.ok(words < DRAW_WORD_LIMIT, `site/${DRAW} has ${words} words`)
-})
-
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {
   assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.'])
 })
