@@ -1607,9 +1607,9 @@ test('the outline setting is off only for a saved false: nothing saved and anyth
   for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.normalize(ok), true, JSON.stringify(ok))
 })
 
-test('buildOutlineCss is empty when the outline is off and filters the pen layer and the copies of an erased line fading beside it, and not the highlight, when on', () => {
+test('buildOutlineCss is empty when the outline is off and filters the pen layer and not the highlight, when on', () => {
   assert.equal(buildOutlineCss(false), '')
-  assert.equal(buildOutlineCss(true), `:root:root #cell-pen, :root:root .pen-tool-extras-erasing, :root:root .pen-tool-extras-faded-group { filter: url(#${OUTLINE_FILTER_ID}); }`)
+  assert.equal(buildOutlineCss(true), `:root:root #cell-pen, :root:root .pen-tool-extras-faded-group { filter: url(#${OUTLINE_FILTER_ID}); }`)
   assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
 })
 

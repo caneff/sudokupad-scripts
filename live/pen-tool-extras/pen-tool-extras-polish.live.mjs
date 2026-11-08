@@ -1,12 +1,11 @@
-// Live check of Pen Tool Extras' small touches (#547) on sudokupad.app in headless Chromium: a press state on the panel buttons, a crosshair over the grid in the pen tool, a fade on an erased
-// line, a fade-in on edit mode's pickers, all of that off under reduced motion, and a pixel floor on the corner and the right-click line hit.
+// Live check of Pen Tool Extras' small touches (#547) on sudokupad.app in headless Chromium: a press state on the panel buttons, the grid's hand cursor kept under the pen tool, an erased line that
+// leaves no copy, a fade-in on edit mode's pickers, the press state and the pickers off under reduced motion, and a pixel floor on the corner and the right-click line hit.
 // Every press, click and drag is real mouse input. The floor is checked on a grid scaled to half size (a 35 px cell at 1200 x 900), which is what a big grid does to its cells.
 /* global Framework */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { assertPressState, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { cellCentre, drag, gridPoint, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
@@ -15,10 +14,7 @@ import { settle } from '../settle.mjs'
 const { HOLD_TO_EDIT_MS, HIT_FLOOR_PX, CORNER_RADIUS, CORNER_RADIUS_MAX, LINE_HIT_RADIUS, LINE_HIT_RADIUS_MAX } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 
-// How long the copies of an erased line get to appear after the right click: the fade itself is 120 ms.
-const FADE_WAIT_MS = 3000
 const MARKS_KEY = 'EdgeMarks_marks'
-const ERASING = '.pen-tool-extras-erasing'
 const PICKERS = '.tool-pen .pen-tool-extras-picker'
 const PANEL_BUTTONS = { 'a color button': '.tool-pen button[data-key="2"]', 'the line mode button': '.pen-tool-extras-mode', 'the page button': '.pen-tool-extras-page', 'the settings button': '.pen-tool-extras-settings' }
 
@@ -38,37 +34,24 @@ const boot = async (p) => {
   await p.locator('.tool-pen button[data-key="1"]').click()
 }
 
-// From the moment the erased line's copies join the erase preview layer: its id and opacity, how many there were, how many pen entries the puzzle held then, and the opacity of the copies on each frame until they are gone.
-const watchFade = (p) => p.evaluate((selector) => {
-  window.__fade = new Promise((resolve) => {
-    const observer = new window.MutationObserver(() => {
-      const first = document.querySelector(selector)
-      if (!first) return
-      observer.disconnect()
-      const born = performance.now()
-      const result = { copies: first.children.length, penAtStart: Framework.app.puzzle.cells.reduce((n, c) => n + c.pen.length, 0), pointerEvents: window.getComputedStyle(first).pointerEvents, layer: first.parentNode.id, layerOpacity: window.getComputedStyle(first.parentNode).opacity, opacities: [] }
-      const frame = () => {
-        const group = document.querySelector(selector)
-        if (!group) return resolve({ ...result, ms: performance.now() - born })
-        result.opacities.push(Number(window.getComputedStyle(group).opacity))
-        window.requestAnimationFrame(frame)
-      }
-      frame()
-    })
-    observer.observe(document.documentElement, { childList: true, subtree: true })
+// From now until `stopWatchingCopies`, the SVG elements that join the page, whatever their class, except in SudokuPad's own cell highlights, which the click redraws: an erase only takes strokes away,
+// so any other that join are a copy of the erased line.
+const watchCopies = (p) => p.evaluate(() => {
+  window.__added = []
+  window.__copyWatch = new window.MutationObserver((records) => {
+    for (const record of records) if (record.target.id !== 'cell-highlights') for (const node of record.addedNodes) if (node instanceof window.SVGElement) window.__added.push(node.localName)
   })
-}, ERASING)
+  window.__copyWatch.observe(document.documentElement, { childList: true, subtree: true })
+})
+const stopWatchingCopies = (p) => p.evaluate(() => {
+  window.__copyWatch.disconnect()
+  return window.__added
+})
 
 for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced motion', { reducedMotion: 'reduce' }, true]]) {
   describe(`Pen Tool Extras${name}`, { concurrency: false }, () => {
     let context, p
     const undoDepth = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
-    const rightClickAt = async (point) => {
-      const [x, y] = await gridPoint(p, point)
-      await p.mouse.move(x, y)
-      await p.mouse.click(x, y, { button: 'right' })
-    }
-
     before(async () => {
       ;({ context, p } = await openPage(browser, { contextOptions }))
       await boot(p)
@@ -81,32 +64,24 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
       })
     }
 
-    it(`an erased line ${reduced ? 'goes at once, with no copy left to fade' : 'is gone from the puzzle at once while copies of it fade out over about 120 ms and are then removed'}`, async () => {
+    it('an erased line is gone from the puzzle at once and leaves no copy of itself behind', { skip: reduced }, async () => {
       await restartPuzzle(p)
       await drag(p, [[0.5, 1.5], [0.5, 4.5]])
       assert.equal((await penEntries(p)).length, 3)
-      await watchFade(p)
+      // The pointer goes to the line and the page draws two frames before the watch starts, so a stroke the drag was still adding is not counted.
+      const [x, y] = await gridPoint(p, [0.5, 3])
+      await p.mouse.move(x, y)
+      await p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
       const depth = await undoDepth()
-      await rightClickAt([0.5, 3])
+      // The held press shows the erase preview, a group of copies that is meant to be there; the watch starts once it has, so only what the release adds is counted.
+      await p.mouse.down({ button: 'right' })
+      await p.locator('.pen-tool-extras-faded-group').waitFor({ state: 'attached' })
+      await watchCopies(p)
+      await p.mouse.up({ button: 'right' })
       assert.deepEqual(await settle(() => penEntries(p), []), [], 'the whole line is erased')
       assert.equal(await undoDepth() > depth, true, 'an undo step')
-      if (reduced) {
-        // "nothing appeared in 600 ms": there is no event to wait on.
-        const appeared = await Promise.race([p.evaluate(() => window.__fade).then(() => true), sleep(600).then(() => false)])
-        assert.equal(appeared, false, 'a copy faded although motion is reduced')
-        return
-      }
-      const fade = await p.evaluate((ms) => Promise.race([window.__fade, new Promise((resolve) => setTimeout(() => resolve(null), ms))]), FADE_WAIT_MS)
-      assert.notEqual(fade, null, `no copy of the erased line appeared in ${FADE_WAIT_MS} ms`)
-      assert.equal(fade.copies, 3, 'one copy for each of the three segments')
-      assert.equal(fade.penAtStart, 0, 'the puzzle had already lost the line when the copies appeared')
-      assert.equal(fade.pointerEvents, 'none')
-      assert.deepEqual([fade.layer, fade.layerOpacity], ['pen-tool-extras-erase-preview', '1'], 'the copies sit in a layer that adds no opacity of its own (the hint layer carries 0.6)')
-      assert.equal(fade.opacities.length >= 2, true, `${fade.opacities.length} frames`)
-      assert.deepEqual([...fade.opacities].sort((a, b) => b - a), fade.opacities, 'never brighter than the frame before')
-      assert.equal(fade.opacities.at(-1) < fade.opacities[0], true, 'it dimmed')
-      assert.equal(fade.ms >= 100 && fade.ms < 1000, true, `${fade.ms} ms`)
-      assert.equal(await p.locator(ERASING).count(), 0)
+      assert.deepEqual(await stopWatchingCopies(p), [], 'a copy of the erased line was drawn')
+      assert.equal(await p.locator('.pen-tool-extras-faded-group').count(), 0, 'the preview group is gone with the release')
       await p.click('#control-undo')
       assert.equal((await settle(() => penEntries(p), (await penEntries(p)).length === 3 ? [] : null)).length, 3, 'one undo brings the line back')
     })
@@ -161,12 +136,12 @@ describe('Pen Tool Extras: the cursor over the grid', { concurrency: false }, ()
   })
   after(async () => { await context.close() })
 
-  it('is a crosshair while the pen tool is the current tool and SudokuPad\'s hand under another tool', async () => {
-    assert.equal(await settle(cursorAt, 'crosshair'), 'crosshair')
+  it('is SudokuPad\'s hand over the grid under the pen tool, as under another tool', async () => {
+    assert.equal(await settle(cursorAt, 'pointer'), 'pointer')
     await p.click('#control-normal')
     assert.equal(await settle(cursorAt, 'pointer'), 'pointer')
     await openPenTool(p)
-    assert.equal(await settle(cursorAt, 'crosshair'), 'crosshair')
+    assert.equal(await settle(cursorAt, 'pointer'), 'pointer')
   })
 })
 

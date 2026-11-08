@@ -183,7 +183,7 @@ With the box on and the pen tool on, a right click over the grid erases what is 
 - On an edge mark, a grid-corner mark or a cell's circle, cross or dot with no line under the pointer: that mark, whatever its shape. Lines win over marks when both are under the pointer.
 - On nothing: nothing, and no mark is made.
 
-While the right button is held, everything the erase has gathered so far is drawn at 0.3 opacity: the whole line the press hit with its branches, and the marks. Releasing erases it, and the line and marks then fade out from that opacity over 120 ms; the puzzle changes at once and undo is unaffected. Under reduced motion there is no fade. Escape while the button is held cancels the erase: the fade goes, nothing is erased and there is no undo step.
+While the right button is held, everything the erase has gathered so far is drawn at 0.3 opacity: the whole line the press hit with its branches, and the marks. Releasing erases it at once, with no fade. Escape while the button is held cancels the erase: the faded strokes return to full opacity, nothing is erased and there is no undo step.
 
 A line is hit within 0.2 of a cell of it, held to at least 10 px on small cells and at most 0.24 of a cell, so a centre line and the edge line beside it (0.5 apart) are never both hit.
 
@@ -193,10 +193,9 @@ A left click steps an edge, corner or cell mark forward, and a right click does 
 
 ## Small touches
 
-- The grid shows a crosshair, not SudokuPad's hand, while the pen is the current tool.
 - The panel's buttons shrink to 0.97 over 120 ms while pressed. The panel is shared with Text Anywhere, which gets the same press state.
 - Edit mode's pickers fade and scale in from 0.95 over 150 ms.
-- With the system set to reduce motion, the fade on an erased line, the press and the pickers' entrance are all off.
+- With the system set to reduce motion, the press and the pickers' entrance are all off.
 
 ## Line mode
 
