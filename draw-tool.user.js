@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.28.0
+// @version      0.30.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.28.0'
+  const VERSION = '0.30.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -36,11 +36,36 @@
   const COLORS_KEY = 'DrawTool_colors'
   // The CSS variable that holds draw color n: the items, the color buttons and the text box all read it.
   const colorVar = (n) => `--draw-tool-color-${n}`
+  // <lib:ready>
+  // Generated from lib/ready.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
+  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
+  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs
+      const poll = () => {
+        let value
+        try {
+          value = check()
+        } catch (error) {
+          reject(error)
+          return
+        }
+        if (value !== null && value !== undefined && value !== false) resolve(value)
+        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
+        else setTimeout(poll, pollMs)
+      }
+      poll()
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:ready>
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math.
-  /* global parseColor, darkenColor, toOklab */
+  // Reads parseColor, darkenColor and toOklab from color-math, and whenReady from ready.
+  /* global parseColor, darkenColor, toOklab, whenReady */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -66,7 +91,7 @@
     'page-3': 'Darker page 3',
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
-  const COLOR_TOOL_POLL_MS = 100
+  const COLOR_TOOL_TIMEOUT_MS = 10000
 
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
@@ -122,16 +147,9 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // No time limit: until the color tool is ready the caller shows SudokuPad's own colors.
+  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
   function waitForColorTool () {
-    return new Promise((resolve) => {
-      const check = () => {
-        const tool = readyColorTool()
-        if (tool) resolve(tool)
-        else setTimeout(check, COLOR_TOOL_POLL_MS)
-      }
-      check()
-    })
+    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
 
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
@@ -226,6 +244,8 @@
   const OK_LABEL = 'OK'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
+  // The notes a Restart cleared, kept until Undo straight after it brings them back.
+  const RESTARTED_PREFIX = 'DrawTool_restarted_'
   const KEPT_PUZZLES = 50
   // How far, in board units, an erase may pass from a text's box and still erase it.
   const ERASE_TOLERANCE = 4
@@ -397,10 +417,16 @@
     return inBox(point, board.box) ? { ...rest, at: roundPoint(board.toBoard(point)) } : { ...rest, fixed: roundPoint(point) }
   }
 
-  // The note in board units, wherever it is stored, so a selection rectangle and an erase test notes on and off the board alike.
-  const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(item.fixed) } : item
+  // A fixed note whose point the window or the layout has put out of reach is drawn at a point it can be reached at, kept on its item under this symbol with
+  // the stored point it was worked out for: a spread copies it and JSON leaves it out, so no save stores it, and a note given a new point is drawn at that one.
+  const SHOWN_AT = Symbol('shown at')
 
-  const screenPoint = (item, toScreen) => item.fixed ?? toScreen(item.at)
+  const drawnPoint = (item) => item[SHOWN_AT]?.from === item.fixed ? item[SHOWN_AT].point : item.fixed
+
+  // The note in board units, wherever it is stored, so a selection rectangle and an erase test notes on and off the board alike.
+  const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(drawnPoint(item)) } : item
+
+  const screenPoint = (item, toScreen) => item.fixed ? drawnPoint(item) : toScreen(item.at)
 
   // The box a note's element takes on the screen, padding included, worked out from its item rather than measured: `map` has the maps between board
   // units and the screen.
@@ -512,7 +538,6 @@
   const TEXT_SIZE_BASE = 8
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
-  const isTextSize = (value) => Number.isInteger(value) && isWidth(widthFor(value))
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
 
@@ -530,6 +555,63 @@
   const rem = (value) => Math.round(value * 100) / 100
   /* eslint-enable no-unused-vars */
   // </lib:plain>
+  // <lib:store>
+  // Generated from lib/store.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Reads isPlainObject from plain.
+  /* global isPlainObject */
+  // A saved value is `{ v, data }`, so a later change to its shape has a version to migrate from; a value saved before the envelope is
+  // version 0, and so is every shape saved so far. A version above this one was saved by a later script, and is unreadable here.
+  const STORE_VERSION = 0
+  const UNREADABLE_SUFFIX = '_unreadable'
+
+  const isEnvelope = (raw) => isPlainObject(raw) && Number.isInteger(raw.v) && Object.hasOwn(raw, 'data') && Object.keys(raw).length === 2
+
+  // The first free slot, `<key>_unreadable`, then `<key>_unreadable2` and on, or the one already holding `raw`: no kept copy is ever replaced.
+  function keptSlot (store, key, raw) {
+    const same = JSON.stringify(raw)
+    for (let n = 1; ; n++) {
+      const slot = key + UNREADABLE_SUFFIX + (n === 1 ? '' : n)
+      const held = store.getData(slot)
+      if (held === null || JSON.stringify(held) === same) return { slot, copied: held === null }
+    }
+  }
+
+  function readSaved (raw, read) {
+    if (isEnvelope(raw) && raw.v > STORE_VERSION) throw new Error(`it was saved by a later version (version ${raw.v})`)
+    const value = read(isEnvelope(raw) ? raw.data : raw)
+    if (value === undefined) throw new Error('its reader refused it')
+    return value
+  }
+
+  // `read` returns the value, or undefined for one it refuses, as a paste reader does. A value that cannot be read is copied aside before
+  // anything can save over it.
+  function load (store, { key, read }) {
+    const raw = store.getData(key)
+    if (raw === null) return { value: undefined }
+    try {
+      return { value: readSaved(raw, read) }
+    } catch (error) {
+      const unreadable = error.message || String(error) || 'its reader threw'
+      const { slot, copied } = keptSlot(store, key, raw)
+      if (copied) {
+        store.setData(slot, raw)
+        console.warn(`${key}: the saved value could not be read (${unreadable}); it is kept under ${slot}`)
+      }
+      return { value: undefined, unreadable }
+    }
+  }
+
+  const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
+
+  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
+  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
+
+  function save (store, key, data) {
+    store.setData(key, { v: STORE_VERSION, data })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:store>
 
   // <lib:color-math>
   // Generated from lib/color-math.js; edit that file and run node sync-lib.js.
@@ -858,24 +940,32 @@
   // A note is a text item. `bg` is set only on a note made with the Background button on, so a note saved without it has no box.
   const textItem = ([x, y], text, color, size, background, opacity = DEFAULT_OPACITY) => ({ kind: TEXT_KIND, color, size, opacity, ...(background ? { bg: true } : {}), text, at: [roundToTenth(x), roundToTenth(y)] })
 
-  const isOpacityOrNone = (value) => value === undefined || isOpacity(value)
+  // A saved note is checked against the stored format only, not the panel's slider ranges, so a later change to a slider cannot make a note saved before it unreadable.
+  const isStoredOpacity = (value) => value === undefined || (isNumber(value) && value > 0 && value <= 100)
+  const isStoredSize = (value) => Number.isInteger(value) && value > 0
   const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(isNumber)
   const isBox = (box) => isPoint(box) && box.every((side) => side > 0)
-  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isOpacityOrNone(item.opacity) &&
-    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isTextSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
+  const isText = (item) => isPlainObject(item) && item.kind === TEXT_KIND && drawColor(item.color) !== undefined && isStoredOpacity(item.opacity) &&
+    (item.bg === undefined || item.bg === true) && (item.box === undefined || isBox(item.box)) && isStoredSize(item.size) && typeof item.text === 'string' && item.text.length > 0 &&
     (isPoint(item.at) ? item.fixed === undefined : item.at === undefined && isPoint(item.fixed))
   // A drawing saved by an earlier version holds strokes and shapes. They are kept in storage as they are and never drawn, so they are not read further.
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
 
-  // A puzzle with nothing saved has an empty drawing; saved data that is not a drawing throws rather than read as one.
+  // A puzzle with nothing saved has an empty drawing; saved data that is not a list throws rather than read as a drawing. The list is read note by note:
+  // an entry that is not a note, stroke or shape is kept, never drawn, and saved back as it is.
   function readDrawing (saved) {
-    if (saved === null || saved === undefined) return []
-    if (!Array.isArray(saved) || !saved.every((item) => isText(item) || isHiddenItem(item))) throw new Error(`the saved drawing is not a list of texts, strokes and shapes: ${JSON.stringify(saved).slice(0, 200)}`)
-    return saved
+    if (saved === null || saved === undefined) return { items: [], kept: [] }
+    if (!Array.isArray(saved)) throw new Error(`the saved drawing is not a list of notes: ${JSON.stringify(saved).slice(0, 200)}`)
+    const read = { items: [], kept: [] }
+    for (const entry of saved) (isText(entry) || isHiddenItem(entry) ? read.items : read.kept).push(entry)
+    return read
   }
 
-  // As Auto Rules Resizer keys its saved data: a puzzle with no id falls back to the page URL.
-  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
+  // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `load`.
+  function loadDrawing (store, key) {
+    const { value, unreadable } = load(store, { key: drawingKey(key), read: readDrawing })
+    return { ...(value ?? { items: [], kept: [] }), unreadable }
+  }
 
   // The index lists puzzle keys oldest change first.
   function readIndex (saved) {
@@ -890,21 +980,39 @@
   }
 
   const drawingKey = (key) => DRAWING_PREFIX + key
+  const restartedKey = (key) => RESTARTED_PREFIX + key
 
-  // `store` has Framework's getData, setData and removeData. The drawing is written before the index, and the dropped
-  // puzzles' drawings are removed last, so a write that throws (a full localStorage) loses no drawing already saved.
-  // An index that cannot be read throws before anything is written.
-  function saveDrawingTo (store, key, drawing) {
+  // A puzzle dropped from the index loses its drawing and the notes its Restart kept.
+  function forgetPuzzle (store, key) {
+    store.removeData(drawingKey(key))
+    store.removeData(restartedKey(key))
+  }
+
+  // `store` has Framework's getData, setData and removeData. Writes `value` under `dataKey` and makes puzzle `key` the newest in `index`. The value is written
+  // before the index, and the dropped puzzles' data is removed last, so a write that throws (a full localStorage) loses nothing already saved.
+  function writeIndexed (store, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
+    const touched = touchIndex(index, key)
+    write(dataKey, value)
+    store.setData(INDEX_KEY, touched.index)
+    for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
+  }
+
+  // A puzzle is in the index while it has a drawing or notes its Restart kept. An index that cannot be read throws before anything is written.
+  function saveDrawingTo (store, key, items, kept = []) {
+    const drawing = items.concat(kept)
     const index = readIndex(store.getData(INDEX_KEY))
-    if (drawing.length === 0) {
-      store.removeData(drawingKey(key))
-      store.setData(INDEX_KEY, index.filter((k) => k !== key))
+    if (drawing.length > 0) {
+      writeIndexed(store, index, key, drawingKey(key), drawing, (k, v) => save(store, k, v))
       return
     }
-    const touched = touchIndex(index, key)
-    store.setData(drawingKey(key), drawing)
-    store.setData(INDEX_KEY, touched.index)
-    for (const dropped of touched.dropped) store.removeData(drawingKey(dropped))
+    store.removeData(drawingKey(key))
+    if (store.getData(restartedKey(key)) == null) store.setData(INDEX_KEY, index.filter((k) => k !== key))
+  }
+
+  // Keeps the notes a Restart cleared, in place of any kept before; with none cleared, nothing is kept.
+  function keepRestartedTo (store, key, notes) {
+    if (notes.length > 0) writeIndexed(store, readIndex(store.getData(INDEX_KEY)), key, restartedKey(key), notes)
+    else store.removeData(restartedKey(key))
   }
 
   // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Anywhere out of the
@@ -1111,17 +1219,289 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
+  // <lib:sudokupad>
+  // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
+  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
+  const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
+  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
+  const NOTICE_COLOR = '#6a1b9a'
+  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
+  const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
+  const INTERNAL_KINDS = {
+    function: (value) => typeof value === 'function',
+    array: Array.isArray,
+    integer: Number.isInteger,
+    number: (value) => typeof value === 'number',
+    object: (value) => Boolean(value) && typeof value === 'object'
+  }
+
+  // A path's first part names a root (`Framework`, `ToolPen`): SudokuPad declares them with `const`, so they are not on `window`.
+  function readInternal (roots, path) {
+    const [root, ...keys] = path.split('.')
+    return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
+  }
+
+  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
+  function lackingInternals (features, roots) {
+    const lacking = new Map()
+    Object.entries(features).forEach(([name, { needs }]) => {
+      const missing = Object.entries(needs).find(([path, kind]) => !INTERNAL_KINDS[kind](readInternal(roots, path)))
+      if (missing) lacking.set(missing[0], [...(lacking.get(missing[0]) || []), name])
+    })
+    return lacking
+  }
+
+  function sudokupadVersion (doc) {
+    const found = PAGE_VERSION.exec(doc.documentElement.outerHTML)
+    return found ? found[1] : null
+  }
+
+  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
+  function reportUrl ({ name, version, sudokupad, off }) {
+    const shownVersion = sudokupad || 'unknown'
+    const labels = off.map((feature) => feature.label).join(', ')
+    const body = [
+      `Script: ${name} ${version}`,
+      `SudokuPad version: ${shownVersion}`,
+      '',
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : String(why)}`)
+    ].join('\n')
+    return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
+  }
+
+  const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
+  const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
+
+  // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
+  // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
+  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  function createGuard ({ script, name, version, features }) {
+    const reasons = []
+    let page = null
+
+    const dismissKey = `${script}-notice`
+    // A dismissal is saved only under a SudokuPad version read from the page: one saved with none would match every later version that
+    // also has none. A store with no getData or setData (a SudokuPad that changed), or one that throws (a frame with storage blocked),
+    // cannot save one either. Without a save, a dismissal holds for this page load only.
+    const dismissedHere = []
+    let storeFailed = false
+    const savesDismissals = () => !storeFailed && page.sudokupad !== null && typeof page.store.getData === 'function' && typeof page.store.setData === 'function'
+    function useStore (fn) {
+      try {
+        return fn()
+      } catch (error) {
+        storeFailed = true
+        console.warn(`${script}: a dismissal of the notice bar cannot be saved, so it holds for this page load only:`, error)
+        return null
+      }
+    }
+    const dismissed = () => {
+      const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
+      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    let bar = null
+    function showNotice () {
+      if (bar) bar.remove()
+      bar = null
+      const gone = dismissed()
+      const shown = reasons.filter((reason) => !gone.includes(reason.name))
+      if (shown.length === 0 || !page.doc.body) return
+      const { doc } = page
+      let host = doc.getElementById(NOTICE_HOST_ID)
+      if (!host) {
+        host = doc.createElement('div')
+        host.id = NOTICE_HOST_ID
+        host.style.cssText = NOTICE_HOST_CSS
+        doc.body.append(host)
+      }
+      bar = doc.createElement('div')
+      bar.setAttribute('data-script', script)
+      bar.style.cssText = NOTICE_BAR_CSS
+      const text = doc.createElement('span')
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      const link = doc.createElement('a')
+      link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
+      link.target = '_blank'
+      link.rel = 'noopener'
+      link.textContent = 'Report'
+      link.style.cssText = NOTICE_LINK_CSS
+      const dismiss = doc.createElement('button')
+      dismiss.type = 'button'
+      dismiss.textContent = '×'
+      dismiss.title = 'Dismiss'
+      dismiss.setAttribute('aria-label', 'Dismiss')
+      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      dismiss.addEventListener('click', () => {
+        dismissedHere.push(...shown.map((reason) => reason.name))
+        if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
+        showNotice()
+      })
+      bar.append(text, link, dismiss)
+      host.append(bar)
+    }
+
+    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
+    function createFeature (featureName, { label, onSkip }) {
+      const feature = {
+        off: false,
+        skip (why, installed = true) {
+          if (feature.off) return
+          feature.off = true
+          reasons.push({ name: featureName, label, why })
+          if (installed) {
+            console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
+            try {
+              if (onSkip) onSkip()
+            } catch (error) {
+              // Best effort: the feature is off already, and what it left behind stays until the page reloads.
+              console.warn(`${script}: could not undo ${label}:`, error)
+            }
+          }
+          if (page) showNotice()
+        },
+        run (fn, fallback = () => {}) {
+          if (feature.off) return fallback()
+          try {
+            return fn()
+          } catch (error) {
+            feature.skip(error)
+            return fallback()
+          }
+        },
+        // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
+        // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
+        // that sends nothing (`stock.sudokupad(fn, false)`) leaves the original to run.
+        wrap (owner, method, body) {
+          const original = owner[method]
+          owner[method] = function (...args) {
+            if (feature.off) return original.apply(this, args)
+            let reached = false
+            let result
+            let failure = null
+            const sudokupad = (fn, sends = true) => {
+              if (sends) reached = true
+              try {
+                return fn()
+              } catch (error) {
+                failure = { error }
+                throw error
+              }
+            }
+            const stock = (...stockArgs) => sudokupad(() => { result = original.apply(this, stockArgs); return result })
+            stock.sudokupad = sudokupad
+            try {
+              return body.call(this, stock, ...args)
+            } catch (error) {
+              if (failure && failure.error === error) throw error
+              feature.skip(error)
+              return reached ? result : original.apply(this, args)
+            }
+          }
+        }
+      }
+      return feature
+    }
+
+    const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
+
+    function probe ({ roots, store, doc = document }) {
+      lackingInternals(features, roots).forEach((names, missing) => {
+        names.forEach((featureName) => guarded[featureName].skip(missing, false))
+        console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
+      })
+      page = { store, doc, sudokupad: sudokupadVersion(doc) }
+      showNotice()
+    }
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:sudokupad>
+  // Each feature with the SudokuPad internals it cannot work without. A path's first part is a root of `guard.probe`: `Framework`, or `app`, which is what
+  // `Framework.getApp` resolves to. Not declared, because a check at startup cannot tell them from "not there yet": `Framework.app.puzzle.puzzleId` and
+  // `currentPuzzle` (a puzzle not loaded has neither), and `Framework.app.tool`, a name and not a kind the guard checks.
+  const BOARD = { 'Framework.getApp': 'function', 'Framework.app.svgRenderer.getElem': 'function', 'Framework.app.puzzle': 'object', 'app.puzzle.on': 'function', 'app.on': 'function' }
+  const FEATURES = {
+    // Without these the script starts from its defaults and keeps nothing: the notes and settings last until the page reloads.
+    saved: { label: 'saved notes and settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
+    // The notes already saved, drawn on the board and kept in place as the board moves; with the Text tool off they show and cannot be changed.
+    notes: {
+      label: 'notes on the board',
+      needs: BOARD,
+      onSkip () {
+        const layer = document.getElementById(LAYER_ID)
+        if (layer) layer.remove()
+      }
+    },
+    tool: {
+      label: 'Text tool',
+      needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function' },
+      onSkip () {
+        const button = document.getElementById(`control-${TOOL_NAME}`)
+        if (button) button.remove()
+        const layer = document.getElementById(LAYER_ID)
+        if (layer) layer.classList.remove(ACTIVE_CLASS)
+        const style = document.getElementById(PANEL_STYLE_ID)
+        if (style) style.remove()
+        hidePanel()
+      }
+    },
+    settings: {
+      label: 'settings',
+      needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' },
+      onSkip () {
+        const gear = document.querySelector(`.${SETTINGS_CLASS}`)
+        if (gear) gear.remove()
+        Framework.closeDialog()
+      }
+    },
+    // Undo straight after a Restart brings back the notes it cleared (docs/research/sudokupad-custom-tool.md § Saving the drawing).
+    undoRestart: { label: 'Undo after Restart', needs: { 'Framework.app.puzzle': 'object', 'Framework.app.puzzle.undoStack': 'array', 'app.puzzle.on': 'function' } },
+    // The Darker page presets of the settings dialog read SudokuPad's color palette.
+    presets: { label: 'color presets', needs: { 'Framework.app.tools.colour': 'object' } }
+  }
+  // The script times the repeat itself: SudokuPad's App.handleKeydown drops every keydown with `event.repeat` before any tool sees it.
+  const NUDGE_PX = 1
+  const NUDGE_SHIFT_PX = 10
+  const NUDGE_MAX_PX = 8
+  const NUDGE_SHIFT_MAX_PX = 40
+  const NUDGE_REPEAT_MS = 300
+  const NUDGE_RAMP_MS = 1500
+  const NUDGE_TICK_MS = 50
+  function nudgeStep (heldMs, shift) {
+    if (heldMs < NUDGE_REPEAT_MS) return 0
+    const [from, to] = shift ? [NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX] : [NUDGE_PX, NUDGE_MAX_PX]
+    return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
+  }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
-  if (!Framework.getApp || !Framework.addTool) {
-    console.warn('draw-tool: SudokuPad\'s Framework has no getApp or addTool, so no Text Anywhere tool was added')
-    return
+
+  const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, features: FEATURES })
+  const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
+  // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
+  const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
+  const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
+  const savedData = { getData: readData }
+  // What the settings dialog's shell is handed in place of Framework: its calls into SudokuPad run under the settings.
+  const dialogs = {
+    addSetting: (setting) => Framework.addSetting(setting),
+    showDialog: (options) => Framework.showDialog(options),
+    closeDialog: () => settingsUi.run(() => Framework.closeDialog())
   }
+  // A listener on the page or on one of the script's own elements runs under the feature it belongs to.
+  const under = (feature, handler) => (...args) => feature.run(() => handler(...args))
+  const onWindow = (feature, type, handler, options) => window.addEventListener(type, under(feature, handler), options)
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
@@ -1407,7 +1787,7 @@
 
   function setColor (next) {
     color = next
-    Framework.setData(COLOR_KEY, color)
+    writeData(COLOR_KEY, color)
   }
 
   function pickColor (next) {
@@ -1435,7 +1815,7 @@
 
   function saveColors (next) {
     colors = next
-    Framework.setData(COLORS_KEY, colors)
+    writeData(COLORS_KEY, colors)
     showColors()
     refreshPickers(CLASS_PREFIX, (n) => colors[n])
   }
@@ -1443,33 +1823,33 @@
   // The next note's size and transparency are saved for the next visit, and a paste sets them as a move of the slider would.
   function setSize (value) {
     width = value
-    Framework.setData(WIDTH_KEY, value)
+    writeData(WIDTH_KEY, value)
   }
 
   function setOpacity (value) {
     opacity = value
-    Framework.setData(OPACITY_KEY, value)
+    writeData(OPACITY_KEY, value)
   }
 
   function showBoxes () {
-    if (Framework.app.puzzle.currentPuzzle) redraw()
+    boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })
   }
 
   function saveOutline (next) {
     outline = next
-    Framework.setData(OUTLINE_KEY, next)
+    writeData(OUTLINE_KEY, next)
     showBoxes()
   }
 
   function saveBoxColor (next) {
     boxColor = next
-    Framework.setData(BOX_KEY, next)
+    writeData(BOX_KEY, next)
     showBoxes()
   }
 
   function saveFrame (on) {
     frame = on
-    Framework.setData(FRAME_KEY, on)
+    writeData(FRAME_KEY, on)
     showBoxes()
   }
 
@@ -1512,14 +1892,17 @@
     let draftFrame = frame
     let pages = []
     let paletteNote = ''
-    try {
-      pages = palettePages()
-    } catch (error) {
-      console.warn(`draw-tool: ${error.message}`)
-      paletteNote = error.message
+    // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
+    if (!presets.off) {
+      try {
+        pages = palettePages()
+      } catch (error) {
+        console.warn(`draw-tool: ${error.message}`)
+        paletteNote = error.message
+      }
     }
     const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame })
-    const box = showSettingsDialog(Framework, {
+    const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Text Anywhere',
       version: VERSION,
@@ -1527,14 +1910,14 @@
       styleId: DIALOG_STYLE_ID,
       css: DIALOG_CSS,
       changed: () => Object.values(edits()).some(Boolean),
-      save: () => {
+      save: under(settingsUi, () => {
         const edited = edits()
         if (edited.colors) saveColors(draft)
         if (edited.outline) saveOutline(draftOutline)
         if (edited.box) saveBoxColor(draftBox)
         if (edited.frame) saveFrame(draftFrame)
-      }
-    })
+      })
+    }), () => null)
     if (!box) return
     const draw = () => {
       const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
@@ -1544,7 +1927,7 @@
         renderSamplePicks({ outline: draftOutline, box: draftBox, custom: draftCustom, frame: draftFrame, textColor: draft[color] })
     }
     draw()
-    box.addEventListener('change', (event) => {
+    box.addEventListener('change', under(settingsUi, (event) => {
       const target = event.target
       if (target.matches('[data-role="color-choice"]')) {
         chosen = target.value || null
@@ -1562,8 +1945,8 @@
         colorsEdited = true
         draw()
       }
-    })
-    box.addEventListener('click', (event) => {
+    }))
+    box.addEventListener('click', under(settingsUi, (event) => {
       const button = event.target.closest('button[data-role$="-pick"]')
       if (!button) return
       const { role, value } = button.dataset
@@ -1573,8 +1956,8 @@
       else return
       draw()
       box.querySelector(`button[data-role="${role}"][data-value="${value}"]`)?.focus()
-    })
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
+    }))
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(savedData), readers: READERS }, under(settingsUi, (values) => {
       applyPasted(values)
       draftOutline = outline
       draftBox = boxColor
@@ -1584,7 +1967,7 @@
       chosen = null
       colorsEdited = false
       draw()
-    })
+    }))
   }
 
   const BACKGROUND_ON_LABEL = 'Background: on. Click to turn off'
@@ -1607,7 +1990,7 @@
 
   function setBackground (on) {
     background = on
-    Framework.setData(BACKGROUND_KEY, on)
+    writeData(BACKGROUND_KEY, on)
   }
 
   // A press turns the open note's background on or off, and the setting only when the note is a new one; with no note open it turns the selected notes' on or off
@@ -1664,30 +2047,30 @@
     const clear = document.createElement('button')
     clear.className = CLEAR_CLASS
     clear.innerHTML = controlIcon(CLEAR_ICON)
-    clear.addEventListener('click', () => selected.length ? deleteSelected() : confirmClear())
+    clear.addEventListener('click', under(textTool, () => selected.length ? deleteSelected() : confirmClear()))
     const settings = document.createElement('button')
     settings.className = SETTINGS_CLASS
     settings.title = SETTINGS_LABEL
     settings.setAttribute('aria-label', SETTINGS_LABEL)
     settings.innerHTML = controlIcon(SETTINGS_ICON, SETTINGS_ICON_VIEWBOX)
-    settings.addEventListener('click', openDialog)
+    settings.addEventListener('click', under(settingsUi, openDialog))
     const backgroundButton = document.createElement('button')
     backgroundButton.className = BACKGROUND_CLASS
     backgroundButton.innerHTML = controlIcon(BACKGROUND_ICON)
-    backgroundButton.addEventListener('click', pressBackground)
+    backgroundButton.addEventListener('click', under(textTool, pressBackground))
     const sliders = document.createElement('div')
     sliders.className = SLIDERS_CLASS
     sliders.append(sliderRow(SIZE_SLIDER, SIZE_LABEL, { min: MIN_WIDTH, max: MAX_WIDTH, step: WIDTH_STEP }, width), sliderRow(OPACITY_SLIDER, OPACITY_LABEL, { min: MIN_OPACITY, max: MAX_OPACITY, step: OPACITY_STEP }, opacity))
     // Arrow keys on a slider end in a change.
-    sliders.addEventListener('change', returnFocusToNote)
-    sliders.addEventListener('input', (event) => slideLook(event.target))
-    panelParts = [tray, clear, backgroundButton, settings, sliders]
+    sliders.addEventListener('change', under(textTool, returnFocusToNote))
+    sliders.addEventListener('input', under(textTool, (event) => slideLook(event.target)))
+    panelParts = [tray, clear, backgroundButton, ...(settingsUi.off ? [] : [settings]), sliders]
     keypad().append(...panelParts)
     showPanelValues()
   }
 
   function showPanelValues () {
-    if (panelParts.length === 0) return
+    if (!panelParts[0]?.isConnected) return
     const looks = panelValues()
     unmarkColor()
     if (looks.color !== null) keypad().querySelector(`button[data-key="${looks.color}"]`).classList.add('current')
@@ -1727,6 +2110,8 @@
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
   let drawing = []
+  // The saved entries that are not notes, strokes or shapes (a note that failed its check, say): never drawn, and saved back as they were.
+  let keptEntries = []
   // The indices of the selected notes in the drawing, in order.
   let selected = []
   // False while this puzzle's saved drawing cannot be read: no save writes over it but an explicit wipe's.
@@ -1751,6 +2136,7 @@
   const selectedNotes = () => selected.map((i) => drawing[i])
 
   // Pointer work waits for the next frame, so a mouse that sends several moves a frame costs one update. Each kind of work keeps only its latest call.
+  // Each kind of work belongs to a feature: a note placed again is the notes', and a gesture's work is the tool's.
   const frameWork = new Map()
   let frameRequest = 0
   function runFrame () {
@@ -1760,8 +2146,8 @@
     frameWork.clear()
     for (const run of work) run()
   }
-  function inFrame (kind, run) {
-    frameWork.set(kind, run)
+  function inFrame (kind, run, feature = textTool) {
+    frameWork.set(kind, () => feature.run(run))
     if (!frameRequest) frameRequest = window.requestAnimationFrame(runFrame)
   }
   // A release, or anything else that ends a gesture, first does the work its last moves are waiting on.
@@ -1777,7 +2163,7 @@
   // placed again whenever those change, and the board, the window or the controls have moved.
   const watchedBoards = new WeakSet()
   const placeIfMoved = () => { if (layoutKey(boardMap()) !== lastLayout) renderDrawing() }
-  const placeSoon = () => inFrame('place', placeIfMoved)
+  const placeSoon = () => inFrame('place', placeIfMoved, boardNotes)
 
   function watchBoard (svg) {
     if (watchedBoards.has(svg)) return
@@ -1810,7 +2196,7 @@
   function showNote (element, item, map) {
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
-    const style = item.fixed ? noteStyle(item, item.fixed, map.scale) : noteStyle(item, item.at, 1)
+    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale) : noteStyle(item, item.at, 1)
     const look = JSON.stringify(style)
     if (look !== shown.look) {
       Object.assign(element.style, style)
@@ -1878,34 +2264,35 @@
       return [{ element, item, index }]
     })
     const inserted = orderNotes(notes)
-    const texts = new Set(notes.map(({ item }) => item.text))
-    for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
     measureNotes(notes, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
-    if (!drag?.move && !resizing && keepFixedReachable(notes, map)) save()
+    if (!drag?.move && !resizing) showFixedReachable(notes, map)
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
     else showHandles(drag?.move ? null : selectedBox(map))
     if (!drag?.move) showSelection(map)
   }
 
-  // A fixed note the window or the layout has put out of reach is moved, and its new point kept, to the nearest point inside the window and clear of the
-  // controls. Whether any note moved. A dragged note is left to its drag, which ends at the nearest such point.
-  function keepFixedReachable (notes, map) {
+  // A fixed note the window or the layout has put out of reach is drawn at the nearest point inside the window and clear of the controls, and its stored
+  // point is left as it is: a short-lived small window (devtools opened, a window snap) never moves a note for good. Only the solver's own move or resize saves
+  // a new point. A note being dragged or resized is left to follow the pointer, and is drawn in reach once it is let go.
+  function showFixedReachable (notes, map) {
     const fixed = notes.filter(({ item }) => item.fixed)
-    if (fixed.length === 0) return false
-    const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+    if (fixed.length === 0) return
     const blockers = layoutBlockers()
-    let moved = false
-    for (const note of fixed) {
-      const { left, right, top, bottom } = noteScreenBox(note.item, map, outline)
-      const point = roundPoint(reachablePoint(note.item.fixed, [right - left, bottom - top], win, blockers))
-      if (point[0] === note.item.fixed[0] && point[1] === note.item.fixed[1]) continue
-      note.item = drawing[note.index] = { ...note.item, fixed: point }
-      showNote(note.element, note.item, map)
-      moved = true
+    for (const { element, item } of fixed) {
+      const point = reachOf(item, map, blockers)
+      if (point[0] === item.fixed[0] && point[1] === item.fixed[1]) delete item[SHOWN_AT]
+      else item[SHOWN_AT] = { from: item.fixed, point }
+      showNote(element, item, map)
     }
-    return moved
+  }
+
+  // The nearest point to a fixed note's own at which its box lies inside the window and clear of `blockers`, the controls' screen boxes.
+  function reachOf (item, map, blockers) {
+    const { left, right, top, bottom } = noteScreenBox(item, map, outline)
+    const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+    return roundPoint(reachablePoint(item.fixed, [right - left, bottom - top], win, blockers))
   }
 
   // Restyles the open note and puts the handles on its corners.
@@ -1956,8 +2343,8 @@
         const element = document.createElement('div')
         element.className = HANDLE_CLASS
         element.style.cursor = corner[0] * corner[1] > 0 ? 'nwse-resize' : 'nesw-resize'
-        element.addEventListener('mousedown', (event) => startResize(event, corner))
-        element.addEventListener('dblclick', resetSize)
+        element.addEventListener('mousedown', under(textTool, (event) => startResize(event, corner)))
+        element.addEventListener('dblclick', under(textTool, resetSize))
         element.addEventListener('touchstart', (event) => event.stopPropagation())
         drawingLayer().append(element)
         return { element, corner }
@@ -2030,8 +2417,9 @@
     const { index, item } = resizing
     resizing = null
     if (editing || String(drawing[index]?.box) === String(item.box)) return
+    keepDrawnPoints([index], boardMap())
+    saveNotes()
     renderDrawing()
-    save()
   }
 
   // A double-click on a handle sends the note back to auto size.
@@ -2043,8 +2431,8 @@
       showEditing(boardMap())
     } else if (drawing[index].box) {
       drawing[index] = autoSized(drawing[index])
+      saveNotes()
       renderDrawing()
-      save()
     }
   }
 
@@ -2093,38 +2481,65 @@
 
   function select (indices) {
     selected = [...new Set(indices)].sort((a, b) => a - b)
+    if (selected.length === 0) stopHold()
     redraw()
   }
 
   // The solver loses work they think is kept, so each failure is shown once a page in SudokuPad's own dialog. Its
   // showDialog does nothing while another dialog is open, so the failure is shown at the next save instead.
-  function report (message) {
+  function report (message, id = message) {
     console.warn(`draw-tool: ${message}`)
-    if (reported.has(message) || document.querySelector('.dialog-overlay')) return
-    reported.add(message)
-    Framework.showDialog({
+    if (reported.has(id) || document.querySelector('.dialog-overlay')) return
+    reported.add(id)
+    textTool.run(() => Framework.showDialog({
       parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }] }],
       centerOverBoard: true
-    })
+    }))
   }
 
-  function save () {
+  // The texts no note has any more, forgotten whenever the notes are saved or loaded; a note that gets one back parses it again.
+  function forgetParsedTexts () {
+    const texts = new Set(drawing.map((item) => item.text))
+    for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
+  }
+
+  // Once a puzzle, so a second puzzle with an unreadable note is told too.
+  function reportKept () {
+    if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${loadedKey}`)
+  }
+
+  const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
+
+  function writeDrawing () {
+    forgetParsedTexts()
     if (loadedKey === null) return
+    reportKept()
     if (!savable) {
-      report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
+      report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
       return
     }
-    try {
-      saveDrawingTo(Framework, loadedKey, drawing)
-    } catch (err) {
-      report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
+    // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
+    if (!storage.off) {
+      try {
+        saveDrawingTo(Framework, loadedKey, drawing, keptEntries)
+      } catch (err) {
+        report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
+      }
     }
   }
+
+  // Saves an edit to the notes. Any edit after a Restart ends what Undo can bring back.
+  function saveNotes () {
+    forgetRestarted()
+    writeDrawing()
+  }
+
+  const forgetRestarted = () => { if (loadedKey !== null && !storage.off) Framework.removeData(restartedKey(loadedKey)) }
 
   function changeSelected (change) {
     for (const i of selected) drawing[i] = change(drawing[i])
+    saveNotes()
     redraw()
-    save()
   }
 
   // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went.
@@ -2145,8 +2560,8 @@
   function deleteSelected () {
     const gone = selected
     keepItems((_, i) => !gone.includes(i))
+    saveNotes()
     redraw()
-    save()
   }
 
   // The note is typed in place: `index` names the text to reopen, or -1 for a new one at screen point `point`. Opening a note ends the selection.
@@ -2159,13 +2574,13 @@
     element.spellcheck = false
     // As SudokuPad's own buttons do: a press in the note is the note's, and never reaches a tool.
     for (const type of ['mousedown', 'touchstart']) element.addEventListener(type, (event) => event.stopPropagation())
-    element.addEventListener('blur', (event) => {
+    element.addEventListener('blur', under(textTool, (event) => {
       if (!editing || editing.element !== element) return
       if (isPanelControl(event.relatedTarget)) editing.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
       else finishText()
-    })
+    }))
     // Typing grows the box, which carries the handles and may start the text scrolling.
-    element.addEventListener('input', () => { if (editing && editing.element === element) showEditing(boardMap()) })
+    element.addEventListener('input', under(textTool, () => { if (editing && editing.element === element) showEditing(boardMap()) }))
     editing = { index, item, element }
     drawingLayer().append(element)
     redraw()
@@ -2212,10 +2627,10 @@
       if (text === '') drawing.splice(index, 1)
       else if (index === -1) drawing.push({ ...item, text })
       else drawing[index] = { ...item, text }
+      saveNotes()
     }
     renderDrawing()
     showPanelValues()
-    if (changed) save()
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
@@ -2257,6 +2672,7 @@
 
   // An erase in progress, or a drag, ends as a release ends it; a press that never moved opens no text box. A nudge not yet saved is saved too.
   function endGesture () {
+    stopHold()
     flushFrame()
     if (erasing) endErase()
     if (drag) endDrag()
@@ -2351,8 +2767,6 @@
 
   const moveKeepsReachable = (d, [px, py], map) => movedBy(d.move, [px - d.points[0][0], py - d.points[0][1]], map).every(({ point }) => reachable(point))
 
-  const NUDGE_PX = 1
-  const NUDGE_SHIFT_PX = 10
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
   // Whether a nudge has moved notes that are not saved yet; the release of the key saves it.
   let nudged = false
@@ -2363,6 +2777,7 @@
     const moved = movedBy(selected.map((index) => ({ index, item: drawing[index] })), direction.map((v) => v * step), map)
     if (!moved.every(({ point }) => reachable(point))) return
     place(moved, map)
+    keepDrawnPoints(selected, map)
     nudged = true
     redraw()
   }
@@ -2370,21 +2785,64 @@
   function saveNudge () {
     if (!nudged) return
     nudged = false
-    save()
+    saveNotes()
+  }
+
+  const heldArrows = new Set()
+  let holdStart = 0
+  let holdShift = false
+  let holdTimer = null
+
+  function stopHold () {
+    clearInterval(holdTimer)
+    holdTimer = null
+    heldArrows.clear()
+  }
+
+  // Held arrows move together, so two make a diagonal.
+  function repeatNudge () {
+    if (selected.length === 0) return stopHold()
+    const step = nudgeStep(Date.now() - holdStart, holdShift)
+    if (step === 0) return
+    const direction = [...heldArrows].reduce(([x, y], key) => [x + ARROWS[key][0], y + ARROWS[key][1]], [0, 0])
+    nudgeSelected(direction, step)
+  }
+
+  function pressArrow (key, shift) {
+    nudgeSelected(ARROWS[key], shift ? NUDGE_SHIFT_PX : NUDGE_PX)
+    if (heldArrows.size === 0) {
+      holdStart = Date.now()
+      holdTimer = setInterval(repeatNudge, NUDGE_TICK_MS)
+    }
+    heldArrows.add(key)
+  }
+
+  function releaseKey (event) {
+    heldArrows.delete(event.key)
+    if (heldArrows.size > 0) return
+    stopHold()
+    saveNudge()
   }
 
   function endMove (d) {
     const map = boardMap()
     place(movedBy(d.move, dragOffset(d), map), map)
     clearMove(d)
+    keepDrawnPoints(d.move.map(({ index }) => index), map)
+    saveNotes()
     renderDrawing()
-    save()
+  }
+
+  // The solver's own move or resize keeps the point a fixed note will be drawn at, so a note dropped partly past the window's edge stays where it is seen.
+  function keepDrawnPoints (indices, map) {
+    const blockers = layoutBlockers()
+    for (const i of indices) if (drawing[i].fixed) drawing[i] = { ...drawing[i], fixed: reachOf(drawing[i], map, blockers) }
   }
 
   function endErase () {
     const { erased } = erasing
     erasing = null
-    if (erased) save()
+    if (erased) saveNotes()
   }
 
   function cancelInput () {
@@ -2397,27 +2855,76 @@
     if (editing) closeEditing()
   }
 
+  // Saved notes the script cannot read are the browser's data and not SudokuPad's, so they are left as they are and never turn the saved data off.
+  // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
   function showSavedDrawing () {
     cancelInput()
+    drawing = []
+    savable = true
     loadedKey = currentPuzzleKey()
-    try {
-      drawing = readDrawing(Framework.getData(drawingKey(loadedKey)))
-      savable = true
-    } catch (err) {
-      console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's notes are not saved.`)
-      drawing = []
-      savable = false
+    forgetRestarted()
+    if (!storage.off) {
+      const { items, kept, unreadable } = loadDrawing(Framework, loadedKey)
+      drawing = items
+      keptEntries = kept
+      savable = unreadable === undefined
+      if (unreadable !== undefined) report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
+      reportKept()
     }
+    forgetParsedTexts()
     redraw()
   }
 
-  // The saved strokes and shapes of an earlier version are left as they are, but an unreadable saved drawing is written over.
-  function emptyDrawing () {
+  // The saved strokes and shapes of an earlier version, and the entries that failed their check, are left as they are.
+  function clearNotes () {
     drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
-    redraw()
     savable = true
-    save()
+  }
+
+  function emptyDrawing () {
+    clearNotes()
+    saveNotes()
+    redraw()
+  }
+
+  // Restart keeps the notes before it saves them cleared, so the Undo that brings back what SudokuPad's Restart cleared brings them back too.
+  function restartDrawing () {
+    try {
+      if (loadedKey !== null && !storage.off && !undoRestart.off) keepRestartedTo(Framework, loadedKey, drawing.filter((item) => item.kind === TEXT_KIND))
+    } catch (err) {
+      report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
+    }
+    clearNotes()
+    writeDrawing()
+    redraw()
+  }
+
+  // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
+  // triggers `act` after each action, so whether the stack was empty before an Undo is read off the last action, a reset or a load.
+  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length === 0
+  let undoWasEmpty = false
+
+  function followUndo (_, action) {
+    if (action?.type === 'undo' && undoWasEmpty) restoreRestarted()
+    undoWasEmpty = undoStackEmpty()
+  }
+
+  function restoreRestarted () {
+    if (loadedKey === null || storage.off) return
+    const key = restartedKey(loadedKey)
+    let notes
+    try {
+      notes = readDrawing(Framework.getData(key)).items
+    } catch (err) {
+      report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
+      return
+    }
+    if (notes.length === 0) return
+    cancelInput()
+    drawing = drawing.concat(notes)
+    saveNotes()
+    redraw()
   }
 
   // Deletes, whole, every note the drag from `from` to `to`, in board units, passes near. Whether any went.
@@ -2448,21 +2955,21 @@
   }
 
   function confirmClear () {
-    Framework.showDialog({
+    textTool.run(() => Framework.showDialog({
       parts: [
         { tag: 'text', content: CLEAR_QUESTION },
         { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }, { tag: 'button', content: CANCEL_LABEL }] }
       ],
-      onButton: (label) => { if (label === OK_LABEL) emptyDrawing() },
+      onButton: under(textTool, (label) => { if (label === OK_LABEL) emptyDrawing() }),
       centerOverBoard: true
-    })
+    }))
   }
 
   // The mouse button each gesture is held by, as a bit of a MouseEvent's `buttons`.
   const PRIMARY_HELD = 1
   const SECONDARY_HELD = 2
 
-  const tool = {
+  const toolHandlers = {
     name: TOOL_NAME,
     isTool: true,
     // A press that starts a drag returns true, so SudokuPad starts no drag of its own and selects no cell. A press that
@@ -2543,57 +3050,74 @@
     // With notes selected, Escape ends the selection, Delete or Backspace (a Mac's delete key) deletes them and an arrow key nudges them, and none reaches the cells.
     handleKeydown (event) {
       if (Framework.app.tool !== TOOL_NAME) return false
+      holdShift = event.shiftKey
       if (event.key === 'Shift') return true
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
-      else if (ARROWS[event.key]) nudgeSelected(ARROWS[event.key], event.shiftKey ? NUDGE_SHIFT_PX : NUDGE_PX)
+      else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
       else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
       else return false
       return true
     },
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
     handleKeyup (event) {
+      holdShift = event.shiftKey
       return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])
     }
   }
 
-  Framework.getApp().then((app) => {
-    color = readColor(Framework.getData(COLOR_KEY))
-    width = readWidth(Framework.getData(WIDTH_KEY))
-    opacity = readOpacity(Framework.getData(OPACITY_KEY))
-    outline = readOutline(Framework.getData(OUTLINE_KEY))
-    background = readBackground(Framework.getData(BACKGROUND_KEY))
-    colors = readDrawColors(Framework.getData(COLORS_KEY))
-    boxColor = readBox(Framework.getData(BOX_KEY))
-    frame = readFrame(Framework.getData(FRAME_KEY))
+  // SudokuPad calls these. A throw from one turns the Text tool off, and the event goes on to SudokuPad's own tools.
+  const tool = Object.fromEntries(Object.entries(toolHandlers).map(([name, handler]) => [name, typeof handler === 'function' ? (...args) => textTool.run(() => handler(...args), () => false) : handler]))
+
+  // Without getApp there is no app: the features that need one are off, and the rest start without it.
+  const start = (app) => {
+    guard.probe({ roots: { Framework, app }, store: Framework })
+    color = readColor(readData(COLOR_KEY))
+    width = readWidth(readData(WIDTH_KEY))
+    opacity = readOpacity(readData(OPACITY_KEY))
+    outline = readOutline(readData(OUTLINE_KEY))
+    background = readBackground(readData(BACKGROUND_KEY))
+    colors = readDrawColors(readData(COLORS_KEY))
+    boxColor = readBox(readData(BOX_KEY))
+    frame = readFrame(readData(FRAME_KEY))
     showColors()
-    const style = document.createElement('style')
-    style.id = PANEL_STYLE_ID
-    style.textContent = PANEL_CSS
-    document.head.appendChild(style)
-    const names = app.getToolNames
-    app.getToolNames = function () { return toolNamesFor(names.call(this), this.currentEvent) }
-    Framework.addTool({
-      button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
-      tool
+    // The features are independent: one that fails to install costs the others nothing.
+    textTool.run(() => {
+      const style = document.createElement('style')
+      style.id = PANEL_STYLE_ID
+      style.textContent = PANEL_CSS
+      document.head.appendChild(style)
+      textTool.wrap(app, 'getToolNames', function (stock) { return toolNamesFor(stock(), this.currentEvent) })
+      Framework.addTool({
+        button: { name: TOOL_NAME, title: 'Text Anywhere', content: `<div class="icon">${BUTTON_ICON}</div>Text` },
+        tool
+      })
+      onWindow(textTool, 'contextmenu', suppressMenu)
+      installColorPickers()
+      onWindow(textTool, 'blur', endGesture)
+      installSliderGuards(`.${SLIDERS_CLASS}`)
+      onWindow(textTool, 'pointerdown', finishTextOnPress, { capture: true })
+      onWindow(textTool, 'mousedown', keepNoteFocus, { capture: true })
+      // After the slider guards' own release handler, which takes the focus off the slider.
+      onWindow(textTool, 'pointerup', returnFocusToNote, { capture: true })
+      onWindow(textTool, 'pointerup', () => { pressFinishedText = false }, { capture: true })
+      onWindow(textTool, 'wheel', scrollNote, { capture: true, passive: false })
+      onWindow(textTool, 'mousemove', resizeMove, { capture: true })
+      onWindow(textTool, 'mouseup', endResize, { capture: true })
+      for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
+      onWindow(textTool, 'keyup', releaseKey, { capture: true })
     })
-    addSettingsEntry(Framework, { name: 'drawtool', content: 'Text Anywhere', open: openDialog })
-    app.puzzle.on('loaded', showSavedDrawing)
-    app.on('restarted', emptyDrawing)
-    window.addEventListener('contextmenu', suppressMenu)
-    installColorPickers()
-    window.addEventListener('blur', endGesture)
-    installSliderGuards(`.${SLIDERS_CLASS}`)
-    window.addEventListener('pointerdown', finishTextOnPress, { capture: true })
-    window.addEventListener('mousedown', keepNoteFocus, { capture: true })
-    // After the slider guards' own release handler, which takes the focus off the slider.
-    window.addEventListener('pointerup', returnFocusToNote, { capture: true })
-    window.addEventListener('pointerup', () => { pressFinishedText = false }, { capture: true })
-    window.addEventListener('wheel', scrollNote, { capture: true, passive: false })
-    window.addEventListener('mousemove', resizeMove, { capture: true })
-    window.addEventListener('mouseup', endResize, { capture: true })
-    for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
-    window.addEventListener('keyup', saveNudge, { capture: true })
-    if (app.puzzle.currentPuzzle) showSavedDrawing()
-  })
+    settingsUi.run(() => addSettingsEntry(dialogs, { name: 'drawtool', content: 'Text Anywhere', open: under(settingsUi, openDialog) }))
+    boardNotes.run(() => {
+      app.puzzle.on('loaded', under(boardNotes, showSavedDrawing))
+      app.on('restarted', under(boardNotes, restartDrawing))
+      if (app.puzzle.currentPuzzle) showSavedDrawing()
+    })
+    undoRestart.run(() => {
+      app.puzzle.on('act', under(undoRestart, followUndo))
+      for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, under(undoRestart, () => { undoWasEmpty = undoStackEmpty() }))
+    })
+  }
+  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
+  else start(undefined)
 })()

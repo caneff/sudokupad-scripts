@@ -4,7 +4,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW, renderSamplePicks } = require('../draw-tool.user.js')
+const { quietly } = require('./fake-store.js')
+const { failEachListener } = require('./specs/broken-sudokupad.js')
+const { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -22,12 +24,12 @@ test('toolNamesFor keeps Text Anywhere for anything else: a keydown already disp
 })
 
 test('a puzzle with no saved drawing starts empty', () => {
-  assert.deepEqual(readDrawing(null), [])
+  assert.deepEqual(readDrawing(null), { items: [], kept: [] })
 })
 
 // Framework's saved-data calls over a plain object, as test/specs/spec-204-closing.test.js has them.
 const storeOf = (saved) => ({
-  getData: (key) => saved[key],
+  getData: (key) => (key in saved ? saved[key] : null),
   setData: (key, value) => { saved[key] = value },
   removeData: (key) => { delete saved[key] }
 })
@@ -36,6 +38,8 @@ const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
 
 // A cage sum "15" at size 20, centred on (100, 50) in board units.
 const sum = textItem([100, 50], '15', 3, 20)
+// The notes a saved list reads as; the entries it keeps are `readDrawing(saved).kept`.
+const readItems = (saved) => readDrawing(saved).items
 // What an earlier version saved: neither is drawn, and both stay in storage.
 const oldStroke = { kind: 'stroke', color: 1, width: 6, opacity: 100, points: [[0, 50], [200, 50]] }
 const oldShape = { kind: 'shape', shape: 'rect', color: 2, width: 6, opacity: 100, box: [0, 0, 100, 100] }
@@ -74,6 +78,40 @@ test('saving an empty drawing removes the puzzle\'s drawing and takes it out of 
   const saved = { [INDEX_KEY]: ['p1', 'p2'], [DRAWING_PREFIX + 'p1']: [line], [DRAWING_PREFIX + 'p2']: [line] }
   saveDrawingTo(storeOf(saved), 'p1', [])
   assert.deepEqual(saved, { [INDEX_KEY]: ['p2'], [DRAWING_PREFIX + 'p2']: [line] })
+})
+
+test('keeping a Restart\'s notes for a 51st puzzle removes the oldest puzzle\'s drawing and kept notes', () => {
+  const saved = { [INDEX_KEY]: puzzles(50) }
+  for (const key of puzzles(50)) {
+    saved[DRAWING_PREFIX + key] = [line]
+    saved[RESTARTED_PREFIX + key] = [line]
+  }
+  keepRestartedTo(storeOf(saved), 'p51', [sum])
+  assert.deepEqual(saved[INDEX_KEY], puzzles(51).slice(1))
+  assert.equal(saved[DRAWING_PREFIX + 'p1'], undefined)
+  assert.equal(saved[RESTARTED_PREFIX + 'p1'], undefined)
+  assert.deepEqual(saved[RESTARTED_PREFIX + 'p51'], [sum])
+  assert.deepEqual(saved[RESTARTED_PREFIX + 'p2'], [line])
+})
+
+test('a drawing for a 51st puzzle removes the oldest puzzle\'s kept notes with its drawing', () => {
+  const saved = { [INDEX_KEY]: puzzles(50), [DRAWING_PREFIX + 'p1']: [line], [RESTARTED_PREFIX + 'p1']: [line] }
+  saveDrawingTo(storeOf(saved), 'p51', [line])
+  assert.equal(saved[DRAWING_PREFIX + 'p1'], undefined)
+  assert.equal(saved[RESTARTED_PREFIX + 'p1'], undefined)
+})
+
+test('Restart\'s empty drawing keeps the puzzle in the index while its kept notes are saved, so they drop out with it', () => {
+  const saved = { [INDEX_KEY]: ['p1', 'p2'], [DRAWING_PREFIX + 'p1']: [sum] }
+  keepRestartedTo(storeOf(saved), 'p1', [sum])
+  saveDrawingTo(storeOf(saved), 'p1', [])
+  assert.deepEqual(saved, { [INDEX_KEY]: ['p2', 'p1'], [RESTARTED_PREFIX + 'p1']: [sum] })
+})
+
+test('a Restart that clears no notes drops the notes an earlier Restart kept', () => {
+  const saved = { [INDEX_KEY]: ['p1'], [RESTARTED_PREFIX + 'p1']: [sum] }
+  keepRestartedTo(storeOf(saved), 'p1', [])
+  assert.deepEqual(saved, { [INDEX_KEY]: ['p1'] })
 })
 
 test('saving a puzzle already in the index makes it the newest and drops nothing', () => {
@@ -292,35 +330,63 @@ test('a text item holds its kind, color number, text size, full opacity, text an
 
 test('a drawing of texts saved as JSON reads back equal, item for item, with or without a background', () => {
   const drawing = [sum, textItem([5, 5], 'a b', 9, 24, true)]
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
+  assert.deepEqual(readItems(JSON.parse(JSON.stringify(drawing))), drawing)
 })
 
 test('a drawing with strokes and shapes saved by an earlier version reads back whole, so a save writes them back untouched', () => {
   const drawing = [oldStroke, sum, oldShape]
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(drawing))), drawing)
+  assert.deepEqual(readItems(JSON.parse(JSON.stringify(drawing))), drawing)
   const saved = {}
-  saveDrawingTo(storeOf(saved), 'p1', readDrawing(drawing).concat(textItem([1, 1], 'x', 1, 20)))
-  assert.deepEqual(saved[DRAWING_PREFIX + 'p1'].slice(0, 3), drawing)
+  saveDrawingTo(storeOf(saved), 'p1', readItems(drawing).concat(textItem([1, 1], 'x', 1, 20)))
+  assert.deepEqual(saved[DRAWING_PREFIX + 'p1'].data.slice(0, 3), drawing)
 })
 
 test('a note saved before opacity existed reads back as it was, and a saved opacity is kept', () => {
   const old = [{ kind: 'text', color: 3, size: 14, text: '9', at: [1, 1] }, { kind: 'text', color: 3, size: 28, text: '9', at: [1, 1], opacity: 65 }]
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(old))), old)
+  assert.deepEqual(readItems(JSON.parse(JSON.stringify(old))), old)
   assert.equal(itemOpacity(old[0]), DEFAULT_OPACITY)
   assert.equal(itemOpacity(old[1]), 65)
 })
 
 // Framework.getData hands back the raw text when it is not JSON.
-test('saved data that is not a drawing throws, and is never read as an empty drawing', () => {
-  for (const saved of ['[{"kind":"text"', {}, 'text', [{ kind: 'blob' }], [{ ...sum, text: '' }], [{ ...sum, text: 15 }], [{ ...sum, at: [1] }], [{ ...sum, size: 'big' }], [{ ...sum, size: 9 }], [{ ...sum, size: 41 }], [{ ...sum, size: 20.5 }], [{ ...sum, opacity: 10 }], [{ ...sum, opacity: 52 }], [{ ...sum, color: null }], [{ ...sum, color: 42 }], [{ ...sum, bg: 'yes' }], [{ ...sum, bg: false }], [null], [{ ...oldStroke, kind: 'line' }]]) {
-    assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
+test('saved data that is not a list throws, and is never read as an empty drawing', () => {
+  for (const saved of ['[{"kind":"text"', {}, 'text', 3, true]) assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
+})
+
+test('a list with one bad note returns the good notes and keeps the bad one, whatever is wrong with it', () => {
+  for (const bad of [{ kind: 'blob' }, { ...sum, text: '' }, { ...sum, text: 15 }, { ...sum, at: [1] }, { ...sum, size: 'big' }, { ...sum, size: 20.5 }, { ...sum, size: 0 }, { ...sum, opacity: 0 }, { ...sum, opacity: 101 }, { ...sum, color: null }, { ...sum, color: 42 }, { ...sum, bg: 'yes' }, { ...sum, bg: false }, null, 7, 'x', [], { ...oldStroke, kind: 'line' }]) {
+    const good = textItem([5, 5], 'ok', 2, 20)
+    assert.deepEqual(readDrawing([sum, bad, good]), { items: [sum, good], kept: [bad] }, JSON.stringify(bad))
   }
 })
 
-test('the key is the puzzle id, or the page URL for a puzzle with none', () => {
-  assert.equal(puzzleKey('scl123abc', 'https://sudokupad.app/scl123abc'), 'scl123abc')
-  assert.equal(puzzleKey(undefined, 'https://sudokupad.app/?puzzle=x'), 'https://sudokupad.app/?puzzle=x')
-  assert.equal(puzzleKey('', 'https://sudokupad.app/'), 'https://sudokupad.app/')
+test('a note at a size or opacity outside today\'s sliders still reads', () => {
+  const old = [{ ...sum, size: 9 }, { ...sum, size: 41 }, { ...sum, size: 200 }, { ...sum, opacity: 10 }, { ...sum, opacity: 52 }, { ...sum, opacity: 100 }]
+  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify(old))), { items: old, kept: [] })
+})
+
+test('a save writes the kept entries back after the notes, versioned, and keeps them when no note is left', () => {
+  const bad = { ...sum, text: 15 }
+  const saved = {}
+  saveDrawingTo(storeOf(saved), 'p1', [sum], [bad])
+  assert.deepEqual(saved[DRAWING_PREFIX + 'p1'], { v: 0, data: [sum, bad] })
+  saveDrawingTo(storeOf(saved), 'p1', [], [bad])
+  assert.deepEqual(saved[DRAWING_PREFIX + 'p1'], { v: 0, data: [bad] })
+  assert.deepEqual(saved[INDEX_KEY], ['p1'])
+})
+
+test('loadDrawing reads a versioned drawing, an unversioned one and none, and reports a whole value that is not a list', () => {
+  const bad = { ...sum, text: 15 }
+  const key = DRAWING_PREFIX + 'p1'
+  const saved = {}
+  saveDrawingTo(storeOf(saved), 'p1', [sum], [bad])
+  assert.deepEqual(loadDrawing(storeOf(saved), 'p1'), { items: [sum], kept: [bad], unreadable: undefined })
+  assert.deepEqual(loadDrawing(storeOf({ [key]: [sum, bad] }), 'p1'), { items: [sum], kept: [bad], unreadable: undefined })
+  assert.deepEqual(loadDrawing(storeOf({}), 'p1'), { items: [], kept: [], unreadable: undefined })
+  const { result, warnings } = quietly(() => loadDrawing(storeOf({ [key]: 'not a drawing' }), 'p1'))
+  assert.deepEqual([result.items, result.kept], [[], []])
+  assert.match(result.unreadable, /saved drawing/)
+  assert.equal(warnings.length, 1)
 })
 
 test('the Background setting is on only when it was saved as true', () => {
@@ -382,10 +448,20 @@ test('a note\'s screen point is its fixed point off the board, and its board poi
   assert.deepEqual(screenPoint(placedItem(on, [40, 700], board), toScreen), [40, 700])
 })
 
+test('an off-board note drawn in reach is placed and hit at its drawn point, and at its own point again once that point changes', () => {
+  const off = placedItem(textItem([50, 60], 'hi', 3, 20), [40, 700], board)
+  const drawn = { ...off, [SHOWN_AT]: { from: off.fixed, point: [60, 650] } }
+  assert.deepEqual(screenPoint(drawn, toScreen), [60, 650])
+  assert.deepEqual(boardView(drawn, toBoard).at, toBoard([60, 650]))
+  const moved = placedItem(drawn, [30, 720], board)
+  assert.deepEqual(screenPoint(moved, toScreen), [30, 720], 'a note given a new point is drawn at it')
+  assert.deepEqual(boardView(moved, toBoard).at, toBoard([30, 720]))
+})
+
 test('saved off-board notes read back, and a note with both a board point and a fixed point, or neither, does not', () => {
   const off = placedItem(sum, [40, 700], board)
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify([sum, off]))), [sum, off])
-  for (const saved of [[{ ...off, at: [1, 1] }], [{ ...sum, at: undefined }], [{ ...off, fixed: [1] }]]) assert.throws(() => readDrawing(saved), /saved drawing/, JSON.stringify(saved))
+  assert.deepEqual(readItems(JSON.parse(JSON.stringify([sum, off]))), [sum, off])
+  for (const bad of [{ ...off, at: [1, 1] }, { ...sum, at: undefined }, { ...off, fixed: [1] }]) assert.deepEqual(readDrawing([bad]), { items: [], kept: [bad] }, JSON.stringify(bad))
 })
 
 test('a note with a background answers to the box drawn behind it: a selection rectangle and an erase just outside its text land on it', () => {
@@ -462,8 +538,8 @@ test('an outline is none, thin or medium, None, Thin or Thick in the dialog, and
 })
 
 test('a note\'s own outline field is ignored: it loads, stays as saved and is not read', () => {
-  assert.deepEqual(readDrawing([{ ...red20, outline: 'none' }]), [{ ...red20, outline: 'none' }])
-  assert.deepEqual(readDrawing([{ ...red20, outline: 'huge' }]), [{ ...red20, outline: 'huge' }])
+  assert.deepEqual(readItems([{ ...red20, outline: 'none' }]), [{ ...red20, outline: 'none' }])
+  assert.deepEqual(readItems([{ ...red20, outline: 'huge' }]), [{ ...red20, outline: 'huge' }])
   const map = { scale: 1, toScreen: (p) => p, toBoard: (p) => p }
   assert.deepEqual(noteScreenBox({ ...red20, outline: 'none' }, map, 'medium'), noteScreenBox(red20, map, 'medium'))
 })
@@ -578,8 +654,8 @@ test('a resized note\'s box is its stored size, whatever its text, centred on it
 
 test('a saved size reads back, and a note without one has none', () => {
   const resized = { ...sum, box: [200.5, 60] }
-  assert.deepEqual(readDrawing(JSON.parse(JSON.stringify([resized, sum]))), [resized, sum])
-  for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.throws(() => readDrawing([{ ...sum, box }]), /saved drawing/, JSON.stringify(box))
+  assert.deepEqual(readItems(JSON.parse(JSON.stringify([resized, sum]))), [resized, sum])
+  for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.deepEqual(readDrawing([{ ...sum, box }]).kept, [{ ...sum, box }], JSON.stringify(box))
 })
 
 // A resize keeps the corner opposite the dragged one still: on the board the stub's scale is 2 screen pixels a board unit.
@@ -671,6 +747,68 @@ test('a note\'s box on the screen is its text\'s box and its padding at the boar
   assert.deepEqual(near(noteScreenBox({ ...pinned, bg: true }, map, 'medium')), { left: 156, right: 264, top: 91, bottom: 149 })
   const { at, ...rest } = pinned
   assert.deepEqual(near(noteScreenBox({ ...rest, fixed: [300, 400] }, map, 'medium')), { left: 254.4, right: 345.6, top: 371.4, bottom: 428.6 })
+})
+
+// A SudokuPad with every internal the features declare, and the helpers that take one away.
+const completeRoots = () => {
+  const app = { on () {}, getToolNames () {}, puzzle: { on () {} } }
+  const Framework = { getApp () {}, getData () {}, setData () {}, removeData () {}, addTool () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { svgRenderer: { getElem () {} }, puzzle: { undoStack: [] }, tools: { colour: {} } } }
+  return { Framework, app }
+}
+const withoutPath = (roots, internal) => {
+  const [root, ...keys] = internal.split('.')
+  const last = keys.pop()
+  delete keys.reduce((owner, key) => owner[key], roots[root])[last]
+  return roots
+}
+
+test('Text Anywhere declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
+})
+
+test('without one internal, only the features that need it are lacking', () => {
+  const cases = [
+    ['Framework.addTool', ['tool']], ['app.getToolNames', ['tool']],
+    ['Framework.showDialog', ['tool', 'settings']],
+    ['Framework.getApp', ['notes', 'tool']],
+    ['Framework.app.svgRenderer.getElem', ['notes', 'tool']], ['Framework.app.puzzle', ['notes', 'tool', 'undoRestart']],
+    ['Framework.app.puzzle.undoStack', ['undoRestart']],
+    ['app.puzzle.on', ['notes', 'tool', 'undoRestart']], ['app.on', ['notes', 'tool']],
+    ['Framework.getData', ['saved']], ['Framework.setData', ['saved']], ['Framework.removeData', ['saved']],
+    ['Framework.addSetting', ['settings']], ['Framework.closeDialog', ['settings']],
+    ['Framework.app.tools.colour', ['presets']]
+  ]
+  for (const [internal, features] of cases) {
+    assert.deepEqual(lackingInternals(FEATURES, withoutPath(completeRoots(), internal)), new Map([[internal, features]]), internal)
+  }
+})
+
+// With the Text tool picked, so a listener reaches its own code past that check.
+const textToolPicked = ({ Framework }) => { Framework.app.tool = TOOL_NAME }
+
+test('a window listener of Text Anywhere whose own code throws turns its feature off, and the throw stays in the script', () => {
+  const runs = failEachListener(path.join(__dirname, '..', 'draw-tool.user.js'), FEATURES, 'window', textToolPicked)
+  assert.ok(runs.length >= 15, runs.map(({ where }) => where).join(', '))
+  for (const { where, escaped } of runs) assert.deepEqual(escaped.map(({ error }) => String(error)), [], where)
+  // Most listeners act only mid-gesture; the ones that read their event at once show the throw turning the Text tool off.
+  const warned = runs.filter(({ warnings }) => warnings.some((warning) => /^draw-tool: Text tool skipped because SudokuPad changed: Error: the listener read event\./.test(warning)))
+  assert.ok(warned.length >= 2, warned.map(({ where }) => where).join(', '))
+})
+
+test('a held arrow key repeats only after the pause, and its step grows from one nudge to the maximum over the ramp', () => {
+  assert.equal(nudgeStep(0, false), 0)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS - 1, false), 0)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false), NUDGE_PX)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, false) < nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS / 2, false), true)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS / 2, false) < nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS, false), true)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS + NUDGE_RAMP_MS, false), NUDGE_MAX_PX)
+  assert.equal(nudgeStep(NUDGE_RAMP_MS * 10, false), NUDGE_MAX_PX)
+})
+
+test('with Shift the step grows from ten pixels to the Shift maximum', () => {
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS - 1, true), 0)
+  assert.equal(nudgeStep(NUDGE_REPEAT_MS, true), NUDGE_SHIFT_PX)
+  assert.equal(nudgeStep(NUDGE_RAMP_MS * 10, true), NUDGE_SHIFT_MAX_PX)
 })
 
 const contains = (text, part, message) => assert.match(text, new RegExp(part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), message)

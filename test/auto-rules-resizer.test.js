@@ -4,10 +4,11 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { fakeStore, quietly } = require('./fake-store.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -212,26 +213,32 @@ test('normalizeLimit: a positive whole number of css px, else no limit', () => {
   for (const empty of [null, undefined, '', '  ', 0, -5, 'abc', NaN, Infinity, 0.2]) assert.equal(normalizeLimit(empty), null, String(empty))
 })
 
-function fakeStore (saved = {}) {
-  const data = { ...saved }
-  return {
-    data,
-    getData: (key) => (key in data ? data[key] : null),
-    setData: (key, value) => { data[key] = value },
-    removeData: (key) => { delete data[key] }
-  }
-}
-
-test('readLimits: what is saved, and no limit for what is not or is unusable', () => {
+test('readLimits: what is saved, in its envelope or from before it, and no limit for what is not', () => {
   assert.deepEqual(readLimits(fakeStore()), noLimits())
-  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: 700, [MAX_HEIGHT_KEY]: '500' })), { maxWidth: 700, maxHeight: 500 })
-  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: 'wide' })), noLimits())
+  assert.deepEqual(readLimits(fakeStore({ [MAX_WIDTH_KEY]: { v: 0, data: 700 }, [MAX_HEIGHT_KEY]: 500 })), { maxWidth: 700, maxHeight: 500 })
 })
 
-test('saveLimits: saves a limit and removes the key of an empty one, so a fresh install saves nothing', () => {
+test('readLimits: a saved limit that cannot be read is no limit, and is kept under _unreadable through a later save', () => {
+  const store = fakeStore({ [MAX_WIDTH_KEY]: 'wide' })
+  const { result, warnings } = quietly(() => readLimits(store))
+  assert.deepEqual(result, noLimits())
+  assert.equal(warnings.length, 1)
+  saveLimits(store, { maxWidth: 640, maxHeight: null })
+  assert.equal(store.data[`${MAX_WIDTH_KEY}_unreadable`], 'wide')
+})
+
+test('one reader per key: a saved limit loads exactly when the same value pastes', () => {
+  for (const value of [700, 1, '500', 'wide', 0, -5, 640.5, true, [700], { px: 700 }]) {
+    const loaded = quietly(() => readLimits(fakeStore({ [MAX_WIDTH_KEY]: value }))).result.maxWidth
+    const pasted = readPaste(JSON.stringify({ [MAX_WIDTH_KEY]: value })).values[MAX_WIDTH_KEY]
+    assert.deepEqual(loaded, pasted ?? null, JSON.stringify(value))
+  }
+})
+
+test('saveLimits: saves a limit in its envelope and removes the key of an empty one, so a fresh install saves nothing', () => {
   const store = fakeStore({ [MAX_HEIGHT_KEY]: 500 })
   saveLimits(store, { maxWidth: 700, maxHeight: null })
-  assert.deepEqual(store.data, { [MAX_WIDTH_KEY]: 700 })
+  assert.deepEqual(store.data, { [MAX_WIDTH_KEY]: { v: 0, data: 700 } })
   saveLimits(store, noLimits())
   assert.deepEqual(store.data, {})
 })
@@ -451,4 +458,76 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
 test('the script has no pointerover or pointerout listener', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
   assert.doesNotMatch(source, /pointerover|pointerout/)
+})
+
+// A SudokuPad with every internal Auto Rules Resizer needs.
+const completeSudokuPad = () => ({
+  Framework: { getApp () {}, app: { puzzle: {}, resizeBoard () {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} }
+})
+
+test('Auto Rules Resizer declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeSudokuPad()), new Map())
+})
+
+test('without one internal, only the features that need it are lacking: getApp holds off the fit and the refit', () => {
+  const removals = [
+    ['Framework.app.puzzle', (r) => { delete r.Framework.app.puzzle }, 'fit'],
+    ['Framework.app.resizeBoard', (r) => { delete r.Framework.app.resizeBoard }, 'refit'],
+    ...['addSetting', 'showDialog', 'closeDialog', 'getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, 'settings'])
+  ]
+  for (const [internal, remove, feature] of removals) {
+    const roots = completeSudokuPad()
+    remove(roots)
+    assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[internal, [feature]]]), internal)
+  }
+  const roots = completeSudokuPad()
+  delete roots.Framework.getApp
+  assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['fit', 'refit']]]))
+})
+
+// Starts the script on a page with `framework` as its Framework; returns the warnings and the notice bar's text, or null for none.
+function startWith (framework) {
+  const file = require.resolve('../auto-rules-resizer.user.js')
+  const inBody = []
+  const element = () => {
+    const el = { style: {}, children: [], textContent: '', attributes: {}, classList: { toggle () {} }, setAttribute (name, value) { el.attributes[name] = value }, addEventListener () {}, append (...kids) { el.children.push(...kids) }, appendChild (kid) { el.children.push(kid) }, remove () { el.removed = true } }
+    return el
+  }
+  const textOf = (el) => el.textContent + el.children.map(textOf).join('')
+  const saved = { document: global.document, window: global.window, Framework: global.Framework }
+  global.document = {
+    createElement: element,
+    head: { appendChild () {} },
+    body: { append: (el) => inBody.push(el), appendChild () {}, classList: { toggle () {} } },
+    documentElement: { outerHTML: '' },
+    getElementById: () => null,
+    querySelector: () => null
+  }
+  global.window = { addEventListener () {} }
+  global.Framework = framework
+  const warnings = []
+  const realWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  delete require.cache[file]
+  try {
+    require(file)
+  } finally {
+    console.warn = realWarn
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete global[name]
+      else global[name] = value
+    }
+    delete require.cache[file]
+  }
+  const [bar] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'auto-rules-resizer' && !el.removed)
+  return { warnings, bar: bar ? textOf(bar) : null }
+}
+
+test('a Framework without getApp turns the fit and the refit off with one warning naming getApp, the bar names them, and the settings entry is still added', () => {
+  const entries = []
+  const framework = { addSetting: (setting) => entries.push(setting.name), showDialog () {}, closeDialog () {}, getData: () => null, setData () {}, removeData () {} }
+  const page = startWith(framework)
+  assert.deepEqual(page.warnings, ['auto-rules-resizer: rules fit, rules refit skipped because SudokuPad has no Framework.getApp'])
+  assert.match(page.bar, /^Auto Rules Resizer: rules fit, rules refit are off — SudokuPad changed\.Report/)
+  assert.deepEqual(entries, ['rulesresizer'])
 })

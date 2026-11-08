@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from '../page.mjs'
+import { clickLeftEdge, openPenTool } from '../pen.mjs'
 import { settle, stable } from '../settle.mjs'
 import { closeDialogWith, headerVersion, openScriptDialog, openSettings } from '../settings.mjs'
 
@@ -231,6 +232,25 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
   })
 })
 
+describe('a press on the left of a font button (#521)', { concurrency: false }, () => {
+  let context, p
+
+  before(async () => {
+    ;({ context, p } = await rulesPage(LANDSCAPE, (p) => p.evaluate(() => Framework.setSetting('toolpen', true))))
+    await openPenTool(p)
+    await p.locator('.tool-pen button[data-key="1"]').click()
+    await inject(p)
+  })
+  after(async () => { await context.close() })
+
+  it('adds no pen mark: the pen tool used to draw an X on the grid\'s right edge', async () => {
+    await hoverPane(p)
+    await p.locator(FONT_BAR).waitFor({ state: 'visible' })
+    const { added } = await clickLeftEdge(p, `${FONT_BAR} button:first-child`)
+    assert.deepEqual(added, [])
+  })
+})
+
 describe('rules too long for SudokuPad\'s size', { concurrency: false }, () => {
   let context, p, errors, own
 
@@ -272,8 +292,9 @@ describe('the max auto width and height', { concurrency: false }, () => {
   describe('saved before the script starts, as after a reload', { concurrency: false }, () => {
     let context, p, errors
 
+    // Saved as the script saves it, so a start that skipped the envelope would read no limit.
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved(600, null), LONG_RULES))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved({ v: 0, data: 600 }, null), LONG_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })
@@ -324,7 +345,8 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
     after(async () => { await context.close() })
 
-    const data = (key) => p.evaluate((k) => Framework.getData(k), key)
+    // A saved limit is the data of its `{ v, data }` envelope; a limit saved bare would read undefined here.
+    const data = (key) => p.evaluate((k) => { const saved = Framework.getData(k); return saved === null ? null : saved.data }, key)
 
     it('opens from the settings entry with both boxes empty, and typing in a box enters no digit on the board', async () => {
       await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)) })
@@ -439,3 +461,56 @@ describe('beside twitch-rules-scroller\'s sync script', { concurrency: false }, 
     assert.deepEqual(errors, [])
   })
 })
+
+// A SudokuPad internal missing before the script loads turns off that feature alone: the console names it once, the bar at the bottom of
+// the page names it with a Report link, and the rest of the script works. The snippet runs ahead of the script's own startup check and
+// puts the internal back after it, so SudokuPad's own layout, which calls resizeBoard, still runs.
+const MISSING = [
+  { name: 'resizeBoard', internal: 'Framework.app.resizeBoard', off: 'rules refit', entry: true },
+  { name: 'addSetting', internal: 'Framework.addSetting', off: 'max size settings', entry: false }
+]
+for (const kase of MISSING) {
+  describe(`SudokuPad has no ${kase.internal}`, { concurrency: false }, () => {
+    let context, p, errors
+    const warned = []
+
+    before(async () => {
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, (page) => {
+        page.on('console', (m) => { if (m.type() === 'warning' && /^auto-rules-resizer: /.test(m.text())) warned.push(m.text()) })
+      }))
+      const breaks = `const owner = ${kase.internal.replace(/\.[^.]+$/, '')}
+        const original = owner.${kase.name}
+        owner.${kase.name} = undefined
+        Framework.getApp().then(() => { owner.${kase.name} = original })`
+      await p.addScriptTag({ content: `;Framework.getApp().then(() => { ${breaks} });\n${script}` })
+      await p.locator(STYLE).waitFor({ state: 'attached' })
+    })
+    after(async () => { await context.close() })
+
+    it('one console warning names the feature', async () => {
+      assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
+      assert.equal(warned[0], `auto-rules-resizer: ${kase.off} skipped because SudokuPad has no ${kase.internal}`)
+    })
+
+    it('the bar names the feature with a Report link, and goes when dismissed', async () => {
+      const bar = p.locator('#sudokupad-scripts-notices [data-script="auto-rules-resizer"]')
+      assert.match(await bar.textContent(), new RegExp(`^Auto Rules Resizer: ${kase.off} is off — SudokuPad changed\\.Report`))
+      assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
+      await bar.locator('button[aria-label="Dismiss"]').click()
+      assert.equal(await bar.count(), 0)
+    })
+
+    it('the other features still work: the rules are fitted, and the settings entry is there only when its feature is on', async () => {
+      assert.equal(await settle(async () => (await fontPx(p)) > SUDOKUPAD_FONT_PX, true), true, 'fitted')
+      await hoverPane(p)
+      assert.equal(await settle(() => p.locator(FONT_BAR).isVisible(), true), true, 'font buttons')
+      const group = await openSettings(p)
+      assert.equal(await group.locator('button, [role=button]').filter({ hasText: /^\s*Rules Resizer\s*$/ }).count(), kase.entry ? 1 : 0, 'the Rules Resizer entry')
+    })
+
+    it('the page raised no error, and no further warning came', () => {
+      assert.deepEqual(errors, [])
+      assert.equal(warned.length, 1, warned.join('\n'))
+    })
+  })
+}

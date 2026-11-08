@@ -10,7 +10,7 @@ import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
-import { readUntil, SETTLE_MS, stable } from '../settle.mjs'
+import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
 const { BOARD, BOARD_ID, STYLE_ID } = createRequire(import.meta.url)('../../dark-page.user.js')
@@ -519,5 +519,50 @@ describe('a page with no puzzle', () => {
     } finally {
       await page.close()
     }
+  })
+})
+
+// A SudokuPad internal missing before the script loads turns off that feature alone: the console names it once, the bar at the bottom of
+// the page names it with a Report link, and the page is still dark. Dark Page checks its internals as it loads, so the snippet takes the
+// internal away just before the script, and puts it back once the app is ready, after that check.
+describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => {
+  let context, p, errors
+  const warned = []
+
+  before(async () => {
+    ;({ context, p, errors } = await openPage(browser, {
+      seed: (page) => {
+        page.on('console', (m) => { if (m.type() === 'warning' && /^dark-page: /.test(m.text())) warned.push(m.text()) })
+      }
+    }))
+    await startPuzzle(p)
+    const breaks = 'const original = Framework.addSetting; Framework.addSetting = undefined; Framework.getApp().then(() => { Framework.addSetting = original })'
+    await p.addScriptTag({ content: `;{ ${breaks} }\n${script}` })
+    await p.locator(STYLE).waitFor({ state: 'attached' })
+  })
+  after(async () => { await context.close() })
+
+  it('one console warning names the feature', async () => {
+    assert.equal(await settle(async () => warned.length, 1), 1, warned.join('\n'))
+    assert.equal(warned[0], 'dark-page: settings entry skipped because SudokuPad has no Framework.addSetting')
+  })
+
+  it('the bar names the feature with a Report link, and goes when dismissed', async () => {
+    const bar = p.locator('#sudokupad-scripts-notices [data-script="dark-page"]')
+    assert.match(await bar.textContent(), /^Dark Page: settings entry is off — SudokuPad changed\.Report/)
+    assert.match(await bar.locator('a').getAttribute('href'), /^https:\/\/github\.com\/caneff\/sudokupad-scripts\/issues\/new\?title=/)
+    await bar.locator('button[aria-label="Dismiss"]').click()
+    assert.equal(await bar.count(), 0)
+  })
+
+  it('the page is still dark, and there is no Dark Page entry in the settings', async () => {
+    assert.equal(await p.evaluate(() => window.getComputedStyle(document.body).backgroundColor), BLACK)
+    const group = await openSettings(p)
+    assert.equal(await settingsEntry(group).count(), 0)
+  })
+
+  it('the page raised no error, and no further warning came', () => {
+    assert.deepEqual(errors, [])
+    assert.equal(warned.length, 1, warned.join('\n'))
   })
 })

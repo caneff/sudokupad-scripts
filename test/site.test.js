@@ -121,7 +121,8 @@ for (const { page: file, script, name } of DETAIL_PAGES) {
 
 // The warning sits directly under the page title, so it is read before any install link.
 const WARNING = /<\/h1>\s*<p class="warning">([\s\S]*?)<\/p>/
-const DETAILS_WARNING = "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad."
+// Every script runs on the shared SudokuPad guard (lib/sudokupad.js), whose bar each details page names.
+const DETAILS_WARNING = "This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad. When an update breaks one part, only that part turns off, and a bar at the bottom of the page names it with a link to report it."
 const WARNINGS = {
   [HOME]: "These scripts can break at any time, and there are no guarantees. They rely on SudokuPad's internals, which aren't a public API, so any SudokuPad update can break them without notice. They aren't made or supported by SudokuPad.",
   [DETAILS]: DETAILS_WARNING,
@@ -159,7 +160,7 @@ test(`${DETAILS} intro says what the script adds`, () => {
   assert.equal(plain(m[1]), "Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.")
 })
 
-const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Erase a whole line', 'White outlines']
+const DETAILS_LEAD_INS = ['Customizable pen colors', 'Dashed and arrow lines', 'Digit keys pick the pen', 'Marks on cell edges', 'Marks on grid corners', 'Marks in cells', 'Erase a whole line', 'White outlines']
 
 test(`${DETAILS} lists what the script adds as a grid of short items, one per feature, and never mentions the middle button`, () => {
   assert.deepEqual(section(DETAILS, 'What it adds'), [
@@ -168,6 +169,7 @@ test(`${DETAILS} lists what the script adds as a grid of short items, one per fe
     'Digit keys pick the pen Press 1 to 9 to pick that pen color, on whichever page of pens is showing.',
     'Marks on cell edges Click an edge for an X, a circle or an arrow.',
     'Marks on grid corners Click near a corner for an X or a circle.',
+    'Marks in cells Click the center of a cell for a circle, a cross or a dot.',
     'Erase a whole line Right-click a line to remove all of it, or a mark to remove that.',
     'White outlines An outline keeps lines readable over colored cells.'
   ])
@@ -450,10 +452,10 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Long notes A long note wraps and scrolls; drag a corner to resize it.',
     'Readable over digits A white outline round the letters, and an optional box behind the note.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
-    'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge.',
+    'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge, hold to keep nudging.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
-    'Settings Color presets, the halo round the letters, the box color and the box border, each picked from a row of small samples, and Copy and Paste to another browser.'
+    'Settings Color presets, halo, box color and box border picked from samples, and Copy and Paste to another browser.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
@@ -485,7 +487,7 @@ test(`${DRAW} stays short: its text is under ${DRAW_WORD_LIMIT} words`, () => {
 })
 
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {
-  assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Restart clears the notes. If the notes cannot be saved, a message says so.'])
+  assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.'])
 })
 
 // A script in docs/research/ takes a picture when its header names the picture's file.
