@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -1976,4 +1976,62 @@ test('reduceDraft reload: pasted settings replace the draft, selecting their act
   const pasted = { profiles: [{ name: 'X', groups: [g('a5', ['9'])] }, { name: 'Y', groups: [] }], active: 0 }
   const draft = run(opened(), { type: 'brush', key: 'b9' }, { type: 'reload', state: pasted, mode: 'off' })
   assert.deepEqual({ state: draft.state, mode: draft.mode, selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { state: pasted, mode: 'off', selected: 0, keptName: 'X', brush: 'a5', page: 0 })
+})
+
+// Polish (#538): focus, hover and press states, hit areas, the grab cursor and the dialog's keyboard.
+const RING = '#6a1b9a'
+const cssRules = (css) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => [m[1].split(',').map((x) => x.trim()), m[2].replace(/\s+/g, ' ').trim()])
+const rulesFor = (css, selector) => cssRules(css).filter(([selectors]) => selectors.includes(selector)).map(([, d]) => d).join(' ')
+
+test('the dialog\'s buttons, digit keys, swatches and profile rows show a 2 px ring on keyboard focus only', () => {
+  for (const part of ['button', '[data-role="swatch"]', '.cbd-profile']) {
+    assert.match(rulesFor(STYLE_CSS, `#color-by-digit-editor ${part}:focus-visible`), new RegExp(`outline: 2px solid ${RING}`), part)
+  }
+  assert.doesNotMatch(STYLE_CSS, /:focus \{[^}]*outline: 2px/)
+})
+
+test('the pressed swatch\'s focus ring is an ::after ring, since its pressed outline covers a focus outline', () => {
+  const ring = rulesFor(STYLE_CSS, '#color-by-digit-editor [data-role="swatch"][aria-pressed="true"]:focus-visible::after')
+  assert.match(ring, /border: 2px solid #6a1b9a/)
+  assert.match(ring, /position: absolute/)
+})
+
+test('Clear all, the digit keys and the swatches lighten to #f3e5f5 or ring on hover and darken 10% on press', () => {
+  assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor .cbd-button:hover'), /background: #f3e5f5/)
+  assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor [data-act="digit"]:not([style]):hover'), /background: #f3e5f5/)
+  assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor [data-role="swatch"]:not([data-empty]):hover'), /box-shadow: 0 0 0 2px #6a1b9a/)
+  for (const part of ['.cbd-button', '[data-act="digit"]', '[data-role="swatch"]:not([data-empty])']) {
+    assert.match(rulesFor(STYLE_CSS, `#color-by-digit-editor ${part}:active`), /inset 0 0 0 100vmax rgb\(0 0 0 \/ \.1\)/, part)
+  }
+})
+
+test('the mode button looks pressed from pointerdown: a class with a 10% darker layer, and a 24 px hit area on the menu arrow', () => {
+  assert.match(rulesFor(BUTTON_CSS, '#control-colorbydigit.cbd-pressed'), /inset 0 0 0 100vmax rgb\(0 0 0 \/ \.1\)/)
+  assert.match(rulesFor(BUTTON_CSS, '#control-colorbydigit [data-role="menu"]::after'), /position: absolute; inset: -5px/)
+})
+
+test('the delete button and the drag handle are at least 24 px, and a drag shows the grabbing cursor', () => {
+  for (const part of ['[data-act="delete"]', '[data-role="handle"]']) {
+    assert.match(rulesFor(STYLE_CSS, `#color-by-digit-editor ${part}`), /min-width: 24px; min-height: 24px/, part)
+  }
+  assert.match(rulesFor(STYLE_CSS, '#color-by-digit-editor.cbd-dragging *'), /cursor: grabbing !important/)
+})
+
+test('the menu\'s Cell and Digit dots pick from the whole column, not the 16 px dot', () => {
+  const html = renderMenu({ ...profileState, active: 0, digitActive: 1, useDigitColors: true, sync: false }, colorFor)
+  assert.match(html, /data-role="dot-column"[^>]*data-act="pick" data-target="cells" data-index="0" aria-checked="true"/)
+  assert.doesNotMatch(html, /<span data-act="pick"/)
+})
+
+test('gridTarget: arrows move by one along a row and by a row down a column, skip an empty slot, and stop at the edges', () => {
+  const usable = [true, true, true, true, false, true, true, true, true, true, false, false]
+  assert.equal(gridTarget('ArrowRight', 0, usable, 3), 1)
+  assert.equal(gridTarget('ArrowRight', 2, usable, 3), null)
+  assert.equal(gridTarget('ArrowLeft', 0, usable, 3), null)
+  assert.equal(gridTarget('ArrowDown', 1, usable, 3), 7)
+  assert.equal(gridTarget('ArrowDown', 7, usable, 3), null)
+  assert.equal(gridTarget('ArrowUp', 7, usable, 3), 1)
+  assert.equal(gridTarget('ArrowDown', 6, usable, 3), 9)
+  assert.equal(gridTarget('ArrowRight', 9, usable, 3), null)
+  assert.equal(gridTarget('a', 0, usable, 3), null)
 })
