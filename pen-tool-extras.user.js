@@ -1480,13 +1480,12 @@
     }
   }
 
-  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back. Acts queued and never sent mean SudokuPad changed how a click is sent: that throws
-  // an error marked `unsent`, before the list is cleared.
+  // The actions `click` (SudokuPad's own `clickCell`) queues, with its `actSend` held back. Acts queued and never sent mean SudokuPad changed how a click is sent, which throws.
   function queuedActs (tool, click) {
     let queued = null
     try {
       withOwnProperty(tool, 'actSend', function () { queued = this._actList.slice() }, click)
-      if (queued === null && tool._actList.length) throw Object.assign(new Error('clickCell queued its acts but never sent them'), { unsent: true })
+      if (queued === null && tool._actList.length) throw new Error('clickCell queued its acts but never sent them')
     } finally {
       tool._actList.length = 0
     }
@@ -1525,18 +1524,8 @@
         const acts = cornerActs(corner)
         return stock.sudokupad(() => { this.actStart(); sendActs(this, acts) })
       }
-      // A throw inside `stock.sudokupad` is SudokuPad's own and passes through, so the unsent case is carried out and thrown here as the script's.
-      let unsent = null
-      const queued = stock.sudokupad(() => {
-        try {
-          return queuedActs(this, () => original.apply(this, args))
-        } catch (error) {
-          if (!error.unsent) throw error
-          unsent = error
-          return null
-        }
-      }, false)
-      if (unsent) throw unsent
+      // Only SudokuPad's own call is inside `stock.sudokupad`, so the unsent-acts throw of `queuedActs` is the script's and switches marks off.
+      const queued = queuedActs(this, () => stock.sudokupad(() => original.apply(this, args), false))
       if (queued === null) return
       let acts = queued
       if (isEdgeActs(queued)) {

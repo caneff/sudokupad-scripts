@@ -2,7 +2,7 @@
 // sudokupad.app in headless Chromium.
 //
 // A case either takes away an internal a step needs before the script's startup check reads it (a snippet run on `Framework.getApp()`,
-// ahead of the script's own), makes a call the script makes fail while SudokuPad's own use of it goes on, or plants a throw in the
+// ahead of the script's own), makes a call the script makes fail while SudokuPad's own use of it goes on, changes how SudokuPad sends a click, or plants a throw in the
 // script's own code inside a wrapper. Each then checks the console warning that names the step, the dialog's line, that SudokuPad's own
 // action still works on the event that failed and after it, and that the other steps still work. A removed internal also goes from
 // SudokuPad's own code, so a case that removes one draws only with what it does not serve.
