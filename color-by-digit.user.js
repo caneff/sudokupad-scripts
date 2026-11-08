@@ -953,6 +953,54 @@
     return first ? first.key : null
   }
 
+  // The settings dialog's draft: the profiles (`state`) and mode Save would apply, the selected profile, its name when it was selected
+  // (an emptied name field keeps it), the brush, the color page shown, and the current stroke's paint key (undefined before its first
+  // digit, null for a stroke that clears).
+  function showingProfile (draft, state, selected) {
+    const groups = state.profiles[selected].groups
+    const brush = startingBrush(groups, draft.pages)
+    return { ...draft, state, selected, keptName: state.profiles[selected].name, brush, page: initialPage(draft.pages, brush) }
+  }
+  const openingDraft = (state, mode, pages) => showingProfile({ mode, pages, paintKey: undefined }, state, state.active)
+
+  // Each dialog edit as one event; an edit that changes nothing returns the same draft.
+  function reduceDraft (draft, event) {
+    const { state, selected, brush } = draft
+    const groups = state.profiles[selected].groups
+    const withGroups = (next) => (sameGroups(next, groups) ? draft : { ...draft, state: setProfileGroups(state, selected, next) })
+    const showing = (next, nextSelected) => (next === state ? draft : showingProfile(draft, next, nextSelected))
+    switch (event.type) {
+      case 'select': return showingProfile(draft, state, event.index)
+      case 'rename': return { ...draft, state: renameProfile(state, selected, event.name.trim() === '' ? draft.keptName : event.name) }
+      case 'brush': return { ...draft, brush: event.key }
+      case 'page': return { ...draft, page: event.page }
+      case 'clear': return withGroups([])
+      case 'press': return draft.paintKey === undefined ? draft : { ...draft, paintKey: undefined }
+      case 'paint': {
+        if (brush === null) return draft
+        const paintKey = draft.paintKey === undefined ? strokeKey(groups, event.digit, brush) : draft.paintKey
+        const painted = withGroups(setDigitColor(groups, event.digit, paintKey))
+        return paintKey === draft.paintKey ? painted : { ...painted, paintKey }
+      }
+      case 'key-paint': return brush === null ? draft : withGroups(paintDigit(groups, event.digit, brush))
+      case 'choose':
+        if (event.role === 'mode-draft') return { ...draft, mode: event.value }
+        if (event.role === 'cell-profile') return { ...draft, state: setActive(state, Number(event.value)) }
+        {
+          const next = chooseDigit(state, event.value)
+          return { ...draft, state: next, mode: allowedMode(draft.mode, usesDigitColors(next)) }
+        }
+      case 'new-profile': {
+        const next = copyProfile(state, selected)
+        return showing(next, next.profiles.length - 1)
+      }
+      case 'delete': return showing(deleteProfile(state, event.index), indexAfterDelete(selected, event.index, state.profiles.length))
+      case 'move': return event.from === event.to ? draft : showing(moveProfile(state, event.from, event.to), indexAfterMove(selected, event.from, event.to))
+      case 'reload': return showingProfile({ ...draft, mode: event.mode }, event.state, event.state.active)
+    }
+    throw new Error(`reduceDraft: no edit ${event.type}`)
+  }
+
   // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
   function renderDigitKey (digit, key, colors) {
     const color = colors.find((c) => c.key === key)
@@ -1718,7 +1766,7 @@
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -2118,14 +2166,9 @@
   }
 
   function openDialog (app) {
-    const pages = readPages()
     let savedState = loadState()
     const unreadable = hasUnreadable(savedData, PROFILES_KEY)
-    let draft = savedState
-    let draftMode = mode
-    let selected = draft.active
-    // The selected profile's name when it was selected: an emptied name field keeps it.
-    let keptName = draft.profiles[selected].name
+    let draft = openingDraft(savedState, mode, readPages())
     const box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Color by Digit',
@@ -2133,75 +2176,61 @@
       bodyId: EDITOR_ID,
       styleId: STYLE_ID,
       css: STYLE_CSS,
-      changed: () => draftMode !== mode || JSON.stringify(draft) !== JSON.stringify(savedState),
-      save: () => editor.run(() => saveDialog(app, savedState, draft, draftMode))
+      changed: () => draft.mode !== mode || JSON.stringify(draft.state) !== JSON.stringify(savedState),
+      save: () => editor.run(() => saveDialog(app, savedState, draft.state, draft.mode))
     })
     if (!box) return
-    let brush
-    let page
-    const groupsShown = () => draft.profiles[selected].groups
     const draw = () => {
-      box.innerHTML = renderEditor({ groups: groupsShown(), pages, page, brush, pulldownsHtml: renderPulldowns(draft, draftMode), profilesHtml: renderProfiles(draft, readColor, selected), unreadable })
+      const { state, mode: draftMode, selected, pages, page, brush } = draft
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable })
     }
-    const reshow = (next, nextSelected = selected) => {
-      draft = next
-      selected = nextSelected
-      keptName = draft.profiles[selected].name
-      brush = startingBrush(groupsShown(), pages)
-      page = initialPage(pages, brush)
+    // Applies one edit; true when it changed the draft.
+    const edit = (event) => {
+      const before = draft
+      draft = reduceDraft(draft, event)
+      return draft !== before
     }
-    reshow(draft)
-    const newProfile = () => {
-      const next = copyProfile(draft, selected)
-      if (next === draft) return
-      reshow(next, next.profiles.length - 1)
-      draw()
-      const nameBox = box.querySelector('[data-role="profile-name"]')
-      nameBox.focus()
-      nameBox.select()
+    // A stroke's paint redraws only when it changed a color: a redraw under the pointer is needed for nothing else.
+    const paint = (digit) => {
+      const groups = draft.state.profiles[draft.selected].groups
+      edit({ type: 'paint', digit })
+      if (draft.state.profiles[draft.selected].groups !== groups) draw()
     }
     draw()
     wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings({ getData: readData }), readers: READERS, upgrade: withModeFromAuto }, (values) => {
       ADDED_PRELOADS.forEach(({ key }) => { if (key in values) writeData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
-      reshow(savedState, savedState.active)
-      draftMode = mode
+      edit({ type: 'reload', state: savedState, mode })
       draw()
     })
     // Typing renames the draft, its row and the pulldowns' options in place, so the name field keeps the focus.
     box.addEventListener('input', (event) => {
       if (!event.target.matches('[data-role="profile-name"]')) return
-      draft = renameProfile(draft, selected, event.target.value.trim() === '' ? keptName : event.target.value)
-      const name = draft.profiles[selected].name
+      edit({ type: 'rename', name: event.target.value })
+      const { state, selected } = draft
+      const name = state.profiles[selected].name
       box.querySelector(`[data-role="profile-row"][data-index="${selected}"]`).setAttribute('aria-label', name)
       box.querySelectorAll(`.cbd-pulldown option[data-index="${selected}"]`).forEach((option) => { option.textContent = name })
     })
     // Enter, or leaving the box, shows the name the draft holds: a blank box shows the kept name again.
-    const settleName = (nameBox) => { nameBox.value = draft.profiles[selected].name }
+    const settleName = (nameBox) => { nameBox.value = draft.state.profiles[draft.selected].name }
     box.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' || !event.target.matches('[data-role="profile-name"]')) return
       event.preventDefault()
       event.stopPropagation()
       settleName(event.target)
     })
+    // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change for the option it already shows.
     box.addEventListener('change', (event) => {
       if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
       const pageChoice = event.target.closest('select[data-role="color-choice"]')
-      if (pageChoice) {
-        page = Number(pageChoice.value)
-        draw()
-        box.querySelector('select[data-role="color-choice"]').focus()
-        return
-      }
       const pulldown = event.target.closest('select[data-role]')
-      if (pulldown) choose(pulldown.dataset.role, pulldown.value)
-    })
-    const setGroups = (groups) => {
-      if (sameGroups(groups, groupsShown())) return
-      draft = setProfileGroups(draft, selected, groups)
+      if (!pulldown) return
+      edit(pageChoice ? { type: 'page', page: Number(pageChoice.value) } : { type: 'choose', role: pulldown.dataset.role, value: pulldown.value })
       draw()
-    }
+      box.querySelector(`select[data-role="${pulldown.dataset.role}"]`).focus()
+    })
     // A press on a digit paints it, and a drag paints each digit the pointer then passes over; the first digit decides paint or clear.
     // A press in a gap (not on a control) paints from the first digit the drag reaches, so a slightly early press selects no text and drags no page.
     box.addEventListener('pointerdown', (event) => {
@@ -2211,12 +2240,7 @@
       if (target.hasPointerCapture && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId)
       const pressed = target.closest('[data-act="digit"]')
       if (!pressed && target.closest('[data-act], [data-role="swatch"]')) return
-      let paintKey
-      const paint = (key) => {
-        if (brush === null) return
-        if (paintKey === undefined) paintKey = strokeKey(groupsShown(), key, brush)
-        setGroups(setDigitColor(groupsShown(), key, paintKey))
-      }
+      edit({ type: 'press' })
       if (pressed) paint(pressed.dataset.digit)
       const stop = trackPointer(document, {
         move: (e) => {
@@ -2243,30 +2267,19 @@
           rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
         },
         end: (e) => {
-          if (e.type === 'pointerup' && to !== from) reshow(moveProfile(draft, from, to), indexAfterMove(selected, from, to))
+          if (e.type === 'pointerup') edit({ type: 'move', from, to })
           draw()
         }
       })
     })
     const selectRow = (index, refocus) => {
-      reshow(draft, index)
+      edit({ type: 'select', index })
       draw()
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
-    // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change for the option it already shows.
-    const choose = (role, value) => {
-      if (role === 'mode-draft') draftMode = value
-      else if (role === 'cell-profile') draft = setActive(draft, Number(value))
-      else {
-        draft = chooseDigit(draft, value)
-        draftMode = allowedMode(draftMode, usesDigitColors(draft))
-      }
-      draw()
-      box.querySelector(`select[data-role="${role}"]`).focus()
-    }
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="select"]')) return
-      const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)
+      const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.state.profiles.length)
       if (target === null) return
       event.preventDefault()
       event.stopPropagation()
@@ -2284,10 +2297,10 @@
       if (swatch) {
         event.preventDefault()
         event.stopPropagation()
-        brush = swatch.dataset.key
+        edit({ type: 'brush', key: swatch.dataset.key })
         draw()
         // The redraw replaced the swatch; a keyboard user keeps the focus on its successor.
-        if (event.detail === 0) swatchWithKey(box, brush)?.focus()
+        if (event.detail === 0) swatchWithKey(box, draft.brush)?.focus()
         return
       }
       const el = event.target.closest('button[data-act]')
@@ -2295,17 +2308,21 @@
       event.preventDefault()
       event.stopPropagation()
       const act = el.dataset.act
-      if (act === 'new-profile') { newProfile(); return }
+      if (act === 'new-profile') {
+        if (!edit({ type: 'new-profile' })) return
+        draw()
+        const nameBox = box.querySelector('[data-role="profile-name"]')
+        nameBox.focus()
+        nameBox.select()
+        return
+      }
       if (act === 'delete') {
-        const index = Number(el.dataset.index)
-        const next = deleteProfile(draft, index)
-        if (next === draft) return
-        reshow(next, indexAfterDelete(selected, index, draft.profiles.length))
+        if (!edit({ type: 'delete', index: Number(el.dataset.index) })) return
       } else if (act === 'clear') {
-        setGroups([])
-      } else if (act === 'digit' && event.detail === 0 && brush !== null) {
+        edit({ type: 'clear' })
+      } else if (act === 'digit' && event.detail === 0) {
         // A mouse or touch press has already painted on pointerdown; only a keyboard click, which has no pointer, lands here.
-        setGroups(paintDigit(groupsShown(), el.dataset.digit, brush))
+        edit({ type: 'key-paint', digit: el.dataset.digit })
       }
       draw()
       // The redraw replaced the button; a keyboard user keeps the focus on its successor.
