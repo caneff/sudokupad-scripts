@@ -124,7 +124,14 @@ describe('Text Anywhere\'s endings, clicks and cancelled drags', { concurrency: 
 
   it('a press on a note that moves 4 px is still a click: it selects the note and moves nothing', async () => {
     const before = (await savedNote('B')).at
-    await slip(B_AT, 4, 0)
+    const [x, y] = await gridPoint(p, B_AT)
+    await p.mouse.move(x, y)
+    await p.mouse.down()
+    await p.mouse.move(x + 4, y, { steps: 2 })
+    // A drag moves the note by a translation while the pointer is down; a click does not.
+    const translate = await p.evaluate(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-text')].find((e) => e.textContent === 'B').style.translate)
+    assert.equal(translate, '', 'the note follows no drag')
+    await p.mouse.up()
     assert.deepEqual(await selectedTexts(), ['B'])
     assert.deepEqual((await savedNote('B')).at, before)
     await p.keyboard.press('Escape')
