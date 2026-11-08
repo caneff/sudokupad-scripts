@@ -903,15 +903,16 @@
   const isHiddenItem = (item) => isPlainObject(item) && HIDDEN_KINDS.includes(item.kind)
 
   // A puzzle with nothing saved has an empty drawing; saved data that is not a list throws rather than read as a drawing. The list is read note by note:
-  // `items` holds the notes and the strokes and shapes of an earlier version, `kept` every entry that is neither, which is never drawn and is saved back as it is.
+  // an entry that is not a note, stroke or shape is kept, never drawn, and saved back as it is.
   function readDrawing (saved) {
     if (saved === null || saved === undefined) return { items: [], kept: [] }
     if (!Array.isArray(saved)) throw new Error(`the saved drawing is not a list of notes: ${JSON.stringify(saved).slice(0, 200)}`)
-    const items = saved.filter((item) => isText(item) || isHiddenItem(item))
-    return { items, kept: saved.filter((item) => !items.includes(item)) }
+    const read = { items: [], kept: [] }
+    for (const entry of saved) (isText(entry) || isHiddenItem(entry) ? read.items : read.kept).push(entry)
+    return read
   }
 
-  // The drawing as `load` reads it from the store: the notes and the entries kept, whether the whole value was unreadable, and the reason.
+  // `unreadable` is the reason when the whole saved value could not be read, and is then copied aside by `load`.
   function loadDrawing (store, key) {
     const { value, unreadable } = load(store, { key: drawingKey(key), read: readDrawing })
     return { ...(value ?? { items: [], kept: [] }), unreadable }
@@ -2141,26 +2142,28 @@
 
   // The solver loses work they think is kept, so each failure is shown once a page in SudokuPad's own dialog. Its
   // showDialog does nothing while another dialog is open, so the failure is shown at the next save instead.
-  function report (message) {
+  function report (message, id = message) {
     console.warn(`draw-tool: ${message}`)
-    if (reported.has(message) || document.querySelector('.dialog-overlay')) return
-    reported.add(message)
+    if (reported.has(id) || document.querySelector('.dialog-overlay')) return
+    reported.add(id)
     Framework.showDialog({
       parts: [{ tag: 'text', content: message }, { tag: 'options', options: [{ tag: 'button', content: OK_LABEL }] }],
       centerOverBoard: true
     })
   }
 
-  // The solver is told at load, and again at a save if a dialog was open then, that some saved notes are not shown.
+  // Once a puzzle, so a second puzzle with an unreadable note is told too.
   function reportKept () {
-    if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`)
+    if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${loadedKey}`)
   }
+
+  const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
 
   function saveNotes () {
     if (loadedKey === null) return
     reportKept()
     if (!savable) {
-      report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
+      report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
       return
     }
     try {
@@ -2453,12 +2456,12 @@
     drawing = items
     keptEntries = kept
     savable = unreadable === undefined
-    if (unreadable !== undefined) console.warn(`draw-tool: ${unreadable}. It is left as it is, and this puzzle's notes are not saved.`)
+    if (unreadable !== undefined) report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
     reportKept()
     redraw()
   }
 
-  // The saved strokes and shapes of an earlier version are left as they are, but an unreadable saved drawing is written over.
+  // The saved strokes and shapes of an earlier version, and the entries that failed their check, are left as they are.
   function emptyDrawing () {
     drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()

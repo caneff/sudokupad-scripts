@@ -49,7 +49,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
-      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool/.test(m.text())) warnings.push(m.text()) })
+      seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool|DrawTool_/.test(m.text())) warnings.push(m.text()) })
     }))
     await draw.boot(p)
     await draw.forgetDrawings(p)
@@ -170,11 +170,11 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await reload()
     assert.deepEqual(await texts(), [])
     assert.equal(warnings.some((w) => /saved drawing/.test(w)), true, warnings.join('\n'))
+    assert.match(await dialogText(), /saved notes cannot be read/, 'the solver is told at load that the notes are not saved')
+    await closeDialog()
     await pickDraw()
     await typeText([2.5, 2.5], '15')
     assert.deepEqual(await texts(), ['15'])
-    assert.match(await dialogText(), /saved notes cannot be read/, 'the solver is told the notes are not saved')
-    await closeDialog()
     assert.equal(await planted(), 'not a drawing {', 'after a note')
     await mouseDrag(p, [[2.5, 2.5], [2.5, 4.5]])
     assert.equal(await planted(), 'not a drawing {', 'after a move')
@@ -258,7 +258,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.equal(await read(() => window.keyupInGap), true, 'the key went up between B\'s id and its load')
     assert.deepEqual(await settle(texts, []), [], 'puzzle B shows no notes')
     assert.equal(await read((k) => Framework.getData(k), DRAWING_PREFIX + B_ID), null, 'nothing is saved under B')
-    assert.deepEqual((await read((k) => Framework.getData(k), DRAWING_PREFIX + a)).data.map((item) => item.text), ['15'], 'A keeps its note')
+    assert.deepEqual(draw.drawingOf(await read((k) => Framework.getData(k), DRAWING_PREFIX + a)).map((item) => item.text), ['15'], 'A keeps its note')
   })
 
   it('the page raised no error', () => {

@@ -91,10 +91,13 @@ export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => tool
 // The puzzle's key, as the script keys its drawing: its id, or the page URL when it has none, as the recorded puzzle does.
 export const puzzleKey = (p) => p.evaluate(() => String(Framework.app.puzzle.puzzleId || window.location.href))
 // The drawing saved for the puzzle on the page: the list inside the `{ v, data }` the store saves (or a planted list, not yet saved over), or null when nothing is saved.
-export const saved = async (p) => {
-  const value = await p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p))
-  return Array.isArray(value) ? value : value?.data ?? null
+export const drawingOf = (value) => {
+  if (value === null || value === undefined) return null
+  if (Array.isArray(value)) return value
+  if (Array.isArray(value.data)) return value.data
+  throw new Error(`not a saved drawing: ${JSON.stringify(value)}`)
 }
+export const saved = async (p) => drawingOf(await p.evaluate((key) => Framework.getData(key), DRAWING_PREFIX + await puzzleKey(p)))
 
 // Each note drawn: its text, its computed color and its size in board units, its font size on the screen over the board's scale.
 export const noteLooks = (p) => p.evaluate((selector) => {

@@ -37,9 +37,9 @@ const puzzles = (n) => Array.from({ length: n }, (_, i) => `p${i + 1}`)
 
 // A cage sum "15" at size 20, centred on (100, 50) in board units.
 const sum = textItem([100, 50], '15', 3, 20)
-// What an earlier version saved: neither is drawn, and both stay in storage.
 // The notes a saved list reads as; the entries it keeps are `readDrawing(saved).kept`.
 const readItems = (saved) => readDrawing(saved).items
+// What an earlier version saved: neither is drawn, and both stay in storage.
 const oldStroke = { kind: 'stroke', color: 1, width: 6, opacity: 100, points: [[0, 50], [200, 50]] }
 const oldShape = { kind: 'shape', shape: 'rect', color: 2, width: 6, opacity: 100, box: [0, 0, 100, 100] }
 
