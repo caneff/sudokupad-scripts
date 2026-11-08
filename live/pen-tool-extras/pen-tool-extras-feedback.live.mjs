@@ -16,7 +16,6 @@ const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta
 const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor_opacity', 'ToolPen_color', 'PenColor_middleerase']
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const PAGES = { 1: '123456789', 2: 'abcdefghi', 3: 'jlnprtvxz' }
-const FADED = '0.3'
 const HEADS = '.pen-tool-extras-hint-arrows'
 
 let browser
@@ -24,16 +23,42 @@ before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
 describe('injected after Start Puzzle', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, reader
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const undoAll = async () => { while ((await read(() => Framework.app.puzzle.undoStack.length)) > 0) await p.click('#control-undo') }
   const moveTo = async (point) => { await p.mouse.move(...await gridPoint(p, point)) }
-  // The computed opacity of every pen stroke (the layer's own opacity not counted), as `row,col:value` to its opacity.
-  const strokeOpacities = () => read(() => Object.fromEntries([...document.querySelectorAll('#cell-pen .cell-pen, #pen-tool-extras-marks .cell-pen')]
-    .filter((el) => el.tagName === 'path' && !el.parentNode.classList.contains('cell-pen'))
-    .map((el) => [`${el.getAttribute('row')},${el.getAttribute('col')}:${el.getAttribute('value')}`, getComputedStyle(el).opacity])))
-  const fadedStrokes = async () => Object.entries(await strokeOpacities()).filter(([, opacity]) => opacity === FADED).map(([key]) => key).sort()
+  // The strokes the preview has faded, as `row,col:value`: the originals are hidden and their copies show in one group at the faded opacity.
+  const fadedStrokes = () => read(() => [...document.querySelectorAll('#cell-pen .cell-pen.pen-tool-extras-faded, #pen-tool-extras-marks .cell-pen.pen-tool-extras-faded')]
+    .map((el) => `${el.getAttribute('row')},${el.getAttribute('col')}:${el.getAttribute('value')}`).sort())
+  // The red, green and blue of the screen pixel at (x, y), read off a screenshot loaded into a second page's canvas.
+  const pixelAt = async (x, y) => {
+    const png = await p.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } })
+    const color = await reader.evaluate(async (b64) => {
+      const img = new window.Image()
+      img.src = 'data:image/png;base64,' + b64
+      await img.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = 1
+      canvas.height = 1
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      return [...ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)]
+    }, png.toString('base64'))
+    await p.bringToFront() // the second page took the focus, and a drag on this one then draws nothing
+    return color
+  }
+  // A white rectangle under the pen layer: the page behind the board is transparent in the screenshot, so a faded stroke would read black over it.
+  const back = () => read(() => {
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    rect.id = 'live-backing'
+    for (const [name, value] of [['x', -100], ['y', -100], ['width', 1000], ['height', 1000], ['fill', '#fff']]) rect.setAttribute(name, value)
+    document.querySelector('#cell-pen').before(rect)
+  })
+  const unback = () => read(() => document.getElementById('live-backing')?.remove())
+  const sameColor = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2)
+  const fadedGroups = () => read(() => document.querySelectorAll('.pen-tool-extras-faded-group').length)
+  const centreOf = (point) => gridPoint(p, point)
 
   const selectPenOnPage = async (page, key) => {
     await openPenTool(p)
@@ -45,6 +70,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, { seed: captureConsoleErrors }))
+    reader = await context.newPage()
     await startPuzzle(p)
     await p.addScriptTag({ content: script })
     await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
@@ -96,6 +122,30 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     })
   })
 
+  describe('the preview and the hint fade as one picture', () => {
+    it('the erase preview of a two-segment line shows the same color at the joint as along a segment, and is fainter than the line', async () => {
+      await restartPuzzle(p)
+      await selectPenOnPage(1, 3)
+      await drag(p, [[2.5, 2.5], [2.5, 4.5]])
+      await back()
+      const [joint, mid] = [await centreOf([2.5, 3.5]), await centreOf([2.5, 3.0])]
+      const solid = await pixelAt(...mid)
+      await moveTo([2.5, 3.0])
+      await p.mouse.down({ button: 'right' })
+      assert.deepEqual(await settle(fadedStrokes, ['2,2:1', '2,3:1']), ['2,2:1', '2,3:1'])
+      const [group, layer] = await read(() => ['.pen-tool-extras-faded-group', '#cell-pen'].map((sel) => Number(getComputedStyle(document.querySelector(sel)).opacity)))
+      assert.equal(Math.round(group * 1000) / 1000, Math.round(0.3 * layer * 1000) / 1000, 'the copies fade as one group at 0.3 of what the pen layer shows (the Opacity slider)')
+      const [atJoint, atMid] = [await pixelAt(...joint), await pixelAt(...mid)]
+      assert.ok(!sameColor(atMid, solid), `the preview is fainter than the line: ${atMid} against ${solid}`)
+      assert.ok(sameColor(atJoint, atMid), `the joint ${atJoint} matches the middle of a segment ${atMid}`)
+      await p.mouse.up({ button: 'right' })
+      assert.equal(await settle(fadedGroups, 0), 0, 'the release takes the group of copies away')
+      await unback()
+      await undoAll()
+      await p.mouse.click(5, 5) // a click off the grid, or the next drag started right after a release draws nothing
+    })
+  })
+
   describe('row 7: Escape while the right button is held cancels the erase', () => {
     it('nothing is erased, the fade goes, and a later release or move does nothing', async () => {
       await restartPuzzle(p)
@@ -109,6 +159,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await settle(fadedStrokes, ['2,2:1', '2,3:1'])).length, 2)
       await p.keyboard.press('Escape')
       assert.deepEqual(await settle(fadedStrokes, []), [], 'Escape clears the fade')
+      assert.equal(await settle(fadedGroups, 0), 0, 'and the group of copies that showed it')
       await p.mouse.move(...await gridPoint(p, [5.5, 3.0]), { steps: 8 })
       assert.deepEqual(await fadedStrokes(), [], 'the drag after Escape fades nothing')
       await p.mouse.up({ button: 'right' })
@@ -208,6 +259,32 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.ok(left.length >= 2 && left.every(({ wing, tip }) => tip < wing), 'a drag to the left points left')
       await p.mouse.up()
       await undoAll()
+    })
+
+    it('an arrow pen\'s drag hint shows the same color where an arrowhead overlaps the line as the line alone', async () => {
+      await restartPuzzle(p)
+      await selectPenOnPage(3, 3)
+      await holdDrag([[2.5, 2.5], [2.5, 4.5]])
+      await settle(async () => (await hint()) !== null && (await hint()).headsD !== null, true)
+      await back()
+      // The first arrowhead's middle, in screen pixels.
+      const [x, y] = await read((heads) => {
+        const el = document.querySelector(heads)
+        const nums = el.getAttribute('d').match(/M([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)Z/).slice(1).map(Number)
+        const point = el.ownerSVGElement.createSVGPoint()
+        point.x = (nums[0] + nums[2] + nums[4]) / 3
+        point.y = (nums[1] + nums[3] + nums[5]) / 3
+        const at = point.matrixTransform(el.getScreenCTM())
+        return [at.x, at.y]
+      }, HEADS)
+      const withHeads = await pixelAt(x, y)
+      await read((heads) => { document.querySelector(heads).style.visibility = 'hidden' }, HEADS)
+      const lineOnly = await pixelAt(x, y)
+      assert.ok(sameColor(withHeads, lineOnly), `an arrowhead over the line ${withHeads} matches the line alone ${lineOnly}`)
+      await p.mouse.up()
+      await unback()
+      await undoAll()
+      await p.mouse.click(5, 5) // as above
     })
   })
 

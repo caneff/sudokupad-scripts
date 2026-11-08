@@ -187,3 +187,52 @@ export const styleOn = (p, property, place, digit, conflict = false) => p.evalua
     .map((e) => window.getComputedStyle(e)[property])
 }, [property, place, digit, conflict])
 export const allFillsOn = (p, place, digit, conflict) => async () => [...new Set(await styleOn(p, 'fill', place, digit, conflict))]
+
+// The editor's profile rows and the selected row's name field.
+export const PROFILE_ROWS = `${EDITOR} [data-role=profile-row]`
+export const PROFILE_NAME_FIELD = `${EDITOR} [data-role=profile-name]`
+// How far past a row's middle a drag ends to land beyond it.
+export const DROP_PAST_MIDDLE_PX = 8
+
+// A row's × shows only while its row is hovered or selected, so the pointer goes onto the row first.
+export const deleteProfileRow = async (p, n) => {
+  await p.hover(`${PROFILE_ROWS}:nth-child(${n})`, ROW_CORNER)
+  await p.click(`${PROFILE_ROWS}:nth-child(${n}) button[data-act=delete]`)
+}
+
+// The palette key of the group holding `digit` in `groups`, undefined when none does.
+export const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
+
+// Every cell's row, column, given, entered value and colors.
+export const cellsStateOn = (p) => p.evaluate(() => [].concat(Framework.app.puzzle.cells).flat(Infinity).map((c) => ({ r: c.row, c: c.col, given: c.given, value: c.value, colours: [...(c.colours || [])] })))
+
+// How many cells hold a color other than their digit's group color in `groups`: a given or an entered digit takes its group's key, an empty cell none.
+export async function wrongCountOn (p, groups) {
+  return (await cellsStateOn(p)).filter((x) => {
+    const digit = String(x.given || x.value || '')
+    return JSON.stringify(x.colours) !== JSON.stringify(digit === '' ? [] : [keyOf(groups, digit)])
+  }).length
+}
+
+// Selects the cell at row r, column c as a click would, deselecting any other.
+export const selectCell = (p, r, c) => p.evaluate(([r, c]) => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(r, c)) }, [r, c])
+
+// Drags the handle of profile row `from` to just past the middle of row `to`, with the real mouse.
+export async function dragProfileRow (p, from, to) {
+  await p.locator(PROFILE_ROWS).first().scrollIntoViewIfNeeded()
+  const start = await center(p.locator(`${PROFILE_ROWS} [data-role=handle]`).nth(from))
+  const end = await center(p.locator(PROFILE_ROWS).nth(to))
+  end.y += to > from ? DROP_PAST_MIDDLE_PX : -DROP_PAST_MIDDLE_PX
+  await p.mouse.move(start.x, start.y)
+  await p.mouse.down()
+  await p.mouse.move(start.x, (start.y + end.y) / 2, { steps: 4 })
+  await p.mouse.move(start.x, end.y, { steps: 4 })
+  await p.mouse.up()
+}
+
+// Types `text` over the selected profile's name with real key presses (an empty `text` deletes it): SudokuPad listens for keys on the page, and a digit or letter must reach the field.
+export async function typeProfileName (p, text) {
+  await p.locator(PROFILE_NAME_FIELD).press('Control+a')
+  if (text === '') await p.locator(PROFILE_NAME_FIELD).press('Backspace')
+  else await p.locator(PROFILE_NAME_FIELD).pressSequentially(text)
+}

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.37.3
+// @version      0.38.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.37.3'
+  const VERSION = '0.38.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -514,28 +514,18 @@
     return [(left + right) / 2, (top + bottom) / 2]
   }
 
-  // The gap left to the window's edge and to a control, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
+  // The gap left to the window's edge, so the half pixel a note's measured size and its rounded point can differ by never puts it back out of reach.
   const REACH_MARGIN_PX = 1
   // A note already this close to a whole device pixel is not moved to it.
   const PIXEL_SNAP_EPSILON_PX = 0.005
 
-  // The point nearest `[x, y]` for the middle of a note box `width` by `height` that lies wholly inside `win` and overlaps none of the `blockers`, all in screen pixels.
-  // A box too big for the window is centred on it; with no free point it is kept inside the window alone; a window with no area leaves the point as it is.
-  function reachablePoint ([x, y], [width, height], win, blockers) {
+  // The point nearest `[x, y]` for the middle of a note box `width` by `height` that lies wholly inside `win`, in screen pixels.
+  // A box too big for the window is centred on it; a window with no area leaves the point as it is.
+  function reachablePoint ([x, y], [width, height], win) {
     if (win.right <= win.left || win.bottom <= win.top) return [x, y]
-    const [halfWidth, halfHeight] = [width / 2, height / 2]
     const clamp = (value, low, high) => low > high ? (low + high) / 2 : Math.min(high, Math.max(low, value))
-    const [spanX, spanY] = [halfWidth + REACH_MARGIN_PX, halfHeight + REACH_MARGIN_PX]
-    const inside = ([px, py]) => [clamp(px, win.left + spanX, win.right - spanX), clamp(py, win.top + spanY, win.bottom - spanY)]
-    const blocked = ([px, py]) => blockers.some((b) => px + halfWidth > b.left && px - halfWidth < b.right && py + halfHeight > b.top && py - halfHeight < b.bottom)
-    const start = inside([x, y])
-    if (!blocked(start)) return start
-    // Every edge of every control is a place to rest against, in either direction, and the two directions combine to clear controls that meet at a corner.
-    const xs = [start[0], ...blockers.flatMap((b) => [b.left - spanX, b.right + spanX])]
-    const ys = [start[1], ...blockers.flatMap((b) => [b.top - spanY, b.bottom + spanY])]
-    const free = xs.flatMap((px) => ys.map((py) => inside([px, py]))).filter((point) => !blocked(point))
-    const distance = (point) => Math.hypot(point[0] - start[0], point[1] - start[1])
-    return free.reduce((best, point) => distance(point) < distance(best) ? point : best, free[0] ?? start)
+    const [spanX, spanY] = [width / 2 + REACH_MARGIN_PX, height / 2 + REACH_MARGIN_PX]
+    return [clamp(x, win.left + spanX, win.right - spanX), clamp(y, win.top + spanY, win.bottom - spanY)]
   }
 
   // The corners of a note's box a handle sits on, each as the sign of its side on x and y: -1 for the left or top, 1 for the right or bottom.
@@ -1645,11 +1635,11 @@
 
   // The open note is kept this many px inside the window.
   const WINDOW_PAD_PX = 20
-  // How far the open note's screen box must move to lie WINDOW_PAD_PX inside `win` and clear of the `blockers`, by the same rule a dropped note is kept reachable by.
-  function viewShift (box, win, blockers) {
+  // How far the open note's screen box must move to lie WINDOW_PAD_PX inside `win`, by the same rule a dropped note is kept reachable by.
+  function viewShift (box, win) {
     const room = { left: win.left + WINDOW_PAD_PX - REACH_MARGIN_PX, top: win.top + WINDOW_PAD_PX - REACH_MARGIN_PX, right: win.right - WINDOW_PAD_PX + REACH_MARGIN_PX, bottom: win.bottom - WINDOW_PAD_PX + REACH_MARGIN_PX }
     const middle = [(box.left + box.right) / 2, (box.top + box.bottom) / 2]
-    const [x, y] = reachablePoint(middle, [box.right - box.left, box.bottom - box.top], room, blockers)
+    const [x, y] = reachablePoint(middle, [box.right - box.left, box.bottom - box.top], room)
     return [x - middle[0], y - middle[1]]
   }
   function nudgeStep (heldMs, shift) {
@@ -1683,13 +1673,11 @@
 
   const boardSvg = () => Framework.app.svgRenderer.getElem()
 
-  // The parts of SudokuPad's layout a fixed note must stay clear of; the menu drawer and dialogs are open only for a while, so a note is not moved for them.
-  const LAYOUT_CONTROLS = '#controls, .topbar'
   // What SudokuPad draws above the notes' layer: an open dialog and the menu drawer.
   const ABOVE_NOTES = '.dialog-overlay, #appmenu'
 
   // A press on these goes to SudokuPad's controls (or a link or field anywhere), never to a note: the control panel, the top bar, the menu drawer and an open dialog.
-  const CONTROLS = `${LAYOUT_CONTROLS}, ${ABOVE_NOTES}, button, a, input, select, textarea`
+  const CONTROLS = `#controls, .topbar, ${ABOVE_NOTES}, button, a, input, select, textarea`
   const overControl = (event) => event.target instanceof window.Element && event.target.closest(CONTROLS) !== null
 
   // The notes' layer covers the page, above the board's digits and SudokuPad's clock and rules copy (z-index 10) and below its dialogs and menu drawer (1000).
@@ -2375,7 +2363,7 @@
   const shownNotes = new WeakMap()
   // The layer's two groups of notes, made at the first redraw, with the style the board group carries.
   let groups = null
-  // The layer's font, and the board, window and controls as of the last redraw.
+  // The layer's font, and the board and window as of the last redraw.
   let layerFont = ''
   let lastLayout = ''
 
@@ -2404,12 +2392,11 @@
     if (frameRequest) runFrame()
   }
 
-  const layoutBlockers = () => [...document.querySelectorAll(LAYOUT_CONTROLS)].map((element) => element.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
-  // What a redraw places the notes by: the board's transform and box, the window's size, and the controls a fixed note keeps clear of.
-  const layoutKey = (map) => JSON.stringify([map.matrix, map.box, window.innerWidth, window.innerHeight, layoutBlockers()])
+  // What a redraw places the notes by: the board's transform and box, the window's size.
+  const layoutKey = (map) => JSON.stringify([map.matrix, map.box, window.innerWidth, window.innerHeight])
 
   // The board moves and scales with the window and SudokuPad's layout, which sets the styles of the board and the boxes round it, so the notes are
-  // placed again whenever those change, and the board, the window or the controls have moved.
+  // placed again whenever those change, and the board or the window has moved.
   const watchedBoards = new WeakSet()
   const placeIfMoved = () => { if (layoutKey(boardMap()) !== lastLayout) renderDrawing() }
   const placeSoon = () => inFrame('place', placeIfMoved, boardNotes)
@@ -2523,33 +2510,32 @@
     if (hoverPoint) showHover()
   }
 
-  // A fixed note the window or the layout has put out of reach is drawn at the nearest point inside the window and clear of the controls, and its stored
+  // A fixed note the window or the layout has put out of reach is drawn at the nearest point inside the window, and its stored
   // point is left as it is: a short-lived small window (devtools opened, a window snap) never moves a note for good. Only the solver's own move or resize saves
   // a new point. A note being dragged or resized is left to follow the pointer, and is drawn in reach once it is let go.
   function showFixedReachable (notes, map) {
     const fixed = notes.filter(({ item }) => item.fixed)
     if (fixed.length === 0) return
-    const blockers = layoutBlockers()
     for (const { element, item } of fixed) {
-      const point = reachOf(item, map, blockers)
+      const point = reachOf(item, map)
       if (point[0] === item.fixed[0] && point[1] === item.fixed[1]) delete item[SHOWN_AT]
       else item[SHOWN_AT] = { from: item.fixed, point }
       showNote(element, item, map)
     }
   }
 
-  // The nearest point to a fixed note's own at which its box lies inside the window and clear of `blockers`, the controls' screen boxes.
-  function reachOf (item, map, blockers) {
+  // The nearest point to a fixed note's own at which its box lies inside the window.
+  function reachOf (item, map) {
     const { left, right, top, bottom } = noteScreenBox(item, map, outline)
     const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
     // The box is where the note is drawn now, which may not be its stored point, so the middle is taken from the stored point by the box's own offset from the drawn one.
     const drawn = drawnPoint(item)
     const toMiddle = noteMiddle(item, map, outline).map((v, i) => v - drawn[i])
-    const reached = reachablePoint(item.fixed.map((v, i) => v + toMiddle[i]), [right - left, bottom - top], win, blockers)
+    const reached = reachablePoint(item.fixed.map((v, i) => v + toMiddle[i]), [right - left, bottom - top], win)
     return roundPoint(reached.map((v, i) => v - toMiddle[i]))
   }
 
-  // Restyles the open note and puts the handles on its corners. The note is shown moved in from the window's edge and clear of SudokuPad's controls when its box would cross them: the view of it,
+  // Restyles the open note and puts the handles on its corners. The note is shown moved in from the window's edge when its box would cross it: the view of it,
   // `editing.shift`, is a translation of its element, and its item's point is never changed.
   function showEditing (map) {
     const { element, item } = editing
@@ -2558,12 +2544,13 @@
     element.classList.toggle(EMPTY_CLASS, typedText(element) === '')
     markScrolling(element)
     const { left, top, right, bottom } = element.getBoundingClientRect()
-    const shift = viewShift({ left, top, right, bottom }, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }, layoutBlockers())
+    const shift = viewShift({ left, top, right, bottom }, { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight })
     element.style.translate = `${shift[0]}px ${shift[1]}px`
     editing.shift = shift
     editing.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
     showHandles(editing.box)
     showSelection(map)
+    showEdgeCursor(hoverPoint)
   }
 
   // The point of a screen box that corner `corner` of CORNERS names, or of the opposite corner with `opposite`.
@@ -3046,10 +3033,31 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || handles.some(({ element }) => element === event.target) || isPanelControl(event.target)) return
-    // A left press on another note goes on to select it, and to drag it.
-    pressFinishedText = !(event.button === PRIMARY_BUTTON && pressedNote(event))
-    finishText()
+    if (!editing || editing.element.contains(event.target) || isHandle(event.target) || isPanelControl(event.target)) return
+    // A left press on another note goes on to select it, and to drag it. So does one on the open note's edge, on the note as it closes: its closed box is not the open one's
+    // (trailing blank lines go, and the open one may be shifted clear of the window's edge), so it is not looked for again by position.
+    const left = event.button === PRIMARY_BUTTON
+    const onEdge = left && onOpenEdge(eventPoint(event))
+    const onOther = left && !onEdge && pressedNote(event)
+    const closed = finishText()
+    edgeNote = onEdge && closed !== -1 ? drawing[closed][NOTE_ELEMENT] : null
+    pressFinishedText = !(onOther || edgeNote)
+  }
+
+  const isHandle = (target) => handles.some(({ element }) => element === target)
+
+  // The note whose edge the press that closed it was on; the press goes on to select it and to drag it.
+  let edgeNote = null
+
+  // The band round the open note, outside its box and within HIT_MARGIN_PX of it: a press there moves the note, as one inside selects its text.
+  const onOpenEdge = (point) => Boolean(editing) && inBox(point, grownBox(editing.box, HIT_MARGIN_PX)) && !inBox(point, editing.box)
+
+  // The move cursor over the open note's edge, which lies outside its element and so cannot carry a cursor of its own.
+  let edgeCursor = false
+  function showEdgeCursor (point) {
+    const over = Boolean(point) && !drag && !resizing && onOpenEdge(point)
+    if (over !== edgeCursor) holdCursor(over ? 'move' : null)
+    edgeCursor = over
   }
 
   // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
@@ -3269,13 +3277,8 @@
     renderDrawing()
   }
 
-  // A note stays where a press can still reach it: its middle inside the window and clear of the controls. The page under the notes' layer answers.
-  function reachable ([x, y]) {
-    if (!inBox([x, y], { left: 0, top: 0, right: window.innerWidth - 1, bottom: window.innerHeight - 1 })) return false
-    const layer = drawingLayer()
-    const under = document.elementsFromPoint(x, y).find((element) => !layer.contains(element))
-    return under !== undefined && under.closest(CONTROLS) === null
-  }
+  // A note stays where a press can still reach it: its middle inside the window.
+  const reachable = (point) => inBox(point, { left: 0, top: 0, right: window.innerWidth - 1, bottom: window.innerHeight - 1 })
 
   const moveKeepsReachable = (d, point, map) => movedBy(d.move, dragOffset(d, point), map).every(({ middle }) => reachable(middle))
 
@@ -3368,8 +3371,7 @@
 
   // The solver's own move or resize keeps the point a fixed note will be drawn at, so a note dropped partly past the window's edge stays where it is seen.
   function keepDrawnPoints (indices, map) {
-    const blockers = layoutBlockers()
-    for (const i of indices) if (drawing[i].fixed) drawing[i] = { ...drawing[i], fixed: reachOf(drawing[i], map, blockers) }
+    for (const i of indices) if (drawing[i].fixed) drawing[i] = { ...drawing[i], fixed: reachOf(drawing[i], map) }
   }
 
   function endErase () {
@@ -3528,7 +3530,8 @@
       if (event.button !== PRIMARY_BUTTON) return false
       // A press on a note moves the selection once it drags, after selecting just that note when it was not selected; with Shift it only adds or removes the note on its release.
       // A press on empty space draws a selection rectangle once it drags.
-      const note = pressedNote(event)
+      const note = edgeNote ?? pressedNote(event)
+      edgeNote = null
       const box = event.target.closest(`.${CHECK_CLASS}`)
       if (note && box) {
         tickCheck(note, box)
@@ -3670,12 +3673,13 @@
       onWindow(textTool, 'mousedown', keepNoteFocus, { capture: true })
       // After the slider guards' own release handler, which takes the focus off the slider.
       onWindow(textTool, 'pointerup', returnFocusToNote, { capture: true })
-      onWindow(textTool, 'pointerup', () => { pressFinishedText = false }, { capture: true })
+      onWindow(textTool, 'pointerup', () => { pressFinishedText = false; edgeNote = null }, { capture: true })
       onWindow(textTool, 'wheel', scrollNote, { capture: true, passive: false })
       onWindow(textTool, 'mousemove', resizeMove, { capture: true })
       onWindow(textTool, 'mousemove', (event) => {
         showChrome()
         hoverPoint = overControl(event) ? null : eventPoint(event)
+        showEdgeCursor(isHandle(event.target) ? null : hoverPoint)
         inFrame('hover', showHover)
       }, { capture: true })
       onWindow(textTool, 'mouseout', (event) => {
