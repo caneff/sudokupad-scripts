@@ -34,7 +34,7 @@ const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d]) => {
 }, [x, y, size])
 
 // A solid purple box with a faint fill over the page box `{ x, y, width, height }`: where a drag went, as the script draws it.
-const addDragBox = (p, box) => p.evaluate(({ x, y, width, height }) => {
+const addSelectionRectangle = (p, box) => p.evaluate(({ x, y, width, height }) => {
   const el = document.createElement('div')
   el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${width}px;height:${height}px;box-sizing:border-box;border:1px solid #6a1b9a;background:rgb(106 27 154 / .06);pointer-events:none;z-index:99998`
   document.body.appendChild(el)
@@ -159,7 +159,7 @@ const ABOVE_COL_8 = [-0.55, 7.3]
   const stored = await saved(s.p)
   if (!stored.every((item) => item.color === BLUE)) throw new Error(`the notes were not recolored: ${JSON.stringify(stored)}`)
   const [[x1, y1], [x2, y2]] = [s.at(FROM), s.at(TO)]
-  await addDragBox(s.p, { x: x1, y: y1, width: x2 - x1, height: y2 - y1 })
+  await addSelectionRectangle(s.p, { x: x1, y: y1, width: x2 - x1, height: y2 - y1 })
   await s.p.mouse.move(0, 0)
   await s.shoot('6-select')
 }
