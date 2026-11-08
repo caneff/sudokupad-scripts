@@ -445,7 +445,7 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
 
 // Text Annotation's entry and details page.
 const DRAW_SUMMARY = 'Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes', 'Long notes', 'Bold, italic and strikethrough', 'Readable over digits', 'Colors of its own', 'Size and transparency', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
+const DRAW_LEAD_INS = ['Typed notes', 'Long notes', 'Bold, italic and strikethrough', 'Bulleted lists', 'Readable over digits', 'Colors of its own', 'Size and transparency', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
 
 test(`${HOME} describes Text Annotation in a short summary ending in a Details link`, () => {
   const m = read(HOME).match(/<h2>Text Annotation<\/h2>\s*<p>([\s\S]*?)<\/p>/)
