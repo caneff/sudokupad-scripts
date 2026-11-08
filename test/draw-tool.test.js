@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { VERSION, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -74,6 +74,40 @@ test('saving an empty drawing removes the puzzle\'s drawing and takes it out of 
   const saved = { [INDEX_KEY]: ['p1', 'p2'], [DRAWING_PREFIX + 'p1']: [line], [DRAWING_PREFIX + 'p2']: [line] }
   saveDrawingTo(storeOf(saved), 'p1', [])
   assert.deepEqual(saved, { [INDEX_KEY]: ['p2'], [DRAWING_PREFIX + 'p2']: [line] })
+})
+
+test('keeping a Restart\'s notes for a 51st puzzle removes the oldest puzzle\'s drawing and kept notes', () => {
+  const saved = { [INDEX_KEY]: puzzles(50) }
+  for (const key of puzzles(50)) {
+    saved[DRAWING_PREFIX + key] = [line]
+    saved[RESTARTED_PREFIX + key] = [line]
+  }
+  keepRestartedTo(storeOf(saved), 'p51', [sum])
+  assert.deepEqual(saved[INDEX_KEY], puzzles(51).slice(1))
+  assert.equal(saved[DRAWING_PREFIX + 'p1'], undefined)
+  assert.equal(saved[RESTARTED_PREFIX + 'p1'], undefined)
+  assert.deepEqual(saved[RESTARTED_PREFIX + 'p51'], [sum])
+  assert.deepEqual(saved[RESTARTED_PREFIX + 'p2'], [line])
+})
+
+test('a drawing for a 51st puzzle removes the oldest puzzle\'s kept notes with its drawing', () => {
+  const saved = { [INDEX_KEY]: puzzles(50), [DRAWING_PREFIX + 'p1']: [line], [RESTARTED_PREFIX + 'p1']: [line] }
+  saveDrawingTo(storeOf(saved), 'p51', [line])
+  assert.equal(saved[DRAWING_PREFIX + 'p1'], undefined)
+  assert.equal(saved[RESTARTED_PREFIX + 'p1'], undefined)
+})
+
+test('Restart\'s empty drawing keeps the puzzle in the index while its kept notes are saved, so they drop out with it', () => {
+  const saved = { [INDEX_KEY]: ['p1', 'p2'], [DRAWING_PREFIX + 'p1']: [sum] }
+  keepRestartedTo(storeOf(saved), 'p1', [sum])
+  saveDrawingTo(storeOf(saved), 'p1', [])
+  assert.deepEqual(saved, { [INDEX_KEY]: ['p2', 'p1'], [RESTARTED_PREFIX + 'p1']: [sum] })
+})
+
+test('a Restart that clears no notes drops the notes an earlier Restart kept', () => {
+  const saved = { [INDEX_KEY]: ['p1'], [RESTARTED_PREFIX + 'p1']: [sum] }
+  keepRestartedTo(storeOf(saved), 'p1', [])
+  assert.deepEqual(saved, { [INDEX_KEY]: ['p1'] })
 })
 
 test('saving a puzzle already in the index makes it the newest and drops nothing', () => {

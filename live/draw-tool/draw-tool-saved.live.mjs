@@ -153,7 +153,47 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['15', '20'], 'the second Undo leaves the notes as they are')
   })
 
+  it('an Undo of a selection made after Restart leaves the notes cleared, and the Undo after it brings them back', async () => {
+    await restartFromDialog()
+    assert.deepEqual(await settle(texts, []), [])
+    await p.click(DIGIT_BUTTON)
+    await p.mouse.click(...await gridPoint(p, EMPTY_CELL.map((v) => v + 0.5)))
+    await undo()
+    await draw.frames(p)
+    assert.deepEqual(await texts(), [], 'the first Undo takes back the selection')
+    assert.notEqual(await kept(), null)
+    await undo()
+    assert.deepEqual(await settle(texts, ['15', '20']), ['15', '20'])
+  })
+
+  it('a reload after Restart drops the kept notes: Undo then brings nothing back', async () => {
+    await restartFromDialog()
+    assert.deepEqual(await settle(texts, []), [])
+    assert.notEqual(await kept(), null)
+    await reload()
+    assert.equal(await kept(), null)
+    await undo()
+    await draw.frames(p)
+    assert.deepEqual(await texts(), [])
+    assert.equal(await saved(), null)
+  })
+
+  it('kept notes that cannot be read do not come back, and the solver is told', async () => {
+    await pickDraw()
+    await typeText([2.5, 2.5], '15')
+    await restartFromDialog()
+    assert.deepEqual(await settle(texts, []), [])
+    await read((k) => Framework.setData(k, 'not a drawing {'), RESTARTED_PREFIX + await puzzleKey())
+    await undo()
+    assert.match(await dialogText(), /cannot read the notes Restart cleared/)
+    await closeDialog()
+    assert.deepEqual(await texts(), [])
+    assert.equal(await saved(), null)
+  })
+
   it('a note typed after Restart drops the kept notes: after a reload they stay cleared, and Undo does not bring them back', async () => {
+    await pickDraw()
+    await typeText([2.5, 2.5], '15')
     await restartFromDialog()
     assert.deepEqual(await settle(texts, []), [])
     assert.notEqual(await kept(), null, 'Restart keeps the notes')
@@ -168,15 +208,15 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.deepEqual(await savedTexts(), ['9'])
   })
 
-  it('a second Restart replaces the kept notes with the ones it cleared', async () => {
-    await restartFromDialog()
-    await pickDraw()
-    await typeText([3.5, 6.5], '7')
+  it('a second Restart replaces the kept notes with the ones it cleared: with none, Undo brings nothing back', async () => {
     await restartFromDialog()
     assert.deepEqual(await settle(texts, []), [])
+    assert.notEqual(await kept(), null, 'the first Restart kept the note')
+    await restartFromDialog()
+    assert.equal(await kept(), null, 'the second Restart cleared none')
     await undo()
-    assert.deepEqual(await settle(texts, ['7']), ['7'])
-    assert.deepEqual(await savedTexts(), ['7'])
+    await draw.frames(p)
+    assert.deepEqual(await texts(), [])
   })
 
   it('a puzzle saved with a stroke, a shape and a note shows only the note: nothing but the note is in the layer', async () => {

@@ -90,6 +90,7 @@ Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run
   but the `act` that `Puzzle.act` triggers after every action, `(act, action)` with `action.type === 'undo'`, and the stack is still
   empty then, as it is after an ordinary Undo of the last action. So Text Anywhere reads whether the undo stack was empty before an Undo
   off the last `act`, `reset` or `progressloaded` of the puzzle, and brings the notes back on an Undo that found it empty. The kept
+  progress lives in memory only, so a reload ends it, and Text Anywhere drops its kept notes on every load to match. The kept
   progress ends in the Restart's own clears, so that Undo shows no digit: the next Undo takes the clears back (checked live,
   2026-11-07: digit, Restart, Undo gives an empty cell and an undo stack of 6; a second Undo gives the digit). With only notes entered
   the replay is empty, nothing is kept, and SudokuPad's Undo does nothing. An Undo while errors are shown only clears them

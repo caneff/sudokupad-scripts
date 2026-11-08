@@ -880,34 +880,30 @@
     store.removeData(restartedKey(key))
   }
 
-  // `store` has Framework's getData, setData and removeData. The drawing is written before the index, and the dropped
-  // puzzles' drawings are removed last, so a write that throws (a full localStorage) loses no drawing already saved.
-  // An index that cannot be read throws before anything is written.
-  function saveDrawingTo (store, key, drawing) {
-    const index = readIndex(store.getData(INDEX_KEY))
-    if (drawing.length === 0) {
-      store.removeData(drawingKey(key))
-      store.setData(INDEX_KEY, index.filter((k) => k !== key))
-      return
-    }
+  // `store` has Framework's getData, setData and removeData. Writes `value` under `dataKey` and makes puzzle `key` the newest in `index`. The value is written
+  // before the index, and the dropped puzzles' data is removed last, so a write that throws (a full localStorage) loses nothing already saved.
+  function writeIndexed (store, index, key, dataKey, value) {
     const touched = touchIndex(index, key)
-    store.setData(drawingKey(key), drawing)
+    store.setData(dataKey, value)
     store.setData(INDEX_KEY, touched.index)
     for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
   }
 
-  // Keeps the notes a Restart cleared, in place of any kept before. A puzzle with kept notes stays in the index, so they
-  // go with its drawing when it drops out.
-  function keepRestartedTo (store, key, notes) {
+  // A puzzle is in the index while it has a drawing or notes its Restart kept. An index that cannot be read throws before anything is written.
+  function saveDrawingTo (store, key, drawing) {
     const index = readIndex(store.getData(INDEX_KEY))
-    if (notes.length === 0) {
-      store.removeData(restartedKey(key))
+    if (drawing.length > 0) {
+      writeIndexed(store, index, key, drawingKey(key), drawing)
       return
     }
-    const touched = touchIndex(index, key)
-    store.setData(restartedKey(key), notes)
-    store.setData(INDEX_KEY, touched.index)
-    for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
+    store.removeData(drawingKey(key))
+    if (store.getData(restartedKey(key)) == null) store.setData(INDEX_KEY, index.filter((k) => k !== key))
+  }
+
+  // Keeps the notes a Restart cleared, in place of any kept before; with none cleared, nothing is kept.
+  function keepRestartedTo (store, key, notes) {
+    if (notes.length > 0) writeIndexed(store, readIndex(store.getData(INDEX_KEY)), key, restartedKey(key), notes)
+    else store.removeData(restartedKey(key))
   }
 
   // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Anywhere out of the
@@ -1091,7 +1087,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2082,19 +2078,25 @@
     })
   }
 
-  function save () {
+  function writeDrawing () {
     if (!savable) {
       report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
       return
     }
     try {
       saveDrawingTo(Framework, currentPuzzleKey(), drawing)
-      // Any edit after a Restart ends what Undo can bring back.
-      Framework.removeData(restartedKey(currentPuzzleKey()))
     } catch (err) {
       report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
     }
   }
+
+  // Saves an edit to the notes. Any edit after a Restart ends what Undo can bring back.
+  function save () {
+    forgetRestarted()
+    writeDrawing()
+  }
+
+  const forgetRestarted = () => Framework.removeData(restartedKey(currentPuzzleKey()))
 
   function changeSelected (change) {
     for (const i of selected) drawing[i] = change(drawing[i])
@@ -2372,8 +2374,10 @@
     if (editing) closeEditing()
   }
 
+  // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
   function showSavedDrawing () {
     cancelInput()
+    forgetRestarted()
     try {
       drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
       savable = true
@@ -2386,23 +2390,27 @@
   }
 
   // The saved strokes and shapes of an earlier version are left as they are, but an unreadable saved drawing is written over.
-  function emptyDrawing () {
+  function clearNotes () {
     drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
     redraw()
     savable = true
+  }
+
+  function emptyDrawing () {
+    clearNotes()
     save()
   }
 
-  // Restart clears the notes and keeps them, so Undo straight after brings them back as it brings back the digits.
+  // Restart keeps the notes before it saves them cleared, so the Undo that brings back what SudokuPad's Restart cleared brings them back too.
   function restartDrawing () {
-    const cleared = drawing.filter((item) => item.kind === TEXT_KIND)
-    emptyDrawing()
     try {
-      keepRestartedTo(Framework, currentPuzzleKey(), cleared)
+      keepRestartedTo(Framework, currentPuzzleKey(), drawing.filter((item) => item.kind === TEXT_KIND))
     } catch (err) {
       report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
     }
+    clearNotes()
+    writeDrawing()
   }
 
   // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
@@ -2421,8 +2429,7 @@
     try {
       notes = readDrawing(Framework.getData(key))
     } catch (err) {
-      console.warn(`draw-tool: the notes Restart kept cannot be read, so Undo does not bring them back: ${err.message}`)
-      Framework.removeData(key)
+      report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
       return
     }
     if (notes.length === 0) return
