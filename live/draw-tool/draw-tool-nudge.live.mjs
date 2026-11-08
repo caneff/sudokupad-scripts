@@ -116,6 +116,59 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     assert.equal(end.x + end.width / 2 <= width - 1, true, `the note's middle ${end.x + end.width / 2} stayed inside the window of width ${width}`)
   })
 
+  // Counts the writes of this puzzle's drawing, so a test sees how many times a held key saved.
+  const countSaves = async () => {
+    await p.evaluate((prefix) => {
+      const counting = window.drawSaves !== undefined
+      window.drawSaves = 0
+      if (counting) return
+      const setData = Framework.setData
+      Framework.setData = function (key, value) {
+        if (String(key).startsWith(prefix)) window.drawSaves++
+        return setData.call(this, key, value)
+      }
+    }, draw.DRAWING_PREFIX)
+    return () => p.evaluate(() => window.drawSaves)
+  }
+  const HELD_FAR_PX = 15
+  // The note was nudged away from where it was typed, so the click goes to where it is now.
+  const selectNote = async (text) => p.mouse.click(...draw.middleOf(await noteBox(text)))
+
+  it('a held ArrowRight keeps nudging the note past a single nudge, and saves once after the release', async () => {
+    await selectNote('N')
+    const x0 = (await noteBox('N')).x
+    const saves = await countSaves()
+    await p.keyboard.down('ArrowRight')
+    try {
+      const far = await settle(async () => (await noteBox('N')).x - x0 > HELD_FAR_PX, true)
+      assert.equal(far, true, `the note moved only ${(await noteBox('N')).x - x0} px while the key was held`)
+      assert.equal(await saves(), 0, 'nothing is saved while the key is held')
+    } finally {
+      await p.keyboard.up('ArrowRight')
+    }
+    assert.equal(await settle(saves, 1), 1, 'one save after the release')
+    const x1 = (await noteBox('N')).x
+    await p.evaluate(() => new Promise((resolve) => window.setTimeout(resolve, 400)))
+    assert.equal((await noteBox('N')).x, x1, 'the note stays put after the release (nothing moved in 400 ms)')
+  })
+
+  it('a blur while the key is held stops the movement and saves it', async () => {
+    await selectNote('N')
+    const x0 = (await noteBox('N')).x
+    const saves = await countSaves()
+    await p.keyboard.down('ArrowLeft')
+    try {
+      assert.equal(await settle(async () => (await noteBox('N')).x - x0 < -HELD_FAR_PX, true), true, 'the held key moved the note')
+      await p.evaluate(() => window.dispatchEvent(new Event('blur')))
+      assert.equal(await settle(saves, 1), 1, 'the blur saved the move')
+      const stopped = (await noteBox('N')).x
+      await p.evaluate(() => new Promise((resolve) => window.setTimeout(resolve, 400)))
+      assert.equal((await noteBox('N')).x, stopped, 'the note stopped moving at the blur (nothing moved in 400 ms)')
+    } finally {
+      await p.keyboard.up('ArrowLeft')
+    }
+  })
+
   it('with nothing selected the arrow keys move the cell cursor', async () => {
     await putCursorAt(CURSOR_AT)
     const before = await cursor()

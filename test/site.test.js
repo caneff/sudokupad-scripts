@@ -460,7 +460,7 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
     'Long notes A long note wraps and scrolls; drag a corner to resize it.',
     'Readable over digits A white outline round the letters, and an optional box behind the note.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
-    'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge.',
+    'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge, and hold one to keep nudging, faster the longer you hold.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
     'Settings Color presets, the box color, the outline, a frame round boxes, and Copy and Paste to another browser.'

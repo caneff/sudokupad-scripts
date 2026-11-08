@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.1
+// @version      0.28.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.1'
+  const VERSION = '0.28.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -1067,8 +1067,23 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
+  // A held arrow key nudges once on press, repeats after NUDGE_REPEAT_MS, and its step grows over NUDGE_RAMP_MS from the single nudge to the maximum.
+  // The script times the repeat itself: SudokuPad's App.handleKeydown drops every keydown with `event.repeat` before any tool sees it.
+  const NUDGE_PX = 1
+  const NUDGE_SHIFT_PX = 10
+  const NUDGE_MAX_PX = 8
+  const NUDGE_SHIFT_MAX_PX = 40
+  const NUDGE_REPEAT_MS = 300
+  const NUDGE_RAMP_MS = 1500
+  const NUDGE_TICK_MS = 50
+  // The pixels one repeat tick moves after the key has been held heldMs; 0 until the pause is over.
+  function nudgeStep (heldMs, shift) {
+    if (heldMs < NUDGE_REPEAT_MS) return 0
+    const [from, to] = shift ? [NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX] : [NUDGE_PX, NUDGE_MAX_PX]
+    return Math.round(from + (to - from) * Math.min(1, heldMs / NUDGE_RAMP_MS))
+  }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2044,6 +2059,7 @@
 
   function select (indices) {
     selected = [...new Set(indices)].sort((a, b) => a - b)
+    if (selected.length === 0) stopHold()
     redraw()
   }
 
@@ -2207,6 +2223,7 @@
 
   // An erase in progress, or a drag, ends as a release ends it; a press that never moved opens no text box. A nudge not yet saved is saved too.
   function endGesture () {
+    stopHold()
     flushFrame()
     if (erasing) endErase()
     if (drag) endDrag()
@@ -2301,8 +2318,6 @@
 
   const moveKeepsReachable = (d, [px, py], map) => movedBy(d.move, [px - d.points[0][0], py - d.points[0][1]], map).every(({ point }) => reachable(point))
 
-  const NUDGE_PX = 1
-  const NUDGE_SHIFT_PX = 10
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
   // Whether a nudge has moved notes that are not saved yet; the release of the key saves it.
   let nudged = false
@@ -2321,6 +2336,44 @@
     if (!nudged) return
     nudged = false
     save()
+  }
+
+  // The arrows held now, when the first of them went down, whether Shift is down, and the repeat timer.
+  const heldArrows = new Set()
+  let holdStart = 0
+  let holdShift = false
+  let holdTimer = null
+
+  function stopHold () {
+    clearInterval(holdTimer)
+    holdTimer = null
+    heldArrows.clear()
+  }
+
+  // Held arrows move together, so two make a diagonal.
+  function repeatNudge () {
+    if (selected.length === 0) return stopHold()
+    const step = nudgeStep(Date.now() - holdStart, holdShift)
+    if (step === 0) return
+    const direction = [...heldArrows].reduce(([x, y], key) => [x + ARROWS[key][0], y + ARROWS[key][1]], [0, 0])
+    nudgeSelected(direction, step)
+  }
+
+  function pressArrow (key, shift) {
+    holdShift = shift
+    nudgeSelected(ARROWS[key], shift ? NUDGE_SHIFT_PX : NUDGE_PX)
+    if (heldArrows.size === 0) {
+      holdStart = Date.now()
+      holdTimer = setInterval(repeatNudge, NUDGE_TICK_MS)
+    }
+    heldArrows.add(key)
+  }
+
+  function releaseKey (event) {
+    heldArrows.delete(event.key)
+    if (heldArrows.size > 0) return
+    stopHold()
+    saveNudge()
   }
 
   function endMove (d) {
@@ -2492,16 +2545,18 @@
     // With notes selected, Escape ends the selection, Delete or Backspace (a Mac's delete key) deletes them and an arrow key nudges them, and none reaches the cells.
     handleKeydown (event) {
       if (Framework.app.tool !== TOOL_NAME) return false
+      holdShift = event.shiftKey
       if (event.key === 'Shift') return true
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
-      else if (ARROWS[event.key]) nudgeSelected(ARROWS[event.key], event.shiftKey ? NUDGE_SHIFT_PX : NUDGE_PX)
+      else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
       else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
       else return false
       return true
     },
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
     handleKeyup (event) {
+      holdShift = event.shiftKey
       return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])
     }
   }
@@ -2542,7 +2597,7 @@
     window.addEventListener('mousemove', resizeMove, { capture: true })
     window.addEventListener('mouseup', endResize, { capture: true })
     for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
-    window.addEventListener('keyup', saveNudge, { capture: true })
+    window.addEventListener('keyup', releaseKey, { capture: true })
     if (app.puzzle.currentPuzzle) showSavedDrawing()
   })
 })()
