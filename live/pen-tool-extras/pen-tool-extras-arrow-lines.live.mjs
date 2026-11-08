@@ -54,7 +54,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const [line, arrows] = ['line', 'arrows'].map((name) => g.querySelector(`[data-arrow-line-part="${name}"]`))
     return { cls: g.getAttribute('class'), arrows: arrows.getAttribute('d'), line: line.getAttribute('d'), lineWidth: Number(line.getAttribute('stroke-width')) }
   }))
-  const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
+  const strokeCount = () => read(() => document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)').length)
   const pageErrors = () => errors.slice()
 
   const press = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()

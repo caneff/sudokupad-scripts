@@ -36,7 +36,7 @@ function group (title, extra = []) {
     const saved = (key) => read((k) => Framework.getData(k), key)
     const selected = () => read(() => ToolPen.tool.selectedColor)
     const currentButtonKey = () => read(() => { const b = document.querySelector('.tool-pen button.current'); return b && b.dataset.key })
-    const strokeCount = () => read(() => document.querySelectorAll('.cell-pen').length)
+    const strokeCount = () => read(() => document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)').length)
     const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
     const styleOf = (selector) => read((s) => { const st = window.getComputedStyle(document.querySelector(s)); return { dash: st.strokeDasharray, stroke: st.stroke, width: st.strokeWidth } }, selector)
     const pageErrors = () => errors.slice()

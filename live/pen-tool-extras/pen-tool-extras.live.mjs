@@ -71,9 +71,9 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const editor = () => p.locator('#pen-tool-extras-editor')
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
 
-  const strokes = (n) => read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}`)].map((e) => window.getComputedStyle(e).stroke), n)
+  const strokes = (n) => read((n) => [...document.querySelectorAll(`.cell-pen.pencolor-${n}:not(.pen-tool-extras-ghost)`)].map((e) => window.getComputedStyle(e).stroke), n)
   const allStrokes = (n) => async () => [...new Set(await strokes(n))]
-  const strokeCount = async () => (await read(() => document.querySelectorAll('.cell-pen').length))
+  const strokeCount = async () => (await read(() => document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)').length))
   const swatch = (n) => read((n) => window.getComputedStyle(document.querySelector(`.tool-pen button[data-key="${n}"]`), ':after').backgroundColor, n)
   const swatches = async () => {
     await openPenTool(p)

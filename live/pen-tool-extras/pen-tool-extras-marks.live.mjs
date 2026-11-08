@@ -63,7 +63,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const saved = () => read((k) => Framework.getData(k), DATA_KEY)
   const editor = () => p.locator('#pen-tool-extras-editor')
 
-  const penCount = () => read(() => document.querySelectorAll('.cell-pen').length)
+  const penCount = () => read(() => document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)').length)
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
 
   // A point 2 px inside the cell, next to the given side: a real click there is an edge click.
@@ -143,7 +143,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         await clickEdge(edge.row, edge.col, edge.side)
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), value === null ? [] : [value]), value === null ? [] : [value], `${name} after a click`)
         // every drawn mark has a path with data: a mark with no `d` shows nothing
-        const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
+        const drawn = await read(() => [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].map((e) => e.getAttribute('d')))
         assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
         assert.equal(drawn.length, value === null ? 0 : 1)
       }
@@ -266,11 +266,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       for (const value of [...cycle, cycle[0]]) {
         await clickCorner(...corner)
         assert.deepEqual(await settle(() => penValuesAt(p, sr, sc), want(value)), want(value), `${name} after a click`)
-        const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
+        const drawn = await read(() => [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].map((e) => e.getAttribute('d')))
         assert.deepEqual(drawn.filter((d) => !d), [], 'a mark was drawn with no path data')
         assert.equal(drawn.length, value === null ? 0 : 1)
         if (value !== null) {
-          const centre = await read(() => { const r = document.querySelector('.cell-pen').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })
+          const centre = await read(() => { const r = document.querySelector('.cell-pen:not(.pen-tool-extras-ghost)').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] })
           assert.equal(Math.abs(centre[0] - cx) < 1 && Math.abs(centre[1] - cy) < 1, true, `mark centre ${centre} is not the corner ${[cx, cy]}`)
         }
       }
@@ -396,7 +396,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await reload()
     assert.deepEqual(await settle(() => penValuesAt(p, 2, 2), ['u']), ['u'])
     assert.deepEqual(await settle(() => penValuesAt(p, 8, 8), ['u']), ['u'])
-    const drawn = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => e.getAttribute('d')))
+    const drawn = await read(() => [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].map((e) => e.getAttribute('d')))
     assert.deepEqual(drawn.filter((d) => !d), [])
     assert.equal(drawn.length, 2)
     await clearMarks()
@@ -446,7 +446,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }, [row, col, values])
     // The paths drawn, and whether every mark path follows every line path in the document, and sits in the marks layer, which is the pen layer's last child.
     const stacking = () => read(([markValues, layerId]) => {
-      const paths = [...document.querySelectorAll('.cell-pen')].map((e) => ({ e, mark: markValues.includes([...e.classList].find((c) => c.startsWith('pen-')).slice(4)) }))
+      const paths = [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].map((e) => ({ e, mark: markValues.includes([...e.classList].find((c) => c.startsWith('pen-')).slice(4)) }))
       const lines = paths.filter((x) => !x.mark).map((x) => x.e)
       const marks = paths.filter((x) => x.mark).map((x) => x.e)
       const layer = document.getElementById(layerId)
@@ -844,8 +844,8 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const savedOpacity = () => read((k) => Framework.getData(k), OPACITY_KEY)
     // The pen value (`pen-<value>` class) and the opacity each drawn mark shows at, without repeats.
     const opacities = async () => {
-      const shown = await effectiveOpacities(p, '.cell-pen')
-      const values = await read(() => [...document.querySelectorAll('.cell-pen')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
+      const shown = await effectiveOpacities(p, '.cell-pen:not(.pen-tool-extras-ghost)')
+      const values = await read(() => [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].map((e) => [...e.classList].find((c) => c.startsWith('pen-')).slice(4)))
       return [...new Set(values.map((v, i) => `${v}:${shown[i]}`))].sort()
     }
     const drawAll = async () => {
@@ -1167,11 +1167,11 @@ describe('without the script', { concurrency: false }, () => {
       const pen = await bare.evaluate(() => {
         const cell = Framework.app.puzzle.cells.find((c) => c.row === 3 && c.col === 3)
         cell.renderContent(true)
-        return { held: cell.pen.map((v) => v[0]).join(''), drawn: document.querySelectorAll('.cell-pen').length }
+        return { held: cell.pen.map((v) => v[0]).join(''), drawn: document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)').length }
       })
       assert.equal(pen.held, 'hijklmnopqrstuvwxy')
       // the unknown values draw as paths with no data, so nothing is visible
-      assert.equal(await bare.evaluate(() => [...document.querySelectorAll('.cell-pen')].filter((e) => e.getAttribute('d')).length), 0)
+      assert.equal(await bare.evaluate(() => [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].filter((e) => e.getAttribute('d')).length), 0)
       assert.deepEqual(errors, [])
     } finally {
       await context.close()
