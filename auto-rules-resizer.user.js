@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.4.4
-// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
+// @version      0.5.0
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes the height SudokuPad leaves it, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,12 +17,12 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.4.4'
+  const VERSION = '0.5.0'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
-  const MIN_FONT_PX = 8 // the smallest font f- goes to
-  const MAX_FONT_PX = 200
+  const MIN_FONT_RATIO = 0.7 // the smallest font, as a share of SudokuPad's own
+  const MAX_FONT_RATIO = 1.5 // the largest font, as a share of SudokuPad's own
   const READABLE_CHARS = 90 // characters a line, on average, that rules too long to fit are widened to
   const REM_PX = 16
   const RULES_MIN = { width: 15 * REM_PX, height: 7 * REM_PX } // the pane's floor under a drag, css px
@@ -100,17 +100,22 @@
     return Math.max(natural, maxWidth === null ? edge : Math.min(edge, maxWidth))
   }
 
-  // Never under SudokuPad's own size, so rules too long to fit still scroll at the size SudokuPad gives them.
+  // The largest font that fits, from 70% to 150% of SudokuPad's own size. Where none fits it is 70%, and the rules scroll.
   function autoFontPx (fits, ownPx) {
-    const px = largestSize(fits, Math.ceil(ownPx), MAX_FONT_PX)
-    return px > ownPx && fits(px) ? px : ownPx
+    const floor = ownPx * MIN_FONT_RATIO
+    if (fits(ownPx)) {
+      const px = largestSize(fits, Math.ceil(ownPx), Math.floor(ownPx * MAX_FONT_RATIO))
+      return px > ownPx && fits(px) ? px : ownPx
+    }
+    const px = largestSize(fits, Math.ceil(floor), Math.floor(ownPx))
+    return px < ownPx && fits(px) ? px : floor
   }
 
-  function nudgedFontPx (autoPx, nudgePx) {
-    return Math.max(MIN_FONT_PX, autoPx + nudgePx)
+  function nudgedFontPx (autoPx, nudgePx, ownPx) {
+    return Math.min(ownPx * MAX_FONT_RATIO, Math.max(ownPx * MIN_FONT_RATIO, autoPx + nudgePx))
   }
 
-  const nudgedAutoFontPx = (fits, ownPx, nudgePx) => nudgedFontPx(autoFontPx(fits, ownPx), nudgePx)
+  const nudgedAutoFontPx = (fits, ownPx, nudgePx) => nudgedFontPx(autoFontPx(fits, ownPx), nudgePx, ownPx)
 
   // The pane's max-height is the room or a drag's, so a size fits when the rules take no more than the room.
   const fitsRoom = (rules, room) => rules.scrollHeight <= Math.min(room, rules.clientHeight)
@@ -123,15 +128,17 @@
     rules.style.fontSize = `${nudgedAutoFontPx(fits, ownPx, nudgePx)}px`
   }
 
-  // `fits(width, font)` is true from some width up. Where one does, f+ widens for the bigger font, which is the nudge on
-  // the automatic size at the width before it. Rules no width keeps from scrolling at SudokuPad's size stay at its size
-  // and get only the `readable(font)` width, because a wider pane would shorten the scroll and lengthen every line.
+  // The pane has all the height already; `fits(width, font)` is true from some width up. The order is width first, at
+  // SudokuPad's font, then a smaller font at the widest width, then the scroll. Rules that fit at SudokuPad's font may
+  // grow it, and f+ then widens for the bigger font. Rules that scroll even at 70% get only the `readable(font)` width,
+  // because a wider pane would shorten the scroll and lengthen every line.
   function autoPaneFit ({ natural, widthLimit: limit, ownPx, nudgePx, fits, readable = () => Infinity }) {
-    if (!fits(limit, ownPx)) {
-      const fontPx = nudgedFontPx(ownPx, nudgePx)
-      return { width: Math.max(natural, Math.min(limit, readable(fontPx))), fontPx }
-    }
     const narrowest = (from, fitsAt) => limit - largestSize((slack) => fitsAt(limit - slack), 0, limit - from)
+    if (!fits(limit, ownPx)) {
+      const autoPx = autoFontPx((n) => fits(limit, n), ownPx)
+      const fontPx = nudgedFontPx(autoPx, nudgePx, ownPx)
+      return { width: fits(limit, autoPx) ? limit : Math.max(natural, Math.min(limit, readable(fontPx))), fontPx }
+    }
     let width = fits(natural, ownPx) ? natural : narrowest(natural, (w) => fits(w, ownPx))
     const fontPx = nudgedAutoFontPx((n) => fits(width, n), ownPx, nudgePx)
     if (nudgePx > 0 && !fits(width, fontPx)) width = narrowest(width, (w) => fits(w, fontPx))
