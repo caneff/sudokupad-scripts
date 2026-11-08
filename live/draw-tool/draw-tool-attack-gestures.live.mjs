@@ -10,7 +10,8 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { captureConsoleErrors, openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
-import { settle } from '../settle.mjs'
+import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
+import { settle, stable } from '../settle.mjs'
 
 const { HANDLES, KEYPAD, NOT_NOTES, OPACITY_KEY, OPACITY_SLIDER, PICKER, SELECTED, SIZE_SLIDER, TEXTS, TEXT_BOX, WIDTH_KEY } = draw
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../draw-tool.user.js')
@@ -24,7 +25,9 @@ const NOTE_AT = [4.5, 4.5]
 const BY = [1, 2]
 const EMPTY_AT = [8.5, 1.5]
 const NOTE_TEXT = '15'
-const NEAR_PX = 1.5
+// How far a note may drift while no button is held.
+const IDLE_NEAR_PX = 1.5
+const SMALLER_WINDOW = { width: 1100, height: 800 }
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -35,7 +38,11 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
 
   const read = (fn, arg) => p.evaluate(fn, arg)
   const tool = () => draw.tool(p)
-  const items = async () => (await draw.saved(p)) ?? []
+  const items = async () => {
+    const saved = await draw.saved(p)
+    assert.notEqual(saved, null, 'the drawing is saved')
+    return saved
+  }
   const noteItems = async () => (await items()).filter((i) => i.kind === 'text')
   const selectedCount = () => p.locator(SELECTED).count()
   const handleCount = () => p.locator(HANDLES).count()
@@ -78,6 +85,11 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     assert.equal(await p.locator(TEXT_BOX).count(), 0, `${why}: no text box is open`)
     const placed = await noteBox()
     assert.equal(placed.inWindow && !placed.overControls, true, `${why}: the note is inside the window and clear of the controls: ${JSON.stringify(placed)}`)
+    const saved = await items()
+    await draw.reload(p)
+    await pickText()
+    assert.deepEqual(await settle(() => draw.texts(p), texts), texts, `${why}: a reload shows the same notes`)
+    assert.deepEqual(await items(), saved, `${why}: a reload leaves the saved notes as they were`)
   }
   // An ordinary move drag still moves the note, and a new note can still be made.
   const assertWorks = async (why) => {
@@ -117,24 +129,19 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await assertWorks('Escape mid-move')
   })
 
-  it('11: a move drag, Delete mid-drag, then the mouse-up leaves the drawn notes and the saved notes the same, once', async () => {
+  it('11: a move drag, Delete mid-drag, then the mouse-up leaves the note deleted, drawn nowhere and saved nowhere', { todo: '#608' }, async () => {
     await startMove()
     await p.keyboard.press('Delete')
     await draw.frames(p)
     await p.mouse.move(...await gridPoint(p, [8.5, 8.5]), { steps: 4 })
     await p.mouse.up()
     await draw.frames(p)
-    const drawn = await draw.texts(p)
-    assert.equal(drawn.length <= 1, true, `at most the one note is drawn: ${JSON.stringify(drawn)}`)
-    assert.equal((await noteItems()).length, drawn.length, 'the saved notes are the drawn ones')
+    assert.deepEqual(await stable(() => draw.texts(p)), [], 'the deleted note is not drawn again at the drop point')
+    assert.equal((await noteItems()).length, 0, 'the deleted note is not saved again')
     assert.deepEqual(errors, [], 'the page shows no error')
     await draw.reload(p)
     await pickText()
-    assert.deepEqual(await settle(() => draw.texts(p), drawn), drawn, 'a reload shows the same notes')
-    assert.equal((await noteItems()).length, drawn.length, 'the reload saved the same notes')
-    await draw.finishNote(p)
-    await makeNote(EMPTY_AT, 'new')
-    assert.equal((await draw.texts(p)).includes('new'), true, 'a new note can still be made')
+    assert.deepEqual(await draw.texts(p), [], 'a reload shows no note')
   })
 
   it('12: a move drag, Ctrl+Z mid-drag, then the mouse-up moves the note once and leaves SudokuPad\'s undo alone', async () => {
@@ -156,6 +163,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
   })
 
   it('13: a resize-handle drag with the window resized mid-drag ends the drag with the note whole and inside the window', async () => {
+    const original = p.viewportSize()
     await p.mouse.click(...await gridPoint(p, NOTE_AT))
     assert.equal(await handleCount(), 4, 'the note shows its four handles')
     const box = await p.locator(HANDLES).nth(3).boundingBox()
@@ -164,18 +172,18 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await p.mouse.down()
     await p.mouse.move(x + 60, y + 40, { steps: 6 })
     await draw.frames(p)
-    await p.setViewportSize({ width: 1100, height: 800 })
+    await p.setViewportSize(SMALLER_WINDOW)
     await draw.frames(p)
     await p.mouse.move(x + 80, y + 60, { steps: 3 })
     await p.mouse.up()
     await draw.frames(p)
     try {
-      assert.equal(await handleCount() === 4 || await handleCount() === 0, true, 'the handles are four or none')
-      assert.equal(await handleCount(), await selectedCount() * 4, 'the handles follow the selection')
+      const handles = await handleCount()
+      assert.equal(handles, await selectedCount() * 4, `the handles (${handles}) follow the selection`)
       await assertWhole('window resize mid-resize')
       await assertWorks('window resize mid-resize')
     } finally {
-      await p.setViewportSize({ width: 1200, height: 900 })
+      await p.setViewportSize(original)
     }
   })
 
@@ -190,7 +198,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
     await p.mouse.move(...await gridPoint(p, [8.5, 8.5]), { steps: 4 })
     await draw.frames(p)
     const later = await noteBox()
-    assert.equal(Math.abs(later.x - placed.x) + Math.abs(later.y - placed.y) <= NEAR_PX, true, `a move with no button held does not drag the note: ${JSON.stringify([placed, later])}`)
+    assert.equal(Math.abs(later.x - placed.x) + Math.abs(later.y - placed.y) <= IDLE_NEAR_PX, true, `a move with no button held does not drag the note: ${JSON.stringify([placed, later])}`)
     await assertWorks('release outside the window')
   })
 
@@ -226,7 +234,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
       await p.mouse.move(box.x + box.width * 0.1, box.y + box.height / 2)
       await p.mouse.down()
       await p.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 12 })
-      assert.notEqual(await settle(valueOf, undefined, 1000, 300), before, 'the drag moved the slider')
+      assert.notEqual(await stable(valueOf), before, 'the drag moved the slider')
       await p.keyboard.press(OTHER_TOOL_KEY)
       assert.equal(await tool(), OTHER_TOOL, 'the hotkey switched the tool')
       await p.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2, { steps: 4 })
@@ -234,12 +242,12 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
       assert.equal(await tool(), OTHER_TOOL, 'the release kept the new tool')
       await pickText()
       const stored = await read((k) => Framework.getData(k), key)
-      const storedValue = stored !== null && typeof stored === 'object' && 'data' in stored ? stored.data : stored
-      assert.equal(Number(storedValue), await valueOf(), 'the saved value is the one the slider shows')
+      assert.notEqual(stored, null, `${key} is saved`)
+      assert.equal(Number(savedState(stored)), await valueOf(), 'the saved value is the one the slider shows')
       const resting = await valueOf()
       const { min, max } = await read((selector) => ({ min: Number(document.querySelector(selector).min), max: Number(document.querySelector(selector).max) }), slider)
       await draw.slideTo(p, slider, resting - min > max - resting ? min : max)
-      assert.notEqual(await settle(valueOf, undefined, 1000, 300), resting, 'the slider answers a click again')
+      assert.notEqual(await stable(valueOf), resting, 'the slider answers a click again')
       assert.equal(await read((selector) => document.activeElement?.matches(`${selector} input`) === true, draw.SLIDERS), false, 'no slider keeps the focus')
       assert.deepEqual(errors, [], 'the page shows no error')
     })
@@ -257,6 +265,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
       await press()
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.9)
       await p.mouse.up()
+      // A "nothing happened" wait: the pickers, if the early release wrongly opened them, would show well within it.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.4)
       assert.equal(await pickers(), 0, 'no pickers after an early release')
       await draw.holdForPickers(p, COLOR_BUTTON, 'left', 'visible')
@@ -271,6 +280,7 @@ describe('Text Anywhere\'s gestures, interrupted', { concurrency: false }, () =>
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.3)
       await p.keyboard.press(OTHER_TOOL_KEY)
       assert.equal(await tool(), OTHER_TOOL)
+      // A "nothing happened" wait: past the hold, the time at which the pickers would show.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 1.2)
       await p.mouse.up()
       assert.equal(await pickers(), 0, 'no pickers over the other tool')

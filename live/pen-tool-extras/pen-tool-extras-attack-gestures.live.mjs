@@ -1,8 +1,8 @@
 // Attacks on Pen Tool Extras' gestures (#596, from #590): a pen drag, a right-click erase, a slider drag and a hold on a color button,
 // each interrupted by something a user does, on sudokupad.app in headless Chromium. Every case is real input and checks the crash signals
 // (an uncaught error, a console error, a skip line), that nothing is left half done on the page (no drag highlight, no picker), that the
-// gesture's own outcome is whole (the line is drawn once or not at all, never half), that an ordinary gesture works afterward, and that
-// undoing everything brings the pen back to the start.
+// gesture's own outcome is whole where a drag was cut short (the line is drawn once or not at all, never half), that an ordinary gesture works afterward, and that
+// undoing everything brings the pen back to the start. The one thing not real input is attack 7's blur and focus, which Playwright cannot take from a page.
 /* global Framework */
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -11,7 +11,8 @@ import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { gridPoint, mouseDrag, openPenTool, penEntries } from '../pen.mjs'
-import { settle } from '../settle.mjs'
+import { savedState } from '../color-by-digit/color-by-digit-fixtures.mjs'
+import { FLOOR_MS, settle, stable, STABLE_MS } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta.url), 'utf8')
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
@@ -33,7 +34,8 @@ const LINE = [[2.5, 1.5], [2.5, 4.5]]
 const NEXT_LINE = [[5.5, 1.5], [5.5, 4.5]]
 const CLICK_AT = [7.5, 7.5]
 const OUTSIDE_CLICK_AT = [6.5, 7.5]
-const QUIET_MS = 300
+const HOLD_WAIT_MS = HOLD_TO_EDIT_MS + 5000
+const SMALLER_WINDOW = { width: 1100, height: 800 }
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -79,7 +81,7 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
   }
   // The line is drawn once or not at all: after the interruption's release, what the pen holds is the clean drag's entries or nothing.
   const assertWholeOrNone = async (why) => {
-    const entries = await settle(async () => JSON.stringify(await penEntries(p)), JSON.stringify(whole))
+    const entries = await settle(async () => JSON.stringify(await penEntries(p)), JSON.stringify(whole), FLOOR_MS * 2, STABLE_MS)
     assert.equal([JSON.stringify([]), JSON.stringify(whole)].includes(entries), true, `${why}: the pen holds ${entries}, neither the whole line ${JSON.stringify(whole)} nor nothing`)
   }
 
@@ -92,7 +94,7 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
     await p.locator('#control-pen').waitFor({ state: 'visible' })
     await toTool()
     await mouseDrag(p, LINE)
-    whole = await settle(() => penEntries(p), undefined, 2000, QUIET_MS)
+    whole = await settle(() => penEntries(p), undefined, FLOOR_MS * 2, STABLE_MS)
     assert.notDeepEqual(whole, [], 'the reference drag draws a line')
   })
   after(async () => { await context.close() })
@@ -123,19 +125,22 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
 
   it('3: a pen drag with Ctrl+Z mid-drag ends the drag cleanly', async () => {
     await mouseDrag(p, NEXT_LINE)
+    assert.equal((await settle(() => penEntries(p), undefined, FLOOR_MS * 2, STABLE_MS)).some((e) => e.startsWith('5,')), true, 'the line Ctrl+Z should undo is drawn')
     await startDrag()
     await p.keyboard.press('Control+z')
     await p.mouse.up()
-    const entries = await settle(() => penEntries(p), undefined, 2000, QUIET_MS)
+    const entries = await settle(() => penEntries(p), undefined, FLOOR_MS * 2, STABLE_MS)
     assert.equal(entries.some((e) => e.startsWith('5,')), false, `Ctrl+Z undid the line drawn before the drag: ${entries}`)
+    await assertWholeOrNone('Ctrl+Z mid-drag')
     await assertRecovered('Ctrl+Z mid-drag')
   })
 
   it('4: a pen drag with the window resized mid-drag ends the drag cleanly', async () => {
     await startDrag()
-    await p.setViewportSize({ width: 1100, height: 800 })
+    const original = p.viewportSize()
+    await p.setViewportSize(SMALLER_WINDOW)
     await p.mouse.up()
-    await p.setViewportSize({ width: 1200, height: 900 })
+    await p.setViewportSize(original)
     await assertWholeOrNone('resize mid-drag')
     await assertRecovered('resize mid-drag')
   })
@@ -162,6 +167,7 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
 
   it('7: a pen drag with the page blurred and focused again, then released, ends the drag cleanly', async () => {
     await startDrag()
+    // Playwright cannot take the focus from a page, so the page gets the events a lost and regained focus sends.
     await read(() => window.dispatchEvent(new window.Event('blur')))
     await read(() => window.dispatchEvent(new window.Event('focus')))
     await p.mouse.up()
@@ -182,7 +188,7 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       await p.keyboard.press('Escape')
       await p.mouse.move(...await gridPoint(p, [2.5, 2.5]), { steps: 4 })
       await p.mouse.up({ button: 'right' })
-      assert.deepEqual(await settle(() => penEntries(p), whole, 1000, QUIET_MS), whole, 'the Escape cancelled the erase')
+      assert.deepEqual(await settle(() => penEntries(p), whole, FLOOR_MS, STABLE_MS), whole, 'the Escape cancelled the erase')
       await assertRecovered('Escape in an erase')
     })
 
@@ -215,7 +221,7 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       await p.mouse.move(box.x + box.width * 0.1, box.y + box.height / 2)
       await p.mouse.down()
       await p.mouse.move(box.x + box.width * 0.9, box.y + box.height / 2, { steps: 12 })
-      const during = await settle(valueOf, undefined, 1000, QUIET_MS)
+      const during = await stable(valueOf)
       assert.notEqual(during, before, 'the drag moved the slider')
       await p.keyboard.press(OTHER_TOOL_KEY)
       assert.equal(await tool(), OTHER_TOOL)
@@ -224,12 +230,14 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       assert.equal(await tool(), OTHER_TOOL, 'the release kept the new tool')
       await toTool()
       const saved = await read((k) => Framework.getData(k), key)
-      const savedValue = saved !== null && typeof saved === 'object' && 'data' in saved ? saved.data : saved
-      assert.equal(Number(savedValue), await valueOf(), 'the saved value is the one the slider shows')
+      assert.notEqual(saved, null, `${key} is saved`)
+      assert.equal(Number(savedState(saved)), await valueOf(), 'the saved value is the one the slider shows')
       const resting = await valueOf()
+      // A click at the end of the track farther from the resting value, so it cannot land on the value the drag left.
+      const { min, max } = await read((selector) => ({ min: Number(document.querySelector(selector).min), max: Number(document.querySelector(selector).max) }), slider)
       const track = await p.locator(slider).boundingBox()
-      await p.mouse.click(track.x + track.width * 0.95, track.y + track.height / 2)
-      assert.notEqual(await settle(valueOf, undefined, 1000, QUIET_MS), resting, 'the slider answers a click again')
+      await p.mouse.click(track.x + track.width * ((resting - min) / (max - min) < 0.5 ? 0.95 : 0.05), track.y + track.height / 2)
+      assert.notEqual(await stable(valueOf), resting, 'the slider answers a click again')
       assert.deepEqual(errors, [], 'the page shows no error')
       assert.equal(await p.evaluate(() => document.activeElement?.matches('.pen-tool-extras-sliders input') === true), false, 'no slider keeps the focus')
     })
@@ -242,16 +250,24 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await p.mouse.down()
     }
+    // A full hold: the pickers show before the wait ends, and the button is let go whatever happens.
+    const holdForPickers = async () => {
+      await press()
+      try {
+        await p.locator(PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_WAIT_MS })
+      } finally {
+        await p.mouse.up()
+      }
+    }
 
     it('released at 0.9 s opens no pickers, and a full hold afterward still does', async () => {
       await press()
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.9)
       await p.mouse.up()
+      // A "nothing happened" wait: the pickers, if the early release wrongly opened them, would show well within it.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.4)
       assert.equal(await pickers(), 0, 'no pickers after an early release')
-      await press()
-      await p.locator(PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_TO_EDIT_MS + 5000 })
-      await p.mouse.up()
+      await holdForPickers()
       assert.equal(await pickers(), 9, 'a full hold opens the nine pickers')
       await p.keyboard.press(OTHER_TOOL_KEY)
       assert.equal(await settle(pickers, 0), 0, 'leaving the pen ends edit mode')
@@ -263,15 +279,14 @@ describe('Pen Tool Extras\' gestures, interrupted', { concurrency: false }, () =
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 0.3)
       await p.keyboard.press(OTHER_TOOL_KEY)
       assert.equal(await tool(), OTHER_TOOL)
+      // A "nothing happened" wait: past the hold, the time at which the pickers would show.
       await p.waitForTimeout(HOLD_TO_EDIT_MS * 1.2)
       await p.mouse.up()
       assert.equal(await pickers(), 0, 'no pickers over the other tool')
       assert.equal(await tool(), OTHER_TOOL)
       await toTool()
       assert.equal(await pickers(), 0, 'no pickers when the pen comes back')
-      await press()
-      await p.locator(PICKERS).first().waitFor({ state: 'attached', timeout: HOLD_TO_EDIT_MS + 5000 })
-      await p.mouse.up()
+      await holdForPickers()
       assert.equal(await pickers(), 9, 'a full hold opens the nine pickers')
       await p.keyboard.press(OTHER_TOOL_KEY)
       assert.equal(await settle(pickers, 0), 0, 'leaving the pen ends edit mode')
