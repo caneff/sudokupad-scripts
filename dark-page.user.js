@@ -31,7 +31,7 @@
   const BUTTON_ACCENT = '#d2a8f0'
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
-  // Material 3 state layers over BUTTON_BG: BUTTON_ACCENT at 8% (hover) and 10% (press).
+  // Material 3 state layers: BUTTON_ACCENT at 8% (hover) and 10% (press) over BUTTON_BG, worked out by hand; recompute both when either of those changes.
   const BUTTON_HOVER_BG = '#37343a'
   const BUTTON_PRESS_BG = '#3b373e'
   // The page's own text pair. Pure white or black never falls below about 4.58:1 on any page color, where the
@@ -175,7 +175,8 @@
   // PAGE_LIGHT_TEXT or PAGE_DARK_TEXT, whichever contrasts more with the page color.
   function pageTextFor (pageColor) {
     const page = wcagLuminance(parseColor(pageColor)) + 0.05
-    return page > Math.sqrt(1.05 * 0.05) ? PAGE_DARK_TEXT : PAGE_LIGHT_TEXT
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(PAGE_LIGHT_TEXT) >= contrast(PAGE_DARK_TEXT) ? PAGE_LIGHT_TEXT : PAGE_DARK_TEXT
   }
 
   // No variable is declared: SudokuPad's theme variables sit on `:root` and color the grid too.
@@ -202,6 +203,7 @@
       boardRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
       boardRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
       boardRule(['.controls-input::after'], `color: ${textColor}`),
+      // The buttons go dark on the shared light-text test, so they switch on the same page colors as before; only the text pair is Dark Page's own.
       ...(textColorFor(pageColor) === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }

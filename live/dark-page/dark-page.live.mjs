@@ -14,6 +14,7 @@ import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
 const { BOARD, BOARD_ID, STYLE_ID } = createRequire(import.meta.url)('../../dark-page.user.js')
+const { contrastRatio } = createRequire(import.meta.url)('../../test/contrast.js')
 const DATA_KEY = 'DarkPage_color'
 
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark Page\s*$/ })
@@ -335,17 +336,31 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
   })
 
-  it('a keyboard-focused dark button shows a 2px light purple outline, and a mouse-focused one does not', async () => {
-    await p.mouse.move(5, 5)
-    await read(() => document.querySelector('#control-undo').focus())
-    // A script's focus() after a mouse press does not match :focus-visible; a Tab does.
+  const outlineOfActive = () => read(() => { const c = window.getComputedStyle(document.activeElement); return { dark: Boolean(document.activeElement.closest('.controls-app, .controls-tool, .controls-aux')), outline: [c.outlineColor, c.outlineWidth, c.outlineStyle] } })
+
+  it('a dark button focused with no keyboard involved shows no outline', async () => {
+    // A mouse press on a SudokuPad button leaves no focus on it, so a button the mouse did focus stands in: Chromium matches :focus-visible for a script's focus() only when the element focused before it did.
+    await read(() => {
+      const button = document.createElement('button')
+      button.id = 'dark-page-live-mouse'
+      button.style.cssText = 'position: fixed; left: 600px; top: 80px; z-index: 99999'
+      document.body.appendChild(button)
+    })
+    try {
+      await p.click('#dark-page-live-mouse')
+      await read(() => document.querySelector('#control-redo').focus())
+      const { dark, outline } = await outlineOfActive()
+      assert.equal(dark, true)
+      assert.equal(outline[2], 'none')
+    } finally {
+      await read(() => { document.activeElement.blur(); document.getElementById('dark-page-live-mouse').remove() })
+    }
+  })
+
+  it('a dark button the keyboard focuses shows a 2px light purple outline', async () => {
+    await read(() => document.querySelector('#control-redo').focus())
     await p.keyboard.press('Tab')
-    await p.keyboard.press('Shift+Tab')
-    const focused = await read(() => document.activeElement.id)
-    const outline = await computed(`#${focused}`, 'outlineColor')
-    assert.equal(outline, BUTTON_ACCENT)
-    assert.equal(await computed(`#${focused}`, 'outlineWidth'), '2px')
-    assert.equal(await computed(`#${focused}`, 'outlineStyle'), 'solid')
+    assert.deepEqual(await outlineOfActive(), { dark: true, outline: [BUTTON_ACCENT, '2px', 'solid'] })
     await read(() => document.activeElement.blur())
   })
 
@@ -500,11 +515,6 @@ describe('the page color dialog', { concurrency: false }, () => {
   })
 
   it('the credit line and the readout reach 4.5:1 on #808080 and #767676', async () => {
-    const ratio = (a, b) => {
-      const lum = (rgb) => { const [r, g, bl] = rgb.map((c) => c / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * bl }
-      const [x, y] = [lum(a) + 0.05, lum(b) + 0.05]
-      return Math.max(x, y) / Math.min(x, y)
-    }
     const channels = (css) => css.match(/\d+/g).slice(0, 3).map(Number)
     for (const grey of ['#808080', '#767676']) {
       await openDialog()
@@ -512,7 +522,7 @@ describe('the page color dialog', { concurrency: false }, () => {
       await dialogButton('Save').click()
       const page = channels(await bodyColor())
       for (const text of [await footerColor(), await readoutColor(p)]) {
-        assert.ok(ratio(channels(text), page) >= 4.5, `${text} on ${grey}`)
+        assert.ok(contrastRatio(channels(text), page) >= 4.5, `${text} on ${grey}`)
       }
     }
     await openDialog()

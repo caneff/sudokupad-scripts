@@ -5,6 +5,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSaved, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 function rules () {
@@ -40,22 +41,12 @@ test('the credit line takes the text color for the page color given', () => {
   assert.equal(credit('#000000'), `${BOARD} .controls-footer, ${BOARD} .controls-footer a { color: #ffffff !important }`)
 })
 
-// WCAG contrast ratio of two #rrggbb colors, worked out here from the published formula and not from the script's own helpers.
-function contrastRatio (a, b) {
-  const lum = (hex) => {
-    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-  }
-  const [x, y] = [lum(a) + 0.05, lum(b) + 0.05]
-  return Math.max(x, y) / Math.min(x, y)
-}
-
-test('the credit line and the replay readout reach 4.5:1 on every picked page color, mid greys included', () => {
+test('the credit line and the replay readout reach 4.5:1 on each of these page colors, mid greys either side of where white and black swap included', () => {
   const textOf = (line) => /color: (#[0-9a-f]{6}) !important/.exec(line)[1]
-  for (const color of ['#808080', '#767676', '#6b6b6b', '#777777', '#ffcc00', '#336699', '#000000', '#ffffff', '#0000ff']) {
+  for (const color of ['#808080', '#767676', '#757575', '#747474', '#6b6b6b', '#777777', '#ffcc00', '#336699', '#000000', '#ffffff', '#0000ff']) {
     for (const start of [`${BOARD} .controls-footer`, `${BOARD} .controls-input::after`]) {
       const line = buildCss(color).split('\n').find((l) => l.startsWith(start))
-      assert.ok(contrastRatio(textOf(line), color) >= 4.5, `${start} on ${color}: ${textOf(line)}`)
+      assert.ok(contrastRatio(hexChannels(textOf(line)), hexChannels(color)) >= 4.5, `${start} on ${color}: ${textOf(line)}`)
     }
   }
 })
