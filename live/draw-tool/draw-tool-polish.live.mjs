@@ -109,6 +109,22 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     assert.deepEqual(await savedTexts(), ['- [x] one\n- [ ] two'])
   })
 
+  it('"[] milk" and an empty "- [ ]" typed on two lines both become boxes when the note finishes, and a click ticks each in its own form', async () => {
+    await draw.forgetDrawings(p)
+    await reload()
+    await typeInto(SYMBOLS_AT, '[] milk')
+    await p.keyboard.press('Enter')
+    await p.keyboard.type('- [ ] ')
+    await draw.finishNote(p)
+    assert.deepEqual(await savedTexts(), ['[] milk\n- [ ]'])
+    assert.equal(await p.locator(CHECK_BOX).count(), 2)
+    await p.locator(CHECK_BOX).nth(1).click()
+    assert.deepEqual(await savedTexts(), ['[] milk\n- [x]'])
+    await p.locator(CHECK_BOX).first().click()
+    assert.deepEqual(await savedTexts(), ['[x] milk\n- [x]'])
+    assert.equal(await p.locator(`${CHECK_BOX}.draw-tool-check-done`).count(), 2)
+  })
+
   it('a press on a box that moves the pointer starts no drag: the note stays where it was', async () => {
     const before = (await draw.saved(p))[0].at
     const box = await p.locator(CHECK_BOX).first().boundingBox()

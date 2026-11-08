@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.38.0
+// @version      0.38.2
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.38.0'
+  const VERSION = '0.38.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -365,19 +365,21 @@
   }
 
   const BULLET_MARK = /^[-*] /
-  const CHECK_MARK = /^- \[([ xX])\] /
+  // The end of the line ends the match too, so an empty item still matches once `closedText` has dropped its trailing space.
+  const CHECK_MARK = /^([-*] )?\[([ xX]?)\](?: |$)/
+  const isTicked = (state) => /x/i.test(state)
   // A bullet line's first run is the bullet itself, `{ text: '•', bullet: true }`. A checklist line takes the bullet's place with `{ text: '☐' | '☑', bullet: true, checked }`.
   function parseBlock (line) {
     const check = CHECK_MARK.exec(line)
     if (check) {
-      const checked = check[1] !== ' '
+      const checked = isTicked(check[2])
       return [{ text: checked ? '☑' : '☐', bullet: true, checked }, ...parseLine(line.slice(check[0].length))]
     }
     return BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
   }
 
   function toggledCheck (text, index) {
-    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, state) => `- [${state === ' ' ? 'x' : ' '}] `) : line).join('\n')
+    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, dash = '', state) => `${dash}[${isTicked(state) ? ' ' : 'x'}]${mark.endsWith(' ') ? ' ' : ''}`) : line).join('\n')
   }
 
   // Symbols typed as ASCII. `sum` is a word of its own, so "summary" stays.
@@ -2550,6 +2552,7 @@
     editing.box = { left: left + shift[0], top: top + shift[1], right: right + shift[0], bottom: bottom + shift[1] }
     showHandles(editing.box)
     showSelection(map)
+    showEdgeCursor(hoverPoint)
   }
 
   // The point of a screen box that corner `corner` of CORNERS names, or of the opposite corner with `opposite`.
@@ -3032,10 +3035,31 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || handles.some(({ element }) => element === event.target) || isPanelControl(event.target)) return
-    // A left press on another note goes on to select it, and to drag it.
-    pressFinishedText = !(event.button === PRIMARY_BUTTON && pressedNote(event))
-    finishText()
+    if (!editing || editing.element.contains(event.target) || isHandle(event.target) || isPanelControl(event.target)) return
+    // A left press on another note goes on to select it, and to drag it. So does one on the open note's edge, on the note as it closes: its closed box is not the open one's
+    // (trailing blank lines go, and the open one may be shifted clear of the window's edge), so it is not looked for again by position.
+    const left = event.button === PRIMARY_BUTTON
+    const onEdge = left && onOpenEdge(eventPoint(event))
+    const onOther = left && !onEdge && pressedNote(event)
+    const closed = finishText()
+    edgeNote = onEdge && closed !== -1 ? drawing[closed][NOTE_ELEMENT] : null
+    pressFinishedText = !(onOther || edgeNote)
+  }
+
+  const isHandle = (target) => handles.some(({ element }) => element === target)
+
+  // The note whose edge the press that closed it was on; the press goes on to select it and to drag it.
+  let edgeNote = null
+
+  // The band round the open note, outside its box and within HIT_MARGIN_PX of it: a press there moves the note, as one inside selects its text.
+  const onOpenEdge = (point) => Boolean(editing) && inBox(point, grownBox(editing.box, HIT_MARGIN_PX)) && !inBox(point, editing.box)
+
+  // The move cursor over the open note's edge, which lies outside its element and so cannot carry a cursor of its own.
+  let edgeCursor = false
+  function showEdgeCursor (point) {
+    const over = Boolean(point) && !drag && !resizing && onOpenEdge(point)
+    if (over !== edgeCursor) holdCursor(over ? 'move' : null)
+    edgeCursor = over
   }
 
   // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
@@ -3508,7 +3532,8 @@
       if (event.button !== PRIMARY_BUTTON) return false
       // A press on a note moves the selection once it drags, after selecting just that note when it was not selected; with Shift it only adds or removes the note on its release.
       // A press on empty space draws a selection rectangle once it drags.
-      const note = pressedNote(event)
+      const note = edgeNote ?? pressedNote(event)
+      edgeNote = null
       const box = event.target.closest(`.${CHECK_CLASS}`)
       if (note && box) {
         tickCheck(note, box)
@@ -3650,12 +3675,13 @@
       onWindow(textTool, 'mousedown', keepNoteFocus, { capture: true })
       // After the slider guards' own release handler, which takes the focus off the slider.
       onWindow(textTool, 'pointerup', returnFocusToNote, { capture: true })
-      onWindow(textTool, 'pointerup', () => { pressFinishedText = false }, { capture: true })
+      onWindow(textTool, 'pointerup', () => { pressFinishedText = false; edgeNote = null }, { capture: true })
       onWindow(textTool, 'wheel', scrollNote, { capture: true, passive: false })
       onWindow(textTool, 'mousemove', resizeMove, { capture: true })
       onWindow(textTool, 'mousemove', (event) => {
         showChrome()
         hoverPoint = overControl(event) ? null : eventPoint(event)
+        showEdgeCursor(isHandle(event.target) ? null : hoverPoint)
         inFrame('hover', showHover)
       }, { capture: true })
       onWindow(textTool, 'mouseout', (event) => {
