@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.0
-// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes the height SudokuPad leaves it, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
+// @version      0.6.0
+// @description  Fits SudokuPad's rules to the screen in landscape: the rules pane takes all the height the page has to spare, with the controls beside it kept at SudokuPad's size, widens only when the rules would still scroll, and only then shrinks the text, to 70% of SudokuPad's size at the least. Spare room grows the text to 150% at most. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.0'
+  const VERSION = '0.6.0'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -217,10 +217,12 @@
     controls.style.translate = ''
   }
 
-  // Fits the pane to the room below it at SudokuPad's width, widening only as the rules need, and returns the
-  // drag it applied. `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with
-  // the fit taken off, or has no room yet, with the last fit put back.
-  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, onNudge = () => {}, box, limits = noLimits(), readable }) {
+  // Fits the pane to the room below it and the page's spare height, at SudokuPad's width, widening only as the rules need,
+  // and returns the drag it applied. The spare height is what the controls column, as SudokuPad laid it out, has above it
+  // down to `pageTop` and below it to the window's bottom: a taller pane lifts the column by what would run off the window.
+  // `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with the fit taken off, or has no
+  // room yet, with the last fit put back.
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, pageTop, boardRight, nudgePx, onNudge = () => {}, box, limits = noLimits(), readable }) {
     const before = FIT_STYLES.map((k) => rules.style[k])
     const movedBefore = controls.style.translate
     // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
@@ -233,6 +235,7 @@
       return null
     }
     const home = rules.getBoundingClientRect()
+    const column = controls.getBoundingClientRect()
     const scale = home.width / natural
     const ownPx = parseFloat(getStyle(rules).fontSize)
     const visualRoom = rulesRoom({
@@ -246,7 +249,9 @@
       controls.style.translate = movedBefore
       return null
     }
-    const room = visualRoom / scale
+    // The container's own slack below the pane is part of the column already, so the spare height adds only what is left of it.
+    const spare = Math.max(0, column.top - pageTop + viewport.height - column.bottom - Math.max(0, visualRoom - home.height))
+    const room = (visualRoom + spare) / scale
     const autoRoom = limits.maxHeight === null ? room : Math.min(room, limits.maxHeight)
     // SudokuPad caps the pane at 14rem: the fit may use the whole room, never less than SudokuPad gives, and a
     // max auto height holds the pane itself.
@@ -266,26 +271,26 @@
       readable
     })
     onNudge(appliedNudge)
-    const column = controls.getBoundingClientRect()
+    // A pane taller than SudokuPad's runs the column off the window's bottom: it is lifted by that much, and a drag adds to the lift.
+    const lift = Math.max(0, Math.ceil(controls.getBoundingClientRect().bottom - viewport.height))
+    if (lift) controls.style.translate = `0px ${-lift}px`
     const applied = clampDrag(box, {
       pane: { left: home.left, right: home.left + width * scale },
-      column,
+      column: controls.getBoundingClientRect(),
       boardRight,
       viewport
     })
-    // A height drag starts from SudokuPad's own pane height so the pane grows by what the corner moved. A sideways
-    // drag has no height of its own to add, so it holds the fitted pane's.
+    // A drag adds to the fitted pane's height: a drag that started from SudokuPad's own height would shrink a pane the fit had grown.
+    const dragging = Boolean(applied.w || applied.h)
     const sideways = Boolean(applied.w && !applied.h)
     let startRoom = autoRoom
-    if (applied.h) startRoom = home.height / scale
-    else if (sideways) {
+    if (dragging) {
       fitsAt(width, fontPx)
       startRoom = rules.offsetHeight
     }
-    const dragging = Boolean(applied.w || applied.h)
     const fitted = draggedPane({ width, room: startRoom, box: applied, scale })
     if (dragging) rules.style.maxHeight = `${fitted.room}px`
-    if (applied.x || applied.y) controls.style.translate = `${applied.x}px ${applied.y}px`
+    if (applied.x || applied.y || lift) controls.style.translate = `${applied.x}px ${applied.y - lift}px`
     setPaneWidth(rules, fitted.width, natural)
     if (dragging) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
     else rules.style.fontSize = `${fontPx}px`
@@ -956,7 +961,7 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
-  // The fit reads the puzzle's id; SudokuPad calls resizeBoard on every layout; the limits dialog and their saved values are SudokuPad's settings entry, dialog and storage.
+  // The fit reads the puzzle's id; SudokuPad calls resize on every layout; the limits dialog and their saved values are SudokuPad's settings entry, dialog and storage.
   // The fit and the refit start once `Framework.getApp` says the app is ready, so without it they are off and the settings start alone.
   const FEATURES = {
     fit: {
@@ -970,7 +975,7 @@
         showControls(false)
       }
     },
-    refit: { label: 'rules refit', needs: { 'Framework.getApp': 'function', 'Framework.app.resizeBoard': 'function' } },
+    refit: { label: 'rules refit', needs: { 'Framework.getApp': 'function', 'Framework.app.resize': 'function' } },
     settings: {
       label: 'max size settings',
       needs: {
@@ -1201,7 +1206,8 @@
     rules.classList.remove(TEXT_CLASS)
   }
 
-  function fitPage () {
+  // `given` is the reading place kept from before the fit came off; without one the pane's current place is kept.
+  function fitPage (given) {
     rulesFit.run(() => {
       const rules = rulesPane()
       const controls = controlsColumn()
@@ -1215,7 +1221,7 @@
       }
       const board = document.getElementById('board')
       const box = draggedBox(dragKey())
-      const place = readingPlace(rules) // before the text class and the fit change the layout
+      const place = given === undefined ? readingPlace(rules) : given // before the text class and the fit change the layout
       rules.classList.add(TEXT_CLASS)
       const applied = fitRulesPane({
         rules,
@@ -1223,6 +1229,7 @@
         controls,
         getStyle,
         viewport: { width: window.innerWidth, height: window.innerHeight },
+        pageTop: game.getBoundingClientRect().top,
         boardRight: board ? board.getBoundingClientRect().right : 0,
         nudgePx,
         onNudge: (px) => { nudgePx = px },
@@ -1313,11 +1320,18 @@
     addStyle()
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)
-    // SudokuPad calls resizeBoard on every layout: a new puzzle, a resize, a turn of the device.
-    rulesRefit.run(() => rulesRefit.wrap(app, 'resizeBoard', (stock, ...args) => {
-      const out = stock(...args)
-      fitPage()
-      return out
+    // SudokuPad calls resize on every layout: a new puzzle, a resize, a turn of the device. It scales the controls column to fit the
+    // page as it measures it, so it measures with the fit off, or the taller pane would shrink the whole column.
+    rulesRefit.run(() => rulesRefit.wrap(app, 'resize', (stock, ...args) => {
+      const rules = rulesPane()
+      const controls = controlsColumn()
+      const place = rules ? readingPlace(rules) : null
+      if (rules && controls) takeOffFit(rules, controls)
+      try {
+        return stock(...args)
+      } finally {
+        fitPage(place)
+      }
     }))
     const refitSoon = makeTrailing(fitPage, RESIZE_MS)
     window.addEventListener('resize', refitSoon)

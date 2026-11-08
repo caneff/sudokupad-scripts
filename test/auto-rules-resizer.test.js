@@ -91,7 +91,7 @@ test('nudgedFontPx: one px per press from the automatic size, inside 70% to 150%
 // height follows its text at the current font and width, capped at 224 css px; the container wraps the pane;
 // SudokuPad's own font is 17.6 px. `scale` is visual px per css px, as SudokuPad scales the controls column.
 const VIEWPORT = { width: 2048, height: 1064 }
-function fakePane (chars, scale = 1, spareRoom = 0) {
+function fakePane (chars, scale = 1, spareRoom = 0, pageSpare = 0) {
   const style = { fontSize: '', width: '', maxWidth: '', boxSizing: '', maxHeight: '', minHeight: '', overflowWrap: '', overflowY: '' }
   const font = () => parseFloat(style.fontSize) || 17.6
   const width = () => parseFloat(style.width) || 480
@@ -102,14 +102,21 @@ function fakePane (chars, scale = 1, spareRoom = 0) {
     get offsetWidth () { return width() },
     get scrollHeight () { return scrollHeight() },
     get clientHeight () { return height() },
+    get offsetHeight () { return height() },
     getBoundingClientRect: () => ({ left: 1000, top: 300, width: width() * scale, height: height() * scale })
   }
   const container = { getBoundingClientRect: () => ({ bottom: 300 + height() * scale + 8 + spareRoom }) }
   const getStyle = (el) => (el === rules ? { fontSize: `${font()}px`, maxHeight: '224px' } : { paddingBottom: '0' })
-  // The controls column holds the pane, from 60 px above it to 400 px below its top.
-  const controls = { style: { translate: '' }, getBoundingClientRect: () => ({ top: 240, bottom: 700 }) }
+  // The controls column holds the pane. SudokuPad lays it out from 240 px down to `pageSpare` px above the window's bottom, with the
+  // pane at its own height; a taller pane pushes the column's bottom down, and the column's `translate` moves it.
+  const ownHeight = height()
+  const moved = () => parseFloat(controls.style.translate.split(' ')[1]) || 0
+  const controls = {
+    style: { translate: '' },
+    getBoundingClientRect: () => ({ top: 240 + moved(), bottom: VIEWPORT.height - pageSpare + (height() - ownHeight) * scale + moved() })
+  }
   const fit = (opts = {}) => fitRulesPane({
-    rules, container, controls, getStyle, viewport: VIEWPORT, boardRight: 900, nudgePx: 0, box: noRulesDrag(), ...opts
+    rules, container, controls, getStyle, viewport: VIEWPORT, pageTop: 240, boardRight: 900, nudgePx: 0, box: noRulesDrag(), ...opts
   })
   return { rules, container, controls, fit, height }
 }
@@ -336,7 +343,7 @@ test('fitRulesPane: the nudge moves the font from the automatic size', () => {
 })
 
 test('fitRulesPane: with no room it puts the last fit back, the controls\' move too, and says so', () => {
-  const { rules, container, controls, fit } = fakePane(140)
+  const { rules, container, controls, fit } = fakePane(140, 1, 0, 364)
   const box = { w: 0, h: 30, x: 0, y: -30 }
   fit({ box })
   const fitted = { ...rules.style }
@@ -367,18 +374,70 @@ test('fitRulesPane: a pane SudokuPad does not show (a puzzle with no rules) gets
 })
 
 test('fitRulesPane: a drag moves the controls and caps the pane\'s height', () => {
-  const { rules, controls, fit } = fakePane(140)
-  const before = rules.getBoundingClientRect().height
+  const { rules, controls, fit } = fakePane(140, 1, 0, 364)
+  fit()
+  const fitted = rules.offsetHeight
   assert.deepEqual(fit({ box: { w: 0, h: 30, x: 0, y: -30 } }), { w: 0, h: 30, x: 0, y: -30 })
   assert.equal(controls.style.translate, '0px -30px')
-  assert.equal(rules.style.maxHeight, `${before + 30}px`, 'the pane\'s own height plus the drag, not the room under it')
+  assert.equal(rules.style.maxHeight, `${fitted + 30}px`, 'the fitted pane\'s height plus the drag, not the room under it')
 })
 
 test('fitRulesPane: a drag made in a larger window is cut back to the window it is applied in', () => {
-  const { controls, fit } = fakePane(140)
+  const { controls, fit } = fakePane(140, 1, 0, 364)
   // The column's top is 240: a drag 300 up from a larger window is cut to 240.
   assert.deepEqual(fit({ box: { w: 0, h: 300, x: 0, y: -300 } }), { w: 0, h: 300, x: 0, y: -240 })
   assert.equal(controls.style.translate, '0px -240px')
+})
+
+test('fitRulesPane: the pane takes the page\'s spare height below the column and lifts the column only as far as the page needs', () => {
+  // 230 chars need about 26 px more than SudokuPad's 224; 10 px are spare below the column and 240 above it.
+  const { rules, controls, fit } = fakePane(230, 1, 0, 10)
+  assert.deepEqual(fit({ pageTop: 0 }), noRulesDrag(), 'the lift is the fit\'s, not a drag')
+  assert.equal(rules.scrollHeight <= rules.clientHeight, true, 'shown whole')
+  assert.equal(rules.clientHeight > 224 + 10, true, `pane ${rules.clientHeight} px, more than the spare below`)
+  const lift = parseFloat(controls.style.translate.split(' ')[1])
+  assert.equal(Math.abs(controls.getBoundingClientRect().bottom - VIEWPORT.height) < 1, true, 'the column ends at the window\'s bottom')
+  assert.equal(lift < 0, true, `lifted ${lift}`)
+})
+
+test('fitRulesPane: rules that need less than the spare below lift nothing', () => {
+  const { controls, fit } = fakePane(230, 1, 0, 300)
+  fit()
+  assert.equal(controls.style.translate, '')
+})
+
+test('fitRulesPane: the pane never grows past the page\'s spare height: the column stays between the page\'s top and the window\'s bottom', () => {
+  const { rules, controls, fit } = fakePane(5000, 1, 0, 50)
+  fit({ pageTop: 200 }) // 40 px above the column and 50 below: 90 spare
+  const column = controls.getBoundingClientRect()
+  assert.equal(column.bottom <= VIEWPORT.height, true, `column bottom ${column.bottom}`)
+  assert.equal(column.top >= 200, true, `column top ${column.top}`)
+  assert.equal(rules.clientHeight, 224 + 90, 'all the spare, no more')
+})
+
+test('fitRulesPane: a max auto height holds the pane under the spare height too', () => {
+  const { rules, fit } = fakePane(5000, 1, 0, 300)
+  fit({ limits: { maxWidth: null, maxHeight: 250 } })
+  assert.equal(rules.clientHeight, 250)
+})
+
+test('fitRulesPane: a sideways drag keeps the pane\'s grown height and the lift that keeps the column on the page', () => {
+  const { rules, controls, fit } = fakePane(5000, 1, 0, 50)
+  fit({ pageTop: 0, box: { w: 40, h: 0, x: -40, y: 0 } })
+  assert.equal(rules.clientHeight > 224 + 50, true, `pane ${rules.clientHeight} px`)
+  assert.equal(controls.getBoundingClientRect().bottom <= VIEWPORT.height, true)
+  assert.match(controls.style.translate, /^-40px -/)
+})
+
+test('fitRulesPane: a height drag adds to the grown pane, so it never shrinks it, and to the column\'s lift', () => {
+  const { rules, controls, fit } = fakePane(5000, 1, 0, 50)
+  fit({ pageTop: 0 })
+  const grown = rules.offsetHeight
+  const lift = parseFloat(controls.style.translate.split(' ')[1])
+  assert.equal(grown > 224, true)
+  assert.deepEqual(fit({ pageTop: 0, box: { w: 0, h: 20, x: 0, y: -20 } }), { w: 0, h: 20, x: 0, y: -20 })
+  assert.equal(rules.style.maxHeight, `${grown + 20}px`)
+  assert.equal(controls.style.translate, `0px ${-20 + lift}px`)
 })
 
 test('clearFit: takes the fit\'s output off the pane and the controls', () => {
@@ -543,7 +602,7 @@ test('the script has no pointerover or pointerout listener', () => {
 
 // A SudokuPad with every internal Auto Rules Resizer needs.
 const completeSudokuPad = () => ({
-  Framework: { getApp () {}, app: { puzzle: {}, resizeBoard () {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} }
+  Framework: { getApp () {}, app: { puzzle: {}, resize () {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} }
 })
 
 test('Auto Rules Resizer declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
@@ -553,7 +612,7 @@ test('Auto Rules Resizer declares each SudokuPad internal it calls, and a comple
 test('without one internal, only the features that need it are lacking: getApp holds off the fit and the refit', () => {
   const removals = [
     ['Framework.app.puzzle', (r) => { delete r.Framework.app.puzzle }, 'fit'],
-    ['Framework.app.resizeBoard', (r) => { delete r.Framework.app.resizeBoard }, 'refit'],
+    ['Framework.app.resize', (r) => { delete r.Framework.app.resize }, 'refit'],
     ...['addSetting', 'showDialog', 'closeDialog', 'getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, 'settings'])
   ]
   for (const [internal, remove, feature] of removals) {
