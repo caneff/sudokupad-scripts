@@ -5,7 +5,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { syncText, readLib, scriptFiles, generatedLine } = require('../sync-lib.js')
+const { syncText, readLib, scriptFiles, generatedLine, libNamesOnDisk } = require('../sync-lib.js')
 
 const modules = { plain: 'const a = 1\n\nconst b = 2\n' }
 const read = (name) => modules[name]
@@ -69,13 +69,40 @@ test('a script with no const VERSION has only its @version raised', () => {
   assert.equal(result.text, `// @version      1.2.4\n${current}\n`)
 })
 
+const dependent = {
+  base: 'function helper () {}\n',
+  needy: '/* global helper, window */\nconst use = () => helper()\n'
+}
+const dependentRead = (name) => dependent[name]
+const libNames = Object.keys(dependent)
+const wrap = (name, body) => `  // <lib:${name}>\n  ${generatedLine(name)}\n${body}\n  // </lib:${name}>`
+const baseBlock = wrap('base', '  function helper () {}')
+const needyBlock = wrap('needy', '  const use = () => helper()')
+
+test('a block whose module reads a name from a lib module the script does not copy is a problem naming both', () => {
+  const source = script(needyBlock)
+  const result = syncText(source, dependentRead, libNames)
+  assert.deepEqual(result.problems, ['lib:needy reads helper from lib:base, which this script does not copy in'])
+  assert.equal(result.text, source)
+})
+
+test('a block whose dependency is copied in, before or after it, is fine', () => {
+  for (const inner of [`${baseBlock}\n${needyBlock}`, `${needyBlock}\n${baseBlock}`]) {
+    assert.deepEqual(syncText(script(inner), dependentRead, libNames).problems, [])
+  }
+})
+
+test('a name no lib module defines (a browser global, or one the script defines) is not a dependency', () => {
+  assert.deepEqual(syncText(script(needyBlock), (name) => name === 'needy' ? '/* global window, helper */\nconst use = 1\n' : undefined, ['needy']).problems, [])
+})
+
 // The command run on a copy of itself, beside its own lib/ and scripts, so the repo's files are not touched.
-function runCommand (scripts) {
+function runCommand (scripts, libFiles = { plain: modules.plain }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sync-lib-'))
   try {
     fs.copyFileSync(path.join(__dirname, '..', 'sync-lib.js'), path.join(dir, 'sync-lib.js'))
     fs.mkdirSync(path.join(dir, 'lib'))
-    fs.writeFileSync(path.join(dir, 'lib', 'plain.js'), modules.plain)
+    for (const [name, text] of Object.entries(libFiles)) fs.writeFileSync(path.join(dir, 'lib', `${name}.js`), text)
     for (const [file, text] of Object.entries(scripts)) fs.writeFileSync(path.join(dir, file), text)
     const run = spawnSync(process.execPath, ['sync-lib.js'], { cwd: dir, encoding: 'utf8' })
     return { status: run.status, stderr: run.stderr, files: Object.fromEntries(Object.keys(scripts).map((file) => [file, fs.readFileSync(path.join(dir, file), 'utf8')])) }
@@ -90,6 +117,12 @@ test('node sync-lib.js rewrites a stale script and exits 0', () => {
   assert.equal(run.files['a.user.js'], script(current, '1.2.4'))
 })
 
+test('node sync-lib.js exits 1 on a missing dependency block and names it', () => {
+  const run = runCommand({ 'a.user.js': script(needyBlock) }, dependent)
+  assert.equal(run.status, 1)
+  assert.match(run.stderr, /^a\.user\.js: lib:needy reads helper from lib:base, which this script does not copy in$/m)
+})
+
 test('node sync-lib.js exits 1 on a marker problem, names it, and still rewrites the other scripts', () => {
   const broken = script('  // <lib:Plain>')
   const run = runCommand({ 'a.user.js': script(block('  const a = 0')), 'b.user.js': broken })
@@ -101,7 +134,7 @@ test('node sync-lib.js exits 1 on a marker problem, names it, and still rewrites
 test('every script\'s lib blocks match lib/ (run node sync-lib.js to fix)', () => {
   for (const file of scriptFiles()) {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
-    const { changed, problems } = syncText(source, readLib)
+    const { changed, problems } = syncText(source, readLib, libNamesOnDisk())
     assert.deepEqual(problems, [], `${file}: fix the markers, then run node sync-lib.js`)
     assert.deepEqual(changed, [], `${file}: block(s) out of date with lib/; run node sync-lib.js`)
   }
