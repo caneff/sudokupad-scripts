@@ -307,8 +307,15 @@
     return read(0, '').runs
   }
 
+  // A line that starts with "- " or "* " is a bullet: a first run `{ text: '•', bullet: true }`, then the rest of the line read as markdown.
+  const BULLET_MARK = /^[-*] /
+  const parseBlock = (line) => BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
+
+  const isBullet = (runs) => Boolean(runs[0]?.bullet)
+  const BULLET_INDENT_EM = 1.2
+
   // A note's text as one list of runs per line; a marker does not reach across a line break.
-  const parseMarkdown = (text) => text.split('\n').map(parseLine)
+  const parseMarkdown = (text) => text.split('\n').map(parseBlock)
 
   // Each text parsed once: a redraw, a move or a recolor reads a note's runs again without parsing it again.
   const parsedTexts = new Map()
@@ -327,7 +334,7 @@
   function noteSize (item) {
     if (item.box) return item.box
     if (item[DRAWN_SIZE]) return item[DRAWN_SIZE]
-    const widths = parsedText(item.text).map((runs) => Math.max(1, shownLength(runs)) * CHAR_WIDTH)
+    const widths = parsedText(item.text).map((runs) => Math.max(1, shownLength(runs) + (isBullet(runs) ? BULLET_INDENT_EM / CHAR_WIDTH - 1 : 0)) * CHAR_WIDTH)
     const rows = widths.reduce((sum, width) => sum + Math.ceil(width / BOX_WIDTH_EM), 0)
     return [Math.min(BOX_WIDTH_EM, Math.max(...widths)) * item.size, Math.min(BOX_LINES, rows) * LINE_HEIGHT * item.size]
   }
@@ -1111,8 +1118,26 @@
     return element
   }
 
-  // A finished note shows the styled runs, lines joined by line breaks.
-  const noteContent = (text) => parsedText(text).flatMap((runs, i) => [...(i ? ['\n'] : []), ...runs.map(runElement)])
+  // A bullet line is a block whose first line hangs out over the indent: the bullet sits in the indent, wrapped lines start at its right.
+  function bulletElement ([mark, ...runs]) {
+    const line = document.createElement('div')
+    Object.assign(line.style, { paddingLeft: `${BULLET_INDENT_EM}em`, textIndent: `-${BULLET_INDENT_EM}em` })
+    const bullet = document.createElement('span')
+    bullet.textContent = mark.text
+    Object.assign(bullet.style, { display: 'inline-block', width: `${BULLET_INDENT_EM}em`, textIndent: '0' })
+    line.append(bullet, ...runs.map(runElement))
+    return line
+  }
+
+  // A finished note shows the styled runs, lines joined by line breaks. A bullet block ends its own line, so a break goes only between two plain lines
+  // and before a bullet that follows an empty line.
+  function noteContent (text) {
+    const lines = parsedText(text)
+    return lines.flatMap((runs, i) => {
+      const before = i && (isBullet(runs) ? lines[i - 1].length === 0 : !isBullet(lines[i - 1])) ? ['\n'] : []
+      return [...before, ...(isBullet(runs) ? [bulletElement(runs)] : runs.map(runElement))]
+    })
+  }
 
   // The note open for typing shows its text as typed, markers and all.
   function newTextBox (item, map) {
@@ -2136,6 +2161,7 @@
     flushFrame()
     if (erasing) endErase()
     if (drag) endDrag()
+    saveNudge()
   }
 
   // The second press of a double-click has a click count (`detail`) of 2.
@@ -2231,6 +2257,31 @@
       const [x, y] = screenPoint(item, map.toScreen)
       return reachable([x + dx, y + dy])
     })
+  }
+
+  const NUDGE_PX = 1
+  const NUDGE_SHIFT_PX = 10
+  const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
+  // Whether a nudge has moved notes that are not saved yet; the release of the key saves it.
+  let nudged = false
+
+  // Moves the selected notes `step` screen pixels along `direction`, a unit vector, and not at all when that would leave one out of reach.
+  function nudgeSelected (direction, step) {
+    const map = boardMap()
+    const moved = selected.map((i) => {
+      const [x, y] = screenPoint(drawing[i], map.toScreen)
+      return [i, [x + direction[0] * step, y + direction[1] * step]]
+    })
+    if (!moved.every(([, point]) => reachable(point))) return
+    for (const [i, point] of moved) drawing[i] = placedItem(drawing[i], point, map)
+    nudged = true
+    redraw()
+  }
+
+  function saveNudge () {
+    if (!nudged) return
+    nudged = false
+    save()
   }
 
   function endMove (d) {
@@ -2383,6 +2434,7 @@
       window.removeEventListener('mousemove', trackPointer, { capture: true })
       pointer = null
       endGesture()
+      saveNudge()
       if (editing) finishText()
       selected = []
       renderDrawing()
@@ -2404,6 +2456,7 @@
       if (event.key === 'Shift') return true
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
+      else if (ARROWS[event.key]) nudgeSelected(ARROWS[event.key], event.shiftKey ? NUDGE_SHIFT_PX : NUDGE_PX)
       else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
       else return false
       return true
@@ -2446,6 +2499,7 @@
     window.addEventListener('mousemove', resizeMove, { capture: true })
     window.addEventListener('mouseup', endResize, { capture: true })
     for (const type of ['keydown', 'keypress', 'keyup']) window.addEventListener(type, keepBoxKeys, { capture: true })
+    window.addEventListener('keyup', saveNudge, { capture: true })
     if (app.puzzle.currentPuzzle) showSavedDrawing()
   })
 })()

@@ -528,7 +528,7 @@ test('an unmatched marker, or one with a space inside it, shows as typed', () =>
   assert.deepEqual(runs('5 ** 2'), [{ text: '5 ** 2' }])
   assert.deepEqual(runs('**a *b**'), [{ text: '**a ' }, { text: 'b', italic: true }, { text: '*' }])
   assert.deepEqual(runs('*a *'), [{ text: '*a *' }], 'a closing marker after a space')
-  assert.deepEqual(runs('* a*'), [{ text: '* a*' }], 'an opening marker before a space')
+  assert.deepEqual(runs('x * a*'), [{ text: 'x * a*' }], 'an opening marker before a space')
   assert.deepEqual(runs('~~~'), [{ text: '~~~' }])
   assert.deepEqual(runs('****'), [{ text: '****' }])
 })
@@ -543,6 +543,18 @@ test('each line is read on its own, so a marker does not reach across a line bre
   assert.deepEqual(parseMarkdown('**a\nb**'), [[{ text: '**a' }], [{ text: 'b**' }]])
   assert.deepEqual(parseMarkdown('x\n*y*'), [[{ text: 'x' }], [{ text: 'y', italic: true }]])
   assert.deepEqual(parseMarkdown(''), [[]])
+})
+
+test('a line starting with "- " or "* " is a bullet: a bullet run, then the rest read as markdown', () => {
+  assert.deepEqual(parseMarkdown('- one\n- **two**'), [[{ text: '•', bullet: true }, { text: 'one' }], [{ text: '•', bullet: true }, { text: 'two', bold: true }]])
+  assert.deepEqual(parseMarkdown('* star'), [[{ text: '•', bullet: true }, { text: 'star' }]])
+})
+
+test('a dash that does not start a line, or has no space after it, is not a bullet', () => {
+  assert.deepEqual(parseMarkdown('a - b'), [[{ text: 'a - b' }]])
+  assert.deepEqual(parseMarkdown('-one'), [[{ text: '-one' }]])
+  assert.deepEqual(parseMarkdown(' - one'), [[{ text: ' - one' }]])
+  assert.deepEqual(parseMarkdown('*one* and'), [[{ text: 'one', italic: true }, { text: ' and' }]])
 })
 
 const width = (item) => textBox(item).right - textBox(item).left
