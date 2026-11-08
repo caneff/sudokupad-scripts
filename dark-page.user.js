@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.7
+// @version      0.7.0
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
-// @run-at       document-idle
+// @run-at       document-start
 // @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js
 // @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js
 // ==/UserScript==
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.7'
+  const VERSION = '0.7.0'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -31,12 +31,25 @@
   const BUTTON_ACCENT = '#d2a8f0'
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
+  // Material 3 state layers: BUTTON_ACCENT at 8% (hover) and 10% (press) over BUTTON_BG, worked out by hand; recompute both when either of those changes.
+  const BUTTON_HOVER_BG = '#37343a'
+  const BUTTON_PRESS_BG = '#3b373e'
+  // The page's own text pair. Pure white or black never falls below about 4.58:1 on any page color, where the
+  // shared LIGHT_TEXT and DARK_TEXT (#ddd, #222) fall to 3.5:1 on a mid grey.
+  const PAGE_LIGHT_TEXT = '#ffffff'
+  const PAGE_DARK_TEXT = '#000000'
   function savedColor (data) {
     return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
   }
 
   // Throws when storage cannot be read: the startup read runs under the savedColor feature, the dialog's under settings.
   const readSaved = (store) => savedColor(store.getData(DATA_KEY))
+
+  // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`), a color as
+  // the plain string: the live checks in § at document-start fail if SudokuPad changes either.
+  const LOCAL_DATA_KEY = `svencodes_${DATA_KEY}`
+  // The saved color read straight from storage, for when Framework does not exist yet. Throws when storage is blocked.
+  const earlyColor = (storage) => savedColor(storage.getItem(LOCAL_DATA_KEY))
 
   const READERS = { [DATA_KEY]: (data) => savedColor(data) ?? undefined }
 
@@ -165,6 +178,13 @@
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
 
+  // PAGE_LIGHT_TEXT or PAGE_DARK_TEXT, whichever contrasts more with the page color.
+  function pageTextFor (pageColor) {
+    const page = wcagLuminance(parseColor(pageColor)) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(PAGE_LIGHT_TEXT) >= contrast(PAGE_DARK_TEXT) ? PAGE_LIGHT_TEXT : PAGE_DARK_TEXT
+  }
+
   // No variable is declared: SudokuPad's theme variables sit on `:root` and color the grid too.
   // `!important` outranks SudokuPad's rules, `.setting-darkmode`'s included. The board's own box
   // (`#svgrenderer`) takes `--body-bg`, what SudokuPad gives `body`: the puzzle has no background and
@@ -174,18 +194,23 @@
   function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     const boardRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${BOARD} ${selector}`).join(', '), ...declarations)
-    const textColor = textColorFor(pageColor)
+    const textColor = pageTextFor(pageColor)
     const darkButtons = [
       boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
       boardRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
-      boardRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`)
+      boardRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`),
+      // SudokuPad's own focus shadow cannot be seen on BUTTON_BG.
+      boardRule(BUTTON_GROUPS.map((group) => `${group} button:focus-visible`), `outline: 2px solid ${BUTTON_ACCENT}`, 'outline-offset: 2px'),
+      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), `background-color: ${BUTTON_HOVER_BG}`),
+      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), `background-color: ${BUTTON_PRESS_BG}`)
     ]
     return [
       rule(BOARD, `background-color: ${pageColor}`),
       boardRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
       boardRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
       boardRule(['.controls-input::after'], `color: ${textColor}`),
-      ...(textColor === LIGHT_TEXT ? darkButtons : [])
+      // The buttons go dark on the shared light-text test, so they switch on the same page colors as before; only the text pair is Dark Page's own.
+      ...(textColorFor(pageColor) === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }
 
@@ -591,7 +616,7 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
-  // The saved color is read before the first paint, with no need of the app; the settings entry is added once `Framework.getApp` says the app is ready.
+  // The saved color is read through Framework with no need of the app; the settings entry is added once `Framework.getApp` says the app is ready.
   const FEATURES = {
     savedColor: { label: 'saved color', needs: { 'Framework.getData': 'function' } },
     settings: {
@@ -610,21 +635,32 @@
   const { savedColor: savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, savedColor, buildCss, BOARD, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, savedColor, earlyColor, LOCAL_DATA_KEY, buildCss, BOARD, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
-  // Read before the first paint so a saved color never shows the default first; Framework.getData
-  // works as soon as Framework exists, before the app is ready, and so does the probe, as each internal
-  // here is Framework's own. A page that cannot read it (a frame with storage blocked) still gets the
-  // default darkening, which needs no Framework.
-  if (typeof Framework !== 'undefined') guard.probe({ roots: { Framework }, store: Framework })
-  let pageColor = (typeof Framework === 'undefined' ? null : savedPageColor.run(() => readSaved(Framework), () => null)) || DEFAULT_COLOR
+  // The page color goes in before the first paint, so the page is never SudokuPad's white first. The board's `#svgrenderer`
+  // is in the page's own HTML, so `BOARD` matches as soon as the parser reaches it. A page whose storage cannot be read gets the default.
+  let pageColor = DEFAULT_COLOR
+  try {
+    pageColor = earlyColor(window.localStorage) || DEFAULT_COLOR
+  } catch (e) {
+    // Best effort: `start` reads the color through Framework, which reports a storage it cannot read.
+  }
 
   const style = document.createElement('style')
   style.id = STYLE_ID
   style.textContent = buildCss(pageColor)
-  document.head.appendChild(style)
+  // Neither `document.head` nor, in some injectors, `document.documentElement` exists yet: the style goes in as the parser creates one.
+  const attach = () => (document.head || document.documentElement).appendChild(style)
+  if (document.documentElement) attach()
+  else {
+    new window.MutationObserver((records, observer) => {
+      if (!document.documentElement) return
+      observer.disconnect()
+      attach()
+    }).observe(document, { childList: true })
+  }
 
   function saveColor (color) {
     // The default is kept as nothing saved, so it follows any later change of the default.
@@ -660,9 +696,17 @@
       `<input type="color" id="dark-page-input" value="${picked}">` +
       '<button type="button" id="dark-page-reset">Black</button></div>'
     const input = document.getElementById('dark-page-input')
+    const preview = () => { style.textContent = buildCss(picked) }
+    // However the dialog closes (Save, Cancel, Escape), the page goes back to the saved color; a Save has already made it the saved one.
+    const closed = new window.MutationObserver(() => {
+      if (body.isConnected) return
+      closed.disconnect()
+      style.textContent = buildCss(pageColor)
+    })
+    closed.observe(document.body, { childList: true, subtree: true })
     const reset = document.getElementById('dark-page-reset')
     // `input` fires while the picker moves.
-    input.addEventListener('input', () => { picked = input.value.toLowerCase() })
+    input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
     const copied = () => savedPageColor.run(() => copiedSettings(Framework), offNow('savedColor'))
     wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS }, (values) => settingsEntry.run(() => {
       if (!(DATA_KEY in values)) return
@@ -675,13 +719,26 @@
       event.stopPropagation()
       picked = DEFAULT_COLOR
       input.value = DEFAULT_COLOR
+      preview()
     })
   }
 
-  // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the
-  // default color.
-  if (typeof Framework === 'undefined') return
-  settingsEntry.run(() => Framework.getApp().then(() => {
-    settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
-  }))
+  // At DOMContentLoaded Framework exists (before the app is ready). What it reads is the saved color, and the early
+  // read is corrected to it, "nothing saved" included; a read that fails keeps the color already painted.
+  function start () {
+    // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the default color.
+    if (typeof Framework === 'undefined') return
+    guard.probe({ roots: { Framework }, store: Framework })
+    const read = savedPageColor.run(() => ({ color: readSaved(Framework) }), () => null)
+    const saved = read ? read.color || DEFAULT_COLOR : pageColor
+    if (saved !== pageColor) {
+      pageColor = saved
+      style.textContent = buildCss(pageColor)
+    }
+    settingsEntry.run(() => Framework.getApp().then(() => {
+      settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
+    }))
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
+  else start()
 })()

@@ -10,6 +10,7 @@
   .lede { max-width: 46rem; }
   .rows { margin: 1.75rem 0; border-top: 1px solid var(--frame-edge); }
   .row { display: grid; grid-template-columns: 30rem 1fr; gap: 2rem; align-items: center; padding: 1.5rem 0; border-bottom: 1px solid var(--frame-edge); }
+  .row-plain { grid-template-columns: 1fr; }
   .row-text { max-width: 36rem; }
   .row h2 { font-size: 1.25rem; margin-bottom: .35rem; }
   .row-text p { margin-bottom: .75rem; }
@@ -135,22 +136,29 @@
   </section>
   <section class="row">
     <div>
-      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/dark-page/dark-page.png?v=46cf742" alt="A puzzle on a black page" width="360" height="270"></div>
+      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/dark-page/dark-page.png?v=02d713b" alt="A puzzle on a black page" width="360" height="270"></div>
     </div>
     <div class="row-text">
       <h2>Dark Page</h2>
-      <p>Turns the page black around the puzzle, or any color you pick, and darkens the control buttons when the color is dark. Puzzle colors stay as intended, unlike SudokuPad's dark mode.</p>
+      <p>Turns the page black around the puzzle, or any color you pick, and darkens the control buttons when the color is dark. The color shows on the page as you move the picker, and the text under the puzzle stays readable on any color. Puzzle colors stay as intended, unlike SudokuPad's dark mode.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js">Install<span class="visually-hidden"> Dark Page</span></a></p>
     </div>
   </section>
   <section class="row">
     <div>
-      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/auto-rules-resizer/auto-rules-resizer.png?v=0d15f0a" alt="A puzzle's long rules in a wider pane that shows them all, with the f+ and f- buttons above it and a drag corner at each end" width="669" height="343"></div>
+      <div class="slide-frame"><img src="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/docs/research/auto-rules-resizer/auto-rules-resizer.png?v=e98c7ea" alt="A puzzle's long rules in a wider pane that shows them all, with the f+ and f- buttons above it and a drag corner at each end" width="669" height="343"></div>
     </div>
     <div class="row-text">
       <h2>Auto Rules Resizer</h2>
-      <p>Fits the rules to your screen in landscape: the text grows as large as fits, and the pane widens only as far as long rules need. Thanks to Nell Gwynn, whose resizing scripts this grew from.</p>
+      <p>Fits the rules to your screen in landscape: the text grows as large as fits, with looser lines, and the pane widens only as far as long rules need, and rules too long to fit at any width get at most about 90 characters a line. Thanks to Nell Gwynn, whose resizing scripts this grew from.</p>
       <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/auto-rules-resizer.user.js">Install<span class="visually-hidden"> Auto Rules Resizer</span></a></p>
+    </div>
+  </section>
+  <section class="row row-plain">
+    <div class="row-text">
+      <h2>No Tab Letters</h2>
+      <p>Stops a stray Tab from switching SudokuPad's number pad to letters. The letter button and the / key still switch it. It adds nothing to the page, so there is no picture.</p>
+      <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/no-tab-letters.user.js">Install<span class="visually-hidden"> No Tab Letters</span></a></p>
     </div>
   </section>
   </div>

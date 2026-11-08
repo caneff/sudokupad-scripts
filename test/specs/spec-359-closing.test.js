@@ -9,7 +9,7 @@ const { pictureTags, tagOf } = require('../../tag-pictures.js')
 
 const SITE = join(ROOT, 'site')
 const read = (file) => readFileSync(join(SITE, file), 'utf8').replace(/<!--[\s\S]*?-->/g, '')
-const rowsOf = (html) => html.split('<section class="row">').slice(1)
+const rowsOf = (html) => html.split('<section class="row').slice(1)
 const showOf = (html) => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
 const captionsOf = (html) => [...html.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)].map((m) => ({ current: Boolean(m[1]), text: m[2] }))
 const imgsOf = (html) => [...html.matchAll(/<img\b[^>]*>/g)].map((m) => m[0])
@@ -51,16 +51,15 @@ const runSlides = (count) => {
 // same slides, and the theme rules in style.css. This seam is blind to a real browser: clicking a real Next button, what the browser draws and the
 // hover and focus looks are `npm run test:live`'s (live/site-slideshow.live.mjs), and the Pages site after the merge is checked by hand.
 test('spec 359: the homepage is rows of slideshows, the details pages carry the same slides, and the slideshow steps and wraps', () => {
-  // Homepage: one row per script in order, with No Tab Letters off the site and the script kept in the repo.
+  // Homepage: one row per script in order; No Tab Letters is the last, a text row with no picture.
   const home = read('index.html')
   const rows = rowsOf(home)
-  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer'])
+  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer', 'No Tab Letters'])
   assert.equal(existsSync(join(ROOT, 'no-tab-letters.user.js')), true)
-  for (const name of readdirSync(SITE).filter((f) => f.endsWith('.html'))) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, name)
   assert.match(home, /\.row \{[^}]*grid-template-columns: 30rem 1fr/)
 
   // Dark Page and Auto Rules Resizer keep one picture and no pager; the other three rows are slideshows with a picture, caption and Install each.
-  for (const row of rows.slice(3)) {
+  for (const row of rows.slice(3, 5)) {
     assert.equal(imgsOf(row).length, 1)
     assert.doesNotMatch(row, /slideshow|slide-caption/)
   }
