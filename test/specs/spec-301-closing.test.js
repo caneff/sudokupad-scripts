@@ -55,11 +55,11 @@ test('spec 301: Text Anywhere has its own colors, one Size slider and a settings
   assert.throws(() => draw.pastedSettings('not settings', draw.READERS))
 
   // The site: the homepage summary and @description name the notes and the tool's own colors, the details page has a bullet for
-  // each part, and the README still says every script but No Tab Letters has a settings entry.
+  // each part, and the README still says every script has a settings entry.
   const summary = /Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own/
   assert.match(read('site/index.html'), summary)
   assert.match(read('draw-tool.user.js'), summary)
   const details = read('site/draw-tool.html')
   for (const lead of ['Typed notes anywhere', 'Colors, size and transparency', 'Readable over digits', 'Settings']) assert.match(details, new RegExp(`<strong>${lead}</strong>`))
-  assert.match(read('README.md'), /Each script except No Tab Letters adds an entry/)
+  assert.match(read('README.md'), /Each script adds an entry/)
 })

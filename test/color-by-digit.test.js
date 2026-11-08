@@ -1,4 +1,5 @@
 'use strict'
+require('./fake-page-storage.js')
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
@@ -6,7 +7,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { createModeHistory, openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, enteredIndices, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -69,13 +70,26 @@ test('readCentreMarks gives the visible centre marks, and none for a cell whose 
 
 test('toPlanCell keeps the digit, colors and visible centre marks, and drops corner marks', () => {
   const cell = { given: null, value: '', colours: ['a'], pencilmarks: ['1', '2'], propVisible: () => true, propGet: () => ['3'] }
-  assert.deepEqual(toPlanCell(cell), { given: null, value: '', colours: ['a'], centre: ['3'] })
+  assert.deepEqual(toPlanCell(cell), { fogged: false, given: null, value: '', colours: ['a'], centre: ['3'] })
   assert.deepEqual(plan([toPlanCell({ ...cell, colours: [], propGet: () => [] })]), [])
 })
 
 test('toPlanCell gives no centre marks for a cell that hides them, so its hidden marks color nothing', () => {
   const hidden = { value: '', colours: [], propVisible: () => false, propGet: () => ['1'] }
   assert.deepEqual(plan([toPlanCell(hidden)], centreGroups), [])
+})
+
+test('toPlanCell hides the digit of a given the fog covers, so it gets no color', () => {
+  const given = { given: '1', value: '', colours: [], hideclue: true, propVisible: () => true, propGet: () => [] }
+  assert.deepEqual(plan([toPlanCell(given)]), [])
+  assert.deepEqual(plan([toPlanCell({ ...given, hideclue: false })]), [{ index: 0, key: 'a' }])
+})
+
+test('a fogged given is among the cells to recolor, so a color put on it before is taken off', () => {
+  const fogged = toPlanCell({ given: '1', value: '', colours: ['a'], hideclue: true, propVisible: () => true, propGet: () => [] })
+  const bare = toPlanCell({ given: null, value: '', colours: [], propVisible: () => true, propGet: () => [] })
+  assert.deepEqual(enteredIndices([bare, fogged]), [1])
+  assert.deepEqual(planCellColors([fogged], groups, [0]), [{ action: 'remove', key: 'a', indices: [0] }])
 })
 
 test('digits in no group are skipped', () => {

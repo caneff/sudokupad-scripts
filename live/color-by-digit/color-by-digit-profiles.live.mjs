@@ -4,21 +4,16 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { ADDED_PRELOADS_STORAGE_KEY, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, startInjected, watch } from './color-by-digit-fixtures.mjs'
+import { ADDED_PRELOADS_STORAGE_KEY, deleteProfileRow, DROP_PAST_MIDDLE_PX, keyOf, PROFILE_NAME_FIELD, PROFILE_ROWS, ARROW, BUTTON, buttonPoint, center, coloredCountOn, EDITOR, group, groupCountOn, labelOn, MENU, pressTo, LEGACY_STORAGE_KEY, ROW_CORNER, LOW_FIVE_HIGH, MODE_STORAGE_KEY, ODD_EVEN, openSession, PROFILES_KEY, PROFILES_STORAGE_KEY, SEED, savedProfiles, savedState, startInjected, watch } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, openScriptDialog } from '../settings.mjs'
 import { settle, SETTLE_MS } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
-const ROWS = `${EDITOR} [data-role=profile-row]`
+const ROWS = PROFILE_ROWS
 // A row's × shows only while its row is hovered or selected, so the pointer goes onto the row first.
-const deleteRow = async (p, n) => {
-  await p.hover(`${ROWS}:nth-child(${n})`, ROW_CORNER)
-  await p.click(`${ROWS}:nth-child(${n}) button[data-act=delete]`)
-}
+const deleteRow = deleteProfileRow
 const HOLD_MS = 500
-// How far past a row's middle a drag ends to land beyond it.
-const DROP_PAST_MIDDLE_PX = 8
 
 const FOUR = [group('1', ['1', '2']), group('3', ['3', '4']), group('5', ['5', '6']), group('9', ['7', '8', '9'])]
 const SIX = ['1', '2', '3', '5', '7', '9'].map((key, i) => group(key, [String(i)]))
@@ -27,8 +22,6 @@ const FOUR_PROFILES = {
   profiles: [...SEED.profiles, { name: 'Four', groups: FOUR }, { name: 'Six', groups: SIX }],
   active: 0
 }
-
-const keyOf = (groups, digit) => (groups.find((g) => g.digits.includes(String(digit))) || {}).key
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -476,7 +469,7 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
 
   // Real key presses into the name field: SudokuPad listens for keys on the page, and a digit or letter
   // must reach the field.
-  const NAME_FIELD = `${EDITOR} [data-role=profile-name]`
+  const NAME_FIELD = PROFILE_NAME_FIELD
   const typeName = async (text) => {
     await p.locator(NAME_FIELD).press('Control+a')
     await p.locator(NAME_FIELD).pressSequentially(text)

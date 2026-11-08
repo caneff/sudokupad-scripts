@@ -107,7 +107,7 @@ Only lines change with the page. A cell circle, a cross, a dot and the edge and 
 **Changing page**, the way the cell color tool does:
 
 - Click the line type button (the page button), the middle one of the three controls. It shows the line the next page draws, with a dot for each page and the current one filled.
-- Press Tab. Tab does nothing else in the pen tool with this script on, with or without No Tab Letters. Shift+Tab is left to SudokuPad.
+- Press Tab. Tab does nothing else in the pen tool with this script on, with or without UI Tweaks' Tab option. Shift+Tab is left to SudokuPad.
 - Turn the mouse wheel over the page button, as SudokuPad's color tool does over its own page button: down for the next page, up for the previous. Over the rest of the pen panel the wheel is left to SudokuPad.
 
 **Picking a pen with a digit key**: with the pen tool on, a bare digit key 1 to 9 picks pen N on the page showing, as a click on that color button does: on page 2, key 3 picks page 2's pen 3. The key follows the button's number, so Keypad Flipped changes nothing. Key 0, a digit with Ctrl, Alt, Meta or Shift held, and a digit typed into a text field are left to SudokuPad and the browser.
