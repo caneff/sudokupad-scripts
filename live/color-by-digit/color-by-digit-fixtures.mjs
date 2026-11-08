@@ -67,30 +67,32 @@ export async function watch (read) {
 
 // Runs the loaded page through the script's injection time for `mode` (document-idle is already set up by `openSession`)
 // and Start Puzzle, and returns once the script's button shows.
-export async function startInjected (p, script, mode = 'after-start') {
+// A script without the button (`buttonExpected` false: SudokuPad lacks what adds it) waits for nothing of its own.
+export async function startInjected (p, script, mode = 'after-start', buttonExpected = true) {
   await startPuzzle(p, {
     injection: { mode, code: script },
-    beforeStart: mode === 'before-start' ? () => p.locator(BUTTON).waitFor({ state: 'attached' }) : undefined
+    beforeStart: mode === 'before-start' && buttonExpected ? () => p.locator(BUTTON).waitFor({ state: 'attached' }) : undefined
   })
-  await p.locator(BUTTON).waitFor({ state: 'visible' })
+  if (buttonExpected) await p.locator(BUTTON).waitFor({ state: 'visible' })
 }
 
 // A page with `script` injected at `mode`. `saved` maps a localStorage key to a JSON value, written before the page's own
 // scripts run and only while the key is absent, so a reload keeps what was saved. `force` is written every load.
 // With neither, the page starts with SEED saved as the profiles and the mode saved Off.
-export async function openSession (browser, script, { saved = SEEDED_OFF, force = {}, contextOptions = {}, mode = 'after-start' } = {}) {
+export async function openSession (browser, script, { saved = SEEDED_OFF, force = {}, contextOptions = {}, mode = 'after-start', buttonExpected = true, seed = async () => {} } = {}) {
   const entries = (object) => Object.entries(object).map(([key, value]) => [key, JSON.stringify(value)])
   const opened = await openPage(browser, {
     contextOptions,
     injection: { mode, code: script },
     seed: async (page) => {
+      await seed(page)
       await page.addInitScript((list) => {
         list.forEach(([key, value]) => { if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, value) })
       }, entries(saved))
       await page.addInitScript((list) => list.forEach(([key, value]) => window.localStorage.setItem(key, value)), entries(force))
     }
   })
-  await startInjected(opened.p, script, mode)
+  await startInjected(opened.p, script, mode, buttonExpected)
   return opened
 }
 

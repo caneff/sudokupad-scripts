@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -880,8 +880,8 @@ const pageDocument = (extra = {}) => ({
   getElementById: () => null,
   documentElement: {},
   head: { appendChild: () => {} },
-  body: { appendChild: () => {} },
-  createElement: () => ({ style: {}, remove: () => {} }),
+  body: { appendChild: () => {}, append: () => {} },
+  createElement: () => ({ style: {}, remove: () => {}, setAttribute: () => {}, append: () => {}, addEventListener: () => {} }),
   ...extra
 })
 // Fires one event at the page's listeners, from a target inside the elements `inside` names (selector to element).
@@ -903,7 +903,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
   delete require.cache[path]
   const calls = []
   const app = {
-    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [] },
+    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], addEventListener: () => {} },
     act: (a) => calls.push(['act', a.type]),
     deselect: () => {},
     select: () => {},
@@ -917,7 +917,10 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     getData: () => null,
     setData: (key, value) => calls.push(['save', key, value]),
     addControlButton: () => calls.push(['button']),
-    addSetting: () => calls.push(['setting'])
+    addSetting: () => calls.push(['setting']),
+    showDialog: () => {},
+    closeDialog: () => {},
+    app: { tools: { colour: {} } }
   }
   try {
     require(path)
@@ -936,20 +939,25 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
   }
 })
 
-test('entry point: a Framework without getApp warns and changes nothing', () => {
+test('entry point: a Framework without getApp turns off the features that need an app, each named once, and starts the rest', async () => {
   const path = require.resolve('../color-by-digit.user.js')
   const saved = require.cache[path]
   delete require.cache[path]
   const warnings = []
   const warn = console.warn
   console.warn = (...args) => warnings.push(args.join(' '))
-  global.Framework = {}
+  const calls = []
+  global.document = pageDocument()
+  global.window = pageWindow()
+  global.Framework = { getData: () => null, setData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
   try {
     require(path)
-    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed'])
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button skipped because SudokuPad has no Framework.getApp'])
+    assert.deepEqual(calls, ['setting'])
   } finally {
     console.warn = warn
-    delete global.Framework
+    delete global.Framework; delete global.document; delete global.window
     delete require.cache[path]
     if (saved) require.cache[path] = saved
   }
@@ -986,7 +994,7 @@ function mockApp (cellDefs, { single = false } = {}) {
     cell.propGet = () => [...(def.centre || [])]
     return cell
   })
-  const puzzle = { cells, selectedCells: [], inGroup: false }
+  const puzzle = { cells, selectedCells: [], inGroup: false, addEventListener: () => {} }
   const app = {
     puzzle,
     calls,
@@ -1029,7 +1037,10 @@ async function withScript (app, fn, stored = {}) {
     getData: (key) => app.stored[key] ?? null,
     setData: (key, value) => { app.stored[key] = value },
     addControlButton: (spec) => { app.buttonTitle = spec.title },
-    addSetting: () => {}
+    addSetting: () => {},
+    showDialog: () => {},
+    closeDialog: () => {},
+    app: { tools: { colour: {} } }
   }
   try {
     require(path)
@@ -1803,4 +1814,48 @@ test('shownChips: Both with unsynced profiles lists its chips in ascending digit
   assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '9'])
   // A cell group of only 0 is reached: k is 2, and 0 is the one digit of the group a.
   assert.deepEqual(digitsOf(shownChips('both', [{ key: 'a', digits: ['0'] }, { key: 'b', digits: ['1', '2'] }], ODD)), ['0', '1'])
+})
+
+// A SudokuPad with every internal Color by Digit needs.
+const completeRoots = () => {
+  const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], addEventListener () {} } }
+  return { Framework: { getApp () {}, getData () {}, setData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
+}
+const withoutPath = (roots, internal) => {
+  const [root, ...keys] = internal.split('.')
+  const last = keys.pop()
+  delete keys.reduce((owner, key) => owner[key], roots[root])[last]
+  return roots
+}
+
+test('Color by Digit declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
+})
+
+test('without one internal, only the features that need it are lacking', () => {
+  const cases = [
+    ['app.act', ['cells']], ['app.select', ['cells']], ['app.deselect', ['cells']], ['app.on', ['cells']],
+    ['app.puzzle.cells', ['cells']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.addEventListener', ['cells']],
+    ['app.refreshControls', ['button']], ['Framework.addControlButton', ['button']],
+    ['Framework.getApp', ['cells', 'button']],
+    ['Framework.getData', ['saved', 'editor']], ['Framework.setData', ['saved', 'editor']],
+    ['Framework.addSetting', ['editor']], ['Framework.showDialog', ['editor']], ['Framework.closeDialog', ['editor']], ['Framework.app.tools.colour', ['editor']]
+  ]
+  for (const [internal, features] of cases) {
+    assert.deepEqual(lackingInternals(FEATURES, withoutPath(completeRoots(), internal)), new Map([[internal, features]]), internal)
+  }
+})
+
+test('Color by Digit declares its features through the shared guard, with no guard code of its own', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'color-by-digit.user.js'), 'utf8')
+  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
+  assert.match(own, /createGuard\(\{ script: 'color-by-digit'[^\n]*features: FEATURES \}\)/)
+  for (const text of ['has no getApp, so', 'nothing was changed']) assert.equal(own.includes(text), false, text)
+})
+
+test('every call into SudokuPad sits under a feature: no bare app or Framework call outside the guard\'s run, wrap and startup', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'color-by-digit.user.js'), 'utf8')
+  const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
+  const calls = own.split('\n').flatMap((line, i) => (/\bFramework\.(getData|setData)\(/.test(line) && !/(storage\.run|\(\) => Framework\.)/.test(line) ? [`${i + 1}: ${line.trim()}`] : []))
+  assert.deepEqual(calls, [])
 })
