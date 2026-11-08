@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.6
+// @version      0.25.8
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.6'
+  const VERSION = '0.25.8'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -911,17 +911,16 @@
   }
 
   const PURPLE = '#6a1b9a'
-  const OFF_WORD_GREY = '#b3acbf'
+  const OFF_WORD_GREY = '#8a8299'
 
-  // A thin white outline, so the purple word reads on Dark Page's dark button. On the normal page's #eee button it shows only as a faint light edge.
-  const WORD_OUTLINE = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
-    .map(([x, y]) => `${x}px ${y}px #fff`).join(',')
+  // A translucent white box behind the word, so it reads on Dark Page's dark button. On the normal page's #eee button it barely shows.
+  const WORD_BACKGROUND = 'rgba(255,255,255,.9)'
 
   // No pointer events, so a press on the label is a press on the button.
   function modeWordHtml (mode) {
     const on = mode !== 'off'
-    return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-3px;top:-2px;' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}${on ? `;text-shadow:${WORD_OUTLINE}` : ''}">${MODE_NAMES[mode].toUpperCase()}</span>`
+    return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-6px;top:-3px;padding:1px 3px;border-radius:3px;background:' + WORD_BACKGROUND + ';' +
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
