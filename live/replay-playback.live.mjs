@@ -45,7 +45,7 @@ async function openSolver (files) {
 const INSTALL_ORDERS = [['alphabetical', SCRIPT_FILES], ['reverse', [...SCRIPT_FILES].reverse()]]
 
 for (const [order, files] of INSTALL_ORDERS) {
-  describe(`the replay tool plays a solve back with every script installed (${order} order)`, { concurrency: false }, () => {
+  describe(`attack 65: the replay tool plays a solve back with every script installed (${order} order)`, { concurrency: false }, () => {
     let context, p, errors, solved
     const read = (fn, arg) => p.evaluate(fn, arg)
 
