@@ -1613,9 +1613,9 @@ test('buildOutlineCss is empty when the outline is off and filters the pen layer
   assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
 })
 
-test('buildFeedbackCss fades the erase\'s strokes, the clearing marks and the ghost to 0.3, and outranks the layer\'s opacity-1 rule', () => {
+test('buildFeedbackCss fades the erase\'s strokes to 0.3, and outranks the layer\'s opacity-1 rule', () => {
   const rules = buildFeedbackCss(3).split('\n')
-  assert.equal(rules[0], ':root:root .cell-pen:is(.pen-tool-extras-faded, .pen-tool-extras-clearing, .pen-tool-extras-ghost) { opacity: 0.3; }')
+  assert.equal(rules[0], ':root:root .cell-pen.pen-tool-extras-faded { opacity: 0.3; }')
 })
 
 test('buildFeedbackCss dashes the hint of the page 2 pens only, for the hint\'s width of 16: 3 widths is 32 on, 32 off, half a dash in; 0 is dots', () => {
@@ -2104,23 +2104,23 @@ test('a complete SudokuPad lacks nothing', () => {
 
 // Each internal removed alone, and the steps it holds back.
 const LACKING_ALONE = [
-  ...['actStart', 'actAdd', 'actSend', 'clickCell', '_actList'].map((name) => [`ToolPen.tool.${name}`, (s) => { delete s.ToolPen.tool[name] }, ['arrowLines', 'marks', 'lineErase', 'markPreview']]),
-  ['ToolPen.tool.getInputRc', (s) => { delete s.ToolPen.tool.getInputRc }, ['marks', 'lineErase', 'markPreview']],
+  ...['actStart', 'actAdd', 'actSend', 'clickCell', '_actList'].map((name) => [`ToolPen.tool.${name}`, (s) => { delete s.ToolPen.tool[name] }, ['arrowLines', 'marks', 'lineErase']]),
+  ['ToolPen.tool.getInputRc', (s) => { delete s.ToolPen.tool.getInputRc }, ['marks', 'lineErase']],
   ['ToolPen.tool.setSelectedColor', (s) => { delete s.ToolPen.tool.setSelectedColor }, ['pages']],
   ['ToolPen.tool.handleToolEnter', (s) => { delete s.ToolPen.tool.handleToolEnter }, ['pages']],
   ['ToolPen.tool.handleToolExit', (s) => { delete s.ToolPen.tool.handleToolExit }, ['pages']],
   ['ToolPen.tool.drawLineHint', (s) => { delete s.ToolPen.tool.drawLineHint }, ['dragHint']],
-  ['Framework.app.grid.getCell', (s) => { delete s.Framework.app.grid.getCell }, ['marks', 'lineErase', 'markPreview']],
-  ['Framework.app.puzzle.cells', (s) => { delete s.Framework.app.puzzle.cells }, ['arrowLines', 'marks', 'lineErase', 'markPreview']],
-  ['Framework.app.grid.rows', (s) => { s.Framework.app.grid.rows = '9' }, ['marks', 'lineErase', 'markPreview']],
-  ['Framework.app.grid.cols', (s) => { s.Framework.app.grid.cols = 9.5 }, ['marks', 'lineErase', 'markPreview']],
+  ['Framework.app.grid.getCell', (s) => { delete s.Framework.app.grid.getCell }, ['marks', 'lineErase']],
+  ['Framework.app.puzzle.cells', (s) => { delete s.Framework.app.puzzle.cells }, ['arrowLines', 'marks', 'lineErase']],
+  ['Framework.app.grid.rows', (s) => { s.Framework.app.grid.rows = '9' }, ['marks', 'lineErase']],
+  ['Framework.app.grid.cols', (s) => { s.Framework.app.grid.cols = 9.5 }, ['marks', 'lineErase']],
   ['Framework.app.svgRenderer.constructor.CellSize', (s) => { delete s.Framework.app.svgRenderer.constructor.CellSize }, ['marks']],
   ['Framework.app.svgRenderer.constructor.rcToPathData', (s) => { delete s.Framework.app.svgRenderer.constructor.rcToPathData }, ['marks']],
-  ['Framework.app.svgRenderer.renderPen', (s) => { delete Object.getPrototypeOf(s.Framework.app.svgRenderer).renderPen }, ['arrowLines', 'marks', 'markPreview']],
+  ['Framework.app.svgRenderer.renderPen', (s) => { delete Object.getPrototypeOf(s.Framework.app.svgRenderer).renderPen }, ['arrowLines', 'marks']],
   ['Framework.app.svgRenderer.renderPart', (s) => { delete s.Framework.app.svgRenderer.renderPart }, ['arrowLines']],
-  ['Framework.app.xyToRCExact', (s) => { delete s.Framework.app.xyToRCExact }, ['marks', 'lineErase', 'markPreview']],
+  ['Framework.app.xyToRCExact', (s) => { delete s.Framework.app.xyToRCExact }, ['marks', 'lineErase']],
   ['Framework.app.tools.colour', (s) => { delete s.Framework.app.tools.colour }, ['colors']],
-  ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase', 'markPreview']],
+  ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase']],
   ...['getData', 'removeData'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['saved']]),
   // The install save writes the colors with setData.
   ['Framework.setData', (s) => { delete s.Framework.setData }, ['saved', 'colorSave']],
@@ -2146,7 +2146,7 @@ test('without a pen tool, every step that needs it is reported under the first i
   delete roots.ToolPen.tool
   assert.deepEqual(lackingInternals(FEATURES, roots), new Map([
     ['ToolPen.tool.setSelectedColor', ['pages']],
-    ['ToolPen.tool.actStart', ['arrowLines', 'marks', 'lineErase', 'markPreview']],
+    ['ToolPen.tool.actStart', ['arrowLines', 'marks', 'lineErase']],
     ['ToolPen.tool.drawLineHint', ['dragHint']],
     ['ToolPen.tool', ['penPanel']]
   ]))
@@ -2203,7 +2203,7 @@ test('a Framework with no getApp turns every install step off in one warning nam
   delete framework.getApp
   const entries = []
   framework.addSetting = (setting) => entries.push(setting.name)
-  const steps = ['colors', 'pen pages', 'arrow lines', 'drag highlight', 'marks', 'pen panel', 'line erase', 'mark preview']
+  const steps = ['colors', 'pen pages', 'arrow lines', 'drag highlight', 'marks', 'pen panel', 'line erase']
   const warnings = withPage(() => loadWithFramework(framework))
   assert.deepEqual(warnings, [`pen-tool-extras: ${steps.join(', ')} skipped because SudokuPad has no Framework.getApp`])
   assert.deepEqual(entries, ['pentoolextras'])

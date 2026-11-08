@@ -173,10 +173,6 @@ A click in a cell's middle cycles SudokuPad's own circle, then its cross, then a
 - The Cell row of the Marks table has a Cell Cross, a Cell Circle and a Cell Dot box, in the X, circle and dot columns, all ticked by default. An unticked mark is skipped. With all three off, a click in a cell's middle does nothing, as an edge click does with the Edge row all off.
 - Settings saved before the Cell row existed read as all three ticked.
 
-## Mark preview
-
-With the pen tool on and no button held, a faint copy (0.3 opacity, in the pen's color) of the mark the next left click on the spot under the pointer would place follows the pointer: on an edge, a grid corner or a cell's middle, the next step of that spot's cycle. When the next step is empty, the marks that click would clear are faded instead. It is looked up at most every 32 ms. It goes while a button is held, off the grid, in another tool and on any key (a digit changes the pen), and comes back with the next move; after a click it comes back at once, showing the step after. Unticked boxes in the Marks table are skipped, as a click skips them.
-
 ## Right click
 
 The dialog's Right click erase box is on by default and saved under `PenColor_middleerase` (the key is older than the right click and keeps its name so old saves read the same; removed when on, `false` when off). Off, the right button is left wholly to SudokuPad and the browser: no erase, no default prevented, and SudokuPad's own right click (which acts as a left click, so it steps a mark forward) and menu.
@@ -225,7 +221,6 @@ The settings dialog names the skipped steps in one line at its top, for example 
 | marks | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, `rcToPathData` or `CellSize`, the grid's `getCell`, `rows` or `cols`, or the app's `xyToRCExact` or `puzzle.cells` | A click on an edge or a corner is SudokuPad's own edge click (its X), and a click in a cell's middle is SudokuPad's own circle and cross. The arrows, circles, corner marks and dots you drew stay stored in the puzzle and its replay, and draw as nothing |
 | pen panel | the pen tool (`ToolPen.tool`), or the `.penlinemode` element in its panel (checked a second after the panel shows) | SudokuPad's own line mode pulldown stays in the panel, and the sliders, the tray and the three control buttons (line mode, line type and settings), which would take its rows, are left out. Tab still turns pages |
 | line erase | the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | A right click is SudokuPad's own click, and the browser's menu opens |
-| mark preview | the marks step being on, and the pen tool's `clickCell`, `getInputRc`, `actStart`, `actAdd`, `actSend` or `_actList`, the renderer's `renderPen`, the app's `xyToRCExact` or `puzzle.cells`, the grid's `getCell`, `rows` or `cols` | No faint mark shows under the pointer before a click |
 | saved settings | Framework's `getData`, `setData` or `removeData` | The settings and pen colors start from their defaults, and nothing is kept |
 | settings dialog | Framework's `addSetting`, `showDialog` or `closeDialog` | SudokuPad's settings menu has no Pen Tool Extras entry, and the pen panel's settings button does nothing |
 | dialog overlay | Framework's `showDialog`; also off when installing its listener throws | A press on the dark area around the settings dialog closes it and also marks the grid cell under the pointer |
