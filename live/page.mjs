@@ -18,7 +18,7 @@ const FRAMEWORK_MS = 30000
 
 // A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
 // (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
-// The ids are the six scripts', read from the `*.user.js` at the repo root, so a seventh is matched without an edit here.
+// The ids are the scripts', read from the `*.user.js` at the repo root, so a new script is matched without an edit here.
 const SCRIPT_IDS = readdirSync(new URL('../', import.meta.url)).filter((f) => f.endsWith('.user.js')).map((f) => f.replace('.user.js', ''))
 const SKIP_LINE = new RegExp(`^(?:${SCRIPT_IDS.join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
 

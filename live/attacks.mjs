@@ -14,12 +14,12 @@ export const NOTES = '#draw-tool-layer .draw-tool-text'
 
 const source = (file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-// Injects all six scripts into a page past Start Puzzle.
+// Injects all the scripts into a page past Start Puzzle.
 export async function injectScripts (p) {
   for (const script of SCRIPTS) await p.addScriptTag({ content: source(script.file) })
 }
 
-// Injects all six scripts into a page past Start Puzzle and waits for each to be up. Pen Tool Extras' `ready` leaves the pen
+// Injects all the scripts into a page past Start Puzzle and waits for each to be up. Pen Tool Extras' `ready` leaves the pen
 // tool current, so this ends on the normal tool, where a player starts. Picking Text Anywhere's tool first waits out the
 // moment its button's click is dead.
 export async function loadScripts (p) {
@@ -29,7 +29,7 @@ export async function loadScripts (p) {
   await p.click('#control-normal')
 }
 
-// Opens the puzzle, gets past Start Puzzle and injects all six scripts, as a user with all of them installed has;
+// Opens the puzzle, gets past Start Puzzle and injects all the scripts, as a user with all of them installed has;
 // `errors` holds the page errors, console errors and skip lines; `expectedSkips` and `seed` go to `openPage` and `afterStart(p)` runs before the scripts go in.
 export async function openWithAllScripts (browser, { expectedSkips, seed, afterStart } = {}) {
   const opened = await openPage(browser, {
@@ -53,7 +53,7 @@ export const setLongRules = (p) => p.evaluate(() => {
 export const rulesWidth = (p) => p.evaluate(() => Math.round(document.querySelector('.puzzle-rules').getBoundingClientRect().width))
 export const rulesScroll = (p) => p.evaluate(() => { const r = document.querySelector('.puzzle-rules'); return r.scrollHeight > r.clientHeight })
 
-// Reloads the page and puts all six scripts back, without `ready`, which would set the pen tool on again.
+// Reloads the page and puts all the scripts back, without `ready`, which would set the pen tool on again.
 export async function reloadWithScripts (p) {
   await p.reload({ waitUntil: 'load' })
   await startPuzzle(p)
@@ -78,7 +78,7 @@ export async function typeDigits (p, [row, col], digits) {
   await p.keyboard.type(digits)
 }
 
-// Opens a page with all six scripts, runs `body(p)`, then checks the crash signals and closes the page.
+// Opens a page with all the scripts, runs `body(p)`, then checks the crash signals and closes the page.
 export async function attack (browser, body) {
   const { context, p, errors } = await openWithAllScripts(browser)
   try {

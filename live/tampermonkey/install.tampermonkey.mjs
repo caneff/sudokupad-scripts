@@ -33,16 +33,16 @@ describe('Tampermonkey', { concurrency: false }, () => {
   })
 
   for (const file of FILES) {
-    it(`${file}: main's copy installs, and the checkout's installs over it as an update`, async (t) => {
+    it(`${file}: main's copy installs, and the checkout's installs over it as an update; with no copy on main, the checkout's installs fresh`, async () => {
       const main = await fetch(RAW + file, { method: 'HEAD' })
+      // A script this branch adds has no copy on main: its first install is the checkout's own.
       if (main.status === 404) {
-        t.skip('not on main yet')
-      } else {
-        assert.equal(main.ok, true, `${RAW + file} answered ${main.status}`)
-        assert.equal(await installScript(tm, RAW + file), 'Install')
+        assert.equal(await installScript(tm, served.url + file), 'Install', 'Tampermonkey did not offer the checkout\'s copy as a new script')
+        return
       }
-      const label = await installScript(tm, served.url + file)
-      if (main.ok) assert.notEqual(label, 'Install', 'Tampermonkey offered the checkout\'s copy as a new script, not an update of main\'s')
+      assert.equal(main.ok, true, `${RAW + file} answered ${main.status}`)
+      assert.equal(await installScript(tm, RAW + file), 'Install')
+      assert.notEqual(await installScript(tm, served.url + file), 'Install', 'Tampermonkey offered the checkout\'s copy as a new script, not an update of main\'s')
     })
   }
 
@@ -52,7 +52,7 @@ describe('Tampermonkey', { concurrency: false }, () => {
     assert.deepEqual((await installedScripts(tm)).sort(byName), expected)
   })
 
-  // Each on its own puzzle page, with all six installed, as a player has them: it starts and its action works.
+  // Each on its own puzzle page, with all of them installed, as a player has them: it starts and its action works.
   for (const script of SCRIPTS) {
     it(`${script.file} runs on the puzzle page`, async () => {
       const { p, errors } = await newPage(tm.context)

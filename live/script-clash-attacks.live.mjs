@@ -1,4 +1,4 @@
-// Live attacks on clashes between the scripts (#590, attacks 57-61): all six are loaded on one page and each test sets two
+// Live attacks on clashes between the scripts (#590, attacks 57-61): all of them are loaded on one page and each test sets two
 // of them against each other, then checks the crash signals (a skip line, a page error, a console error, a notice bar)
 // plus what the player expects to see.
 import { after, before, describe, it } from 'node:test'
@@ -96,7 +96,7 @@ describe('clashes between scripts', { concurrency: 4 }, () => {
     await p.locator('#draw-tool-layer .draw-tool-textbox').waitFor({ state: 'attached' })
     await p.keyboard.type('ab')
     const box = '#draw-tool-layer .draw-tool-textbox'
-    // The note's box takes its keys before SudokuPad's handlers, so No Tab Letters never sees this Tab; the note must be the one to keep it.
+    // The note's box takes its keys before SudokuPad's handlers, so UI Tweaks' Tab option never sees this Tab; the note must be the one to keep it.
     await p.keyboard.press('Tab')
     assert.equal(await p.locator(box).count(), 1, 'the note is still open')
     assert.equal(await p.evaluate((selector) => document.activeElement.matches(selector), box), true, 'the focus stayed in the note')
