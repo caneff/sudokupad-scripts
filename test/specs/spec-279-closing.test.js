@@ -28,7 +28,7 @@ const digitsIn = (css) => [...new Set([...css.matchAll(/="(\d)"/g)].map((m) => m
 test('spec 279: Color by Digit colors cells, digits or both, and Digit Color is merged into it', () => {
   const { nextMode, allowedMode, startingMode, buttonLabel, copiedSettings, pastedSettings } = byDigit
 
-  // A press steps Cell, Digit, Both, Off and round; the button's label names the mode (#354: its chips show it, its title says it).
+  // A press steps Cell, Digit, Both, Off and round; the button's label names the mode (#354, #509: its word and chips show it, its title says it).
   const cycle = ['cell']
   for (let i = 0; i < 4; i++) cycle.push(nextMode(cycle[i], true))
   assert.deepEqual(cycle, ['cell', 'digit', 'both', 'off', 'cell'])

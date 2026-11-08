@@ -44,9 +44,9 @@
   active: in Cell and Both it recolors the cells (planSwitch), as one undo step, and in Digit and Both the
   digits take their new **digit colors** at once. With separate picks, a Cell dot does only the first and a Digit dot,
   which picks the digit profile, only the second.
-- **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off, shown by the button's **chips** (Cell: group
+- **mode** — Color by Digit's saved setting, Cell, Digit, Both or Off, named by the word above the button's **chips**, which also draw it (Cell: group
   colors with SudokuPad's blue digits; Digit: white with the darker shades; Both: group colors with the shades; Off:
-  white, grey digits and a grey outline), named in the button's tooltip, and stepped by a short press on the button, Cell → Digit → Both →
+  white, grey digits and a grey outline), named again in the button's tooltip, and stepped by a short press on the button, Cell → Digit → Both →
   Off → Cell. Cell and Both color cells; Digit and Both color digits with their **digit color**. In Cell and Both, a cell's color keeps in step with
   its digit and centre marks as they change: a pure cell gets its group's color and loses any other
   group's, and a cell that is not pure loses every group's color. Colors in no group are left alone, except that with SudokuPad's Multi-color setting off, adding a group color replaces whatever color the cell held.
