@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -215,6 +215,28 @@ test('a press and release with the mouse still, or moved no more than the slop, 
   assert.equal(isClick([[10, 10], [10 + CLICK_SLOP, 10], [10, 10 - CLICK_SLOP]]), true)
   assert.equal(isClick([[10, 10], [10 + CLICK_SLOP + 0.1, 10]]), false)
   assert.equal(isClick([[10, 10], [40, 10], [10, 10]]), false, 'a drag that comes back to its start')
+})
+
+test('the slop is 4 px', () => {
+  assert.equal(CLICK_SLOP, 4)
+})
+
+test('a rectangle under 8 px both ways is a sloppy click; one 8 px or more either way is a real rectangle', () => {
+  assert.equal(RECTANGLE_CLICK_PX, 8)
+  assert.equal(isSmallRectangle([[10, 10], [10, 10]]), true)
+  assert.equal(isSmallRectangle([[10, 10], [17, 3]]), true)
+  assert.equal(isSmallRectangle([[10, 10], [18, 10]]), false)
+  assert.equal(isSmallRectangle([[10, 10], [10, 2]]), false)
+  assert.equal(isSmallRectangle([[10, 10], [30, 10], [11, 11]]), true, 'the rectangle runs from the press to the release')
+})
+
+test('closedText drops trailing spaces and tabs from each line, and a note of only spaces is empty', () => {
+  assert.equal(closedText('a  \nb\t \n  c   '), 'a\nb\n  c')
+  assert.equal(closedText('   '), '')
+  assert.equal(closedText(' \t \n  \n'), '')
+  assert.equal(closedText('\n\nhi  \n\n'), 'hi')
+  assert.equal(closedText('a \r\n b'), 'a\n b', 'a line break typed as CRLF')
+  assert.equal(closedText('a\n\n  \nb'), 'a\n\n\nb', 'blank lines inside stay')
 })
 
 test('VERSION matches the @version header', () => {

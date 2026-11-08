@@ -70,7 +70,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     await stable(async () => (await boxes()).note.x)
     await p.mouse.dblclick(...draw.middleOf((await boxes()).note))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click opens the note itself')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual((await saved())[0].fixed, RIGHT_OF_PANEL, 'drawing it clear of the panel saves nothing')
     await reload()
     assert.equal(clearOfPanel(await boxes()), true, 'still clear of the panel over a reload')

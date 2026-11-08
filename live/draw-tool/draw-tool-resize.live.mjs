@@ -90,7 +90,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
       const corner = [sx < 0 ? edges.left : edges.right, sy < 0 ? edges.top : edges.bottom]
       assert.ok(near(x, corner[0]) && near(y, corner[1]), `handle ${which} at ${x}, ${y}; corner at ${corner}`)
     }
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal(await handleCount(), 0)
     assert.equal((await saved())[0].box, undefined, 'a note never resized stores no box')
   })
@@ -105,7 +105,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     assert.ok(near(after.right - after.left, width) && near(after.bottom - after.top, height), `${after.right - after.left} x ${after.bottom - after.top}, dragged to ${width} x ${height}`)
     assert.ok(after.scrollRoom > 0, 'the text runs past the smaller box')
     await p.keyboard.type('Z')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal((await draw.texts(p))[0], `${NOTE_TEXT}Z`, 'the key typed after the drag went into the note')
     const finished = await box(TEXTS)
     assert.ok(near(finished.right - finished.left, width) && near(finished.bottom - finished.top, height), 'the finished note keeps the box')
@@ -131,7 +131,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     await dragHandle(-1000, -1000)
     const smallest = await box(TEXT_BOX)
     assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em) && near(smallest.bottom - smallest.top, MIN_EM[1] * smallest.em), `${smallest.right - smallest.left} x ${smallest.bottom - smallest.top}`)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     // The note's text size is 20 board units.
     assert.deepEqual((await saved())[0].box, MIN_EM.map((em) => em * 20))
   })
@@ -145,17 +145,17 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
   it('a note selected alone shows a handle on each corner, and two selected notes show none', async () => {
     await p.mouse.click(...await middleOfNote())
     assert.equal(await handleCount(), 4)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal(await handleCount(), 0, 'no selection, no handles')
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.type('two')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.click(...await middleOfNote())
     await p.keyboard.down('Shift')
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.up('Shift')
     assert.equal(await handleCount(), 0)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     // Leaves only the first note.
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.press('Delete')
@@ -227,12 +227,12 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     await p.mouse.dblclick(...await middleOfNote())
     assert.equal((await draw.texts(p)).length, 0, 'the note itself is open')
     await p.mouse.dblclick(...await handleMiddle())
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal((await saved())[0].box, undefined)
     // Leaves the note with a box for the checks below.
     await p.mouse.click(...await middleOfNote())
     await dragHandle(-20, -5)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal((await saved())[0].box.length, 2)
   })
 
@@ -267,19 +267,19 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     const before = (await saved()).map((item) => item.text)
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     await p.keyboard.type('second')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const { left, top, right, bottom } = await box(TEXTS)
     await p.mouse.dblclick((left + right) / 2, (top + bottom) / 2)
     await p.mouse.click(...await handleMiddle(), { button: 'right' })
     assert.equal(await p.locator(TEXT_BOX).count(), 1, 'the note is still open')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual((await saved()).map((item) => item.text), [...before, 'second'])
   })
 
   it('a note narrower than three characters widened by a handle shrinks back to its own size and no further', async () => {
     await p.mouse.click(...await gridPoint(p, SHORT_AT))
     await p.keyboard.type('hi')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.click(...await gridPoint(p, SHORT_AT))
     const index = (await saved()).length - 1
     const start = await box(TEXTS + ':last-of-type')
@@ -302,13 +302,13 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
     await dragHandle(-1000, -1000)
     const smallest = await box(TEXT_BOX)
     assert.ok(near(smallest.right - smallest.left, MIN_EM[0] * smallest.em), `${smallest.right - smallest.left} wide, em ${smallest.em}`)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.click(...await gridPoint(p, SHORT_AT))
     await p.keyboard.press('Delete')
   })
 
   it('pressing a handle of a scrolled note leaves its scroll where it was', async () => {
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.click(...await middleOfNote())
     const scrolled = await read((s) => {
       const note = document.querySelector(s)

@@ -31,7 +31,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   const puzzleKey = () => draw.puzzleKey(p)
   const saved = () => draw.saved(p)
@@ -348,7 +348,7 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await plantRedrawFailure()
     const first = errors.length
     const warnedBefore = warnings.length
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual((await saved()).map((item) => item.text), ['15'], 'stored before the redraw failed')
     planted(first, warnedBefore)
     await reload()

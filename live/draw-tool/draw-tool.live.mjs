@@ -2,7 +2,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
-import { boot, DIGIT_BUTTON, DRAW_BUTTON, noteInCells as cellsOf, NOT_NOTES, pickDraw as pick, TEXTS, texts, TOOL_KEYS, topmostAtNotes, tool as toolOf } from './draw-tool-fixtures.mjs'
+import { boot, finishNote, DIGIT_BUTTON, DRAW_BUTTON, noteInCells as cellsOf, NOT_NOTES, pickDraw as pick, TEXTS, texts, TOOL_KEYS, topmostAtNotes, tool as toolOf } from './draw-tool-fixtures.mjs'
 import { MARKUP_CANVAS } from '../cache.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
@@ -62,7 +62,7 @@ describe('Text Anywhere, injected after Start Puzzle', { concurrency: false }, (
     await p.evaluate(() => Framework.app.deselect())
     await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
     await p.keyboard.type('15')
-    await p.keyboard.press('Escape')
+    await finishNote(p)
     assert.deepEqual(await texts(p), ['15'])
     assert.equal(await selected(), 0, 'no cell selected')
     assert.equal(await tool(), 'draw')
@@ -149,7 +149,7 @@ describe('Text Anywhere with SudokuPad\'s Test Markup turned on', { concurrency:
     await pick(p)
     await p.mouse.click(...await gridPoint(p, [3.5, 3.5]))
     await p.keyboard.type('15')
-    await p.keyboard.press('Escape')
+    await finishNote(p)
     assert.deepEqual(await texts(p), ['15'])
     await p.mouse.click(...await gridPoint(p, [3.5, 3.5]), { button: 'right' })
     assert.deepEqual(await texts(p), [])
@@ -171,7 +171,7 @@ describe('Text Anywhere with SudokuPad\'s Test Markup turned on', { concurrency:
     await p.keyboard.down('m')
     assert.equal(await markupDrawing(), false)
     await p.keyboard.up('m')
-    await p.keyboard.press('Escape')
+    await finishNote(p)
     assert.deepEqual(await texts(p), ['m'])
   })
 

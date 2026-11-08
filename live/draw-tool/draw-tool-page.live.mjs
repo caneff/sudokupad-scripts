@@ -52,7 +52,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
   const typeAt = async (point, content) => {
     await p.mouse.click(...point)
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   const dragFromTo = async (from, to) => {
     await p.mouse.move(...from)
@@ -135,7 +135,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const { right } = await blankPoints()
     await p.mouse.dblclick(...right)
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'R')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.click(...right, { button: 'right' })
     assert.deepEqual(await texts(), ['B'])
     assert.equal(await savedNote('R'), undefined)
@@ -218,7 +218,7 @@ describe('Text Anywhere\'s notes off the board', { concurrency: false }, () => {
     const note = await savedNote('N')
     assert.equal(note.box.length, 2)
     assert.equal(near(note.fixed, await notePoint('N')), true, `saved at ${note.fixed}, drawn from ${await notePoint('N')}`)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('the page raised no error', () => {

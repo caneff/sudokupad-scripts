@@ -95,14 +95,14 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     await moveTo(A)
     assert.equal((await noteStyle('A', ['outlineStyle'])).outlineStyle, 'none', 'the selected note has no hover outline')
     assert.equal(await p.locator(SELECTION).count(), 1)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await draw.reopen(p, await gridPoint(p, A))
     await p.locator(TEXT_BOX).waitFor()
     await moveTo(A)
     const open = await styleOf(TEXT_BOX, ['outlineStyle', 'backgroundImage'])
     assert.notEqual(open.outlineStyle, 'solid', 'the open note has no hover outline')
     assert.equal(open.backgroundImage, 'none', 'and no hover fill')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('the cursor is move on a closed note and text in the open one', async () => {
@@ -111,7 +111,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
     await draw.reopen(p, await gridPoint(p, B))
     await p.locator(TEXT_BOX).waitFor()
     assert.equal((await styleOf(TEXT_BOX, ['cursor'])).cursor, 'text')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('the resize handles are 11 px squares with a 2 px white border, a purple ring and a shadow', async () => {
@@ -134,7 +134,7 @@ describe('Text Anywhere\'s looks', { concurrency: false }, () => {
   it('a selected note\'s outline is solid and 2 px', async () => {
     const outline = await styleOf(SELECTION, ['outlineStyle', 'outlineWidth'])
     assert.deepEqual(outline, { outlineStyle: 'solid', outlineWidth: '2px' })
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('the selection rectangle is a solid 1 px line with a faint fill', async () => {

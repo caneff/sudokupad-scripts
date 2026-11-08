@@ -60,7 +60,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   // A rectangle over A, B and C, where they are before the group move, or after it when `moved`.
   const selectThree = async (moved = false) => {
@@ -91,9 +91,9 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     await draw.reopen(p, await gridPoint(p, NOTES.B))
     assert.equal(await p.locator(TEXT_BOX).textContent(), 'B', 'the double-click opened the note')
-    await p.keyboard.press('Escape')
-    assert.equal(await p.locator(TEXT_BOX).count(), 0)
     assert.deepEqual(await selectedTexts(), [], 'opening the note ended the selection its first click made')
+    await draw.finishNote(p)
+    assert.equal(await p.locator(TEXT_BOX).count(), 0)
   })
 
   it('a click on empty space with a selection only ends it, and starts no note; Escape ends it too', async () => {
@@ -102,7 +102,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     assert.deepEqual(await selectedTexts(), [])
     assert.equal(await p.locator(TEXT_BOX).count(), 0, 'no text box opened')
     await clickAt(NOTES.A)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual(await selectedTexts(), [])
     assert.deepEqual(await draw.texts(p), ['A', 'B', 'C', 'D'])
   })
@@ -126,7 +126,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
       await p.keyboard.up('Shift')
     }
     assert.deepEqual(await selectedTexts(), ['A', 'B', 'C', 'D'])
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
 
   it('a color picked with three notes selected recolors only those three, and the next new note takes the earlier next-note color', async () => {
@@ -160,7 +160,7 @@ describe('Text Anywhere\'s selection', { concurrency: false }, () => {
     await p.click(BACKGROUND_BUTTON)
     assert.deepEqual(await Promise.all(['A', 'B', 'C', 'D'].map(async (t) => Boolean((await savedNote(t)).bg))), [true, true, true, true])
     assert.equal(await backgroundPressed(), 'true')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal(await backgroundPressed(), 'false', 'with nothing selected the button shows the next-note setting')
   })
 
