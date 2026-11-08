@@ -487,9 +487,10 @@ test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated pictur
   assert.match(alt, /press 1 to 9/)
 })
 
-test(`${DRAW} stays short: its text is under 320 words`, () => {
-  const words = plain(read(DRAW).replace(/<(script|footer)[\s\S]*?<\/\1>/g, '').replace(/<img[^>]*>/g, m => ' ')).split(' ').length
-  assert.ok(words < 320, `site/${DRAW} has ${words} words`)
+const DRAW_WORD_LIMIT = 320
+test(`${DRAW} stays short: its text is under ${DRAW_WORD_LIMIT} words`, () => {
+  const words = plain(read(DRAW).replace(/<(script|footer)[\s\S]*?<\/\1>/g, '')).split(' ').length
+  assert.ok(words < DRAW_WORD_LIMIT, `site/${DRAW} has ${words} words`)
 })
 
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {
