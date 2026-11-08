@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { LOAD_MS } from './cache.mjs'
 import { GIVENS, MODE_STORAGE_KEY, savedProfiles, SEED } from './color-by-digit/color-by-digit-fixtures.mjs'
 import { DRAW_BUTTON, TEXT_BOX, texts, tool } from './draw-tool/draw-tool-fixtures.mjs'
-import { injectAtIdle, startPuzzle } from './page.mjs'
+import { injectAtIdle, startPuzzle, START } from './page.mjs'
 import { cellCentre, gridPoint } from './pen.mjs'
 import { clickUntil, SETTLE_MS } from './settle.mjs'
 import { animationsDone } from './settings.mjs'
@@ -131,11 +131,11 @@ export async function placeNote (p, text, point = NOTE_POINT) {
 
 // Returns once the page after a Back or a Forward shows its puzzle, pressing Start Puzzle (or Continue) when the page asks for it.
 export async function resumeAfterHistory (p) {
-  const state = await p.waitForFunction(() => {
+  const state = await p.waitForFunction(([source, flags]) => {
     if (typeof Framework === 'undefined' || !Framework.app?.puzzle?.cells?.length) return false
-    const start = [...document.querySelectorAll('button')].find((b) => /Start Puzzle|Continue|Resume/i.test(b.textContent) && b.offsetParent)
+    const start = [...document.querySelectorAll('button')].find((b) => new RegExp(source, flags).test(b.textContent) && b.offsetParent)
     return start ? 'start' : (document.querySelector('#control-undo')?.offsetParent ? 'ready' : false)
-  }, null, { timeout: LOAD_MS })
+  }, [START.source, START.flags], { timeout: LOAD_MS })
   if (await state.jsonValue() === 'start') await startPuzzle(p)
   await enableTools(p)
 }
