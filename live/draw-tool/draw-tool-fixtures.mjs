@@ -22,9 +22,9 @@ export const NOTE_GROUPS = '.draw-tool-board, .draw-tool-screen'
 export const NOT_NOTES = `#draw-tool-layer > :not(.draw-tool-text, .draw-tool-resize, .draw-tool-selection, ${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > :not(.draw-tool-text)`
 // Every element in the layer but the groups themselves.
 export const IN_LAYER = `#draw-tool-layer > :not(${NOTE_GROUPS}), :is(${NOTE_GROUPS}) > *`
-// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open, and a deleted one that is fading out.
-export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox, .draw-tool-fading)'
-export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox, .draw-tool-fading)'
+// The notes drawn, leaving out the one open for typing, which is its own element in the layer while it is open.
+export const TEXT_BGS = '#draw-tool-layer .draw-tool-text-bg:not(.draw-tool-textbox)'
+export const TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 export const TEXT_BOX = '#draw-tool-layer .draw-tool-textbox'
 // The sliders under the controls, and the Size and Transparency sliders in them.
 export const SLIDERS = '.draw-tool-sliders'

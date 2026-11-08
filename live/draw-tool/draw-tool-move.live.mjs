@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's moving on sudokupad.app: a left-drag that starts on a note moves it (following the pointer, and kept over a
-// reload), a drag never leaves the note under the controls or off the window, a double-click on a note still edits it, a drag that starts off every note makes nothing, and a
+// reload), a drag may drop the note on the controls but never off the window, a double-click on a note still edits it, a drag that starts off every note makes nothing, and a
 // moved note keeps its background. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -106,17 +106,17 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
     assert.deepEqual(await settle(bgBoxes, [boxAfter]), [boxAfter])
   })
 
-  it('a drag held, or ended, over the controls or past the window leaves the note where a press can still reach it', async () => {
-    // The first note's middle on the screen, and whether it is clear of the controls and inside the window.
-    const reachable = () => read((selector) => {
-      const note = document.querySelector(selector).getBoundingClientRect()
+  it('a drag held, or ended, over the controls stays there, and one past the window leaves the note inside it', async () => {
+    // The note's middle on the screen, and whether it is inside the window; found by its text, since a note dropped off the board leaves the board's group.
+    const [text] = await texts()
+    const reachable = () => read(([selector, content]) => {
+      const note = [...document.querySelectorAll(selector)].find((e) => e.textContent === content).getBoundingClientRect()
       const [x, y] = [note.x + note.width / 2, note.y + note.height / 2]
-      const controls = document.querySelector('#controls').getBoundingClientRect()
-      const overControls = x >= controls.left && x <= controls.right && y >= controls.top && y <= controls.bottom
-      return { point: [x, y], reachable: !overControls && x >= 0 && y >= 0 && x <= window.innerWidth && y <= window.innerHeight }
-    }, TEXTS)
+      return { point: [x, y], reachable: x >= 0 && y >= 0 && x <= window.innerWidth && y <= window.innerHeight }
+    }, [TEXTS, text])
     const keypad = await p.locator('.controls-input').boundingBox()
-    for (const to of [[keypad.x + keypad.width / 2, keypad.y + keypad.height / 2], [3000, 300]]) {
+    const overKeypad = [keypad.x + keypad.width / 2, keypad.y + keypad.height / 2]
+    for (const to of [overKeypad, [3000, 300]]) {
       const { point } = await reachable()
       await p.mouse.move(...point)
       await p.mouse.down()
@@ -129,6 +129,16 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
       const after = await reachable()
       assert.equal(held.reachable, true, `held at ${to}, the note is at ${held.point}`)
       assert.equal(after.reachable, true, `dragged to ${to}, the note is at ${after.point}`)
+      if (to === overKeypad) {
+        assert.equal(held.point.every((v, i) => Math.abs(v - to[i]) <= 3) && after.point.every((v, i) => Math.abs(v - to[i]) <= 3), true, `dragged onto the controls at ${to}, held at ${held.point} and dropped at ${after.point}`)
+        // A note dropped on the controls takes a press again: another drag moves it.
+        await p.mouse.move(...after.point)
+        await p.mouse.down()
+        await p.mouse.move(after.point[0] - 40, after.point[1] - 40, { steps: 8 })
+        await p.mouse.up()
+        const again = await reachable()
+        assert.equal(again.point.every((v, i) => Math.abs(v - (after.point[i] - 40)) <= 3), true, `pressed on the controls at ${after.point} and dragged 40 px up and left, the note is at ${again.point}`)
+      }
     }
   })
 

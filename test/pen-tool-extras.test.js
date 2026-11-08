@@ -1607,28 +1607,37 @@ test('the outline setting is off only for a saved false: nothing saved and anyth
   for (const ok of [true, undefined, null, 'false', 0, 1, {}, []]) assert.equal(SETTINGS.outline.normalize(ok), true, JSON.stringify(ok))
 })
 
-test('buildOutlineCss is empty when the outline is off and filters the pen layer and the copies of an erased line fading beside it, and not the highlight, when on', () => {
+test('buildOutlineCss is empty when the outline is off and filters the pen layer and not the highlight, when on', () => {
   assert.equal(buildOutlineCss(false), '')
-  assert.equal(buildOutlineCss(true), `:root:root #cell-pen, :root:root .pen-tool-extras-erasing { filter: url(#${OUTLINE_FILTER_ID}); }`)
+  assert.equal(buildOutlineCss(true), `:root:root #cell-pen, :root:root .pen-tool-extras-faded-group { filter: url(#${OUTLINE_FILTER_ID}); }`)
   assert.doesNotMatch(buildOutlineCss(true), /penhint|pen-tool-extras-hint/)
 })
 
-test('buildFeedbackCss fades the erase\'s strokes to 0.3, and outranks the layer\'s opacity-1 rule', () => {
+test('buildFeedbackCss hides the erase\'s strokes (their copies, in one group, show the fade), and outranks the layer\'s opacity-1 rule', () => {
   const rules = buildFeedbackCss(3).split('\n')
-  assert.equal(rules[0], ':root:root .cell-pen.pen-tool-extras-faded { opacity: 0.3; }')
+  assert.equal(rules[0], ':root:root .cell-pen.pen-tool-extras-faded { opacity: 0; }')
 })
 
 test('buildFeedbackCss dashes the hint of the page 2 pens only, for the hint\'s width of 16: 3 widths is 32 on, 32 off, half a dash in; 0 is dots', () => {
-  const dashed = (dash) => buildFeedbackCss(dash).split('\n').filter((rule) => rule.includes('.penhint'))
+  const dashed = (dash) => buildFeedbackCss(dash).split('\n').filter((rule) => rule.startsWith(':root:root .penhint:is'))
   assert.deepEqual(dashed(3), [':root:root .penhint:is(.pencolor-a, .pencolor-b, .pencolor-c, .pencolor-d, .pencolor-e, .pencolor-f, .pencolor-g, .pencolor-h, .pencolor-i) { stroke-dasharray: 32 32; stroke-dashoffset: 16; }'])
   assert.match(dashed(0)[0], /\{ stroke-dasharray: 0 31\.9968; \}$/)
 })
 
-test('buildFeedbackCss fills the arrowheads beside an arrow pen\'s hint in that pen\'s color, one rule for each of the nine, at the hint\'s 0.6', () => {
+test('buildFeedbackCss fills the arrowheads beside an arrow pen\'s hint in that pen\'s color, one rule for each of the nine, solid (the hint layer carries the 0.6)', () => {
   const heads = buildFeedbackCss(3).split('\n').filter((rule) => rule.includes('hint-arrows'))
   assert.equal(heads.length, 9)
-  assert.equal(heads[0], ':root:root .pen-tool-extras-hint-arrows.pencolor-j { fill: var(--puzzle-pencolor-1); stroke: none; opacity: 0.6; }')
-  assert.equal(heads[8], ':root:root .pen-tool-extras-hint-arrows.pencolor-z { fill: var(--puzzle-pencolor-9); stroke: none; opacity: 0.6; }')
+  assert.equal(heads[0], ':root:root .pen-tool-extras-hint-arrows.pencolor-j { fill: var(--puzzle-pencolor-1); stroke: none; }')
+  assert.equal(heads[8], ':root:root .pen-tool-extras-hint-arrows.pencolor-z { fill: var(--puzzle-pencolor-9); stroke: none; }')
+})
+
+test('buildFeedbackCss fades the hint layer as one picture: 0.6 on the layer, the drag hint and its arrowheads solid, the erase hint at the 0.5 it has today', () => {
+  const rules = buildFeedbackCss(3).split('\n').filter((rule) => rule.startsWith(':root:root #pen-tool-extras-hint'))
+  assert.deepEqual(rules, [
+    ':root:root #pen-tool-extras-hint { opacity: 0.6; }',
+    ':root:root #pen-tool-extras-hint .penhint { opacity: 1; }',
+    ':root:root #pen-tool-extras-hint .penhint.pencolor-erase { opacity: calc(0.5 / 0.6); }'
+  ])
 })
 
 test('the outline filter grows the layer\'s combined shape by the default width with a square growth then a blur and a cut (round corners), fills it white and draws the layer over it', () => {
