@@ -9,6 +9,7 @@ import { gridPoint } from '../pen.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
 const SYMBOLS_AT = [1.5, 1.5]
+const TRAILING_AT = [3.5, 3.5]
 const MOVED_AT = [7.5, 6.5]
 const BY = [1, 2]
 const CHECK_BOX = `${TEXTS} .draw-tool-check`
@@ -79,6 +80,20 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     assert.deepEqual(await savedTexts(), ['1≤2'])
   })
 
+  it('deleting text after a typed arrow, or a note closing on the word sum, leaves the text as typed or makes the sigma', async () => {
+    await typeInto(TRAILING_AT, '')
+    await p.keyboard.insertText('r1->r2')
+    assert.equal(await boxText(), 'r1->r2', 'text inserted whole is not converted')
+    await p.keyboard.press('Backspace')
+    await p.keyboard.press('Backspace')
+    assert.equal(await boxText(), 'r1->', 'deleting back to the arrow does not convert it')
+    await p.keyboard.press('Control+A')
+    await p.keyboard.type('r5 sum')
+    assert.equal(await boxText(), 'r5 sum', 'sum waits for the character after it')
+    await p.keyboard.press('Escape')
+    assert.deepEqual(await savedTexts(), ['1≤2', 'r5 Σ'])
+  })
+
   it('a click on a checklist box ticks it and saves the note, a reload keeps it, and the note does not open', async () => {
     await draw.plantDrawing(p, [{ kind: 'text', color: 1, size: 20, opacity: 100, text: '- [ ] one\n- [x] two', at: [352, 288] }])
     await reload()
@@ -94,7 +109,7 @@ describe('Text Anywhere\'s polish', { concurrency: false }, () => {
     assert.deepEqual(await savedTexts(), ['- [x] one\n- [ ] two'])
   })
 
-  it('a click on a box starts no drag: the note stays where it was', async () => {
+  it('a press on a box that moves the pointer starts no drag: the note stays where it was', async () => {
     const before = (await draw.saved(p))[0].at
     const box = await p.locator(CHECK_BOX).first().boundingBox()
     await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)

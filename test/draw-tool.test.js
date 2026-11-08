@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, replaceSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -642,19 +642,23 @@ test('toggledCheck flips one line\'s box and leaves the other lines alone', () =
   assert.equal(toggledCheck('plain', 0), 'plain')
 })
 
-test('replaceSymbols turns each pair into its sign', () => {
-  assert.equal(replaceSymbols('a->b <-c x!=y p<=q r>=s'), 'a→b ←c x≠y p≤q r≥s')
+test('closedSymbols turns a note\'s last word "sum" into a sigma, since nothing is typed after it', () => {
+  assert.equal(closedSymbols('r5 sum'), 'r5 Σ')
+  assert.equal(closedSymbols('sum'), 'Σ')
+  assert.equal(closedSymbols('sum of 5'), 'sum of 5')
+  assert.equal(closedSymbols('summary'), 'summary')
+  assert.equal(closedSymbols('subsum'), 'subsum')
+  assert.equal(closedSymbols('a->b'), 'a->b')
 })
 
-test('replaceSymbols turns "sum" into a sigma only as a word of its own', () => {
-  assert.equal(replaceSymbols('sum of 5'), 'Σ of 5')
-  assert.equal(replaceSymbols('the sum'), 'the Σ')
-  assert.equal(replaceSymbols('summary subsum sums'), 'summary subsum sums')
+test('symbolJustTyped gives each pair its sign', () => {
+  const sign = (pair) => symbolJustTyped(`a${pair}`, 3).symbol
+  assert.deepEqual(['->', '<-', '!=', '<=', '>='].map(sign), ['→', '←', '≠', '≤', '≥'])
 })
 
-test('replaceSymbols leaves text with none of them as it is', () => {
-  assert.equal(replaceSymbols('a - b < c = d > e !'), 'a - b < c = d > e !')
-  assert.equal(replaceSymbols(''), '')
+test('symbolJustTyped leaves text without a symbol alone', () => {
+  assert.equal(symbolJustTyped('a - b < c = d > e !', 19), null)
+  assert.equal(symbolJustTyped('', 0), null)
 })
 
 test('symbolJustTyped finds the pair that ends at the caret, with the sign to put there', () => {
