@@ -6,12 +6,15 @@ import { openSettings } from './settings.mjs'
 import { gridPoint, keydownDefaults, openPenTool, penEntries } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
-const BLACK = 'rgb(0, 0, 0)'
-const DIGITS = '1234567890'
+export const BLACK = 'rgb(0, 0, 0)'
+export const DIGITS = '1234567890'
 export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
-const DRAW_BUTTON = '#control-draw'
+export const DRAW_BUTTON = '#control-draw'
+
+// SudokuPad binds a new button's click a moment after it appears, so the click repeats until the tool is current.
+export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => p.evaluate(() => Framework.app.tool), 'draw', SETTLE_MS)
 
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
@@ -121,8 +124,7 @@ export const SCRIPTS = [
     control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
     // With Text Anywhere picked, a left click on r3c3 and 15 typed leave one note.
     act: async (p) => {
-      const tool = () => p.evaluate(() => Framework.app.tool)
-      assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS), 'draw')
+      assert.equal(await pickDraw(p), 'draw')
       await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
       await p.keyboard.type('15')
       await p.keyboard.press('Escape')
