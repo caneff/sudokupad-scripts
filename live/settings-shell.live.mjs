@@ -34,6 +34,23 @@ for (const { file, entry, editor, buttons } of SCRIPTS) {
       await closeDialogWith(p, 'Cancel', editor)
     })
 
+    it('the buttons are one row at the dialog\'s right: Save filled purple left of Cancel, Cancel and any extra button plain', async () => {
+      await openScriptDialog(p, entry, editor)
+      const row = await p.evaluate(() => {
+        const dialog = document.querySelector('.dialog').getBoundingClientRect()
+        return [...document.querySelectorAll('.dialog-options button')].map((b) => {
+          const { x, right, y, height } = b.getBoundingClientRect()
+          return { text: b.textContent.trim(), x, right, middle: Math.round(y + height / 2), height: Math.round(height), background: window.getComputedStyle(b).backgroundColor, dialogRight: dialog.right }
+        })
+      })
+      assert.deepEqual(row.map((b) => b.text), buttons)
+      assert.equal(row.every((b) => Math.abs(b.middle - row[0].middle) <= 3 && b.height === row[0].height), true, `one row of equal buttons: ${JSON.stringify(row)}`)
+      assert.equal(row.every((b, i) => i === 0 || b.x > row[i - 1].x), true, 'left to right in order')
+      assert.equal(row.at(-1).dialogRight - row.at(-1).right <= 24, true, `right-aligned: ${JSON.stringify(row)}`)
+      assert.deepEqual(row.map((b) => b.background), ['rgb(107, 63, 160)', ...row.slice(1).map(() => 'rgb(241, 239, 245)')])
+      await closeDialogWith(p, 'Cancel', editor)
+    })
+
     it('Save with nothing changed writes nothing and closes the dialog', async () => {
       await openScriptDialog(p, entry, editor)
       await p.evaluate(() => {

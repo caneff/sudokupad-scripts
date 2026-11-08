@@ -541,23 +541,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.deepEqual(await allWidths(), { full: [5], half: [2.5] })
     })
 
-    it('the buttons are one row under a divider: Save (filled purple), then Cancel (light), then Restore defaults as small underlined grey text at the right', async () => {
+    it('the buttons are one row under a divider: Save (filled purple), then Cancel and Restore defaults, plain, the same size', async () => {
       await openExtrasEditor(p)
       // All three in one read, so a dialog still moving into place cannot put them in different frames.
       const [save, cancel, restore] = await p.evaluate(() => ['Save', 'Cancel', 'Restore defaults'].map((text) => {
         const el = [...document.querySelectorAll('.dialog button')].find((b) => b.textContent.trim() === text)
         const box = el.getBoundingClientRect()
         const style = window.getComputedStyle(el)
-        return { x: box.x, y: Math.round(box.y + box.height / 2), height: Math.round(box.height), fontSize: parseFloat(style.fontSize), underline: style.textDecorationLine, background: style.backgroundColor, color: style.color }
+        return { x: box.x, y: Math.round(box.y + box.height / 2), height: Math.round(box.height), background: style.backgroundColor }
       }))
       assert.deepEqual([restore.y, cancel.y].map((y) => Math.abs(y - save.y) <= 3), [true, true], 'one row')
       assert.equal(save.x < cancel.x && cancel.x < restore.x, true, 'Save, Cancel, Restore defaults from the left')
-      assert.equal(cancel.height, save.height)
-      assert.equal(restore.fontSize < save.fontSize, true, 'small text')
-      assert.match(restore.underline, /underline/)
-      assert.equal(restore.background, 'rgba(0, 0, 0, 0)', 'Restore defaults has no fill')
-      assert.equal(save.background, 'rgb(106, 27, 154)', 'Save is filled purple')
-      assert.notEqual(cancel.background, save.background)
+      assert.deepEqual([cancel.height, restore.height], [save.height, save.height])
+      assert.equal(save.background, 'rgb(107, 63, 160)', 'Save is filled purple')
+      assert.deepEqual([cancel.background, restore.background], ['rgb(241, 239, 245)', 'rgb(241, 239, 245)'], 'Cancel and Restore defaults are plain')
       const row = await dialogButton(p, 'Save').evaluate((el) => {
         const options = el.parentElement
         const style = window.getComputedStyle(options)

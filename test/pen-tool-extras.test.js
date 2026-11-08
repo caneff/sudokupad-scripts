@@ -2235,8 +2235,8 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
   assert.deepEqual(readPaste(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })
 
-test('the dialog and its button row are styled through the editor inside the dialog', () => {
-  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options \{ display: flex !important;/)
-  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options button\[data-role="save"\]/)
+test('the dialog is styled through the editor inside the dialog; its button row look is the shared shell\'s', () => {
+  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{ width: fit-content !important;/)
+  assert.doesNotMatch(DIALOG_CSS, /data-role="(save|cancel|restore)"/)
   assert.doesNotMatch(DIALOG_CSS, /pen-tool-extras-dialog/)
 })

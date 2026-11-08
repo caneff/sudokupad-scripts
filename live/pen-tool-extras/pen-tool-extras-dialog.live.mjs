@@ -242,7 +242,7 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     }
   })
 
-  it('the buttons are one row at the bottom: Save, then Cancel, then Restore defaults, which sits at the right', async () => {
+  it('the buttons are one row at the bottom: Save, then Cancel, then Restore defaults, all at the right', async () => {
     await openSettledEditor(p)
     const [save, cancel, restore] = await p.evaluate(() => ['save', 'cancel', 'restore'].map((role) => { const { x, y, width, height } = document.querySelector(`.dialog-options button[data-role="${role}"]`).getBoundingClientRect(); return { x, y, width, height } }))
     assert.equal(save.x < cancel.x && cancel.x < restore.x, true)
