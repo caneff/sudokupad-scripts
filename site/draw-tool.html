@@ -9,7 +9,7 @@
 <body class="details">
   <p class="back"><a href="index.html">&larr; All SudokuPad scripts</a></p>
   <h1>Text Anywhere</h1>
-  <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad.</p>
+  <p class="warning">This script can break at any time. It relies on SudokuPad's internals, which any update can change, and it isn't made or supported by SudokuPad. When an update breaks one part, only that part turns off, and a bar at the bottom of the page names it with a link to report it.</p>
   <p class="lede">Adds to <a href="https://sudokupad.app">SudokuPad</a> a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.</p>
   <p class="actions"><a class="install" href="https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/draw-tool.user.js">Install Text Anywhere</a></p>
 
@@ -41,7 +41,7 @@
     <li><strong>Long notes</strong> <p>A long note wraps and scrolls; drag a corner to resize it.</p></li>
     <li><strong>Readable over digits</strong> <p>A white outline round the letters, and an optional box behind the note.</p></li>
     <li><strong>Colors, size and transparency</strong> <p>Nine colors of its own (keys 1-9), and Size and Transparency sliders.</p></li>
-    <li><strong>Select and move</strong> <p>Click a note or drag a box round several; drag to move, arrow keys to nudge.</p></li>
+    <li><strong>Select and move</strong> <p>Click a note or drag a box round several; drag to move, arrow keys to nudge, hold to keep nudging.</p></li>
     <li><strong>Erase</strong> <p>Right-click a note, or press Delete.</p></li>
     <li><strong>Kept per puzzle</strong> <p>Notes survive a reload, for your last 50 puzzles.</p></li>
     <li><strong>Settings</strong> <p>Color presets, the box color, the outline, a frame round boxes, and Copy and Paste to another browser.</p></li>
@@ -54,7 +54,7 @@
   <h2>Good to know</h2>
   <ul class="notes">
     <li>The notes are kept in this browser only, so another browser or device does not show them.</li>
-    <li>Restart clears the notes. If the notes cannot be saved, a message says so.</li>
+    <li>Undo right after Restart restores the notes. If the notes cannot be saved, a message says so.</li>
   </ul>
   <footer><a href="index.html">&larr; All SudokuPad scripts</a> &middot; <a href="https://github.com/caneff/sudokupad-scripts">Source on GitHub</a></footer>
   <script src="slides.js"></script>

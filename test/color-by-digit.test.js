@@ -4,8 +4,9 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { fakeStore, quietly } = require('./fake-store.js')
-const { copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
+const { openingDraft, reduceDraft, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
 const groups = [{ key: 'a', digits: ['1', '2'] }, { key: 'b', digits: ['3'] }]
@@ -901,8 +902,8 @@ const pageDocument = (extra = {}) => ({
   getElementById: () => null,
   documentElement: {},
   head: { appendChild: () => {} },
-  body: { appendChild: () => {} },
-  createElement: () => ({ style: {}, remove: () => {} }),
+  body: { appendChild: () => {}, append: () => {} },
+  createElement: () => ({ style: {}, remove: () => {}, setAttribute: () => {}, append: () => {}, addEventListener: () => {} }),
   ...extra
 })
 // Fires one event at the page's listeners, from a target inside the elements `inside` names (selector to element).
@@ -924,7 +925,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
   delete require.cache[path]
   const calls = []
   const app = {
-    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [] },
+    puzzle: { cells: [{ given: '1', colours: [], propVisible: () => false, propGet: () => [] }], selectedCells: [], addEventListener: () => {} },
     act: (a) => calls.push(['act', a.type]),
     deselect: () => {},
     select: () => {},
@@ -938,7 +939,10 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     getData: () => null,
     setData: (key, value) => calls.push(['save', key, value]),
     addControlButton: () => calls.push(['button']),
-    addSetting: () => calls.push(['setting'])
+    addSetting: () => calls.push(['setting']),
+    showDialog: () => {},
+    closeDialog: () => {},
+    app: { tools: { colour: {} } }
   }
   try {
     require(path)
@@ -957,20 +961,25 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
   }
 })
 
-test('entry point: a Framework without getApp warns and changes nothing', () => {
+test('entry point: a Framework without getApp turns off the features that need an app, each named once, and starts the rest', async () => {
   const path = require.resolve('../color-by-digit.user.js')
   const saved = require.cache[path]
   delete require.cache[path]
   const warnings = []
   const warn = console.warn
   console.warn = (...args) => warnings.push(args.join(' '))
-  global.Framework = {}
+  const calls = []
+  global.document = pageDocument()
+  global.window = pageWindow()
+  global.Framework = { getData: () => null, setData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
   try {
     require(path)
-    assert.deepEqual(warnings, ['color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed'])
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button, redraw after the puzzle loads skipped because SudokuPad has no Framework.getApp'])
+    assert.deepEqual(calls, ['setting'])
   } finally {
     console.warn = warn
-    delete global.Framework
+    delete global.Framework; delete global.document; delete global.window
     delete require.cache[path]
     if (saved) require.cache[path] = saved
   }
@@ -1007,7 +1016,7 @@ function mockApp (cellDefs, { single = false } = {}) {
     cell.propGet = () => [...(def.centre || [])]
     return cell
   })
-  const puzzle = { cells, selectedCells: [], inGroup: false }
+  const puzzle = { cells, selectedCells: [], inGroup: false, addEventListener: () => {} }
   const app = {
     puzzle,
     calls,
@@ -1050,7 +1059,10 @@ async function withScript (app, fn, stored = {}) {
     getData: (key) => app.stored[key] ?? null,
     setData: (key, value) => { app.stored[key] = value },
     addControlButton: (spec) => { app.buttonTitle = spec.title },
-    addSetting: () => {}
+    addSetting: () => {},
+    showDialog: () => {},
+    closeDialog: () => {},
+    app: { tools: { colour: {} } }
   }
   try {
     require(path)
@@ -1827,4 +1839,141 @@ test('shownChips: Both with unsynced profiles lists its chips in ascending digit
   assert.deepEqual(digitsOf(shownChips('both', cells, digits)), ['1', '9'])
   // A cell group of only 0 is reached: k is 2, and 0 is the one digit of the group a.
   assert.deepEqual(digitsOf(shownChips('both', [{ key: 'a', digits: ['0'] }, { key: 'b', digits: ['1', '2'] }], ODD)), ['0', '1'])
+})
+
+// A SudokuPad with every internal Color by Digit needs.
+const completeRoots = () => {
+  const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], addEventListener () {} } }
+  return { Framework: { getApp () {}, getData () {}, setData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
+}
+const withoutPath = (roots, internal) => {
+  const [root, ...keys] = internal.split('.')
+  const last = keys.pop()
+  delete keys.reduce((owner, key) => owner[key], roots[root])[last]
+  return roots
+}
+
+test('Color by Digit declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeRoots()), new Map())
+})
+
+test('without one internal, only the features that need it are lacking', () => {
+  const cases = [
+    ['app.act', ['cells']], ['app.select', ['cells']], ['app.deselect', ['cells']], ['app.on', ['cells']],
+    ['app.puzzle.cells', ['cells', 'loading']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.addEventListener', ['loading']],
+    ['app.refreshControls', ['button']], ['Framework.addControlButton', ['button']],
+    ['Framework.getApp', ['cells', 'button', 'loading']],
+    ['Framework.getData', ['saved', 'editor']], ['Framework.setData', ['saved', 'editor']],
+    ['Framework.addSetting', ['editor']], ['Framework.showDialog', ['editor']], ['Framework.closeDialog', ['editor']], ['Framework.app.tools.colour', ['editor']]
+  ]
+  for (const [internal, features] of cases) {
+    assert.deepEqual(lackingInternals(FEATURES, withoutPath(completeRoots(), internal)), new Map([[internal, features]]), internal)
+  }
+})
+
+const SCRIPT = path.join(__dirname, '..', 'color-by-digit.user.js')
+
+test('a document listener of the mode button whose own code throws turns the button off, and the throw stays in the script', () => {
+  const runs = failEachListener(SCRIPT, FEATURES, 'document')
+  assert.equal(runs.length, 6, runs.map(({ where }) => where).join(', '))
+  for (const { where, escaped, warnings } of runs) {
+    assert.deepEqual(escaped.map(({ error }) => String(error)), [], where)
+    assert.match(warnings.join('\n'), /^color-by-digit: mode button skipped because SudokuPad changed: Error: the listener read event\./, where)
+  }
+})
+
+test('with cell coloring off, the icon and the digit shades still wait for the puzzle to load', () => {
+  const { added } = startOnStandInPage(SCRIPT, FEATURES, { missing: ['app.act'] })
+  assert.ok(added.some(({ where }) => where === 'Framework.app.puzzle.addEventListener()'), added.map(({ where }) => where).join(', '))
+})
+
+// The settings dialog's draft: three profiles over twoPages' colors, the second one active.
+const dialogState = () => ({ profiles: [{ name: 'A', groups: [g('a2', ['1'])] }, { name: 'B', groups: [g('b3', ['2'])] }, { name: 'C', groups: [] }], active: 1 })
+const opened = (state = dialogState(), mode = 'cell') => openingDraft(state, mode, twoPages())
+const run = (draft, ...events) => events.reduce(reduceDraft, draft)
+const shownGroups = (draft) => draft.state.profiles[draft.selected].groups
+
+test('openingDraft selects the active profile, keeps its name, and starts the brush on its lowest group\'s color and page', () => {
+  const draft = opened(dialogState(), 'both')
+  assert.deepEqual({ selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page, mode: draft.mode }, { selected: 1, keptName: 'B', brush: 'b3', page: 1, mode: 'both' })
+  assert.deepEqual(draft.state, dialogState())
+})
+
+test('reduceDraft select: the row\'s profile is selected, its name kept, and the brush and page restart from its groups', () => {
+  const draft = run(opened(), { type: 'select', index: 0 })
+  assert.deepEqual({ selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { selected: 0, keptName: 'A', brush: 'a2', page: 0 })
+  assert.equal(draft.state.active, 1, 'selecting picks no profile')
+  assert.deepEqual(run(opened(), { type: 'select', index: 2 }).brush, 'b1', 'a profile with no groups starts on the current page\'s first color')
+})
+
+test('reduceDraft paint: the stroke\'s first digit decides paint or clear, and every digit after follows it', () => {
+  const painting = run(opened(), { type: 'press' }, { type: 'paint', digit: '5' }, { type: 'paint', digit: '2' })
+  assert.deepEqual(shownGroups(painting), [g('b3', ['2', '5'])], 'a stroke that started by painting never clears')
+  const clearing = run(painting, { type: 'press' }, { type: 'paint', digit: '2' }, { type: 'paint', digit: '5' }, { type: 'paint', digit: '7' })
+  assert.deepEqual(shownGroups(clearing), [], 'a stroke that started on a brush-colored digit clears each digit it passes')
+})
+
+test('reduceDraft paint: with no brush, or a digit already as the stroke leaves it, the draft is the same draft', () => {
+  const noBrush = { ...opened(), brush: null }
+  assert.equal(run(noBrush, { type: 'press' }, { type: 'paint', digit: '5' }), noBrush)
+  const painted = run(opened(), { type: 'press' }, { type: 'paint', digit: '5' })
+  assert.equal(reduceDraft(painted, { type: 'paint', digit: '5' }), painted)
+})
+
+test('reduceDraft key-paint: a keyboard click on a digit toggles it in the brush\'s color, with no stroke', () => {
+  const painted = run(opened(), { type: 'key-paint', digit: '5' })
+  assert.deepEqual(shownGroups(painted), [g('b3', ['2', '5'])])
+  assert.deepEqual(shownGroups(run(painted, { type: 'key-paint', digit: '5' })), [g('b3', ['2'])])
+  const noBrush = { ...opened(), brush: null }
+  assert.equal(reduceDraft(noBrush, { type: 'key-paint', digit: '2' }), noBrush, 'with no brush a keyboard click leaves the digit\'s color alone')
+})
+
+test('reduceDraft brush, page and clear: a swatch sets the brush, the page choice the page, and Clear empties the selected profile', () => {
+  const draft = run(opened(), { type: 'brush', key: 'a7' }, { type: 'page', page: 0 }, { type: 'clear' })
+  assert.deepEqual({ brush: draft.brush, page: draft.page, groups: shownGroups(draft) }, { brush: 'a7', page: 0, groups: [] })
+  assert.deepEqual(draft.state.profiles[0].groups, [g('a2', ['1'])], 'only the selected profile is cleared')
+})
+
+test('reduceDraft rename: the typed name renames the selected profile, and a blank one restores the name it had when selected', () => {
+  const typed = run(opened(), { type: 'rename', name: 'Bee' })
+  assert.equal(typed.state.profiles[1].name, 'Bee')
+  assert.equal(run(typed, { type: 'rename', name: '   ' }).state.profiles[1].name, 'B')
+})
+
+test('reduceDraft choose: Mode sets the draft mode, Cell the active profile, and Digit None moves a digit mode to one without digit colors', () => {
+  assert.equal(run(opened(), { type: 'choose', role: 'mode-draft', value: 'both' }).mode, 'both')
+  assert.equal(run(opened(), { type: 'choose', role: 'cell-profile', value: '2' }).state.active, 2)
+  const none = run(opened(dialogState(), 'both'), { type: 'choose', role: 'digit-profile', value: 'none' })
+  assert.equal(none.mode, 'cell')
+  assert.equal(usesDigitColors(none.state), false)
+  assert.throws(() => reduceDraft(opened(), { type: 'choose', role: 'color-choice', value: '0' }), /no pulldown color-choice/)
+})
+
+test('reduceDraft new-profile: the selected profile is copied to the end and the copy selected; at the limit the draft is the same draft', () => {
+  const copied = run(opened(), { type: 'new-profile' })
+  assert.deepEqual({ count: copied.state.profiles.length, selected: copied.selected, groups: shownGroups(copied) }, { count: 4, selected: 3, groups: [g('b3', ['2'])] })
+  const full = opened({ profiles: Array.from({ length: MAX_PROFILES }, (_, i) => ({ name: `P${i}`, groups: [] })), active: 0 })
+  assert.equal(reduceDraft(full, { type: 'new-profile' }), full)
+})
+
+test('reduceDraft delete: the row goes and the selection stays on the same profile; a refused delete is the same draft', () => {
+  const deleted = run(opened(), { type: 'delete', index: 0 })
+  assert.deepEqual(deleted.state.profiles.map((p) => p.name), ['B', 'C'])
+  assert.equal(deleted.state.profiles[deleted.selected].name, 'B')
+  const one = opened({ profiles: [{ name: 'Only', groups: [] }], active: 0 })
+  assert.equal(reduceDraft(one, { type: 'delete', index: 0 }), one)
+})
+
+test('reduceDraft move: a dragged row moves, the selection follows its profile, and a drop on its own place is the same draft', () => {
+  const moved = run(opened(), { type: 'move', from: 0, to: 2 })
+  assert.deepEqual(moved.state.profiles.map((p) => p.name), ['B', 'C', 'A'])
+  assert.equal(moved.state.profiles[moved.selected].name, 'B')
+  const draft = opened()
+  assert.equal(reduceDraft(draft, { type: 'move', from: 1, to: 1 }), draft)
+})
+
+test('reduceDraft reload: pasted settings replace the draft, selecting their active profile, in their mode', () => {
+  const pasted = { profiles: [{ name: 'X', groups: [g('a5', ['9'])] }, { name: 'Y', groups: [] }], active: 0 }
+  const draft = run(opened(), { type: 'brush', key: 'b9' }, { type: 'reload', state: pasted, mode: 'off' })
+  assert.deepEqual({ state: draft.state, mode: draft.mode, selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { state: pasted, mode: 'off', selected: 0, keptName: 'X', brush: 'a5', page: 0 })
 })

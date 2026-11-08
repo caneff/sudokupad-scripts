@@ -530,11 +530,36 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
+  // <lib:ready>
+  // Generated from lib/ready.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // Resolves with what `check()` first returns that is not null, undefined or false, polling every `pollMs`. Rejects with `<what> not ready after <ms> ms` once `timeoutMs`
+  // passes, so a wait for SudokuPad always ends and says what it was waiting for. A `check` that throws rejects with that error.
+  function whenReady (check, { timeoutMs, what, pollMs = 100 }) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs
+      const poll = () => {
+        let value
+        try {
+          value = check()
+        } catch (error) {
+          reject(error)
+          return
+        }
+        if (value !== null && value !== undefined && value !== false) resolve(value)
+        else if (Date.now() >= deadline) reject(new Error(`${what} not ready after ${timeoutMs} ms`))
+        else setTimeout(poll, pollMs)
+      }
+      poll()
+    })
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:ready>
   // <lib:palette>
   // Generated from lib/palette.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
-  // Reads parseColor, darkenColor and toOklab from color-math.
-  /* global parseColor, darkenColor, toOklab */
+  // Reads parseColor, darkenColor and toOklab from color-math, and whenReady from ready.
+  /* global parseColor, darkenColor, toOklab, whenReady */
   // SudokuPad's own pen colors (tool-pen.css). Color 9 is rgb(-36, -36, -36) there, which clamps to black.
   const SUDOKUPAD_PEN_COLORS = Object.freeze({
     1: '#1f8020',
@@ -560,7 +585,7 @@
     'page-3': 'Darker page 3',
     [SUDOKUPAD_PRESET]: 'SudokuPad colors'
   }
-  const COLOR_TOOL_POLL_MS = 100
+  const COLOR_TOOL_TIMEOUT_MS = 10000
 
   // A color set is `{ colors, preset, missing }`: the nine colors, the preset they came from, and the pens of that page with no usable color, which keep SudokuPad's own.
   const SUDOKUPAD_SET = Object.freeze({ colors: SUDOKUPAD_PEN_COLORS, preset: SUDOKUPAD_PRESET, missing: Object.freeze([]) })
@@ -616,16 +641,9 @@
     return Array.isArray(pages) && Array.isArray(pages[0]) ? tool : null
   }
 
-  // No time limit: until the color tool is ready the caller shows SudokuPad's own colors.
+  // Rejects once COLOR_TOOL_TIMEOUT_MS passes with no ready color tool, naming it, so the caller can skip its step and keep SudokuPad's own colors.
   function waitForColorTool () {
-    return new Promise((resolve) => {
-      const check = () => {
-        const tool = readyColorTool()
-        if (tool) resolve(tool)
-        else setTimeout(check, COLOR_TOOL_POLL_MS)
-      }
-      check()
-    })
+    return whenReady(readyColorTool, { timeoutMs: COLOR_TOOL_TIMEOUT_MS, what: 'the color tool' })
   }
 
   // The pages of cell color keys of the palette in force, or none until the color tool has one.
@@ -959,6 +977,57 @@
     const page = pages.find((p) => p.current) || pages[0]
     const first = page && [...page.rows.flat(), page.zero].find(Boolean)
     return first ? first.key : null
+  }
+
+  function showingProfile (draft, state, selected) {
+    const groups = state.profiles[selected].groups
+    const brush = startingBrush(groups, draft.pages)
+    return { ...draft, state, selected, keptName: state.profiles[selected].name, brush, page: initialPage(draft.pages, brush) }
+  }
+  // The settings dialog's draft: the profiles (`state`) and mode Save would apply, the selected profile, its name when it was selected
+  // (an emptied name field keeps it), the brush, the color page shown, and the current stroke's paint key (undefined before its first
+  // digit, null for a stroke that clears).
+  const openingDraft = (state, mode, pages) => showingProfile({ mode, pages, paintKey: undefined }, state, state.active)
+
+  // Each dialog edit as one event; an edit that changes nothing returns the same draft.
+  function reduceDraft (draft, event) {
+    const { state, selected, brush } = draft
+    const groups = state.profiles[selected].groups
+    const withGroups = (next) => (sameGroups(next, groups) ? draft : { ...draft, state: setProfileGroups(state, selected, next) })
+    const showing = (next, nextSelected) => (next === state ? draft : showingProfile(draft, next, nextSelected))
+    switch (event.type) {
+      case 'select': return showingProfile(draft, state, event.index)
+      case 'rename': return { ...draft, state: renameProfile(state, selected, event.name.trim() === '' ? draft.keptName : event.name) }
+      case 'brush': return { ...draft, brush: event.key }
+      case 'page': return { ...draft, page: event.page }
+      case 'clear': return withGroups([])
+      case 'press': return draft.paintKey === undefined ? draft : { ...draft, paintKey: undefined }
+      case 'paint': {
+        if (brush === null) return draft
+        const paintKey = draft.paintKey === undefined ? strokeKey(groups, event.digit, brush) : draft.paintKey
+        const painted = withGroups(setDigitColor(groups, event.digit, paintKey))
+        return paintKey === draft.paintKey ? painted : { ...painted, paintKey }
+      }
+      case 'key-paint': return brush === null ? draft : withGroups(paintDigit(groups, event.digit, brush))
+      case 'choose':
+        if (event.role === 'mode-draft') return { ...draft, mode: event.value }
+        if (event.role === 'cell-profile') return { ...draft, state: setActive(state, Number(event.value)) }
+        if (event.role === 'digit-profile') {
+          // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change
+          // for the option it already shows.
+          const next = chooseDigit(state, event.value)
+          return { ...draft, state: next, mode: allowedMode(draft.mode, usesDigitColors(next)) }
+        }
+        throw new Error(`reduceDraft: no pulldown ${event.role}`)
+      case 'new-profile': {
+        const next = copyProfile(state, selected)
+        return showing(next, next.profiles.length - 1)
+      }
+      case 'delete': return showing(deleteProfile(state, event.index), indexAfterDelete(selected, event.index, state.profiles.length))
+      case 'move': return event.from === event.to ? draft : showing(moveProfile(state, event.from, event.to), indexAfterMove(selected, event.from, event.to))
+      case 'reload': return showingProfile({ ...draft, mode: event.mode }, event.state, event.state.active)
+    }
+    throw new Error(`reduceDraft: no edit ${event.type}`)
   }
 
   // A digit key shows its group's color; a color on no page of the palette gets the dashed unset look.
@@ -1433,19 +1502,314 @@
 
   const hasUnreadable = (store, key) => store.getData(key + UNREADABLE_SUFFIX) !== null
 
+  // A puzzle's saved data is keyed by its id; one with none of its own (a replay or a pack) is told apart by its page URL.
+  const puzzleKey = (puzzleId, href) => String(puzzleId || href)
+
   function save (store, key, data) {
     store.setData(key, { v: STORE_VERSION, data })
   }
   /* eslint-enable no-unused-vars */
   // </lib:store>
+  // <lib:pointer-session>
+  // Generated from lib/pointer-session.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // One press, from after its `pointerdown` to its release: `move` hears each `pointermove` and `end` the `pointerup` or `pointercancel`.
+  // The session listens in the capture phase, so a page handler that stops a release cannot leave it listening, and it is gone before
+  // `end` runs. The returned stop ends it with no `end`.
+  const PRESS_END_EVENTS = ['pointerup', 'pointercancel']
+  // The object form: Node's EventTarget, which the tests use, keeps a listener removed with a bare `true`.
+  const CAPTURE = { capture: true }
+
+  function trackPointer (target, { move, end = () => {} }) {
+    const finish = (event) => {
+      stop()
+      end(event)
+    }
+    const stop = () => {
+      target.removeEventListener('pointermove', move, CAPTURE)
+      PRESS_END_EVENTS.forEach((type) => target.removeEventListener(type, finish, CAPTURE))
+    }
+    target.addEventListener('pointermove', move, CAPTURE)
+    PRESS_END_EVENTS.forEach((type) => target.addEventListener(type, finish, CAPTURE))
+    return stop
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:pointer-session>
+  // <lib:sudokupad>
+  // Generated from lib/sudokupad.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
+  // alone, and a bar at the bottom of the page says so once per SudokuPad version.
+  const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
+  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
+  const NOTICE_COLOR = '#6a1b9a'
+  const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
+  // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
+  const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
+  const INTERNAL_KINDS = {
+    function: (value) => typeof value === 'function',
+    array: Array.isArray,
+    integer: Number.isInteger,
+    number: (value) => typeof value === 'number',
+    object: (value) => Boolean(value) && typeof value === 'object'
+  }
+
+  // A path's first part names a root (`Framework`, `ToolPen`): SudokuPad declares them with `const`, so they are not on `window`.
+  function readInternal (roots, path) {
+    const [root, ...keys] = path.split('.')
+    return keys.reduce((owner, key) => (owner === undefined || owner === null ? undefined : owner[key]), roots[root])
+  }
+
+  // Each internal lacking, with the features it holds off; a feature is listed under the first of its `needs` it lacks.
+  function lackingInternals (features, roots) {
+    const lacking = new Map()
+    Object.entries(features).forEach(([name, { needs }]) => {
+      const missing = Object.entries(needs).find(([path, kind]) => !INTERNAL_KINDS[kind](readInternal(roots, path)))
+      if (missing) lacking.set(missing[0], [...(lacking.get(missing[0]) || []), name])
+    })
+    return lacking
+  }
+
+  function sudokupadVersion (doc) {
+    const found = PAGE_VERSION.exec(doc.documentElement.outerHTML)
+    return found ? found[1] : null
+  }
+
+  // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
+  function reportUrl ({ name, version, sudokupad, off }) {
+    const shownVersion = sudokupad || 'unknown'
+    const labels = off.map((feature) => feature.label).join(', ')
+    const body = [
+      `Script: ${name} ${version}`,
+      `SudokuPad version: ${shownVersion}`,
+      '',
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : String(why)}`)
+    ].join('\n')
+    return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
+  }
+
+  const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
+  const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
+
+  // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
+  // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
+  // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
+  function createGuard ({ script, name, version, features }) {
+    const reasons = []
+    let page = null
+
+    const dismissKey = `${script}-notice`
+    // A dismissal is saved only under a SudokuPad version read from the page: one saved with none would match every later version that
+    // also has none. A store with no getData or setData (a SudokuPad that changed), or one that throws (a frame with storage blocked),
+    // cannot save one either. Without a save, a dismissal holds for this page load only.
+    const dismissedHere = []
+    let storeFailed = false
+    const savesDismissals = () => !storeFailed && page.sudokupad !== null && typeof page.store.getData === 'function' && typeof page.store.setData === 'function'
+    function useStore (fn) {
+      try {
+        return fn()
+      } catch (error) {
+        storeFailed = true
+        console.warn(`${script}: a dismissal of the notice bar cannot be saved, so it holds for this page load only:`, error)
+        return null
+      }
+    }
+    const dismissed = () => {
+      const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
+      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    let bar = null
+    function showNotice () {
+      if (bar) bar.remove()
+      bar = null
+      const gone = dismissed()
+      const shown = reasons.filter((reason) => !gone.includes(reason.name))
+      if (shown.length === 0 || !page.doc.body) return
+      const { doc } = page
+      let host = doc.getElementById(NOTICE_HOST_ID)
+      if (!host) {
+        host = doc.createElement('div')
+        host.id = NOTICE_HOST_ID
+        host.style.cssText = NOTICE_HOST_CSS
+        doc.body.append(host)
+      }
+      bar = doc.createElement('div')
+      bar.setAttribute('data-script', script)
+      bar.style.cssText = NOTICE_BAR_CSS
+      const text = doc.createElement('span')
+      text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
+      const link = doc.createElement('a')
+      link.href = reportUrl({ name, version, sudokupad: page.sudokupad, off: shown })
+      link.target = '_blank'
+      link.rel = 'noopener'
+      link.textContent = 'Report'
+      link.style.cssText = NOTICE_LINK_CSS
+      const dismiss = doc.createElement('button')
+      dismiss.type = 'button'
+      dismiss.textContent = '×'
+      dismiss.title = 'Dismiss'
+      dismiss.setAttribute('aria-label', 'Dismiss')
+      dismiss.style.cssText = NOTICE_DISMISS_CSS
+      dismiss.addEventListener('click', () => {
+        dismissedHere.push(...shown.map((reason) => reason.name))
+        if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
+        showNotice()
+      })
+      bar.append(text, link, dismiss)
+      host.append(bar)
+    }
+
+    // A feature stays off once skipped, so its error is warned once and not on every event. `skip(why, false)` is for one never installed.
+    function createFeature (featureName, { label, onSkip }) {
+      const feature = {
+        off: false,
+        skip (why, installed = true) {
+          if (feature.off) return
+          feature.off = true
+          reasons.push({ name: featureName, label, why })
+          if (installed) {
+            console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
+            try {
+              if (onSkip) onSkip()
+            } catch (error) {
+              // Best effort: the feature is off already, and what it left behind stays until the page reloads.
+              console.warn(`${script}: could not undo ${label}:`, error)
+            }
+          }
+          if (page) showNotice()
+        },
+        run (fn, fallback = () => {}) {
+          if (feature.off) return fallback()
+          try {
+            return fn()
+          } catch (error) {
+            feature.skip(error)
+            return fallback()
+          }
+        },
+        // SudokuPad's code runs only through `stock` or `stock.sudokupad`, so a throw from it passes through as SudokuPad's own. After the
+        // body's own throw, the original runs only if nothing was sent for this event: a click half sent must not be sent again. A call
+        // that sends nothing (`stock.sudokupad(fn, false)`) leaves the original to run.
+        wrap (owner, method, body) {
+          const original = owner[method]
+          owner[method] = function (...args) {
+            if (feature.off) return original.apply(this, args)
+            let reached = false
+            let result
+            let failure = null
+            const sudokupad = (fn, sends = true) => {
+              if (sends) reached = true
+              try {
+                return fn()
+              } catch (error) {
+                failure = { error }
+                throw error
+              }
+            }
+            const stock = (...stockArgs) => sudokupad(() => { result = original.apply(this, stockArgs); return result })
+            stock.sudokupad = sudokupad
+            try {
+              return body.call(this, stock, ...args)
+            } catch (error) {
+              if (failure && failure.error === error) throw error
+              feature.skip(error)
+              return reached ? result : original.apply(this, args)
+            }
+          }
+        }
+      }
+      return feature
+    }
+
+    const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
+
+    function probe ({ roots, store, doc = document }) {
+      lackingInternals(features, roots).forEach((names, missing) => {
+        names.forEach((featureName) => guarded[featureName].skip(missing, false))
+        console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
+      })
+      page = { store, doc, sudokupad: sudokupadVersion(doc) }
+      showNotice()
+    }
+
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:sudokupad>
+  // Each feature with the SudokuPad internals it cannot work without. A path's first part is a root of `guard.probe`: `Framework`, or `app`, which is
+  // what `Framework.getApp` resolves to. Not declared, because a check at startup cannot tell them from "not there yet": the cells of a puzzle not loaded
+  // (`app.puzzle.cells` is an empty array until then), and the methods on each cell, which the cell coloring's own `run` covers.
+  const FEATURES = {
+    // Without these the script starts from its preloads and keeps nothing: the mode steps in memory until the page reloads, and the editor is off too.
+    saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function' } },
+    cells: {
+      label: 'cell coloring',
+      needs: {
+        'Framework.getApp': 'function',
+        'app.act': 'function',
+        'app.select': 'function',
+        'app.deselect': 'function',
+        'app.on': 'function',
+        'app.puzzle.cells': 'array',
+        'app.puzzle.selectedCells': 'array'
+      }
+    },
+    button: {
+      label: 'mode button',
+      needs: { 'Framework.getApp': 'function', 'Framework.addControlButton': 'function', 'app.refreshControls': 'function' },
+      onSkip () {
+        closeMenu()
+        const button = document.querySelector(BUTTON)
+        if (button) button.remove()
+      }
+    },
+    editor: {
+      label: 'editor',
+      needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function', 'Framework.app.tools.colour': 'object' },
+      onSkip () {
+        Framework.closeDialog()
+      }
+    },
+    // Only the page's own markup is read and styled, so there is no internal to name; a throw from a changed page still turns it off.
+    digits: {
+      label: 'digit colors',
+      needs: {},
+      onSkip () {
+        const style = document.getElementById(DIGIT_STYLE_ID)
+        if (style) style.remove()
+        const circles = document.getElementById(CIRCLES_ID)
+        if (circles) circles.remove()
+        document.querySelectorAll(`[${DIGIT_ATTR}]`).forEach((el) => el.removeAttribute(DIGIT_ATTR))
+      }
+    },
+    // The mode button's icon, the digit shades and the cell colors wait for the puzzle's progress, which resets the board, to load.
+    // Without it they are drawn at once, before the puzzle's own palette is in force.
+    loading: {
+      label: 'redraw after the puzzle loads',
+      needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function' }
+    }
+  }
+  const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
+  const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
-  if (!Framework.getApp) {
-    console.warn('color-by-digit: SudokuPad\'s Framework has no getApp, so nothing was changed')
-    return
+
+  // The saved data is read and written only here: with no getData or setData nothing is read, so the preloads and the starting mode show, and nothing is kept.
+  const readData = (key) => storage.run(() => Framework.getData(key), () => null)
+  const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
+  // What the shared store reads and writes through: the saved settings feature's guarded calls, never Framework itself.
+  const savedData = { getData: readData, setData: writeData }
+  // What the settings entry and the editor are handed in place of Framework: the editor's close runs under the editor when a button is pressed.
+  const dialogs = {
+    addSetting: (setting) => Framework.addSetting(setting),
+    showDialog: (options) => Framework.showDialog(options),
+    closeDialog: () => editor.run(() => Framework.closeDialog())
   }
 
   function readPages () {
@@ -1453,16 +1817,16 @@
     return tool ? layoutPages(tool.palette.pages, tool.currentPage, readColor) : []
   }
 
-  const saveState = (state) => saveProfiles(Framework, state)
-  const loadState = () => stateFromStored(Framework)
+  const saveState = (state) => saveProfiles(savedData, state)
+  const loadState = () => stateFromStored(savedData)
 
   function addPreloadsOnce () {
     for (const { key, names } of ADDED_PRELOADS) {
-      if (Framework.getData(key) === true) continue
+      if (readData(key) === true) continue
       const state = loadState()
       const added = withAddedPreloads(state, names)
       if (added.profiles.length !== state.profiles.length) saveState(added)
-      Framework.setData(key, true)
+      writeData(key, true)
     }
   }
   const loadGroups = () => activeGroups(loadState())
@@ -1504,16 +1868,18 @@
   // Planned a second time after the first ops: with Multi-color off a cell holds one color, so putting back a
   // cell's other colors can take off the group color planned as already there, which must go back on.
   function recolor (app, makeOps) {
-    const first = allCells(app)
-    const ops = makeOps(first.map(toPlanCell))
-    if (ops.length === 0) return
-    const run = () => {
-      runColorOps(app, first, ops)
-      const cells = allCells(app)
-      runColorOps(app, cells, makeOps(cells.map(toPlanCell)))
-    }
-    if (app.puzzle.inGroup) run()
-    else inOneUndoStep(app, run)
+    coloring.run(() => {
+      const first = allCells(app)
+      const ops = makeOps(first.map(toPlanCell))
+      if (ops.length === 0) return
+      const run = () => {
+        runColorOps(app, first, ops)
+        const second = allCells(app)
+        runColorOps(app, second, makeOps(second.map(toPlanCell)))
+      }
+      if (app.puzzle.inGroup) run()
+      else inOneUndoStep(app, run)
+    })
   }
 
   const colorEnteredCells = (app) => recolor(app, (plans) => planCellColors(plans, loadGroups(), enteredIndices(plans)))
@@ -1523,9 +1889,10 @@
   const BUTTON = '#control-colorbydigit'
   const ARROW = `${BUTTON} [data-role="menu"]`
   // Loading progress resets the board, so a pass before it would be wiped.
+  // With the wait off there is nothing to wait for, so `fn` runs at once.
   function whenProgressLoaded (app, fn) {
-    if (allCells(app).length > 0) fn()
-    else app.puzzle.addEventListener('progressloaded', fn, { once: true })
+    if (loading.run(() => allCells(app).length > 0, () => true)) fn()
+    else loading.run(() => app.puzzle.addEventListener('progressloaded', fn, { once: true }), fn)
   }
 
   const DIGIT_STYLE_ID = 'color-by-digit-digits'
@@ -1623,7 +1990,7 @@
     new window.MutationObserver((records) => {
       if (queued || !colorsDigits(mode) || !records.some(isBoardChange)) return
       queued = true
-      window.requestAnimationFrame(() => { queued = false; syncDigits() })
+      window.requestAnimationFrame(() => { queued = false; digitColors.run(syncDigits) })
     }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class'] })
   }
 
@@ -1649,18 +2016,20 @@
 
   // The palette can change after the button was drawn, so the icon and the digit shades are drawn from it again.
   function redraw () {
-    const icon = document.querySelector(`${BUTTON} .icon`)
-    const state = loadState()
-    if (icon) icon.outerHTML = iconHtml(mode, activeGroups(state), readColor, digitGroups(state))
-    labelButton()
-    showDigitColors()
+    modeButton.run(() => {
+      const icon = document.querySelector(`${BUTTON} .icon`)
+      const state = loadState()
+      if (icon) icon.outerHTML = iconHtml(mode, activeGroups(state), readColor, digitGroups(state))
+      labelButton()
+    })
+    digitColors.run(showDigitColors)
   }
 
   // Leaving cell coloring takes the colors of `keys`, the group keys to take off, off every cell.
   function setMode (app, next, keys = groupKeys(loadGroups())) {
     const was = mode
     mode = next
-    Framework.setData(MODE_KEY, next)
+    writeData(MODE_KEY, next)
     redraw()
     if (colorsCells(next) && !colorsCells(was)) colorEnteredCells(app)
     if (!colorsCells(next) && colorsCells(was)) recolor(app, (plans) => planClear(plans, keys))
@@ -1678,23 +2047,24 @@
   // A change SudokuPad already runs inside its own group (a paste) has its color changes added to that
   // group; opening a second would end it early. Undo, redo, replays and loading progress bypass app.act.
   function installCellColoring (app) {
-    const act = app.act
-    app.act = function (action) {
-      if (!colorsCells(mode) || !isEntryAction(action)) return act.call(this, action)
-      const touched = [...app.puzzle.selectedCells]
-      if (!touched.some((cell) => mayChange(action, cell))) return act.call(this, action)
-      const cells = allCells(app)
-      const indices = touched.map((cell) => cells.indexOf(cell))
-      const before = touched.map((cell) => entrySignature(toPlanCell(cell)))
-      const enter = () => {
-        const result = act.call(this, action)
-        const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
-        recolor(app, (plans) => planCellColors(plans, loadGroups(), changed))
-        return result
-      }
-      return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
-    }
-    app.on('restarted', () => { if (colorsCells(mode)) colorEnteredCells(app) })
+    coloring.run(() => {
+      coloring.wrap(app, 'act', function (stock, action) {
+        if (!colorsCells(mode) || !isEntryAction(action)) return stock(action)
+        const touched = [...app.puzzle.selectedCells]
+        if (!touched.some((cell) => mayChange(action, cell))) return stock(action)
+        const all = allCells(app)
+        const indices = touched.map((cell) => all.indexOf(cell))
+        const before = touched.map((cell) => entrySignature(toPlanCell(cell)))
+        const enter = () => {
+          const result = stock(action)
+          const changed = changedIndices(before, touched.map((cell) => entrySignature(toPlanCell(cell)))).map((i) => indices[i])
+          recolor(app, (plans) => planCellColors(plans, loadGroups(), changed))
+          return result
+        }
+        return app.puzzle.inGroup ? enter() : inOneUndoStep(app, enter)
+      })
+      app.on('restarted', () => { if (colorsCells(mode)) colorEnteredCells(app) })
+    })
   }
 
   let menu = null
@@ -1755,11 +2125,13 @@
       if (menu) closeMenu()
       else openMenu()
     }
-    document.addEventListener('mousedown', (event) => {
+    // A handler that throws turns the button off, and an off button's handlers do nothing.
+    const listen = (type, handler, options) => document.addEventListener(type, (event) => modeButton.run(() => handler(event)), options)
+    listen('mousedown', (event) => {
       if (onButtonProper(event)) event.stopPropagation()
       if (onArrow(event) || onButtonProper(event) || within(event, MENU)) event.preventDefault()
     }, true)
-    document.addEventListener('click', (event) => {
+    listen('click', (event) => {
       if (onArrow(event)) return toggleMenu(event)
       const row = within(event, `${MENU} [data-act]`)
       if (!row) return
@@ -1772,11 +2144,11 @@
         switchProfile(app, Number(row.dataset.index), row.dataset.target)
       }
     }, true)
-    document.addEventListener('touchstart', (event) => {
+    listen('touchstart', (event) => {
       if (onArrow(event)) toggleMenu(event)
       else if (onButtonProper(event)) { event.preventDefault(); event.stopPropagation() }
     }, { capture: true, passive: false })
-    document.addEventListener('contextmenu', (event) => {
+    listen('contextmenu', (event) => {
       if (!within(event, BUTTON)) return
       event.preventDefault()
       if (!menu) openMenu()
@@ -1786,29 +2158,25 @@
       clearTimeout(hold)
       hold = null
     }
-    document.addEventListener('pointerdown', (event) => {
+    listen('pointerdown', (event) => {
       if (menu && !within(event, MENU) && !onArrow(event)) closeMenu()
       endHold()
       if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== 0)) return
       const { clientX, clientY } = event
       const moved = (e) => Math.hypot(e.clientX - clientX, e.clientY - clientY) > HOLD_SLOP
-      const watch = (e) => { if (moved(e)) endHold() }
-      document.addEventListener('pointermove', watch)
       hold = setTimeout(() => {
         hold = null
-        openMenu()
+        modeButton.run(openMenu)
       }, HOLD_MS)
-      const stop = (e) => {
-        if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState())))
-        endHold()
-        document.removeEventListener('pointermove', watch)
-        document.removeEventListener('pointerup', stop, true)
-        document.removeEventListener('pointercancel', stop, true)
-      }
-      document.addEventListener('pointerup', stop, true)
-      document.addEventListener('pointercancel', stop, true)
+      trackPointer(document, {
+        move: (e) => { if (moved(e)) endHold() },
+        end: (e) => {
+          modeButton.run(() => { if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState()))) })
+          endHold()
+        }
+      })
     }, true)
-    document.addEventListener('keydown', (event) => {
+    listen('keydown', (event) => {
       if (event.key !== 'Escape' || !menu) return
       event.preventDefault()
       event.stopPropagation()
@@ -1827,67 +2195,54 @@
   }
 
   function openDialog (app) {
-    const pages = readPages()
     let savedState = loadState()
-    const unreadable = hasUnreadable(Framework, PROFILES_KEY)
-    let draft = savedState
-    let draftMode = mode
-    let selected = draft.active
-    // The selected profile's name when it was selected: an emptied name field keeps it.
-    let keptName = draft.profiles[selected].name
-    const box = showSettingsDialog(Framework, {
+    const unreadable = hasUnreadable(savedData, PROFILES_KEY)
+    let draft = openingDraft(savedState, mode, readPages())
+    const box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Color by Digit',
       version: VERSION,
       bodyId: EDITOR_ID,
       styleId: STYLE_ID,
       css: STYLE_CSS,
-      changed: () => draftMode !== mode || JSON.stringify(draft) !== JSON.stringify(savedState),
-      save: () => saveDialog(app, savedState, draft, draftMode)
+      changed: () => draft.mode !== mode || JSON.stringify(draft.state) !== JSON.stringify(savedState),
+      save: () => editor.run(() => saveDialog(app, savedState, draft.state, draft.mode))
     })
     if (!box) return
-    let brush
-    let page
-    const groupsShown = () => draft.profiles[selected].groups
     const draw = () => {
-      box.innerHTML = renderEditor({ groups: groupsShown(), pages, page, brush, pulldownsHtml: renderPulldowns(draft, draftMode), profilesHtml: renderProfiles(draft, readColor, selected), unreadable })
+      const { state, mode: draftMode, selected, pages, page, brush } = draft
+      box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable })
     }
-    const reshow = (next, nextSelected = selected) => {
-      draft = next
-      selected = nextSelected
-      keptName = draft.profiles[selected].name
-      brush = startingBrush(groupsShown(), pages)
-      page = initialPage(pages, brush)
+    const edit = (event) => {
+      const before = draft
+      draft = reduceDraft(draft, event)
+      return draft !== before
     }
-    reshow(draft)
-    const newProfile = () => {
-      const next = copyProfile(draft, selected)
-      if (next === draft) return
-      reshow(next, next.profiles.length - 1)
-      draw()
-      const nameBox = box.querySelector('[data-role="profile-name"]')
-      nameBox.focus()
-      nameBox.select()
+    // A stroke's paint redraws only when it changed a color: a redraw under the pointer is needed for nothing else.
+    const paint = (digit) => {
+      const groups = draft.state.profiles[draft.selected].groups
+      edit({ type: 'paint', digit })
+      if (draft.state.profiles[draft.selected].groups !== groups) draw()
     }
     draw()
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS, upgrade: withModeFromAuto }, (values) => {
-      ADDED_PRELOADS.forEach(({ key }) => { if (key in values) Framework.setData(key, values[key]) })
+    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings({ getData: readData }), readers: READERS, upgrade: withModeFromAuto }, (values) => {
+      ADDED_PRELOADS.forEach(({ key }) => { if (key in values) writeData(key, values[key]) })
       saveDialog(app, savedState, values[PROFILES_KEY] ?? savedState, values[MODE_KEY] ?? mode)
       savedState = loadState()
-      reshow(savedState, savedState.active)
-      draftMode = mode
+      edit({ type: 'reload', state: savedState, mode })
       draw()
     })
     // Typing renames the draft, its row and the pulldowns' options in place, so the name field keeps the focus.
     box.addEventListener('input', (event) => {
       if (!event.target.matches('[data-role="profile-name"]')) return
-      draft = renameProfile(draft, selected, event.target.value.trim() === '' ? keptName : event.target.value)
-      const name = draft.profiles[selected].name
+      edit({ type: 'rename', name: event.target.value })
+      const { state, selected } = draft
+      const name = state.profiles[selected].name
       box.querySelector(`[data-role="profile-row"][data-index="${selected}"]`).setAttribute('aria-label', name)
       box.querySelectorAll(`.cbd-pulldown option[data-index="${selected}"]`).forEach((option) => { option.textContent = name })
     })
     // Enter, or leaving the box, shows the name the draft holds: a blank box shows the kept name again.
-    const settleName = (nameBox) => { nameBox.value = draft.profiles[selected].name }
+    const settleName = (nameBox) => { nameBox.value = draft.state.profiles[draft.selected].name }
     box.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' || !event.target.matches('[data-role="profile-name"]')) return
       event.preventDefault()
@@ -1896,21 +2251,13 @@
     })
     box.addEventListener('change', (event) => {
       if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
-      const pageChoice = event.target.closest('select[data-role="color-choice"]')
-      if (pageChoice) {
-        page = Number(pageChoice.value)
-        draw()
-        box.querySelector('select[data-role="color-choice"]').focus()
-        return
-      }
       const pulldown = event.target.closest('select[data-role]')
-      if (pulldown) choose(pulldown.dataset.role, pulldown.value)
-    })
-    const setGroups = (groups) => {
-      if (sameGroups(groups, groupsShown())) return
-      draft = setProfileGroups(draft, selected, groups)
+      if (!pulldown) return
+      const role = pulldown.dataset.role
+      edit(role === 'color-choice' ? { type: 'page', page: Number(pulldown.value) } : { type: 'choose', role, value: pulldown.value })
       draw()
-    }
+      box.querySelector(`select[data-role="${role}"]`).focus()
+    })
     // A press on a digit paints it, and a drag paints each digit the pointer then passes over; the first digit decides paint or clear.
     // A press in a gap (not on a control) paints from the first digit the drag reaches, so a slightly early press selects no text and drags no page.
     box.addEventListener('pointerdown', (event) => {
@@ -1920,27 +2267,16 @@
       if (target.hasPointerCapture && target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId)
       const pressed = target.closest('[data-act="digit"]')
       if (!pressed && target.closest('[data-act], [data-role="swatch"]')) return
-      let paintKey
-      const paint = (key) => {
-        if (brush === null) return
-        if (paintKey === undefined) paintKey = strokeKey(groupsShown(), key, brush)
-        setGroups(setDigitColor(groupsShown(), key, paintKey))
-      }
+      edit({ type: 'press' })
       if (pressed) paint(pressed.dataset.digit)
-      const move = (e) => {
-        if (e.buttons === 0) { finish(); return }
-        const under = document.elementFromPoint(e.clientX, e.clientY)
-        const digit = under && box.contains(under) && under.closest('[data-act="digit"]')
-        if (digit) paint(digit.dataset.digit)
-      }
-      const finish = () => {
-        document.removeEventListener('pointermove', move)
-        document.removeEventListener('pointerup', finish)
-        document.removeEventListener('pointercancel', finish)
-      }
-      document.addEventListener('pointermove', move)
-      document.addEventListener('pointerup', finish)
-      document.addEventListener('pointercancel', finish)
+      const stop = trackPointer(document, {
+        move: (e) => {
+          if (e.buttons === 0) { stop(); return }
+          const under = document.elementFromPoint(e.clientX, e.clientY)
+          const digit = under && box.contains(under) && under.closest('[data-act="digit"]')
+          if (digit) paint(digit.dataset.digit)
+        }
+      })
     })
     box.addEventListener('pointerdown', (event) => {
       const handle = event.target.closest('[data-role="handle"]')
@@ -1952,40 +2288,25 @@
       let to = from
       rows[from].style.opacity = '0.5'
       handle.setPointerCapture(event.pointerId)
-      const move = (e) => {
-        to = dropIndex(mids, from, e.clientY)
-        rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
-      }
-      const finish = (e) => {
-        handle.removeEventListener('pointermove', move)
-        handle.removeEventListener('pointerup', finish)
-        handle.removeEventListener('pointercancel', finish)
-        if (e.type === 'pointerup' && to !== from) reshow(moveProfile(draft, from, to), indexAfterMove(selected, from, to))
-        draw()
-      }
-      handle.addEventListener('pointermove', move)
-      handle.addEventListener('pointerup', finish)
-      handle.addEventListener('pointercancel', finish)
+      trackPointer(handle, {
+        move: (e) => {
+          to = dropIndex(mids, from, e.clientY)
+          rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
+        },
+        end: (e) => {
+          if (e.type === 'pointerup') edit({ type: 'move', from, to })
+          draw()
+        }
+      })
     })
     const selectRow = (index, refocus) => {
-      reshow(draft, index)
+      edit({ type: 'select', index })
       draw()
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
-    // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change for the option it already shows.
-    const choose = (role, value) => {
-      if (role === 'mode-draft') draftMode = value
-      else if (role === 'cell-profile') draft = setActive(draft, Number(value))
-      else {
-        draft = chooseDigit(draft, value)
-        draftMode = allowedMode(draftMode, usesDigitColors(draft))
-      }
-      draw()
-      box.querySelector(`select[data-role="${role}"]`).focus()
-    }
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="select"]')) return
-      const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.profiles.length)
+      const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.state.profiles.length)
       if (target === null) return
       event.preventDefault()
       event.stopPropagation()
@@ -2003,10 +2324,10 @@
       if (swatch) {
         event.preventDefault()
         event.stopPropagation()
-        brush = swatch.dataset.key
+        edit({ type: 'brush', key: swatch.dataset.key })
         draw()
         // The redraw replaced the swatch; a keyboard user keeps the focus on its successor.
-        if (event.detail === 0) swatchWithKey(box, brush)?.focus()
+        if (event.detail === 0) swatchWithKey(box, draft.brush)?.focus()
         return
       }
       const el = event.target.closest('button[data-act]')
@@ -2014,17 +2335,21 @@
       event.preventDefault()
       event.stopPropagation()
       const act = el.dataset.act
-      if (act === 'new-profile') { newProfile(); return }
+      if (act === 'new-profile') {
+        if (!edit({ type: 'new-profile' })) return
+        draw()
+        const nameBox = box.querySelector('[data-role="profile-name"]')
+        nameBox.focus()
+        nameBox.select()
+        return
+      }
       if (act === 'delete') {
-        const index = Number(el.dataset.index)
-        const next = deleteProfile(draft, index)
-        if (next === draft) return
-        reshow(next, indexAfterDelete(selected, index, draft.profiles.length))
+        if (!edit({ type: 'delete', index: Number(el.dataset.index) })) return
       } else if (act === 'clear') {
-        setGroups([])
-      } else if (act === 'digit' && event.detail === 0 && brush !== null) {
+        edit({ type: 'clear' })
+      } else if (act === 'digit' && event.detail === 0) {
         // A mouse or touch press has already painted on pointerdown; only a keyboard click, which has no pointer, lands here.
-        setGroups(paintDigit(groupsShown(), el.dataset.digit, brush))
+        edit({ type: 'key-paint', digit: el.dataset.digit })
       }
       draw()
       // The redraw replaced the button; a keyboard user keeps the focus on its successor.
@@ -2035,24 +2360,30 @@
     })
   }
 
-  Framework.getApp().then((app) => {
-    const openEditor = () => {
+  // Without getApp there is no app: the features that need one are off, and the rest start without it.
+  const start = (app) => {
+    guard.probe({ roots: { Framework, app }, store: Framework })
+    const openEditor = () => editor.run(() => {
       Framework.closeDialog()
-      setTimeout(() => openDialog(app), 0)
-    }
-    // The settings entry goes first: a failure installing the button must not cost the editor.
-    addSettingsEntry(Framework, { name: 'colorbydigit', content: 'Color by Digit', open: () => openDialog(app) })
+      setTimeout(() => editor.run(() => openDialog(app)), 0)
+    })
+    // The features are independent: one that fails to install costs the others nothing.
+    editor.run(() => addSettingsEntry(dialogs, { name: 'colorbydigit', content: 'Color by Digit', open: () => editor.run(() => openDialog(app)) }))
     addPreloadsOnce()
     const state = loadState()
-    mode = allowedMode(startingMode(Framework.getData(MODE_KEY), Framework.getData(AUTO_KEY)), usesDigitColors(state))
+    mode = allowedMode(startingMode(readData(MODE_KEY), readData(AUTO_KEY)), usesDigitColors(state))
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
-    installButton(Framework, app, mode, activeGroups(state), readColor, digitGroups(state))
-    labelButton()
+    modeButton.run(() => {
+      installButton(Framework, app, mode, activeGroups(state), readColor, digitGroups(state))
+      labelButton()
+    })
     installCellColoring(app)
-    listenForButton(app, openEditor)
-    watchBoard()
+    modeButton.run(() => listenForButton(app, openEditor))
+    digitColors.run(watchBoard)
     // The puzzle's own palette is in the page's colors once it has loaded: the icon and the digit shades show those.
     whenProgressLoaded(app, redraw)
     if (colorsCells(mode)) whenProgressLoaded(app, () => colorEnteredCells(app))
-  })
+  }
+  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
+  else start(undefined)
 })()

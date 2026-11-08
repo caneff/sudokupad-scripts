@@ -37,13 +37,15 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   const startup = headings[10].index
   for (const tail of ['module.exports = {', 'Framework.getApp()']) assert.ok(pen.indexOf(tail) > startup, `${tail} is in Startup`)
 
-  // One mark table: the parallel tables and their searches are gone, and the pen values and the marks that grow are as before.
+  // One mark table: the parallel tables and their searches are gone, and the pen values and the marks that grow are as before; a mark added
+  // since (the cell dot, z, #479) comes after them.
   for (const gone of ['edgeOf', 'shapeOf', 'cornerMarkOf', 'ADDED', 'SHAPES', 'DEFAULT_MARK_SETTINGS', 'MARKS_KEY']) {
     assert.ok(!new RegExp(`\\b(function|const) ${gone}\\b`).test(pen), gone)
   }
-  assert.deepEqual(extras.MARK_VALUES, MARK_VALUES_BEFORE)
+  assert.deepEqual(extras.MARK_VALUES.slice(0, MARK_VALUES_BEFORE.length), MARK_VALUES_BEFORE)
   const growing = /^(.*) \{ stroke-width: [^;]+; transform: scale/m.exec(extras.buildThicknessCss(4))[1]
-  assert.deepEqual(growing.split(', ').map((s) => /pen-(\w+)$/.exec(s)[1]), MARK_VALUES_BEFORE.filter((v) => v !== '5' && v !== '6'))
+  const growingBefore = MARK_VALUES_BEFORE.filter((v) => v !== '5' && v !== '6')
+  assert.deepEqual(growing.split(', ').map((s) => /pen-(\w+)$/.exec(s)[1]).slice(0, growingBefore.length), growingBefore)
 
   // One color-character map: each pen page's characters answer from it, and a reverse direction character is no pen of its own.
   const { PEN_PAGES, penPageOf, penNumber, arrowLineWayOf, directionCharOf, lineIdentityOf } = extras
@@ -67,9 +69,10 @@ test('spec 204 makes Pen Tool Extras and the dialogs legible without changing a 
   const saved = { EdgeMarks_marks: { x: true, directions: true, dot: false, cornerX: true, cornerDot: false } }
   const store = storeOf(saved)
   const loaded = readSettings(store).marks
-  assert.deepEqual(loaded, { x: true, directions: true, circle: false, cornerX: true, cornerCircle: false })
+  // Saved before the Cell row (#479): its three boxes read as ticked.
+  assert.deepEqual(loaded, { x: true, directions: true, circle: false, cornerX: true, cornerCircle: false, cellCircle: true, cellCross: true, cellDot: true })
   saveSetting(store, SETTINGS.marks, { ...loaded, circle: true, cornerCircle: true })
-  assert.equal('EdgeMarks_marks' in saved, false, 'all five ticked removes the key')
+  assert.equal('EdgeMarks_marks' in saved, false, 'every box ticked removes the key')
   assert.deepEqual(readSettings(store).marks, SETTINGS.marks.fallback)
   saveSetting(store, SETTINGS.marks, { ...SETTINGS.marks.fallback, directions: false })
   assert.deepEqual(saved.EdgeMarks_marks, { ...SETTINGS.marks.fallback, directions: false }, 'one unticked writes the key')

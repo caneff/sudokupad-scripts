@@ -84,6 +84,17 @@ Read in `script.js`, `framework.js` and `portableevents.js` of v0.611.0, and run
   confirm dialog's Restart and Keep Time was picked, and whether or not anything was entered. Draw Tool listens with
   `app.on('restarted', …)` (the app mixes in `PortableEvents`). The confirm dialog runs first, so the script asks
   nothing itself. Checked live through the dialog's Restart button.
+- **Undo after Restart (#489)**: `App.restartPuzzle` keeps `this.puzzle.getProgress()` in `app.preRestartSavedProgress`, but only
+  when the replay is not empty, and `Puzzle.resetPuzzle` empties the undo stack. `Puzzle.execUndo` with an empty undo stack loads that
+  progress (`loadProgress`, then `progressloaded`), clears it, and returns false, so the Undo is not logged. Nothing is triggered for it
+  but the `act` that `Puzzle.act` triggers after every action, `(act, action)` with `action.type === 'undo'`, and the stack is still
+  empty then, as it is after an ordinary Undo of the last action. So Text Anywhere reads whether the undo stack was empty before an Undo
+  off the last `act`, `reset` or `progressloaded` of the puzzle, and brings the notes back on an Undo that found it empty. The kept
+  progress lives in memory only, so a reload ends it, and Text Anywhere drops its kept notes on every load to match. The kept
+  progress ends in the Restart's own clears, so that Undo shows no digit: the next Undo takes the clears back (checked live,
+  2026-11-07: digit, Restart, Undo gives an empty cell and an undo stack of 6; a second Undo gives the digit). With only notes entered
+  the replay is empty, nothing is kept, and SudokuPad's Undo does nothing. An Undo while errors are shown only clears them
+  (`App.act` returns before `Puzzle.act`), so no `act` is triggered.
 - **Loading a puzzle**: `Puzzle.createPuzzle` calls `svgRenderer.clearAllLayers()`, which removes every child of the
   board SVG that is not one of SudokuPad's layers, Draw Tool's layer included. `Puzzle.loadPuzzle` then triggers
   `loaded` on the puzzle, before the saved progress loads. Draw Tool redraws from storage on `puzzle.on('loaded', …)`,
@@ -187,3 +198,13 @@ turned on, so the live recording turns it on too.
   covers the page and stops the `mousedown`, so Draw never sees the press; the release of M ends it, and Draw is still
   current. An M typed in an open text box goes into the text, since Draw keeps the box's keys from every SudokuPad
   listener, `feature-markup.js`'s window one included. No page error.
+
+## Held keys (#498)
+
+SudokuPad v0.611.0 (`script.js`, the live recording), read 2026-11-07.
+
+- `App.handleKeydown` begins with `if(event.repeat) return`, before `handleToolEventForwarding('Keydown', ...)`. A tool's
+  `handleKeydown` sees the first keydown of a held key and never the OS repeats, so a held key does nothing more unless the
+  tool times it. Text Anywhere starts its own interval on the press and stops it on the key's keyup, a blur, or the
+  selection ending.
+- `handleKeyup` is forwarded without such a check, and `App.handleBlur` forwards `Blur` to tools after clearing its own keys.

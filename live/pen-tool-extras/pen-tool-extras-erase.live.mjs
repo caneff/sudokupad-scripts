@@ -161,6 +161,29 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     await undoAll()
   })
 
+  it('with the Right click erase box unticked a right click in a cell\'s middle steps the cell marks forward, circle, cross, dot, empty, as a left click does', async () => {
+    await undoAll()
+    const box = editor().locator('input[data-box="eraseClicks"]')
+    await openExtrasEditor(p)
+    await box.uncheck()
+    await closeExtrasEditorWith(p, 'Save')
+    // The cell's mark values, without their color character.
+    const marksAt = async () => (await penEntries(p)).filter((e) => e.startsWith('4,4:')).map((e) => e[4])
+    try {
+      for (const value of ['5', '6', 'z', null]) {
+        await rightClick([4.5, 4.5])
+        const want = value === null ? [] : [value]
+        assert.deepEqual(await settle(marksAt, want), want, `a right click to ${value}`)
+      }
+    } finally {
+      await openExtrasEditor(p)
+      await box.check()
+      await closeExtrasEditorWith(p, 'Save')
+      await p.mouse.click(5, 5)
+      await undoAll()
+    }
+  })
+
   it('a middle click and a middle-drag erase nothing: the line stays, and no default is prevented (the autoscroll is the browser\'s)', async () => {
     await undoAll()
     await selectPenOnPage(1, 3)
