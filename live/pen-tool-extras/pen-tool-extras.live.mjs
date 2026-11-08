@@ -15,6 +15,8 @@ const script = readFileSync(new URL('../../pen-tool-extras.user.js', import.meta
 const { HOLD_TO_EDIT_MS } = createRequire(import.meta.url)('../../pen-tool-extras.user.js')
 
 const DATA_KEY = 'PenColor_colors'
+// The color tool wait's limit in the script (COLOR_TOOL_TIMEOUT_MS).
+const COLOR_TOOL_TIMEOUT_MS = 10000
 const THICKNESS_KEY = 'PenColor_thickness'
 // SudokuPad's cell color pages, darkened: the pen color presets. Typed out
 // here from the script's own darkening of SudokuPad's default palette (tool-color.js) as the
@@ -787,12 +789,12 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       await p.addScriptTag({ content: script })
       await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
       // The wait ends at 10 s: a sleep past it, since the check is that nothing was saved meanwhile and the one warning names the wait.
-      await sleep(12000)
+      await sleep(COLOR_TOOL_TIMEOUT_MS + 2000)
       const pens = () => p.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${n}`).trim()))
       assert.deepEqual(await pens(), OWN_PEN_HEX)
       assert.equal(await p.evaluate((k) => Framework.getData(k), DATA_KEY), null)
       assert.equal(warned.length, 1, warned.join('\n'))
-      assert.match(warned[0], /^pen-tool-extras: color save skipped because SudokuPad changed: .*the color tool not ready after 10000 ms/)
+      assert.match(warned[0], new RegExp(`^pen-tool-extras: color save skipped because SudokuPad changed: .*the color tool not ready after ${COLOR_TOOL_TIMEOUT_MS} ms`))
       await openExtrasEditor(p)
       const editor = p.locator('#pen-tool-extras-editor')
       assert.deepEqual(await editor.locator('input[type=color]').evaluateAll((es) => es.map((e) => e.value)), OWN_PEN_HEX)
@@ -804,7 +806,7 @@ describe('the color tool is not ready yet', { concurrency: false }, () => {
       assert.equal(await editor.locator('select[data-role="color-choice"]').evaluate((el) => el.value), 'sudokupad')
       await closeExtrasEditorWith(p, 'Cancel')
       await putBackRemovedPalette(p)
-      // The save gave up, so a palette that comes late saves nothing until the next page load.
+      // The save gave up, so a palette that comes late saves nothing until the next page load. The check is that nothing happens, so this one is a sleep past the 100 ms poll.
       await sleep(1500)
       assert.equal(await p.evaluate((k) => Framework.getData(k), DATA_KEY), null)
       assert.deepEqual(await pens(), OWN_PEN_HEX)

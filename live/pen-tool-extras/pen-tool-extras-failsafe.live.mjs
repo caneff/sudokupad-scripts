@@ -22,6 +22,9 @@ const KEYS = ['PenColor_pen', 'PenColor_colors', 'PenColor_thickness', 'PenColor
 const PAGE_BUTTON = '.pen-tool-extras-page'
 const SLIDERS = '#pen-tool-extras-thickness'
 const NOTHING_OFF = ''
+// The color tool wait's limit in the script (COLOR_TOOL_TIMEOUT_MS) and the panel check's pause (PANEL_CHECK_MS).
+const COLOR_TOOL_TIMEOUT_MS = 10000
+const PANEL_CHECK_MS = 1000
 const missing = (steps, internal) => new RegExp(`^pen-tool-extras: ${steps} skipped because SudokuPad has no ${internal.replaceAll('.', '\\.')}$`)
 const changed = (step) => new RegExp(`^pen-tool-extras: ${step} skipped because SudokuPad changed: `)
 
@@ -120,7 +123,7 @@ const CASES = [
   {
     name: 'color tool never ready',
     off: 'color save',
-    warns: /^pen-tool-extras: color save skipped because SudokuPad changed: .*the color tool not ready after 10000 ms/,
+    warns: new RegExp(`^pen-tool-extras: color save skipped because SudokuPad changed: .*the color tool not ready after ${COLOR_TOOL_TIMEOUT_MS} ms`),
     breaks: 'Framework.app.tools.colour.palette = null'
   },
   { name: 'nothing broken', off: NOTHING_OFF }
@@ -179,7 +182,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       })
 
       // Some failures show only when the step is used: a page 3 line is drawn, a context menu, an edge click. The panel check
-      // and the color tool wait are the script's own timers (2 s and 10 s), so an infinite quiet window waits them out.
+      // and the color tool wait are the script's own timers (PANEL_CHECK_MS twice and COLOR_TOOL_TIMEOUT_MS), so an infinite quiet window waits them out.
       const triggerFailure = async () => {
         if (kase.name === 'arrow lines') {
           await p.locator(PAGE_BUTTON).click()
@@ -341,5 +344,46 @@ describe('SudokuPad throws after sending a click', { concurrency: false }, () =>
     assert.deepEqual(warned, [])
     assert.equal(await dialogLineOf(p), NOTHING_OFF)
     assert.deepEqual(errors.filter((e) => !/planted after the send/.test(e)), [])
+  })
+})
+
+// SudokuPad builds the panel in steps, so the line mode pulldown may be missing at the panel check's first look. One miss skips nothing: the pulldown comes back before the second.
+describe('the pulldown is missing at one look of the panel check only', { concurrency: false }, () => {
+  let context, p, errors, warned
+  before(async () => {
+    warned = []
+    ;({ context, p, errors } = await openPage(browser, {
+      seed: (page, errs) => {
+        page.on('console', (m) => {
+          if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
+        })
+        captureConsoleErrors(page, errs)
+      }
+    }))
+    await startPuzzle(p)
+    await p.addScriptTag({ content: script })
+    await p.locator('style#pen-tool-extras-style').waitFor({ state: 'attached' })
+    await p.evaluate((keys) => { keys.forEach((k) => Framework.removeData(k)); Framework.setSetting('toolpen', true) }, KEYS)
+    await p.locator('#control-pen').waitFor({ state: 'visible' })
+    await openPenTool(p)
+    await p.locator(PAGE_BUTTON).waitFor({ state: 'attached' })
+  })
+  after(async () => { await context.close() })
+
+  it('the step stays on and the panel keeps its buttons', async () => {
+    // Out for 1.5 panel checks: the first look (PANEL_CHECK_MS after the removal) misses, and the pulldown is back before the second.
+    await p.evaluate(async (ms) => {
+      const box = document.querySelector('.tool-pen .penlinemode')
+      const parent = box.parentNode
+      box.remove()
+      await new Promise((resolve) => setTimeout(resolve, ms))
+      parent.prepend(box)
+    }, PANEL_CHECK_MS * 1.5)
+    // Past the second look; the check is that nothing is skipped, so this one is a sleep.
+    await new Promise((resolve) => setTimeout(resolve, PANEL_CHECK_MS * 2))
+    assert.deepEqual(warned, [])
+    assert.equal(await p.locator(PAGE_BUTTON).count(), 1)
+    assert.equal(await dialogLineOf(p), NOTHING_OFF)
+    assert.deepEqual(errors, [])
   })
 })
