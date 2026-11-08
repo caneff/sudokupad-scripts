@@ -54,7 +54,7 @@ test('spec 359: the homepage is rows of slideshows, the details pages carry the 
   // Homepage: one row per script in order, with No Tab Letters off the site and the script kept in the repo.
   const home = read('index.html')
   const rows = rowsOf(home)
-  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Color by Digit', 'Pen Tool Extras', 'Text Anywhere', 'Dark Page', 'Auto Rules Resizer'])
+  assert.deepEqual(rows.map((r) => r.match(/<h2>([^<]*)<\/h2>/)[1]), ['Pen Tool Extras', 'Text Anywhere', 'Color by Digit', 'Dark Page', 'Auto Rules Resizer'])
   assert.equal(existsSync(join(ROOT, 'no-tab-letters.user.js')), true)
   for (const name of readdirSync(SITE).filter((f) => f.endsWith('.html'))) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, name)
   assert.match(home, /\.row \{[^}]*grid-template-columns: 30rem 1fr/)
@@ -64,7 +64,7 @@ test('spec 359: the homepage is rows of slideshows, the details pages carry the 
     assert.equal(imgsOf(row).length, 1)
     assert.doesNotMatch(row, /slideshow|slide-caption/)
   }
-  const details = { 'Color by Digit': 'color-by-digit.html', 'Pen Tool Extras': 'pen-tool-extras.html', 'Text Anywhere': 'draw-tool.html' }
+  const details = { 'Pen Tool Extras': 'pen-tool-extras.html', 'Text Anywhere': 'draw-tool.html', 'Color by Digit': 'color-by-digit.html' }
   rows.slice(0, 3).forEach((row, i) => {
     const heading = Object.keys(details)[i]
     const show = showOf(row)

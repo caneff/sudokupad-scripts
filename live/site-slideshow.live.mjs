@@ -12,7 +12,7 @@ const ROOT = new URL('../', import.meta.url)
 const SHOWS = [
   {
     heading: 'Color by Digit',
-    row: 1,
+    row: 3,
     details: 'color-by-digit.html',
     slides: 10,
     first: ['color-by-digit-slide-1-start.png', 'Start'],
@@ -22,7 +22,7 @@ const SHOWS = [
   },
   {
     heading: 'Pen Tool Extras',
-    row: 2,
+    row: 1,
     details: 'pen-tool-extras.html',
     slides: 14,
     first: ['pen-tool-extras-slide-1-line.png', 'Draw a line'],
@@ -32,7 +32,7 @@ const SHOWS = [
   },
   {
     heading: 'Text Anywhere',
-    row: 3,
+    row: 2,
     details: 'draw-tool.html',
     slides: 5,
     first: ['draw-tool-slide-1-type.png', 'Left click to type a note'],
