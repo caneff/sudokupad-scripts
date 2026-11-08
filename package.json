@@ -4,11 +4,13 @@
   "scripts": {
     "test": "node --test \"test/**/*.test.*\" \"lib/**/*.test.js\" \"live/**/*.test.mjs\"",
     "test:live": "node --test --test-concurrency=4 \"live/**/*.live.mjs\"",
+    "test:fuzz": "node --test live/fuzz/fuzz.proof.mjs",
     "watch:live": "node live/watch.mjs",
     "test:tampermonkey": "node --test --test-concurrency=1 \"live/**/*.tampermonkey.mjs\"",
     "lint": "standard"
   },
   "devDependencies": {
+    "fast-check": "^4.10.2",
     "playwright": "^1.64.1",
     "standard": "^17.1.2"
   },
