@@ -215,11 +215,13 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
-  // The plant removes the size slider while the panel stays on the page, so showPanelValues throws; the page errors it causes are taken out of `errors` and checked here.
+  // The plant removes the size slider while the panel stays on the page, so showPanelValues throws. The SudokuPad guard holds the throw and
+  // turns the feature it ran under off, with one warning; a page error it still lets through is taken out of `errors`. Either shows the plant took.
   const plantRedrawFailure = () => p.evaluate((slider) => document.querySelector(slider).remove(), draw.SIZE_SLIDER)
-  const planted = (first) => {
+  const planted = (first, warnedBefore) => {
     const raised = errors.splice(first)
-    assert.match(raised.join('\n'), /TypeError/, 'the plant made the redraw throw')
+    const held = warnings.slice(warnedBefore).some((w) => /skipped because SudokuPad changed/.test(w))
+    assert.ok(held || /TypeError/.test(raised.join('\n')), `the plant made the redraw throw\n${warnings.join('\n')}`)
   }
   const selectNote = async () => {
     await draw.plantDrawing(p, [NOTE])
@@ -236,9 +238,10 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await p.keyboard.type('15')
     await plantRedrawFailure()
     const first = errors.length
+    const warnedBefore = warnings.length
     await p.keyboard.press('Escape')
     assert.deepEqual((await saved()).map((item) => item.text), ['15'], 'stored before the redraw failed')
-    planted(first)
+    planted(first, warnedBefore)
     await reload()
     assert.deepEqual(await settle(texts, ['15']), ['15'])
     await restartFromDialog()
@@ -248,13 +251,18 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await selectNote()
     await plantRedrawFailure()
     let first = errors.length
+    let warnedBefore = warnings.length
     await p.click(`${draw.KEYPAD} button[data-key="6"]`)
     assert.deepEqual((await saved()).map((item) => item.color), [6], 'the recolor is stored')
-    planted(first)
+    planted(first, warnedBefore)
+    // The held throw turned its feature off until the page reloads, so the delete gets a fresh page and its own plant.
+    await selectNote()
+    await plantRedrawFailure()
     first = errors.length
+    warnedBefore = warnings.length
     await p.keyboard.press('Delete')
     assert.equal(await saved(), null, 'the delete is stored')
-    planted(first)
+    planted(first, warnedBefore)
     await reload()
     await restartFromDialog()
   })
