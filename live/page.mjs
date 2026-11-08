@@ -22,8 +22,9 @@ export async function newPage (context) {
   return { p, errors }
 }
 
-// A line a script logs when it switches a step off because SudokuPad changed: `<script>: <step> skipped: <reason>` (lib/steps.js).
-const SKIP_LINE = /^(?:auto-rules-resizer|color-by-digit|dark-page|draw-tool|no-tab-letters|pen-tool-extras): .+ skipped: /
+// A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
+// (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
+export const SKIP_LINE = /^(?:auto-rules-resizer|color-by-digit|dark-page|draw-tool|no-tab-letters|pen-tool-extras): .* skipped because SudokuPad (?:has no|changed)/
 
 // Collects the page's `console.error` lines into `errors`, leaving out a resource that failed to load, which a
 // replay's aborted trackers print. It also collects a script's skip line (any console type), so a test that asserts

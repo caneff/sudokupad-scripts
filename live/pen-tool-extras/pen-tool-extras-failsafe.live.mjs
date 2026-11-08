@@ -11,7 +11,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { captureConsoleErrors, openPage, startPuzzle } from '../page.mjs'
+import { captureConsoleErrors, openPage, SKIP_LINE, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
 import { drag, gridPoint, openPenTool, padValues, penEntries } from '../pen.mjs'
 import { settle } from '../settle.mjs'
@@ -164,7 +164,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
               if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
             })
             // The case plants its own breakage, so its skip lines are expected (`warned` holds them); any other console line is an error.
-            captureConsoleErrors(page, errs, (text) => /^pen-tool-extras: .+ skipped: /.test(text))
+            captureConsoleErrors(page, errs, (text) => SKIP_LINE.test(text))
           }
         }))
         await startPuzzle(p)
