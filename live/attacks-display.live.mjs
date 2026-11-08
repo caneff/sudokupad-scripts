@@ -145,7 +145,7 @@ describe('attacks on the display and scale', { concurrency: false }, () => {
 
     // Draw a pen line on the full grid, along a diagonal no row or column line covers, then undo it.
     const entriesBefore = (await penEntries(p)).length
-    await timed('draw a pen line', () => mouseDrag(p, [[2.5, 2.5], [3.5, 3.5]]), async () => (await penEntries(p)).length !== entriesBefore)
+    await timed('draw a pen line', () => mouseDrag(p, [[2.5, 2.5], [3.5, 3.5]]), async () => (await penEntries(p)).length > entriesBefore)
     await timed('undo the pen line', () => p.click('#control-undo'), async () => (await penEntries(p)).length === entriesBefore)
 
     // Draw a note among the 200, and move one by a cell.
