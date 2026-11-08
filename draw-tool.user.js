@@ -1375,7 +1375,9 @@
     `#${DIALOG_ID} .draw-tool-section-title { font-weight: 600; margin: 6px 0 0; }`,
     `#${DIALOG_ID} .draw-tool-box-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
     `#${DIALOG_ID} .draw-tool-box-row .draw-tool-color-choice { flex: 1 1 0; width: auto; min-width: 0; }`,
-    `#${DIALOG_ID} .draw-tool-frame-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }`,
+    `#${DIALOG_ID} .draw-tool-frame-row { display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin: 6px 0; cursor: pointer; }`,
+    // SudokuPad stretches a dialog's inputs across the row, which left the box alone in the middle and the word at the far edge.
+    `#${DIALOG_ID} .draw-tool-frame-row input { flex: none; width: auto; min-width: 0; margin: 0; }`,
     colorBlockCss(CLASS_PREFIX, `#${DIALOG_ID}`)
   ].join('\n')
 

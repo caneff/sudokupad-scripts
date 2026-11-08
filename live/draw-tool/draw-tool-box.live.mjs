@@ -66,6 +66,16 @@ describe('Text Annotation\'s background box color and frame', { concurrency: fal
     assert.deepEqual(await p.locator(`${CHOICE} option`).allTextContents(), ['Page', 'White', 'Sticky yellow', 'Tint', 'Custom'])
     assert.equal(await p.locator(FRAME).isChecked(), false)
     assert.equal(await p.locator(CUSTOM).count(), 0)
+    // SudokuPad stretches a dialog's inputs: the checkbox must stay its own size, on the pulldown's left edge, with its word right beside it.
+    const { check, word, choice } = await p.evaluate(() => {
+      const row = document.querySelector('#draw-tool-dialog .draw-tool-frame-row')
+      const range = document.createRange()
+      range.selectNodeContents([...row.childNodes].find((node) => node.nodeType === window.Node.TEXT_NODE && node.textContent.trim()))
+      return { check: row.querySelector('input').getBoundingClientRect(), word: range.getBoundingClientRect(), choice: document.querySelector('#draw-tool-dialog select[data-role="box-choice"]').getBoundingClientRect() }
+    })
+    assert.equal(check.width < 30, true, `the checkbox is ${check.width}px wide`)
+    assert.equal(Math.abs(check.left - choice.left) <= 2, true, `the checkbox is at ${check.left}, the pulldown at ${choice.left}`)
+    assert.equal(word.left >= check.right && word.left - check.right <= 16, true, `the word starts ${word.left - check.right}px from the checkbox`)
     await closeDialogWith(p, 'Cancel', EDITOR)
   })
 
