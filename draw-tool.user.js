@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.31.0
+// @version      0.32.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.31.0'
+  const VERSION = '0.32.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -229,6 +229,10 @@
   const ACTIVE_CLASS = 'draw-tool-active'
   const HANDLE_CLASS = 'draw-tool-resize'
   const SELECTION_CLASS = 'draw-tool-selection'
+  const GUIDE_CLASS = 'draw-tool-snap-guide'
+  const GUIDE_PX = 1
+  const SELECTION_OUTLINE_PX = 2
+  const SELECTION_OFFSET_PX = 2
   const OPEN_OUTLINE_CLASS = 'draw-tool-open-outline'
   const HANDLE_PX = 11
   // A note's own opacity, as a number, for the hover look: it draws on the note and the note's opacity multiplies into it.
@@ -1446,7 +1450,7 @@
     },
     tool: {
       label: 'Text tool',
-      needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function' },
+      needs: { ...BOARD, 'Framework.addTool': 'function', 'Framework.showDialog': 'function', 'app.getToolNames': 'function', 'Framework.app.grid.rows': 'integer', 'Framework.app.grid.cols': 'integer' },
       onSkip () {
         const button = document.getElementById(`control-${TOOL_NAME}`)
         if (button) button.remove()
@@ -1479,13 +1483,39 @@
   const NUDGE_REPEAT_MS = 300
   const NUDGE_RAMP_MS = 1500
   const NUDGE_TICK_MS = 50
+  // Dragging a note pulls it onto the grid and the other notes. On one axis the dragged note's box spans `lo`..`hi` in screen pixels and its selection outline's line
+  // lies `reach` past it. The nearest target within SNAP_PX gives the `shift` and the `guide`, where the outline then lies: the grid's `lines` for the outline's line
+  // (or a cell's middle for the box's middle), or one of `others`' `{ lo, hi }` boxes for the same edge or middle. A tie goes to the first target found, a cell's.
+  const SNAP_PX = 4
+  const CELL_UNITS = 64
+  function snapAxis (lo, hi, { lines, others = [], reach = 0 }) {
+    const middle = (lo + hi) / 2
+    let best = null
+    const consider = (from, to, guide) => {
+      const shift = to - from
+      if (Math.abs(shift) <= SNAP_PX && (!best || Math.abs(shift) < Math.abs(best.shift))) best = { shift, guide }
+    }
+    if (hi + reach >= lines[0] && lo - reach <= lines[lines.length - 1]) {
+      lines.forEach((line, i) => {
+        consider(lo - reach, line, line)
+        consider(hi + reach, line, line)
+        if (i < lines.length - 1) consider(middle, (line + lines[i + 1]) / 2, (line + lines[i + 1]) / 2)
+      })
+    }
+    for (const other of others) {
+      consider(lo, other.lo, other.lo - reach)
+      consider(hi, other.hi, other.hi + reach)
+      consider(middle, (other.lo + other.hi) / 2, (other.lo + other.hi) / 2)
+    }
+    return best
+  }
   function nudgeStep (heldMs, shift) {
     if (heldMs < NUDGE_REPEAT_MS) return 0
     const [from, to] = shift ? [NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX] : [NUDGE_PX, NUDGE_MAX_PX]
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1758,7 +1788,8 @@
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}):hover { ${hoverLook(35, 4)} }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     // The outline is a box of its own in the layer, since a note's opacity would fade an outline drawn on the note itself.
-    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: 2px solid ${PANEL_COLOR}; outline-offset: 2px; }`,
+    `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: ${SELECTION_OUTLINE_PX}px solid ${PANEL_COLOR}; outline-offset: ${SELECTION_OFFSET_PX}px; }`,
+    `.${GUIDE_CLASS} { position: absolute; background: color-mix(in srgb, ${PANEL_COLOR} 35%, transparent); pointer-events: none; }`,
     `.${SELECTION_CLASS}.${OPEN_OUTLINE_CLASS} { outline-width: 1px; outline-offset: 1px; }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px solid ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 6%, transparent); }`,
     `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; box-shadow: 0 0 0 1px ${PANEL_COLOR}, 0 1px 3px rgb(0 0 0 / .3); pointer-events: auto; }`,
@@ -2752,9 +2783,10 @@
 
   // While a move is in progress each moving note's element follows the pointer by a translation, in the units of its own group, and nothing is drawn again.
   function showMove (d, map) {
-    const [dx, dy] = dragOffset(d)
+    const { offset: [dx, dy], guides } = snappedOffset(d, map)
     showHandles(null)
     showSelection(map, [dx, dy])
+    showGuides(guides)
     for (const { item } of d.move) {
       const element = item[NOTE_ELEMENT]
       if (!element) continue
@@ -2764,7 +2796,41 @@
     }
   }
 
+  // The drag's offset once the pressed note is pulled onto the grid and the other notes, and the screen x and y of the guide lines of the axes that snapped.
+  // Only the notes not being moved are targets.
+  function snappedOffset (d, map) {
+    const raw = dragOffset(d)
+    const item = drawing[d.start]
+    if (!item) return { offset: raw, guides: [] }
+    const reach = SELECTION_OFFSET_PX + SELECTION_OUTLINE_PX / 2
+    const lines = (axis) => Array.from({ length: Framework.app.grid[axis === 0 ? 'cols' : 'rows'] + 1 }, (_, k) => map.toScreen(axis === 0 ? [k * CELL_UNITS, 0] : [0, k * CELL_UNITS])[axis])
+    const box = noteScreenBox(item, map, outline)
+    const others = drawing.filter((other, i) => other.kind === TEXT_KIND && !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, outline))
+    const snaps = [['left', 'right'], ['top', 'bottom']].map(([near, far], axis) => snapAxis(box[near] + raw[axis], box[far] + raw[axis], {
+      lines: lines(axis), reach, others: others.map((other) => ({ lo: other[near], hi: other[far] }))
+    }))
+    const offset = raw.map((v, axis) => v + (snaps[axis]?.shift ?? 0))
+    // The pull may carry a note past what the pointer left reachable, so then the note stays where the pointer put it.
+    if (!movedBy(d.move, offset, map).every(({ point }) => reachable(point))) return { offset: raw, guides: [] }
+    return { offset, guides: snaps.map((snap) => snap?.guide ?? null) }
+  }
+
+  // The faint guide lines across the page at `[x, y]` (null for an axis that is not snapped); none for null.
+  function showGuides (guides) {
+    const layer = drawingLayer()
+    ;['x', 'y'].forEach((axis, i) => {
+      let line = layer.querySelector(`.${GUIDE_CLASS}[data-axis="${axis}"]`)
+      if (guides?.[i] == null) return line?.remove()
+      line ??= layer.appendChild(Object.assign(document.createElement('div'), { className: GUIDE_CLASS }))
+      line.dataset.axis = axis
+      const at = `${roundToTenth(guides[i] - GUIDE_PX / 2)}px`
+      const thick = `${GUIDE_PX}px`
+      Object.assign(line.style, axis === 'x' ? { left: at, top: '0', width: thick, height: '100%' } : { top: at, left: '0', height: thick, width: '100%' })
+    })
+  }
+
   function clearMove (d) {
+    showGuides(null)
     for (const { item } of d.move) if (item[NOTE_ELEMENT]) item[NOTE_ELEMENT].style.translate = ''
   }
 
@@ -2859,7 +2925,7 @@
 
   function endMove (d) {
     const map = boardMap()
-    place(movedBy(d.move, dragOffset(d), map), map)
+    place(movedBy(d.move, snappedOffset(d, map).offset, map), map)
     clearMove(d)
     keepDrawnPoints(d.move.map(({ index }) => index), map)
     saveNotes()
