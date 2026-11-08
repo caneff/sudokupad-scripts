@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSavedColor, DATA_KEY, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSaved, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 function rules () {
@@ -27,20 +27,11 @@ test('the page background is the color given', () => {
   assert.equal(given, `${BOARD} { background-color: #336699 !important }`)
 })
 
-test('readSavedColor reads the saved color through the Framework, and reports a Framework it cannot read as nothing saved', () => {
-  assert.equal(readSavedColor({ getData: (key) => (key === DATA_KEY ? '#ABCDEF' : null) }), '#abcdef')
-  assert.equal(readSavedColor({ getData: () => null }), null)
-  assert.equal(readSavedColor({}), null)
-  assert.equal(readSavedColor(null), null)
-  const logged = []
-  const original = console.error
-  console.error = (...args) => logged.push(args)
-  try {
-    assert.equal(readSavedColor({ getData: () => { throw new Error('storage blocked') } }), null)
-  } finally {
-    console.error = original
-  }
-  assert.equal(logged.length, 1)
+test('readSaved reads the saved color through the Framework, and lets a Framework it cannot read throw', () => {
+  assert.equal(readSaved({ getData: (key) => (key === DATA_KEY ? '#ABCDEF' : null) }), '#abcdef')
+  assert.equal(readSaved({ getData: () => null }), null)
+  assert.throws(() => readSaved({}), TypeError)
+  assert.throws(() => readSaved({ getData: () => { throw new Error('storage blocked') } }), /storage blocked/)
 })
 
 test('the credit line takes the text color for the page color given', () => {
@@ -186,4 +177,26 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
   assert.deepEqual(readPaste('{}'), { values: {}, skipped: 0 })
   assert.deepEqual(readPaste(JSON.stringify({ ColorByDigit_auto: true })), { values: {}, skipped: 0 })
   assert.throws(() => readPaste('[{"DarkPage_color":"#ffffff"}]'), /not a settings object/)
+})
+
+// A SudokuPad with every internal Dark Page needs.
+const completeFramework = () => ({ Framework: { getData () {}, addSetting () {}, showDialog () {}, closeDialog () {}, setData () {}, removeData () {} } })
+
+test('Dark Page declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeFramework()), new Map())
+})
+
+test('without one internal, only the feature that needs it is lacking', () => {
+  for (const [internal, feature] of [['getData', 'savedColor'], ['addSetting', 'settings'], ['showDialog', 'settings'], ['closeDialog', 'settings'], ['setData', 'settings'], ['removeData', 'settings']]) {
+    const roots = completeFramework()
+    delete roots.Framework[internal]
+    assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[`Framework.${internal}`, [feature]]]), internal)
+  }
+})
+
+test('Dark Page declares its features through the shared guard, with no guard code of its own', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')
+  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
+  assert.match(own, /createGuard\(\{ script: 'dark-page'[^\n]*features: FEATURES \}\)/)
+  for (const name of ['readSavedColor', 'console.error']) assert.equal(own.includes(name), false, name)
 })

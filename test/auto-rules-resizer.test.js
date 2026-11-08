@@ -7,7 +7,7 @@ const { headerVersion } = require('./header-version.js')
 const {
   VERSION, MAX_WIDTH_KEY, MAX_HEIGHT_KEY, normalizeLimit, limitFromBox, readLimits, saveLimits, noLimits, autoPaneFit,
   largestSize, rulesRoom, rulesContainer, rulesWidth, autoFontPx, nudgedFontPx, fitRulesPane, clearFit,
-  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag
+  copiedSettings, pastedSettings, READERS, dragRulesBox, clampDrag, draggedPane, draggedBox, noRulesDrag, isLandscape, makeTrailing, watchCornerDrag, lackingInternals, FEATURES
 } = require('../auto-rules-resizer.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -451,4 +451,33 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
 test('the script has no pointerover or pointerout listener', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
   assert.doesNotMatch(source, /pointerover|pointerout/)
+})
+
+// A SudokuPad with every internal Auto Rules Resizer needs.
+const completeSudokuPad = () => ({
+  Framework: { app: { puzzle: {}, resizeBoard () {} }, addSetting () {}, showDialog () {}, closeDialog () {}, getData () {}, setData () {}, removeData () {} }
+})
+
+test('Auto Rules Resizer declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
+  assert.deepEqual(lackingInternals(FEATURES, completeSudokuPad()), new Map())
+})
+
+test('without one internal, only the feature that needs it is lacking', () => {
+  const removals = [
+    ['Framework.app.puzzle', (r) => { delete r.Framework.app.puzzle }, 'fit'],
+    ['Framework.app.resizeBoard', (r) => { delete r.Framework.app.resizeBoard }, 'refit'],
+    ...['addSetting', 'showDialog', 'closeDialog', 'getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (r) => { delete r.Framework[name] }, 'settings'])
+  ]
+  for (const [internal, remove, feature] of removals) {
+    const roots = completeSudokuPad()
+    remove(roots)
+    assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[internal, [feature]]]), internal)
+  }
+})
+
+test('Auto Rules Resizer declares its features through the shared guard, with no guard code of its own', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
+  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
+  assert.match(own, /createGuard\(\{ script: 'auto-rules-resizer'[^\n]*features: FEATURES \}\)/)
+  for (const name of ['refitAfterResizeBoard', 'the rules fit failed', 'has no resizeBoard']) assert.equal(own.includes(name), false, name)
 })

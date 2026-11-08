@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.27.5
+// @version      1.27.6
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install step guard, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.27.5'
+  const VERSION = '1.27.6'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -118,9 +118,11 @@
     let page = null
 
     const dismissKey = `${script}-notice`
+    // A store with no getData or setData (a SudokuPad that changed) cannot remember a dismissal, so it holds for this page load only.
+    const dismissedHere = []
     const dismissed = () => {
-      const saved = page.store.getData(dismissKey)
-      return saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []
+      const saved = typeof page.store.getData === 'function' ? page.store.getData(dismissKey) : null
+      return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
     let bar = null
@@ -156,7 +158,8 @@
       dismiss.setAttribute('aria-label', 'Dismiss')
       dismiss.style.cssText = NOTICE_DISMISS_CSS
       dismiss.addEventListener('click', () => {
-        page.store.setData(dismissKey, { version: page.sudokupad, features: [...gone, ...shown.map((reason) => reason.name)] })
+        dismissedHere.push(...shown.map((reason) => reason.name))
+        if (typeof page.store.setData === 'function') page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() })
         showNotice()
       })
       bar.append(text, link, dismiss)
