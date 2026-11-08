@@ -18,7 +18,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s Size and Transparency sliders', { concurrency: false }, () => {
+describe('Text Anywhere\'s Size and Transparency sliders', { concurrency: false }, () => {
   let context, p, errors
 
   const saved = () => draw.saved(p)

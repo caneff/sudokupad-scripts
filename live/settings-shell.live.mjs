@@ -11,7 +11,7 @@ const SCRIPTS = [
   { file: 'dark-page', entry: 'Dark Page', editor: '#dark-page-dialog', buttons: ['Save', 'Cancel'] },
   { file: 'auto-rules-resizer', entry: 'Rules Resizer', editor: '#rules-resizer-dialog', buttons: ['Save', 'Cancel'] },
   { file: 'color-by-digit', entry: 'Color by Digit', editor: '#color-by-digit-editor', buttons: ['Save', 'Cancel'] },
-  { file: 'draw-tool', entry: 'Text Annotation', editor: '#draw-tool-dialog', buttons: ['Save', 'Cancel'] },
+  { file: 'draw-tool', entry: 'Text Anywhere', editor: '#draw-tool-dialog', buttons: ['Save', 'Cancel'] },
   { file: 'pen-tool-extras', entry: 'Pen Tool Extras', editor: '#pen-tool-extras-editor', buttons: ['Save', 'Cancel', 'Restore defaults'] }
 ]
 

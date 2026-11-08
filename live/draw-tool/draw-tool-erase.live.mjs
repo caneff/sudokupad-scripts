@@ -1,5 +1,5 @@
 // Live check of draw-tool.user.js's erasing on sudokupad.app: a right-drag or right click deletes the notes it crosses (a middle click or drag does nothing), the
-// board's context menu is suppressed while Text Annotation is current, Clear all asks first, and closing its dialog over the board
+// board's context menu is suppressed while Text Anywhere is current, Clear all asks first, and closing its dialog over the board
 // makes no note and opens no text box. Real mouse input throughout.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -18,7 +18,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s erasing', { concurrency: false }, () => {
+describe('Text Anywhere\'s erasing', { concurrency: false }, () => {
   let context, p, errors
   // A right click on the board before the script runs: whether the page prevented its menu, and the cells selected.
   let stockRightClick
@@ -99,7 +99,7 @@ describe('Text Annotation\'s erasing', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('Text Annotation gets the right button as a mousedown with button 2', async () => {
+  it('Text Anywhere gets the right button as a mousedown with button 2', async () => {
     await pickDraw()
     // App.toolExecHandler triggers `tool-<handler>` with the event before it calls the current tool's handler.
     const got = read(() => new Promise((resolve) => {
@@ -133,8 +133,8 @@ describe('Text Annotation\'s erasing', { concurrency: false }, () => {
     assert.deepEqual((await saved()).map((item) => item.text), ['20'])
   })
 
-  // Z switches to Digit with the right button still held, so the release goes to the Digit tool and not to Text Annotation.
-  it('a right-drag cut short by a tool switch keeps what it erased, and erases nothing more when Text Annotation is back', async () => {
+  // Z switches to Digit with the right button still held, so the release goes to the Digit tool and not to Text Anywhere.
+  it('a right-drag cut short by a tool switch keeps what it erased, and erases nothing more when Text Anywhere is back', async () => {
     await typeText(UPPER_AT, '15')
     await p.mouse.move(...await gridPoint(p, [1.5, 2.2]))
     await p.mouse.down({ button: 'right' })
@@ -143,7 +143,7 @@ describe('Text Annotation\'s erasing', { concurrency: false }, () => {
     await p.keyboard.press('z')
     assert.equal(await settle(tool, 'normal'), 'normal')
     await p.mouse.up({ button: 'right' })
-    assert.equal((await saved()).length, 1, 'the erase was saved when Text Annotation was left')
+    assert.equal((await saved()).length, 1, 'the erase was saved when Text Anywhere was left')
     await read(() => Framework.app.changeTool('draw'))
     assert.equal(await tool(), 'draw')
     await p.mouse.move(...await gridPoint(p, [3.5, 2.2]))
@@ -179,7 +179,7 @@ describe('Text Annotation\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(await texts(), [])
   })
 
-  it('with Text Annotation current a right click on the board opens no context menu and selects no cell', async () => {
+  it('with Text Anywhere current a right click on the board opens no context menu and selects no cell', async () => {
     await pickDraw()
     await p.evaluate(() => Framework.app.deselect())
     assert.deepEqual(await rightClick(), { prevented: [true], selected: 0 })
@@ -234,7 +234,7 @@ describe('Text Annotation\'s erasing', { concurrency: false }, () => {
     assert.deepEqual(await texts(), [])
   })
 
-  it('a middle pointerdown, mousedown and auxclick over the board are the page\'s own with Text Annotation current as with another tool: not prevented, so the autoscroll and Linux paste are the browser\'s', async () => {
+  it('a middle pointerdown, mousedown and auxclick over the board are the page\'s own with Text Anywhere current as with another tool: not prevented, so the autoscroll and Linux paste are the browser\'s', async () => {
     await pickDraw()
     await watchPrevented(MIDDLE_EVENTS, MIDDLE)
     await middleClick([8.5, 1.5])

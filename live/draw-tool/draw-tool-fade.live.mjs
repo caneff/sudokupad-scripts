@@ -20,7 +20,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s Transparency fades the whole note', { concurrency: false }, () => {
+describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: false }, () => {
   let context, p
 
   // Each note's computed opacity, color, box fill and frame, by text.

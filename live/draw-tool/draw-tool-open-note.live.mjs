@@ -17,7 +17,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s panel while a note is open', { concurrency: false }, () => {
+describe('Text Anywhere\'s panel while a note is open', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -127,7 +127,7 @@ describe('Text Annotation\'s panel while a note is open', { concurrency: false }
   it('no page error', () => { assert.deepEqual(errors, []) })
 })
 
-describe('Text Annotation\'s panel while a brand-new note is open', { concurrency: false }, () => {
+describe('Text Anywhere\'s panel while a brand-new note is open', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
