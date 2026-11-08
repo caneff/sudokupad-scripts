@@ -1828,6 +1828,8 @@
     let latest = null
     let lastAt = -Infinity
     const hide = () => {
+      clearTimeout(timer)
+      timer = null
       if (ghost !== null) ghost.remove()
       ghost = null
       shown = null
