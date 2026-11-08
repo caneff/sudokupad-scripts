@@ -51,6 +51,24 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.equal(await saved(), null, 'saved after')
   })
 
+  // SudokuPad's App.handleKeydown returns early on event.repeat, so its own Tab entry never sees a held Tab (#545).
+  it('a held Tab (repeat keydowns) is prevented too, leaves the pad on digits, and leaves focus where it is', async () => {
+    const focus = await focused()
+    await p.evaluate(() => {
+      window.__held = []
+      window.addEventListener('keydown', (e) => { if (e.key === 'Tab') window.__held.push([e.repeat, e.defaultPrevented]) }, true)
+      window.addEventListener('keydown', (e) => { if (e.key === 'Tab') window.__held[window.__held.length - 1][1] = e.defaultPrevented })
+    })
+    await p.keyboard.down('Tab')
+    await p.keyboard.down('Tab')
+    await p.keyboard.down('Tab')
+    await p.keyboard.up('Tab')
+    assert.deepEqual(await p.evaluate(() => window.__held), [[false, true], [true, true], [true, true]], 'repeat flag, prevented')
+    assert.equal(await focused(), focus, 'focus did not move')
+    assert.equal(await pad(), DIGITS, 'pad')
+    assert.equal(await saved(), null, 'saved')
+  })
+
   it('"/" and the letter button still toggle letter mode and save it', async () => {
     await keydownDefaults(p, '/')
     assert.equal(await pad(), LETTERS, 'after "/"')
@@ -82,6 +100,14 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     assert.notEqual(await focused(), before, 'focus moved')
     assert.equal(await pad(), DIGITS, 'pad')
     assert.equal(await saved(), false, 'saved')
+  })
+
+  it('a held Tab in a dialog is not prevented either', async () => {
+    await p.evaluate(() => { window.__held = [] })
+    await p.keyboard.down('Tab')
+    await p.keyboard.down('Tab')
+    await p.keyboard.up('Tab')
+    assert.deepEqual(await p.evaluate(() => window.__held.map(([repeat, prevented]) => [repeat, prevented])), [[false, false], [true, false]])
   })
 
   it('the page raised no error', () => {

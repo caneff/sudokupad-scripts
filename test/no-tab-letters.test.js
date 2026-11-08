@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { VERSION, withInertTab, ignoreKey, lackingInternals, FEATURES } = require('../no-tab-letters.user.js')
+const { VERSION, withInertTab, ignoreKey, isHeldTabToStop, lackingInternals, FEATURES } = require('../no-tab-letters.user.js')
 
 const toggle = () => {}
 const typeLetter = () => {}
@@ -116,4 +116,13 @@ test('a Framework without getApp turns the Tab key off with one warning naming g
 
 test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'no-tab-letters.user.js'), 'utf8')))
+})
+
+test('isHeldTabToStop stops only a repeated Tab, while the letter tool is on and no dialog is open', () => {
+  const play = { toolOn: true, dialogOpen: false }
+  assert.equal(isHeldTabToStop({ key: 'Tab', repeat: true }, play), true, 'held Tab in play')
+  assert.equal(isHeldTabToStop({ key: 'Tab', repeat: false }, play), false, 'first Tab is the swapped entry\'s')
+  assert.equal(isHeldTabToStop({ key: '/', repeat: true }, play), false, 'another key')
+  assert.equal(isHeldTabToStop({ key: 'Tab', repeat: true }, { ...play, dialogOpen: true }), false, 'dialog open')
+  assert.equal(isHeldTabToStop({ key: 'Tab', repeat: true }, { ...play, toolOn: false }), false, 'letter tool off')
 })
