@@ -327,17 +327,25 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     await read((k) => Framework.removeData(k), INDEX_KEY)
   })
 
+  // The open note autosaves 500 ms after a key (#631), so on a slow machine the failed save and its dialog come while the note is still open, and the Escape that
+  // ends the note then dismisses the dialog (#647). The dialog is waited for and closed before the note ends: it is there from the autosave on, whichever came first.
+  // The index is mended in `finally`, so a failure here cannot leave every test after it with an index that cannot be read.
   it('an index that cannot be read leaves every saved drawing as it is, and the solver is told these notes were not saved', async () => {
     await reload()
     await read((k) => Framework.setData(k, 'not an index {'), INDEX_KEY)
-    await pickDraw()
-    await typeText([2.5, 2.5], '15')
-    assert.deepEqual(await texts(), ['15'])
-    assert.match(await dialogText(), /could not save this puzzle's notes: .*saved index/)
-    await closeDialog()
-    assert.equal(await saved(), null)
-    assert.equal(await read((k) => Framework.getData(k), INDEX_KEY), 'not an index {')
-    await read((k) => Framework.removeData(k), INDEX_KEY)
+    try {
+      await pickDraw()
+      await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
+      await p.keyboard.type('15')
+      assert.match(await dialogText(), /could not save this puzzle's notes: .*saved index/)
+      await closeDialog()
+      await draw.finishNote(p)
+      assert.deepEqual(await texts(), ['15'])
+      assert.equal(await saved(), null)
+      assert.equal(await read((k) => Framework.getData(k), INDEX_KEY), 'not an index {')
+    } finally {
+      await read((k) => Framework.removeData(k), INDEX_KEY)
+    }
   })
 
   // The plant removes the size slider while the panel stays on the page, so showPanelValues throws. The SudokuPad guard holds the throw and
