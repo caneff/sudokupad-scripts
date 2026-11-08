@@ -10,7 +10,6 @@ import { gridPoint } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
 const { TEXTS } = draw
-const CELL = 64
 // In cells from the grid's top left: the note nudged, and a note of bullets.
 const NOTE_AT = [4.5, 4.5]
 const CURSOR_AT = [8.5, 0.5]

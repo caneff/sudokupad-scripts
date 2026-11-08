@@ -202,6 +202,10 @@
   partly past the window's edge, the text is moved to the nearest point wholly inside the window and clear of them, and that point is saved. Both are drawn at the
   board's scale, in a layer over the page that sits above the digits and below SudokuPad's dialogs and menu. Where they overlap a fixed text is drawn, and
   clicked, above a pinned one; among texts of one kind the one made last is on top.
+- **bullet** (a note's) — a line of a note that starts with `- ` or `* `. A finished note shows it with a `•` hanging in the indent and its wrapped lines
+  under the text, with the rest of the line read as markdown; the note open for typing shows the raw `- `. A `-` anywhere else in a line is plain text.
+- **nudge** — an arrow key pressed with notes **selected** and no **text box** open: it moves them 1 screen pixel, or 10 with Shift, and no arrow key reaches
+  SudokuPad's cell cursor. A nudge that would put a note out of reach moves none, and the move is saved when the key is released.
 - **box** (a note's) — the room a Text Annotation note's text takes. A note never resized has one 16 em wide and 8 lines high at its text size, which
   it fits up to; a resized one is exactly the size a **resize handle** set, stored on the note as `box: [width, height]` in board units, on the board
   or off it, since a note off the board is drawn at the board's scale too. A long line wraps inside it and text past its bottom scrolls: the wheel over
