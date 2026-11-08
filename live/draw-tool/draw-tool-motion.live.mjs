@@ -9,8 +9,6 @@ import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 
 const { CLEAR_BUTTON, HANDLES: HANDLE, TEXTS, TEXT_BOX, middleOf, pickDraw } = draw
-// Every note element in the layer.
-const ALL_NOTES = '#draw-tool-layer .draw-tool-text'
 const ITEMS = [
   { kind: 'text', color: 1, size: 20, opacity: 100, text: 'alpha', at: [160, 160] },
   { kind: 'text', color: 2, size: 20, opacity: 100, text: 'bravo', at: [352, 160] },
@@ -130,7 +128,7 @@ describe('Text Anywhere\'s motion and precision touches', { concurrency: false }
     // Whether the note's element is still in the page right after `act`.
     const lingersAfter = async (text, act) => {
       await act()
-      return p.evaluate(([selector, want]) => [...document.querySelectorAll(selector)].some((e) => e.textContent === want), [ALL_NOTES, text])
+      return p.evaluate(([selector, want]) => [...document.querySelectorAll(selector)].some((e) => e.textContent === want), [TEXTS, text])
     }
 
     it('goes at once on a right click', async () => {

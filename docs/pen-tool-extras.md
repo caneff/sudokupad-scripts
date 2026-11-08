@@ -193,7 +193,6 @@ A left click steps an edge, corner or cell mark forward, and a right click does 
 
 ## Small touches
 
-- The grid shows a crosshair, not SudokuPad's hand, while the pen is the current tool.
 - The panel's buttons shrink to 0.97 over 120 ms while pressed. The panel is shared with Text Anywhere, which gets the same press state.
 - Edit mode's pickers fade and scale in from 0.95 over 150 ms.
 - With the system set to reduce motion, the press and the pickers' entrance are all off.

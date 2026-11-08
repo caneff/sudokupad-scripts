@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.31.1
+// @version      1.31.2
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,11 +21,9 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.31.1'
+  const VERSION = '1.31.2'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
-  // SudokuPad gives `.grid` the hand (`cursor: pointer`) under every tool; the pen draws at the exact point, so it gets the crosshair. `.controls-main` carries `tool-pen` while the pen is the current tool.
-  const CROSSHAIR_CSS = `:root:has(.controls-main.tool-pen) .grid, :root:has(.controls-main.tool-pen) ${GRID_SELECTOR} { cursor: crosshair; }`
   const PEN_LAYER = '#cell-pen'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
   const RIGHT_BUTTON = 2
@@ -505,7 +503,6 @@
       buildPagesCss(inForce.thickness, inForce.dash),
       buildFeedbackCss(inForce.dash),
       DOT_FILL_CSS,
-      CROSSHAIR_CSS,
       pickerCss(CLASS_PREFIX, 'pen'),
       DIALOG_CSS,
       steps.penPanel.off ? '' : PANEL_CSS
