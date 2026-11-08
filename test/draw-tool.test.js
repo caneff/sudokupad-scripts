@@ -1,4 +1,5 @@
 'use strict'
+require('./fake-page-storage.js')
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
@@ -6,7 +7,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, gridLines, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, viewShift, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, rawOffset, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -651,9 +652,35 @@ test('a line starting "- [ ] " or "- [x] " is a checklist item, a box run with i
   assert.deepEqual(parseMarkdown('- [X] caps')[0][0].checked, true)
 })
 
-test('a "- [" line without the box shape, or a plain "- " line, stays a bullet', () => {
-  assert.deepEqual(parseMarkdown('- [] x'), [[{ text: '•', bullet: true }, { text: '[] x' }]])
+test('a checklist item may drop the dash, drop the space inside the brackets, or be empty', () => {
+  const box = (checked, ...rest) => [{ text: checked ? '☑' : '☐', bullet: true, checked }, ...rest]
+  assert.deepEqual(parseMarkdown('[ ] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('[] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('[x] milk'), [box(true, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('[X] milk'), [box(true, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('- [] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('* [ ] milk'), [box(false, { text: 'milk' })])
+  assert.deepEqual(parseMarkdown('* [x] milk'), [box(true, { text: 'milk' })])
+})
+
+test('an empty checklist item is a box, and keeps it once the note is closed', () => {
+  for (const typed of ['- [ ]', '- [ ] ', '[]', '[ ]', '* [] ', '- [x]']) {
+    const [line] = parseMarkdown(closedText(typed))
+    assert.equal(line.length, 1, `${JSON.stringify(typed)} is one box run`)
+    assert.equal(line[0].bullet, true, `${JSON.stringify(typed)} is a box`)
+    assert.equal(typeof line[0].checked, 'boolean')
+  }
+  assert.equal(closedText('- [ ] '), '- [ ]')
+  assert.equal(parseMarkdown('a\n- [ ]\nb')[1][0].text, '☐', 'an empty item among other lines')
+})
+
+test('text that is not a checklist item stays text or a bullet', () => {
+  assert.deepEqual(parseMarkdown('-[ ] milk'), [[{ text: '-[ ] milk' }]], 'no space after the dash is no bullet')
+  assert.deepEqual(parseMarkdown('milk [ ]'), [[{ text: 'milk [ ]' }]], 'a box mid-line')
+  assert.deepEqual(parseMarkdown('[ ]milk'), [[{ text: '[ ]milk' }]], 'no space after the box')
+  assert.deepEqual(parseMarkdown('[  ] milk'), [[{ text: '[  ] milk' }]], 'two spaces inside')
   assert.deepEqual(parseMarkdown('- [ ]x'), [[{ text: '•', bullet: true }, { text: '[ ]x' }]])
+  assert.deepEqual(parseMarkdown(' [ ] milk'), [[{ text: ' [ ] milk' }]], 'an indented box')
   assert.deepEqual(parseMarkdown('- one'), [[{ text: '•', bullet: true }, { text: 'one' }]])
 })
 
@@ -679,6 +706,12 @@ test('a fence line opens a code block, whose lines show as typed, and the next f
   const body = ['- [ ] a', '**b**', '  -> c', '', '_d_']
   assert.deepEqual(parseMarkdown('```\n' + body.join('\n') + '\n```'), [[FENCE], ...body.map(codeLine), [FENCE]])
   assert.deepEqual(parseMarkdown('```js\nx `y`\n```'), [[FENCE], codeLine('x `y`'), [FENCE]])
+})
+
+test('the forgiving checklist forms stay text inside inline code and a code block', () => {
+  assert.deepEqual(parseMarkdown('`[ ] a`'), [[{ text: '[ ] a', code: true }]])
+  assert.deepEqual(parseMarkdown('```\n[ ] a\n[]\n* [x] b\n```'), [[FENCE], codeLine('[ ] a'), codeLine('[]'), codeLine('* [x] b'), [FENCE]])
+  assert.deepEqual(parseMarkdown('[ ] `a`'), [[{ text: '☐', bullet: true, checked: false }, { text: 'a', code: true }]])
 })
 
 test('lines after a code block parse normally, and an unclosed block runs to the end of the note', () => {
@@ -720,6 +753,17 @@ test('toggledCheck flips one line\'s box and leaves the other lines alone', () =
   assert.equal(toggledCheck('- [x] b', 0), '- [ ] b')
   assert.equal(toggledCheck('- [X] b', 0), '- [ ] b')
   assert.equal(toggledCheck('plain', 0), 'plain')
+})
+
+test('toggledCheck keeps the form the user typed', () => {
+  assert.equal(toggledCheck('[] milk', 0), '[x] milk')
+  assert.equal(toggledCheck('[ ] milk', 0), '[x] milk')
+  assert.equal(toggledCheck('* [ ] milk', 0), '* [x] milk')
+  assert.equal(toggledCheck('- []', 0), '- [x]')
+  assert.equal(toggledCheck('- [ ]', 0), '- [x]')
+  assert.equal(toggledCheck('[x]', 0), '[ ]')
+  assert.equal(toggledCheck('* [X] milk', 0), '* [ ] milk')
+  assert.equal(toggledCheck('milk [ ]', 0), 'milk [ ]')
 })
 
 test('closedSymbols turns a note\'s last word "sum" into a sigma, since nothing is typed after it', () => {
@@ -1031,7 +1075,31 @@ test('each of the three sample rows has its sub-line', () => {
 })
 
 // Ten column lines 64 px apart from 100: the board's span is 100..676, middles at 132, 196 ... 644.
-const LINES = Array.from({ length: 10 }, (_, k) => 100 + k * 64)
+const lineAt = (k) => 100 + k * 64
+const LINES = Array.from({ length: 10 }, (_, k) => lineAt(k))
+
+// The same board with the one implied ring of cells round it: lines from one cell before the first to one cell after the last, 36..740.
+const RING_LINES = gridLines(9, lineAt)
+
+test('gridLines runs from one cell before the board to one cell after it, for any grid size', () => {
+  assert.deepEqual(gridLines(9, lineAt), [36, 100, 164, 228, 292, 356, 420, 484, 548, 612, 676, 740])
+  assert.deepEqual(gridLines(2, (k) => k * 10), [-10, 0, 10, 20, 30])
+})
+
+test('snapAxis pulls a note\'s edge onto the line one cell outside the board', () => {
+  assert.deepEqual(snapAxis(700, 738, { lines: RING_LINES }), { shift: 2, guide: 740 })
+  assert.deepEqual(snapAxis(34, 90, { lines: RING_LINES }), { shift: 2, guide: 36 })
+})
+
+test('snapAxis pulls a note\'s middle onto the middle of an outer-ring cell', () => {
+  assert.deepEqual(snapAxis(680, 738, { lines: RING_LINES }), { shift: -1, guide: 708 })
+  assert.deepEqual(snapAxis(42, 96, { lines: RING_LINES }), { shift: -1, guide: 68 })
+})
+
+test('snapAxis does not snap to the lines two cells outside the board (-28 and 804)', () => {
+  assert.equal(snapAxis(-40, -26, { lines: RING_LINES }), null)
+  assert.equal(snapAxis(790, 802, { lines: RING_LINES }), null)
+})
 
 test('snapAxis pulls a note\'s middle onto a cell\'s middle and guides at that middle', () => {
   assert.deepEqual(snapAxis(150, 240, { lines: LINES }), { shift: 1, guide: 196 })

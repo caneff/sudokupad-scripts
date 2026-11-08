@@ -2,16 +2,21 @@
 // check itself, so `live/**/*.live.mjs` skips it.
 import assert from 'node:assert/strict'
 import { labelOn } from './color-by-digit/color-by-digit-fixtures.mjs'
-import { openSettings } from './settings.mjs'
+import { openScriptDialog, openSettings } from './settings.mjs'
 import { gridPoint, keydownDefaults, openPenTool, penEntries } from './pen.mjs'
 import { clickUntil, settle, SETTLE_MS } from './settle.mjs'
 
-const BLACK = 'rgb(0, 0, 0)'
-const DIGITS = '1234567890'
+export const BLACK = 'rgb(0, 0, 0)'
+export const DIGITS = '1234567890'
 export const LETTER_MODE_KEY = 'ToolLetter_letterMode'
+// What the number pad's keys read: digits, or letters in letter mode.
+export const numberPadText = (p) => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
 const LETTER_TOGGLE = 'button[data-control="toggleletter"]'
 const PEN_PAGE_BUTTON = '.pen-tool-extras-page'
-const DRAW_BUTTON = '#control-draw'
+export const DRAW_BUTTON = '#control-draw'
+
+// SudokuPad binds a new button's click a moment after it appears, so the click repeats until the tool is current.
+export const pickDraw = (p) => clickUntil(() => p.click(DRAW_BUTTON), () => p.evaluate(() => Framework.app.tool), 'draw', SETTLE_MS)
 
 const settingsEntry = async (p, text) => {
   const group = await openSettings(p)
@@ -49,21 +54,28 @@ export const SCRIPTS = [
     }
   },
   {
-    name: 'No Tab Letters',
-    file: 'no-tab-letters.user.js',
-    // The script adds no control: the letter tool's own button, which it leaves in place, shows once the tool is on.
+    name: 'UI Tweaks',
+    file: 'ui-tweaks.user.js',
+    // The letter tool's own button, which the Tab option leaves in place, shows once the tool is on.
     ready: async (p) => {
+      await p.locator('#ui-tweaks-style').waitFor({ state: 'attached' })
       await p.evaluate(() => Framework.setSetting('toolletter', true))
       await p.locator(LETTER_TOGGLE).waitFor({ state: 'attached' })
     },
-    control: (p) => p.locator(LETTER_TOGGLE).waitFor({ state: 'visible' }),
-    // Tab is swallowed: it leaves the number pad on digits and saves no letter mode. The keydown default is prevented
-    // either way, since SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script.
+    control: (p) => settingsEntry(p, /^\s*UI Tweaks\s*$/),
+    // Tab is swallowed: it leaves the number pad on digits and saves no letter mode (the keydown default is prevented either way, since
+    // SudokuPad's own Tab toggle prevents it too, so that alone would pass without the script). Then Hide the Toggle Selection button
+    // in the dialog and Save: the button goes.
     act: async (p) => {
       assert.deepEqual(await keydownDefaults(p, 'Tab'), [true])
-      const pad = () => p.evaluate(() => [...document.querySelectorAll('.controls-buttons .digit')].map((d) => d.textContent).join(''))
-      assert.equal(await settle(pad, DIGITS), DIGITS, 'the number pad stayed on digits')
+      assert.equal(await settle(() => numberPadText(p), DIGITS), DIGITS, 'the number pad stayed on digits')
       assert.equal(await p.evaluate((key) => Framework.getData(key), LETTER_MODE_KEY), null, 'no letter mode was saved')
+      const select = p.locator('.controls-aux [data-control="select"]')
+      await select.waitFor({ state: 'visible' })
+      await openScriptDialog(p, 'UI Tweaks', '#ui-tweaks-dialog')
+      await p.locator('#ui-tweaks-dialog input[data-option="hideSelect"]').check()
+      await p.locator('.dialog button').filter({ hasText: /^\s*Save\s*$/ }).click()
+      await select.waitFor({ state: 'hidden' })
     }
   },
   {
@@ -121,8 +133,7 @@ export const SCRIPTS = [
     control: (p) => p.locator(DRAW_BUTTON).waitFor({ state: 'visible' }),
     // With Text Anywhere picked, a left click on r3c3 and 15 typed leave one note.
     act: async (p) => {
-      const tool = () => p.evaluate(() => Framework.app.tool)
-      assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), tool, 'draw', SETTLE_MS), 'draw')
+      assert.equal(await pickDraw(p), 'draw')
       await p.mouse.click(...await gridPoint(p, [2.5, 2.5]))
       await p.keyboard.type('15')
       await p.keyboard.press('Escape')

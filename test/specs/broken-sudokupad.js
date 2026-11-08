@@ -129,6 +129,7 @@ function startOnStandInPage (file, features, { missing = [] } = {}) {
     document: page('document'),
     navigator: page('element'),
     localStorage: { getItem: () => null, setItem () {}, removeItem () {} },
+    location: { href: 'https://sudokupad.app/test' },
     ...roots,
     console: { log () {}, info () {}, error () {}, warn: (...args) => warnings.push(args.map(String).join(' ')) },
     setTimeout: (fn) => { record.add({ where: 'setTimeout', on: 'timer', fn }); return 1 },
@@ -138,7 +139,9 @@ function startOnStandInPage (file, features, { missing = [] } = {}) {
     requestAnimationFrame: (fn) => { record.add({ where: 'requestAnimationFrame', on: 'timer', fn }); return 1 },
     cancelAnimationFrame () {},
     URLSearchParams,
-    URL
+    URL,
+    // A page's `new Event(type)`, which the stand-in page's `dispatchEvent` takes.
+    Event: class Event { constructor (type) { this.type = type } }
   }
   for (const name of ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'localStorage']) sandbox.window[name] = sandbox[name]
   const take = ({ where, on, fn }, event = page('element')) => {

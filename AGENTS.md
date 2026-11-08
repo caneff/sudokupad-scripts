@@ -39,6 +39,9 @@ script between `// <lib:name>` and `// </lib:name>` markers, so an installed scr
 
 ## Agent skills
 
+- **Dispatch cap** (Chris, 2026-11-08): a controller has at most 6 workers out at once, and at most 2 whose tickets change the same
+  `*.user.js`; a new ticket waits for a slot. Every merge raises a script's version, so parallel PRs on one script each need another merge of main.
+
 ### Issue tracker
 
 GitHub issues at `caneff/sudokupad-scripts`, through `gh`. See `docs/agents/issue-tracker.md`.

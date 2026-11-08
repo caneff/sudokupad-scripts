@@ -18,7 +18,7 @@ const FRAMEWORK_MS = 30000
 
 // A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
 // (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
-// The ids are the six scripts', read from the `*.user.js` at the repo root, so a seventh is matched without an edit here.
+// The ids are the scripts', read from the `*.user.js` at the repo root, so a new script is matched without an edit here.
 const SCRIPT_IDS = readdirSync(new URL('../', import.meta.url)).filter((f) => f.endsWith('.user.js')).map((f) => f.replace('.user.js', ''))
 const SKIP_LINE = new RegExp(`^(?:${SCRIPT_IDS.join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
 
@@ -32,12 +32,18 @@ export const collectSkipLines = (page, errors, expectedSkips = []) => {
   })
 }
 
+// Collects into `errors` every uncaught page error as its stack (which starts with the name and message), so a suite that
+// asserts `errors` is empty prints where the error came from when it fails.
+export const collectPageErrors = (page, errors) => {
+  page.on('pageerror', (e) => errors.push(e?.stack || String(e)))
+}
+
 // A page of `context` served from the recording, with its uncaught errors and its skip lines collected into the returned
 // `errors`; `expectedSkips` (patterns) names the skip lines left out.
 export async function newPage (context, { expectedSkips } = {}) {
   const errors = []
   const p = await context.newPage()
-  p.on('pageerror', (e) => errors.push(String(e)))
+  collectPageErrors(p, errors)
   collectSkipLines(p, errors, expectedSkips)
   await routeSudokuPad(p)
   return { p, errors }
