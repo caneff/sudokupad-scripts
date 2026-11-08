@@ -171,7 +171,7 @@ describe('attacks on input', { concurrency: false }, () => {
     await assertNoCrash(p, errors)
   })
 
-  it('attack 71: Ctrl+A, Ctrl+C and Ctrl+V with notes selected, or none, change no note and no cell and throw nothing', async () => {
+  it('attack 71: Ctrl+A then Ctrl+C and Ctrl+V, with a note clicked first or none, change no note and no cell and throw nothing', async () => {
     await pickTool(p, 'draw')
     await makeNote(p, [4.5, 4.5], '15')
     await makeNote(p, [6.5, 6.5], '26')
@@ -180,8 +180,8 @@ describe('attacks on input', { concurrency: false }, () => {
     for (const selecting of [false, true]) {
       if (selecting) await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, [4.5, 4.5])))
       for (const key of ['Control+a', 'Control+c', 'Control+v']) await p.keyboard.press(key)
-      // Ctrl+A selects the cells and ends the note selection, so the Ctrl+C copies nothing and the empty clipboard pastes nothing.
-      assert.deepEqual((await draw.texts(p)).sort(), ['15', '26'], `${selecting ? 'with a note selected' : 'with none selected'}: both notes keep their text`)
+      // Ctrl+A selects the cells and ends the note selection, so the Ctrl+C copies nothing and the empty clipboard pastes nothing; the quiet read waits out the async paste.
+      assert.deepEqual(await settle(async () => (await draw.texts(p)).sort(), undefined), ['15', '26'], `${selecting ? 'with a note selected' : 'with none selected'}: both notes keep their text`)
       assert.equal(await p.locator(draw.TEXT_BOX).count(), 0, 'no note is left open')
       await draw.finishNote(p)
     }

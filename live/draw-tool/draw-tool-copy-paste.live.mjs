@@ -28,6 +28,9 @@ describe('Text Anywhere\'s copy and paste', { concurrency: false }, () => {
     await draw.finishNote(p)
   }
   const selectedCount = () => p.locator(SELECTED).count()
+  // A "nothing happened" read: it waits out a quiet window before returning, since a copy or a paste lands when a clipboard promise resolves.
+  const quiet = (read) => settle(read, undefined)
+  const noteCount = async () => (await draw.saved(p)).length
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, { contextOptions: { permissions: ['clipboard-read', 'clipboard-write'] } }))
@@ -54,6 +57,7 @@ describe('Text Anywhere\'s copy and paste', { concurrency: false }, () => {
     assert.equal(await selectedCount(), 2, 'both notes are selected')
     await p.keyboard.press('Control+c')
     assert.equal(await settle(clipboard, 'Ay\n\n**Bee**'), 'Ay\n\n**Bee**', 'the clipboard holds both notes\' text, the upper note first')
+    assert.equal(await selectedCount(), 2, 'both notes are still selected after the keys are released')
     await p.mouse.move(...await gridPoint(p, SPOT))
     await p.keyboard.press('Control+v')
     const pasted = await settle(async () => (await draw.saved(p)).filter((item) => item.text === 'Ay\n\n**Bee**'), (found) => found.length === 1)
@@ -72,11 +76,32 @@ describe('Text Anywhere\'s copy and paste', { concurrency: false }, () => {
     await draw.finishNote(p)
     await p.evaluate(() => navigator.clipboard.writeText('kept'))
     await p.keyboard.press('Control+c')
-    assert.equal(await clipboard(), 'kept', 'the clipboard is as it was')
+    assert.equal(await quiet(clipboard), 'kept', 'the clipboard is as it was')
     await p.evaluate(() => navigator.clipboard.writeText(''))
     await p.keyboard.press('Control+v')
+    assert.equal(await quiet(noteCount), 2, 'an empty clipboard added no note')
     assert.equal(await p.locator(draw.TEXT_BOX).count(), 0)
-    assert.equal((await draw.saved(p)).length, 2, 'no note was added')
+    // The same keys with text on the clipboard do add a note, so the quiet read above was a real wait.
+    await p.evaluate(() => navigator.clipboard.writeText('pasted'))
+    await p.keyboard.press('Control+v')
+    assert.equal(await settle(noteCount, 3), 3, 'a clipboard with text adds a note')
+    assert.deepEqual(errors, [], 'no page error')
+  })
+
+  it('Ctrl+C and Ctrl+V in another text field on the page are left to it: a selected note is not copied and the clipboard adds no note', async () => {
+    await clickAt(UPPER)
+    assert.equal(await selectedCount(), 1, 'a note is selected')
+    await p.evaluate(() => {
+      const field = document.createElement('input')
+      document.body.append(field)
+      field.focus()
+    })
+    const before = await noteCount()
+    await p.evaluate(() => navigator.clipboard.writeText('kept'))
+    await p.keyboard.press('Control+c')
+    assert.equal(await quiet(clipboard), 'kept', 'the selected note\'s text was not copied')
+    await p.keyboard.press('Control+v')
+    assert.equal(await quiet(noteCount), before, 'no note was added')
     assert.deepEqual(errors, [], 'no page error')
   })
 })

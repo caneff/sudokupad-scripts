@@ -563,11 +563,10 @@
     return { left, right, top, bottom }
   }
 
+  const boxMiddle = ({ left, right, top, bottom }) => [(left + right) / 2, (top + bottom) / 2]
+
   // The middle of a note's screen box, padding included.
-  function noteMiddle (item, map, outline) {
-    const { left, right, top, bottom } = noteScreenBox(item, map, outline)
-    return [(left + right) / 2, (top + bottom) / 2]
-  }
+  const noteMiddle = (item, map, outline) => boxMiddle(noteScreenBox(item, map, outline))
 
   // Line breaks as \n, and blank lines before and after the text dropped; line breaks inside it stay.
   const withoutBlankEdges = (text) => text.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
@@ -1807,7 +1806,7 @@
   // How far the open note's screen box must move to lie WINDOW_PAD_PX inside `win`, by the same rule a dropped note is kept reachable by.
   function viewShift (box, win) {
     const room = { left: win.left + WINDOW_PAD_PX - REACH_MARGIN_PX, top: win.top + WINDOW_PAD_PX - REACH_MARGIN_PX, right: win.right - WINDOW_PAD_PX + REACH_MARGIN_PX, bottom: win.bottom - WINDOW_PAD_PX + REACH_MARGIN_PX }
-    const middle = [(box.left + box.right) / 2, (box.top + box.bottom) / 2]
+    const middle = boxMiddle(box)
     const [x, y] = reachablePoint(middle, [box.right - box.left, box.bottom - box.top], room)
     return [x - middle[0], y - middle[1]]
   }
@@ -3287,12 +3286,18 @@
 
   // Ctrl+C and Ctrl+V with no note open are Text Anywhere's own, and stop in the window's capture phase, before SudokuPad's cell copy and paste: its Ctrl+C
   // throws, with no entry for this tool in its SmartSelectToolOrder. In an open note, or any other field, they stay the browser's.
+  const isCommandKey = (key) => key === 'Control' || key === 'Meta'
+
   // The key of the copy or paste being held: SudokuPad's keyup for C would switch to Centre (its tempKey), which leaves this tool and ends the selection.
   let copyPasteCode = null
   function copyPasteNotes (event) {
+    // Any other key ends a hold whose keyup never came: a Mac sends none for a key released under Cmd.
+    copyPasteCode = null
     if (Framework.app.tool !== TOOL_NAME || editing || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return
-    if ((event.code !== 'KeyC' && event.code !== 'KeyV') || event.target.closest?.('input, textarea, [contenteditable]')) return
+    if (event.code !== 'KeyC' && event.code !== 'KeyV') return
     event.stopImmediatePropagation()
+    // In a text field the key is the browser's own, and only SudokuPad's cell copy and paste are kept from it.
+    if (event.target.closest?.('input, textarea, [contenteditable]')) return
     event.preventDefault()
     copyPasteCode = event.code
     if (event.code === 'KeyC') copySelectedNotes()
@@ -3312,8 +3317,7 @@
       const text = pastedNoteText(clipboard)
       if (text === '' || Framework.app.tool !== TOOL_NAME) return
       const map = boardMap()
-      const { left, right, top, bottom } = map.box
-      const index = drawing.push({ ...newNote(hoverPoint ?? [(left + right) / 2, (top + bottom) / 2], map), text }) - 1
+      const index = drawing.push({ ...newNote(hoverPoint ?? boxMiddle(map.box), map), text }) - 1
       saveNotes()
       select([index])
     }), (error) => report(`Could not paste the note: ${errorText(error)}`))
@@ -3900,7 +3904,7 @@
         return true
       }
       // Ctrl or Cmd would switch to Centre (its tempKey), which ends the selection before the Ctrl+C that copies it. In the middle of a drag or a resize it still does, and that ends the gesture.
-      if ((event.key === 'Control' || event.key === 'Meta') && !drag && !resizing) return true
+      if (isCommandKey(event.key) && !drag && !resizing) return true
       // Escape in the middle of a drag or a resize puts the notes back and ends the gesture; the selection stays.
       if (event.key === 'Escape' && drag && !drag.cancelled) {
         cancelDrag()
@@ -3935,7 +3939,7 @@
         copyPasteCode = null
         return true
       }
-      return Framework.app.tool === TOOL_NAME && (event.key === 'Control' || event.key === 'Meta' || (selected.length > 0 && Boolean(ARROWS[event.key])))
+      return Framework.app.tool === TOOL_NAME && (isCommandKey(event.key) || (selected.length > 0 && Boolean(ARROWS[event.key])))
     }
   }
 
