@@ -24,6 +24,8 @@ const MAX_WIDTH_INPUT = '#auto-rules-resizer-max-width'
 const MAX_HEIGHT_INPUT = '#auto-rules-resizer-max-height'
 // SudokuPad's own rules font (1.1rem), and the gap the script keeps to the window's right edge.
 const SUDOKUPAD_FONT_PX = 17.6
+const MIN_FONT_PX = SUDOKUPAD_FONT_PX * 0.7 // the smallest the fit goes
+const MAX_FONT_PX = SUDOKUPAD_FONT_PX * 1.5 // the largest
 const EDGE_PX = 8
 const PORTRAIT = { width: 800, height: 1100 }
 const STYLE = '#auto-rules-resizer-style'
@@ -188,6 +190,7 @@ describe('a landscape window, short rules', { concurrency: false }, () => {
     assert.equal(fitted, true, `font ${await fontPx(p)} after the fit`)
     const now = await pane(p)
     assert.equal(now.width, own.width, 'SudokuPad\'s width')
+    assert.equal(now.font <= MAX_FONT_PX, true, `font ${now.font}, at most 150% of SudokuPad's`)
     assert.equal(now.scrolls, false)
   })
 
@@ -335,7 +338,7 @@ describe('rules too long for SudokuPad\'s size', { concurrency: false }, () => {
     const fitted = await settle(async () => (await pane(p)).scrolls, false)
     assert.equal(fitted, false, 'stopped scrolling')
     const now = await pane(p)
-    assert.equal(now.font >= SUDOKUPAD_FONT_PX, true, `font ${now.font}, never under SudokuPad's own`)
+    assert.equal(now.font >= SUDOKUPAD_FONT_PX, true, `font ${now.font}, not under SudokuPad's own: widened before it shrank`)
     assert.equal(now.width > own.width, true, `width ${own.width} -> ${now.width}`)
     assert.equal(now.right < LANDSCAPE.width - EDGE_PX - 10, true, `right ${now.right}, short of the window's edge`)
     // Two css px narrower scrolls again.
@@ -345,6 +348,35 @@ describe('rules too long for SudokuPad\'s size', { concurrency: false }, () => {
       return rules.scrollHeight > rules.clientHeight
     }, now.cssWidth)
     assert.equal(scrollsNarrower, true)
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+// Too long for SudokuPad's size even at the widest pane, short enough for 70% of it.
+const MID_RULES = Array(10).fill(RULES).join(' ')
+
+describe('rules that need the smaller text', { concurrency: false }, () => {
+  let context, p, errors, own
+
+  before(async () => {
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, MID_RULES))
+    own = await pane(p)
+    await inject(p)
+  })
+  after(async () => { await context.close() })
+
+  it('fill the height, then the width, and only then shrink the text, with no scroll bar', async () => {
+    const fitted = await settle(async () => (await pane(p)).font < SUDOKUPAD_FONT_PX, true)
+    assert.equal(fitted, true, `font ${(await pane(p)).font}`)
+    const now = await stable(() => pane(p))
+    assert.equal(now.scrolls, false, 'no scroll bar')
+    assert.equal(now.font >= MIN_FONT_PX, true, `font ${now.font}, not under 70%`)
+    assert.equal(now.width > own.width, true, `width ${own.width} -> ${now.width}`)
+    assert.equal(now.right >= LANDSCAPE.width - EDGE_PX - 10, true, `right ${now.right}: as wide as the window allows`)
+    assert.equal(now.cssHeight >= 0.85 * own.cssHeight, true, `pane ${now.cssHeight} css px tall, SudokuPad's own ${own.cssHeight}: the room is used, not given up for width`)
   })
 
   it('the page raised no error', () => {
@@ -368,9 +400,11 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
     after(async () => { await context.close() })
 
-    it('the automatic width stops at the max, with the rules still scrolling', async () => {
+    it('the automatic width stops at the max, and the text shrinks to stop the scroll', async () => {
       assert.equal(await settle(async () => (await pane(p)).cssWidth, 500), 500)
-      assert.equal((await pane(p)).scrolls, true)
+      const capped = await settle(async () => (await pane(p)).font < SUDOKUPAD_FONT_PX, true)
+      assert.equal(capped, true, `font ${(await pane(p)).font}: shrunk at the capped width`)
+      assert.equal((await pane(p)).scrolls, false)
     })
 
     it('a corner drag goes past the max width', async () => {
@@ -393,10 +427,10 @@ describe('the max auto width and height', { concurrency: false }, () => {
     })
     after(async () => { await context.close() })
 
-    it('leaves the font at SudokuPad\'s own, never under it, and holds the pane to the max', async () => {
+    it('shrinks the font to 70% of SudokuPad\'s, no further, and holds the pane to the max', async () => {
       assert.equal(await settle(() => p.locator(FONT_BAR).count(), 1), 1)
       const now = await stable(() => pane(p))
-      assert.equal(now.font, SUDOKUPAD_FONT_PX)
+      assert.equal(now.font, MIN_FONT_PX)
       assert.equal(now.cssHeight <= 50, true, `pane ${now.cssHeight} css px tall under a max of 50`)
     })
 
@@ -594,10 +628,11 @@ describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', {
 })
 
 describe('very long rules (about 5,600 characters)', { concurrency: false }, () => {
-  let context, p, errors
+  let context, p, errors, own
 
   before(async () => {
     ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES))
+    own = await pane(p)
     await inject(p)
     await stable(() => pane(p))
   })
@@ -606,20 +641,22 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
   it('are widened to 90 characters a line or fewer, and still scroll', async () => {
     const now = await pane(p)
     assert.equal(now.scrolls, true)
-    assert.equal(now.font, SUDOKUPAD_FONT_PX)
+    assert.equal(now.font, MIN_FONT_PX, '70% of SudokuPad\'s size and it still scrolls')
+    assert.equal(now.cssHeight >= own.cssHeight, true, `pane ${now.cssHeight} css px tall, SudokuPad's own ${own.cssHeight}: all the room`)
     const { charsPerLine } = await lineStats(p)
     assert.equal(charsPerLine <= READABLE_CHARS, true, `${charsPerLine} characters a line`)
     assert.equal(charsPerLine > READABLE_CHARS - 20, true, `${charsPerLine} characters a line: widened to the measure, not left narrow`)
   })
 
-  it('f- keeps them at 90 characters a line or fewer: the width follows the smaller font', async () => {
-    for (let i = 0; i < 3; i++) await clickFont(p, 'f-')
-    assert.equal(await settle(() => fontPx(p), 14.6), 14.6, 'f- three times, from SudokuPad\'s 17.6')
+  it('f- goes no lower and f+ keeps them at 90 characters a line or fewer: the width follows the larger font', async () => {
+    for (let i = 0; i < 3; i++) await clickFont(p, 'f-') // at the floor already: these presses are not kept
+    for (let i = 0; i < 3; i++) await clickFont(p, 'f+')
+    assert.equal(await settle(() => fontPx(p), MIN_FONT_PX + 3), MIN_FONT_PX + 3, 'f+ three times')
     const { charsPerLine } = await lineStats(p)
     assert.equal(charsPerLine <= READABLE_CHARS, true, `${charsPerLine} characters a line at ${await fontPx(p)} px`)
-    assert.equal(charsPerLine > READABLE_CHARS - 20, true, `${charsPerLine} characters a line: narrowed with the font, not left wide`)
-    for (let i = 0; i < 3; i++) await clickFont(p, 'f+')
-    assert.equal(await settle(() => fontPx(p), SUDOKUPAD_FONT_PX), SUDOKUPAD_FONT_PX, 'f+ back')
+    assert.equal(charsPerLine > READABLE_CHARS - 20, true, `${charsPerLine} characters a line: widened with the font`)
+    for (let i = 0; i < 3; i++) await clickFont(p, 'f-')
+    assert.equal(await settle(() => fontPx(p), MIN_FONT_PX), MIN_FONT_PX, 'f- back')
   })
 
   it('keep the line at the top at the top after a resize', async () => {
@@ -631,19 +668,23 @@ describe('very long rules (about 5,600 characters)', { concurrency: false }, () 
       const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + parseFloat(style.paddingTop) + 2)
       return at.offset
     })
-    await p.evaluate(() => {
+    // A line and a half down: the probe lands in the middle of a line, not on the border of two.
+    const { lineHeight } = await lineStats(p)
+    await p.evaluate((lh) => {
       const rules = document.querySelector('.puzzle-rules')
-      rules.scrollTop = (rules.scrollHeight - rules.clientHeight) * 0.4
-    })
+      rules.scrollTop = Math.round((rules.scrollHeight - rules.clientHeight) * 0.4 / lh) * lh + lh / 2
+    }, lineHeight)
     const heldAt = await topOffset()
-    assert.equal(heldAt > 1000, true, `scrolled to text offset ${heldAt}`)
+    assert.equal(heldAt > 500, true, `scrolled to text offset ${heldAt}`)
     // Read once the offset has held through the window's trailing refit.
     const refitTo = async (viewport) => {
       await p.setViewportSize(viewport)
       return stable(topOffset)
     }
-    assert.equal(Math.abs((await refitTo(SMALLER)) - heldAt) <= 10, true, `smaller window: the top line was at text offset ${heldAt}`)
-    assert.equal(Math.abs((await refitTo(LANDSCAPE)) - heldAt) <= 10, true, `back in the first window: the top line was at text offset ${heldAt}`)
+    const smaller = await refitTo(SMALLER)
+    assert.equal(Math.abs(smaller - heldAt) <= 10, true, `smaller window: text offset ${smaller}, the top line was at ${heldAt}`)
+    const back = await refitTo(LANDSCAPE)
+    assert.equal(Math.abs(back - heldAt) <= 10, true, `back in the first window: text offset ${back}, the top line was at ${heldAt}`)
   })
 
   it('the page raised no error', () => {
