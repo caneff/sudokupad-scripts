@@ -38,7 +38,7 @@ const SHOWS = [
     first: ['draw-tool-slide-1-type.png', 'Left click to type a note'],
     second: ['draw-tool-slide-3-background.png', 'Background: a box behind the next note'],
     last: ['draw-tool-slide-7-erase.png', 'Erase: right-click a note'],
-    beforeLast: ['draw-tool-slide-9-long.png', 'Long notes wrap and scroll; drag any corner to resize']
+    beforeLast: ['draw-tool-slide-9-long.png', 'Long notes scroll; drag any corner to resize']
   }
 ]
 
