@@ -214,7 +214,8 @@
   on the page but SudokuPad's controls (the control panel, the top bar, the menu and an open dialog) opens while nothing is
   **selected**, and a double-click on a text reopens. A text put on the board is pinned to its cells (stored in board units under `at`); one put off the board is
   fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). When the window or SudokuPad's layout puts a fixed text's box under the control panel or top bar, or
-  partly past the window's edge, the text is moved to the nearest point wholly inside the window and clear of them, and that point is saved. Both are drawn at the
+  partly past the window's edge, the text is drawn at the nearest point wholly inside the window and clear of them, and its saved point stays as it was, so it is
+  back in its own place once the window or layout allows; only the solver's own move or resize saves a new point. Both are drawn at the
   board's scale, in a layer over the page that sits above the digits and below SudokuPad's dialogs and menu. Where they overlap a fixed text is drawn, and
   clicked, above a pinned one; among texts of one kind the one made last is on top.
 - **bullet** (a note's) — a line of a note that starts with `- ` or `* `. A finished note shows it with a `•` hanging in the indent and its wrapped lines

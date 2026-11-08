@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.29.2
+// @version      0.29.3
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.29.2'
+  const VERSION = '0.29.3'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -399,10 +399,16 @@
     return inBox(point, board.box) ? { ...rest, at: roundPoint(board.toBoard(point)) } : { ...rest, fixed: roundPoint(point) }
   }
 
-  // The note in board units, wherever it is stored, so a selection rectangle and an erase test notes on and off the board alike.
-  const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(item.fixed) } : item
+  // A fixed note whose point the window or the layout has put out of reach is drawn at a point it can be reached at, kept on its item under this symbol with
+  // the stored point it was worked out for: a spread copies it and JSON leaves it out, so no save stores it, and a note given a new point is drawn at that one.
+  const SHOWN_AT = Symbol('shown at')
 
-  const screenPoint = (item, toScreen) => item.fixed ?? toScreen(item.at)
+  const drawnPoint = (item) => item[SHOWN_AT]?.from === item.fixed ? item[SHOWN_AT].point : item.fixed
+
+  // The note in board units, wherever it is stored, so a selection rectangle and an erase test notes on and off the board alike.
+  const boardView = (item, toBoard) => item.fixed ? { ...item, at: toBoard(drawnPoint(item)) } : item
+
+  const screenPoint = (item, toScreen) => item.fixed ? drawnPoint(item) : toScreen(item.at)
 
   // The box a note's element takes on the screen, padding included, worked out from its item rather than measured: `map` has the maps between board
   // units and the screen.
@@ -1436,7 +1442,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2149,7 +2155,7 @@
   function showNote (element, item, map) {
     const shown = shownNotes.get(element) ?? {}
     if (shown.text !== item.text) element.replaceChildren(...noteContent(item.text))
-    const style = item.fixed ? noteStyle(item, item.fixed, map.scale) : noteStyle(item, item.at, 1)
+    const style = item.fixed ? noteStyle(item, drawnPoint(item), map.scale) : noteStyle(item, item.at, 1)
     const look = JSON.stringify(style)
     if (look !== shown.look) {
       Object.assign(element.style, style)
@@ -2217,34 +2223,35 @@
       return [{ element, item, index }]
     })
     const inserted = orderNotes(notes)
-    const texts = new Set(notes.map(({ item }) => item.text))
-    for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
     measureNotes(notes, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
-    if (!drag?.move && !resizing && keepFixedReachable(notes, map)) saveNotes()
+    if (!drag?.move && !resizing) showFixedReachable(notes, map)
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
     else showHandles(drag?.move ? null : selectedBox(map))
     if (!drag?.move) showSelection(map)
   }
 
-  // A fixed note the window or the layout has put out of reach is moved, and its new point kept, to the nearest point inside the window and clear of the
-  // controls. Whether any note moved. A dragged note is left to its drag, which ends at the nearest such point.
-  function keepFixedReachable (notes, map) {
+  // A fixed note the window or the layout has put out of reach is drawn at the nearest point inside the window and clear of the controls, and its stored
+  // point is left as it is: a short-lived small window (devtools opened, a window snap) never moves a note for good. Only the solver's own move or resize saves
+  // a new point. A note being dragged or resized is left to follow the pointer, and is drawn in reach once it is let go.
+  function showFixedReachable (notes, map) {
     const fixed = notes.filter(({ item }) => item.fixed)
-    if (fixed.length === 0) return false
-    const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+    if (fixed.length === 0) return
     const blockers = layoutBlockers()
-    let moved = false
-    for (const note of fixed) {
-      const { left, right, top, bottom } = noteScreenBox(note.item, map, outline)
-      const point = roundPoint(reachablePoint(note.item.fixed, [right - left, bottom - top], win, blockers))
-      if (point[0] === note.item.fixed[0] && point[1] === note.item.fixed[1]) continue
-      note.item = drawing[note.index] = { ...note.item, fixed: point }
-      showNote(note.element, note.item, map)
-      moved = true
+    for (const { element, item } of fixed) {
+      const point = reachOf(item, map, blockers)
+      if (point[0] === item.fixed[0] && point[1] === item.fixed[1]) delete item[SHOWN_AT]
+      else item[SHOWN_AT] = { from: item.fixed, point }
+      showNote(element, item, map)
     }
-    return moved
+  }
+
+  // The nearest point to a fixed note's own at which its box lies inside the window and clear of `blockers`, the controls' screen boxes.
+  function reachOf (item, map, blockers) {
+    const { left, right, top, bottom } = noteScreenBox(item, map, outline)
+    const win = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+    return roundPoint(reachablePoint(item.fixed, [right - left, bottom - top], win, blockers))
   }
 
   // Restyles the open note and puts the handles on its corners.
@@ -2369,6 +2376,7 @@
     const { index, item } = resizing
     resizing = null
     if (editing || String(drawing[index]?.box) === String(item.box)) return
+    keepDrawnPoints([index], boardMap())
     saveNotes()
     renderDrawing()
   }
@@ -2448,6 +2456,12 @@
     }))
   }
 
+  // The texts no note has any more, forgotten whenever the notes are saved or loaded; a note that gets one back parses it again.
+  function forgetParsedTexts () {
+    const texts = new Set(drawing.map((item) => item.text))
+    for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
+  }
+
   // Once a puzzle, so a second puzzle with an unreadable note is told too.
   function reportKept () {
     if (keptEntries.length > 0) report(`${keptEntries.length} of this puzzle's saved notes could not be read, so Text Anywhere does not show them and keeps them as they are.`, `kept ${loadedKey}`)
@@ -2456,6 +2470,7 @@
   const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
 
   function writeDrawing () {
+    forgetParsedTexts()
     if (loadedKey === null) return
     reportKept()
     if (!savable) {
@@ -2721,6 +2736,7 @@
     const moved = movedBy(selected.map((index) => ({ index, item: drawing[index] })), direction.map((v) => v * step), map)
     if (!moved.every(({ point }) => reachable(point))) return
     place(moved, map)
+    keepDrawnPoints(selected, map)
     nudged = true
     redraw()
   }
@@ -2771,8 +2787,15 @@
     const map = boardMap()
     place(movedBy(d.move, dragOffset(d), map), map)
     clearMove(d)
+    keepDrawnPoints(d.move.map(({ index }) => index), map)
     saveNotes()
     renderDrawing()
+  }
+
+  // The solver's own move or resize keeps the point a fixed note will be drawn at, so a note dropped partly past the window's edge stays where it is seen.
+  function keepDrawnPoints (indices, map) {
+    const blockers = layoutBlockers()
+    for (const i of indices) if (drawing[i].fixed) drawing[i] = { ...drawing[i], fixed: reachOf(drawing[i], map, blockers) }
   }
 
   function endErase () {
@@ -2807,6 +2830,7 @@
       if (unreadable !== undefined) report(UNSAVABLE_MESSAGE, `unsavable ${loadedKey}`)
       reportKept()
     }
+    forgetParsedTexts()
     redraw()
   }
 
