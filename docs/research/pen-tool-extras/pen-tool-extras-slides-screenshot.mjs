@@ -6,8 +6,8 @@
 //   pen-tool-extras-slide-4-solid.png      a solid line
 //   pen-tool-extras-slide-5-dashed.png     a dashed line
 //   pen-tool-extras-slide-6-arrow.png      an arrow line
-//   pen-tool-extras-slide-7-edges.png      three cell edges marked, clicked once, twice and three times: an X, a circle and an arrow
-//   pen-tool-extras-slide-8-corner.png     a grid corner marked with an X
+//   pen-tool-extras-slide-7-edges.png      four cell edges marked, clicked once to four times: an X, a circle and both arrows
+//   pen-tool-extras-slide-8-corner.png     two grid corners marked, clicked once and twice: an X and a circle
 //   pen-tool-extras-slide-9-thickness.png  the Thickness slider up: every line and mark thicker
 //   pen-tool-extras-slide-10-opacity.png   the Opacity slider down: the whole pen layer fainter
 //   pen-tool-extras-slide-11-outline-off.png  a line across dark cells with White outlines off
@@ -56,8 +56,9 @@ sheet.save(target)
 const [TEAL_ROW, SOLID_ROW, DASHED_ROW, ARROW_ROW] = [0.5, 1, 1.5, 2]
 const DARK_ROW = 3
 const OUTLINE_ROW = DARK_ROW + 0.5
-// The row whose cells take the edge marks, and the grid corner (row, column) that takes the corner mark.
-const [EDGE_MARK_ROW, CORNER_MARK] = [2, [3, 2]]
+// The row whose cells take the edge marks, and the grid corners (row, column) that take the corner marks.
+const EDGE_MARK_ROW = 2
+const CORNER_MARKS = [[[3, 1], 2, 'a circle'], [[3, 2], 1, 'an X']]
 const SETTLE_MS = 400
 const EDGE_INSET_PX = 2
 const [NEW_COLOR] = PICTURE_PEN_COLORS
@@ -168,9 +169,9 @@ await line(SOLID_PEN, [[ARROW_ROW, 0], [ARROW_ROW, 3]])
 await slide('6-arrow')
 await turnPage()
 
-// 7. Three edges, clicked once, twice and three times: an X, a circle and an arrow. The arrow is on a cell's bottom edge, so it stays inside the picture.
+// 7. Four edges, clicked once to four times: an X, a circle and an arrow each way. The arrows are on cells' bottom edges, so they stay inside the picture.
 await pick(EDGE_PEN)
-for (const [col, down, clicks, what] of [[0, false, 1, 'an X'], [1, false, 2, 'a circle'], [0, true, 3, 'an arrow']]) {
+for (const [col, down, clicks, what] of [[0, false, 1, 'an X'], [1, false, 2, 'a circle'], [0, true, 3, 'an arrow'], [2, true, 4, 'the arrow turned round']]) {
   const [ex, ey, ew] = await cellCentre(p, EDGE_MARK_ROW, col)
   const edge = down ? [ex, ey + ew / 2 - EDGE_INSET_PX] : [ex + ew / 2 - EDGE_INSET_PX, ey]
   for (let i = 0; i < clicks; i++) {
@@ -179,10 +180,12 @@ for (const [col, down, clicks, what] of [[0, false, 1, 'an X'], [1, false, 2, 'a
 }
 await slide('7-edges')
 
-// 8. One grid corner.
+// 8. Two grid corners, clicked once and twice: an X and a circle.
 await pick(CORNER_PEN)
-const corner = await gridPoint(p, CORNER_MARK)
-await changing('the corner mark', async () => { await p.mouse.click(...corner); await park() })
+for (const [at, clicks, what] of CORNER_MARKS) {
+  const corner = await gridPoint(p, at)
+  for (let i = 0; i < clicks; i++) await changing(`${what} on the corner ${at}`, async () => { await p.mouse.click(...corner); await park() })
+}
 await slide('8-corner')
 
 // 9 and 10. The sliders change every line and mark already drawn.

@@ -235,7 +235,7 @@ const CBD_SLIDES = [
 ]
 const PEN_SLIDES = [
   ['1-line', 'Draw a line'], ['2-hold', 'Hold a color button'], ['3-color', 'Pick a color'], ['4-solid', 'A solid line'], ['5-dashed', 'A dashed line'], ['6-arrow', 'An arrow line'],
-  ['7-edges', 'Marks on cell edges: click for an X, again for a circle, again for an arrow'], ['8-corner', 'A mark on a grid corner'], ['9-thickness', 'Thickness'], ['10-opacity', 'Opacity'],
+  ['7-edges', 'Marks on cell edges: click for an X, again for a circle, again for an arrow, again to turn it round'], ['8-corner', 'Marks on grid corners: click for an X, again for a circle'], ['9-thickness', 'Thickness'], ['10-opacity', 'Opacity'],
   ['11-outline-off', 'White outlines off'], ['12-outline-on', 'White outlines on'], ['13-erase', 'Right-click a line to delete it'], ['14-erased', 'The whole line is gone']
 ]
 const DRAW_SLIDES = [
