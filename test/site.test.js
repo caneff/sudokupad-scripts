@@ -402,7 +402,7 @@ test("the slides' five pen colors are far from SudokuPad's nine", () => {
 test(`${CBD} lists what the script adds, one item per feature`, () => {
   const lines = section(CBD, 'What it adds')
   assert.deepEqual(lines, [
-    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The chips on the button preview the mode.',
+    'Four modes Each press of the button moves to the next mode: Cell, Digit, Both, Off. The word above the chips names the mode, and the chips are drawn the way that mode colors the board.',
     'Updates as you solve A cell takes its group\'s color when its digit, or every one of its center marks, is in that group. The color goes when that stops being true.',
     'Colored digits In Digit and Both, digits and marks take a darker shade of their group\'s color. A mark that conflicts gets a red circle.',
     'Profiles A profile splits the digits into groups and gives each a color. Five come built in (Low/5/High, Odd/Even, Entropic, Modular and Each digit), and you can keep up to six.',
