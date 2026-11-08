@@ -31,6 +31,13 @@
   const BUTTON_ACCENT = '#d2a8f0'
   const BUTTON_BORDER = '#4a4a4a'
   const BUTTON_GROUPS = ['.controls-app', '.controls-tool', '.controls-aux']
+  // Material 3 state layers: BUTTON_ACCENT at 8% (hover) and 10% (press) over BUTTON_BG, worked out by hand; recompute both when either of those changes.
+  const BUTTON_HOVER_BG = '#37343a'
+  const BUTTON_PRESS_BG = '#3b373e'
+  // The page's own text pair. Pure white or black never falls below about 4.58:1 on any page color, where the
+  // shared LIGHT_TEXT and DARK_TEXT (#ddd, #222) fall to 3.5:1 on a mid grey.
+  const PAGE_LIGHT_TEXT = '#ffffff'
+  const PAGE_DARK_TEXT = '#000000'
   function savedColor (data) {
     return typeof data === 'string' && HEX_COLOR.test(data) ? data.toLowerCase() : null
   }
@@ -171,6 +178,13 @@
   /* eslint-enable no-unused-vars */
   // </lib:color-math>
 
+  // PAGE_LIGHT_TEXT or PAGE_DARK_TEXT, whichever contrasts more with the page color.
+  function pageTextFor (pageColor) {
+    const page = wcagLuminance(parseColor(pageColor)) + 0.05
+    const contrast = (text) => { const t = wcagLuminance(parseColor(text)) + 0.05; return Math.max(page, t) / Math.min(page, t) }
+    return contrast(PAGE_LIGHT_TEXT) >= contrast(PAGE_DARK_TEXT) ? PAGE_LIGHT_TEXT : PAGE_DARK_TEXT
+  }
+
   // No variable is declared: SudokuPad's theme variables sit on `:root` and color the grid too.
   // `!important` outranks SudokuPad's rules, `.setting-darkmode`'s included. The board's own box
   // (`#svgrenderer`) takes `--body-bg`, what SudokuPad gives `body`: the puzzle has no background and
@@ -180,18 +194,23 @@
   function buildCss (pageColor) {
     const rule = (selector, ...declarations) => `${selector} { ${declarations.map((d) => `${d} !important`).join('; ')} }`
     const boardRule = (selectors, ...declarations) => rule(selectors.map((selector) => `${BOARD} ${selector}`).join(', '), ...declarations)
-    const textColor = textColorFor(pageColor)
+    const textColor = pageTextFor(pageColor)
     const darkButtons = [
       boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm)`), `background-color: ${BUTTON_BG}`, `color: ${BUTTON_ACCENT}`, `border-color: ${BUTTON_BORDER}`),
       boardRule(BUTTON_GROUPS.flatMap((group) => [`${group} button.selected`, `${group} button.selectedperm`]), `border-color: ${BUTTON_ACCENT}`),
-      boardRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`)
+      boardRule(['.button-row button'], `border-color: ${BUTTON_BORDER}`),
+      // SudokuPad's own focus shadow cannot be seen on BUTTON_BG.
+      boardRule(BUTTON_GROUPS.map((group) => `${group} button:focus-visible`), `outline: 2px solid ${BUTTON_ACCENT}`, 'outline-offset: 2px'),
+      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):hover`), `background-color: ${BUTTON_HOVER_BG}`),
+      boardRule(BUTTON_GROUPS.map((group) => `${group} button:not(.selected):not(.selectedperm):active`), `background-color: ${BUTTON_PRESS_BG}`)
     ]
     return [
       rule(BOARD, `background-color: ${pageColor}`),
       boardRule([`#${BOARD_ID}`], 'background-color: var(--body-bg)'),
       boardRule(['.controls-footer', '.controls-footer a'], `color: ${textColor}`),
       boardRule(['.controls-input::after'], `color: ${textColor}`),
-      ...(textColor === LIGHT_TEXT ? darkButtons : [])
+      // The buttons go dark on the shared light-text test, so they switch on the same page colors as before; only the text pair is Dark Page's own.
+      ...(textColorFor(pageColor) === LIGHT_TEXT ? darkButtons : [])
     ].join('\n')
   }
 
@@ -677,9 +696,17 @@
       `<input type="color" id="dark-page-input" value="${picked}">` +
       '<button type="button" id="dark-page-reset">Black</button></div>'
     const input = document.getElementById('dark-page-input')
+    const preview = () => { style.textContent = buildCss(picked) }
+    // However the dialog closes (Save, Cancel, Escape), the page goes back to the saved color; a Save has already made it the saved one.
+    const closed = new window.MutationObserver(() => {
+      if (body.isConnected) return
+      closed.disconnect()
+      style.textContent = buildCss(pageColor)
+    })
+    closed.observe(document.body, { childList: true, subtree: true })
     const reset = document.getElementById('dark-page-reset')
     // `input` fires while the picker moves.
-    input.addEventListener('input', () => { picked = input.value.toLowerCase() })
+    input.addEventListener('input', () => { picked = input.value.toLowerCase(); preview() })
     const copied = () => savedPageColor.run(() => copiedSettings(Framework), offNow('savedColor'))
     wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS }, (values) => settingsEntry.run(() => {
       if (!(DATA_KEY in values)) return
@@ -692,6 +719,7 @@
       event.stopPropagation()
       picked = DEFAULT_COLOR
       input.value = DEFAULT_COLOR
+      preview()
     })
   }
 
