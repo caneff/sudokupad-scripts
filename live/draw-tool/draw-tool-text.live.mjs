@@ -9,7 +9,7 @@ import { openPage } from '../page.mjs'
 import { gridPoint, plantUnchecked } from '../pen.mjs'
 import { readUntil, settle, stable } from '../settle.mjs'
 
-const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, SIZE_BUTTON, WIDTH_KEY, face, pickMenu } = draw
+const { COLOR_KEY, DIALOG, TEXT_BOX, TEXTS, SIZE_SLIDER, WIDTH_KEY, slideTo, valueOf } = draw
 // Points in cells from the grid's top left: r2c2's top left corner, where a cage sum goes, and three more spots.
 const SUM_AT = [1.2, 1.2]
 const SECOND_AT = [6.2, 3.25]
@@ -44,7 +44,8 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     return { color, size }
   }
   const penColor = (n) => read((i) => window.getComputedStyle(document.documentElement).getPropertyValue(`--puzzle-pencolor-${i}`).trim(), n)
-  const sizeShown = async () => Number(await face(p, SIZE_BUTTON))
+  // The text size the Size slider's width gives.
+  const sizeShown = async () => 2 * await valueOf(p, SIZE_SLIDER) + 8
   const textInCells = (content) => draw.noteInCells(p, content)
 
   before(async () => {
@@ -179,9 +180,9 @@ describe('Text Annotation\'s typed text', { concurrency: false }, () => {
     assert.deepEqual(await texts(), ['23', 'xy CZ', '84'])
   })
 
-  it('the Size menu sets the next text\'s size to the size picked; the earlier text is unchanged, and every note is solid', async () => {
+  it('the Size slider sets the next text\'s size to the size picked; the earlier text is unchanged, and every note is solid', async () => {
     assert.equal(await sizeShown(), 20)
-    await pickMenu(p, SIZE_BUTTON, '26')
+    await slideTo(p, SIZE_SLIDER, 9)
     await p.click('.controls-input button[data-key="4"]')
     await clickAt(THIRD_AT)
     await p.keyboard.type('6')

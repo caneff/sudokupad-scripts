@@ -1,7 +1,7 @@
 // Takes the nine slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
 // The notes are what a solver writes: short remarks beside the grid, in the margin above it, or small on a cell's corner or edge, never one digit and never centered in a cell (the script checks both).
 //   draw-tool-slide-1-type.png        a remark typed beside row 2, with markdown
-//   draw-tool-slide-2-size.png        the Size menu open after a pick: a small note beside the grid and a large one above it
+//   draw-tool-slide-2-size.png        the Size slider dragged up between two notes: a small note beside the grid and a large one above it
 //   draw-tool-slide-3-background.png  the Background button on: a note in a page-colored box over the digits, beside one made with it off
 //   draw-tool-slide-4-colors.png      a hold on a color button: a picker over each color, one recolored, and the note in it recolored too
 //   draw-tool-slide-5-move.png        a note dragged off the grid to above it, its old place dashed, a ring on the point it is held by
@@ -60,11 +60,16 @@ async function scene () {
   const at = ([row, col]) => [x0 + col * cell, y0 + row * cell]
   const clipRect = () => ({ x: x0 + CLIP_CORNER[0] * cell, y: y0 + CLIP_CORNER[1] * cell, width: CLIP_SIZE[0], height: CLIP_SIZE[1] })
   const items = () => p.locator(NOTES).count()
-  // Picks `size`, one of the Size menu's numbers, with a click on its button and one on its item.
+  // Sets the Size slider to the text size `size` (2 x width + 8) with a click on its track, where the thumb's centre runs from half a thumb in from each end.
   const pickSize = async (size) => {
-    await p.click('.draw-tool-menu-button[data-menu="size"]')
-    await p.locator('.draw-tool-menu-item', { hasText: new RegExp(`^${size}$`) }).click()
-    await p.locator('.draw-tool-menu').waitFor({ state: 'detached' })
+    const { box, min, max, thumb } = await p.evaluate(() => {
+      const input = document.querySelector('#draw-tool-size')
+      return { box: input.getBoundingClientRect().toJSON(), min: Number(input.min), max: Number(input.max), thumb: 1.1 * parseFloat(window.getComputedStyle(document.documentElement).fontSize) }
+    })
+    const width = (size - 8) / 2
+    await p.mouse.click(box.x + thumb / 2 + (box.width - thumb) * (width - min) / (max - min), box.y + box.height / 2)
+    const set = await p.evaluate(() => Number(document.querySelector('#draw-tool-size').value))
+    if (set !== width) throw new Error(`the Size slider is at ${set}, not ${width}`)
   }
   const pick = (color, size) => p.click(`.controls-input button[data-key="${color}"]`).then(() => pickSize(size))
   const note = async (cell, text) => {
@@ -125,15 +130,13 @@ const BESIDE_ROW_2 = [1.3, 11.2]
   await s.shoot('1-type')
 }
 
-// 2: a size picked from the Size menu between two notes: a small one beside row 2, a large one in the margin above the grid, with the menu open after the pick.
+// 2: the Size slider dragged up between two notes: a small one beside row 2, a large one in the margin above the grid.
 {
   const s = await scene()
   await s.pick(BLUE, 20)
   await s.note(BESIDE_ROW_2, 'r2: 3 must be in c7-9')
   await s.pickSize(32)
   await s.note([-0.5, 5.6], '*X-wing* on 6')
-  await s.p.click('.draw-tool-menu-button[data-menu="size"]')
-  await s.p.locator('.draw-tool-menu').waitFor({ state: 'visible' })
   await s.p.mouse.move(0, 0)
   await s.shoot('2-size')
 }
