@@ -91,11 +91,59 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     // Out 150 px and back in 4 moves a leg: tens of px a frame, well over 0.5 px/ms.
     await p.mouse.move(px - 150, py, { steps: 4 })
     await p.mouse.move(px + gap, py, { steps: 4 })
-    const left = await outlineLeft()
-    const guides = await p.locator(GUIDE_X).count()
+    // One read, so the pointer has no time to rest between the outline and the guide.
+    const { left, guides } = await p.evaluate(([selection, guide, middle]) => ({ left: document.querySelector(selection).getBoundingClientRect().x - middle, guides: document.querySelectorAll(guide).length }), [SELECTION, GUIDE_X, OUTLINE_MIDDLE_PX])
     await p.mouse.up()
     assert.equal(guides, 0, 'no guide while the pointer is fast')
     assert.equal(Math.abs(left - (line + 2)) < NEAR_PX, true, `the outline's line ${left} is where the pointer put it, 2 px past ${line}`)
+  })
+
+  it('a fast drag that stops short of the line is pulled onto it once the pointer rests, and drops there', async () => {
+    const line = await lineX(COLUMN_LINE)
+    const note = await noteBox('15')
+    const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
+    const gap = line + 2 - (note.x - OUTLINE_MIDDLE_PX)
+    await p.mouse.move(px, py)
+    await p.mouse.down()
+    await p.mouse.move(px - 150, py, { steps: 4 })
+    await p.mouse.move(px + gap, py, { steps: 4 })
+    await p.locator(GUIDE_X).waitFor()
+    const left = await outlineLeft()
+    await p.mouse.up()
+    assert.equal(Math.abs(left - line) < NEAR_PX, true, `the outline's line ${left} is on the line ${line}`)
+    assert.equal(Math.abs(await outlineLeft() - line) < NEAR_PX, true, 'and stays there after the release')
+  })
+
+  it('a fast drag released at once drops where the pointer put it, with no jump onto the line', async () => {
+    const line = await lineX(COLUMN_LINE)
+    const note = await noteBox('15')
+    const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
+    const gap = line + 2 - (note.x - OUTLINE_MIDDLE_PX)
+    await p.mouse.move(px, py)
+    await p.mouse.down()
+    await p.mouse.move(px - 150, py, { steps: 4 })
+    await p.mouse.move(px + gap, py, { steps: 4 })
+    await p.mouse.up()
+    assert.equal(Math.abs(await outlineLeft() - (line + 2)) < NEAR_PX, true, 'dropped 2 px past the line, as it was drawn')
+  })
+
+  it('with Shift held the locked axis is not pulled: only the free axis snaps', async () => {
+    const line = await lineX(COLUMN_LINE)
+    await dragToGap(2)
+    const note = await noteBox('15')
+    const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
+    await p.mouse.move(px, py)
+    await p.mouse.down()
+    await p.keyboard.down('Shift')
+    await p.mouse.move(px + 1, py + 40, { steps: 4 })
+    // Nothing is to happen: the note rests 2 px from the x line, which a free drag would be pulled onto after 100 ms, and Shift locks x.
+    await p.waitForTimeout(300)
+    const left = await outlineLeft()
+    const guides = await p.locator(GUIDE_X).count()
+    await p.mouse.up()
+    await p.keyboard.up('Shift')
+    assert.equal(guides, 0, 'no x guide')
+    assert.equal(Math.abs(left - (line + 2)) < NEAR_PX, true, `x stays ${line + 2}, not pulled to ${line}: ${left}`)
   })
 
   it('a slow drag is pulled while the pointer is still moving: 4 px a frame (about 0.25 px/ms) into the pull shows the guide', async () => {

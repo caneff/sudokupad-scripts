@@ -3,18 +3,18 @@
 // one and selects the other in the same press, and a note's hit area is its box plus 4 px (hover, select, drag, right-click erase). Real mouse and keyboard input throughout.
 import { after, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { gridPoint } from '../pen.mjs'
 
 const { TEXTS, TEXT_BOX } = draw
+const { HIT_MARGIN_PX, WINDOW_PAD_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
 const SELECTION = '#draw-tool-layer .draw-tool-selection'
 const HANDLES = '#draw-tool-layer .draw-tool-resize'
 const WINDOW = { width: 1200, height: 900 }
 const NEAR_PX = 0.6
-const WINDOW_PAD_PX = 20
-const HIT_MARGIN_PX = 4
 // A note's box is checked by hand at these distances from its edge: inside the margin and past it.
 const INSIDE_MARGIN_PX = 3
 const PAST_MARGIN_PX = 6
@@ -115,7 +115,8 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
       assert.equal(Math.abs(locked.x - (start.x + 80)) < NEAR_PX, true, `x followed the pointer: ${locked.x}`)
       assert.equal(Math.abs(locked.y - start.y) < NEAR_PX, true, `y stayed at ${start.y}, not ${locked.y}`)
       await p.keyboard.up('Shift')
-      await p.waitForFunction(([text, y]) => [...document.querySelectorAll('#draw-tool-layer .draw-tool-text')].find((e) => e.textContent === text).getBoundingClientRect().y > y + 20, ['CC', start.y])
+      // Two frames, well inside the 100 ms a still pointer takes to redraw the move by itself: the release of Shift redraws it.
+      await draw.frames(p)
       const freed = await noteBox('CC')
       assert.equal(Math.abs(freed.y - (start.y + 30)) < NEAR_PX, true, `y follows again: ${freed.y}`)
       await p.mouse.up()
@@ -138,7 +139,42 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
     })
   })
 
+  describe('Shift released mid-drag', () => {
+    it('never leaves a note out of the window: the move goes back to the last point that is reachable', async () => {
+      const start = await noteBox('CC')
+      const [px, py] = middle(start)
+      await p.mouse.move(px, py)
+      await p.mouse.down()
+      await p.keyboard.down('Shift')
+      // Locked to y this reaches (px, py - 450); free it would put the note 60 px left of the window.
+      await p.mouse.move(px - 410, py - 450, { steps: 2 })
+      await p.keyboard.up('Shift')
+      await draw.frames(p)
+      await p.mouse.up()
+      const dropped = await noteBox('CC')
+      assert.equal(dropped.x >= 0, true, `the note is at x ${dropped.x}, inside the window`)
+    })
+  })
+
   describe('a press on another note while one is open', () => {
+    it('picks it from 3 px outside its box too', async () => {
+      await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
+      await p.locator(TEXT_BOX).waitFor()
+      const box = await noteBox('BB')
+      await p.mouse.click(box.x - INSIDE_MARGIN_PX, box.y + box.height / 2)
+      assert.equal(await p.locator(TEXT_BOX).count(), 0)
+      assert.equal(await onlySelected('BB'), true)
+    })
+
+    it('does not erase it on a right press: that only closes the open note', async () => {
+      await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
+      await p.locator(TEXT_BOX).waitFor()
+      await p.mouse.click(...middle(await noteBox('BB')), { button: 'right' })
+      await draw.frames(p)
+      assert.equal(await p.locator(TEXT_BOX).count(), 0)
+      assert.deepEqual(await draw.texts(p), ['AA', 'BB', 'CC'])
+    })
+
     it('finishes the open note and selects the other in the one press', async () => {
       await p.mouse.click(...middle(await noteBox('AA')), { clickCount: 2 })
       await p.locator(TEXT_BOX).waitFor()
@@ -182,7 +218,10 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
 
     it('selects the note on a press 3 px outside its box, and not on a press 6 px outside', async () => {
       await p.mouse.click(...await outsideLeft(PAST_MARGIN_PX))
+      await draw.frames(p)
       assert.equal(await selectedCount(), 0, 'past the margin selects nothing')
+      assert.equal(await p.locator(TEXT_BOX).count(), 1, 'it opens a new note instead')
+      await p.keyboard.press('Escape')
       await p.keyboard.press('Escape')
       await p.mouse.click(...await outsideLeft(INSIDE_MARGIN_PX))
       assert.equal(await onlySelected('BB'), true)
@@ -211,6 +250,7 @@ describe('Text Anywhere\'s touches', { concurrency: false }, () => {
 
     it('erases the note on a right click 3 px outside its box, and not 6 px outside', async () => {
       await p.mouse.click(...await outsideLeft(PAST_MARGIN_PX), { button: 'right' })
+      await draw.frames(p)
       assert.deepEqual(await draw.texts(p), ['AA', 'BB', 'CC'])
       await p.mouse.click(...await outsideLeft(INSIDE_MARGIN_PX), { button: 'right' })
       await p.waitForFunction(() => document.querySelectorAll('#draw-tool-layer .draw-tool-text').length === 2, null, { timeout: 3000 })

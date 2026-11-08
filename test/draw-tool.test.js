@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, axisLocked, keptInside, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, keptInside, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -1047,7 +1047,7 @@ test('the note a point hits is the topmost whose box, grown by the margin, holds
   assert.equal(noteAtPoint(boxes, [-3.9, 23.9], HIT_MARGIN_PX), 0, 'a corner within the margin on both sides')
 })
 
-test('pointerSpeed is the distance the pointer covered over the last frames in px per ms, counting the time it has stood still', () => {
+test('pointerSpeed is the distance the pointer covered over the last SPEED_WINDOW_MS in px per ms, counting the time it has stood still', () => {
   assert.equal(pointerSpeed([[0, 0, 900], [30, 40, 950]], 950), 1, '50 px in 50 ms')
   assert.equal(pointerSpeed([[0, 0, 900], [30, 40, 950]], 1000), 0.5, 'the same move 50 ms ago is slower now')
   assert.equal(pointerSpeed([[0, 0, 800], [30, 40, 950]], 950), 0, 'a sample older than the window is not counted, so the pointer has stopped')
@@ -1074,6 +1074,13 @@ test('a locked move keeps the axis of greater movement and zeroes the other; a t
   assert.deepEqual(axisLocked([5, -12], false), [5, -12], 'unlocked moves freely')
 })
 
+test('lockedAxis is the axis of lesser movement, and x on a tie', () => {
+  assert.equal(lockedAxis([30, -12]), 1)
+  assert.equal(lockedAxis([5, -12]), 0)
+  assert.equal(lockedAxis([7, 7]), 1)
+  assert.equal(lockedAxis([0, 0]), 1)
+})
+
 test('keptInside moves a box in from the window edge so it stays WINDOW_PAD_PX inside, and leaves one already inside alone', () => {
   const win = { left: 0, top: 0, right: 1000, bottom: 800 }
   assert.equal(WINDOW_PAD_PX, 20)
@@ -1087,4 +1094,9 @@ test('keptInside moves a box in from the window edge so it stays WINDOW_PAD_PX i
 test('a box too big for the window to hold with its pads starts at the left and top pads', () => {
   const win = { left: 0, top: 0, right: 1000, bottom: 800 }
   assert.deepEqual(keptInside({ left: -50, top: -40, right: 1100, bottom: 900 }, win), [70, 60])
+})
+
+test('a box too big for the window crossing only the right and bottom edges is still moved to the left and top pads', () => {
+  const win = { left: 0, top: 0, right: 1000, bottom: 800 }
+  assert.deepEqual(keptInside({ left: 30, top: 30, right: 1100, bottom: 900 }, win), [-10, -10])
 })

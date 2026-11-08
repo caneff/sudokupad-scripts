@@ -235,10 +235,9 @@
   const ACTIVE_CLASS = 'draw-tool-active'
   const HANDLE_CLASS = 'draw-tool-resize'
   const SELECTION_CLASS = 'draw-tool-selection'
-  // The wait past SPEED_WINDOW_MS before a still pointer's move is drawn again, so the window has surely emptied.
-  const SETTLE_SLACK_MS = 20
-  // On the layer while arrow keys nudge, hiding the selection outline and the handles; on a note within the hit margin of the pointer but not under it, for its hover look.
+  // On the layer while arrow keys nudge, hiding the selection outline and the handles.
   const NUDGING_CLASS = 'draw-tool-nudging'
+  // On a note within the hit margin of the pointer but not under it, for its hover look.
   const HOVERED_CLASS = 'draw-tool-hovered'
   const GUIDE_CLASS = 'draw-tool-snap-guide'
   const GUIDE_PX = 1
@@ -1557,6 +1556,8 @@
   // `samples` are `[x, y, time]` in ms in order; a pointer that has stood still the whole window has no sample in it, or one.
   const SNAP_MAX_SPEED = 0.5
   const SPEED_WINDOW_MS = 100
+  // The wait past SPEED_WINDOW_MS before a still pointer's move is drawn again, so the window has surely emptied.
+  const SETTLE_SLACK_MS = 20
   function pointerSpeed (samples, now) {
     const recent = samples.filter(([, , time]) => time >= now - SPEED_WINDOW_MS)
     if (recent.length < 2) return 0
@@ -1566,8 +1567,10 @@
   }
   const isPlacing = (samples, now) => pointerSpeed(samples, now) < SNAP_MAX_SPEED
 
-  // A move `[dx, dy]` locked to its axis of greater movement, the other zeroed; a tie keeps x.
-  const axisLocked = ([dx, dy], locked) => !locked ? [dx, dy] : Math.abs(dx) >= Math.abs(dy) ? [dx, 0] : [0, dy]
+  // The axis, 0 for x and 1 for y, a move `[dx, dy]` is locked off: the one of lesser movement; a tie keeps x.
+  const lockedAxis = ([dx, dy]) => Math.abs(dx) >= Math.abs(dy) ? 1 : 0
+  // The move with its locked axis zeroed when `locked`.
+  const axisLocked = (delta, locked) => locked ? delta.map((v, axis) => axis === lockedAxis(delta) ? 0 : v) : delta
 
   // The open note is kept this many px inside the window.
   const WINDOW_PAD_PX = 20
@@ -1582,7 +1585,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, axisLocked, keptInside, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, HIT_MARGIN_PX, grownBox, noteAtPoint, pointerSpeed, isPlacing, SNAP_MAX_SPEED, SPEED_WINDOW_MS, lockedAxis, axisLocked, keptInside, WINDOW_PAD_PX, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesBox, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2403,6 +2406,7 @@
     if (editing) showEditing(map)
     else showHandles(drag?.move ? null : selectedBox(map))
     if (!drag?.move) showSelection(map)
+    if (hoverPoint) showHover()
   }
 
   // A fixed note the window or the layout has put out of reach is drawn at the nearest point inside the window and clear of the controls, and its stored
@@ -2615,6 +2619,9 @@
     const onTop = [...drawn.filter((item) => !item.fixed), ...drawn.filter((item) => item.fixed)]
     return onTop[noteAtPoint(onTop.map((item) => noteScreenBox(item, map, outline)), point, margin)]?.[NOTE_ELEMENT] ?? null
   }
+
+  // The note a press hits: the one under the pointer, else the topmost within HIT_MARGIN_PX of it.
+  const pressedNote = (event) => noteOf(event) ?? noteAt(eventPoint(event), HIT_MARGIN_PX)
 
   // A note within the hit margin of the pointer but not under it shows its hover look from a class, since :hover needs the pointer on the element.
   let hoverPoint = null
@@ -2842,8 +2849,8 @@
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
     if (!editing || editing.element.contains(event.target) || handles.some(({ element }) => element === event.target) || isPanelControl(event.target)) return
-    // A press on another note goes on to select it, and to drag it.
-    pressFinishedText = !noteOf(event)
+    // A left press on another note goes on to select it, and to drag it.
+    pressFinishedText = !(event.button === PRIMARY_BUTTON && pressedNote(event))
     finishText()
   }
 
@@ -2863,7 +2870,7 @@
   }
 
   // Keeps the pointer's samples of the last SPEED_WINDOW_MS and draws a move again once the pointer has stood still that long, so a note held near a line then snaps.
-  function noteSample (d, point) {
+  function recordSample (d, point) {
     const now = window.performance.now()
     d.samples = [...d.samples.filter(([, , time]) => time >= now - SPEED_WINDOW_MS), [...point, now]]
     clearTimeout(d.settle)
@@ -2922,16 +2929,15 @@
     select(d.shift ? [...selected, ...touched] : touched)
   }
 
-  // The move so far, locked to one axis while Shift is held.
-  const dragOffset = (d) => {
-    const [x, y] = d.points[0]
-    const [lastX, lastY] = d.points[d.points.length - 1]
-    return axisLocked([lastX - x, lastY - y], holdShift && Boolean(d.move))
-  }
+  // The move to the pointer's last point, and the same locked to one axis while Shift is held.
+  const dragDelta = (d, [px, py] = d.points[d.points.length - 1]) => [px - d.points[0][0], py - d.points[0][1]]
+  const dragOffset = (d, point) => axisLocked(dragDelta(d, point), holdShift)
 
   // While a move is in progress each moving note's element follows the pointer by a translation, in the units of its own group, and nothing is drawn again.
   function showMove (d, map) {
     const { offset: [dx, dy], guides } = snappedOffset(d, map)
+    // The release drops the note where this showed it, so it never jumps.
+    d.shown = [dx, dy]
     showHandles(null)
     showSelection(map, [dx, dy])
     showGuides(guides)
@@ -2958,8 +2964,10 @@
     const snaps = [['left', 'right'], ['top', 'bottom']].map(([near, far], axis) => snapAxis(box[near] + raw[axis], box[far] + raw[axis], {
       lines: lines(axis), reach, others: others.map((other) => ({ lo: other[near], hi: other[far] }))
     }))
-    // A fast drag passes the lines freely: only a note being placed is pulled.
+    // A fast drag passes the lines freely: only a note being placed is pulled. With Shift held the locked axis stays as it is, and only the free one is pulled.
     if (!isPlacing(d.samples, window.performance.now())) return { offset: raw, guides: [] }
+    const locked = holdShift ? lockedAxis(dragDelta(d)) : -1
+    if (locked !== -1) snaps[locked] = null
     const offset = raw.map((v, axis) => v + (snaps[axis]?.shift ?? 0))
     // The pull may carry a note past what the pointer left reachable, so then the note stays where the pointer put it.
     if (!movedBy(d.move, offset, map).every(({ point }) => reachable(point))) return { offset: raw, guides: [] }
@@ -2991,6 +2999,8 @@
     const d = drag
     const map = boardMap()
     for (const point of d.pending.splice(0)) if (!d.move || moveKeepsReachable(d, point, map)) d.points.push(point)
+    // Letting go of Shift frees the move the lock was keeping reachable, so the move goes back to the last point that is reachable as it now is.
+    while (d.move && d.points.length > 1 && !moveKeepsReachable(d, d.points[d.points.length - 1], map)) d.points.pop()
     if (isClick(d.points)) return
     if (d.move) showMove(d, map)
     else if (d.start === -1) showRectangle(d)
@@ -3015,7 +3025,7 @@
     return under !== undefined && under.closest(CONTROLS) === null
   }
 
-  const moveKeepsReachable = (d, [px, py], map) => movedBy(d.move, axisLocked([px - d.points[0][0], py - d.points[0][1]], holdShift), map).every(({ point }) => reachable(point))
+  const moveKeepsReachable = (d, point, map) => movedBy(d.move, dragOffset(d, point), map).every(({ point }) => reachable(point))
 
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
   // Whether a nudge has moved notes that are not saved yet; the release of the key saves it.
@@ -3093,7 +3103,7 @@
 
   function endMove (d) {
     const map = boardMap()
-    place(movedBy(d.move, snappedOffset(d, map).offset, map), map)
+    place(movedBy(d.move, d.shown, map), map)
     clearMove(d)
     keepDrawnPoints(d.move.map(({ index }) => index), map)
     saveNotes()
@@ -3261,7 +3271,7 @@
       if (event.button !== PRIMARY_BUTTON) return false
       // A press on a note moves the selection once it drags, after selecting just that note when it was not selected; with Shift it only adds or removes the note on its release.
       // A press on empty space draws a selection rectangle once it drags.
-      const note = noteOf(event) ?? noteAt(point, HIT_MARGIN_PX)
+      const note = pressedNote(event)
       const box = event.target.closest(`.${CHECK_CLASS}`)
       if (note && box) {
         tickCheck(note, box)
@@ -3271,7 +3281,7 @@
       const shift = event.shiftKey
       if (start !== -1 && !shift && !selected.includes(start)) select([start])
       const move = start === -1 || shift ? null : selected.map((index) => ({ index, item: drawing[index] }))
-      drag = { start, move, points: [point], pending: [], samples: [], settle: null, shift, detail: event.detail, rectangle: null }
+      drag = { start, move, points: [point], pending: [], samples: [[...point, window.performance.now()]], settle: null, shift, detail: event.detail, rectangle: null }
       return true
     },
     // A release the page never saw (off the window, or under another tool) leaves the button up on the next move.
@@ -3289,7 +3299,7 @@
       if (event.type === 'mousemove') holdShift = event.shiftKey
       // The browser goes on sending a held drag's moves past the window's edge, so the frame checks each one.
       drag.pending.push(eventPoint(event))
-      noteSample(drag, eventPoint(event))
+      recordSample(drag, eventPoint(event))
       inFrame('drag', dragMoves)
       return true
     },
@@ -3392,7 +3402,12 @@
       onWindow(textTool, 'mousemove', resizeMove, { capture: true })
       onWindow(textTool, 'mousemove', (event) => {
         showChrome()
-        hoverPoint = eventPoint(event)
+        hoverPoint = overControl(event) ? null : eventPoint(event)
+        inFrame('hover', showHover)
+      }, { capture: true })
+      onWindow(textTool, 'mouseout', (event) => {
+        if (event.relatedTarget) return
+        hoverPoint = null
         inFrame('hover', showHover)
       }, { capture: true })
       onWindow(textTool, 'mouseup', endResize, { capture: true })
