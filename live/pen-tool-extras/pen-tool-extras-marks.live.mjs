@@ -225,7 +225,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     }
   })
 
-  it('a right-drag across cell middles removes their centre marks and leaves the edge marks it does not cross, as one undo step', async () => {
+  it('a right-drag across cell middles removes their cell marks and leaves the edge marks it does not cross, as one undo step', async () => {
     await clickCellCentre(4, 1)
     await clickCellCentre(4, 2)
     await clickCellCentre(4, 2)

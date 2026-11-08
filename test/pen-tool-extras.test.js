@@ -468,7 +468,7 @@ test('an unticked cell mark is skipped, and with all three unticked a cell click
   assert.equal(planCellClick(['z'], { ...ALL, cellCircle: false, cellCross: false, cellDot: false }), null)
 })
 
-test('a cell click sees only the cell\'s centre marks: an edge or corner mark on the cell stays', () => {
+test('a cell click sees only the cell\'s cell marks: an edge or corner mark on the cell stays', () => {
   assert.deepEqual(planCellClick(['3', 'h', 'u', 'z'], ALL), { remove: ['z'], add: null })
 })
 
@@ -477,7 +477,7 @@ test('the edge and corner boxes do not drive the cell cycle, nor the cell boxes 
   assert.equal(planClick('3', [], { ...NONE, cellCircle: true, cellCross: true, cellDot: true }), null)
 })
 
-test('addedMark draws the dot filled at the cell\'s middle, and nowhere else', () => {
+test('addedMark places the dot at the cell\'s middle, in the dot shape', () => {
   assert.deepEqual(addedMark('z', 3, 4, 9), { point: [3.5, 4.5], shape: '.' })
 })
 
@@ -497,12 +497,16 @@ test('DOT_FILL_CSS fills the dot in its pen\'s color on every page, forward and 
   for (const [char, i] of chars) assert.equal(rules.includes(`:root:root .cell-pen.pen-z.pencolor-${char} { fill: var(--puzzle-pencolor-${i + 1}); }`), true, char)
 })
 
-test('clickedMarks reads SudokuPad\'s queued click as the cell and the values of the mark spot it hit', () => {
+test('clickedMarks reads SudokuPad\'s queued click as the cell, the values of the edge\'s or the cell\'s marks, and the click\'s step through them', () => {
   const cell = { row: 2, col: 3 }
-  assert.deepEqual(clickedMarks([{ type: 'select', arg: [cell] }, { type: 'pen', arg: '3' }]), { cell, values: ['3', 'h', 'i', 'j'] })
+  const edge = clickedMarks([{ type: 'select', arg: [cell] }, { type: 'pen', arg: '3' }])
+  assert.deepEqual([edge.cell, edge.values], [cell, ['3', 'h', 'i', 'j']])
+  assert.deepEqual(edge.plan(['3'], ALL), planClick('3', ['3'], ALL))
   // SudokuPad's cell click queues the toggles from circle to cross, cross to nothing, or nothing to circle.
   for (const toggles of [['5', '6'], ['6'], ['5']]) {
-    assert.deepEqual(clickedMarks([{ type: 'select', arg: [cell] }, ...toggles.map((arg) => ({ type: 'pen', arg }))]), { cell, values: ['5', '6', 'z'] }, toggles.join())
+    const middle = clickedMarks([{ type: 'select', arg: [cell] }, ...toggles.map((arg) => ({ type: 'pen', arg }))])
+    assert.deepEqual([middle.cell, middle.values], [cell, ['5', '6', 'z']], toggles.join())
+    assert.deepEqual(middle.plan(['6'], ALL), { remove: ['6'], add: 'z' }, toggles.join())
   }
   assert.equal(clickedMarks(null), null)
   assert.equal(clickedMarks([{ type: 'select', arg: [cell] }, { type: 'pen', arg: '1' }]), null)

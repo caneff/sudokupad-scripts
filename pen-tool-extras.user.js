@@ -1321,6 +1321,8 @@
     values: { circle: '5', cross: '6', dot: 'z' }
   }
   const CELL_VALUES = CELL_CYCLE.types.map((type) => CELL_CYCLE.values[type])
+  // The two of them SudokuPad's own cell click toggles.
+  const STOCK_CELL_VALUES = [CELL_CYCLE.values.circle, CELL_CYCLE.values.cross]
   const CIRCLE = 'o'
   const CIRCLE_RADIUS_PER_HALF_SIZE = 0.83
   const DOT = '.'
@@ -1446,15 +1448,19 @@
     return acts !== null && acts.length === 2 && acts[0].type === 'select' && acts[1].type === 'pen' && EDGE_X.includes(acts[1].arg)
   }
 
-  // SudokuPad's own cell click queues a `select` and then one or two toggles of 5 and 6.
+  // SudokuPad's own cell click queues a `select` and then one or two toggles of its circle and cross.
   function isCellActs (acts) {
-    return acts !== null && acts.length >= 2 && acts[0].type === 'select' && acts.slice(1).every((act) => act.type === 'pen' && (act.arg === '5' || act.arg === '6'))
+    return acts !== null && acts.length >= 2 && acts[0].type === 'select' && acts.slice(1).every((act) => act.type === 'pen' && STOCK_CELL_VALUES.includes(act.arg))
   }
 
-  // The cell and every value of the mark spot (an edge, or a cell's middle) SudokuPad's own click queued for, or null when it hit neither.
+  // What SudokuPad's own click hit, from the actions it queued: an edge or a cell's middle, as the cell that stores its marks, every value of
+  // those marks, and `plan(present, settings)`, the click's step through them. null when it hit neither.
   function clickedMarks (acts) {
-    if (isEdgeActs(acts)) return { cell: acts[0].arg[0], values: ['x', ...ADDED_ORDER].map((type) => valueOfType(acts[1].arg, type)) }
-    if (isCellActs(acts)) return { cell: acts[0].arg[0], values: CELL_VALUES }
+    if (isEdgeActs(acts)) {
+      const edge = acts[1].arg
+      return { cell: acts[0].arg[0], values: ['x', ...ADDED_ORDER].map((type) => valueOfType(edge, type)), plan: (present, settings) => planClick(edge, present, settings) }
+    }
+    if (isCellActs(acts)) return { cell: acts[0].arg[0], values: CELL_VALUES, plan: planCellClick }
     return null
   }
 
@@ -1549,14 +1555,11 @@
       const queued = stock.sudokupad(() => queuedActs(this, () => original.apply(this, args)), false)
       if (queued === null) return
       let acts = queued
-      const planner = isEdgeActs(queued)
-        ? (present) => planClick(queued[1].arg, present, inForce.marks)
-        : isCellActs(queued) ? (present) => planCellClick(present, inForce.marks) : null
-      if (planner !== null) {
-        const cell = queued[0].arg[0]
-        const plan = planner(penValuesOf(cell))
+      const clicked = clickedMarks(queued)
+      if (clicked !== null) {
+        const plan = clicked.plan(penValuesOf(clicked.cell), inForce.marks)
         if (plan === null) return
-        acts = planActs(cell, plan)
+        acts = planActs(clicked.cell, plan)
       }
       stock.sudokupad(() => sendActs(this, acts))
     })
