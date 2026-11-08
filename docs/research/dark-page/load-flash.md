@@ -3,7 +3,7 @@
 Probed 2026-11-08 against `dark-page.user.js` 0.5.7 (before) and 0.6.0 (after), SudokuPad 0.611.0, Tampermonkey 5.5.1 in
 Playwright's Chromium 156 (new headless, 1280x720). Ticket #544. The probe is `load-flash-probe.mjs` (run from the repo root),
 the reader `load-flash-report.py`; they install the script through `live/tampermonkey/` (the `npm run test:tampermonkey`
-infrastructure) and load the puzzle in `live/puzzle-url.txt`. The frames the probe writes (`load-flash-frames/`) are not kept.
+infrastructure) and load the puzzle in `live/puzzle-url.txt`. The frames the probe writes (`.scratch/load-flash-frames/`) are not kept; the reader needs Pillow.
 
 ## What the probe records
 
@@ -47,11 +47,15 @@ infrastructure) and load the puzzle in `live/puzzle-url.txt`. The frames the pro
   `document.documentElement` exists yet (an injector running before the parser has created it; Playwright's init script does),
   the style is attached the moment the parser creates it, through a `MutationObserver` on the document.
 - The rest of the old startup (the `Framework` probe, the read through `Framework`, the settings entry) moved into `start`,
-  which runs at `DOMContentLoaded`, or at once when the page is already past `loading`. The read through `Framework` stays the
-  authority: it corrects the early color if SudokuPad ever renamed the key, and reports a blocked storage itself.
+  which runs at `DOMContentLoaded`, or at once when the page is already past `loading`. The read through `Framework` is the
+  authority: what it returns replaces the early color, "nothing saved" (back to the default) included, so a stale value in the
+  key the early read uses cannot outlive the user's own Save of Black. A read that fails keeps the early color.
 - `live/dark-page/dark-page.live.mjs` § `at document-start` runs the script as an init script before any of the page's, with a
   frame sampler, and asserts that every frame in which the board exists has the page color, black and `#336699`, and that
-  `Framework.makeDataKey('DarkPage_color')` is the key the early read uses (so a renamed prefix fails the daily watch).
+  `Framework.makeDataKey('DarkPage_color')` is the key the early read uses and a `Framework.setData` color is the plain string
+  (so a renamed prefix fails the daily watch); that the settings entry still appears (`start` ran); and that what `Framework`
+  reads at DOMContentLoaded, a color or nothing, replaces the early one.
+- `npm run test:tampermonkey` was run on 0.6.0 (the header changed): 14 of 14 passed, the update over main's copy included.
 
 ## Findings, after (0.6.0, `@run-at document-start`)
 
@@ -71,6 +75,7 @@ No white frame is painted. The log's body color is the page color at every sampl
   each) reads white, because `BOARD` is not true yet. Chrome did not paint one in the screencast, and the live test samples
   only frames that have a board. Closing it would need a gate known at `document-start` that a board will come: the URL path,
   or `body:not(#page-home)`, both guesses about SudokuPad's routing. Not done.
-- **A renamed storage key** would give black first, then the saved color, for one run of the fix. The live test names the key.
+- **A renamed storage key or a changed value format** would give the default first, then the saved color. The live test
+  `the key and the format the early read uses are Framework's own` fails in the daily watch if either changes.
 - **Not run**: Chrome Web Store install, a real (non-headless) display, and a slow connection. The screencast records what the
   compositor produces, not what a monitor shows.

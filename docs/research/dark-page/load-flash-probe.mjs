@@ -12,7 +12,8 @@ import { newPage, PUZZLE_URL } from '../../../live/page.mjs'
 const args = process.argv.slice(2)
 const network = args.includes('--network')
 const color = args.includes('--color') ? args[args.indexOf('--color') + 1] : null
-const out = fileURLToPath(new URL('./load-flash-frames/', import.meta.url))
+// Frames go in the workspace's untracked .scratch/, read back by load-flash-report.py.
+const out = fileURLToPath(new URL('../../../.scratch/load-flash-frames/', import.meta.url))
 mkdirSync(out, { recursive: true })
 const src = readFileSync(fileURLToPath(new URL('../../../dark-page.user.js', import.meta.url)), 'utf8')
 // Optionally rewrite the header to another @run-at, to probe a candidate fix without editing the script.

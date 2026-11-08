@@ -8,7 +8,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
-import { gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
+import { captureConsoleErrors, gotoPuzzle, openPage, START, startPuzzle } from '../page.mjs'
 import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 
@@ -412,40 +412,59 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 // `@run-at document-start`: the script runs before any of the page's own, so the page is never SudokuPad's white. A frame
 // sampler, installed before the script, records the body's color at every frame the board exists in; a white one is the
 // flash. (A frame between the body and the board, while the parser waits on SudokuPad's blocking scripts, is outside
-// `BOARD` by design and is not sampled: docs/research/dark-page/load-flash.md.) Framework does not exist yet, so the saved color is read from localStorage.
+// `BOARD` by design and is not sampled: docs/research/dark-page/load-flash.md.) Framework does not exist yet, so the
+// saved color is read from localStorage, and `start` corrects it through Framework at DOMContentLoaded.
 describe('at document-start', { concurrency: false }, () => {
-  const samples = async (saved) => {
+  // `saved` is put in storage before the script runs; `atLoad` is a color put in, or `null` taking it out (`false`: no change), at
+  // DOMContentLoaded just before `start` (the sampler's listener is registered first, so it runs first).
+  const samples = async (saved, atLoad = false) => {
     const { context, p, errors } = await openPage(browser, {
       // Two init scripts run in order at document start, before the page's own: the sampler, then the script. At that point
       // `document.documentElement` does not exist yet, as in an injector that runs the script first.
-      seed: async (page) => {
-        await page.addInitScript(([key, color]) => {
+      seed: async (page, errors) => {
+        captureConsoleErrors(page, errors)
+        await page.addInitScript(([key, color, atLoad, boardId]) => {
           if (color) window.localStorage.setItem(key, color)
+          if (atLoad !== false) {
+            document.addEventListener('DOMContentLoaded', () => {
+              if (atLoad === null) window.localStorage.removeItem(key)
+              else window.localStorage.setItem(key, atLoad)
+            })
+          }
           const frames = (window.__frames = [])
           const tick = () => {
-            if (document.getElementById('svgrenderer')) frames.push(window.getComputedStyle(document.body).backgroundColor)
+            if (document.getElementById(boardId)) frames.push(window.getComputedStyle(document.body).backgroundColor)
             if (frames.length < 600) window.requestAnimationFrame(tick)
           }
           window.requestAnimationFrame(tick)
-        }, [LOCAL_DATA_KEY, saved])
+        }, [LOCAL_DATA_KEY, saved, atLoad, BOARD_ID])
         await page.addInitScript({ content: script })
       }
     })
     try {
       await p.locator(STYLE).waitFor({ state: 'attached' })
       await startPuzzle(p)
-      const frames = await p.evaluate(() => window.__frames)
-      return { frames, errors, key: await p.evaluate(() => Framework.makeDataKey('DarkPage_color')), color: await p.evaluate(() => window.getComputedStyle(document.body).backgroundColor) }
+      return {
+        errors,
+        frames: await p.evaluate(() => window.__frames),
+        color: await p.evaluate(() => window.getComputedStyle(document.body).backgroundColor),
+        entries: await settingsEntry(await openSettings(p)).count(),
+        stored: await p.evaluate((name) => {
+          Framework.setData(name, '#123456')
+          return [Framework.makeDataKey(name), window.localStorage.getItem(Framework.makeDataKey(name))]
+        }, DATA_KEY)
+      }
     } finally {
       await context.close()
     }
   }
 
-  it('paints the default black from the first frame with a board, never white', async () => {
-    const { frames, errors, color } = await samples(null)
+  it('paints the default black from the first frame with a board, never white, and `start` adds the settings entry', async () => {
+    const { frames, errors, color, entries } = await samples(null)
     assert.ok(frames.length > 0, 'the sampler saw a frame with a board')
     assert.deepEqual([...new Set(frames)], [BLACK])
     assert.equal(color, BLACK)
+    assert.equal(entries, 1)
     assert.deepEqual(errors, [])
   })
 
@@ -457,14 +476,22 @@ describe('at document-start', { concurrency: false }, () => {
     assert.deepEqual(errors, [])
   })
 
-  it('the key the early read uses is Framework\'s own', async () => {
-    const { key } = await samples(null)
-    assert.equal(key, LOCAL_DATA_KEY)
+  it('the key and the format the early read uses are Framework\'s own', async () => {
+    const { stored } = await samples(null)
+    assert.deepEqual(stored, [LOCAL_DATA_KEY, '#123456'])
+  })
+
+  it('Framework\'s saved color wins over the early read', async () => {
+    assert.equal((await samples('#336699', '#993366')).color, 'rgb(153, 51, 102)')
+  })
+
+  it('Framework\'s "nothing saved" wins over the early read, so the default comes back', async () => {
+    assert.equal((await samples('#336699', null)).color, BLACK)
   })
 })
 
 // The options dialog changes the page color and keeps it. One context, so localStorage carries over
-// a reload; the script is injected at DOMContentLoaded, as `@run-at document-idle` approximates it.
+// a reload; the script is injected at DOMContentLoaded, after the page's own startup.
 describe('the page color dialog', { concurrency: false }, () => {
   let context, p, errors
   const bodyColor = () => p.evaluate(() => window.getComputedStyle(document.body).backgroundColor)

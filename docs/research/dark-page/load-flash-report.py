@@ -1,8 +1,8 @@
-# Reads load-flash-frames/ (written by load-flash-probe.mjs) and prints when the page was white and when dark.
+# Needs Pillow (PIL). Reads .scratch/load-flash-frames/ (written by load-flash-probe.mjs) and prints when the page was white and when dark.
 # Run: python3 -I docs/research/dark-page/load-flash-report.py
 import json, os
 from PIL import Image
-d = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'load-flash-frames')
+d = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '.scratch', 'load-flash-frames')
 times = json.load(open(os.path.join(d, 'times.json')))
 log = json.load(open(os.path.join(d, 'log.json')))
 prev = None

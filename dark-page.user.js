@@ -38,11 +38,10 @@
   // Throws when storage cannot be read: the startup read runs under the savedColor feature, the dialog's under settings.
   const readSaved = (store) => savedColor(store.getData(DATA_KEY))
 
-  // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`). At
-  // document-start Framework does not exist yet, so the first paint reads that key itself; the live check
-  // `the key the early read uses is Framework's own` fails if SudokuPad renames the prefix.
+  // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`), a color as
+  // the plain string: the live checks in § at document-start fail if SudokuPad changes either.
   const LOCAL_DATA_KEY = `svencodes_${DATA_KEY}`
-  // Throws when storage is blocked; the caller keeps the default then, and the read through Framework at DOMContentLoaded reports it.
+  // The saved color read straight from storage, for when Framework does not exist yet. Throws when storage is blocked.
   const earlyColor = (storage) => savedColor(storage.getItem(LOCAL_DATA_KEY))
 
   const READERS = { [DATA_KEY]: (data) => savedColor(data) ?? undefined }
@@ -598,7 +597,7 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
-  // The saved color is read before the first paint, with no need of the app; the settings entry is added once `Framework.getApp` says the app is ready.
+  // The saved color is read through Framework with no need of the app; the settings entry is added once `Framework.getApp` says the app is ready.
   const FEATURES = {
     savedColor: { label: 'saved color', needs: { 'Framework.getData': 'function' } },
     settings: {
@@ -621,21 +620,19 @@
   }
   if (typeof document === 'undefined') return
 
-  // The page color goes in at document-start, before the first paint, so the page is never SudokuPad's white first. The
-  // board's `#svgrenderer` is in the page's own HTML, so `BOARD` matches as soon as the parser reaches it. Framework does not
-  // exist yet, so the saved color is read from localStorage (`earlyColor`); a page that cannot be read gets the default.
+  // The page color goes in before the first paint, so the page is never SudokuPad's white first. The board's `#svgrenderer`
+  // is in the page's own HTML, so `BOARD` matches as soon as the parser reaches it. A page whose storage cannot be read gets the default.
   let pageColor = DEFAULT_COLOR
   try {
     pageColor = earlyColor(window.localStorage) || DEFAULT_COLOR
   } catch (e) {
-    // Best effort: `start` reads the color through Framework, which reports a blocked storage itself.
+    // Best effort: `start` reads the color through Framework, which reports a storage it cannot read.
   }
 
   const style = document.createElement('style')
   style.id = STYLE_ID
   style.textContent = buildCss(pageColor)
-  // At document-start `document.head`, and in some injectors `document.documentElement` too, does not exist yet; the
-  // style goes in the moment the parser creates the element, which is before the first paint.
+  // Neither `document.head` nor, in some injectors, `document.documentElement` exists yet: the style goes in as the parser creates one.
   const attach = () => (document.head || document.documentElement).appendChild(style)
   if (document.documentElement) attach()
   else {
@@ -698,18 +695,18 @@
     })
   }
 
-  // At DOMContentLoaded Framework exists (before the app is ready), so the saved color is read through it, as the one
-  // authority; `getData` works then. A page that cannot read it keeps the color already painted.
+  // At DOMContentLoaded Framework exists (before the app is ready). What it reads is the saved color, and the early
+  // read is corrected to it, "nothing saved" included; a read that fails keeps the color already painted.
   function start () {
-    if (typeof Framework !== 'undefined') guard.probe({ roots: { Framework }, store: Framework })
-    const saved = typeof Framework === 'undefined' ? null : savedPageColor.run(() => readSaved(Framework), () => null)
-    if (saved && saved !== pageColor) {
+    // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the default color.
+    if (typeof Framework === 'undefined') return
+    guard.probe({ roots: { Framework }, store: Framework })
+    const read = savedPageColor.run(() => ({ color: readSaved(Framework) }), () => null)
+    const saved = read ? read.color || DEFAULT_COLOR : pageColor
+    if (saved !== pageColor) {
       pageColor = saved
       style.textContent = buildCss(pageColor)
     }
-    // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the
-    // default color.
-    if (typeof Framework === 'undefined') return
     settingsEntry.run(() => Framework.getApp().then(() => {
       settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
     }))
