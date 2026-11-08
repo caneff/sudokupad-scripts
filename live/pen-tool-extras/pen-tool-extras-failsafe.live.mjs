@@ -26,6 +26,7 @@ const NOTHING_OFF = ''
 // The color tool wait's limit in the script (COLOR_TOOL_TIMEOUT_MS) and the panel check's pause (PANEL_CHECK_MS).
 const COLOR_TOOL_TIMEOUT_MS = 10000
 const PANEL_CHECK_MS = 1000
+const WARNING = /^pen-tool-extras: /
 const missing = (steps, internal) => new RegExp(`^pen-tool-extras: ${steps} skipped because SudokuPad has no ${internal.replaceAll('.', '\\.')}$`)
 const changed = (step) => new RegExp(`^pen-tool-extras: ${step} skipped because SudokuPad changed: `)
 
@@ -165,10 +166,10 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         warned = []
         ;({ context, p, errors } = await openPage(browser, {
           // The case plants its own breakage, so its skip lines are expected: `warned` holds them and is checked.
-          expectedSkips: [/^pen-tool-extras: /],
+          expectedSkips: [WARNING],
           seed: (page, errs) => {
             page.on('console', (m) => {
-              if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
+              if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
             })
             captureConsoleErrors(page, errs)
           }
@@ -339,7 +340,7 @@ describe('SudokuPad throws after sending a click', { concurrency: false }, () =>
     ;({ context, p, errors } = await openPage(browser, {
       seed: (page, errs) => {
         page.on('console', (m) => {
-          if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
+          if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
         })
         captureConsoleErrors(page, errs)
       }
@@ -374,7 +375,7 @@ describe('the pulldown is missing at one look of the panel check only', { concur
     ;({ context, p, errors } = await openPage(browser, {
       seed: (page, errs) => {
         page.on('console', (m) => {
-          if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text())
+          if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text())
         })
         captureConsoleErrors(page, errs)
       }

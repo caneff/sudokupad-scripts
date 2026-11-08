@@ -22,7 +22,9 @@ nothing for that: a feature that turns itself off at runtime fails any suite tha
 `captureConsoleErrors` (a `seed`) adds the page's `console.error` lines.
 
 A suite that breaks a feature on purpose declares the skip lines it expects: `openPage(browser, { expectedSkips: [/^dark-page: /] })`
-(patterns). Those lines stay out of `errors`, and the suite checks them itself; any other skip line still fails it.
+(patterns). Those lines stay out of `errors`, and the suite checks them itself; any other skip line fails it. Declare
+as narrow a pattern as the break allows: a pattern for a whole script lets a second, unplanted skip line pass, unless the
+suite also counts its warnings.
 `live/skip-lines.live.mjs` plants a skip with no declaration and checks it lands in `errors`.
 
 ## The recording

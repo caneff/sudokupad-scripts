@@ -700,12 +700,13 @@ describe('a page with no puzzle', () => {
 describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => {
   let context, p, errors
   const warned = []
+  const WARNING = /^dark-page: /
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
-      expectedSkips: [/^dark-page: /],
+      expectedSkips: [WARNING],
       seed: (page) => {
-        page.on('console', (m) => { if (m.type() === 'warning' && /^dark-page: /.test(m.text())) warned.push(m.text()) })
+        page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
       }
     }))
     await startPuzzle(p)

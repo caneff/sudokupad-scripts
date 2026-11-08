@@ -5,21 +5,24 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { openPage, startPuzzle } from './page.mjs'
+import { settle } from './settle.mjs'
 
 const SKIP = 'dark-page: settings entry skipped because SudokuPad has no Framework.addSetting'
+// Logged after `SKIP`. Console messages arrive in order, so once it has landed in `errors`, `SKIP` has been handled.
+const MARKER = 'color-by-digit: marker skipped because SudokuPad has no Framework.addSetting'
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-// Logs `SKIP` from the page the way a script does, then returns what the helper collected.
+// Logs `SKIP` and then `MARKER` from the page the way a script does, and returns what the helper collected, `MARKER` out.
 const plant = async (options) => {
   const { context, p, errors } = await openPage(browser, options)
   try {
     await startPuzzle(p)
-    await p.evaluate((line) => console.warn(line), SKIP)
-    await p.evaluate(() => new Promise((resolve) => setTimeout(resolve, 200)))
-    return errors
+    await p.evaluate(([skip, marker]) => { console.warn(skip); console.warn(marker) }, [SKIP, MARKER])
+    await settle(async () => errors.some((e) => e.endsWith(MARKER)), true)
+    return errors.filter((e) => !e.endsWith(MARKER))
   } finally {
     await context.close()
   }
@@ -27,9 +30,7 @@ const plant = async (options) => {
 
 describe('a skip line on a page opened with no seed', () => {
   it('is collected, so an undeclared one fails a suite that asserts no errors', async () => {
-    const errors = await plant()
-    assert.deepEqual(errors, [`console.warn: ${SKIP}`])
-    assert.throws(() => assert.deepEqual(errors, []), 'the check a suite runs fails')
+    assert.deepEqual(await plant(), [`console.warn: ${SKIP}`])
   })
 
   it('is left out when the suite declares it', async () => {

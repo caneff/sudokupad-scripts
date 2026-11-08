@@ -18,7 +18,7 @@ const FRAMEWORK_MS = 30000
 // (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
 // The ids are the six scripts', read from the `*.user.js` at the repo root, so a seventh is matched without an edit here.
 const SCRIPT_IDS = readdirSync(new URL('../', import.meta.url)).filter((f) => f.endsWith('.user.js')).map((f) => f.replace('.user.js', ''))
-export const SKIP_LINE = new RegExp(`^(?:${SCRIPT_IDS.join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
+const SKIP_LINE = new RegExp(`^(?:${SCRIPT_IDS.join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
 
 // Collects into `errors` every skip line a script logs, of any console type, so a test that asserts `errors`
 // is empty fails when a script lost a feature. A line an `expectedSkips` pattern matches is the suite's own: it
@@ -30,8 +30,8 @@ export const collectSkipLines = (page, errors, expectedSkips = []) => {
   })
 }
 
-// A page of `context` served from the recording, with the page's errors collected into the returned `errors`: its
-// uncaught errors and, with no suite asking, every skip line a script logs except those `expectedSkips` (patterns) declares.
+// A page of `context` served from the recording, with its uncaught errors and its skip lines collected into the returned
+// `errors`; `expectedSkips` (patterns) names the skip lines left out.
 export async function newPage (context, { expectedSkips } = {}) {
   const errors = []
   const p = await context.newPage()
@@ -42,11 +42,11 @@ export async function newPage (context, { expectedSkips } = {}) {
 }
 
 // Collects into `errors` the page's `console.error` lines, leaving out a resource that failed to load, which a
-// replay's aborted trackers print. Skip lines need no call: `newPage` collects them. Fits `openPage`'s `seed` as it is.
+// replay's aborted trackers print, and a skip line, which `newPage` collects whatever its console type. Fits `openPage`'s `seed` as it is.
 export const captureConsoleErrors = (page, errors) => {
   page.on('console', (m) => {
     const text = m.text()
-    if (m.type() === 'error' && !/Failed to load resource/.test(text)) errors.push(`console.error: ${text}`)
+    if (m.type() === 'error' && !/Failed to load resource/.test(text) && !SKIP_LINE.test(text)) errors.push(`console.error: ${text}`)
   })
 }
 
