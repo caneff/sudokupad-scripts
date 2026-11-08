@@ -44,6 +44,7 @@ p { margin: 0 0 .5rem; }
 .slide-pager button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
 /* The details layout (body.details): a back link, title, warning, lede and Install, then the slideshow, then sections divided by thin rules. */
+body.details { max-width: 46rem; }
 .details .back { font-size: .95rem; margin: .25rem 0 1rem; }
 .details .slide-caption { font-size: 1.25rem; }
 /* On a details page the frame takes the slides' own shape: the pictures stack in one grid cell at their own width (never larger), shrinking to fit a narrow window, so the frame is as wide and tall as the biggest. */
@@ -55,7 +56,6 @@ p { margin: 0 0 .5rem; }
 .details .lede { font-size: 1.1rem; }
 .details .actions { margin: .75rem 0 1.5rem; }
 .details h2 { font-size: 1.35rem; margin: 2.25rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--frame-edge); }
-.details .prose, .details .notes { max-width: 44rem; }
 .details .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 1rem 2rem; margin: 0; padding: 0; list-style: none; }
 .details .features strong { display: block; margin-bottom: .15rem; }
 .details .features p { margin: 0; }
