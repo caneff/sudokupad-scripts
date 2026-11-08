@@ -540,10 +540,10 @@ describe('the dialog\'s profile list, injected after Start Puzzle', { concurrenc
     await p.click(`${ROWS}:nth-child(1)`)
   })
 
-  it('the buttons row is Cancel then Save, Save filled purple, the title row holds the two settings icons, and the page pulldown has the dialog\'s own look', async () => {
-    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Cancel', 'Save'])
+  it('the buttons row is Save then Cancel, Save filled purple, the title row holds the two settings icons, and the page pulldown has the dialog\'s own look', async () => {
+    assert.deepEqual(await p.$$eval('.dialog-options button', (bs) => bs.map((b) => b.textContent.trim())), ['Save', 'Cancel'])
     assert.deepEqual(await p.$$eval('.cbd-title-row button', (bs) => bs.map((b) => b.getAttribute('aria-label'))), ['Copy settings', 'Paste settings'])
-    assert.equal(await p.$eval('.dialog-options button:last-child', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
+    assert.equal(await p.$eval('.dialog-options button[data-role=save]', (b) => window.getComputedStyle(b).backgroundColor), 'rgb(107, 63, 160)')
     assert.match(await p.$eval(`${EDITOR} select[data-role=color-choice]`, (e) => window.getComputedStyle(e).backgroundImage), /^url\("data:image\/svg\+xml/)
   })
 

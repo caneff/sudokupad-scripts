@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.0
+// @version      0.5.3
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.0'
+  const VERSION = '0.5.3'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -269,6 +269,54 @@
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
   }
+
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
+  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
+  function buttonRowCss (bodyId) {
+    const row = `.dialog:has(#${bodyId}) .dialog-options`
+    return [
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: #6b3fa0 !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`
+    ].join('\n')
+  }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) addStyleOnce(styleId, css, doc)
+    const close = () => closeDialogKeepingGrid(framework, win)
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
+  }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
   // <lib:settings-transfer>
@@ -347,41 +395,27 @@
   }
 
   const CLASS_PREFIX = 'dark-page-'
+  const DIALOG_ID = 'dark-page-dialog'
 
   function openDialog () {
     let picked = pageColor
-    Framework.showDialog({
-      centerOverBoard: true,
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Dark Page', version: VERSION }) },
-        {
-          tag: 'text',
-          innerHTML: '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
-            `<input type="color" id="dark-page-input" value="${picked}">` +
-            '<button type="button" id="dark-page-reset">Black</button></div>'
-        },
-        {
-          tag: 'options',
-          options: [
-            {
-              tag: 'button',
-              content: 'Save',
-              handler: () => {
-                saveColor(picked)
-                Framework.closeDialog()
-              }
-            },
-            { tag: 'button', content: 'Cancel', action: 'close' }
-          ]
-        }
-      ]
+    const body = showSettingsDialog(Framework, {
+      prefix: CLASS_PREFIX,
+      name: 'Dark Page',
+      version: VERSION,
+      bodyId: DIALOG_ID,
+      changed: () => picked !== pageColor,
+      save: () => saveColor(picked)
     })
+    if (!body) return
+    body.innerHTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
+      `<input type="color" id="dark-page-input" value="${picked}">` +
+      '<button type="button" id="dark-page-reset">Black</button></div>'
     const input = document.getElementById('dark-page-input')
     const reset = document.getElementById('dark-page-reset')
-    if (!input || !reset) throw new Error('dark-page: the dialog has no color input')
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase() })
-    wireCopyPaste(input.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
+    wireCopyPaste(body.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
       if (!(DATA_KEY in values)) return
       picked = values[DATA_KEY]
       input.value = picked

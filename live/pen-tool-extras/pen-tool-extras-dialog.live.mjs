@@ -1,7 +1,7 @@
 // Live check of pen-tool-extras.user.js's settings dialog layout on sudokupad.app in headless Chromium, at 1200x1000: the two by two grid whose vertical
 // line meets the title line and the footer line, the Line settings / Line styles divider starting at the vertical line, the pen colors filling their
 // column, the five sliders one column and 96px long, the marks table's headings over their boxes, the title row's icon buttons and status, the dialog
-// centred in the window, one column on a narrow screen, and the button row (Restore defaults, Cancel, Save). A touch screen stays untested. Every click is real input.
+// centred in the window, one column on a narrow screen, and the button row (Save, Cancel, Restore defaults). A touch screen stays untested. Every click is real input.
 /* global Framework */
 import { after, afterEach, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -242,13 +242,13 @@ describe('the settings dialog layout', { concurrency: false }, () => {
     }
   })
 
-  it('the buttons are one row at the bottom: Restore defaults at the left, Cancel and Save at the right', async () => {
+  it('the buttons are one row at the bottom: Save, then Cancel, then Restore defaults, all at the right', async () => {
     await openSettledEditor(p)
-    const [restore, cancel, save] = await p.evaluate(() => ['restore', 'cancel', 'save'].map((role) => { const { x, y, width, height } = document.querySelector(`.dialog-options button[data-role="${role}"]`).getBoundingClientRect(); return { x, y, width, height } }))
-    assert.equal(restore.x < cancel.x && cancel.x < save.x, true)
+    const [save, cancel, restore] = await p.evaluate(() => ['save', 'cancel', 'restore'].map((role) => { const { x, y, width, height } = document.querySelector(`.dialog-options button[data-role="${role}"]`).getBoundingClientRect(); return { x, y, width, height } }))
+    assert.equal(save.x < cancel.x && cancel.x < restore.x, true)
     assert.equal(Math.abs(restore.y + restore.height / 2 - (save.y + save.height / 2)) <= 3, true, 'one row')
     const dialog = await p.locator('.dialog').boundingBox()
-    assert.equal(save.x + save.width <= dialog.x + dialog.width, true)
+    assert.equal(restore.x + restore.width <= dialog.x + dialog.width, true)
     await closeExtrasEditorWith(p, 'Cancel')
   })
 

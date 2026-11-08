@@ -1083,7 +1083,7 @@ test('the editor is a two by two grid: Pen colors | Line settings and Line style
 test('the dialog is sized to its content, the paragraph around the editor loses its bottom margin, and the dialog is not centred over the board', () => {
   assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{[^}]*width: fit-content !important;/)
   assert.match(DIALOG_CSS, /\.dialog p:has\(> #pen-tool-extras-editor\) \{ margin-bottom: 0 !important; \}/)
-  assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.js'), 'utf8'), /centerOverBoard/)
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'pen-tool-extras.user.js'), 'utf8'), /bodyId: EDITOR_ID,\n\s*centerOverBoard: false,/)
 })
 
 test('a missing-color note in the first column wraps within it and never sets its width', () => {
@@ -2235,8 +2235,8 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
   assert.deepEqual(readPaste(JSON.stringify({ DarkPage_color: '#ffffff' })), { values: {}, skipped: 0 })
 })
 
-test('the dialog and its button row are styled through the editor inside the dialog', () => {
-  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options \{ display: flex !important;/)
-  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \.dialog-options button\[data-role="save"\]/)
+test('the dialog is styled through the editor inside the dialog; its button row look is the shared shell\'s', () => {
+  assert.match(DIALOG_CSS, /\.dialog:has\(#pen-tool-extras-editor\) \{ width: fit-content !important;/)
+  assert.doesNotMatch(DIALOG_CSS, /data-role="(save|cancel|restore)"/)
   assert.doesNotMatch(DIALOG_CSS, /pen-tool-extras-dialog/)
 })

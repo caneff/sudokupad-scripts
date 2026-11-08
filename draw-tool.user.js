@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.26.0
+// @version      0.26.2
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.26.0'
+  const VERSION = '0.26.2'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -221,7 +221,6 @@
   const PANEL_STYLE_ID = 'draw-tool-style'
   const CLEAR_QUESTION = 'Clear all notes?'
   const OK_LABEL = 'OK'
-  const CANCEL_LABEL = 'Cancel'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
   const KEPT_PUZZLES = 50
@@ -969,6 +968,54 @@
       `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
   }
+
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
+  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
+  function buttonRowCss (bodyId) {
+    const row = `.dialog:has(#${bodyId}) .dialog-options`
+    return [
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: #6b3fa0 !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`
+    ].join('\n')
+  }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) addStyleOnce(styleId, css, doc)
+    const close = () => closeDialogKeepingGrid(framework, win)
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
+  }
   /* eslint-enable no-unused-vars */
   // </lib:settings-dialog>
   // <lib:settings-transfer>
@@ -1386,7 +1433,6 @@
   const DIALOG_ID = 'draw-tool-dialog'
   const DIALOG_STYLE_ID = 'draw-tool-dialog-style'
   const CUSTOM_LABEL = 'Custom'
-  const SAVE_LABEL = 'Save'
   const DIALOG_CSS = [
     `#${DIALOG_ID} .draw-tool-section-title { font-weight: 600; margin: 6px 0 0; }`,
     `#${DIALOG_ID} .draw-tool-box-row { display: flex; align-items: center; gap: 12px; margin: 6px 0; }`,
@@ -1409,16 +1455,10 @@
   }
 
   function openDialog () {
-    if (!document.getElementById(DIALOG_STYLE_ID)) {
-      const style = document.createElement('style')
-      style.id = DIALOG_STYLE_ID
-      style.textContent = DIALOG_CSS
-      document.head.appendChild(style)
-    }
     // Until the colors are first copied, the draft is the pen colors a first use would copy.
     let draft = colors ?? copiedPenColors(readPenColor)
     let chosen = null
-    let changed = false
+    let colorsEdited = false
     let draftOutline = outline
     let draftBox = boxColor
     let draftCustom = savedHex(boxColor) ?? BOX_WHITE
@@ -1431,21 +1471,23 @@
       console.warn(`draw-tool: ${error.message}`)
       paletteNote = error.message
     }
-    Framework.showDialog({
-      centerOverBoard: true,
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix: CLASS_PREFIX, name: 'Text Annotation', version: VERSION }) },
-        { tag: 'text', innerHTML: `<div id="${DIALOG_ID}"></div>` },
-        {
-          tag: 'options',
-          options: [
-            { tag: 'button', content: CANCEL_LABEL, action: 'close' },
-            { tag: 'button', content: SAVE_LABEL, handler: () => { if (changed) saveColors(draft); if (draftOutline !== outline) saveOutline(draftOutline); if (draftBox !== boxColor) saveBoxColor(draftBox); if (draftFrame !== frame) saveFrame(draftFrame); Framework.closeDialog() } }
-          ]
-        }
-      ]
+    const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame })
+    const box = showSettingsDialog(Framework, {
+      prefix: CLASS_PREFIX,
+      name: 'Text Annotation',
+      version: VERSION,
+      bodyId: DIALOG_ID,
+      styleId: DIALOG_STYLE_ID,
+      css: DIALOG_CSS,
+      changed: () => Object.values(edits()).some(Boolean),
+      save: () => {
+        const edited = edits()
+        if (edited.colors) saveColors(draft)
+        if (edited.outline) saveOutline(draftOutline)
+        if (edited.box) saveBoxColor(draftBox)
+        if (edited.frame) saveFrame(draftFrame)
+      }
     })
-    const box = document.getElementById(DIALOG_ID)
     if (!box) return
     const draw = () => {
       const options = [{ value: '', label: CUSTOM_LABEL, selected: !chosen }, ...presetOptions(pages.length).map((id) => ({ value: id, label: PRESET_LABELS[id], selected: id === chosen }))]
@@ -1466,7 +1508,7 @@
         chosen = target.value || null
         if (chosen) {
           draft = presetColors(chosen, pages, readCellColor, readPenColor)
-          changed = true
+          colorsEdited = true
         }
         draw()
       } else if (target.matches('[data-role="outline"]')) {
@@ -1481,7 +1523,7 @@
       } else if (target.matches('input[data-role="swatch"]')) {
         draft = editedColor(draft, Number(target.dataset.key), target.value)
         chosen = null
-        changed = true
+        colorsEdited = true
         draw()
       }
     })
@@ -1493,7 +1535,7 @@
       draftFrame = frame
       draft = colors ?? draft
       chosen = null
-      changed = false
+      colorsEdited = false
       draw()
     })
   }
