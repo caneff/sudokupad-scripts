@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.13
+// @version      0.22.14
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.22.13'
+  const VERSION = '0.22.14'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -953,14 +953,14 @@
     return first ? first.key : null
   }
 
-  // The settings dialog's draft: the profiles (`state`) and mode Save would apply, the selected profile, its name when it was selected
-  // (an emptied name field keeps it), the brush, the color page shown, and the current stroke's paint key (undefined before its first
-  // digit, null for a stroke that clears).
   function showingProfile (draft, state, selected) {
     const groups = state.profiles[selected].groups
     const brush = startingBrush(groups, draft.pages)
     return { ...draft, state, selected, keptName: state.profiles[selected].name, brush, page: initialPage(draft.pages, brush) }
   }
+  // The settings dialog's draft: the profiles (`state`) and mode Save would apply, the selected profile, its name when it was selected
+  // (an emptied name field keeps it), the brush, the color page shown, and the current stroke's paint key (undefined before its first
+  // digit, null for a stroke that clears).
   const openingDraft = (state, mode, pages) => showingProfile({ mode, pages, paintKey: undefined }, state, state.active)
 
   // Each dialog edit as one event; an edit that changes nothing returns the same draft.
@@ -986,10 +986,13 @@
       case 'choose':
         if (event.role === 'mode-draft') return { ...draft, mode: event.value }
         if (event.role === 'cell-profile') return { ...draft, state: setActive(state, Number(event.value)) }
-        {
+        if (event.role === 'digit-profile') {
+          // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change
+          // for the option it already shows.
           const next = chooseDigit(state, event.value)
           return { ...draft, state: next, mode: allowedMode(draft.mode, usesDigitColors(next)) }
         }
+        throw new Error(`reduceDraft: no pulldown ${event.role}`)
       case 'new-profile': {
         const next = copyProfile(state, selected)
         return showing(next, next.profiles.length - 1)
@@ -1491,7 +1494,7 @@
   // The object form: Node's EventTarget, which the tests use, keeps a listener removed with a bare `true`.
   const CAPTURE = { capture: true }
 
-  function trackPointer (target, { move = () => {}, end = () => {} }) {
+  function trackPointer (target, { move, end = () => {} }) {
     const finish = (event) => {
       stop()
       end(event)
@@ -2184,7 +2187,6 @@
       const { state, mode: draftMode, selected, pages, page, brush } = draft
       box.innerHTML = renderEditor({ groups: state.profiles[selected].groups, pages, page, brush, pulldownsHtml: renderPulldowns(state, draftMode), profilesHtml: renderProfiles(state, readColor, selected), unreadable })
     }
-    // Applies one edit; true when it changed the draft.
     const edit = (event) => {
       const before = draft
       draft = reduceDraft(draft, event)
@@ -2221,15 +2223,14 @@
       event.stopPropagation()
       settleName(event.target)
     })
-    // None moves the draft mode at once, so the Mode pulldown never shows a mode the draft does not hold: a select fires no change for the option it already shows.
     box.addEventListener('change', (event) => {
       if (event.target.matches('[data-role="profile-name"]')) { settleName(event.target); return }
-      const pageChoice = event.target.closest('select[data-role="color-choice"]')
       const pulldown = event.target.closest('select[data-role]')
       if (!pulldown) return
-      edit(pageChoice ? { type: 'page', page: Number(pageChoice.value) } : { type: 'choose', role: pulldown.dataset.role, value: pulldown.value })
+      const role = pulldown.dataset.role
+      edit(role === 'color-choice' ? { type: 'page', page: Number(pulldown.value) } : { type: 'choose', role, value: pulldown.value })
       draw()
-      box.querySelector(`select[data-role="${pulldown.dataset.role}"]`).focus()
+      box.querySelector(`select[data-role="${role}"]`).focus()
     })
     // A press on a digit paints it, and a drag paints each digit the pointer then passes over; the first digit decides paint or clear.
     // A press in a gap (not on a control) paints from the first digit the drag reaches, so a slightly early press selects no text and drags no page.

@@ -1921,6 +1921,8 @@ test('reduceDraft key-paint: a keyboard click on a digit toggles it in the brush
   const painted = run(opened(), { type: 'key-paint', digit: '5' })
   assert.deepEqual(shownGroups(painted), [g('b3', ['2', '5'])])
   assert.deepEqual(shownGroups(run(painted, { type: 'key-paint', digit: '5' })), [g('b3', ['2'])])
+  const noBrush = { ...opened(), brush: null }
+  assert.equal(reduceDraft(noBrush, { type: 'key-paint', digit: '2' }), noBrush, 'with no brush a keyboard click leaves the digit\'s color alone')
 })
 
 test('reduceDraft brush, page and clear: a swatch sets the brush, the page choice the page, and Clear empties the selected profile', () => {
@@ -1941,6 +1943,7 @@ test('reduceDraft choose: Mode sets the draft mode, Cell the active profile, and
   const none = run(opened(dialogState(), 'both'), { type: 'choose', role: 'digit-profile', value: 'none' })
   assert.equal(none.mode, 'cell')
   assert.equal(usesDigitColors(none.state), false)
+  assert.throws(() => reduceDraft(opened(), { type: 'choose', role: 'color-choice', value: '0' }), /no pulldown color-choice/)
 })
 
 test('reduceDraft new-profile: the selected profile is copied to the end and the copy selected; at the limit the draft is the same draft', () => {
