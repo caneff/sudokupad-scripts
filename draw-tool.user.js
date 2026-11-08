@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.22.1
+// @version      0.23.1
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.22.1'
+  const VERSION = '0.23.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -180,7 +180,7 @@
   // A note never resized wraps at this many em and stops growing at this many lines, then scrolls.
   const BOX_WIDTH_EM = 16
   const BOX_LINES = 8
-  // The smallest box the resize handle leaves: about three characters wide and one line high, in em.
+  // The smallest box a resize handle leaves: about three characters wide and one line high, in em.
   const MIN_BOX_EM = [3, LINE_HEIGHT]
   // How far, in screen pixels, the mouse may move between press and release and the press still be a click.
   const CLICK_SLOP = 2
@@ -427,13 +427,22 @@
     return free.reduce((best, point) => distance(point) < distance(best) ? point : best, free[0] ?? start)
   }
 
-  // The note with its box's bottom right dragged to screen point `corner`, its top left kept at screen point `topLeft`. The box is in board units on the
-  // board and off it, since a note off the board is drawn at the board's scale too; the note's point moves to the box's new middle, pinned or fixed as it was.
-  function resizedItem (item, topLeft, corner, board) {
-    const box = [0, 1].map((i) => roundToTenth(Math.max(MIN_BOX_EM[i] * item.size, (corner[i] - topLeft[i]) / board.scale)))
-    const middle = [0, 1].map((i) => topLeft[i] + box[i] * board.scale / 2)
+  // The corners of a note's box a handle sits on, each as the sign of its side on x and y: -1 for the left or top, 1 for the right or bottom.
+  const CORNERS = { topLeft: [-1, -1], topRight: [1, -1], bottomLeft: [-1, 1], bottomRight: [1, 1] }
+
+  // The note with the box corner `corner` of CORNERS dragged to screen point `point`, the opposite corner kept at screen point `anchor`. The box is in board
+  // units on the board and off it, since a note off the board is drawn at the board's scale too; the note's point moves to the box's new middle, pinned or fixed as it was.
+  function resizedItem (item, anchor, point, board, corner) {
+    const box = [0, 1].map((i) => roundToTenth(Math.max(MIN_BOX_EM[i] * item.size, corner[i] * (point[i] - anchor[i]) / board.scale)))
+    const middle = [0, 1].map((i) => anchor[i] + corner[i] * box[i] * board.scale / 2)
     const { at, fixed, ...rest } = item
     return item.fixed ? { ...rest, box, fixed: roundPoint(middle) } : { ...rest, box, at: roundPoint(board.toBoard(middle)) }
+  }
+
+  // The note back at its auto size, on the point it has.
+  function autoSized (item) {
+    const { box, ...rest } = item
+    return rest
   }
 
   // A press whose every point stays within the slop of where it began.
@@ -983,7 +992,7 @@
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, SIZE_MENU, nearestMenuSize, OUTLINES, DEFAULT_OUTLINE, readOutline, readSavedOutline, withOutline, haloShadow, OUTLINE_EM, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, textAt, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, BACKGROUND_KEY, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1042,7 +1051,7 @@
   const textColor = (item) => itemOpacity(item) === 100 ? itemColor(item.color) : `color-mix(in srgb, ${itemColor(item.color)} ${itemOpacity(item)}%, transparent)`
 
   // A note's style, centred on `point` and drawn at `scale` pixels of its box per board unit; a background is a page-colored rounded box around the text.
-  // A resized note is exactly its stored box; any other takes the stylesheet's automatic width and height. A note with no background is padded by its
+  // A resized note is exactly its stored box; any other takes the stylesheet's auto width and height. A note with no background is padded by its
   // halo's reach, since its box clips what overflows it.
   function noteStyle (item, [x, y], scale) {
     const px = (units) => `${roundToTenth(units * scale)}px`
@@ -1228,7 +1237,7 @@
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     `.${SELECTED_CLASS} { outline: calc(2 * var(${PIXEL_VAR}, 1px)) dashed ${PANEL_COLOR}; outline-offset: calc(2 * var(${PIXEL_VAR}, 1px)); }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
-    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; cursor: nwse-resize; }`,
+    `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; }`,
     `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; outline: 1px dashed currentColor; outline-offset: 1px; cursor: text; }`,
     // The tool bar is a grid and stock buttons have order 0, so Text Annotation's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
@@ -1602,10 +1611,12 @@
   // A right-drag in progress: the last point it reached, the points its moves reached since the last frame, and whether it has erased an item yet. The
   // right button's `buttons` bit holds it.
   let erasing = null
-  // The note open for typing: the index of the text it reopened, or -1 for a new one, the item, its element, which the solver types in, and its resize handle.
+  // The note open for typing: the index of the text it reopened, or -1 for a new one, the item and its element, which the solver types in.
   let editing = null
-  // A drag of the open note's resize handle: the item at the press, its box's top left on the screen, the handle's offset from the box's corner at the press,
-  // and the point its last move reached, or null.
+  // The four resize handles of the open note, or of the one note selected, each with the corner of CORNERS it sits on; none when no note shows them.
+  let handles = []
+  // A drag of a resize handle: the note's index in the drawing, its item at the press, the corner dragged, the opposite corner on
+  // the screen, the dragged corner's offset from the pointer at the press, and the point the last move reached, or null.
   let resizing = null
   // True from a press that finished a text box until its release, so the press does nothing else on the page.
   let pressFinishedText = false
@@ -1741,7 +1752,7 @@
     })
   }
 
-  // The open note's element, its handle and the selection rectangle sit in the layer beside the two groups, where a redraw leaves them, so the note
+  // The open note's element, the handles and the selection rectangle sit in the layer beside the two groups, where a redraw leaves them, so the note
   // keeps the focus. Each note keeps its element, and only what changed is written: a board change is one write to the board group.
   function renderDrawing () {
     const layer = drawingLayer()
@@ -1768,11 +1779,12 @@
     for (const text of parsedTexts.keys()) if (!texts.has(text)) parsedTexts.delete(text)
     measureNotes(notes, map)
     for (const element of inserted) element.scrollTop = shownNotes.get(element).item[SCROLL] ?? 0
-    if (!drag?.move && keepFixedReachable(notes, map)) save()
+    if (!drag?.move && !resizing && keepFixedReachable(notes, map)) save()
     const onTop = [...notes.filter(({ item }) => !item.fixed), ...notes.filter(({ item }) => item.fixed)]
     hitBoxes = onTop.map(({ element }) => ({ element, box: noteScreenBox(shownNotes.get(element).item, map) }))
     if (drag?.move) showMove(drag, map)
     if (editing) showEditing(map)
+    else showHandles(drag?.move ? null : selectedBox())
     showHover()
   }
 
@@ -1795,15 +1807,49 @@
     return moved
   }
 
-  // Restyles the open note and puts the handle on its bottom right corner.
+  // Restyles the open note and puts the handles on its corners.
   function showEditing (map) {
-    const { element, item, handle } = editing
+    const { element, item } = editing
     styleNote(element, item, map)
     markScrolling(element)
     const { left, top, right, bottom } = element.getBoundingClientRect()
     editing.box = { left, top, right, bottom }
-    handle.style.left = `${roundToTenth(right - HANDLE_PX / 2)}px`
-    handle.style.top = `${roundToTenth(bottom - HANDLE_PX / 2)}px`
+    showHandles(editing.box)
+  }
+
+  // The point of a screen box that corner `corner` of CORNERS names, or of the opposite corner with `opposite`.
+  const cornerPoint = (box, corner, opposite = false) => [0, 1].map((i) => (corner[i] < 0) !== opposite ? [box.left, box.top][i] : [box.right, box.bottom][i])
+
+  // The screen box of the one selected note, or null when no note or several are selected.
+  function selectedBox () {
+    const element = selected.length === 1 ? drawing[selected[0]][NOTE_ELEMENT] : null
+    return hitBoxes.find((entry) => entry.element === element)?.box ?? null
+  }
+
+  // The handles on the corners of screen box `box`, made when there are none; null takes them off the page.
+  function showHandles (box) {
+    if (!box) {
+      for (const { element } of handles) element.remove()
+      handles = []
+      return
+    }
+    if (handles.length === 0) {
+      handles = Object.values(CORNERS).map((corner) => {
+        const element = document.createElement('div')
+        element.className = HANDLE_CLASS
+        element.style.cursor = corner[0] * corner[1] > 0 ? 'nwse-resize' : 'nesw-resize'
+        element.addEventListener('mousedown', (event) => startResize(event, corner))
+        element.addEventListener('dblclick', resetSize)
+        element.addEventListener('touchstart', (event) => event.stopPropagation())
+        drawingLayer().append(element)
+        return { element, corner }
+      })
+    }
+    for (const { element, corner } of handles) {
+      const [x, y] = cornerPoint(box, corner)
+      element.style.left = `${roundToTenth(x - HANDLE_PX / 2)}px`
+      element.style.top = `${roundToTenth(y - HANDLE_PX / 2)}px`
+    }
   }
 
   // A note's text box, inside its padding, on the screen. `unit` is screen pixels per pixel of the note's own box: the board's scale for a note on the board.
@@ -1814,41 +1860,74 @@
     return { left: left + pad('Left'), top: top + pad('Top'), right: right - pad('Right'), bottom: bottom - pad('Bottom') }
   }
 
-  // A press on the handle, with any button, keeps the note's focus and never reaches SudokuPad; only the left button resizes.
-  function startResize (event) {
+  // The note a handle resizes: the open one, else the one selected.
+  const resizedIndex = () => editing ? editing.index : selected.length === 1 ? selected[0] : null
+
+  // A press on a handle, with any button, keeps the note's focus and never reaches SudokuPad; only the left button resizes.
+  function startResize (event, corner) {
     event.preventDefault()
     event.stopPropagation()
-    if (event.button !== PRIMARY_BUTTON || !editing) return
-    const box = contentBox(editing.element)
+    const index = resizedIndex()
+    if (event.button !== PRIMARY_BUTTON || index === null) return
+    const item = editing ? editing.item : drawing[index]
+    const element = editing ? editing.element : item[NOTE_ELEMENT]
+    const box = contentBox(element, editing || item.fixed ? 1 : boardMap().scale)
     const [x, y] = eventPoint(event)
-    resizing = { item: editing.item, topLeft: [box.left, box.top], offset: [box.right - x, box.bottom - y], to: null }
+    const grabbed = cornerPoint(box, corner)
+    const anchor = cornerPoint(box, corner, true)
+    resizing = { index, item, corner, anchor, offset: [grabbed[0] - x, grabbed[1] - y], to: null }
   }
 
   // A release the page never saw leaves the button up on the next move, which ends the resize.
   function resizeMove (event) {
     if (!resizing) return
     event.stopImmediatePropagation()
-    if (!(event.buttons & PRIMARY_HELD) || !editing) {
-      resizing = null
+    if (!(event.buttons & PRIMARY_HELD) || resizedIndex() === null) {
+      endResize(event)
       return
     }
     resizing.to = eventPoint(event)
     inFrame('resize', showResize)
   }
 
+  // The open note is restyled in place; a selected one is drawn again, and saved when the drag ends.
   function showResize () {
-    if (!resizing?.to || !editing) return
-    const [x, y] = resizing.to
+    if (!resizing?.to) return
+    const { index, item, corner, anchor, offset, to } = resizing
     const map = boardMap()
-    editing.item = resizedItem(resizing.item, resizing.topLeft, [x + resizing.offset[0], y + resizing.offset[1]], map)
-    showEditing(map)
+    const resized = resizedItem(item, anchor, [to[0] + offset[0], to[1] + offset[1]], map, corner)
+    if (editing) {
+      editing.item = resized
+      showEditing(map)
+    } else {
+      drawing[index] = resized
+      renderDrawing()
+    }
   }
 
   function endResize (event) {
     if (!resizing) return
     event.stopImmediatePropagation()
     flushFrame()
+    const { index, item } = resizing
     resizing = null
+    if (editing || String(drawing[index]?.box) === String(item.box)) return
+    renderDrawing()
+    save()
+  }
+
+  // A double-click on a handle sends the note back to auto size.
+  function resetSize () {
+    const index = resizedIndex()
+    if (index === null) return
+    if (editing) {
+      editing.item = autoSized(editing.item)
+      showEditing(boardMap())
+    } else if (drawing[index].box) {
+      drawing[index] = autoSized(drawing[index])
+      renderDrawing()
+      save()
+    }
   }
 
   const scrollRoom = (note) => note.scrollHeight - note.clientHeight
@@ -1971,14 +2050,10 @@
       if (isPanelControl(event.relatedTarget)) editing.caret = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null
       else finishText()
     })
-    // Typing grows the box, which carries the handle and may start the text scrolling.
+    // Typing grows the box, which carries the handles and may start the text scrolling.
     element.addEventListener('input', () => { if (editing && editing.element === element) showEditing(boardMap()) })
-    const handle = document.createElement('div')
-    handle.className = HANDLE_CLASS
-    handle.addEventListener('mousedown', startResize)
-    handle.addEventListener('touchstart', (event) => event.stopPropagation())
-    editing = { index, item, element, handle }
-    drawingLayer().append(element, handle)
+    editing = { index, item, element }
+    drawingLayer().append(element)
     redraw()
     element.focus()
     window.getSelection().selectAllChildren(element)
@@ -2004,13 +2079,13 @@
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
 
   // An empty box removes its text.
-  // Takes the open note's element and handle off the page, and ends any resize.
+  // Takes the open note's element and handles off the page, and ends any resize.
   function closeEditing () {
     const open = editing
     editing = null
     resizing = null
     open.element.remove()
-    open.handle.remove()
+    showHandles(null)
     return open
   }
 
@@ -2045,7 +2120,7 @@
   // SudokuPad's buttons and dialogs stop their mousedown, so a press outside the box finishes it from the window's
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
-    if (!editing || editing.element.contains(event.target) || event.target === editing.handle || isPanelControl(event.target)) return
+    if (!editing || editing.element.contains(event.target) || handles.some(({ element }) => element === event.target) || isPanelControl(event.target)) return
     pressFinishedText = true
     finishText()
   }
@@ -2114,6 +2189,7 @@
   // nothing is drawn again.
   function showMove (d, map) {
     const [dx, dy] = dragOffset(d)
+    showHandles(null)
     for (const { item } of d.move) {
       const element = item[NOTE_ELEMENT]
       if (!element) continue
@@ -2184,6 +2260,7 @@
     if (drag?.move) clearMove(drag)
     drag = null
     erasing = null
+    resizing = null
     selected = []
     if (editing) closeEditing()
   }

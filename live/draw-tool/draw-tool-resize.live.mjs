@@ -1,13 +1,14 @@
-// Live check of draw-tool.user.js's resize handle on sudokupad.app: the open note shows a handle at its bottom right, and only it; dragging
-// the handle sets the box, keeping its top left and the note's focus, the text wraps and scrolls to fit, and the size is saved and survives a
-// reload; the box stops at about three characters by one line; and off the editor a drag on the note moves it and never resizes it. Real mouse input.
+// Live check of draw-tool.user.js's resize handles on sudokupad.app: the open note, and a note alone selected, show a handle on each of their four
+// corners, and several selected notes show none; dragging a handle sets the box, keeping the opposite corner and the note's focus, the text wraps and
+// scrolls to fit, and the size is saved and survives a reload; the box stops at about three characters by one line; a double-click on a handle sends
+// the note back to auto size; and a drag on the note's body moves it and never resizes it. Real mouse input.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
-import { gridPoint, mouseDrag } from '../pen.mjs'
+import { gridPoint } from '../pen.mjs'
 import { readUntil } from '../settle.mjs'
 
 const { TEXT_BOX, TEXTS } = draw
@@ -19,13 +20,16 @@ const NOTE_TEXT = 'word '.repeat(12).trim()
 // A real mouse lands on whole page pixels.
 const NEAR_PX = 1.5
 // The smallest box, in em of the note's text size.
-const { MIN_BOX_EM: MIN_EM } = createRequire(import.meta.url)('../../draw-tool.user.js')
+const { MIN_BOX_EM: MIN_EM, CORNERS: CORNER_TABLE } = createRequire(import.meta.url)('../../draw-tool.user.js')
+// The handles in the order of the layer: the sign on x and y of the side of the box each sits on.
+const CORNERS = Object.values(CORNER_TABLE)
+const BOTTOM_RIGHT = Object.keys(CORNER_TABLE).indexOf('bottomRight')
 
 let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
+describe('Text Annotation\'s resize handles', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -42,17 +46,20 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
       right: r.right - pad('Right'),
       bottom: r.bottom - pad('Bottom'),
       em: parseFloat(style.fontSize),
-      scrollRoom: e.scrollHeight - e.clientHeight
+      // Screen pixels per pixel of the note's own box: the board's scale for a note on the board.
+      scale: r.width / e.offsetWidth,
+      scrollRoom: e.scrollHeight - e.clientHeight,
+      scrollHeight: e.scrollHeight
     }
   }, selector)
   const handleCount = () => p.locator(HANDLE).count()
-  const handleMiddle = async () => {
-    const { x, y, width, height } = await p.locator(HANDLE).boundingBox()
+  const handleMiddle = async (which = BOTTOM_RIGHT) => {
+    const { x, y, width, height } = await p.locator(HANDLE).nth(which).boundingBox()
     return [x + width / 2, y + height / 2]
   }
   // A press on the handle dragged by (dx, dy) screen pixels.
-  const dragHandle = async (dx, dy) => {
-    const [x, y] = await handleMiddle()
+  const dragHandle = async (dx, dy, which = BOTTOM_RIGHT) => {
+    const [x, y] = await handleMiddle(which)
     await p.mouse.move(x, y)
     await p.mouse.down()
     await p.mouse.move(x + dx, y + dy, { steps: 8 })
@@ -69,16 +76,19 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
   })
   after(async () => { await context.close() })
 
-  it('the open note shows the handle at its bottom right corner, and a finished note has none', async () => {
+  it('the open note shows a handle on each corner, and a finished note has none', async () => {
     await p.mouse.click(...await gridPoint(p, NOTE_AT))
     await p.keyboard.type(NOTE_TEXT)
-    assert.equal(await handleCount(), 1)
-    const corner = await read((s) => {
-      const { right, bottom } = document.querySelector(s).getBoundingClientRect()
-      return [right, bottom]
+    assert.equal(await handleCount(), 4)
+    const edges = await read((s) => {
+      const { left, top, right, bottom } = document.querySelector(s).getBoundingClientRect()
+      return { left, top, right, bottom }
     }, TEXT_BOX)
-    const [x, y] = await handleMiddle()
-    assert.ok(near(x, corner[0]) && near(y, corner[1]), `handle at ${x}, ${y}; corner at ${corner}`)
+    for (const [which, [sx, sy]] of CORNERS.entries()) {
+      const [x, y] = await handleMiddle(which)
+      const corner = [sx < 0 ? edges.left : edges.right, sy < 0 ? edges.top : edges.bottom]
+      assert.ok(near(x, corner[0]) && near(y, corner[1]), `handle ${which} at ${x}, ${y}; corner at ${corner}`)
+    }
     await p.keyboard.press('Escape')
     assert.equal(await handleCount(), 0)
     assert.equal((await saved())[0].box, undefined, 'a note never resized stores no box')
@@ -127,6 +137,106 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
     assert.deepEqual((await saved())[0].box, MIN_EM.map((em) => em * 20))
   })
 
+  // The note's middle on the screen.
+  const middleOfNote = async () => {
+    const { left, top, right, bottom } = await box(TEXTS)
+    return [(left + right) / 2, (top + bottom) / 2]
+  }
+
+  it('a note selected alone shows a handle on each corner, and two selected notes show none', async () => {
+    await p.mouse.click(...await middleOfNote())
+    assert.equal(await handleCount(), 4)
+    await p.keyboard.press('Escape')
+    assert.equal(await handleCount(), 0, 'no selection, no handles')
+    await p.mouse.click(...await gridPoint(p, EMPTY_AT))
+    await p.keyboard.type('two')
+    await p.keyboard.press('Escape')
+    await p.mouse.click(...await middleOfNote())
+    await p.keyboard.down('Shift')
+    await p.mouse.click(...await gridPoint(p, EMPTY_AT))
+    await p.keyboard.up('Shift')
+    assert.equal(await handleCount(), 0)
+    await p.keyboard.press('Escape')
+    // Leaves only the first note.
+    await p.mouse.click(...await gridPoint(p, EMPTY_AT))
+    await p.keyboard.press('Delete')
+    assert.deepEqual(await draw.texts(p), [`${NOTE_TEXT}Z`])
+  })
+
+  for (const [which, [sx, sy]] of CORNERS.entries()) {
+    it(`dragging the ${sy < 0 ? 'top' : 'bottom'} ${sx < 0 ? 'left' : 'right'} handle of a selected note resizes it with the opposite corner held and the font size unchanged`, async () => {
+      await p.mouse.click(...await middleOfNote())
+      const before = await box(TEXTS)
+      await dragHandle(sx * 30, sy * 15, which)
+      const after = await box(TEXTS)
+      const fixed = { x: sx < 0 ? 'right' : 'left', y: sy < 0 ? 'bottom' : 'top' }
+      assert.ok(near(after[fixed.x], before[fixed.x]) && near(after[fixed.y], before[fixed.y]), `the ${fixed.x} ${fixed.y} corner moved to ${after[fixed.x]}, ${after[fixed.y]} from ${before[fixed.x]}, ${before[fixed.y]}`)
+      assert.ok(near(after.right - after.left, before.right - before.left + 30) && near(after.bottom - after.top, before.bottom - before.top + 15), `${after.right - after.left} x ${after.bottom - after.top} from ${before.right - before.left} x ${before.bottom - before.top}`)
+      assert.equal(after.em, before.em)
+      assert.equal(await handleCount(), 4, 'the note is still selected')
+    })
+  }
+
+  it('dragging the top left handle in rewraps the text, and the size it set survives a reload', async () => {
+    await p.mouse.click(...await middleOfNote())
+    const before = await box(TEXTS)
+    await dragHandle(40, 0, 0)
+    const after = await box(TEXTS)
+    assert.ok(near(after.right - after.left, before.right - before.left - 40), `${after.right - after.left} wide from ${before.right - before.left}`)
+    assert.ok(after.scrollHeight > before.scrollHeight, `the text is ${after.scrollHeight} high from ${before.scrollHeight}: it wrapped onto more lines`)
+  })
+
+  it('the size a corner drag set is saved and survives a reload', async () => {
+    const stored = (await saved())[0].box
+    const before = await box(TEXTS)
+    await draw.reload(p)
+    await readUntil(() => draw.texts(p), (t) => t.length === 1)
+    assert.deepEqual((await saved())[0].box, stored)
+    const after = await box(TEXTS)
+    assert.ok(near(after.left, before.left) && near(after.top, before.top) && near(after.right, before.right) && near(after.bottom, before.bottom), 'the note is where it was, at the size it was')
+    await draw.pickDraw(p)
+  })
+
+  it('the top left handle stops at the minimum box with the bottom right corner held', async () => {
+    await p.mouse.click(...await middleOfNote())
+    const before = await box(TEXTS)
+    await dragHandle(1000, 1000, 0)
+    const after = await box(TEXTS)
+    assert.ok(near(after.right, before.right) && near(after.bottom, before.bottom), `the bottom right corner moved to ${after.right}, ${after.bottom}`)
+    assert.ok(near(after.right - after.left, MIN_EM[0] * after.em * after.scale) && near(after.bottom - after.top, MIN_EM[1] * after.em * after.scale), `${after.right - after.left} x ${after.bottom - after.top}`)
+  })
+
+  it('a double-click on a handle sends a selected note back to auto size, which survives a reload', async () => {
+    await dragHandle(150, 40)
+    assert.equal((await saved())[0].box.length, 2)
+    const wide = await box(TEXTS)
+    await p.mouse.dblclick(...await handleMiddle())
+    assert.equal((await saved())[0].box, undefined)
+    const auto = await box(TEXTS)
+    assert.ok(Math.abs(auto.right - auto.left - (wide.right - wide.left)) > NEAR_PX, 'the note changed size')
+    assert.equal(await handleCount(), 4)
+    await draw.reload(p)
+    await readUntil(() => draw.texts(p), (t) => t.length === 1)
+    assert.equal((await saved())[0].box, undefined)
+    await draw.pickDraw(p)
+  })
+
+  it('a double-click on a handle of the open note sends it back to auto size', async () => {
+    await p.mouse.click(...await middleOfNote())
+    await dragHandle(-20, -5)
+    assert.equal((await saved())[0].box.length, 2)
+    await p.mouse.dblclick(...await middleOfNote())
+    assert.equal((await draw.texts(p)).length, 0, 'the note itself is open')
+    await p.mouse.dblclick(...await handleMiddle())
+    await p.keyboard.press('Escape')
+    assert.equal((await saved())[0].box, undefined)
+    // Leaves the note with a box for the checks below.
+    await p.mouse.click(...await middleOfNote())
+    await dragHandle(-20, -5)
+    await p.keyboard.press('Escape')
+    assert.equal((await saved())[0].box.length, 2)
+  })
+
   it('off the editor, a drag from the note\'s bottom right corner moves it and never resizes it', async () => {
     const stored = (await saved())[0]
     const { right, bottom } = await box(TEXTS)
@@ -134,16 +244,22 @@ describe('Text Annotation\'s resize handle', { concurrency: false }, () => {
       const cell = Framework.app.grid.getCell(0, 0).elem.getBoundingClientRect()
       return [(y - cell.y) / cell.height, (x - cell.x) / cell.width]
     }, [right - 2, bottom - 2])
-    await mouseDrag(p, [corner, [corner[0] + 1, corner[1] + 1]])
+    const [from, to] = [await gridPoint(p, corner), await gridPoint(p, [corner[0] + 1, corner[1] + 1])]
+    await p.mouse.move(...from)
+    await p.mouse.down()
+    await p.mouse.move(...to, { steps: 8 })
+    await draw.frames(p)
+    assert.equal(await handleCount(), 0, 'the handles are off while the note moves')
+    await p.mouse.up()
     const moved = (await saved())[0]
     assert.deepEqual(moved.box, stored.box, 'the box is unchanged')
     assert.notDeepEqual(moved.at, stored.at, 'the note moved')
-    assert.equal(await handleCount(), 0)
+    assert.equal(await handleCount(), 4, 'the moved note is still the one selected')
   })
 
-  it('a press away from the open note finishes it, and its handle goes with it', async () => {
+  it('a press away from the open note finishes it, and its handles go with it', async () => {
     await p.mouse.dblclick(...await gridPoint(p, [NOTE_AT[0] + 1, NOTE_AT[1] + 1]))
-    assert.equal(await handleCount(), 1)
+    assert.equal(await handleCount(), 4)
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     assert.equal(await handleCount(), 0)
   })
