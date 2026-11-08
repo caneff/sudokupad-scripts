@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.16
+// @version      0.4.0
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,12 +17,13 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.16'
+  const VERSION = '0.4.0'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
   const MIN_FONT_PX = 8 // the smallest font f- goes to
   const MAX_FONT_PX = 200
+  const READABLE_CHARS = 90 // characters a line, on average, that rules too long to fit are widened to
   const REM_PX = 16
   const RULES_MIN = { width: 15 * REM_PX, height: 7 * REM_PX } // the pane's floor under a drag, css px
   const RESIZE_MS = 100
@@ -123,12 +124,15 @@
   }
 
   // `fits(width, font)` is true from some width up. f+ widens for the bigger font, which is the nudge on the
-  // automatic size at the width before it.
-  function autoPaneFit ({ natural, widthLimit: limit, ownPx, nudgePx, fits }) {
+  // automatic size at the width before it. Rules no width keeps from scrolling at SudokuPad's size get only the
+  // `readable(ownPx)` width, because a wider pane would shorten the scroll and lengthen every line.
+  function autoPaneFit ({ natural, widthLimit: limit, ownPx, nudgePx, fits, readable = () => Infinity }) {
     const narrowest = (from, fitsAt) => limit - largestSize((slack) => fitsAt(limit - slack), 0, limit - from)
-    let width = fits(natural, ownPx) ? natural : narrowest(natural, (w) => fits(w, ownPx))
+    const scrollsAnyway = !fits(limit, ownPx)
+    let width = Math.max(natural, Math.min(limit, readable(ownPx)))
+    if (!scrollsAnyway) width = fits(natural, ownPx) ? natural : narrowest(natural, (w) => fits(w, ownPx))
     const fontPx = nudgedAutoFontPx((n) => fits(width, n), ownPx, nudgePx)
-    if (nudgePx > 0 && !fits(width, fontPx)) width = narrowest(width, (w) => fits(w, fontPx))
+    if (nudgePx > 0 && !scrollsAnyway && !fits(width, fontPx)) width = narrowest(width, (w) => fits(w, fontPx))
     return { width, fontPx }
   }
 
@@ -192,7 +196,7 @@
   const isLandscape = (gameRect) => gameRect.width > gameRect.height
 
   // Every style property the fit writes on the pane; it also moves the controls column by its `translate`.
-  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight']
+  const FIT_STYLES = ['overflowWrap', 'width', 'maxWidth', 'boxSizing', 'fontSize', 'maxHeight', 'overflowY']
 
   function clearFit (rules, controls) {
     for (const k of FIT_STYLES) rules.style[k] = ''
@@ -202,7 +206,7 @@
   // Fits the pane to the room below it at SudokuPad's width, widening only as the rules need, and returns the
   // drag it applied. `limits` cap the automatic fit, never a drag. Returns null when the pane is not shown, with
   // the fit taken off, or has no room yet, with the last fit put back.
-  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box, limits = noLimits() }) {
+  function fitRulesPane ({ rules, container, controls, getStyle, viewport, boardRight, nudgePx, box, limits = noLimits(), readable }) {
     const before = FIT_STYLES.map((k) => rules.style[k])
     const movedBefore = controls.style.translate
     // Measure the pane as SudokuPad laid it out: the container wraps the pane, so a room read under the last
@@ -244,7 +248,8 @@
       widthLimit: rulesWidth({ natural, rulesLeft: home.left, scale, viewportWidth: viewport.width, maxWidth: limits.maxWidth }),
       ownPx,
       nudgePx,
-      fits: fitsAt
+      fits: fitsAt,
+      readable
     })
     const column = controls.getBoundingClientRect()
     const applied = clampDrag(box, {
@@ -261,6 +266,8 @@
     setPaneWidth(rules, fitted.width, natural)
     if (applied.w || applied.h) fitRulesFont(rules, fitted.room, ownPx, nudgePx)
     else rules.style.fontSize = `${fontPx}px`
+    // SudokuPad sets `overflow-y: scroll`, which draws an empty track beside rules that fit.
+    if (rules.scrollHeight <= rules.clientHeight) rules.style.overflowY = 'auto'
     return applied
   }
 
@@ -796,6 +803,7 @@
         const rules = rulesPane()
         const controls = controlsColumn()
         if (rules && controls) clearFit(rules, controls)
+        if (rules) rules.classList.remove(TEXT_CLASS)
         fitted = false
         showControls(false)
       }
@@ -867,6 +875,12 @@
   const CORNER_CURSOR = { ur: 'ne-resize', dl: 'sw-resize' }
   const cornerId = (corner) => `${ID}-drag-${corner}`
 
+  // On the pane while it is fitted, so the fit measures the text as it will be set. A stylesheet rule, not inline, leaves a
+  // reader's own text-spacing override the last word.
+  const TEXT_NODE = 3
+  const TEXT_CLASS = `${ID}-text`
+  const COPY_ICON = '.rules-copy' // SudokuPad's copy-rules icon
+
   // The corners and the font bar show while the pointer is over the pane, a corner or the bar, or a drag is under
   // way. The bar sits flush against the pane, so the pointer never leaves them on its way up.
   const SHOW_WHEN = `body.${SHOWN_CLASS}:is(.${DRAG_CLASS}, :has(.puzzle-rules:hover, .${CORNER_CLASS}:hover, #${FONT_BAR_ID}:hover))`
@@ -880,11 +894,15 @@
     body.${SHOWN_CLASS} #${FONT_BAR_ID} { display: flex; }
     ${SHOW_WHEN} #${FONT_BAR_ID} { visibility: visible; }
     ${SHOW_WHEN} .${CORNER_CLASS} { display: block; }
+    .puzzle-rules.${TEXT_CLASS} { line-height: 1.3; text-wrap: pretty; hyphens: auto; }
   `
 
   let nudgePx = 0
   let fitted = false // whether the fit's output may be on the pane
   let limits = noLimits()
+
+  let textWatch = null // a MutationObserver on the pane, made in `start`
+  let watchedPane = null
 
   const getStyle = (el) => window.getComputedStyle(el)
   const rulesPane = () => document.querySelector('.puzzle-rules')
@@ -934,19 +952,78 @@
     el.style.top = `${Math.max(0, Math.min(top, window.innerHeight - height))}px`
   }
 
-  // The font bar sits on the pane's top-left corner, which a widening pane leaves where it is, directly above the
-  // pane so it covers none of the rules, or directly below it when the pane reaches the window's top.
+  // The font bar sits at the pane's top-left corner, which a widening pane leaves where it is, directly above the
+  // pane so it covers none of the rules, or directly below it when the pane reaches the window's top. It starts
+  // right of SudokuPad's copy-rules icon, which hangs over that corner.
   function placeControls (rules) {
     const r = rules.getBoundingClientRect()
     const bar = document.getElementById(FONT_BAR_ID)
     const above = r.top - bar.offsetHeight
-    place(bar, r.left, above >= 0 ? above : r.bottom, bar.offsetWidth, bar.offsetHeight)
+    const copyIcon = document.querySelector(COPY_ICON)
+    place(bar, r.left + (copyIcon ? copyIcon.getBoundingClientRect().width : 0), above >= 0 ? above : r.bottom, bar.offsetWidth, bar.offsetHeight)
     place(document.getElementById(cornerId('ur')), r.right - CORNER_PX, r.top, CORNER_PX, CORNER_PX)
     place(document.getElementById(cornerId('dl')), r.left, r.bottom - CORNER_PX, CORNER_PX, CORNER_PX)
   }
 
   function showControls (on) {
     document.body.classList.toggle(SHOWN_CLASS, on)
+  }
+
+  // Other SudokuPad features write into the pane after it is shown, some without a layout pass (a support link, emoji images).
+  // The observer follows the pane if SudokuPad replaces it. Not the attributes: the fit's own writes are styles.
+  function watchText (rules) {
+    if (!textWatch || rules === watchedPane) return
+    textWatch.disconnect()
+    textWatch.observe(rules, { childList: true, subtree: true, characterData: true })
+    watchedPane = rules
+  }
+
+  // The text position under the pane's top-left content corner and how far its line sits above that corner, in visual px, or null
+  // when there is nothing to keep (the pane is at the top, or the browser cannot say).
+  function readingPlace (rules) {
+    if (rules.scrollTop === 0) return null
+    const r = rules.getBoundingClientRect()
+    const style = getStyle(rules)
+    const point = [r.left + (parseFloat(style.paddingLeft) || 0) + 2, r.top + (parseFloat(style.paddingTop) || 0) + 2]
+    const caret = document.caretPositionFromPoint?.(...point)
+    const at = caret && rules.contains(caret.offsetNode) ? { node: caret.offsetNode, offset: caret.offset } : null
+    const line = at && lineTop(at)
+    return line === null || line === undefined ? null : { ...at, above: contentTop(rules) - line }
+  }
+
+  function contentTop (rules) {
+    return rules.getBoundingClientRect().top + (parseFloat(getStyle(rules).paddingTop) || 0)
+  }
+
+  // The top of the line holding a text position; null where a position has no box, as a break element has none.
+  function lineTop ({ node, offset }) {
+    const range = document.createRange()
+    range.setStart(node, offset)
+    range.setEnd(node, node.nodeType === TEXT_NODE && offset < node.length ? offset + 1 : offset)
+    const { top, height } = range.getBoundingClientRect()
+    return height > 0 ? top : null
+  }
+
+  // After a refit, scrolls the pane so the line that was at its top is there again.
+  function keepReadingPlace (rules, place) {
+    if (!place) return
+    const line = lineTop(place)
+    if (line === null) return
+    const r = rules.getBoundingClientRect()
+    const scale = rules.offsetWidth > 0 ? r.width / rules.offsetWidth : 1
+    rules.scrollTop += (line - (contentTop(rules) - place.above)) / scale
+  }
+
+  // The pane's width in css px that sets the rules' average character READABLE_CHARS wide at `fontPx`. The average is the
+  // rules' own, measured as a canvas sets them, so it holds for any font and any text.
+  function readableWidth (rules, fontPx) {
+    const style = getStyle(rules)
+    const context = document.createElement('canvas').getContext('2d')
+    context.font = `${style.fontStyle} ${style.fontWeight} ${fontPx}px ${style.fontFamily}`
+    const text = rules.textContent
+    const average = text.length > 0 ? context.measureText(text).width / text.length : 0
+    const sides = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth']
+    return Math.ceil(READABLE_CHARS * average + sides.reduce((sum, k) => sum + (parseFloat(style[k]) || 0), 0))
   }
 
   function fitPage () {
@@ -957,12 +1034,15 @@
       const game = document.querySelector('.game')
       if (!game || !isLandscape(game.getBoundingClientRect())) {
         if (fitted) clearFit(rules, controls)
+        rules.classList.remove(TEXT_CLASS)
         fitted = false
         showControls(false)
         return
       }
       const board = document.getElementById('board')
       const box = draggedBox(dragKey())
+      const place = readingPlace(rules) // before the text class and the fit change the layout
+      rules.classList.add(TEXT_CLASS)
       const applied = fitRulesPane({
         rules,
         container: rulesContainer(rules, getStyle),
@@ -972,9 +1052,12 @@
         boardRight: board ? board.getBoundingClientRect().right : 0,
         nudgePx,
         box,
-        limits
+        limits,
+        readable: (fontPx) => readableWidth(rules, fontPx)
       })
       if (applied) Object.assign(box, applied) // a later drag starts from where this one stopped
+      keepReadingPlace(rules, place)
+      rulesRefit.run(() => watchText(rules))
       fitted = fitted || Boolean(applied)
       showControls(Boolean(applied))
       if (applied) placeControls(rules)
@@ -1062,7 +1145,9 @@
       fitPage()
       return out
     }))
-    window.addEventListener('resize', makeTrailing(fitPage, RESIZE_MS))
+    const refitSoon = makeTrailing(fitPage, RESIZE_MS)
+    window.addEventListener('resize', refitSoon)
+    rulesRefit.run(() => { textWatch = new window.MutationObserver(refitSoon) })
     fitPage()
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)

@@ -16,8 +16,8 @@ const script = readFileSync(new URL('../../auto-rules-resizer.user.js', import.m
 const RULES = 'Normal sudoku rules apply. Digits along an arrow sum to the digit in its circle. Cells separated by a white dot contain consecutive digits.'
 const LANDSCAPE = { width: 1920, height: 1080 }
 const SMALLER = { width: 1600, height: 900 }
-// Six times as long: too long for SudokuPad's own size at its own width, so the fit widens the pane.
-const LONG_RULES = Array(6).fill(RULES).join(' ')
+// Four times as long: too long for SudokuPad's own size at its own width, so the fit widens the pane.
+const LONG_RULES = Array(4).fill(RULES).join(' ')
 const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
 const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
 const MAX_WIDTH_INPUT = '#auto-rules-resizer-max-width'
@@ -294,19 +294,19 @@ describe('the max auto width and height', { concurrency: false }, () => {
 
     // Saved as the script saves it, so a start that skipped the envelope would read no limit.
     before(async () => {
-      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved({ v: 0, data: 600 }, null), LONG_RULES))
+      ;({ context, p, errors } = await rulesPage(LANDSCAPE, saved({ v: 0, data: 500 }, null), LONG_RULES))
       await inject(p)
     })
     after(async () => { await context.close() })
 
     it('the automatic width stops at the max, with the rules still scrolling', async () => {
-      assert.equal(await settle(async () => (await pane(p)).cssWidth, 600), 600)
+      assert.equal(await settle(async () => (await pane(p)).cssWidth, 500), 500)
       assert.equal((await pane(p)).scrolls, true)
     })
 
     it('a corner drag goes past the max width', async () => {
       await dragCorner(p, 'ur', 120, 0)
-      const wider = await settle(async () => (await pane(p)).cssWidth > 600, true)
+      const wider = await settle(async () => (await pane(p)).cssWidth > 500, true)
       assert.equal(wider, true, `width ${(await pane(p)).cssWidth} after the drag`)
     })
 
@@ -359,8 +359,8 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '')
       assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
       await p.locator(MAX_WIDTH_INPUT).click()
-      await p.keyboard.type('600')
-      assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '600')
+      await p.keyboard.type('500')
+      assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
       const cell = await p.evaluate(() => Framework.app.grid.getCell(0, 2).value)
       assert.equal(cell === undefined || cell === null || cell === 0 || cell === '', true, `cell holds ${cell}`)
     })
@@ -368,22 +368,22 @@ describe('the max auto width and height', { concurrency: false }, () => {
     it('Save keeps the limits and applies them at once', async () => {
       await p.locator(MAX_HEIGHT_INPUT).fill('50')
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
-      assert.equal(await data(MAX_WIDTH_KEY), 600)
+      assert.equal(await data(MAX_WIDTH_KEY), 500)
       assert.equal(await data(MAX_HEIGHT_KEY), 50)
-      assert.equal(await settle(async () => (await pane(p)).cssWidth, 600), 600)
+      assert.equal(await settle(async () => (await pane(p)).cssWidth, 500), 500)
     })
 
     it('a box holding no usable number keeps the saved limit', async () => {
       await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
       await p.locator(MAX_WIDTH_INPUT).evaluate((el) => { el.value = '0' })
       await closeDialogWith(p, 'Save', MAX_WIDTH_INPUT)
-      assert.equal(await data(MAX_WIDTH_KEY), 600)
+      assert.equal(await data(MAX_WIDTH_KEY), 500)
       assert.equal(await data(MAX_HEIGHT_KEY), 50)
     })
 
     it('shows the saved values on reopening, and clearing both and saving removes the keys and lifts the cap', async () => {
       await openScriptDialog(p, 'Rules Resizer', MAX_WIDTH_INPUT)
-      assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '600')
+      assert.equal(await p.inputValue(MAX_WIDTH_INPUT), '500')
       assert.equal(await p.inputValue(MAX_HEIGHT_INPUT), '50')
       await p.locator(MAX_WIDTH_INPUT).fill('')
       await p.locator(MAX_HEIGHT_INPUT).fill('')
@@ -391,7 +391,7 @@ describe('the max auto width and height', { concurrency: false }, () => {
       assert.equal(await data(MAX_WIDTH_KEY), null)
       assert.equal(await data(MAX_HEIGHT_KEY), null)
       assert.equal(await settle(async () => (await pane(p)).scrolls, false), false, 'uncapped: widened until it stops scrolling')
-      assert.equal((await pane(p)).cssWidth > 600, true)
+      assert.equal((await pane(p)).cssWidth > 500, true)
     })
 
     it('Cancel saves nothing', async () => {
@@ -404,6 +404,201 @@ describe('the max auto width and height', { concurrency: false }, () => {
     it('the page raised no error', () => {
       assert.deepEqual(errors, [])
     })
+  })
+})
+
+// About 5,600 characters: no width the window allows stops the scroll.
+const VERY_LONG_RULES = Array(40).fill(RULES).join(' ')
+const READABLE_CHARS = 90
+const COPY_ICON = '.rules-copy'
+
+// Characters a line on average and the line height in css px, from the pane's text and its laid-out height.
+const lineStats = (p) => p.evaluate(() => {
+  const rules = document.querySelector('.puzzle-rules')
+  const style = window.getComputedStyle(rules)
+  const lineHeight = parseFloat(style.lineHeight)
+  const content = rules.scrollHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+  const lines = Math.round(content / lineHeight)
+  return { lineHeight, font: parseFloat(style.fontSize), charsPerLine: rules.textContent.length / lines }
+})
+
+describe('the text of the fitted pane', { concurrency: false }, () => {
+  let context, p, errors
+
+  before(async () => {
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE))
+    await inject(p)
+    await settle(async () => (await fontPx(p)) > SUDOKUPAD_FONT_PX, true)
+  })
+  after(async () => { await context.close() })
+
+  it('has a line height of 1.3 from the stylesheet, and the fit still leaves nothing to scroll', async () => {
+    const text = await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      const style = window.getComputedStyle(rules)
+      return { inline: rules.style.lineHeight, lineHeight: parseFloat(style.lineHeight), font: parseFloat(style.fontSize) }
+    })
+    assert.equal(text.inline, '', 'not an inline style, so a reader\'s own override can win')
+    assert.equal(Math.abs(text.lineHeight - 1.3 * text.font) < 0.01, true, `line height ${text.lineHeight} at font ${text.font}`)
+    assert.equal((await pane(p)).scrolls, false)
+  })
+
+  it('sets the text with pretty wrapping and automatic hyphens', async () => {
+    const style = await p.evaluate(() => {
+      const s = window.getComputedStyle(document.querySelector('.puzzle-rules'))
+      return { wrap: s.textWrapStyle, hyphens: s.hyphens }
+    })
+    assert.deepEqual(style, { wrap: 'pretty', hyphens: 'auto' })
+  })
+
+  it('keeps the font bar off SudokuPad\'s copy icon', async () => {
+    const boxes = await p.evaluate((icon) => {
+      const rect = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom } }
+      return { icon: rect(document.querySelector(icon)), bar: rect(document.getElementById('auto-rules-resizer-font')) }
+    }, COPY_ICON)
+    const apart = boxes.bar.left >= boxes.icon.right || boxes.bar.right <= boxes.icon.left || boxes.bar.top >= boxes.icon.bottom || boxes.bar.bottom <= boxes.icon.top
+    assert.equal(apart, true, JSON.stringify(boxes))
+  })
+
+  it('refits when the rules change with no resize, as a support link or emoji images do', async () => {
+    const before = (await pane(p)).cssWidth
+    await p.evaluate((extra) => {
+      document.querySelector('.puzzle-rules').insertAdjacentHTML('afterbegin', `<a href="#">Support</a> ${extra} `)
+    }, RULES.repeat(3))
+    const wider = await settle(async () => (await pane(p)).cssWidth > before, true)
+    assert.equal(wider, true, `width ${(await pane(p)).cssWidth}, was ${before}`)
+    assert.equal((await pane(p)).scrolls, false)
+  })
+
+  it('leaves a reader\'s own line height the last word, and the fit follows it', async () => {
+    await p.addStyleTag({ content: '.puzzle-rules { line-height: 1.5 !important }' })
+    await clickFont(p, 'f-')
+    const spacing = await settle(async () => {
+      const { lineHeight, font } = await lineStats(p)
+      return Math.round((lineHeight / font) * 100) / 100
+    }, 1.5)
+    assert.equal(spacing, 1.5)
+    assert.equal((await pane(p)).scrolls, false, 'the fit measured the larger line height')
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('the scrollbar track (a classic scrollbar, as Windows Chrome draws)', { concurrency: false }, () => {
+  let classic
+  before(async () => { classic = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] }) })
+  after(async () => { await classic?.close() })
+
+  const trackWidth = (p) => p.evaluate(() => {
+    const rules = document.querySelector('.puzzle-rules')
+    return { track: rules.offsetWidth - rules.clientWidth, overflowY: window.getComputedStyle(rules).overflowY }
+  })
+
+  async function classicPage (rules) {
+    const opened = await openPage(classic, { contextOptions: { viewport: LANDSCAPE } })
+    await startPuzzle(opened.p)
+    await opened.p.evaluate((text) => {
+      Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules: text })
+      Framework.app.resize()
+    }, rules)
+    return opened
+  }
+
+  it('is gone when the rules fit, and SudokuPad\'s scroll stays when they still scroll', async () => {
+    const short = await classicPage(RULES)
+    const longer = await classicPage(VERY_LONG_RULES)
+    try {
+      assert.equal((await trackWidth(short.p)).track > 0, true, 'SudokuPad\'s own pane draws a track')
+      await inject(short.p)
+      assert.deepEqual(await settle(() => trackWidth(short.p), { track: 0, overflowY: 'auto' }), { track: 0, overflowY: 'auto' })
+      await inject(longer.p)
+      const scrolling = await settle(async () => (await trackWidth(longer.p)).overflowY, 'scroll')
+      assert.equal(scrolling, 'scroll')
+      assert.equal((await trackWidth(longer.p)).track > 0, true)
+    } finally {
+      await short.context.close()
+      await longer.context.close()
+    }
+  })
+})
+
+describe('very long rules (about 5,600 characters)', { concurrency: false }, () => {
+  let context, p, errors
+
+  before(async () => {
+    ;({ context, p, errors } = await rulesPage(LANDSCAPE, null, VERY_LONG_RULES))
+    await inject(p)
+    await stable(() => pane(p))
+  })
+  after(async () => { await context.close() })
+
+  it('are widened to 90 characters a line or fewer, and still scroll', async () => {
+    const now = await pane(p)
+    assert.equal(now.scrolls, true)
+    assert.equal(now.font, SUDOKUPAD_FONT_PX)
+    const { charsPerLine } = await lineStats(p)
+    assert.equal(charsPerLine <= READABLE_CHARS, true, `${charsPerLine} characters a line`)
+    assert.equal(charsPerLine > READABLE_CHARS - 20, true, `${charsPerLine} characters a line: widened to the measure, not left narrow`)
+  })
+
+  it('keep the line at the top at the top after a resize', async () => {
+    // The text offset of the line under the pane's top-left content corner.
+    const topOffset = () => p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      const r = rules.getBoundingClientRect()
+      const style = window.getComputedStyle(rules)
+      const at = document.caretPositionFromPoint(r.left + parseFloat(style.paddingLeft) + 2, r.top + parseFloat(style.paddingTop) + 2)
+      return at.offset
+    })
+    await p.evaluate(() => {
+      const rules = document.querySelector('.puzzle-rules')
+      rules.scrollTop = (rules.scrollHeight - rules.clientHeight) * 0.4
+    })
+    const heldAt = await topOffset()
+    assert.equal(heldAt > 1000, true, `scrolled to text offset ${heldAt}`)
+    await p.setViewportSize(SMALLER)
+    const moved = await settle(async () => (await pane(p)).top !== undefined && Math.abs((await topOffset()) - heldAt) <= 120, true)
+    const after = await topOffset()
+    assert.equal(moved, true, `the top line was at text offset ${heldAt} and is at ${after}`)
+    await p.setViewportSize(LANDSCAPE)
+    const back = await settle(async () => Math.abs((await topOffset()) - heldAt) <= 120, true)
+    assert.equal(back, true, `back in the first window: text offset ${await topOffset()}, was ${heldAt}`)
+  })
+
+  it('the page raised no error', () => {
+    assert.deepEqual(errors, [])
+  })
+})
+
+describe('the first paint of the fit (#542, row 10)', { concurrency: false }, () => {
+  it('never shows SudokuPad\'s size once the script is in: the fit runs in the same task as the layout', async () => {
+    const { context, p, errors } = await openPage(browser, { contextOptions: { viewport: LANDSCAPE } })
+    try {
+      await startPuzzle(p)
+      await inject(p)
+      await p.evaluate(() => {
+        window.__frames = []
+        const tick = () => {
+          const rules = document.querySelector('.puzzle-rules')
+          if (rules && rules.offsetWidth > 0) window.__frames.push(parseFloat(window.getComputedStyle(rules).fontSize))
+          window.requestAnimationFrame(tick)
+        }
+        window.requestAnimationFrame(tick)
+      })
+      await p.evaluate((rules) => {
+        Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
+        Framework.app.resize()
+      }, RULES)
+      await settle(async () => (await p.evaluate(() => window.__frames.length)) >= 10, true)
+      const frames = await p.evaluate(() => window.__frames)
+      assert.equal(frames.length >= 10, true, `${frames.length} frames with the pane shown`)
+      assert.deepEqual(frames.filter((font) => font === SUDOKUPAD_FONT_PX), [], 'frames at SudokuPad\'s own size')
+      assert.deepEqual(errors, [])
+    } finally {
+      await context.close()
+    }
   })
 })
 
