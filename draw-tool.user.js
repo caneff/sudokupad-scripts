@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.32.2
+// @version      0.33.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.32.2'
+  const VERSION = '0.33.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -217,6 +217,12 @@
   const TEXT_CLASS = 'draw-tool-text'
   const TEXT_BACKGROUND_CLASS = 'draw-tool-text-bg'
   const SELECTED_CLASS = 'draw-tool-selected'
+  const CHECK_CLASS = 'draw-tool-check'
+  const CHECK_DONE_CLASS = 'draw-tool-check-done'
+  // A ticked item's line fades to this share of the note's own look.
+  const DONE_OPACITY = 0.6
+  // A note being moved is drawn at this share of its own opacity, so the board shows through.
+  const MOVING_OPACITY = 0.6
   // The notes' two groups in the layer: the notes on the board, in board units under the board's own transform, and the fixed notes, in screen pixels,
   // drawn above them.
   const BOARD_NOTES_CLASS = 'draw-tool-board'
@@ -338,8 +344,36 @@
   }
 
   const BULLET_MARK = /^[-*] /
-  // A bullet line's first run is the bullet itself, `{ text: '•', bullet: true }`.
-  const parseBlock = (line) => BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
+  const CHECK_MARK = /^- \[([ xX])\] /
+  // A bullet line's first run is the bullet itself, `{ text: '•', bullet: true }`. A checklist line takes the bullet's place with `{ text: '☐' | '☑', bullet: true, checked }`.
+  function parseBlock (line) {
+    const check = CHECK_MARK.exec(line)
+    if (check) {
+      const checked = check[1] !== ' '
+      return [{ text: checked ? '☑' : '☐', bullet: true, checked }, ...parseLine(line.slice(check[0].length))]
+    }
+    return BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
+  }
+
+  function toggledCheck (text, index) {
+    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, state) => `- [${state === ' ' ? 'x' : ' '}] `) : line).join('\n')
+  }
+
+  // Symbols typed as ASCII. `sum` is a word of its own, so "summary" stays.
+  const SYMBOLS = { '->': '→', '<-': '←', '!=': '≠', '<=': '≤', '>=': '≥', sum: 'Σ' }
+  const SYMBOL_PATTERN = /->|<-|!=|<=|>=|\bsum\b/g
+  // A note that ends in the word `sum` has no character typed after it to complete it, so closing the note does.
+  const closedSymbols = (text) => text.replace(/\bsum$/, SYMBOLS.sum)
+
+  // The symbol the character just typed before `caret` completed, or null. A pair is complete at the caret; `sum` only once a character that is not part of a word follows it.
+  function symbolJustTyped (text, caret) {
+    for (const found of text.slice(0, caret).matchAll(SYMBOL_PATTERN)) {
+      const end = found.index + found[0].length
+      if (end === caret && found[0] !== 'sum') return { start: found.index, end, symbol: SYMBOLS[found[0]] }
+      if (end === caret - 1 && found[0] === 'sum') return { start: found.index, end, symbol: SYMBOLS.sum }
+    }
+    return null
+  }
 
   const isBullet = (runs) => Boolean(runs[0]?.bullet)
   const BULLET_INDENT_EM = 1.2
@@ -548,6 +582,8 @@
   const textSizeFor = (width) => TEXT_SIZE_PER_WIDTH * width + TEXT_SIZE_BASE
   const widthFor = (size) => (size - TEXT_SIZE_BASE) / TEXT_SIZE_PER_WIDTH
   const itemOpacity = (item) => item.opacity ?? DEFAULT_OPACITY
+  // A note's opacity as the CSS number.
+  const noteOpacity = (item) => itemOpacity(item) / 100
   const readOpacity = (saved) => isOpacity(saved) ? saved : DEFAULT_OPACITY
 
   // A color or background the notes do not share is null; a slider must show one value, so it shows the first note's (the oldest).
@@ -1518,7 +1554,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1599,8 +1635,8 @@
       maxWidth: limit,
       maxHeight: limit,
       color: itemColor(item.color),
-      opacity: String(itemOpacity(item) / 100),
-      [NOTE_OPACITY_VAR]: String(itemOpacity(item) / 100),
+      opacity: String(noteOpacity(item)),
+      [NOTE_OPACITY_VAR]: String(noteOpacity(item)),
       backgroundColor: item.bg ? boxFill(boxColor, itemColor(item.color)) : 'transparent',
       boxShadow: item.bg ? frameShadow(frame) : 'none',
       textShadow: item.bg ? 'none' : haloShadow(outline, PAGE_COLOR),
@@ -1633,12 +1669,23 @@
     return element
   }
 
+  function checkBox (checked, lineIndex) {
+    const box = document.createElement('span')
+    box.className = checked ? `${CHECK_CLASS} ${CHECK_DONE_CLASS}` : CHECK_CLASS
+    box.dataset.line = String(lineIndex)
+    return box
+  }
+
   // A bullet line is a block whose first line hangs out over the indent: the bullet sits in the indent, wrapped lines start at its right.
-  function bulletElement ([mark, ...runs]) {
+  function bulletElement ([mark, ...runs], lineIndex) {
     const line = document.createElement('div')
     Object.assign(line.style, { paddingLeft: `${BULLET_INDENT_EM}em`, textIndent: `-${BULLET_INDENT_EM}em` })
     const bullet = document.createElement('span')
-    bullet.textContent = mark.text
+    if (mark.checked === undefined) bullet.textContent = mark.text
+    else {
+      bullet.append(checkBox(mark.checked, lineIndex))
+      if (mark.checked) Object.assign(line.style, { textDecoration: 'line-through', opacity: String(DONE_OPACITY) })
+    }
     Object.assign(bullet.style, { display: 'inline-block', width: `${BULLET_INDENT_EM}em`, textIndent: '0' })
     line.append(bullet, ...runs.map(runElement))
     return line
@@ -1650,7 +1697,7 @@
   // A finished note shows the styled runs, lines joined by line breaks.
   function noteContent (text) {
     const lines = parsedText(text)
-    return lines.flatMap((runs, i) => [...(i && breaksBefore(runs, lines[i - 1]) ? ['\n'] : []), ...(isBullet(runs) ? [bulletElement(runs)] : runs.map(runElement))])
+    return lines.flatMap((runs, i) => [...(i && breaksBefore(runs, lines[i - 1]) ? ['\n'] : []), ...(isBullet(runs) ? [bulletElement(runs, i)] : runs.map(runElement))])
   }
 
   // The note open for typing shows its text as typed, markers and all.
@@ -1789,6 +1836,9 @@
     // The fill is a background image because the note's inline background color, empty or its box, wins over any stylesheet color.
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) { pointer-events: auto; cursor: move; }`,
     `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}, .${SELECTED_CLASS}):hover { ${hoverLook(35, 4)} }`,
+    `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
+    `.${CHECK_DONE_CLASS}::after { content: ''; position: absolute; left: 0.2em; top: -0.1em; width: 0.25em; height: 0.5em; border: solid currentColor; border-width: 0 2px 2px 0; transform: rotate(45deg); }`,
+    `.${ACTIVE_CLASS} .${TEXT_CLASS}:not(.${TEXT_BOX_CLASS}) .${CHECK_CLASS} { cursor: pointer; }`,
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     // The outline is a box of its own in the layer, since a note's opacity would fade an outline drawn on the note itself.
     `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: ${SELECTION_OUTLINE_PX}px solid ${PANEL_COLOR}; outline-offset: ${SELECTION_OFFSET_PX}px; }`,
@@ -2647,13 +2697,35 @@
       else finishText()
     }))
     // Typing grows the box, which carries the handles and may start the text scrolling.
-    element.addEventListener('input', under(textTool, () => { if (editing && editing.element === element) showEditing(boardMap()) }))
+    element.addEventListener('input', under(textTool, (event) => {
+      if (!editing || editing.element !== element) return
+      // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
+      if (event.inputType === 'insertText') replaceTypedSymbol()
+      showEditing(boardMap())
+    }))
     editing = { index, item, element }
     drawingLayer().append(element)
     redraw()
     element.focus()
     window.getSelection().selectAllChildren(element)
     window.getSelection().collapseToEnd()
+  }
+
+  // A symbol the last typed character completed is typed over with its sign, as an insertion, so the caret stays after it and the browser's Undo can give the typed characters back.
+  function replaceTypedSymbol () {
+    const selection = window.getSelection()
+    const { anchorNode, anchorOffset } = selection
+    if (!selection.isCollapsed || anchorNode?.nodeType !== window.Node.TEXT_NODE || !editing.element.contains(anchorNode)) return
+    const found = symbolJustTyped(anchorNode.data, anchorOffset)
+    if (!found) return
+    const range = document.createRange()
+    range.setStart(anchorNode, found.start)
+    range.setEnd(anchorNode, found.end)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    document.execCommand('insertText', false, found.symbol)
+    // `sum` ends before the character typed after it, which the insertion carried the caret behind.
+    if (found.end !== anchorOffset) selection.modify('move', 'forward', 'character')
   }
 
   // The focus went to a panel button (`caret` was saved then, null with no caret); the note takes it back, once.
@@ -2688,7 +2760,8 @@
   function finishText () {
     const { index, item, element } = closeEditing()
     const before = index === -1 ? '' : drawing[index].text
-    const text = typedText(element)
+    const typed = typedText(element)
+    const text = typed === before ? typed : closedSymbols(typed)
     const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
       if (text === '') drawing.splice(index, 1)
@@ -2725,6 +2798,15 @@
   // pointer is released, even when the slider did not move.
   function keepNoteFocus (event) {
     if (editing && isPanelControl(event.target) && !event.target.closest(`.${SLIDERS_CLASS} input`)) event.preventDefault()
+  }
+
+  // A press on a checklist box ticks or unticks its item and saves the note; it opens no note and starts no drag.
+  function tickCheck (note, box) {
+    const index = drawing.findIndex((item) => item[NOTE_ELEMENT] === note)
+    if (index === -1) return
+    drawing[index] = { ...drawing[index], text: toggledCheck(drawing[index].text, Number(box.dataset.line)) }
+    saveNotes()
+    redraw()
   }
 
   // A drag ends its move or its selection rectangle on its release; a press that never moved does nothing more, unless `click` is given to run it.
@@ -2796,6 +2878,7 @@
       const [x, y] = screenPoint(item, map.toScreen)
       const [tx, ty] = item.fixed ? [dx, dy] : map.toBoard([x + dx, y + dy]).map((v, i) => v - item.at[i])
       element.style.translate = `${tx}px ${ty}px`
+      element.style.opacity = String(noteOpacity(item) * MOVING_OPACITY)
     }
   }
 
@@ -2834,7 +2917,7 @@
 
   function clearMove (d) {
     showGuides(null)
-    for (const { item } of d.move) if (item[NOTE_ELEMENT]) item[NOTE_ELEMENT].style.translate = ''
+    for (const { item } of d.move) if (item[NOTE_ELEMENT]) Object.assign(item[NOTE_ELEMENT].style, { translate: '', opacity: String(noteOpacity(item)) })
   }
 
   // The moves that reached the drag since the last frame, in order. A move goes no further than the last point that leaves every note reachable.
@@ -3091,6 +3174,11 @@
       // A press on a note moves the selection once it drags, after selecting just that note when it was not selected; with Shift it only adds or removes the note on its release.
       // A press on empty space draws a selection rectangle once it drags.
       const note = noteOf(event)
+      const box = event.target.closest(`.${CHECK_CLASS}`)
+      if (note && box) {
+        tickCheck(note, box)
+        return true
+      }
       const start = note ? drawing.findIndex((item) => item[NOTE_ELEMENT] === note) : -1
       const shift = event.shiftKey
       if (start !== -1 && !shift && !selected.includes(start)) select([start])
