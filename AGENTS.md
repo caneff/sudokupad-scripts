@@ -64,13 +64,12 @@ Before you write or review code: read `CODING_STANDARDS.md`.
   its startup changed); the full suite runs once, at the controller's merge check.
 - When your change alters behavior on purpose, first change the live tests that check the old behavior, then run them: a
   wrong expectation waits out its time limit.
-- `npm run test:tampermonkey` (`live/tampermonkey/`) installs every script into a real Tampermonkey, over main's copy as an
-  update, and checks each runs on the puzzle page. It needs `tampermonkey.net` and Google's CRX endpoint, so it stays out
-  of `npm test`, `npm run test:live` and `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==`
-  header; the controller's merge check runs it then too, and the daily watch every night.
-- A PR names as owed only what that test does not cover: the Chrome Web Store install, the browser's own prompts and
-  Tampermonkey's scheduled update check. `crackingthecryptic.com` only redirects to SudokuPad now, so no PR, ticket or
-  report names it as owed (Chris, 2026-11-07).
+- `npm run test:tampermonkey` installs every script into a real Tampermonkey; `live/README.md` § The Tampermonkey test
+  says what it covers and needs. It needs the network, so it stays out of `npm test`, `npm run test:live` and
+  `land.testcmd`. Run it when a change touches any line of a `// ==UserScript==` header; the controller's merge check
+  runs it then too.
+- A PR names as owed only what that section says the test does not cover. `crackingthecryptic.com` only redirects to
+  SudokuPad now, so no PR, ticket or report names it as owed (Chris, 2026-11-07).
 
 `npm run lint` runs StandardJS over the repo, excluding `docs/research/`. Run it before you hand off a change:
 `land.testcmd` runs only the tests, and no hook runs the linter. GitHub does: `.github/workflows/ci.yml` runs `npm ci`, `npm test`

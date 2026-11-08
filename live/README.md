@@ -53,12 +53,14 @@ back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow
 Tampermonkey in Playwright's Chromium, the way a user does: open the script's URL, click Install. Each script's copy on
 main goes in first, from `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it.
 Tampermonkey must offer the second as an update and its dashboard must list each script once, at the checkout's
-`@version`, which is what a changed `@name` or `@namespace` breaks. Then each script must run on the puzzle page, served
-from the recording. The recipe and its caveats are `docs/research/tampermonkey-in-playwright.md`.
+`@version`, which is what a changed `@name` or `@namespace` breaks. Then each script must start on the puzzle page,
+served from the recording, and its representative action from `live/scripts.mjs` must work. The recipe and its caveats are `docs/research/tampermonkey-in-playwright.md`.
 
 - Tampermonkey is closed-source freeware: its CRX is fetched at run time from Google's update endpoint into
   `tampermonkey/` beside the recording, again once it is a day old, and never committed.
-- It needs `tampermonkey.net` and the CRX endpoint, so it stays out of `npm test` and `npm run test:live`.
+- It needs `tampermonkey.net`, `raw.githubusercontent.com` and Google's CRX endpoint (`clients2.google.com`), so it
+  stays out of `npm test` and `npm run test:live`.
 - It runs when a change touches any line of a `// ==UserScript==` header, at the controller's merge check for such a PR,
-  and every night in the daily watch, after `watch:live`, so a Tampermonkey or Chrome change shows up within a day.
+  and every night in the daily watch, after `watch:live`, so a new Tampermonkey shows up within a day. Chromium changes
+  only when `package-lock.json`'s Playwright does.
 - It does not cover the Chrome Web Store install, the browser's own prompts or Tampermonkey's scheduled update check.

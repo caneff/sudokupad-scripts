@@ -3,12 +3,12 @@
 // and its caveats.
 //
 // Tampermonkey is closed-source freeware with no redistribution grant, so its CRX is fetched from Google's update
-// endpoint at run time into the live cache, beside the SudokuPad recording, and never committed. A copy older than
-// a day is fetched again, so a new Tampermonkey shows up in the nightly run.
+// endpoint at run time into the live cache, beside the SudokuPad recording, and never committed. A copy a day old is
+// fetched again. live/README.md § The Tampermonkey test has what the test covers and needs.
 
 import { chromium } from 'playwright'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -17,14 +17,12 @@ import { harPath, MAX_AGE_MS } from '../cache.mjs'
 // Tampermonkey's Chrome Web Store id (its FAQ Q406). An unpacked copy gets another id, derived from its path.
 const STORE_ID = 'dhdgffkkebhmkfjojejmpbldmpobfkfo'
 // `prodversion` must be at least the extension's `minimum_chrome_version` (120 for 5.5.1).
-export const CRX_URL = `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=140.0.0.0&acceptformat=crx3&x=id%3D${STORE_ID}%26uc`
+const CRX_URL = `https://clients2.google.com/service/update2/crx?response=redirect&prodversion=140.0.0.0&acceptformat=crx3&x=id%3D${STORE_ID}%26uc`
 const FETCH_MS = 60000
 // How long Tampermonkey gets to open its install page for a URL before the URL is opened again.
 const ASK_MS = 5000
 const ASK_TRIES = 6
 const PAGE_MS = 30000
-
-const cacheDir = (env, home) => join(dirname(harPath(env, home)), 'tampermonkey')
 
 // The zip inside a CRX3 file: a CRX3 is `Cr24`, version 3 and a header length, all little-endian 32-bit, then
 // that many bytes of signed header, then the zip. Throws on anything else, such as an error page.
@@ -37,25 +35,50 @@ export function crxZip (bytes) {
   return bytes.subarray(start)
 }
 
-// The unpacked Tampermonkey's directory, fetched and unpacked first when it is missing or older than a day.
-export async function ensureTampermonkey ({ env = process.env, home = homedir() } = {}) {
-  const dir = cacheDir(env, home)
-  const unpacked = join(dir, 'extension')
+// The unpacked copy the `fetched` stamp names, or null when the stamp is missing or a day old, or the copy has no
+// manifest.
+function freshCopy (dir) {
   const stamp = join(dir, 'fetched')
-  let fresh = false
-  try { fresh = Date.now() - statSync(stamp).mtimeMs <= MAX_AGE_MS } catch (e) { if (e.code !== 'ENOENT') throw e }
-  if (fresh) return unpacked
-  console.error(`tampermonkey: fetching Tampermonkey into ${unpacked}`)
+  try {
+    if (Date.now() - statSync(stamp).mtimeMs > MAX_AGE_MS) return null
+    const unpacked = join(dir, readFileSync(stamp, 'utf8').trim())
+    statSync(join(unpacked, 'manifest.json'))
+    return unpacked
+  } catch (e) {
+    if (e.code === 'ENOENT') return null
+    throw e
+  }
+}
+
+// The unpacked Tampermonkey's directory, fetched first when there is no fresh copy. Each version unpacks into its
+// own `extension-<version>`, renamed into place whole and never deleted, because the cache is shared by every
+// worktree and another run's browser may have a copy loaded.
+async function ensureTampermonkey () {
+  const dir = join(dirname(harPath(process.env, homedir())), 'tampermonkey')
+  const cached = freshCopy(dir)
+  if (cached) return cached
+  console.error(`tampermonkey: fetching Tampermonkey into ${dir}`)
   const response = await fetch(CRX_URL, { signal: AbortSignal.timeout(FETCH_MS) })
   if (!response.ok) throw new Error(`${CRX_URL} answered ${response.status}`)
   const zip = crxZip(Buffer.from(await response.arrayBuffer()))
-  rmSync(unpacked, { recursive: true, force: true })
-  mkdirSync(unpacked, { recursive: true })
-  const zipFile = join(dir, 'tampermonkey.zip')
-  writeFileSync(zipFile, zip)
-  try { execFileSync('unzip', ['-q', '-o', zipFile, '-d', unpacked]) } finally { rmSync(zipFile, { force: true }) }
-  writeFileSync(stamp, `${JSON.parse(readFileSync(join(unpacked, 'manifest.json'), 'utf8')).version}\n`)
-  return unpacked
+  mkdirSync(dir, { recursive: true })
+  const work = mkdtempSync(join(dir, 'unpacking-'))
+  try {
+    const zipFile = join(work, 'tampermonkey.zip')
+    const files = join(work, 'extension')
+    writeFileSync(zipFile, zip)
+    execFileSync('unzip', ['-q', zipFile, '-d', files])
+    const name = `extension-${JSON.parse(readFileSync(join(files, 'manifest.json'), 'utf8')).version}`
+    try { renameSync(files, join(dir, name)) } catch (e) {
+      // Another run unpacked this version first; its copy is the same and stays.
+      if (e.code !== 'ENOTEMPTY' && e.code !== 'EEXIST') throw e
+    }
+    writeFileSync(join(work, 'fetched'), `${name}\n`)
+    renameSync(join(work, 'fetched'), join(dir, 'fetched'))
+    return join(dir, name)
+  } finally {
+    rmSync(work, { recursive: true, force: true })
+  }
 }
 
 // Serves `files` (a name -> text map) on 127.0.0.1 as text/plain, as raw.githubusercontent.com serves a script.

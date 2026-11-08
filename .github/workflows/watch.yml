@@ -48,7 +48,7 @@ jobs:
         with:
           path: ${{ env.CACHE_PATH }}
           key: ${{ env.CACHE_KEY }}
-      # After the save, so Tampermonkey is never in the cache and each night fetches the current one: a Tampermonkey or
-      # Chrome change shows up within a day. It runs after a red watch too (live/README.md § The Tampermonkey test).
+      # After the save, so Tampermonkey is never in the cache and each night fetches the current one: a new Tampermonkey
+      # shows up within a day. It runs after a red watch too (live/README.md § The Tampermonkey test).
       - run: npm run test:tampermonkey
         if: ${{ !cancelled() }}
