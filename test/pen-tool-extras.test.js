@@ -2059,7 +2059,7 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
 
 // The requirement table: which SudokuPad internal each feature (an install step, the saved settings, the settings dialog) cannot work without.
 const FRAMEWORK_FNS = ['getApp', 'getData', 'setData', 'removeData', 'addSetting', 'showDialog', 'closeDialog']
-const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint', 'handleDragEnd']
+const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
 // SudokuPad's roots with every internal the features need.
 const completeSudokuPad = () => {
   class Renderer {
@@ -2095,7 +2095,6 @@ const LACKING_ALONE = [
   ['ToolPen.tool.handleToolEnter', (s) => { delete s.ToolPen.tool.handleToolEnter }, ['pages']],
   ['ToolPen.tool.handleToolExit', (s) => { delete s.ToolPen.tool.handleToolExit }, ['pages']],
   ['ToolPen.tool.drawLineHint', (s) => { delete s.ToolPen.tool.drawLineHint }, ['dragHint']],
-  ['ToolPen.tool.handleDragEnd', (s) => { delete s.ToolPen.tool.handleDragEnd }, ['dragHint']],
   ['Framework.app.grid.getCell', (s) => { delete s.Framework.app.grid.getCell }, ['marks', 'lineErase', 'markPreview']],
   ['Framework.app.puzzle.cells', (s) => { delete s.Framework.app.puzzle.cells }, ['arrowLines', 'marks', 'lineErase', 'markPreview']],
   ['Framework.app.grid.rows', (s) => { s.Framework.app.grid.rows = '9' }, ['marks', 'lineErase', 'markPreview']],

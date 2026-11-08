@@ -10,6 +10,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, SKIP_LINE, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
@@ -280,6 +281,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         })
         assert.equal(pulldown, kase.pulldown || 'hidden', 'SudokuPad\'s line mode pulldown')
       })
+
+      // The faint mark under the pointer previews this script's click, so it goes with the marks step and stays when nothing is broken.
+      if (kase.off === 'marks' || kase.off === NOTHING_OFF) {
+        it('the faint mark under the pointer shows only while the marks step is on', async () => {
+          await undoAll()
+          const [x, y] = await gridPoint(p, [2, 2.5])
+          await p.mouse.move(x + 1, y + 2)
+          await p.mouse.move(x, y + 2)
+          const ghosts = () => read(() => document.querySelectorAll('.pen-tool-extras-ghost').length)
+          if (kase.off === NOTHING_OFF) assert.equal(await settle(ghosts, 1), 1, 'a ghost shows when nothing is broken')
+          else {
+            await sleep(300) // "nothing happened in 300 ms" check
+            assert.equal(await ghosts(), 0, 'no ghost with the marks step off')
+          }
+        })
+      }
 
       // A dragged line is SudokuPad's own drawing; it needs the drag highlight, which one case removes.
       if (!kase.noDrag) {

@@ -112,6 +112,8 @@
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type.
+- **mark preview** — Pen Tool Extras' faint copy of the mark the next left click under the pointer would place (the **ghost**, in the hint layer at 0.3 opacity), or, when that click clears the spot, the marks it would clear drawn faint. The install step is `mark preview`.
+- **faded stroke** — a pen stroke drawn at 0.3 opacity because the **pen erase** held under the right button will take it, or the **mark preview** says the next click clears it.
 - **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge, corner and cell marks it crosses, as one undo step. Text Anywhere's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle,
   cross and dot (pen values 5, 6 and z) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.

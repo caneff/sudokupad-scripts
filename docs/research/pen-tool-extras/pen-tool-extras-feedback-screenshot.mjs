@@ -3,7 +3,7 @@
 //   preview         the pointer on a cell edge with a mark already there: the faint next mark (after) or nothing (before)
 //   hint-dashed     a drag held with a page 2 pen: dashes (after) or the solid stroke (before)
 //   hint-arrow      a drag held with a page 3 pen: arrowheads (after) or the solid stroke (before)
-// Every press, move and drag is real input. A red ring marks where the pointer is, since a screenshot draws none.
+// Every press, move and drag is real input. A red ring marks where the pointer is in the erase picture, since a screenshot draws none; the preview picture has none, so it does not cover the faint mark.
 // "before" is main's script, read from `git show origin/main:pen-tool-extras.user.js`.
 // Run from the repo root, after `git fetch origin`: node docs/research/pen-tool-extras/pen-tool-extras-feedback-screenshot.mjs
 import { chromium } from 'playwright'
@@ -52,7 +52,7 @@ for (const [which, source] of Object.entries(VERSIONS)) {
   }
   const pick = (key) => p.locator(`.tool-pen button[data-key="${key}"]`).click()
   const clean = async () => {
-    await p.mouse.up({ button: 'right' }).catch(() => {})
+    await p.mouse.up({ button: 'right' }).catch(() => {}) // best effort: no right button is down after most shots, and `up` then throws
     await unring()
     await p.mouse.click(5, 5)
     for (let n = await p.evaluate(() => Framework.app.puzzle.undoStack.length); n > 0; n--) await p.click('#control-undo')
@@ -77,7 +77,6 @@ for (const [which, source] of Object.entries(VERSIONS)) {
   await p.mouse.click(mx, my)
   await p.mouse.move(mx + 1, my)
   await p.mouse.move(mx, my)
-  await ring(mx, my)
   await shot('preview')
   await clean()
 

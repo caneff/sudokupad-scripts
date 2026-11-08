@@ -1,7 +1,7 @@
 // Live check of pen-tool-extras.user.js's feedback before a gesture lands, on sudokupad.app in headless Chromium: the right-click erase's preview and its Escape (#546 rows 1 and 7),
 // the faint mark a left click would place (row 4), and the drag highlight in the pen's style (row 5). Every press, move and key is real input; each check reads the page's computed
 // style and what is stored (`cell.pen`).
-/* global Framework, getComputedStyle, MouseEvent, PointerEvent */
+/* global Framework, getComputedStyle, KeyboardEvent, MouseEvent, MutationObserver, PointerEvent */
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -162,7 +162,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         const stored = await settle(async () => (await marksOf(row, col)).includes(ghost.value), true)
         assert.equal(stored, true, `${label}: the click stores the ghost's mark ${ghost.value}; the cell holds ${await marksOf(row, col)} after ${seen}`)
         // The mark the click stored is drawn as the ghost was.
-        const drawn = await read((value) => [...document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)')].filter((el) => el.getAttribute('value') === value).map((el) => el.getAttribute('d')), ghost.value)
+        const drawn = await read((value) => [...document.querySelectorAll('#cell-pen .cell-pen')].filter((el) => el.getAttribute('value') === value).map((el) => el.getAttribute('d')), ghost.value)
         assert.deepEqual(drawn, [ghost.d], `${label}: the stored ${ghost.value} has the ghost's shape`)
         const shown = ghost.value
         // The pointer has not moved: the ghost shows the step after the click made, with no move to ask for it.
@@ -242,14 +242,49 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await undoAll()
     })
 
-    it('a ghost is drawn at most once per 32 ms of moves: a burst of moves leaves the one ghost of the last point', async () => {
+    it('the preview looks at the pointer at most once every 32 ms: moves 4 ms apart, alternating between two edges, draw far fewer ghosts than moves, and the last one shows the last point', async () => {
       await restartPuzzle(p)
       await selectPenOnPage(1, 3)
-      await hover([1.5, 2.0])
-      for (let i = 0; i < 12; i++) await p.mouse.move(...await gridPoint(p, [1.5 + i * 0.3, 2.0]))
-      await moveTo([5.5, 6.0])
-      const last = await settle(async () => { const g = await ghostOf(); return g && g.count }, 1)
-      assert.equal(last, 1, 'one ghost')
+      const here = await gridPoint(p, [3.5, 4.0])
+      const there = await gridPoint(p, [5.5, 6.0])
+      await p.mouse.move(5, 5)
+      const drawn = await read(async ([points, moves, gapMs]) => {
+        const grid = document.querySelector('#svgrenderer')
+        const layer = document.getElementById('pen-tool-extras-hint')
+        let added = 0
+        const watch = new MutationObserver((records) => { added += records.flatMap((r) => [...r.addedNodes]).filter((n) => n.classList && n.classList.contains('pen-tool-extras-ghost')).length })
+        watch.observe(layer, { childList: true })
+        for (let i = 0; i < moves; i++) {
+          const [x, y] = points[i % 2]
+          grid.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, bubbles: true, buttons: 0 }))
+          await new Promise((resolve) => setTimeout(resolve, gapMs))
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100)) // the last tick's turn
+        watch.disconnect()
+        return added
+      }, [[here, there], 12, 4])
+      assert.ok(drawn >= 1 && drawn <= 6, `${drawn} ghosts drawn for 12 moves 4 ms apart`)
+      const last = await ghostOf()
+      assert.equal(last.count, 1)
+      // 12 moves alternate starting at `here`, so the last one is `there`: the ghost belongs to the cell of the edge at 5.5, 6.0
+      assert.equal(await read(() => document.querySelector('.pen-tool-extras-ghost').getAttribute('row')), '5')
+    })
+
+    it('a key or the pointer leaving right after a release leaves no ghost behind: the release\'s refresh is cancelled', async () => {
+      await restartPuzzle(p)
+      await selectPenOnPage(1, 3)
+      const [x, y] = await gridPoint(p, [3.5, 4.0])
+      for (const leave of ['keydown', 'pointerleave']) {
+        await p.mouse.click(5, 5)
+        await read(([px, py, type]) => {
+          const grid = document.querySelector('#svgrenderer')
+          grid.dispatchEvent(new MouseEvent('mouseup', { clientX: px, clientY: py, bubbles: true }))
+          if (type === 'keydown') window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }))
+          else document.documentElement.dispatchEvent(new PointerEvent('pointerleave'))
+        }, [x, y, leave])
+        await sleep(200) // "nothing happened in 200 ms" check: the release's refresh has had its turn
+        assert.equal(await ghostOf(), null, `no ghost after ${leave}`)
+      }
     })
   })
 
@@ -281,7 +316,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       const h = await hint()
       assert.equal(h.dash, 'none')
       assert.equal(h.headsD, null)
+      // The pointer is over the grid with the button down: no ghost, and SudokuPad's click test has not run over the drag's queued acts.
+      await sleep(150) // "nothing happened in 150 ms" check
+      assert.equal(await read(() => document.querySelectorAll('.pen-tool-extras-ghost').length), 0, 'no ghost during a drag')
       await p.mouse.up()
+      assert.equal(await settle(() => penEntries(p).then((all) => all.length), 2), 2, 'the drag still draws its two segments')
       await undoAll()
     })
 
@@ -322,6 +361,20 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       await p.mouse.up()
       await undoAll()
     })
+  })
+
+  it('page 3: an arrow pen\'s erasing drag has the red solid hint and no arrowheads', async () => {
+    await restartPuzzle(p)
+    await selectPenOnPage(3, 3)
+    await drag(p, [[2.5, 2.5], [2.5, 4.5]])
+    await p.mouse.click(5, 5) // a click off the grid, or a drag started right after a release draws nothing
+    await p.mouse.move(...await gridPoint(p, [2.5, 2.5]))
+    await p.mouse.down()
+    for (let i = 0; i < 20 && (await read(() => document.querySelector('.penhint'))) === null; i++) await p.mouse.move(...await gridPoint(p, [2.5, 4.5]), { steps: 10 })
+    const erasing = await read(() => ({ red: document.querySelector('.penhint').classList.contains('pencolor-erase'), heads: document.querySelectorAll('.pen-tool-extras-hint-arrows').length }))
+    assert.deepEqual(erasing, { red: true, heads: 0 })
+    await p.mouse.up()
+    await undoAll()
   })
 
   it('no page error was raised in the whole group', () => {

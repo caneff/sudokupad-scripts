@@ -33,7 +33,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   const editor = () => p.locator('#pen-tool-extras-editor')
   const sliderValue = (selector) => p.locator(selector).inputValue()
   const undoDepth = () => read(() => Framework.app.puzzle.undoStack.length)
-  const strokeCount = () => read(() => document.querySelectorAll('.cell-pen:not(.pen-tool-extras-ghost)').length)
+  const strokeCount = () => read(() => document.querySelectorAll('#cell-pen .cell-pen').length)
   const activeElementTag = () => read(() => document.activeElement.tagName)
   const lineWidth = () => read(() => parseFloat(window.getComputedStyle(document.querySelector('.cell-pen.pencolor-1')).strokeWidth))
   const effectiveOpacity = async (selector) => (await effectiveOpacities(p, selector))[0]
