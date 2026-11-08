@@ -805,36 +805,26 @@ test('once a note is drawn its box is the size drawn, not the guess from its cha
   assert.deepEqual(textBox({ ...long, box: [200, 60], [DRAWN_SIZE]: [300, 23] }), { left: 100, right: 300, top: 50, bottom: 110 })
 })
 
-// A 1000x900 window with a panel down its right side from x=800.
+// A 1000x900 window.
 const WINDOW = { left: 0, top: 0, right: 1000, bottom: 900 }
-const PANEL = { left: 800, top: 100, right: 1000, bottom: 700 }
 
-test('a note whose box is inside the window and clear of the controls stays where it is', () => {
-  assert.deepEqual(reachablePoint([500, 400], [100, 40], WINDOW, [PANEL]), [500, 400])
+test('a note whose box is inside the window stays where it is, on the controls or off them', () => {
+  assert.deepEqual(reachablePoint([500, 400], [100, 40], WINDOW), [500, 400])
+  assert.deepEqual(reachablePoint([850, 400], [100, 40], WINDOW), [850, 400], 'on a panel down the right side from x=800')
+  assert.deepEqual(reachablePoint([900, 120], [100, 40], WINDOW), [900, 120], 'on that panel\'s corner')
 })
 
 test('a note whose box is past the window\'s edge is moved to the nearest point, a pixel in, that holds the whole box inside', () => {
-  assert.deepEqual(reachablePoint([1143, 800], [100, 40], WINDOW, []), [949, 800])
-  assert.deepEqual(reachablePoint([-20, -5], [100, 40], WINDOW, []), [51, 21])
+  assert.deepEqual(reachablePoint([1143, 800], [100, 40], WINDOW), [949, 800])
+  assert.deepEqual(reachablePoint([-20, -5], [100, 40], WINDOW), [51, 21])
 })
 
-test('a note under a control is moved to the nearest point a pixel clear of it, on the side it is nearest', () => {
-  assert.deepEqual(reachablePoint([850, 400], [100, 40], WINDOW, [PANEL]), [749, 400])
-  assert.deepEqual(reachablePoint([900, 120], [100, 40], WINDOW, [PANEL]), [900, 79])
-})
-
-test('a note too big for the window is centred on it, and a control that leaves no free point leaves the note inside the window', () => {
-  assert.deepEqual(reachablePoint([10, 10], [1200, 40], WINDOW, []), [500, 21])
-  assert.deepEqual(reachablePoint([1500, 400], [100, 40], WINDOW, [WINDOW]), [949, 400])
-})
-
-test('a note under two controls that meet at a corner is moved to the nearest point clear of both', () => {
-  const topbar = { left: 0, top: 0, right: 1000, bottom: 50 }
-  assert.deepEqual(reachablePoint([900, 60], [100, 40], WINDOW, [topbar, { ...PANEL, top: 50 }]), [749, 71])
+test('a note too big for the window is centred on it', () => {
+  assert.deepEqual(reachablePoint([10, 10], [1200, 40], WINDOW), [500, 21])
 })
 
 test('a window with no area leaves a note where it is', () => {
-  assert.deepEqual(reachablePoint([900, 60], [100, 40], { left: 0, top: 0, right: 0, bottom: 0 }, [PANEL]), [900, 60])
+  assert.deepEqual(reachablePoint([900, 60], [100, 40], { left: 0, top: 0, right: 0, bottom: 0 }), [900, 60])
 })
 
 test('a note\'s box on the screen is its text\'s box and its padding at the board\'s scale, round its screen point, on the board or off it', () => {
@@ -1118,22 +1108,13 @@ const WIN = { left: 0, top: 0, right: 1000, bottom: 800 }
 
 test('viewShift moves a box in from the window edge so it stays WINDOW_PAD_PX inside, and leaves one already inside alone', () => {
   assert.equal(WINDOW_PAD_PX, 20)
-  assert.deepEqual(viewShift({ left: 400, top: 300, right: 500, bottom: 330 }, WIN, []), [0, 0])
-  assert.deepEqual(viewShift({ left: 900, top: 300, right: 1010, bottom: 330 }, WIN, []), [-30, 0], 'past the right edge: right ends at 980')
-  assert.deepEqual(viewShift({ left: -10, top: 790, right: 40, bottom: 805 }, WIN, []), [30, -25], 'left ends at 20 and bottom at 780')
-  assert.deepEqual(viewShift({ left: 981, top: 300, right: 990, bottom: 330 }, WIN, []), [-10, 0], 'inside the window but within the pad of the edge')
+  assert.deepEqual(viewShift({ left: 400, top: 300, right: 500, bottom: 330 }, WIN), [0, 0])
+  assert.deepEqual(viewShift({ left: 900, top: 300, right: 1010, bottom: 330 }, WIN), [-30, 0], 'past the right edge: right ends at 980')
+  assert.deepEqual(viewShift({ left: -10, top: 790, right: 40, bottom: 805 }, WIN), [30, -25], 'left ends at 20 and bottom at 780')
+  assert.deepEqual(viewShift({ left: 981, top: 300, right: 990, bottom: 330 }, WIN), [-10, 0], 'inside the window but within the pad of the edge')
 })
 
-test('viewShift moves a box clear of a control it overlaps, by the nearest way', () => {
-  const control = { left: 700, right: 1000, top: 0, bottom: 800 }
-  const [dx, dy] = viewShift({ left: 650, top: 300, right: 750, bottom: 330 }, WIN, [control])
-  assert.equal(dy, 0)
-  assert.equal(750 + dx < 700, true, `its right edge ${750 + dx} is left of the control`)
-  assert.equal(650 + dx >= WINDOW_PAD_PX, true)
-})
-
-test('viewShift leaves a box beside a control where it is, and puts a box too big for the window at the middle', () => {
-  assert.deepEqual(viewShift({ left: 400, top: 300, right: 500, bottom: 330 }, WIN, [{ left: 700, right: 1000, top: 0, bottom: 800 }]), [0, 0])
-  const [dx] = viewShift({ left: -50, top: 300, right: 1100, bottom: 330 }, WIN, [])
+test('viewShift puts a box too big for the window at the middle', () => {
+  const [dx] = viewShift({ left: -50, top: 300, right: 1100, bottom: 330 }, WIN)
   assert.equal((-50 + 1100) / 2 + dx, 500, 'centred on the window')
 })

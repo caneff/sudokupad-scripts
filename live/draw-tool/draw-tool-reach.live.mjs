@@ -1,5 +1,5 @@
-// Live check of draw-tool.user.js's fixed notes on sudokupad.app: a note put right of the panel at 1200x900 is drawn clear of the panel when the window
-// widens to 1600x900 and wholly inside the window when it narrows to 1000x900, and can then be clicked and dragged. Drawing it there never saves: its stored
+// Live check of draw-tool.user.js's fixed notes on sudokupad.app: a note put right of the panel at 1200x900 stays at its own point, under the panel, when the window
+// widens to 1600x900, and is drawn wholly inside the window when it narrows to 1000x900, and can then be clicked and dragged. Drawing it there never saves: its stored
 // point changes only when the solver moves it, so with the window restored it is back at its own place.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
@@ -8,7 +8,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { settle, stable } from '../settle.mjs'
 
-const { TEXT_BOX, TEXTS } = draw
+const { TEXTS } = draw
 const WIDE = { width: 1600, height: 900 }
 const NARROW = { width: 1000, height: 900 }
 const HOME = { width: 1200, height: 900 }
@@ -36,7 +36,7 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     }, TEXTS),
     point: await draw.notePoint(p, 'fixed')
   })
-  const clearOfPanel = ({ note, panel }) => note.right <= panel.left || note.left >= panel.right || note.bottom <= panel.top || note.top >= panel.bottom
+  const overPanel = ({ note, panel }) => note.right > panel.left && note.left < panel.right && note.bottom > panel.top && note.top < panel.bottom
   const insideWindow = ({ note, window: [w, h] }) => note.left >= 0 && note.top >= 0 && note.right <= w && note.bottom <= h
   const reload = async () => {
     await draw.reload(p)
@@ -62,19 +62,15 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.deepEqual(point, RIGHT_OF_PANEL, 'drawn at its own point')
     assert.deepEqual((await saved())[0].fixed, RIGHT_OF_PANEL, 'stored at its own point')
   }
-  it('widened until the panel covers its point, the note is drawn clear of the panel and opens on a double-click without moving for good, and is back at its own point when the window is restored', async () => {
+  it('widened until the panel covers its point, the note stays at its own point under the panel, saves nothing, and is where it was over a reload', async () => {
     await start()
     await resizeTo(WIDE)
-    const moved = await settle(async () => clearOfPanel(await boxes()), true)
-    assert.equal(moved, true, 'clear of the panel')
+    assert.equal(await settle(async () => overPanel(await boxes()), true), true, 'the panel covers the note')
     await stable(async () => (await boxes()).note.x)
-    await p.mouse.dblclick(...draw.middleOf((await boxes()).note))
-    assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click opens the note itself')
-    await draw.finishNote(p)
-    assert.deepEqual((await saved())[0].fixed, RIGHT_OF_PANEL, 'drawing it clear of the panel saves nothing')
+    await atHome()
     await reload()
-    assert.equal(clearOfPanel(await boxes()), true, 'still clear of the panel over a reload')
-    assert.deepEqual((await saved())[0].fixed, RIGHT_OF_PANEL, 'still stored at its own point over a reload')
+    assert.equal(overPanel(await boxes()), true, 'still under the panel over a reload')
+    await atHome()
     await resizeTo(HOME)
     await atHome()
   })
