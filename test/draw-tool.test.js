@@ -658,10 +658,13 @@ test('a saved size reads back, and a note without one has none', () => {
   for (const box of [[1], 'big', [0, 10], [10, -1], [10, 'a'], null]) assert.deepEqual(readDrawing([{ ...sum, box }]).kept, [{ ...sum, box }], JSON.stringify(box))
 })
 
+// The auto size, in board units, of a note of a dozen characters at a text size of 20: wider than the minimum box.
+const AUTO = [132, 23]
+
 // A resize keeps the corner opposite the dragged one still: on the board the stub's scale is 2 screen pixels a board unit.
 test('dragging a note\'s bottom right corner sets its box in board units and moves its point so its top left stays put', () => {
   const on = textItem([50, 60], 'hi', 3, 20)
-  const resized = resizedItem(on, [200, 170], [600, 290], { ...board, scale: 2 }, CORNERS.bottomRight)
+  const resized = resizedItem(on, [200, 170], [600, 290], { ...board, scale: 2 }, CORNERS.bottomRight, AUTO)
   assert.deepEqual(resized, { ...on, box: [200, 60], at: [150, 90] })
 })
 
@@ -669,27 +672,41 @@ test('dragging each other corner keeps the opposite corner still and sets the sa
   const on = textItem([50, 60], 'hi', 3, 20)
   const scaled = { ...board, scale: 2 }
   // The box is 200 x 60 board units, 400 x 120 pixels, with its opposite corner at (600, 290), (200, 290), (600, 170) and (200, 170).
-  assert.deepEqual(resizedItem(on, [600, 290], [200, 170], scaled, CORNERS.topLeft), { ...on, box: [200, 60], at: [150, 90] })
-  assert.deepEqual(resizedItem(on, [200, 290], [600, 170], scaled, CORNERS.topRight), { ...on, box: [200, 60], at: [150, 90] })
-  assert.deepEqual(resizedItem(on, [600, 170], [200, 290], scaled, CORNERS.bottomLeft), { ...on, box: [200, 60], at: [150, 90] })
+  assert.deepEqual(resizedItem(on, [600, 290], [200, 170], scaled, CORNERS.topLeft, AUTO), { ...on, box: [200, 60], at: [150, 90] })
+  assert.deepEqual(resizedItem(on, [200, 290], [600, 170], scaled, CORNERS.topRight, AUTO), { ...on, box: [200, 60], at: [150, 90] })
+  assert.deepEqual(resizedItem(on, [600, 170], [200, 290], scaled, CORNERS.bottomLeft, AUTO), { ...on, box: [200, 60], at: [150, 90] })
 })
 
 test('dragging a corner past its opposite one still leaves the minimum box on the corner\'s own side', () => {
-  const on = textItem([50, 60], 'hi', 3, 20)
+  const on = textItem([50, 60], 'a longer note', 3, 20)
   // The top left dragged to the right of and below the fixed bottom right: the box is the minimum and ends at the bottom right.
-  const resized = resizedItem(on, [600, 290], [900, 500], { ...board, scale: 2 }, CORNERS.topLeft)
+  const resized = resizedItem(on, [600, 290], [900, 500], { ...board, scale: 2 }, CORNERS.topLeft, AUTO)
   assert.deepEqual(resized.box, [60, 23])
   assert.deepEqual(resized.at, [220, 108.5])
 })
 
 test('a note off the board keeps its fixed point\'s kind, and its box is in board units too, as its text is', () => {
   const off = placedItem(textItem([50, 60], 'hi', 3, 20), [40, 700], board)
-  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }, CORNERS.bottomRight), { ...off, box: [200, 60], fixed: [200, 740] })
+  assert.deepEqual(resizedItem(off, [0, 680], [400, 800], { ...board, scale: 2 }, CORNERS.bottomRight, AUTO), { ...off, box: [200, 60], fixed: [200, 740] })
 })
 
-test('a resize stops at about three characters wide and one line high', () => {
-  const on = textItem([50, 60], 'hi', 3, 20)
-  assert.deepEqual(resizedItem(on, [200, 170], [190, 160], { ...board, scale: 2 }, CORNERS.bottomRight).box, [60, 23])
+test('a resize of a note wider than three characters stops at about three characters wide and one line high', () => {
+  const on = textItem([50, 60], 'a longer note', 3, 20)
+  assert.deepEqual(resizedItem(on, [200, 170], [190, 160], { ...board, scale: 2 }, CORNERS.bottomRight, AUTO).box, [60, 23])
+})
+
+test('a note narrower than three characters can be resized back down to its own width and no further than it', () => {
+  const short = textItem([50, 60], 'hi', 3, 20)
+  // Two characters at 0.6 em each, and one line of 1.15 em, at a text size of 20 board units.
+  const own = [24, 23]
+  const dragged = (to) => resizedItem(short, [200, 170], to, { ...board, scale: 2 }, CORNERS.bottomRight, own).box
+  assert.deepEqual(dragged([200 + own[0] * 2, 170 + own[1] * 2]), own, 'dragged to its own size')
+  assert.deepEqual(dragged([190, 160]), own, 'dragged past it, it stops at its own size')
+})
+
+test('a resize never leaves a note without a box to grab, even from an auto size of nothing', () => {
+  const empty = textItem([50, 60], 'x', 3, 20)
+  assert.deepEqual(resizedItem(empty, [200, 170], [190, 160], { ...board, scale: 2 }, CORNERS.bottomRight, [0, 0]).box, [5, 5])
 })
 
 test('a note sent back to auto size loses its box and keeps its point', () => {
