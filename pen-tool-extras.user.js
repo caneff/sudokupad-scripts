@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.27.9
+// @version      1.28.4
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -21,7 +21,7 @@
 
   // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.27.9'
+  const VERSION = '1.28.4'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -1035,6 +1035,16 @@
     return PEN_PAGES[page].chars[PEN_COLOR_KEYS.indexOf(number)]
   }
 
+  const hasModifier = (event) => event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
+
+  // SudokuPad hands every tool the keys typed into a page field too, so a key typed into a field is left to it.
+  const typedIntoField = (event) => Boolean(event.target && event.target.closest && event.target.closest('input, textarea, select, [contenteditable]'))
+
+  function digitKeyPen (event, page) {
+    if (hasModifier(event) || typedIntoField(event)) return null
+    return PEN_COLOR_KEYS.includes(event.key) ? penCharOn(page, event.key) : null
+  }
+
   // SudokuPad's `getData` parses what it reads, so a saved '3' comes back as the number 3.
   function normalizePen (data) {
     const pen = typeof data === 'number' ? String(data) : data
@@ -1200,12 +1210,20 @@
       setPadPage(0)
     })
     // SudokuPad asks every tool's `handleKeydown` before its key handlers, and stops at the first that answers, so
+    // answering a digit here keeps it from the tool's own digit handler, which never selects a pen, and
     // answering Tab here also keeps it from the letter tool's Tab binding (which does nothing in the pen tool in
     // SudokuPad now, with No Tab Letters installed or not), and the key's default of moving the focus is stopped.
     // Shift+Tab is left alone: a held Shift is the letter tool's own temporary switch.
     if (typeof tool.handleKeydown !== 'function') tool.handleKeydown = () => false
     steps.pages.wrap(tool, 'handleKeydown', function (stock, event) {
-      if (!hasPageToTurnTo() || Framework.app.tool !== this.name || event.code !== 'Tab' || event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return stock(event)
+      const penToolOn = Framework.app.tool === this.name
+      const digitPen = penToolOn && digitKeyPen(event, currentPage())
+      if (digitPen) {
+        event.preventDefault()
+        tool.setSelectedColor(digitPen)
+        return true
+      }
+      if (!hasPageToTurnTo() || !penToolOn || event.code !== 'Tab' || hasModifier(event)) return stock(event)
       event.preventDefault()
       turnPage(1)
       return true
@@ -2502,6 +2520,14 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
+  const STATUS_ATTRIBUTE = 'data-role="settings-status"'
+  const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
+
+  function setDialogStatus (dialog, message) {
+    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  }
+  // A thrown value that is not an Error has no message, so it is shown as itself.
+  const errorText = (error) => error?.message ?? String(error)
 
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
@@ -2521,7 +2547,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   }
 
   // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }) {
+  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
     framework.addSetting({
       tag: 'button',
       name,
@@ -2529,7 +2555,9 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       content,
       handler: () => {
         closeDialogKeepingGrid(framework)
-        setTimeout(open, 0)
+        setTimeout(() => {
+          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
+        }, 0)
       }
     })
   }
@@ -2546,7 +2574,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
       `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
-      '<span data-role="settings-status"></span>' +
+      `<span ${STATUS_ATTRIBUTE}></span>` +
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
@@ -2562,7 +2590,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
   }
 
@@ -2593,8 +2621,21 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
+    // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
+    let failed = false
+    const saveAndClose = () => {
+      try {
+        if (failed || changed()) save()
+      } catch (error) {
+        failed = true
+        // The dialog stays open so the failure is read and the choices are kept.
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        return
+      }
+      close()
+    }
     const buttons = [
-      { content: SAVE_LABEL, role: 'save', handler: () => { if (changed()) save(); close() } },
+      { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
       { content: CANCEL_LABEL, role: 'cancel', handler: close },
       ...extraButtons
     ]
@@ -2618,6 +2659,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -2646,7 +2688,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
 
   // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
   function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -2662,14 +2704,14 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
       }
     })
   }
   /* eslint-enable no-unused-vars */
   // </lib:settings-transfer>
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
+    module.exports = { VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, digitKeyPen, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
   // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return

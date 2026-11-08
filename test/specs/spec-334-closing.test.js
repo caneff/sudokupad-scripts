@@ -6,7 +6,7 @@ const { join } = require('node:path')
 const ROOT = join(__dirname, '..', '..')
 
 const read = (file) => readFileSync(join(ROOT, file), 'utf8')
-const { syncText, readLib, RUN } = require('../../sync-lib.js')
+const { syncText, readLib, libNamesOnDisk, RUN } = require('../../sync-lib.js')
 // Color by Digit and Pen Tool Extras export their copy of lib/color-math.js; the sync check below holds every copy to the module.
 const COLOR_EXPORTERS = ['color-by-digit', 'pen-tool-extras'].map((script) => require(`../../${script}.user.js`))
 
@@ -53,7 +53,7 @@ test('spec 334: shared lib/ modules copied into each script, kept in sync by nod
       assert.equal(blocks, scripts.includes(script) ? 1 : 0, `${file}: <lib:${name}> blocks`)
     }
     // Every block is what node sync-lib.js would write.
-    const synced = syncText(source, readLib)
+    const synced = syncText(source, readLib, libNamesOnDisk())
     assert.deepEqual(synced.problems, [], `${file}: ${RUN}`)
     assert.deepEqual(synced.changed, [], `${file}: blocks out of date; run ${RUN}`)
     // No module name is defined again outside the blocks.

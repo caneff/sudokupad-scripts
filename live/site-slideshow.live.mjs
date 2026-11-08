@@ -8,39 +8,21 @@ import { chromium } from 'playwright'
 
 const RAW = 'https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/'
 const ROOT = new URL('../', import.meta.url)
-// The slideshows: the homepage row heading and its place among the rows, the details page, the slide count and the first, second, last and second-last picture and caption.
+// The slideshows: the homepage row heading and its place among the rows, the details page and the slideshow's id in site/slideshows.json, which holds the slide count and each picture and caption.
+const SOURCE = JSON.parse(readFileSync(new URL('site/slideshows.json', ROOT), 'utf8'))
+const slideOf = ({ slides }, i) => [slides.at(i).picture, slides.at(i).caption]
 const SHOWS = [
-  {
-    heading: 'Color by Digit',
-    row: 1,
-    details: 'color-by-digit.html',
-    slides: 10,
-    first: ['color-by-digit-slide-1-start.png', 'Start'],
-    second: ['color-by-digit-slide-2-type.png', 'Type a 1'],
-    last: ['color-by-digit-slide-10-split.png', 'Cells from one profile, digits from another'],
-    beforeLast: ['color-by-digit-slide-9-modular.png', 'Pick Modular']
-  },
-  {
-    heading: 'Pen Tool Extras',
-    row: 2,
-    details: 'pen-tool-extras.html',
-    slides: 14,
-    first: ['pen-tool-extras-slide-1-line.png', 'Draw a line'],
-    second: ['pen-tool-extras-slide-2-hold.png', 'Hold a color button'],
-    last: ['pen-tool-extras-slide-14-erased.png', 'The whole line is gone'],
-    beforeLast: ['pen-tool-extras-slide-13-erase.png', 'Right-click a line to delete it']
-  },
-  {
-    heading: 'Text Anywhere',
-    row: 3,
-    details: 'draw-tool.html',
-    slides: 5,
-    first: ['draw-tool-slide-1-type.png', 'Left click to type a note'],
-    second: ['draw-tool-slide-3-background.png', 'Background: a box behind the next note'],
-    last: ['draw-tool-slide-7-erase.png', 'Erase: right-click a note'],
-    beforeLast: ['draw-tool-slide-9-long.png', 'Long notes wrap and scroll; drag any corner to resize']
-  }
-]
+  { heading: 'Color by Digit', row: 3, details: 'color-by-digit.html', id: 'color-by-digit' },
+  { heading: 'Pen Tool Extras', row: 1, details: 'pen-tool-extras.html', id: 'pen-tool-extras' },
+  { heading: 'Text Anywhere', row: 2, details: 'draw-tool.html', id: 'text-anywhere' }
+].map((show) => ({
+  ...show,
+  slides: SOURCE[show.id].slides.length,
+  first: slideOf(SOURCE[show.id], 0),
+  second: slideOf(SOURCE[show.id], 1),
+  last: slideOf(SOURCE[show.id], -1),
+  beforeLast: slideOf(SOURCE[show.id], -2)
+}))
 
 let browser, page
 before(async () => {
