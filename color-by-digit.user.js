@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.5
+// @version      0.25.7
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.5'
+  const VERSION = '0.25.7'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -913,11 +913,15 @@
   const PURPLE = '#6a1b9a'
   const OFF_WORD_GREY = '#b3acbf'
 
+  // A thin white outline, so the purple word reads on Dark Page's dark button. On the normal page's #eee button it shows only as a faint light edge.
+  const WORD_OUTLINE = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]
+    .map(([x, y]) => `${x}px ${y}px #fff`).join(',')
+
   // No pointer events, so a press on the label is a press on the button.
   function modeWordHtml (mode) {
     const on = mode !== 'off'
     return '<span data-role="mode" style="pointer-events:none;position:absolute;left:-3px;top:-2px;' +
-      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
+      `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}${on ? `;text-shadow:${WORD_OUTLINE}` : ''}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
   // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
@@ -1228,17 +1232,28 @@
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
-  const ERROR_LOG_ROW = 'data-role="error-log"'
+  // SudokuPad styles a dialog's buttons by tag, so a button that is to look like bare text or a bare icon has each of these forced.
+  const BARE_BUTTON = 'background: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; cursor: pointer;'
+  const ERROR_LOG_ATTRIBUTE = 'data-role="error-log"'
+  const ERROR_LOG_SELECTOR = `[${ERROR_LOG_ATTRIBUTE}]`
+
+  function errorLogCss (prefix) {
+    return [
+      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
+      `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+    ].join('\n')
+  }
 
   // Under the script's own settings: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
   function renderErrorLogRow (prefix) {
-    return `<div class="${prefix}error-log" ${ERROR_LOG_ROW}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
+    return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
   // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
   function wireErrorLog (dialog, win) {
     const say = (message) => setDialogStatus(dialog, message)
-    dialog.querySelector(`[${ERROR_LOG_ROW}]`).addEventListener('click', async (event) => {
+    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-error-log' && act !== 'clear-error-log') return
       event.preventDefault()
@@ -1269,14 +1284,11 @@
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
-      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
-      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
-      `.${prefix}error-log button { background: none !important; border: none !important; box-shadow: none !important; padding: 2px 0 !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; cursor: pointer; }`,
-      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
@@ -1734,17 +1746,17 @@
     return log
   }
 
-  const indented = (text, spaces) => text.split('\n').map((line) => ' '.repeat(spaces) + line).join('\n')
-
-  // V8's stack opens with the message; Firefox's does not.
-  const withStack = (message, stack) => (typeof stack !== 'string' || stack === '' ? message : stack.includes(message) ? stack : `${message}\n${stack}`)
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
 
   function formatErrorLog (log) {
     if (log.length === 0) return 'The error log is empty.'
     return [...log].reverse().map((record) => [
       `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
       `  ${record.url}`,
-      record.missing ? `  SudokuPad has no ${record.missing}` : indented(withStack(record.message, record.stack), 2)
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
     ].join('\n')).join('\n\n')
   }
 
@@ -1794,14 +1806,18 @@
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
-    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page.
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
     let sudokupad = null
     let logFailed = false
-    function logOff (label, why) {
+    function recordFeatureOff (label, why) {
       if (logFailed) return
-      const fields = typeof why === 'string' ? { missing: why } : { message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
       try {
         const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
         log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
         globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
       } catch (error) {
@@ -1859,7 +1875,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
-          logOff(label, why)
+          recordFeatureOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {

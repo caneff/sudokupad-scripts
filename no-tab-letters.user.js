@@ -99,17 +99,17 @@
     return log
   }
 
-  const indented = (text, spaces) => text.split('\n').map((line) => ' '.repeat(spaces) + line).join('\n')
-
-  // V8's stack opens with the message; Firefox's does not.
-  const withStack = (message, stack) => (typeof stack !== 'string' || stack === '' ? message : stack.includes(message) ? stack : `${message}\n${stack}`)
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
 
   function formatErrorLog (log) {
     if (log.length === 0) return 'The error log is empty.'
     return [...log].reverse().map((record) => [
       `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
       `  ${record.url}`,
-      record.missing ? `  SudokuPad has no ${record.missing}` : indented(withStack(record.message, record.stack), 2)
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
     ].join('\n')).join('\n\n')
   }
 
@@ -159,14 +159,18 @@
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
-    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page.
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
     let sudokupad = null
     let logFailed = false
-    function logOff (label, why) {
+    function recordFeatureOff (label, why) {
       if (logFailed) return
-      const fields = typeof why === 'string' ? { missing: why } : { message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
       try {
         const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
         log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
         globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
       } catch (error) {
@@ -224,7 +228,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
-          logOff(label, why)
+          recordFeatureOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {

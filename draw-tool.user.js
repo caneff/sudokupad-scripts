@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.37.3
+// @version      0.37.4
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.37.3'
+  const VERSION = '0.37.4'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -226,14 +226,10 @@
   const DONE_OPACITY = 0.6
   // A note being moved is drawn at this share of its own opacity, so the board shows through.
   const MOVING_OPACITY = 0.6
-  // The hover outline and the handles fade in over this long, and a note deleted by the right button or the trash button fades out over FADE_OUT_MS; each with Material's
-  // decelerate curve to enter and accelerate curve to exit, and only when the solver has not asked for reduced motion.
+  // The hover outline and the handles fade in over this long, on Material's decelerate curve, and only when the solver has not asked for reduced motion.
   const FADE_IN_MS = 80
-  const FADE_OUT_MS = 120
   const FADE_IN_EASE = 'cubic-bezier(0, 0, 0, 1)'
-  const FADE_OUT_EASE = 'cubic-bezier(0.3, 0, 1, 1)'
   const MOTION_OK = '(prefers-reduced-motion: no-preference)'
-  const FADING_CLASS = 'draw-tool-fading'
   // An open note with no text yet shows a faint box.
   const EMPTY_CLASS = 'draw-tool-empty'
   // A handle is made with this class and loses it a frame later, which is what starts its fade in.
@@ -1200,17 +1196,28 @@
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
-  const ERROR_LOG_ROW = 'data-role="error-log"'
+  // SudokuPad styles a dialog's buttons by tag, so a button that is to look like bare text or a bare icon has each of these forced.
+  const BARE_BUTTON = 'background: none !important; border: none !important; box-shadow: none !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; cursor: pointer;'
+  const ERROR_LOG_ATTRIBUTE = 'data-role="error-log"'
+  const ERROR_LOG_SELECTOR = `[${ERROR_LOG_ATTRIBUTE}]`
+
+  function errorLogCss (prefix) {
+    return [
+      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
+      `.${prefix}error-log button { ${BARE_BUTTON} padding: 2px 0 !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; }`,
+      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`
+    ].join('\n')
+  }
 
   // Under the script's own settings: the log every script's guard writes (lib/sudokupad.js), read and cleared from any one of them.
   function renderErrorLogRow (prefix) {
-    return `<div class="${prefix}error-log" ${ERROR_LOG_ROW}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
+    return `<style>${errorLogCss(prefix)}</style><div class="${prefix}error-log" ${ERROR_LOG_ATTRIBUTE}><button type="button" data-act="copy-error-log">Copy error log</button><button type="button" data-act="clear-error-log">Clear</button></div>`
   }
 
   // The title row's Copy settings and Paste settings are wired by wireCopyPaste; this row is wired here, since every script has it.
   function wireErrorLog (dialog, win) {
     const say = (message) => setDialogStatus(dialog, message)
-    dialog.querySelector(`[${ERROR_LOG_ROW}]`).addEventListener('click', async (event) => {
+    dialog.querySelector(ERROR_LOG_SELECTOR).addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-error-log' && act !== 'clear-error-log') return
       event.preventDefault()
@@ -1241,14 +1248,11 @@
       `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
       `${tools} { display: flex; align-items: center; gap: 4px; }`,
       // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
-      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button { ${BARE_BUTTON} padding: 4px !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; border-radius: 6px !important; }`,
       `${tools} button:hover { background: #f0edf5 !important; }`,
       `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
-      `.${prefix}error-log { display: flex; gap: 12px; margin-top: 10px; }`,
-      `.${prefix}error-log button { background: none !important; border: none !important; box-shadow: none !important; padding: 2px 0 !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; font-size: .8rem !important; color: ${TITLE_MUTED} !important; text-decoration: underline; cursor: pointer; }`,
-      `.${prefix}error-log button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 2px; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
       `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
@@ -1442,17 +1446,17 @@
     return log
   }
 
-  const indented = (text, spaces) => text.split('\n').map((line) => ' '.repeat(spaces) + line).join('\n')
-
-  // V8's stack opens with the message; Firefox's does not.
-  const withStack = (message, stack) => (typeof stack !== 'string' || stack === '' ? message : stack.includes(message) ? stack : `${message}\n${stack}`)
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
 
   function formatErrorLog (log) {
     if (log.length === 0) return 'The error log is empty.'
     return [...log].reverse().map((record) => [
       `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
       `  ${record.url}`,
-      record.missing ? `  SudokuPad has no ${record.missing}` : indented(withStack(record.message, record.stack), 2)
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
     ].join('\n')).join('\n\n')
   }
 
@@ -1502,14 +1506,18 @@
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
-    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page.
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
     let sudokupad = null
     let logFailed = false
-    function logOff (label, why) {
+    function recordFeatureOff (label, why) {
       if (logFailed) return
-      const fields = typeof why === 'string' ? { missing: why } : { message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
       try {
         const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
         log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
         globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
       } catch (error) {
@@ -1567,7 +1575,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
-          logOff(label, why)
+          recordFeatureOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {
@@ -2047,14 +2055,11 @@
     // The outline is there and clear until the pointer comes, so its color is what fades in.
     `${IDLE_NOTE} { outline: 1px solid transparent; outline-offset: 2px; }`,
     `${IDLE_NOTE}:is(:hover, .${HOVERED_CLASS}) { ${hoverLook(35, 4)} }`,
-    `.${TEXT_CLASS}.${FADING_CLASS} { pointer-events: none !important; }`,
     `.${TEXT_BOX_CLASS}.${EMPTY_CLASS} { min-width: 1em; outline: 1px solid color-mix(in srgb, currentColor 30%, transparent); }`,
     `html.${HELD_CURSOR_CLASS}, html.${HELD_CURSOR_CLASS} * { cursor: var(${HELD_CURSOR_VAR}) !important; }`,
     `@media ${MOTION_OK} {`,
     `  ${IDLE_NOTE}:is(:hover, .${HOVERED_CLASS}) { transition: outline-color ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
     `  .${HANDLE_CLASS} { transition: opacity ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
-    // Important, since the pointer is still over the note when it starts to fade, and the hover rule's own transition would win.
-    `  .${TEXT_CLASS}.${FADING_CLASS} { transition: opacity ${FADE_OUT_MS}ms ${FADE_OUT_EASE} !important; }`,
     '}',
     `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
@@ -2549,22 +2554,17 @@
     shownNotes.set(element, { ...shown, item, text: item.text, look })
   }
 
-  const skipFading = (node) => {
-    while (node?.classList.contains(FADING_CLASS)) node = node.nextSibling
-    return node
-  }
-
   // Puts each group's notes in drawing order, moving only the elements out of place. The elements it put back in the page.
   function orderNotes (notes) {
     const kept = new Set(notes.map(({ element }) => element))
-    for (const group of [groups.board, groups.screen]) for (const child of [...group.children]) if (!kept.has(child) && !child.classList.contains(FADING_CLASS)) child.remove()
+    for (const group of [groups.board, groups.screen]) for (const child of [...group.children]) if (!kept.has(child)) child.remove()
     const inserted = []
     for (const group of [groups.board, groups.screen]) {
-      let next = skipFading(group.firstChild)
+      let next = group.firstChild
       for (const { element, item } of notes) {
         if ((item.fixed ? groups.screen : groups.board) !== group) continue
         if (element === next) {
-          next = skipFading(next.nextSibling)
+          next = next.nextSibling
           continue
         }
         group.insertBefore(element, next)
@@ -2955,19 +2955,8 @@
     redraw()
   }
 
-  // A deleted note's element stays for the fade out, takes no pointer and is skipped by every redraw until it leaves the page; with reduced motion it leaves with the redraw.
-  function fadeOut (items) {
-    if (!window.matchMedia(MOTION_OK).matches) return
-    for (const element of items.map((item) => item[NOTE_ELEMENT]).filter(Boolean)) {
-      element.classList.add(FADING_CLASS)
-      element.classList.remove(SELECTED_CLASS)
-      element.style.opacity = '0'
-      setTimeout(() => element.remove(), FADE_OUT_MS)
-    }
-  }
-
-  // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went. The ones that went fade out unless `fade` is false.
-  function keepItems (keep, fade = true) {
+  // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went.
+  function keepItems (keep) {
     const kept = []
     const stillSelected = []
     drawing.forEach((item, i) => {
@@ -2976,16 +2965,14 @@
       kept.push(item)
     })
     const removed = kept.length !== drawing.length
-    if (fade) fadeOut(drawing.filter((item) => !kept.includes(item)))
     drawing = kept
     selected = stillSelected
     return removed
   }
 
-  // Deletes the selected notes, which fade out unless `fade` is false.
-  function deleteSelected (fade = true) {
+  function deleteSelected () {
     const gone = selected
-    keepItems((_, i) => !gone.includes(i), fade)
+    keepItems((_, i) => !gone.includes(i))
     saveNotes()
     redraw()
   }
@@ -3737,7 +3724,7 @@
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
       else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
-      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected(false)
+      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
       else return false
       return true
     },
