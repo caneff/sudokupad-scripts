@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad No Tab Letters
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.1.5
+// @version      0.1.6
 // @description  Stops a stray Tab from switching SudokuPad's number pad to letters. The letter button and the / key still switch it.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -19,7 +19,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.1.5'
+  const VERSION = '0.1.6'
   const TOGGLE_KEY = '/'
   const TAB_KEY = 'Tab'
 
@@ -84,6 +84,35 @@
     return found ? found[1] : null
   }
 
+  // One key for every script, so a reader finds every feature any script turned off.
+  const ERROR_LOG_KEY = 'sudokupad-scripts-error-log'
+  const ERROR_LOG_LIMIT = 50
+  // A report is a URL, and GitHub refuses a long one.
+  const REPORT_STACK_LIMIT = 1200
+
+  // Oldest first. Throws when the storage is blocked or the saved text is not a list, so a caller never mistakes either for an empty log.
+  function readErrorLog (storage) {
+    const saved = storage.getItem(ERROR_LOG_KEY)
+    if (saved === null) return []
+    const log = JSON.parse(saved)
+    if (!Array.isArray(log)) throw new Error('the saved error log is not a list')
+    return log
+  }
+
+  // V8's stack opens with the error's own line (`TypeError: message`); Firefox's holds only frames.
+  const withStack = (headline, stack) => (typeof stack !== 'string' || stack === '' ? headline : stack.startsWith(headline) ? stack : `${headline}\n${stack}`)
+
+  function formatErrorLog (log) {
+    if (log.length === 0) return 'The error log is empty.'
+    return [...log].reverse().map((record) => [
+      `${record.time} ${record.script}@${record.version} on SudokuPad ${record.sudokupad || 'unknown'}: ${record.feature}`,
+      `  ${record.url}`,
+      record.missing
+        ? `  SudokuPad has no ${record.missing}`
+        : withStack(record.name ? `${record.name}: ${record.message}` : record.message, record.stack).split('\n').map((line) => `  ${line}`).join('\n')
+    ].join('\n')).join('\n\n')
+  }
+
   // `off` holds each feature's label and why it is off: the internal it lacks, or the error its own code threw.
   function reportUrl ({ name, version, sudokupad, off }) {
     const shownVersion = sudokupad || 'unknown'
@@ -92,7 +121,7 @@
       `Script: ${name} ${version}`,
       `SudokuPad version: ${shownVersion}`,
       '',
-      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : String(why)}`)
+      ...off.map(({ label, why }) => `- ${label}: ${typeof why === 'string' ? `SudokuPad has no ${why}` : withStack(String(why), why && why.stack).slice(0, REPORT_STACK_LIMIT)}`)
     ].join('\n')
     return `${REPORT_URL}?${new URLSearchParams({ title: `${name}: ${labels} off on SudokuPad ${shownVersion}`, body })}`
   }
@@ -128,6 +157,26 @@
     const dismissed = () => {
       const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
+    }
+
+    // Every feature turned off is kept, shown or not. A blocked or unreadable storage costs the record, never the page. A missing internal
+    // is the same fact on every load, so one already recorded for this script version and SudokuPad version is not recorded again: it
+    // would push the one-off throw out of the newest 50.
+    let sudokupad = null
+    let logFailed = false
+    function recordFeatureOff (label, why) {
+      if (logFailed) return
+      const fields = typeof why === 'string' ? { missing: why } : { name: why && why.name, message: String(why && why.message !== undefined ? why.message : why), stack: why && why.stack }
+      try {
+        const log = readErrorLog(globalThis.localStorage)
+        const same = (record) => record.script === script && record.version === version && record.sudokupad === sudokupad && record.feature === label && record.missing === fields.missing
+        if (fields.missing && log.some(same)) return
+        log.push({ time: new Date().toISOString(), script, version, sudokupad, feature: label, url: globalThis.location.href, ...fields })
+        globalThis.localStorage.setItem(ERROR_LOG_KEY, JSON.stringify(log.slice(-ERROR_LOG_LIMIT)))
+      } catch (error) {
+        logFailed = true
+        console.warn(`${script}: the error log cannot be saved, so ${label} and later features turned off are not recorded:`, error)
+      }
     }
 
     let bar = null
@@ -179,6 +228,7 @@
           if (feature.off) return
           feature.off = true
           reasons.push({ name: featureName, label, why })
+          recordFeatureOff(label, why)
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
             try {
@@ -236,11 +286,12 @@
     const guarded = Object.fromEntries(Object.entries(features).map(([featureName, declared]) => [featureName, createFeature(featureName, declared)]))
 
     function probe ({ roots, store, doc = document }) {
+      sudokupad = sudokupadVersion(doc)
       lackingInternals(features, roots).forEach((names, missing) => {
         names.forEach((featureName) => guarded[featureName].skip(missing, false))
         console.warn(`${script}: ${names.map((featureName) => features[featureName].label).join(', ')} skipped because SudokuPad has no ${missing}`)
       })
-      page = { store, doc, sudokupad: sudokupadVersion(doc) }
+      page = { store, doc, sudokupad }
       showNotice()
     }
 
