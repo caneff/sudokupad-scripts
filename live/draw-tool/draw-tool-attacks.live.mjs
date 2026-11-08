@@ -8,7 +8,7 @@ import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
 import { captureConsoleErrors, openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
-import { settle } from '../settle.mjs'
+import { SETTLE_MS, settle } from '../settle.mjs'
 
 const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS, slideTo } = draw
 const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
@@ -20,6 +20,8 @@ const RED = 4
 // A held arrow must carry a note past this many px (one press moves about 1), and Shift+arrow past this many.
 const HELD_FAR_PX = 15
 const SHIFT_FAR_PX = 40
+// The debounced save is 500 ms after typing pauses, so a read must stay unchanged longer than that before it is given up on.
+const SAVE_QUIET_MS = 1500
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -97,19 +99,42 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.deepEqual((await savedTexts()).sort(), ['old', 'typing'])
   })
 
-  it('attack 21: a note being typed in, then a reload, keeps the notes already saved, draws what it saves, and leaves no half-open note', async () => {
+  it('attack 21: a note being typed in is saved while typing, so a reload keeps it, drawn and saved alike, and leaves no half-open note', async () => {
     await typeAt(OTHER, 'saved')
     await clickAt(SPOT)
     await p.keyboard.type('unsaved')
+    // The debounced save, not the reload's pagehide, wrote it.
+    assert.deepEqual(await settle(savedTexts, ['saved', 'unsaved'], SETTLE_MS, SAVE_QUIET_MS), ['saved', 'unsaved'])
+    assert.equal(await boxOpen(), true, 'saving left the note open')
     await reload()
     await noOpenBox()
-    // Whether the unfinished text survives is not ruled (#590 asks only that saved and drawn notes match); the finished note must.
-    const drawn = await shown()
-    assert.ok(drawn.includes('saved'), `the finished note survived (${drawn})`)
-    assert.deepEqual((await savedTexts()).sort(), drawn.sort(), 'what is drawn is what is saved')
+    assert.deepEqual((await shown()).sort(), ['saved', 'unsaved'])
+    assert.deepEqual((await savedTexts()).sort(), ['saved', 'unsaved'], 'what is drawn is what is saved')
     // The page still takes a note.
-    await typeAt(SPOT, 'again')
+    await typeAt([7.5, 1.5], 'again')
     assert.ok((await shown()).includes('again'))
+  })
+
+  it('attack 21b: typing and reloading at once keeps the text through the pagehide save', async () => {
+    await clickAt(SPOT)
+    await p.keyboard.type('quick')
+    await reload()
+    await noOpenBox()
+    assert.deepEqual(await shown(), ['quick'])
+    assert.deepEqual(await savedTexts(), ['quick'])
+  })
+
+  it('attack 21c: an empty open note is not saved, and the saves while typing add no SudokuPad undo step and leave the note\'s own Undo whole', async () => {
+    const undoSteps = () => p.evaluate(() => Framework.app.puzzle.undoStack.length)
+    const before = await undoSteps()
+    await clickAt(SPOT)
+    await p.keyboard.type('abcdef')
+    await settle(savedTexts, ['abcdef'], SETTLE_MS, SAVE_QUIET_MS)
+    assert.equal(await undoSteps(), before, 'the saves added no undo step')
+    await p.keyboard.press('Control+z')
+    assert.equal(await boxText(), '', 'one Undo in the note removes everything typed')
+    await draw.finishNote(p)
+    assert.deepEqual(await savedTexts(), [], 'an empty note leaves nothing saved')
   })
 
   it('attack 22: Undo and Redo pressed over and over inside a note, and Undo from the toolbar, keep the note\'s text and SudokuPad\'s state sound', async () => {

@@ -2810,7 +2810,7 @@
 
   const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
 
-  function writeDrawing () {
+  function writeDrawing (items = drawing) {
     forgetParsedTexts()
     if (loadedKey === null) return
     reportKept()
@@ -2821,7 +2821,7 @@
     // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
     if (!storage.off) {
       try {
-        saveDrawingTo(Framework, loadedKey, drawing, keptEntries)
+        saveDrawingTo(Framework, loadedKey, items, keptEntries)
       } catch (err) {
         report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
       }
@@ -2931,6 +2931,8 @@
       // Only a typed character completes a symbol: deleting, pasting and Undo leave the text as it is.
       if (event.inputType === 'insertText') replaceTypedSymbol()
       showEditing(boardMap())
+      clearTimeout(openNoteSaveTimer)
+      openNoteSaveTimer = setTimeout(saveOpenNote, OPEN_NOTE_SAVE_MS)
     }))
     editing = { index, item, element }
     drawingLayer().append(element)
@@ -2976,9 +2978,25 @@
   // Blank lines before and after the text are dropped; line breaks inside it stay.
   const typedText = (element) => element.textContent.replace(/\r\n?/g, '\n').replace(/^\n+|\n+$/g, '')
 
+  // The open note is saved with the rest of the notes, as typed so far, once typing pauses and when the page is hidden or unloaded, so a reload or a crashed tab
+  // keeps it. The notes in memory are not changed: finishing the note decides them. An empty note is not saved.
+  const OPEN_NOTE_SAVE_MS = 500
+  let openNoteSaveTimer
+  function saveOpenNote () {
+    clearTimeout(openNoteSaveTimer)
+    if (!editing) return
+    const { index, item, element } = editing
+    const text = closedText(typedText(element))
+    if (text === '') return
+    const typed = { ...item, text }
+    editing.saved = true
+    writeDrawing(index === -1 ? [...drawing, typed] : drawing.map((note, i) => i === index ? typed : note))
+  }
+
   // An empty box removes its text.
   // Takes the open note's element and handles off the page, and ends any resize.
   function closeEditing () {
+    clearTimeout(openNoteSaveTimer)
     const open = editing
     editing = null
     resizing = null
@@ -2990,7 +3008,7 @@
 
   // Closes the open note. The index of the note it leaves, or -1 when there is none (it was empty).
   function finishText () {
-    const { index, item, element } = closeEditing()
+    const { index, item, element, saved } = closeEditing()
     const before = index === -1 ? '' : drawing[index].text
     const typed = typedText(element)
     // A last word `sum` becomes a sigma before the trailing spaces go, so a sigma the typist undid stays the word.
@@ -3007,7 +3025,8 @@
     }
     renderDrawing()
     if (changed && resized && text !== '') snapToPixels([index])
-    if (changed) saveNotes()
+    // A save made while typing is written over, even when the note ended as it began.
+    if (changed || saved) saveNotes()
     showPanelValues()
     return left
   }
@@ -3690,6 +3709,8 @@
       onWindow(textTool, 'mouseup', endResize, { capture: true })
       for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
       onWindow(textTool, 'keyup', releaseKey, { capture: true })
+      onWindow(textTool, 'pagehide', saveOpenNote)
+      document.addEventListener('visibilitychange', under(textTool, () => { if (document.visibilityState === 'hidden') saveOpenNote() }))
     })
     settingsUi.run(() => addSettingsEntry(dialogs, { name: 'drawtool', content: 'Text Anywhere', open: under(settingsUi, openDialog) }))
     boardNotes.run(() => {
