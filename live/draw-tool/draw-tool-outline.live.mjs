@@ -31,7 +31,7 @@ describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await clickAt(at)
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   const reload = async () => {
     await draw.reload(p)

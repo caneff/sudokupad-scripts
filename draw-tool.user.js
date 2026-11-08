@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.34.0
+// @version      0.35.0
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.34.0'
+  const VERSION = '0.35.0'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -208,7 +208,9 @@
   // The least a resize leaves of any note, in em, so a box stays a target for its handles even when the note is empty.
   const GRABBABLE_EM = 0.25
   // How far, in screen pixels, the mouse may move between press and release and the press still be a click.
-  const CLICK_SLOP = 2
+  const CLICK_SLOP = 4
+  // A selection rectangle smaller than this, in screen pixels both ways, that selects nothing is a click that slipped.
+  const RECTANGLE_CLICK_PX = 8
   const TEXT_BOX_CLASS = 'draw-tool-textbox'
   const CLEAR_CLASS = 'draw-tool-clear'
   const SETTINGS_CLASS = 'draw-tool-settings'
@@ -382,6 +384,10 @@
   // A note that ends in the word `sum` has no character typed after it to complete it, so closing the note does.
   const closedSymbols = (text) => text.replace(/\bsum$/, SYMBOLS.sum)
 
+  // What a closed note keeps of its typed text: trailing spaces and tabs go from every line, and blank lines before and after the text go, so a note of
+  // only spaces is empty. Line breaks inside the text stay.
+  const closedText = (typed) => typed.replace(/\r\n?/g, '\n').replace(/[ \t]+$/gm, '').replace(/^\n+|\n+$/g, '')
+
   // The symbol the character just typed before `caret` completed, or null. A pair is complete at the caret; `sum` only once a character that is not part of a word follows it.
   function symbolJustTyped (text, caret) {
     for (const found of text.slice(0, caret).matchAll(SYMBOL_PATTERN)) {
@@ -542,6 +548,11 @@
 
   // A press whose every point stays within the slop of where it began.
   const isClick = (points) => points.every(([x, y]) => Math.hypot(x - points[0][0], y - points[0][1]) <= CLICK_SLOP)
+
+  const isSmallRectangle = (points) => {
+    const [[ax, ay], [bx, by]] = [points[0], points[points.length - 1]]
+    return Math.abs(bx - ax) < RECTANGLE_CLICK_PX && Math.abs(by - ay) < RECTANGLE_CLICK_PX
+  }
 
   // A keypad button's data-value is text, and Framework.getData parses a saved number back as a number.
   function drawColor (value) {
@@ -1570,7 +1581,7 @@
     return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
   }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, closedText, isSmallRectangle, RECTANGLE_CLICK_PX, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, renderSamplePicks, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -2558,13 +2569,14 @@
       endResize(event)
       return
     }
+    if (resizing.cancelled) return
     resizing.to = eventPoint(event)
     inFrame('resize', showResize)
   }
 
   // The open note is restyled in place; a selected one is drawn again, and saved when the drag ends.
   function showResize () {
-    if (!resizing?.to) return
+    if (!resizing?.to || resizing.cancelled) return
     const { index, item, corner, anchor, offset, autoSize, to } = resizing
     const map = boardMap()
     const resized = resizedItem(item, anchor, [to[0] + offset[0], to[1] + offset[1]], map, corner, autoSize)
@@ -2824,34 +2836,45 @@
     return open
   }
 
+  // Closes the open note. The index of the note it leaves, or -1 when there is none (it was empty).
   function finishText () {
     const { index, item, element } = closeEditing()
     const before = index === -1 ? '' : drawing[index].text
     const typed = typedText(element)
-    const text = typed === before ? typed : closedSymbols(typed)
+    // A last word `sum` becomes a sigma before the trailing spaces go, so a sigma the typist undid stays the word.
+    const text = typed === before ? typed : closedText(closedSymbols(typed))
     const resized = index !== -1 && String(item.box) !== String(drawing[index].box)
+    let left = index
     const changed = text !== before || (index !== -1 && (item.color !== drawing[index].color || item.size !== drawing[index].size || itemOpacity(item) !== itemOpacity(drawing[index]) || Boolean(item.bg) !== Boolean(drawing[index].bg) || String(item.box) !== String(drawing[index].box)))
     if (changed) {
-      if (text === '') drawing.splice(index, 1)
-      else if (index === -1) drawing.push({ ...item, text })
+      if (text === '') {
+        drawing.splice(index, 1)
+        left = -1
+      } else if (index === -1) left = drawing.push({ ...item, text }) - 1
       else drawing[index] = { ...item, text }
     }
     renderDrawing()
     if (changed && resized && text !== '') snapToPixels([index])
     if (changed) saveNotes()
     showPanelValues()
+    return left
   }
 
   // SudokuPad's key listeners are on the document and the window, and its App's in the document's capture phase, so
   // a key typed in the box is stopped in the window's capture phase, before them all. Its default is left alone, so
-  // the note types, edits, pastes and composes as any editable text does, and F5 or Tab do what they do anywhere.
+  // the note types, edits, pastes and composes as any editable text does, and F5 does what it does anywhere.
   function keepBoxKeys (event) {
     if (!editing || event.target !== editing.element) return
     event.stopImmediatePropagation()
     if (event.type !== 'keydown' || event.isComposing) return
+    // Tab does nothing in the note: it neither closes it nor reaches SudokuPad.
+    if (event.key === 'Tab') event.preventDefault()
     if (event.key === 'Escape') {
       event.preventDefault()
-      finishText()
+      // A resize in progress is put back and the note stays open; otherwise the note closes and stays selected.
+      if (resizing && !resizing.cancelled) return cancelResize()
+      const left = finishText()
+      if (left !== -1) select([left])
     }
   }
 
@@ -2879,14 +2902,38 @@
   }
 
   // A drag ends its move or its selection rectangle on its release; a press that never moved does nothing more, unless `click` is given to run it.
+  // A drag Escape cancelled does nothing on its release. A small rectangle that selects nothing is a click that slipped.
   function endDrag (click = () => {}) {
     const ended = drag
     drag = null
     holdCursor(null)
     if (ended.rectangle) ended.rectangle.remove()
+    if (ended.cancelled) return
     if (isClick(ended.points)) click(ended)
     else if (ended.move) endMove(ended)
-    else if (ended.start === -1) selectInRectangle(ended)
+    else if (ended.start === -1) selectInRectangle(ended, click)
+  }
+
+  // Escape mid-drag puts the notes back where they were at the press. The press stays the tool's until its release, which then does nothing.
+  function cancelDrag () {
+    const d = drag
+    if (d.rectangle) d.rectangle.remove()
+    if (d.move) clearMove(d)
+    Object.assign(d, { move: null, rectangle: null, pending: [], cancelled: true })
+    redraw()
+  }
+
+  // Escape mid-resize puts the note back at the size it had at the press; an open note stays open.
+  function cancelResize () {
+    const { index, item } = resizing
+    resizing.cancelled = true
+    if (editing) {
+      editing.item = item
+      showEditing(boardMap())
+    } else {
+      drawing[index] = item
+      renderDrawing()
+    }
   }
 
   // An erase in progress, or a drag, ends as a release ends it; a press that never moved opens no text box. A nudge not yet saved is saved too.
@@ -2924,9 +2971,10 @@
     placeOver(d.rectangle, { left: box.left, top: box.top, right: box.left + box.width, bottom: box.top + box.height })
   }
 
-  function selectInRectangle (d) {
+  function selectInRectangle (d, click) {
     const map = boardMap()
     const touched = notesTouched(boardDrawing(map), map.toBoard(d.points[0]), map.toBoard(d.points[d.points.length - 1]))
+    if (touched.length === 0 && isSmallRectangle(d.points)) return click(d)
     select(d.shift ? [...selected, ...touched] : touched)
   }
 
@@ -2997,7 +3045,7 @@
 
   // The moves that reached the drag since the last frame, in order. A move goes no further than the last point that leaves every note reachable.
   function dragMoves () {
-    if (!drag) return
+    if (!drag || drag.cancelled) return
     const d = drag
     const map = boardMap()
     for (const point of d.pending.splice(0)) if (!d.move || moveKeepsReachable(d, point, map)) d.points.push(point)
@@ -3300,6 +3348,7 @@
         return true
       }
       if (!drag) return false
+      if (drag.cancelled) return true
       // The browser goes on sending a held drag's moves past the window's edge, so the frame checks each one.
       drag.pending.push(eventPoint(event))
       inFrame('drag', dragMoves)
@@ -3344,6 +3393,21 @@
       if (Framework.app.tool !== TOOL_NAME) return false
       holdShift = event.shiftKey
       if (event.key === 'Shift') return true
+      // Escape in the middle of a drag or a resize puts the notes back and ends the gesture; the selection stays.
+      if (event.key === 'Escape' && drag && !drag.cancelled) {
+        cancelDrag()
+        return true
+      }
+      if (event.key === 'Escape' && resizing && !resizing.cancelled) {
+        cancelResize()
+        return true
+      }
+      // Enter reopens the one selected note, the caret at its end, and types no line break into it.
+      if (event.key === 'Enter' && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey && selected.length === 1 && !editing && !drag) {
+        event.preventDefault()
+        openText(selected[0])
+        return true
+      }
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
       else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
