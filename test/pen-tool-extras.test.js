@@ -1632,10 +1632,12 @@ test('buildFeedbackCss fills the arrowheads beside an arrow pen\'s hint in that 
 })
 
 test('buildFeedbackCss fades the hint layer as one picture: 0.6 on the layer, the drag hint and its arrowheads solid, the erase hint at the 0.5 it has today', () => {
-  const rules = buildFeedbackCss(3).split('\n')
-  assert.ok(rules.includes(':root:root #pen-tool-extras-hint { opacity: 0.6; }'))
-  assert.ok(rules.includes(':root:root #pen-tool-extras-hint .penhint { opacity: 1; }'))
-  assert.ok(rules.includes(':root:root #pen-tool-extras-hint .penhint.pencolor-erase { opacity: calc(0.5 / 0.6); }'))
+  const rules = buildFeedbackCss(3).split('\n').filter((rule) => rule.startsWith(':root:root #pen-tool-extras-hint'))
+  assert.deepEqual(rules, [
+    ':root:root #pen-tool-extras-hint { opacity: 0.6; }',
+    ':root:root #pen-tool-extras-hint .penhint { opacity: 1; }',
+    ':root:root #pen-tool-extras-hint .penhint.pencolor-erase { opacity: calc(0.5 / 0.6); }'
+  ])
 })
 
 test('the outline filter grows the layer\'s combined shape by the default width with a square growth then a blur and a cut (round corners), fills it white and draws the layer over it', () => {

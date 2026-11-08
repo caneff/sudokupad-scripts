@@ -1540,6 +1540,21 @@
   // applied to it here and the outline filter is applied by `buildOutlineCss`.
   let fadedGroup = null
 
+  // What the faded group shows: the faded opacity under the pen layer's own, which the group, being beside the layer, does not get from it.
+  const fadedOpacity = () => FADED_OPACITY * inForce.opacity / 100
+
+  // A group of copies of `elements`, in `className`.
+  function copiesOf (className, elements) {
+    const group = document.createElementNS(SVG_NAMESPACE, 'g')
+    group.setAttribute('class', className)
+    elements.forEach((element) => {
+      const copy = element.cloneNode(true)
+      copy.classList.remove(FADED_CLASS)
+      group.appendChild(copy)
+    })
+    return group
+  }
+
   function fadeStrokes (elements) {
     const layer = previewLayer()
     const shown = layer ? elements : []
@@ -1548,14 +1563,8 @@
     if (fadedGroup !== null) fadedGroup.remove()
     fadedGroup = null
     if (!shown.length) return
-    fadedGroup = document.createElementNS(SVG_NAMESPACE, 'g')
-    fadedGroup.setAttribute('class', FADED_GROUP_CLASS)
-    fadedGroup.style.opacity = FADED_OPACITY * inForce.opacity / 100
-    shown.forEach((el) => {
-      const copy = el.cloneNode(true)
-      copy.classList.remove(FADED_CLASS)
-      fadedGroup.appendChild(copy)
-    })
+    fadedGroup = copiesOf(FADED_GROUP_CLASS, shown)
+    fadedGroup.style.opacity = fadedOpacity()
     layer.appendChild(fadedGroup)
   }
 
@@ -2025,12 +2034,9 @@
     return [...lines, ...marks]
   }
 
-  // Copies of what an erase is about to remove, taken before the puzzle changes. They sit in the highlight layer, which takes no pointer, and the group is outlined as the pen layer is.
+  // Copies of what an erase is about to remove, taken before the puzzle changes. They sit in the erase preview layer, beside the pen layer, and the group is outlined as the pen layer is.
   function erasedCopies (erase) {
-    const group = document.createElementNS(SVG_NAMESPACE, 'g')
-    group.setAttribute('class', ERASING_CLASS)
-    erasedElements(erase).forEach((element) => group.appendChild(element.cloneNode(true)))
-    return group
+    return copiesOf(ERASING_CLASS, erasedElements(erase))
   }
 
   const fadesErases = () => Boolean(previewLayer()) && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -2038,7 +2044,7 @@
   // The copies start where the erase preview left the strokes: at the faded opacity, under the pen layer's.
   function fadeOut (group) {
     previewLayer().appendChild(group)
-    group.animate([{ opacity: FADED_OPACITY * inForce.opacity / 100 }, { opacity: 0 }], { duration: ERASE_FADE_MS, easing: 'ease-out' }).onfinish = () => group.remove()
+    group.animate([{ opacity: fadedOpacity() }, { opacity: 0 }], { duration: ERASE_FADE_MS, easing: 'ease-out' }).onfinish = () => group.remove()
   }
 
   function finishErase (tool, erase) {
@@ -2160,8 +2166,8 @@
   const HINT_ERASE_OPACITY = 0.5
   const HINT_ARROWS_CLASS = 'pen-tool-extras-hint-arrows'
 
-  // The faded strokes, which are `.cell-pen`s, and the drag hint in the pen's style: a dashed page's dashes, laid out for the hint's width as a line's are for its own, and the
-  // fill of the arrowheads beside an arrow page's hint. `:root:root` outranks SudokuPad's rules whichever stylesheet loads last.
+  // The faded strokes, which are `.cell-pen`s (hidden: their copies in one group show the fade), the hint layer's opacity (the layer fades the hint and its arrowheads as one picture),
+  // and the drag hint in the pen's style: a dashed page's dashes, laid out for the hint's width as a line's are for its own, and the fill of the arrowheads beside an arrow page's hint. `:root:root` outranks SudokuPad's rules whichever stylesheet loads last.
   function buildFeedbackCss (dash) {
     const colorsOf = (pages) => pages.flatMap((page) => page.chars.map((char, i) => [char, PEN_COLOR_KEYS[i]]))
     const dashed = PEN_PAGES.filter((page) => page.dashed).flatMap((page) => page.chars)

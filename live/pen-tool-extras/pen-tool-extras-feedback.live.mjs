@@ -57,6 +57,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
   })
   const unback = () => read(() => document.getElementById('live-backing')?.remove())
   const sameColor = (a, b) => a.every((v, i) => Math.abs(v - b[i]) <= 2)
+  const fadedGroups = () => read(() => document.querySelectorAll('.pen-tool-extras-faded-group').length)
   const centreOf = (point) => gridPoint(p, point)
 
   const selectPenOnPage = async (page, key) => {
@@ -138,6 +139,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.ok(!sameColor(atMid, solid), `the preview is fainter than the line: ${atMid} against ${solid}`)
       assert.ok(sameColor(atJoint, atMid), `the joint ${atJoint} matches the middle of a segment ${atMid}`)
       await p.mouse.up({ button: 'right' })
+      assert.equal(await settle(fadedGroups, 0), 0, 'the release takes the group of copies away')
       await unback()
       await undoAll()
       await p.mouse.click(5, 5) // a click off the grid, or the next drag started right after a release draws nothing
@@ -157,6 +159,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
       assert.equal((await settle(fadedStrokes, ['2,2:1', '2,3:1'])).length, 2)
       await p.keyboard.press('Escape')
       assert.deepEqual(await settle(fadedStrokes, []), [], 'Escape clears the fade')
+      assert.equal(await settle(fadedGroups, 0), 0, 'and the group of copies that showed it')
       await p.mouse.move(...await gridPoint(p, [5.5, 3.0]), { steps: 8 })
       assert.deepEqual(await fadedStrokes(), [], 'the drag after Escape fades nothing')
       await p.mouse.up({ button: 'right' })

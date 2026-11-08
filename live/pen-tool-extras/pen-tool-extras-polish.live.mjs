@@ -38,7 +38,7 @@ const boot = async (p) => {
   await p.locator('.tool-pen button[data-key="1"]').click()
 }
 
-// From the moment the erased line's copies join the highlight layer: how many there were, how many pen entries the puzzle held then, and the opacity of the copies on each frame until they are gone.
+// From the moment the erased line's copies join the erase preview layer: its id and opacity, how many there were, how many pen entries the puzzle held then, and the opacity of the copies on each frame until they are gone.
 const watchFade = (p) => p.evaluate((selector) => {
   window.__fade = new Promise((resolve) => {
     const observer = new window.MutationObserver(() => {
@@ -46,7 +46,7 @@ const watchFade = (p) => p.evaluate((selector) => {
       if (!first) return
       observer.disconnect()
       const born = performance.now()
-      const result = { copies: first.children.length, penAtStart: Framework.app.puzzle.cells.reduce((n, c) => n + c.pen.length, 0), pointerEvents: window.getComputedStyle(first).pointerEvents, opacities: [] }
+      const result = { copies: first.children.length, penAtStart: Framework.app.puzzle.cells.reduce((n, c) => n + c.pen.length, 0), pointerEvents: window.getComputedStyle(first).pointerEvents, layer: first.parentNode.id, layerOpacity: window.getComputedStyle(first.parentNode).opacity, opacities: [] }
       const frame = () => {
         const group = document.querySelector(selector)
         if (!group) return resolve({ ...result, ms: performance.now() - born })
@@ -101,6 +101,7 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
       assert.equal(fade.copies, 3, 'one copy for each of the three segments')
       assert.equal(fade.penAtStart, 0, 'the puzzle had already lost the line when the copies appeared')
       assert.equal(fade.pointerEvents, 'none')
+      assert.deepEqual([fade.layer, fade.layerOpacity], ['pen-tool-extras-erase-preview', '1'], 'the copies sit in a layer that adds no opacity of its own (the hint layer carries 0.6)')
       assert.equal(fade.opacities.length >= 2, true, `${fade.opacities.length} frames`)
       assert.deepEqual([...fade.opacities].sort((a, b) => b - a), fade.opacities, 'never brighter than the frame before')
       assert.equal(fade.opacities.at(-1) < fade.opacities[0], true, 'it dimmed')
