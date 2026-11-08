@@ -10,6 +10,7 @@
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
 import { captureConsoleErrors, openPage, SKIP_LINE, startPuzzle } from '../page.mjs'
 import { closeExtrasEditorWith, openExtrasEditor } from '../settings.mjs'
@@ -40,12 +41,12 @@ function planted (anchor, line) {
 const CASES = [
   { name: 'pen pages missing', off: 'pen pages', warns: missing('pen pages', 'ToolPen.tool.handleToolExit'), noPageButton: true, breaks: 'ToolPen.tool.handleToolExit = undefined' },
   { name: 'drag highlight missing', off: 'drag highlight', warns: missing('drag highlight', 'ToolPen.tool.drawLineHint'), noDrag: true, breaks: 'ToolPen.tool.drawLineHint = undefined' },
-  { name: 'marks missing', off: 'marks, line erase', warns: missing('marks, line erase', 'Framework.app.grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
+  { name: 'marks missing', off: 'marks, line erase, mark preview', warns: missing('marks, line erase, mark preview', 'Framework.app.grid.rows'), edgeAgain: null, breaks: 'Framework.app.grid.rows = String(Framework.app.grid.rows)' },
   // SudokuPad's own clicks read xyToRCExact too, so it is hidden from the script's startup check only, and SudokuPad's own is back after it.
   {
     name: 'line erase missing',
-    off: 'line erase',
-    warns: missing('line erase', 'Framework.app.xyToRCExact'),
+    off: 'line erase, mark preview',
+    warns: missing('line erase, mark preview', 'Framework.app.xyToRCExact'),
     breaks: `Framework.app.xyToRCExact = undefined
       Framework.getApp().then(() => { delete Framework.app.xyToRCExact })`
   },
@@ -280,6 +281,22 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         })
         assert.equal(pulldown, kase.pulldown || 'hidden', 'SudokuPad\'s line mode pulldown')
       })
+
+      // The faint mark under the pointer previews this script's click, so it goes with the marks step and stays when nothing is broken.
+      if (kase.off === 'marks' || kase.off === NOTHING_OFF) {
+        it('the faint mark under the pointer shows only while the marks step is on', async () => {
+          await undoAll()
+          const [x, y] = await gridPoint(p, [2, 2.5])
+          await p.mouse.move(x + 1, y + 2)
+          await p.mouse.move(x, y + 2)
+          const ghosts = () => read(() => document.querySelectorAll('.pen-tool-extras-ghost').length)
+          if (kase.off === NOTHING_OFF) assert.equal(await settle(ghosts, 1), 1, 'a ghost shows when nothing is broken')
+          else {
+            await sleep(300) // "nothing happened in 300 ms" check
+            assert.equal(await ghosts(), 0, 'no ghost with the marks step off')
+          }
+        })
+      }
 
       // A dragged line is SudokuPad's own drawing; it needs the drag highlight, which one case removes.
       if (!kase.noDrag) {

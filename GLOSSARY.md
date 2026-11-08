@@ -112,6 +112,8 @@
   there is no corner zone.
 - **corner cycle** — the order a left click in a corner zone steps through: X, circle, empty, skipping an unticked
   type.
+- **mark preview** — Pen Tool Extras' faint copy of the mark the next left click under the pointer would place (the **ghost**, in the hint layer at 0.3 opacity), or, when that click clears the spot, the marks it would clear drawn faint. The install step is `mark preview`.
+- **faded stroke** — a pen stroke drawn at 0.3 opacity because the **pen erase** held under the right button will take it, or the **mark preview** says the next click clears it.
 - **pen erase** — Pen Tool Extras' right click or drag in the pen tool: the whole line under the pointer and the edge, corner and cell marks it crosses, as one undo step. Text Anywhere's **erase** is a different feature. The install step that does it is `line erase`.
 - **thickness** — the setting, with a slider in the pen tool's panel and one in the settings dialog, setting the stroke width of the pen's free lines, the cell circle,
   cross and dot (pen values 5, 6 and z) and every edge mark and grid-corner mark, from 1 to 16 in half steps (31 positions, shown as `2.5`), saved at once, on every move, under `PenColor_thickness`.
@@ -168,7 +170,7 @@
   with a dot for each enabled page and the current one filled; Tab turns the page too, and so does the mouse wheel over the button only (as SudokuPad's color tool's
   wheel works over its own page button, not over the rest of its panel).
 - **install step** — one of the parts Pen Tool Extras installs at startup, each a **feature** of the **SudokuPad guard**: colors, color save, pen pages, arrow
-  lines, drag highlight, marks, line erase, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
+  lines, drag highlight, marks, line erase, mark preview, pen panel. Its saved settings and settings dialog are features too, but not install steps. A step is **skipped** when SudokuPad lacks an internal it
   needs or its own code throws: one console warning names it, the **notice bar** and the settings dialog's "Off because SudokuPad changed" line list it,
   and the pad works as stock SudokuPad there until the page reloads. Not an undo step, a cycle step or a page step.
 - **SudokuPad guard** — `lib/sudokupad.js`: a script declares its **features**, each with a label and the SudokuPad internals it needs, and a
