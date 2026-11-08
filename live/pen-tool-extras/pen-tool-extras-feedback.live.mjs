@@ -137,16 +137,16 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
     const marksOf = (row, col) => penEntries(p).then((all) => all.filter((v) => v.startsWith(`${row},${col}:`)).map((v) => v[v.indexOf(':') + 1]))
     const NEXT_MS = 2000
 
-    // Hovers, then clicks, until the cycle ends; the ghost before each click must be the mark the click stores.
+    // Hovers once, then clicks in place until the cycle ends, never moving: the ghost before each click must be the mark the click stores, and after the click it must show the next step.
     const cycleAt = async (point, [row, col], label) => {
       const seen = []
+      await hover(point)
+      // The ghost of the spot the pointer left may still show for one throttle tick, so the first reading waits for the ghost to hold still.
+      let ghost = await settle(async () => JSON.stringify(await ghostOf()), undefined, NEXT_MS).then(ghostOf)
       for (let step = 0; step < 8; step++) {
-        await hover(point)
-        const ghost = await settle(async () => JSON.stringify(await ghostOf()), undefined, NEXT_MS).then(async () => ghostOf())
-        const before = await marksOf(row, col)
         if (ghost === null) {
           // The next step empties the spot: the mark that is there is faded instead.
-          assert.ok(before.length > 0, `${label}: no ghost and no mark to clear`)
+          assert.ok((await marksOf(row, col)).length > 0, `${label}: no ghost and no mark to clear`)
           assert.ok((await fadedStrokes()).length > 0, `${label}: the mark the click clears is faded`)
           await p.mouse.click(...await gridPoint(p, point))
           assert.deepEqual(await settle(() => marksOf(row, col), []), [], `${label}: the click clears it`)
@@ -159,7 +159,11 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
         seen.push(ghost.value)
         await p.mouse.click(...await gridPoint(p, point))
         const stored = await settle(async () => (await marksOf(row, col)).includes(ghost.value), true)
-        assert.equal(stored, true, `${label}: the click stores the ghost's mark ${ghost.value}; the cell holds ${await marksOf(row, col)}`)
+        assert.equal(stored, true, `${label}: the click stores the ghost's mark ${ghost.value}; the cell holds ${await marksOf(row, col)} after ${seen}`)
+        const shown = ghost.value
+        // The pointer has not moved: the ghost shows the step after the click made, with no move to ask for it.
+        ghost = await settle(async () => JSON.stringify(await ghostOf()), undefined, NEXT_MS).then(ghostOf)
+        assert.notEqual(ghost && ghost.value, shown, `${label}: after the click the ghost still shows ${shown}`)
       }
       throw new Error(`${label}: the cycle did not end in 8 clicks: ${seen}`)
     }
