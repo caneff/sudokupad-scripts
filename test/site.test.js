@@ -185,7 +185,7 @@ test(`${DETAILS} has no picture inside its feature grid, and no figure but the p
   const page = read(DETAILS)
   for (const li of items(page)) assert.deepEqual(imgs(li), [], `"${leadIn(li)}" has a picture`)
   assert.doesNotMatch(page, /<figure\b/)
-  assert.equal(imgs(page).length, PEN_SLIDES.length + 1, 'the page has the slides and the pen panel picture')
+  assert.equal(imgs(page).length, SOURCE['pen-tool-extras'].slides.length + 1, 'the page has the slides and the pen panel picture')
 })
 
 test(`${DETAILS} good to know says others need the script to see dashed and arrow lines`, () => {
@@ -229,53 +229,43 @@ test(`${HOME}'s other rows show one picture and no pager`, () => {
   }
 })
 
-// Each slideshow: its picture file's name (after the script's prefix) and its caption, in order.
-const CBD_SLIDES = [
-  ['1-start', 'Start'], ['2-type', 'Type a 1'], ['3-marks', 'Center marks 7 and 9'], ['4-add', 'Add a center mark 2'], ['5-digit', 'Digit'], ['6-both', 'Both'],
-  ['7-off', 'Off'], ['8-menu', 'Open the profile menu'], ['9-modular', 'Pick Modular'], ['10-split', 'Cells from one profile, digits from another']
-]
-const PEN_SLIDES = [
-  ['1-line', 'Draw a line'], ['2-hold', 'Hold a color button'], ['3-color', 'Pick a color'], ['4-solid', 'A solid line'], ['5-dashed', 'A dashed line'], ['6-arrow', 'An arrow line'],
-  ['7-edges', 'Marks on cell edges: click for an X, again for a circle, again for an arrow, again to turn it round'], ['8-corner', 'Marks on grid corners: click for an X, again for a circle'], ['9-thickness', 'Thickness'], ['10-opacity', 'Opacity'],
-  ['11-outline-off', 'White outlines off'], ['12-outline-on', 'White outlines on'], ['13-erase', 'Right-click a line to delete it'], ['14-erased', 'The whole line is gone']
-]
-const DRAW_SLIDES = [
-  ['1-type', 'Left click to type a note'], ['3-background', 'Background: a box behind the next note'],
-  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note']
-]
+// Each slideshow's pictures, alt text and captions live once, in site/slideshows.json; `node sync-slides.js` writes them into the pages.
+const { SHOWS: SOURCE, syncText } = require('../sync-slides.js')
 const SHOWS = [
-  { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
-  { heading: 'Pen Tool Extras', page: DETAILS, prefix: 'pen-tool-extras/pen-tool-extras-slide-', slides: PEN_SLIDES },
-  { heading: 'Text Anywhere', page: DRAW, prefix: 'draw-tool/draw-tool-slide-', slides: DRAW_SLIDES }
+  { heading: 'Color by Digit', page: CBD, id: 'color-by-digit' },
+  { heading: 'Pen Tool Extras', page: DETAILS, id: 'pen-tool-extras' },
+  { heading: 'Text Anywhere', page: DRAW, id: 'text-anywhere' }
 ]
 
 // A slideshow's own markup, from a homepage row or a details page (where it ends at "What it adds").
 const showOf = html => html.split('<div class="slideshow">')[1].split(/<h2>What it adds<\/h2>|<\/section>/)[0]
-const captionsOf = html => [...html.matchAll(/<p class="slide-caption( current)?">([^<]*)<\/p>/g)].map(m => ({ current: Boolean(m[1]), text: m[2] }))
 const homeShow = heading => showOf(rowsOf(read(HOME)).find(r => r.includes(`<h2>${heading}</h2>`)))
 
-for (const { heading, page: file, prefix, slides } of SHOWS) {
-  test(`${HOME}'s ${heading} row is a slideshow of ${slides.length} slides, each a tagged picture of its own file with a caption, the first showing without script`, () => {
-    const show = homeShow(heading)
-    const pictures = imgs(show)
-    const captions = captionsOf(show)
-    assert.deepEqual(captions.map(c => c.text), slides.map(([, caption]) => caption))
-    assert.equal(pictures.length, slides.length)
-    pictures.forEach((img, i) => {
-      assert.match(img, i === 0 ? /class="slide current"/ : /class="slide"/)
-      assert.match(img, new RegExp(`src="${RAW.replace(/\./g, '\\.')}docs/research/${prefix}${slides[i][0]}\\.png\\?v=[0-9a-f]{7}"`))
-      assert.match(img, /\balt="[^"]*[^"\s][^"]*"/)
-      assertDeclaredAtFileShape(img, `docs/research/${prefix}${slides[i][0]}.png`, `slide ${i + 1}`)
-    })
-    assert.deepEqual(captions.map(c => c.current), slides.map((_, i) => i === 0))
-    assert.doesNotMatch(plain(show), /middle/i)
+test('slideshows.json names exactly the slideshows the site shows', () => {
+  assert.deepEqual(Object.keys(SOURCE).sort(), SHOWS.map(s => s.id).sort())
+})
+
+for (const { heading, page: file, id } of SHOWS) {
+  const { dir, slides } = SOURCE[id]
+  test(`slideshows.json's ${heading} is ${slides.length} slides, each a picture of a file that exists with alt text and a caption`, () => {
+    for (const [i, { picture, alt, caption }] of slides.entries()) {
+      assert.ok(fs.existsSync(path.join(ROOT, dir, picture)), `slide ${i + 1}: ${dir}${picture} is missing`)
+      assert.match(alt, /\S/, `slide ${i + 1} has no alt text`)
+      assert.match(caption, /\S/, `slide ${i + 1} has no caption`)
+    }
+    assert.doesNotMatch(plain(slides.map(s => s.caption).join(' ')), /middle/i)
   })
 
-  test(`${file} opens with the homepage's ${heading} slideshow, picture for picture and caption for caption`, () => {
-    const onPage = showOf(read(file))
-    assert.deepEqual(imgs(onPage), imgs(homeShow(heading)))
-    assert.deepEqual(captionsOf(onPage), captionsOf(homeShow(heading)))
-    assert.equal(imgs(onPage).length, slides.length)
+  for (const page of [HOME, file]) {
+    test(`${page} shows ${heading} as slideshows.json says: node sync-slides.js has been run`, () => {
+      const raw = fs.readFileSync(path.join(SITE_DIR, page), 'utf8')
+      assert.match(raw, new RegExp(`<!-- slideshow:${id} -->`), `${page} has no <!-- slideshow:${id} --> block`)
+      assert.deepEqual(syncText(raw), { text: raw, problems: [] })
+    })
+  }
+
+  test(`${HOME}'s ${heading} slides each declare the size of their file`, () => {
+    imgs(homeShow(heading)).forEach((img, i) => assertDeclaredAtFileShape(img, `${dir}${slides[i].picture}`, `slide ${i + 1}`))
   })
 }
 
