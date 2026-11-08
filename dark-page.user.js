@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.4
+// @version      0.5.6
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.4'
+  const VERSION = '0.5.6'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -206,6 +206,14 @@
   const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
   const SETTINGS_GROUP = 'experimental'
   const TITLE_MUTED = '#777'
+  const STATUS_ATTRIBUTE = 'data-role="settings-status"'
+  const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
+
+  function setDialogStatus (dialog, message) {
+    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  }
+  // A thrown value that is not an Error has no message, so it is shown as itself.
+  const errorText = (error) => error?.message ?? String(error)
 
   // The next press ends the swallowing even when no release came (a close from the keyboard).
   function swallowRelease (win = window) {
@@ -252,7 +260,7 @@
   function renderDialogTitle ({ prefix, name, version }) {
     return `<style>${dialogTitleCss(prefix)}</style>` +
       `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
-      '<span data-role="settings-status"></span>' +
+      `<span ${STATUS_ATTRIBUTE}></span>` +
       `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
   }
 
@@ -268,7 +276,7 @@
       `${tools} svg { width: 20px; height: 20px; }`,
       `${tools} svg * { fill: none !important; }`,
       // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row [data-role="settings-status"] { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
     ].join('\n')
   }
 
@@ -299,12 +307,15 @@
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
+    // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
+    let failed = false
     const saveAndClose = () => {
       try {
-        if (changed()) save()
+        if (failed || changed()) save()
       } catch (error) {
+        failed = true
         // The dialog stays open so the failure is read and the choices are kept.
-        doc.getElementById(bodyId).closest('.dialog').querySelector('[data-role="settings-status"]').textContent = `Not saved: ${error.message}`
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
         return
       }
       close()
@@ -334,6 +345,7 @@
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
+  /* global setDialogStatus, errorText */ // from settings-dialog.js, which every script carries beside this one
   // A reader returns the value to save, or undefined for one it refuses. Keys of other scripts are ignored, not counted: only a value of the script's own that its reader refuses is skipped. `upgrade` rewrites the parsed object first, for text copied by an older version.
   function pastedSettings (text, readers, upgrade = (data) => data) {
     let data
@@ -362,7 +374,7 @@
 
   // Wires the title row's Copy settings and Paste settings icons: `copied()` is the text to copy, `apply(values)` takes what a paste kept; `readers` and `upgrade` are `pastedSettings`'.
   function wireCopyPaste (root, { copied, readers, upgrade }, apply) {
-    const say = (message) => { root.querySelector('[data-role="settings-status"]').textContent = message }
+    const say = (message) => setDialogStatus(root, message)
     root.addEventListener('click', async (event) => {
       const act = event.target.closest('button[data-act]')?.dataset.act
       if (act !== 'copy-settings' && act !== 'paste-settings') return
@@ -378,7 +390,7 @@
           say(pasteReport(Object.keys(values).length, skipped))
         }
       } catch (error) {
-        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${error.message}`)
+        say(`Could not ${act === 'copy-settings' ? 'copy' : 'paste'}: ${errorText(error)}`)
       }
     })
   }
