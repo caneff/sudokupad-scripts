@@ -67,7 +67,7 @@ shared `lib/` code with a test. L is more.
 
 - **Fade the board's cell colors in on a mode or profile change.** SudokuPad remakes its color layer's nodes on each change
   (`color-by-digit-redraw-cost.md`: about 80 nodes per entry), so a fade would also catch nodes that did not change. Undo
-  bypasses `app.act` and would still snap. Apple HIG advises against motion on frequent interactions.
+  (a replay or a progress load, which bypass `app.act`) would still snap. Apple HIG advises against motion on frequent interactions.
 - **A toast or flash when the mode changes.** The word above the chips and the chips' look already change on the press.
   A second signal would repeat them, and Apple HIG, Feedback keeps confirmations for important actions.
 - **Animate the dialog's close.** SudokuPad's `Framework.closeDialog` removes it. Animating only this script's dialog
@@ -80,9 +80,8 @@ shared `lib/` code with a test. L is more.
   reopens with one click.
 - **Clearer swatch names (`title` is the palette key, such as `j`).** It helps a screen reader more than mouse and
   keyboard feel, and the color is visible. Low value.
-- **Undo after a mode change.** A worry, not polish: undoing the Off→Cell fill (one undo step) seems to leave the mode at
-  Cell with the cells uncolored, because undo bypasses `app.act` and does not touch `mode`. **Not checked live.** If
-  confirmed, file it as a bug.
+- **Undo after a mode change.** It was a real bug (#537), seen live: Undo left the mode at Cell with the cells uncolored. Fixed: the
+  mode follows the board (`live/color-by-digit/color-by-digit-undo.live.mjs`).
 - **Anything for phones or tablets, a right-button drag, or SudokuPad's dark mode:** the owner's standing rejections.
 
 ## Coverage

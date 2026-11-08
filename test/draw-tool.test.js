@@ -6,7 +6,7 @@ const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
 const { quietly } = require('./fake-store.js')
 const { failEachListener } = require('./specs/broken-sudokupad.js')
-const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
+const { snapAxis, SNAP_PX, nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, closedSymbols, symbolJustTyped, toggledCheck, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, SHOWN_AT, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, renderSamplePicks, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
 // The parts of an Event toolNamesFor reads: eventPhase is 0 once the browser has finished dispatching it.
@@ -621,6 +621,57 @@ test('a dash that does not start a line, or has no space after it, is not a bull
 
 test('a line that starts with italic markers and no space is italic, not a bullet', () => {
   assert.deepEqual(parseMarkdown('*one* and'), [[{ text: 'one', italic: true }, { text: ' and' }]])
+})
+
+test('a line starting "- [ ] " or "- [x] " is a checklist item, a box run with its checked state, then the rest read as markdown', () => {
+  assert.deepEqual(parseMarkdown('- [ ] buy'), [[{ text: '☐', bullet: true, checked: false }, { text: 'buy' }]])
+  assert.deepEqual(parseMarkdown('- [x] **done**'), [[{ text: '☑', bullet: true, checked: true }, { text: 'done', bold: true }]])
+  assert.deepEqual(parseMarkdown('- [X] caps')[0][0].checked, true)
+})
+
+test('a "- [" line without the box shape, or a plain "- " line, stays a bullet', () => {
+  assert.deepEqual(parseMarkdown('- [] x'), [[{ text: '•', bullet: true }, { text: '[] x' }]])
+  assert.deepEqual(parseMarkdown('- [ ]x'), [[{ text: '•', bullet: true }, { text: '[ ]x' }]])
+  assert.deepEqual(parseMarkdown('- one'), [[{ text: '•', bullet: true }, { text: 'one' }]])
+})
+
+test('toggledCheck flips one line\'s box and leaves the other lines alone', () => {
+  assert.equal(toggledCheck('a\n- [ ] b\n- [ ] c', 1), 'a\n- [x] b\n- [ ] c')
+  assert.equal(toggledCheck('- [x] b', 0), '- [ ] b')
+  assert.equal(toggledCheck('- [X] b', 0), '- [ ] b')
+  assert.equal(toggledCheck('plain', 0), 'plain')
+})
+
+test('closedSymbols turns a note\'s last word "sum" into a sigma, since nothing is typed after it', () => {
+  assert.equal(closedSymbols('r5 sum'), 'r5 Σ')
+  assert.equal(closedSymbols('sum'), 'Σ')
+  assert.equal(closedSymbols('sum of 5'), 'sum of 5')
+  assert.equal(closedSymbols('summary'), 'summary')
+  assert.equal(closedSymbols('subsum'), 'subsum')
+  assert.equal(closedSymbols('a->b'), 'a->b')
+})
+
+test('symbolJustTyped gives each pair its sign', () => {
+  const sign = (pair) => symbolJustTyped(`a${pair}`, 3).symbol
+  assert.deepEqual(['->', '<-', '!=', '<=', '>='].map(sign), ['→', '←', '≠', '≤', '≥'])
+})
+
+test('symbolJustTyped leaves text without a symbol alone', () => {
+  assert.equal(symbolJustTyped('a - b < c = d > e !', 19), null)
+  assert.equal(symbolJustTyped('', 0), null)
+})
+
+test('symbolJustTyped finds the pair that ends at the caret, with the sign to put there', () => {
+  assert.deepEqual(symbolJustTyped('a->', 3), { start: 1, end: 3, symbol: '→' })
+  assert.deepEqual(symbolJustTyped('a>=b', 3), { start: 1, end: 3, symbol: '≥' })
+  assert.equal(symbolJustTyped('a-', 2), null)
+  assert.equal(symbolJustTyped('a->b', 4), null)
+})
+
+test('symbolJustTyped replaces "sum" only once the character after it is typed, so "summary" survives', () => {
+  assert.equal(symbolJustTyped('sum', 3), null)
+  assert.equal(symbolJustTyped('summ', 4), null)
+  assert.deepEqual(symbolJustTyped('x sum ', 6), { start: 2, end: 5, symbol: 'Σ' })
 })
 
 const width = (item) => textBox(item).right - textBox(item).left
