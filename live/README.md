@@ -46,3 +46,19 @@ artifact. A run on an unchanged version makes one request to SudokuPad and runs 
 GitHub turns off a public repository's scheduled workflows after 60 days with no repository activity. To turn it
 back on, open the Actions tab, pick "Watch SudokuPad" and press "Enable workflow" (or run
 `gh workflow enable watch.yml`).
+
+## The Tampermonkey test
+
+`npm run test:tampermonkey` (`live/tampermonkey/install.tampermonkey.mjs`) installs every `*.user.js` into a real
+Tampermonkey in Playwright's Chromium, the way a user does: open the script's URL, click Install. Each script's copy on
+main goes in first, from `raw.githubusercontent.com`, then the checkout's copy, served from `127.0.0.1`, over it.
+Tampermonkey must offer the second as an update and its dashboard must list each script once, at the checkout's
+`@version`, which is what a changed `@name` or `@namespace` breaks. Then each script must run on the puzzle page, served
+from the recording. The recipe and its caveats are `docs/research/tampermonkey-in-playwright.md`.
+
+- Tampermonkey is closed-source freeware: its CRX is fetched at run time from Google's update endpoint into
+  `tampermonkey/` beside the recording, again once it is a day old, and never committed.
+- It needs `tampermonkey.net` and the CRX endpoint, so it stays out of `npm test` and `npm run test:live`.
+- It runs when a change touches any line of a `// ==UserScript==` header, at the controller's merge check for such a PR,
+  and every night in the daily watch, after `watch:live`, so a Tampermonkey or Chrome change shows up within a day.
+- It does not cover the Chrome Web Store install, the browser's own prompts or Tampermonkey's scheduled update check.

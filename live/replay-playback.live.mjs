@@ -1,6 +1,6 @@
 // Live check that SudokuPad's replay tool plays a solve back with every script installed, on sudokupad.app in headless
 // Chromium. How the tool is turned on, its button, its key and how it plays: docs/research/sudokupad-replay-tool.md.
-// A real Tampermonkey install and crackingthecryptic.com stay untested.
+// Replay under a real Tampermonkey install and on crackingthecryptic.com stays untested.
 import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
