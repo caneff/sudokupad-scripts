@@ -161,6 +161,10 @@ that the slider sets `opacity` on `.cell-pen` and that overlaps darken at every 
   group (`penhint` is made with `renderPart({target: 'cell-pen'})`), so the layer's opacity would fade them. The script
   moves the hint element to its own `g#pen-tool-extras-hint` right after the pen layer as soon as `drawLineHint` makes
   it. Live: their effective opacity, the product over their ancestors, is 0.6 and 0.5 with the slider at 20 and at 100.
+  The hint layer itself carries the 0.6 (`.penhint` and the arrowheads beside an arrow pen's hint are solid inside it; the
+  erase hint is `calc(0.5 / 0.6)`), so an arrowhead over the hint line shows the line's shade instead of stacking to about 0.84 (#580).
+  The right-click erase preview does the same: the faded strokes are hidden and one group of copies, in `g#pen-tool-extras-erase-preview`,
+  carries the 0.3, so the joints between a line's segments are not darker.
 
 ### The panel
 
