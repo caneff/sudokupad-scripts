@@ -4,7 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
-const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSaved, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
+const { buildCss, BOARD, BOARD_ID, VERSION, DEFAULT_COLOR, textColorFor, savedColor, readSaved, earlyColor, LOCAL_DATA_KEY, DATA_KEY, lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS } = require('../dark-page.user.js')
 const { contrastRatio, hexChannels } = require('./contrast.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -33,6 +33,19 @@ test('readSaved reads the saved color through the Framework, and lets a Framewor
   assert.equal(readSaved({ getData: () => null }), null)
   assert.throws(() => readSaved({}), TypeError)
   assert.throws(() => readSaved({ getData: () => { throw new Error('storage blocked') } }), /storage blocked/)
+})
+
+test('earlyColor reads the saved color straight from localStorage, where Framework has put it, and lets blocked storage throw', () => {
+  assert.equal(LOCAL_DATA_KEY, 'svencodes_DarkPage_color')
+  assert.equal(earlyColor({ getItem: (key) => (key === LOCAL_DATA_KEY ? '#ABCDEF' : null) }), '#abcdef')
+  assert.equal(earlyColor({ getItem: () => null }), null)
+  assert.equal(earlyColor({ getItem: () => 'red' }), null)
+  assert.throws(() => earlyColor({ getItem: () => { throw new Error('storage blocked') } }), /storage blocked/)
+})
+
+test('the script runs at document-start, so the page color is there before the first paint', () => {
+  const header = fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8').split('==/UserScript==')[0]
+  assert.match(header, /^\/\/ @run-at\s+document-start$/m)
 })
 
 test('the credit line takes the text color for the page color given', () => {
