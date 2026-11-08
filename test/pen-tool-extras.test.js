@@ -15,7 +15,7 @@ const {
   LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, arrowLine,
   ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave,
   linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS,
-  createStep, lackingInternals, STEP_LABELS,
+  lackingInternals, penRequirements, STEP_LABELS,
   edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf
 } = require('../pen-tool-extras.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
@@ -1734,125 +1734,6 @@ test('eraseActs removes a cell\'s marks after the lines, each cell in its own gr
   assert.deepEqual(eraseActs([], [{ cell: one, values: ['3'] }], cellAt), [{ type: 'select', arg: [one] }, { type: 'pen', arg: '3' }])
 })
 
-// A step with its warnings and skipped labels caught.
-const newStep = (onSkip) => {
-  const warned = []
-  const skipped = []
-  const warn = console.warn
-  console.warn = (...args) => warned.push(args)
-  const step = createStep('marks', skipped, onSkip)
-  return { step, warned, skipped, restore: () => { console.warn = warn } }
-}
-
-test('a throw in a step\'s own code skips it, warns once naming it, and the fallback answers from then on', (t) => {
-  const { step, warned, skipped, restore } = newStep()
-  t.after(restore)
-  const boom = new TypeError('x is not a function')
-  let runs = 0
-  const run = () => { runs++; throw boom }
-  assert.equal(step.run(run, () => 'fallback'), 'fallback')
-  assert.equal(step.run(run, () => 'again'), 'again')
-  assert.equal(runs, 1, 'a skipped step is not run again')
-  assert.deepEqual(warned, [['pen-tool-extras: marks skipped because SudokuPad changed:', boom]])
-  assert.deepEqual(skipped, ['marks'])
-})
-
-test('a step that works runs, keeps its result and warns nothing', (t) => {
-  const { step, warned, restore } = newStep()
-  t.after(restore)
-  assert.equal(step.run(() => 42, () => 'fallback'), 42)
-  assert.deepEqual(warned, [])
-})
-
-test('a wrapper whose own code throws after SudokuPad\'s call answers with that call\'s result, without calling it twice, and is stock from then on', (t) => {
-  const { step, warned, restore } = newStep()
-  t.after(restore)
-  const calls = []
-  let ownRuns = 0
-  const owner = { click (n) { calls.push(n); return n * 10 } }
-  step.wrap(owner, 'click', (stock, n) => { ownRuns++; stock(n); throw new Error('own') })
-  assert.equal(owner.click(1), 10)
-  assert.deepEqual(calls, [1])
-  assert.equal(owner.click(2), 20)
-  assert.deepEqual(calls, [1, 2])
-  assert.equal(ownRuns, 1, 'the wrapper\'s own code does not run once the step is skipped')
-  assert.equal(warned.length, 1)
-})
-
-test('a wrapper whose own code throws after another SudokuPad function ran for the event does not call the original', (t) => {
-  const { step, warned, restore } = newStep()
-  t.after(restore)
-  const sent = []
-  const owner = { click () { sent.push('stock click') }, send (act) { sent.push(act) } }
-  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.send('mark')); throw new Error('own') })
-  assert.equal(owner.click(), undefined)
-  assert.deepEqual(sent, ['mark'], 'the click is not sent a second time')
-  assert.equal(warned.length, 1)
-})
-
-test('a wrapper whose own code throws after a SudokuPad call that sends nothing still calls the original', (t) => {
-  const { step, restore } = newStep()
-  t.after(restore)
-  const sent = []
-  const owner = { click () { sent.push('stock click') }, peek () { return 'queued' } }
-  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.peek(), false); throw new Error('own') })
-  owner.click()
-  assert.deepEqual(sent, ['stock click'])
-})
-
-test('a throw from a SudokuPad function called through stock.sudokupad passes through, is not retried and leaves the step on', (t) => {
-  const { step, warned, skipped, restore } = newStep()
-  t.after(restore)
-  const stockError = new TypeError('render failed')
-  const sent = []
-  const owner = { click () { sent.push('stock click') }, send (act) { sent.push(act); throw stockError } }
-  step.wrap(owner, 'click', function (stock) { stock.sudokupad(() => this.send('mark')) })
-  assert.throws(() => owner.click(), (error) => error === stockError)
-  assert.deepEqual(sent, ['mark'])
-  assert.deepEqual([warned, skipped], [[], []])
-})
-
-test('a wrapper whose own code throws before SudokuPad\'s call makes that call with the arguments it was given', (t) => {
-  const { step, restore } = newStep()
-  t.after(restore)
-  const owner = { name: 'pen', click (n) { return `${this.name} ${n}` } }
-  step.wrap(owner, 'click', () => { throw new Error('own') })
-  assert.equal(owner.click(3), 'pen 3')
-})
-
-test('a throw in SudokuPad\'s own function passes through a wrapper and leaves the step on', (t) => {
-  const { step, warned, skipped, restore } = newStep()
-  t.after(restore)
-  const stockError = new TypeError('SudokuPad broke')
-  let fail = true
-  const owner = { click () { if (fail) throw stockError; return 'stock' } }
-  step.wrap(owner, 'click', (stock) => `own ${stock()}`)
-  assert.throws(() => owner.click(), (error) => error === stockError)
-  fail = false
-  assert.equal(owner.click(), 'own stock')
-  assert.deepEqual([warned, skipped], [[], []])
-})
-
-test('a step skipped puts back what it changed once, and a failure there is warned, not thrown', (t) => {
-  let undone = 0
-  const { step, warned, restore } = newStep(() => { undone++; throw new Error('undo') })
-  t.after(restore)
-  step.run(() => { throw new Error('own') })
-  step.skip(new Error('again'))
-  assert.equal(undone, 1)
-  assert.equal(warned.length, 2)
-  assert.match(warned[1][0], /^pen-tool-extras: could not undo marks/)
-})
-
-test('a step skipped for a missing internal is quiet and puts nothing back: nothing was installed', (t) => {
-  let undone = 0
-  const { step, warned, skipped, restore } = newStep(() => { undone++ })
-  t.after(restore)
-  step.skip('getInputRc', false)
-  assert.equal(step.run(() => 'ran', () => 'fallback'), 'fallback')
-  assert.deepEqual([warned, skipped, undone], [[], ['marks'], 0])
-})
-
 test('every settings table row with a section is drawn in the dialog, so a section whose rows went astray fails here', () => {
   const html = renderEditor(editorState())
   for (const [name, row] of Object.entries(SETTINGS)) {
@@ -2088,6 +1969,7 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
 
 // The requirement table: which SudokuPad internal each install step cannot work without.
 const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
+const FRAMEWORK_FNS = ['getData', 'setData', 'addSetting', 'showDialog']
 // A SudokuPad stand-in with every internal the steps need.
 const completeSudokuPad = () => {
   class Renderer {
@@ -2106,12 +1988,14 @@ const completeSudokuPad = () => {
     puzzle: { cells: [] },
     xyToRCExact: () => {}
   }
-  return { app, tool }
+  const framework = Object.fromEntries(FRAMEWORK_FNS.map((name) => [name, () => {}]))
+  return { app, tool, framework }
 }
+// Each step that lacks a member, by its name in STEP_LABELS, and the first member it lacks.
+const lacking = ({ app, tool, framework }) => lackingInternals(Object.entries(penRequirements(app, tool, framework)))
 
 test('a complete SudokuPad lacks nothing', () => {
-  const { app, tool } = completeSudokuPad()
-  assert.deepEqual(lackingInternals(app, tool), new Map())
+  assert.deepEqual(lacking(completeSudokuPad()), new Map())
 })
 
 // Each internal removed alone, and the steps it holds back.
@@ -2131,29 +2015,37 @@ const LACKING_ALONE = [
   ['renderPen', (s) => { delete Object.getPrototypeOf(s.app.svgRenderer).renderPen }, ['arrowLines', 'marks']],
   ['renderPart', (s) => { delete s.app.svgRenderer.renderPart }, ['arrowLines']],
   ['xyToRCExact', (s) => { delete s.app.xyToRCExact }, ['lineErase']],
-  ['tools.colour', (s) => { delete s.app.tools.colour }, ['colors']]
+  ['tools.colour', (s) => { delete s.app.tools.colour }, ['colors']],
+  ['Framework.getData', (s) => { delete s.framework.getData }, ['settings', 'pages', 'penPanel', 'colorSave']],
+  ['Framework.setData', (s) => { delete s.framework.setData }, ['pages', 'penPanel', 'colorSave']],
+  ['Framework.addSetting', (s) => { delete s.framework.addSetting }, ['settingsEntry']],
+  ['Framework.showDialog', (s) => { delete s.framework.showDialog }, ['settingsEntry']]
 ]
 for (const [internal, remove, featureNames] of LACKING_ALONE) {
   test(`without ${internal}, exactly ${featureNames.join(', ')} are lacking`, () => {
     const stub = completeSudokuPad()
     remove(stub)
-    assert.deepEqual(lackingInternals(stub.app, stub.tool), new Map([[internal, featureNames]]))
+    assert.deepEqual(lacking(stub), new Map(featureNames.map((name) => [name, internal])))
   })
 }
 
-test('every step with a requirement is lacking under some internal removed alone', () => {
-  // penPanel needs ToolPen.tool (the next test).
-  const own = Object.keys(STEP_LABELS).filter((name) => name !== 'penPanel')
-  assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), own.sort())
+test('every step but the style has a requirement, and each is lacking under some internal removed alone', () => {
+  const { app, tool, framework } = completeSudokuPad()
+  const held = Object.keys(penRequirements(app, tool, framework))
+  assert.deepEqual(held.sort(), Object.keys(STEP_LABELS).filter((name) => name !== 'style').sort())
+  // penPanel's ToolPen.tool is the next test's.
+  assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), held.sort())
 })
 
 test('without a pen tool, every step that needs it is reported under the first internal it lacks', () => {
-  const { app } = completeSudokuPad()
-  assert.deepEqual(lackingInternals(app, undefined), new Map([
-    ['setSelectedColor', ['pages']],
-    ['actStart', ['arrowLines', 'marks', 'lineErase']],
-    ['drawLineHint', ['dragHint']],
-    ['ToolPen.tool', ['penPanel']]
+  const { app, framework } = completeSudokuPad()
+  assert.deepEqual(lacking({ app, tool: undefined, framework }), new Map([
+    ['pages', 'setSelectedColor'],
+    ['arrowLines', 'actStart'],
+    ['marks', 'actStart'],
+    ['lineErase', 'actStart'],
+    ['dragHint', 'drawLineHint'],
+    ['penPanel', 'ToolPen.tool']
   ]))
 })
 
