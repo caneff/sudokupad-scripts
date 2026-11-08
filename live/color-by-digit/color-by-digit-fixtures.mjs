@@ -82,10 +82,11 @@ export async function startInjected (p, script, mode = 'after-start', buttonExpe
 // A page with `script` injected at `mode`. `saved` maps a localStorage key to a JSON value, written before the page's own
 // scripts run and only while the key is absent, so a reload keeps what was saved. `force` is written every load.
 // With neither, the page starts with SEED saved as the profiles and the mode saved Off.
-export async function openSession (browser, script, { saved = SEEDED_OFF, force = {}, contextOptions = {}, mode = 'after-start', buttonExpected = true, seed = async () => {} } = {}) {
+export async function openSession (browser, script, { saved = SEEDED_OFF, force = {}, contextOptions = {}, mode = 'after-start', buttonExpected = true, seed = async () => {}, expectedSkips } = {}) {
   const entries = (object) => Object.entries(object).map(([key, value]) => [key, JSON.stringify(value)])
   const opened = await openPage(browser, {
     contextOptions,
+    expectedSkips,
     injection: { mode, code: script },
     seed: async (page) => {
       await seed(page)

@@ -72,6 +72,7 @@ for (const kase of CASES) {
       ;({ context, p, errors } = await openSession(browser, `${missingBefore(kase.owner, kase.name)}${script}`, {
         saved: kase.saved,
         buttonExpected: kase.buttonExpected,
+        expectedSkips: [WARNING],
         seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) }
       }))
     })

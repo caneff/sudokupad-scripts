@@ -45,32 +45,37 @@
         "caption": "Marks on grid corners: click for an X, again for a circle"
       },
       {
-        "picture": "pen-tool-extras-slide-9-thickness.png",
+        "picture": "pen-tool-extras-slide-9-center.png",
+        "alt": "A green circle, a green cross and a green dot in the centers of three cells",
+        "caption": "Marks in cells: click the center for a circle, again for a cross, again for a dot"
+      },
+      {
+        "picture": "pen-tool-extras-slide-10-thickness.png",
         "alt": "Every line and mark drawn thicker, with the Thickness slider up",
         "caption": "Thickness"
       },
       {
-        "picture": "pen-tool-extras-slide-10-opacity.png",
+        "picture": "pen-tool-extras-slide-11-opacity.png",
         "alt": "Every line and mark faded, with the Opacity slider down",
         "caption": "Opacity"
       },
       {
-        "picture": "pen-tool-extras-slide-11-outline-off.png",
+        "picture": "pen-tool-extras-slide-12-outline-off.png",
         "alt": "A yellow line across dark cells with no white outline, harder to see",
         "caption": "White outlines off"
       },
       {
-        "picture": "pen-tool-extras-slide-12-outline-on.png",
+        "picture": "pen-tool-extras-slide-13-outline-on.png",
         "alt": "The same yellow line across dark cells with a white outline, easy to see",
         "caption": "White outlines on"
       },
       {
-        "picture": "pen-tool-extras-slide-13-erase.png",
+        "picture": "pen-tool-extras-slide-14-erase.png",
         "alt": "A red ring on the first line, which has faded to show it is the line a right press will erase",
         "caption": "Hold a right click on a line and it fades; let go to delete it"
       },
       {
-        "picture": "pen-tool-extras-slide-14-erased.png",
+        "picture": "pen-tool-extras-slide-15-erased.png",
         "alt": "The board with the first line gone and every other line and mark still there",
         "caption": "The whole line is gone"
       }

@@ -16,7 +16,7 @@ const script = readFileSync(new URL('../../../pen-tool-extras.user.js', import.m
 const out = new URL('./pen-tool-extras-panel-annotated.png', import.meta.url).pathname
 
 // Page pixels of space around the panel for the labels, and of padding around the whole picture.
-const LABEL_WIDTH = 250
+const LABEL_WIDTH = 232
 const SIDE_GAP = 36
 const PAD = 10
 const FONT = '15px system-ui, sans-serif'

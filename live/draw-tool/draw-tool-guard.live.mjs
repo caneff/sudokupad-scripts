@@ -62,6 +62,7 @@ for (const kase of CASES) {
 
     before(async () => {
       ;({ context, p, errors } = await openPage(browser, {
+        expectedSkips: [WARNING],
         seed: (page) => { page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) }) }
       }))
       await startPuzzle(p)
