@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.8
+// @version      0.25.9
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.8'
+  const VERSION = '0.25.9'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -2222,6 +2222,13 @@
     if (target !== undefined) showMode(allowedMode(target, usesDigitColors(loadState())))
   }
 
+  // The undo stack stays as it was: the empty stack after a Restart is what makes SudokuPad's next Undo load the board from before it.
+  function colorEnteredCellsWithoutUndoStep (app) {
+    const kept = app.puzzle.undoStack.length
+    colorEnteredCells(app)
+    app.puzzle.undoStack.length = kept
+  }
+
   // A change SudokuPad would drop is not wrapped in a group: an empty group still empties the redo
   // stack and leaves a dead undo step.
   function mayChange (action, cell) {
@@ -2254,6 +2261,8 @@
         if (action?.type === 'undo' || action?.type === 'redo') {
           // SudokuPad keeps the board from before a Restart in `preRestartSavedProgress`, and an Undo on the empty stack loads it.
           const loadsBeforeRestart = action.type === 'undo' && app.puzzle.undoStack.length === 0 && app.preRestartSavedProgress !== undefined
+          // The board it loads ends in the Restart's clears, and arrives after `act` returns.
+          if (loadsBeforeRestart) app.puzzle.addEventListener('progressloaded', () => { if (colorsCells(mode)) colorEnteredCellsWithoutUndoStep(app) }, { once: true })
           const result = stock(action)
           if (loadsBeforeRestart) modeHistory.restoreBeforeRestart()
           else followUndo(app, action.type)
@@ -2267,8 +2276,8 @@
       })
       app.on('restarted', () => {
         modeHistory.restart()
-        // The restart's own coloring is an undo step too; taking it back leaves the cells as the mode before it colored them.
-        if (colorsCells(mode)) recordingModeStep(app, mode === 'cell' ? 'off' : 'digit', mode, () => colorEnteredCells(app))
+        // The coloring is not left as an undo step: the empty stack is what makes SudokuPad's next Undo load the board from before the Restart.
+        if (colorsCells(mode)) colorEnteredCellsWithoutUndoStep(app)
       })
     })
   }

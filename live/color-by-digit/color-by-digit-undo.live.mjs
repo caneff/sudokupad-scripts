@@ -6,6 +6,8 @@ import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 import { coloredCountOn, labelOn, openSession, pressTo } from './color-by-digit-fixtures.mjs'
 import { settle } from '../settle.mjs'
+import * as draw from '../draw-tool/draw-tool-fixtures.mjs'
+import { gridPoint } from '../pen.mjs'
 
 const script = readFileSync(new URL('../../color-by-digit.user.js', import.meta.url), 'utf8')
 
@@ -113,5 +115,50 @@ describe('Undo after a Restart', { concurrency: false }, () => {
       assert.equal(await settle(agree, true), true, `after Undo ${undos}: ${await label()}, ${await coloredCount()} colored`)
     }
     assert.deepEqual([await label(), await coloredCount()], ['Off', 0])
+  })
+})
+
+describe('The first Undo after a Restart', { concurrency: false }, () => {
+  let context, p
+
+  const undo = () => p.click('#control-undo')
+  const coloredCount = () => coloredCountOn(p)
+  const label = () => labelOn(p)
+
+  before(async () => {
+    ({ context, p } = await openSession(browser, script))
+  })
+  after(async () => { await context.close() })
+
+  it('the first Undo after a Restart loads what it cleared and leaves the mode on Cell, the givens colored', async () => {
+    await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
+    await pressTo(p, 'Cell')
+    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
+    await p.evaluate(() => Framework.app.restartPuzzle())
+    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
+    // An empty undo stack is what makes SudokuPad's next Undo load the board from before the Restart.
+    assert.equal(await p.evaluate(() => Framework.app.puzzle.undoStack.length), 0)
+    await undo()
+    assert.equal(await settle(label, 'Cell'), 'Cell')
+    assert.equal(await settle(async () => (await coloredCount()) > 0, true), true)
+  })
+
+  it('with Text Anywhere loaded, that Undo brings its note back too', async () => {
+    const both = await openSession(browser, script)
+    try {
+      const q = both.p
+      await q.addScriptTag({ content: draw.script })
+      await q.locator(draw.DRAW_BUTTON).waitFor({ state: 'visible' })
+      await draw.pickDraw(q)
+      await q.mouse.click(...await gridPoint(q, [2.5, 2.5]))
+      await q.keyboard.type('15')
+      await draw.finishNote(q)
+      await q.evaluate(() => Framework.app.restartPuzzle())
+      assert.deepEqual(await settle(() => draw.texts(q), []), [])
+      await q.click('#control-undo')
+      assert.deepEqual(await settle(() => draw.texts(q), ['15']), ['15'])
+    } finally {
+      await both.context.close()
+    }
   })
 })
