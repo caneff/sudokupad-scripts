@@ -72,11 +72,11 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     await draw.pickDraw(p)
     await p.mouse.click(...await gridPoint(p, TEXT_AT))
     await p.keyboard.type('15')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
     await p.mouse.click(...await gridPoint(p, OTHER_AT))
     await p.keyboard.type('2')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.equal(await p.locator(TEXT_BOX).count(), 0)
   })
   after(async () => { await context.close() })
@@ -186,11 +186,11 @@ describe('Text Anywhere\'s snap', { concurrency: false }, () => {
     assert.equal(Math.abs(left - (line + 6)) < NEAR_PX, true, `the outline's line ${left} is 6 px past ${line}`)
   })
 
-  it('a note dragged 3 px from where it began, clear of every target, moves exactly 3 px: the notes being dragged are no targets', async () => {
+  it('a note dragged 5 px from where it began, clear of every target, moves exactly 5 px: the notes being dragged are no targets', async () => {
     const before = (await noteBox('15')).x
-    const { guides } = await dragBy(3)
+    const { guides } = await dragBy(5)
     assert.equal(guides, 0, 'no guide')
-    assert.equal(Math.abs((await noteBox('15')).x - (before + 3)) < NEAR_PX, true, 'the note moved with the pointer')
+    assert.equal(Math.abs((await noteBox('15')).x - (before + 5)) < NEAR_PX, true, 'the note moved with the pointer')
   })
 
   it('releasing a snapped note never jumps: the pointer moving 0.5 px further within the pull leaves it on the line, drawn and saved', async () => {

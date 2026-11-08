@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.24.0
+// @version      0.24.1
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.24.0'
+  const VERSION = '0.24.1'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -204,6 +204,23 @@
   function rowAfterKey (key, index, count) {
     if (key === 'Enter' || key === ' ') return index
     if (ARROW_STEP[key]) return (index + ARROW_STEP[key] + count) % count
+    return null
+  }
+
+  // Where an arrow key moves within a grid `columns` wide: along the row or down the column to the next usable slot, null at the edge or for any other key.
+  const GRID_STEP = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }
+  function gridTarget (key, index, usable, columns) {
+    const step = GRID_STEP[key]
+    if (!step) return null
+    const rows = Math.ceil(usable.length / columns)
+    let column = index % columns + step[0]
+    let row = Math.floor(index / columns) + step[1]
+    while (column >= 0 && column < columns && row >= 0 && row < rows) {
+      const next = row * columns + column
+      if (usable[next]) return next
+      column += step[0]
+      row += step[1]
+    }
     return null
   }
 
@@ -893,8 +910,11 @@
       `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
+  // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
+  const MIN_TARGET_PX = 24
+  const ARROW_BOX_PX = 14
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
-    'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:14px;height:14px;' +
+    'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:' + ARROW_BOX_PX + 'px;height:' + ARROW_BOX_PX + 'px;' +
     `border:1.5px solid ${PURPLE};border-radius:3px;background:#fff;color:${PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
 
   const UNREADABLE_FILL = '#ccc'
@@ -1102,6 +1122,160 @@
   // Wide enough for the longest of Mode, Cell and Digit, so the three pulldowns start at one edge.
   const PULLDOWN_LABEL_WIDTH = 64
   const DIALOG_WIDTH = 640
+  // <lib:settings-dialog>
+  // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
+  /* eslint-disable no-unused-vars */
+  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
+  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
+  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
+  const SETTINGS_GROUP = 'experimental'
+  const TITLE_MUTED = '#777'
+  const FOCUS_RING = '#6a1b9a'
+  const CONTROL_HOVER = '#f3e5f5'
+  const SAVE_FILL = '#6b3fa0'
+  // An inset layer darkens whatever fill the control has.
+  const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
+  const STATUS_ATTRIBUTE = 'data-role="settings-status"'
+  const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
+
+  function setDialogStatus (dialog, message) {
+    dialog.querySelector(STATUS_SELECTOR).textContent = message
+  }
+  // A thrown value that is not an Error has no message, so it is shown as itself.
+  const errorText = (error) => error?.message ?? String(error)
+
+  // The next press ends the swallowing even when no release came (a close from the keyboard).
+  function swallowRelease (win = window) {
+    const swallow = (event) => event.stopImmediatePropagation()
+    const stop = () => {
+      RELEASE_EVENTS.forEach((type) => win.removeEventListener(type, swallow, true))
+      win.removeEventListener('pointerdown', stop, true)
+    }
+    RELEASE_EVENTS.forEach((type) => win.addEventListener(type, swallow, true))
+    win.addEventListener('pointerdown', stop, true)
+  }
+
+  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
+  function closeDialogKeepingGrid (framework, win = window) {
+    framework.closeDialog()
+    swallowRelease(win)
+  }
+
+  // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
+  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
+    framework.addSetting({
+      tag: 'button',
+      name,
+      group: SETTINGS_GROUP,
+      content,
+      handler: () => {
+        closeDialogKeepingGrid(framework)
+        setTimeout(() => {
+          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
+        }, 0)
+      }
+    })
+  }
+
+  const COPY_PASTE_PICTURES = {
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
+  }
+  const titleIconButton = (act, label, picture) =>
+    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
+
+  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
+  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
+  function renderDialogTitle ({ prefix, name, version }) {
+    return `<style>${dialogTitleCss(prefix)}</style>` +
+      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
+      `<span ${STATUS_ATTRIBUTE}></span>` +
+      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
+  }
+
+  function dialogTitleCss (prefix) {
+    const tools = `.${prefix}tools`
+    return [
+      `.${prefix}version { opacity: .6; }`,
+      `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
+      `${tools} { display: flex; align-items: center; gap: 4px; }`,
+      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
+      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
+      `${tools} button:hover { background: #f0edf5 !important; }`,
+      `${tools} button:focus-visible { outline: 2px solid ${FOCUS_RING} !important; outline-offset: 0; }`,
+      `${tools} svg { width: 20px; height: 20px; }`,
+      `${tools} svg * { fill: none !important; }`,
+      // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
+      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
+    ].join('\n')
+  }
+
+  function addStyleOnce (id, css, doc = document) {
+    if (doc.getElementById(id)) return
+    const style = doc.createElement('style')
+    style.id = id
+    style.textContent = css
+    doc.head.appendChild(style)
+  }
+
+  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
+  function buttonRowCss (bodyId) {
+    const row = `.dialog:has(#${bodyId}) .dialog-options`
+    return [
+      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
+      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
+      `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+      `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
+      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
+      `${row} button:active { ${PRESS_LAYER} !important; }`,
+      `${row} button:focus-visible { outline: 2px solid ${FOCUS_RING}; outline-offset: 2px; }`
+    ].join('\n')
+  }
+
+  const SAVE_LABEL = 'Save'
+  const CANCEL_LABEL = 'Cancel'
+
+  // Escape needs no handler here: SudokuPad's own dialog closes on it.
+  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
+    if (css) addStyleOnce(styleId, css, doc)
+    const close = () => closeDialogKeepingGrid(framework, win)
+    // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
+    let failed = false
+    const saveAndClose = () => {
+      try {
+        if (failed || changed()) save()
+      } catch (error) {
+        failed = true
+        // The dialog stays open so the failure is read and the choices are kept.
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        return
+      }
+      close()
+    }
+    const buttons = [
+      { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
+      { content: CANCEL_LABEL, role: 'cancel', handler: close },
+      ...extraButtons
+    ]
+    framework.showDialog({
+      centerOverBoard,
+      parts: [
+        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
+        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
+        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
+      ]
+    })
+    const body = doc.getElementById(bodyId)
+    if (!body) return null
+    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
+    const row = body.closest('.dialog')?.querySelector('.dialog-options')
+    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
+    return body
+  }
+  /* eslint-enable no-unused-vars */
+  // </lib:settings-dialog>
   const heading = (text, extra = '') => `<div class="cbd-heading">${text}${extra}</div>`
   const EDITOR_ID = 'color-by-digit-editor'
   const MENU = '#color-by-digit-menu'
@@ -1142,13 +1316,15 @@
     `<span data-role="chip-column" style="display:flex;flex:none;width:${CHIP_COLUMN_PX}px">${renderChips(groups, colorOf, { size: CHIP_PX })}</span>`
   // A name too long for a narrow window is cut with an ellipsis, so the dots stay on screen.
   const menuName = (name) => `<span data-role="name" title="${escapeHtml(name)}" style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(name)}</span>`
-  const dotColumn = (role, html, align) => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}">${html}</span>`
+  const dotColumn = (role, html, align, attributes = '') => `<span data-role="${role}" style="flex:none;width:${MENU_DOT_COLUMN}px;${align}"${attributes}>${html}</span>`
   const TARGET_NAMES = { cells: 'Cell', digits: 'Digit' }
 
   function menuDot (target, index, picked, name) {
     const on = index === picked
-    return dotColumn('dot-column', `<span data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${escapeHtml(name)}" ` +
-      `style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;cursor:pointer;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`, 'display:flex;justify-content:center')
+    // The whole column picks, a target 44 by 26 px; the dot is only what is drawn.
+    const picks = ` data-act="pick" data-target="${target}" data-index="${index}" aria-checked="${on}" role="menuitemradio" aria-label="${TARGET_NAMES[target]}: ${escapeHtml(name)}"`
+    return dotColumn('dot-column', `<span style="box-sizing:border-box;width:16px;height:16px;border-radius:50%;border:2px solid ${on ? PURPLE : DOT_RING}${on ? `;background:radial-gradient(${PURPLE} 45%, transparent 50%)` : ''}"></span>`,
+      'display:flex;justify-content:center;align-self:stretch;align-items:center;cursor:pointer', picks)
   }
 
   // Rows are not focusable, so the keyboard stays with the puzzle. Synced, a row picks its profile; unsynced, its two dots pick
@@ -1245,153 +1421,24 @@
     // Looks like the row's name until focused: no border or fill, then the box shows.
     [`${EDITOR} [data-role="profile-name"]`, `box-sizing: border-box; flex: 1; width: auto; min-width: 0; padding: 4px ${NAME_PAD}px; margin: 0; font-size: .9rem; font-weight: 600; background: transparent; border: 1px solid transparent; border-radius: 6px; box-shadow: none; color: inherit; user-select: text; -webkit-user-select: text`],
     [`${EDITOR} [data-role="profile-name"]:focus`, `background: #fff; border-color: ${ACTIVE_RING}; outline: none`],
-    [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px']
+    [`${EDITOR} .cbd-profile [data-role="handle"]`, 'flex: none; margin-right: -2px'],
+    // SudokuPad's `button:focus { outline: none }` hides the browser's ring, so the dialog draws its own, for the keyboard only.
+    [`${EDITOR} button:focus-visible, ${EDITOR} [data-role="swatch"]:focus-visible, ${EDITOR} .cbd-profile:focus-visible`, `outline: 2px solid ${FOCUS_RING}; outline-offset: 2px`],
+    // The pressed swatch's own outline takes the property, so its focus ring is drawn beside it.
+    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]`, 'position: relative'],
+    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible`, 'outline: 3px solid #000; outline-offset: 0'],
+    [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible::after`, `content: ''; position: absolute; inset: -7px; border: 2px solid ${FOCUS_RING}; border-radius: 9px; pointer-events: none`],
+    [`${EDITOR} .cbd-button:hover`, `background: ${CONTROL_HOVER}`],
+    [`${EDITOR} [data-act="digit"]:not([style]):hover`, `background: ${CONTROL_HOVER}`],
+    [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${PURPLE}`],
+    [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${PURPLE}`],
+    [`${EDITOR} .cbd-button:active, ${EDITOR} [data-act="digit"]:active, ${EDITOR} [data-role="swatch"]:not([data-empty]):active`, PRESS_LAYER],
+    // At least 24 px each way (WCAG 2.2 SC 2.5.8).
+    [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, `display: inline-flex; align-items: center; justify-content: center; min-width: ${MIN_TARGET_PX}px; min-height: ${MIN_TARGET_PX}px; box-sizing: border-box`],
+    // The handle holds the pointer capture, so its cursor shows wherever the pointer goes; every element has its own, so it is forced.
+    [`${EDITOR}.cbd-dragging *`, 'cursor: grabbing !important']
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
 
-  // <lib:settings-dialog>
-  // Generated from lib/settings-dialog.js; edit that file and run node sync-lib.js.
-  /* eslint-disable no-unused-vars */
-  // The events that end a press. SudokuPad's pen tool takes its click from `mouseup` (seen live), and
-  // a touch ends with `pointerup`, `touchend` and a compatibility `mouseup`, so all four are swallowed.
-  const RELEASE_EVENTS = ['pointerup', 'pointercancel', 'mouseup', 'touchend']
-  const SETTINGS_GROUP = 'experimental'
-  const TITLE_MUTED = '#777'
-  const STATUS_ATTRIBUTE = 'data-role="settings-status"'
-  const STATUS_SELECTOR = `[${STATUS_ATTRIBUTE}]`
-
-  function setDialogStatus (dialog, message) {
-    dialog.querySelector(STATUS_SELECTOR).textContent = message
-  }
-  // A thrown value that is not an Error has no message, so it is shown as itself.
-  const errorText = (error) => error?.message ?? String(error)
-
-  // The next press ends the swallowing even when no release came (a close from the keyboard).
-  function swallowRelease (win = window) {
-    const swallow = (event) => event.stopImmediatePropagation()
-    const stop = () => {
-      RELEASE_EVENTS.forEach((type) => win.removeEventListener(type, swallow, true))
-      win.removeEventListener('pointerdown', stop, true)
-    }
-    RELEASE_EVENTS.forEach((type) => win.addEventListener(type, swallow, true))
-    win.addEventListener('pointerdown', stop, true)
-  }
-
-  // SudokuPad runs a dialog button's handler on the press and removes the dialog at once, so the release lands on the grid and the pen tool takes it for a click on the cell under the button.
-  function closeDialogKeepingGrid (framework, win = window) {
-    framework.closeDialog()
-    swallowRelease(win)
-  }
-
-  // SudokuPad's showDialog does nothing while its settings dialog is open, so that one closes first; `open` then runs after the close has settled.
-  function addSettingsEntry (framework, { name, content, open }, { log = console.error } = {}) {
-    framework.addSetting({
-      tag: 'button',
-      name,
-      group: SETTINGS_GROUP,
-      content,
-      handler: () => {
-        closeDialogKeepingGrid(framework)
-        setTimeout(() => {
-          try { open() } catch (error) { log(`${name}: could not open its settings dialog`, error) }
-        }, 0)
-      }
-    })
-  }
-
-  const COPY_PASTE_PICTURES = {
-    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
-    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 9h6M9 13h6M9 17h4"/>'
-  }
-  const titleIconButton = (act, label, picture) =>
-    `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${picture}</svg></button>`
-
-  // The dialog's first part: its own title rules, then the name with the version beside it, and Copy settings and Paste settings as icons at the right end,
-  // after the status line they report to. The rules travel with the row, so they are in the page exactly while the dialog is.
-  function renderDialogTitle ({ prefix, name, version }) {
-    return `<style>${dialogTitleCss(prefix)}</style>` +
-      `<div class="${prefix}title-row"><span><b>${name}</b> <small class="${prefix}version">v${version}</small></span>` +
-      `<span ${STATUS_ATTRIBUTE}></span>` +
-      `<span class="${prefix}tools">${titleIconButton('copy-settings', 'Copy settings', COPY_PASTE_PICTURES.copy)}${titleIconButton('paste-settings', 'Paste settings', COPY_PASTE_PICTURES.paste)}</span></div>`
-  }
-
-  function dialogTitleCss (prefix) {
-    const tools = `.${prefix}tools`
-    return [
-      `.${prefix}version { opacity: .6; }`,
-      `.${prefix}title-row { display: flex; align-items: center; gap: 12px; }`,
-      `${tools} { display: flex; align-items: center; gap: 4px; }`,
-      // SudokuPad styles a dialog's buttons by tag, so each of these is forced.
-      `${tools} button { background: none !important; border: none !important; box-shadow: none !important; padding: 4px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; height: auto !important; line-height: 0 !important; color: ${TITLE_MUTED} !important; cursor: pointer; border-radius: 6px !important; }`,
-      `${tools} button:hover { background: #f0edf5 !important; }`,
-      `${tools} svg { width: 20px; height: 20px; }`,
-      `${tools} svg * { fill: none !important; }`,
-      // A flex item with no intrinsic width: a long message wraps in the room the title leaves and never widens the dialog.
-      `.${prefix}title-row ${STATUS_SELECTOR} { flex: 1 1 0; min-width: 0; contain: inline-size; text-align: right; font-size: .8rem; color: ${TITLE_MUTED}; }`
-    ].join('\n')
-  }
-
-  function addStyleOnce (id, css, doc = document) {
-    if (doc.getElementById(id)) return
-    const style = doc.createElement('style')
-    style.id = id
-    style.textContent = css
-    doc.head.appendChild(style)
-  }
-
-  // SudokuPad styles a dialog's buttons by tag, so each of these is forced. Scoped by the body's id, so SudokuPad's other dialogs are left alone.
-  function buttonRowCss (bodyId) {
-    const row = `.dialog:has(#${bodyId}) .dialog-options`
-    return [
-      `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
-      `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
-      `${row} button[data-role="save"] { background: #6b3fa0 !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`
-    ].join('\n')
-  }
-
-  const SAVE_LABEL = 'Save'
-  const CANCEL_LABEL = 'Cancel'
-
-  // Escape needs no handler here: SudokuPad's own dialog closes on it.
-  // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
-    addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
-    if (css) addStyleOnce(styleId, css, doc)
-    const close = () => closeDialogKeepingGrid(framework, win)
-    // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
-    let failed = false
-    const saveAndClose = () => {
-      try {
-        if (failed || changed()) save()
-      } catch (error) {
-        failed = true
-        // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
-        return
-      }
-      close()
-    }
-    const buttons = [
-      { content: SAVE_LABEL, role: 'save', handler: saveAndClose },
-      { content: CANCEL_LABEL, role: 'cancel', handler: close },
-      ...extraButtons
-    ]
-    framework.showDialog({
-      centerOverBoard,
-      parts: [
-        { tag: 'text', innerHTML: renderDialogTitle({ prefix, name, version }) },
-        { tag: 'text', innerHTML: `<div id="${bodyId}"></div>` },
-        { tag: 'options', options: buttons.map(({ content, handler }) => ({ tag: 'button', content, handler })) }
-      ]
-    })
-    const body = doc.getElementById(bodyId)
-    if (!body) return null
-    // No selector tells the buttons apart but their text, so the shell marks each with its role for the script's stylesheet.
-    const row = body.closest('.dialog')?.querySelector('.dialog-options')
-    if (row) row.querySelectorAll('button').forEach((button, index) => { button.dataset.role = buttons[index].role })
-    return body
-  }
-  /* eslint-enable no-unused-vars */
-  // </lib:settings-dialog>
   // <lib:settings-transfer>
   // Generated from lib/settings-transfer.js; edit that file and run node sync-lib.js.
   /* eslint-disable no-unused-vars */
@@ -1794,10 +1841,24 @@
       needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function' }
     }
   }
+  const BUTTON = '#control-colorbydigit'
+  const ARROW = `${BUTTON} [data-role="menu"]`
+  const PRESSED_CLASS = 'cbd-pressed'
+  const DRAGGING_CLASS = 'cbd-dragging'
+  // The digit grid and the swatch grid; a slot that is no button is an empty cell of the layout.
+  const PAINT_GRIDS = '[data-role="paint"], .cbd-swatches'
+  const FOCUSABLE_SLOT = 'button'
+  // The pressed look is a class, set on pointerdown: the button's `mousedown` is cancelled, and an engine may then drop `:active`.
+  // The arrow's ::after widens its 14 px box to 24 px, outward over the button's corner (WCAG 2.2 SC 2.5.8).
+  const BUTTON_CSS = [
+    `${BUTTON}.${PRESSED_CLASS} { ${PRESS_LAYER} !important; }`,
+    `${ARROW}::after { content: ''; position: absolute; inset: -${(MIN_TARGET_PX - ARROW_BOX_PX) / 2}px; }`
+  ].join('\n')
+  const BUTTON_STYLE_ID = 'color-by-digit-button'
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
   const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
+    module.exports = { VERSION, createModeHistory, openingDraft, reduceDraft, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, gridTarget, BUTTON_CSS, normalizeGroups, stateFromStored, saveProfiles, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
@@ -1930,8 +1991,6 @@
 
   let mode = 'off'
 
-  const BUTTON = '#control-colorbydigit'
-  const ARROW = `${BUTTON} [data-role="menu"]`
   // Loading progress resets the board, so a pass before it would be wiped.
   // With the wait off there is nothing to wait for, so `fn` runs at once.
   function whenProgressLoaded (app, fn) {
@@ -2246,19 +2305,22 @@
       clearTimeout(hold)
       hold = null
     }
+    const setPressed = (on) => document.querySelector(BUTTON)?.classList.toggle(PRESSED_CLASS, on)
     listen('pointerdown', (event) => {
       if (menu && !within(event, MENU) && !onArrow(event)) closeMenu()
       endHold()
       if (!onButtonProper(event) || (event.pointerType === 'mouse' && event.button !== 0)) return
       const { clientX, clientY } = event
       const moved = (e) => Math.hypot(e.clientX - clientX, e.clientY - clientY) > HOLD_SLOP
+      setPressed(true)
       hold = setTimeout(() => {
         hold = null
         modeButton.run(openMenu)
       }, HOLD_MS)
       trackPointer(document, {
-        move: (e) => { if (moved(e)) endHold() },
+        move: (e) => { if (moved(e)) { endHold(); setPressed(false) } },
         end: (e) => {
+          setPressed(false)
           modeButton.run(() => { if (hold !== null && e.type === 'pointerup') setMode(app, nextMode(mode, usesDigitColors(loadState()))) })
           endHold()
         }
@@ -2375,6 +2437,7 @@
       const mids = rows.map((row) => { const r = row.getBoundingClientRect(); return r.top + r.height / 2 })
       let to = from
       rows[from].style.opacity = '0.5'
+      box.classList.add(DRAGGING_CLASS)
       handle.setPointerCapture(event.pointerId)
       trackPointer(handle, {
         move: (e) => {
@@ -2382,6 +2445,7 @@
           rows.forEach((row, i) => { row.style.outline = i === to && to !== from ? `2px solid ${PURPLE}` : '' })
         },
         end: (e) => {
+          box.classList.remove(DRAGGING_CLASS)
           if (e.type === 'pointerup') edit({ type: 'move', from, to })
           draw()
         }
@@ -2392,6 +2456,28 @@
       draw()
       if (refocus) box.querySelector(`[data-act="select"][data-index="${index}"]`).focus()
     }
+    const focusDigitKey = (digit) => box.querySelector(`[data-act="digit"][data-digit="${digit}"]`)?.focus()
+    // The arrow keys move the focus within the swatch grid or the digit grid, and a typed digit paints that digit.
+    box.addEventListener('keydown', (event) => {
+      const grid = event.target.closest(PAINT_GRIDS)
+      if (!grid || event.ctrlKey || event.altKey || event.metaKey) return
+      const slots = [...grid.children]
+      const index = slots.indexOf(event.target)
+      const to = index < 0 ? null : gridTarget(event.key, index, slots.map((slot) => slot.matches(FOCUSABLE_SLOT)), PAGE_COLUMNS)
+      if (to !== null) {
+        event.preventDefault()
+        event.stopPropagation()
+        slots[to].focus()
+      } else if (/^[0-9]$/.test(event.key)) {
+        event.preventDefault()
+        event.stopPropagation()
+        // A held key repeats, and each repeat would toggle the paint again.
+        if (event.repeat) return
+        edit({ type: 'key-paint', digit: event.key })
+        draw()
+        focusDigitKey(event.key)
+      }
+    })
     box.addEventListener('keydown', (event) => {
       if (!event.target.matches('[data-act="select"]')) return
       const target = rowAfterKey(event.key, Number(event.target.dataset.index), draft.state.profiles.length)
@@ -2441,10 +2527,7 @@
       }
       draw()
       // The redraw replaced the button; a keyboard user keeps the focus on its successor.
-      if (event.detail === 0 && act === 'digit') {
-        const next = box.querySelector(`[data-act="digit"][data-digit="${el.dataset.digit}"]`)
-        if (next) next.focus()
-      }
+      if (event.detail === 0 && act === 'digit') focusDigitKey(el.dataset.digit)
     })
   }
 
@@ -2461,6 +2544,7 @@
     const state = loadState()
     mode = allowedMode(startingMode(readData(MODE_KEY), readData(AUTO_KEY)), usesDigitColors(state))
     addStyle(BOTTOM_ROW_STYLE_ID, BOTTOM_ROW_CSS)
+    addStyle(BUTTON_STYLE_ID, BUTTON_CSS)
     modeButton.run(() => {
       installButton(Framework, app, mode, activeGroups(state), readColor, digitGroups(state))
       labelButton()

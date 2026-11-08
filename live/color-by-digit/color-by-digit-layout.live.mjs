@@ -188,6 +188,7 @@ describe('the dialog at 1280x720', { concurrency: false }, () => {
     const { context, p } = await openSession(browser, script, { contextOptions: { viewport: { width: 1280, height: 720 } } })
     try {
       await openScriptDialog(p, 'Color by Digit', EDITOR)
+      await p.mouse.move(0, 0)
       assert.deepEqual(await p.evaluate(() => [[...document.querySelector('.dialog').classList], [...document.querySelector('.dialog-options').classList]]), [['dialog'], ['dialog-options']])
       assert.equal(await p.locator('.dialog').evaluate((el) => Math.round(el.getBoundingClientRect().width)), DESKTOP_DIALOG_PX)
       assert.equal(await p.locator('.dialog-options').evaluate((el) => window.getComputedStyle(el).display), 'flex')

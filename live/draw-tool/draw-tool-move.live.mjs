@@ -42,7 +42,7 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   const typeText = async (at, content) => {
     await p.mouse.click(...await gridPoint(p, at))
     await p.keyboard.type(content)
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   }
   // The top left corner of each box, in board units.
   const bgBoxes = () => read((selector) => {
@@ -64,9 +64,9 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
   it('a double-click on a note still edits it, and a left-drag that starts on it moves it, keeps the text, and a reload keeps the new place', async () => {
     await typeText(TEXT_AT, '15')
     assert.deepEqual(await texts(), ['15'])
-    await p.mouse.dblclick(...await gridPoint(p, TEXT_AT))
+    await draw.reopen(p, await gridPoint(p, TEXT_AT))
     assert.equal(await p.locator(TEXT_BOX).textContent(), '15', 'the double-click reopened the text')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const [before] = await textAts()
     await p.mouse.move(...await gridPoint(p, TEXT_AT))
     await p.mouse.down()

@@ -168,7 +168,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     await p.mouse.click(...await gridPoint(p, atCell(9)))
     const selected = await read(() => [...document.querySelectorAll('#draw-tool-layer .draw-tool-selected')].map((note) => note.textContent))
     // The pointer leaves the notes and the selection ends, so the board checks below see no hover or selection change of their own.
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.move(1, 899)
     assert.deepEqual({ selected, measures: await noteMeasures() }, { selected: [NOTE_TEXT(9)], measures: 0 })
   })
@@ -208,10 +208,11 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
   it('a move shows only after the next frame, at the last pointer move', async () => {
     // n4, at r2c1: a click selects it alone, and a press on it drags it.
     const from = [1.5, 0.5]
-    const point = await gridPoint(p, from)
+    const start = await gridPoint(p, from)
+    const point = await draw.middleAt(p, start)
     await p.mouse.click(...point)
     await p.mouse.down()
-    const target = await steps(from, [1, 1], 3)
+    const target = (await steps(from, [1, 1], 3)).map(([x, y]) => [x + point[0] - start[0], y + point[1] - start[1]])
     const look = await movesInOneTask(target, 1, () => {
       const note = [...document.querySelectorAll('#draw-tool-layer .draw-tool-text')].find((n) => n.textContent === 'n4').getBoundingClientRect()
       return [note.x, note.y]
@@ -249,7 +250,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
       return [right, bottom]
     })
     await p.mouse.up()
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     const [right, bottom] = [handle.x + handle.width, handle.y + handle.height]
     assert.deepEqual(look.straightAfter.map(Math.round), [right, bottom].map(Math.round))
     assert.deepEqual(look.afterFrame.map(Math.round), [right + 30, bottom + 15].map(Math.round))

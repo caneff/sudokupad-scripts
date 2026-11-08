@@ -48,12 +48,12 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     await reload()
     await p.mouse.click(...await gridPoint(p, NOTE_AT))
     await p.keyboard.type('N')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.click(...await gridPoint(p, BULLETS_AT))
     await p.keyboard.type(BULLET_TEXT.split('\n')[0])
     await p.keyboard.press('Shift+Enter')
     await p.keyboard.type(BULLET_TEXT.split('\n')[1])
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
   })
   after(async () => { await context.close() })
 
@@ -91,7 +91,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
   it('each arrow key moves the note its own way, and a note stops where it would leave the window', async () => {
     await p.mouse.click(...await gridPoint(p, EDGE_AT))
     await p.keyboard.type('E')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     await p.mouse.click(...await gridPoint(p, EDGE_AT))
     const moved = async (key) => {
       const before = await noteBox('E')
@@ -178,7 +178,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     await p.keyboard.down('ArrowRight')
     try {
       assert.equal(await settle(async () => (await noteBox('N')).x - x0 > HELD_FAR_PX, true), true, 'the held key moved the note')
-      await p.keyboard.press('Escape')
+      await draw.finishNote(p)
       // A timer left running would move the note again as soon as it is selected.
       await selectNote('N')
       const stopped = (await noteBox('N')).x
@@ -206,9 +206,9 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     assert.deepEqual(await lines(), want)
     await reload()
     assert.deepEqual(await settle(lines, [want]), want)
-    await p.mouse.dblclick(...await gridPoint(p, BULLETS_AT))
+    await draw.reopen(p, await gridPoint(p, BULLETS_AT))
     assert.equal(await p.locator(draw.TEXT_BOX).textContent(), BULLET_TEXT, 'the open note shows the raw markers')
-    await p.keyboard.press('Escape')
+    await draw.finishNote(p)
     assert.deepEqual(errors, [])
   })
 })
