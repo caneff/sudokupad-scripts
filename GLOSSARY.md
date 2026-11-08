@@ -24,7 +24,7 @@
   Both, Off; only Cell and Off while Digit is None), **Cell** (the cell profile, by name) and **Digit** (Same as
   cell, a profile by name, or None). They apply at Save; Cancel drops them.
 - **chips** — a profile's colors in Color by Digit, drawn as a run of joined square board cells: three at most,
-  one outline with single dividers, no gaps or rounded corners, each cell with a digit. In Cell and Off one cell per
+  one outline with single dividers, no gaps or rounded corners, each cell with a digit (a profile with no groups draws three blank dashed cells instead). In Cell and Off one cell per
   group of the cell profile, with the group's **shown digit**; in Digit the same from the digit profile; in Both the
   digits that reach the most groups of the two profiles (see **Cell strip**). The button draws them in the **mode**'s look; the profile menu and the dialog's profile
   list draw them as Cell does.

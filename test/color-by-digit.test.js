@@ -1706,6 +1706,9 @@ test('renderChips draws a group color at SudokuPad\'s 60% cell opacity, and a wh
   assert.deepEqual(opacities('both'), ['0.6'])
   assert.deepEqual(opacities('digit'), [undefined])
   assert.deepEqual(opacities('off'), [undefined])
+  // A digit in no cell group is a white chip, not a grey tinted one.
+  const uncovered = runCells(renderChips([{ key: 'a', digits: ['3'] }], colorFor, { size: 16, chips: [{ digit: '8', cellKey: undefined, digitKey: undefined }] }))
+  assert.deepEqual(uncovered.map((c) => [c.fill, c.opacity]), [['#fff', undefined]])
 })
 
 test('renderChips draws three blank dashed cells for a profile with no groups, in a run as wide as three chips', () => {
@@ -1727,6 +1730,7 @@ test('a painted digit key and a palette swatch are drawn at 60%, an unpainted ke
   const html = editor([{ key: 'a1', digits: ['1'] }], [{ page: 0, rows: [[{ key: 'a1', value: '#a1' }]], zero: null }], 0, 'a1')
   assert.match(html, /data-act="digit" data-digit="1" data-key="a1" style="background:color-mix\(in srgb, #a1 60%, transparent\)"/)
   assert.match(html, /data-key="a1" aria-pressed="true"[^>]*style="background:color-mix\(in srgb, #a1 60%, transparent\)"/)
+  assert.doesNotMatch(/<button[^>]*data-digit="2"[^>]*>/.exec(html)[0], /style=/)
 })
 
 test('iconHtml draws the run of cells in the mode\'s look with the mode word, and keeps the menu arrow box', () => {

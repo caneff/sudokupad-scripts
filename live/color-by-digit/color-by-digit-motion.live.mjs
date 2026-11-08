@@ -15,6 +15,8 @@ const ROWS = `${EDITOR} [data-role=profile-row]`
 const THREE = { profiles: [...SEED.profiles, { name: 'Third', groups: [{ key: '9', digits: ['1', '2', '3'] }] }], active: 0 }
 // The picked row's fill while it blinks: the active row's.
 const BLINK_FILL = 'rgb(241, 235, 251)'
+// The longest a picked menu may take to go.
+const GONE_WITHIN_MS = 1000
 // How far a drag goes past the last row's middle.
 const PAST_LAST_ROW_PX = 8
 
@@ -108,19 +110,31 @@ describe('the profile menu\'s fade after a pick, injected after Start Puzzle', {
     await openMenuByArrow(p)
     await p.setViewportSize({ width: 1100, height: 700 })
     await p.locator(MENU).waitFor({ state: 'detached' })
-    assert.equal((await menuSeen(p)).some((seen) => seen.closing), false)
+    const seen = await menuSeen(p)
+    assert.equal(seen.length > 0, true, 'the watcher recorded the menu')
+    assert.equal(seen.some((s) => s.closing), false)
   })
 
   it('a pick blinks the row, then fades the menu over 100 ms with Material\'s accelerate easing, and removes it', async () => {
     await p.evaluate(() => { window.menuSeen = [] })
     await openMenuByArrow(p)
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
-    await p.locator(MENU).waitFor({ state: 'detached' })
+    // The blink and the fade take 160 ms; the bound is loose for a loaded box and still far below a menu that lingers.
+    await p.locator(MENU).waitFor({ state: 'detached', timeout: GONE_WITHIN_MS })
     const seen = await menuSeen(p)
     assert.equal(seen.some((s) => !s.closing && s.rowFills[1] === BLINK_FILL), true, 'the picked row blinks in the active fill')
     const closing = seen.filter((s) => s.closing)
     assert.equal(closing.length > 0, true, 'the menu fades')
     assert.deepEqual([...new Set(closing.map((s) => [s.property, s.duration, s.easing, s.events].join('|')))], ['opacity|0.1s|cubic-bezier(0.3, 0, 1, 1)|none'])
+  })
+
+  it('while it fades, a click on the arrow box opens the list again', async () => {
+    await openMenuByArrow(p)
+    await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Odd/Even' }).click()
+    // A fading menu already counts as closed: the next click opens a fresh one, which is the only one left.
+    await p.click(ARROW)
+    await p.locator(`${MENU}:not(.cbd-closing)`).waitFor({ state: 'visible' })
+    assert.equal(await p.locator(MENU).count(), 1)
   })
 
   it('no uncaught page errors', () => {
@@ -182,6 +196,7 @@ describe('reduced motion, injected after Start Puzzle', { concurrency: false }, 
     await p.locator(`${MENU} [data-act=pick]`).filter({ hasText: 'Low/5/High' }).click()
     await p.locator(MENU).waitFor({ state: 'detached' })
     const seen = await menuSeen(p)
+    assert.equal(seen.length > 0, true, 'the watcher recorded the menu')
     assert.equal(seen.some((s) => s.closing || s.duration !== '0s' || s.rowFills[1] === BLINK_FILL), false, JSON.stringify(seen))
   })
 
