@@ -14,6 +14,19 @@ all three times: at `DOMContentLoaded`, after load before Start Puzzle, after St
 - The two "auto mode saved on and no mode saved" groups of `live/color-by-digit/color-by-digit-mode.live.mjs` do too.
 - Dark Page's page color dialog group injects at `DOMContentLoaded` only.
 
+## Errors and skip lines
+
+`openPage` (and `newPage`) collect into the returned `errors` every uncaught page error and every skip line a script logs
+(`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`), of any console type. A suite seeds
+nothing for that: a feature that turns itself off at runtime fails any suite that asserts `errors` is empty.
+`captureConsoleErrors` (a `seed`) adds the page's `console.error` lines.
+
+A suite that breaks a feature on purpose declares the skip lines it expects: `openPage(browser, { expectedSkips: [/^dark-page: /] })`
+(patterns). Those lines stay out of `errors`, and the suite checks them itself; any other skip line fails it. Declare
+as narrow a pattern as the break allows: a pattern for a whole script lets a second, unplanted skip line pass, unless the
+suite also counts its warnings.
+`live/skip-lines.live.mjs` plants a skip with no declaration and checks it lands in `errors`.
+
 ## The recording
 
 SudokuPad is served from a recording, not from sudokupad.app on every page load. `live/cache.mjs`

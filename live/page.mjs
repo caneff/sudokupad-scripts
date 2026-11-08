@@ -14,32 +14,39 @@ export const MODES = ['document-idle', 'before-start', 'after-start']
 const VIEWPORT = { width: 1200, height: 900 }
 const FRAMEWORK_MS = 30000
 
-// A page of `context` served from the recording, with the page's errors collected into the returned `errors`.
-export async function newPage (context) {
+// A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
+// (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
+// The ids are the six scripts', read from the `*.user.js` at the repo root, so a seventh is matched without an edit here.
+const SCRIPT_IDS = readdirSync(new URL('../', import.meta.url)).filter((f) => f.endsWith('.user.js')).map((f) => f.replace('.user.js', ''))
+const SKIP_LINE = new RegExp(`^(?:${SCRIPT_IDS.join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
+
+// Collects into `errors` every skip line a script logs, of any console type, so a test that asserts `errors`
+// is empty fails when a script lost a feature. A line an `expectedSkips` pattern matches is the suite's own: it
+// planted that break on purpose and checks the line itself.
+export const collectSkipLines = (page, errors, expectedSkips = []) => {
+  page.on('console', (m) => {
+    const text = m.text()
+    if (SKIP_LINE.test(text) && !expectedSkips.some((re) => re.test(text))) errors.push(`console.${m.type() === 'warning' ? 'warn' : m.type()}: ${text}`)
+  })
+}
+
+// A page of `context` served from the recording, with its uncaught errors and its skip lines collected into the returned
+// `errors`; `expectedSkips` (patterns) names the skip lines left out.
+export async function newPage (context, { expectedSkips } = {}) {
   const errors = []
   const p = await context.newPage()
   p.on('pageerror', (e) => errors.push(String(e)))
+  collectSkipLines(p, errors, expectedSkips)
   await routeSudokuPad(p)
   return { p, errors }
 }
 
-// The six scripts' ids, read from the `*.user.js` at the repo root, so a seventh script is matched without an edit here.
-const SCRIPT_IDS = readdirSync(new URL('../', import.meta.url)).filter((f) => f.endsWith('.user.js')).map((f) => f.replace('.user.js', ''))
-
-// A line a script logs when it turns a feature off because SudokuPad has no internal it needs or changed
-// (`<script>: <feature> skipped because SudokuPad has no <internal>` or `... changed:`, lib/sudokupad.js).
-export const SKIP_LINE = new RegExp(`^(?:${SCRIPT_IDS.join('|')}): .* skipped because SudokuPad (?:has no|changed)`)
-
-// Collects into `errors` the page's `console.error` lines (leaving out a resource that failed to load, which a
-// replay's aborted trackers print) and a script's skip line, of any console type, so a test that asserts `errors`
-// is empty fails when a script lost a feature. Fits `openPage`'s `seed` as it is. `take(text)`, when given, is
-// asked first: a line it returns true for is the caller's.
-export const captureConsoleErrors = (page, errors, take = () => false) => {
+// Collects into `errors` the page's `console.error` lines, leaving out a resource that failed to load, which a
+// replay's aborted trackers print, and a skip line, which `newPage` collects whatever its console type. Fits `openPage`'s `seed` as it is.
+export const captureConsoleErrors = (page, errors) => {
   page.on('console', (m) => {
     const text = m.text()
-    if (take(text)) return
-    if (m.type() === 'error' && !/Failed to load resource/.test(text)) errors.push(`console.error: ${text}`)
-    else if (SKIP_LINE.test(text)) errors.push(`console.${m.type() === 'warning' ? 'warn' : m.type()}: ${text}`)
+    if (m.type() === 'error' && !/Failed to load resource/.test(text) && !SKIP_LINE.test(text)) errors.push(`console.error: ${text}`)
   })
 }
 
@@ -59,11 +66,12 @@ export const gotoPuzzle = (p) => p.goto(PUZZLE_URL, { waitUntil: 'load', timeout
 
 // Opens a context (1200x900 unless `contextOptions` say otherwise) with one page on the puzzle, served from the
 // recording. `seed(p, errors)` runs before the page loads, for init scripts and listeners that must see the load.
+// `expectedSkips` (patterns) declares the skip lines a suite plants on purpose; any other skip line lands in `errors`.
 // `injection` is `{ mode, code }`: with mode `document-idle` the code is injected here, at DOMContentLoaded;
 // the other modes are `startPuzzle`'s.
-export async function openPage (browser, { contextOptions = {}, seed, injection } = {}) {
+export async function openPage (browser, { contextOptions = {}, seed, injection, expectedSkips } = {}) {
   const context = await browser.newContext({ viewport: VIEWPORT, ...contextOptions })
-  const { p, errors } = await newPage(context)
+  const { p, errors } = await newPage(context, { expectedSkips })
   if (seed) await seed(p, errors)
   if (injection?.mode === 'document-idle') await injectAtIdle(p, injection.code)
   await gotoPuzzle(p)

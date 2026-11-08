@@ -1198,6 +1198,7 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
     it(`${member} gone: one warning that marks are skipped`, async () => {
       const warnings = []
       const { context, p } = await openPage(browser, {
+        expectedSkips: [TURNED_OFF],
         seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
       })
       try {
@@ -1215,6 +1216,7 @@ describe('with a SudokuPad internal missing', { concurrency: false }, () => {
   it('warns once, skips marks, and the pen tool still works', async () => {
     const warnings = []
     const { context, p, errors } = await openPage(browser, {
+      expectedSkips: [TURNED_OFF],
       seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && TURNED_OFF.test(m.text())) warnings.push(m.text()) })
     })
     try {

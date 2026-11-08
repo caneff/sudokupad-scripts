@@ -60,6 +60,8 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
+      // Only the redraw plants a break; its skip line says SudokuPad changed, any other draw-tool skip line fails the suite.
+      expectedSkips: [/^draw-tool: .* skipped because SudokuPad changed/],
       seed: (page) => page.on('console', (m) => { if (m.type() === 'warning' && /draw-tool|DrawTool_/.test(m.text())) warnings.push(m.text()) })
     }))
     await draw.boot(p)

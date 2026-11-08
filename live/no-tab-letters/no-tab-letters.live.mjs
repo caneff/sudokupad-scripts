@@ -123,6 +123,7 @@ describe('the Tab binding is not found', () => {
     const warnings = []
     let warned
     const { context, p } = await openPage(browser, {
+      expectedSkips: [WARNING],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning') warnings.push(m.text()) })
         warned = page.waitForEvent('console', { predicate: (m) => WARNING.test(m.text()), timeout: 30000 })
@@ -157,6 +158,7 @@ describe('SudokuPad has no ToolLetter.tool.keyHandlers', { concurrency: false },
 
   before(async () => {
     ;({ context, p, errors } = await openPage(browser, {
+      expectedSkips: [WARNING],
       seed: (page) => {
         page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
       }

@@ -780,7 +780,7 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
 describe('the color tool is not ready yet', { concurrency: false }, () => {
   it('the pens show SudokuPad\'s own colors and nothing is saved while it waits; after 10 s the color save is skipped with a named warning; the dialog offers only SudokuPad colors; a palette that comes later is not saved over them', async () => {
-    const { context, p, errors } = await openPage(browser)
+    const { context, p, errors } = await openPage(browser, { expectedSkips: [/^pen-tool-extras: color save skipped because/] })
     const warned = []
     p.on('console', (m) => { if (m.type() === 'warning' && /^pen-tool-extras: /.test(m.text())) warned.push(m.text()) })
     try {

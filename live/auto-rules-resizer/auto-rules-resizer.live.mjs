@@ -28,6 +28,7 @@ const EDGE_PX = 8
 const PORTRAIT = { width: 800, height: 1100 }
 const STYLE = '#auto-rules-resizer-style'
 const FONT_BAR = '#auto-rules-resizer-font'
+const WARNING = /^auto-rules-resizer: /
 const CORNER = (corner) => `#auto-rules-resizer-drag-${corner}`
 
 let browser
@@ -35,8 +36,8 @@ before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
 // A page in a `viewport` window with the puzzle started and RULES shown. `seed()` runs before the script goes in.
-async function rulesPage (viewport, seed, rules = RULES) {
-  const opened = await openPage(browser, { contextOptions: { viewport } })
+async function rulesPage (viewport, seed, rules = RULES, { expectedSkips } = {}) {
+  const opened = await openPage(browser, { contextOptions: { viewport }, expectedSkips })
   await startPuzzle(opened.p)
   await opened.p.evaluate((rules) => {
     Framework.app.showMetaInfoUI({ title: 'Arrows and dots', author: 'Tester', rules })
@@ -719,8 +720,8 @@ for (const kase of MISSING) {
 
     before(async () => {
       ;({ context, p, errors } = await rulesPage(LANDSCAPE, (page) => {
-        page.on('console', (m) => { if (m.type() === 'warning' && /^auto-rules-resizer: /.test(m.text())) warned.push(m.text()) })
-      }))
+        page.on('console', (m) => { if (m.type() === 'warning' && WARNING.test(m.text())) warned.push(m.text()) })
+      }, RULES, { expectedSkips: [WARNING] }))
       const breaks = `const owner = ${kase.internal.replace(/\.[^.]+$/, '')}
         const original = owner.${kase.name}
         owner.${kase.name} = undefined
