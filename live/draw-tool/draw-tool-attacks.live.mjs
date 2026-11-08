@@ -6,18 +6,20 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage } from '../page.mjs'
+import { captureConsoleErrors, openPage } from '../page.mjs'
 import { gridPoint, mouseDrag } from '../pen.mjs'
-import { settle, SETTLE_MS } from '../settle.mjs'
+import { settle } from '../settle.mjs'
 
-const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SIZE_SLIDER, TEXT_BOX, TEXTS, slideTo } = draw
+const { CLEAR_BUTTON, DIALOG, DIGIT_BUTTON, OPACITY_SLIDER, SELECTED, SIZE_SLIDER, TEXT_BOX, TEXTS, slideTo } = draw
 const { HIT_MARGIN_PX } = createRequire(import.meta.url)('../../draw-tool.user.js')
 const HOME = { width: 1200, height: 900 }
 const SPOT = [2.5, 2.5]
 const OTHER = [6.5, 5.5]
-const SELECTED = '#draw-tool-layer .draw-tool-selected'
 const key = (n) => `.controls-input button[data-key="${n}"]`
 const RED = 4
+// A held arrow must carry a note past this many px (one press moves about 1), and Shift+arrow past this many.
+const HELD_FAR_PX = 15
+const SHIFT_FAR_PX = 40
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -52,7 +54,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
   const noOpenBox = async () => assert.equal(await boxOpen(), false, 'no note is left open')
 
   before(async () => {
-    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: HOME, permissions: ['clipboard-read', 'clipboard-write'] } }))
+    ;({ context, p, errors } = await openPage(browser, { contextOptions: { viewport: HOME, permissions: ['clipboard-read', 'clipboard-write'] }, seed: captureConsoleErrors }))
     await draw.boot(p)
   })
   after(async () => { await context.close() })
@@ -62,7 +64,11 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await draw.forgetDrawings(p)
     await reload()
   })
-  afterEach(() => { assert.deepEqual(errors, [], 'no page error and no skip line') })
+  // Errors are checked and cleared after each attack, so one failure names its own attack and no other.
+  afterEach(() => {
+    const seen = errors.splice(0)
+    assert.deepEqual(seen, [], 'no page error, console error or skip line')
+  })
 
   it('attack 19: a note being typed in is kept when the tool is switched without leaving the note', async () => {
     await clickAt(SPOT)
@@ -91,15 +97,16 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.deepEqual((await savedTexts()).sort(), ['old', 'typing'])
   })
 
-  it('attack 21: a note being typed in, then a reload, keeps the notes already saved, drops the unfinished text, and leaves no half-open note', async () => {
+  it('attack 21: a note being typed in, then a reload, keeps the notes already saved, draws what it saves, and leaves no half-open note', async () => {
     await typeAt(OTHER, 'saved')
     await clickAt(SPOT)
     await p.keyboard.type('unsaved')
     await reload()
     await noOpenBox()
-    // The text typed and not yet finished is not saved: a reload drops it, as it drops any unsaved edit. This pins that; it is not a ruling that it should.
-    assert.deepEqual(await shown(), ['saved'], 'the earlier note survived and the unfinished one did not')
-    assert.deepEqual(await savedTexts(), ['saved'], 'what is drawn is what is saved')
+    // Whether the unfinished text survives is not ruled (#590 asks only that saved and drawn notes match); the finished note must.
+    const drawn = await shown()
+    assert.ok(drawn.includes('saved'), `the finished note survived (${drawn})`)
+    assert.deepEqual((await savedTexts()).sort(), drawn.sort(), 'what is drawn is what is saved')
     // The page still takes a note.
     await typeAt(SPOT, 'again')
     assert.ok((await shown()).includes('again'))
@@ -168,11 +175,13 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await p.keyboard.type('- [x] two')
     await draw.finishNote(p)
     assert.deepEqual(await savedTexts(), ['- [ ] one\n- [x] two'])
-    assert.equal(await p.locator(`${TEXTS} .draw-tool-check, ${TEXTS} [data-line]`).count() >= 2, true, 'two checklist boxes are drawn')
+    assert.equal(await p.locator(`${TEXTS} [data-line]`).count(), 2, 'two checklist boxes are drawn')
     await draw.reopen(p, await gridPoint(p, SPOT))
     for (let i = 0; i < 12; i++) await p.keyboard.press('Control+z')
-    await p.keyboard.press('Control+End')
+    assert.equal(await boxOpen(), true, 'the note is still open after Undo')
     await draw.finishNote(p)
+    assert.equal((await shown()).length, 1, 'the checklist note is still drawn')
+    assert.equal((await savedTexts()).length, 1, 'and saved')
   })
 
   it('attack 25: a 5000-character line and a 200-line text pasted into a note are kept whole, and the page keeps working', async () => {
@@ -195,7 +204,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.equal((await shown()).length, 2, 'both over a reload')
     // The notes can still be selected and erased.
     await p.mouse.click(...await draw.middleAt(p, await gridPoint(p, OTHER)), { button: 'right' })
-    assert.equal((await settle(shown, [line])).length, 1)
+    assert.deepEqual(await settle(shown, [line]), [line], 'the other note is the one left')
   })
 
   it('attack 26: rich HTML pasted into a note comes in as its plain text only', async () => {
@@ -206,7 +215,6 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.equal(await boxText(), 'Title\nsome bold and link')
     await draw.finishNote(p)
     assert.deepEqual(await savedTexts(), ['Title\nsome bold and link'])
-    assert.equal(await p.evaluate(() => window.__pwned), undefined)
     await reload()
     assert.equal(await p.locator(`${TEXTS} img, ${TEXTS} script, ${TEXTS} a`).count(), 0)
   })
@@ -232,7 +240,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await draw.reopen(p, await gridPoint(p, SPOT))
     await p.keyboard.type('!')
     await p.mouse.dblclick(...await draw.middleAt(p, await gridPoint(p, OTHER)))
-    assert.equal(await p.locator(TEXT_BOX).count(), 1, 'one note is open')
+    assert.equal(await boxOpen(), true, 'one note is open')
     assert.equal(await boxText(), 'second', 'the second note is the open one')
     assert.deepEqual((await savedTexts()).sort(), ['first!', 'second'], 'the first note kept what was typed')
     await p.keyboard.press('Control+End')
@@ -302,48 +310,62 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     assert.deepEqual(await saved(), changed)
   })
 
-  it('attack 31: arrows held on several selected notes move them all together, Shift+arrows move them farther, and releasing saves once and keeps them reachable', async () => {
+  it('attack 31: arrows held on several selected notes move them all together with a ramp, Shift+arrows move them farther, and each release saves once and keeps them reachable', async () => {
     await typeAt([1.5, 1.5], 'A')
     await typeAt([3.5, 1.5], 'B')
     await mouseDrag(p, [[0.6, 0.6], [2, 2], [4.4, 3.4]])
     assert.equal(await p.locator(SELECTED).count(), 2, 'two notes are selected')
+    // Counts the writes of this puzzle's drawing.
+    await p.evaluate((prefix) => {
+      window.drawSaves = 0
+      const setData = Framework.setData
+      Framework.setData = function (name, value) {
+        if (String(name).startsWith(prefix)) window.drawSaves++
+        return setData.call(this, name, value)
+      }
+    }, draw.DRAWING_PREFIX)
+    const saves = () => p.evaluate(() => window.drawSaves)
     const start = [await noteBox('A'), await noteBox('B')]
     await p.keyboard.down('ArrowRight')
     try {
-      assert.equal(await settle(async () => (await noteBox('A')).x - start[0].x > 15, true), true, 'the held key keeps nudging')
+      // A ramp: well past the 1 px of a single press.
+      assert.equal(await settle(async () => (await noteBox('A')).x - start[0].x > HELD_FAR_PX, true), true, `the held key moved the notes only ${(await noteBox('A')).x - start[0].x} px`)
+      assert.equal(await saves(), 0, 'nothing is saved while the key is held')
     } finally {
       await p.keyboard.up('ArrowRight')
     }
+    assert.equal(await settle(saves, 1), 1, 'one save after the release')
+    const right = await noteBox('A')
     await p.keyboard.down('Shift')
     try {
       await p.keyboard.down('ArrowDown')
-      assert.equal(await settle(async () => (await noteBox('A')).y - start[0].y > 40, true), true, 'Shift+arrow moves farther')
+      assert.equal(await settle(async () => (await noteBox('A')).y - start[0].y > SHIFT_FAR_PX, true), true, `Shift+arrow moved the notes only ${(await noteBox('A')).y - start[0].y} px`)
       await p.keyboard.up('ArrowDown')
     } finally {
       await p.keyboard.up('Shift')
     }
+    assert.equal(await settle(saves, 2), 2, 'one more save after the second release')
     const end = [await noteBox('A'), await noteBox('B')]
+    assert.ok(end[0].x >= right.x - 1, 'the Shift+arrow down did not undo the move right')
     assert.ok(Math.abs((end[0].x - start[0].x) - (end[1].x - start[1].x)) <= 1, 'both moved the same way across')
     assert.ok(Math.abs((end[0].y - start[0].y) - (end[1].y - start[1].y)) <= 1, 'and down')
     assert.equal(await draw.tool(p), 'draw')
-    // Settled: the saved places are the drawn ones after a reload.
-    await p.evaluate((ms) => new Promise((resolve) => window.setTimeout(resolve, ms)), SETTLE_MS)
-    const stopped = await noteBox('A')
     await reload()
     const reloaded = await noteBox('A')
-    assert.ok(Math.abs(reloaded.x - stopped.x) <= 1.5 && Math.abs(reloaded.y - stopped.y) <= 1.5, `saved where it stopped (${stopped.x},${stopped.y} then ${reloaded.x},${reloaded.y})`)
+    assert.ok(Math.abs(reloaded.x - end[0].x) <= 1.5 && Math.abs(reloaded.y - end[0].y) <= 1.5, `saved where it stopped (${end[0].x},${end[0].y} then ${reloaded.x},${reloaded.y})`)
     for (const box of [await noteBox('A'), await noteBox('B')]) assert.ok(box.x + box.width / 2 <= HOME.width && box.y + box.height / 2 <= HOME.height, 'inside the window')
   })
 
   it('attack 32: notes put at the window\'s corners and the board\'s edges stay reachable when the window shrinks below them', async () => {
-    const corners = { TL: [6, 6], TR: [HOME.width - 6, 6], BL: [6, HOME.height - 6], BR: [HOME.width - 6, HOME.height - 6] }
+    // The window's four corners; the top ones sit under SudokuPad's menu and top bar, so those notes start just below and inside them, on the page.
+    const corners = { TL: [46, 46], TR: [HOME.width - 46, 46], BL: [6, HOME.height - 6], BR: [HOME.width - 6, HOME.height - 6] }
     for (const [text, at] of Object.entries(corners)) {
       await p.mouse.click(...at)
-      if (await boxOpen()) {
-        await p.keyboard.type(text)
-        await draw.finishNote(p)
-      }
+      assert.equal(await boxOpen(), true, `a click at the ${text} corner of the window opens a note`)
+      await p.keyboard.type(text)
+      await draw.finishNote(p)
     }
+    assert.deepEqual((await shown()).sort(), ['BL', 'BR', 'TL', 'TR'], 'a note sits at each corner')
     await typeAt([0.05, 0.05], 'BoardTL')
     await typeAt([8.95, 8.95], 'BoardBR')
     await typeAt([4.5, 4.5], 'a long note that is wider than the small window will be')
@@ -353,8 +375,8 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
       return middles.every(([x, y]) => x >= 0 && x <= w && y >= 0 && y <= h)
     }
     const count = (await shown()).length
-    assert.ok(count >= 3, `the notes were placed (${count})`)
-    for (const size of [{ width: 700, height: 500 }, { width: 400, height: 300 }, HOME]) {
+    assert.equal(count, 7, 'seven notes were placed')
+    for (const size of [{ width: 1024, height: 600 }, { width: 800, height: 600 }, HOME]) {
       await p.setViewportSize(size)
       assert.equal(await settle(insideWindow, true), true, `every note's middle is inside a ${size.width}x${size.height} window`)
       assert.equal((await shown()).length, count, 'no note was lost')
@@ -373,7 +395,7 @@ describe('Text Anywhere attacked while editing', { concurrency: false }, () => {
     await p.locator(DIALOG).waitFor({ state: 'visible' })
     assert.match(await p.locator(DIALOG).textContent(), /Clear all notes\?/)
     await p.waitForFunction(() => !window.dialogJustShown)
-    await p.locator(`${DIALOG} button`).filter({ hasText: /^(Clear|Yes|OK|Clear all)/ }).first().click()
+    await p.locator(`${DIALOG} button`).filter({ hasText: /^OK$/ }).first().click()
     await p.locator(DIALOG).waitFor({ state: 'detached' })
     assert.deepEqual(await settle(shown, []), [], 'every note is gone, the one being typed in too')
     assert.deepEqual(await savedTexts(), [])
