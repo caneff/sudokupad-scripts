@@ -187,7 +187,7 @@ With the box on and the pen tool on, a right click over the grid erases what is 
 - On an edge mark, a grid-corner mark or a cell's circle, cross or dot with no line under the pointer: that mark, whatever its shape. Lines win over marks when both are under the pointer.
 - On nothing: nothing, and no mark is made.
 
-While the right button is held, everything the erase has gathered so far is drawn at 0.3 opacity: the whole line the press hit with its branches, and the marks. Releasing erases it, and the line and marks then fade out from that opacity over 120 ms; the puzzle changes at once and undo is unaffected. Under reduced motion there is no fade. Nothing erases from the keyboard, so there is no keyboard case to leave out. Escape while the button is held cancels the erase: the fade goes, nothing is erased and there is no undo step.
+While the right button is held, everything the erase has gathered so far is drawn at 0.3 opacity: the whole line the press hit with its branches, and the marks. Releasing erases it, and the line and marks then fade out from that opacity over 120 ms; the puzzle changes at once and undo is unaffected. Under reduced motion there is no fade. Escape while the button is held cancels the erase: the fade goes, nothing is erased and there is no undo step.
 
 A line is hit within 0.2 of a cell of it, held to at least 10 px on small cells and at most 0.24 of a cell, so a centre line and the edge line beside it (0.5 apart) are never both hit.
 

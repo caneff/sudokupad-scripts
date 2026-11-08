@@ -1,11 +1,9 @@
 // Live check of the press state on Text Anywhere's panel buttons (lib/panel.js, shared with Pen Tool Extras): a button shrinks to 0.97 while the mouse holds it, and does not under reduced motion.
 // Every press is the real mouse.
 import { after, before, describe, it } from 'node:test'
-import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import * as draw from './draw-tool-fixtures.mjs'
-import { openPage, scaleWhilePressed } from '../page.mjs'
-import { settle } from '../settle.mjs'
+import { assertPressState, openPage } from '../page.mjs'
 
 const BUTTONS = { 'a color button': `${draw.KEYPAD} button.digit[data-key="2"]`, 'the Clear all button': draw.CLEAR_BUTTON, 'the gear': draw.SETTINGS_BUTTON }
 
@@ -26,8 +24,7 @@ for (const [name, contextOptions, scale] of [['a press', {}, 0.97], ['a press un
 
     for (const [what, selector] of Object.entries(BUTTONS)) {
       it(`${what} ${scale === 1 ? 'keeps its size' : 'shrinks to 0.97'} while it is held, and is full size again once let go`, async () => {
-        assert.equal(await scaleWhilePressed(p, selector), scale)
-        assert.equal(await settle(() => p.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector), 'none'), 'none')
+        await assertPressState(p, selector, scale)
       })
     }
   })

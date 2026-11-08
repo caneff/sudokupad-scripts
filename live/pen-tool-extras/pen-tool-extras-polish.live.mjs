@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { chromium } from 'playwright'
-import { openPage, restartPuzzle, scaleWhilePressed, startPuzzle } from '../page.mjs'
+import { assertPressState, openPage, restartPuzzle, startPuzzle } from '../page.mjs'
 import { cellCentre, drag, gridPoint, openPenTool, penEntries, penValuesAt, plantUnchecked } from '../pen.mjs'
 import { settle } from '../settle.mjs'
 
@@ -77,8 +77,7 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
 
     for (const [what, selector] of Object.entries(PANEL_BUTTONS)) {
       it(`${what} ${reduced ? 'keeps its size' : 'shrinks to 0.97'} while the mouse holds it and is full size once let go`, async () => {
-        assert.equal(await scaleWhilePressed(p, selector), reduced ? 1 : 0.97)
-        assert.equal(await settle(() => p.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector), 'none'), 'none')
+        await assertPressState(p, selector, reduced ? 1 : 0.97)
       })
     }
 
@@ -112,6 +111,7 @@ for (const [name, contextOptions, reduced] of [['', {}, false], [' under reduced
     })
 
     it(`edit mode's pickers ${reduced ? 'appear with no animation' : 'fade in from 0.95 over 150 ms'}`, async () => {
+      assert.equal(await p.locator(PICKERS).count(), 0, 'edit mode starts shut, so the pickers read below are the ones this hold opens')
       // Read the moment a picker is inserted: a 150 ms animation is over before a poll from outside the page can look.
       await p.evaluate((selector) => {
         window.__pickerAnimations = new Promise((resolve) => {
@@ -189,21 +189,23 @@ describe('Pen Tool Extras: the hit floor on a grid with small cells', { concurre
   })
   after(async () => { await context.close() })
 
-  it('keeps a corner click and a right-click line hit at 10 px on a 35 px cell, up to the caps, and not past them', async () => {
+  it('keeps a corner click, the right click that erases that corner mark and a right-click line hit at 10 px on a 35 px cell, the line hit up to its cap, and no corner hit past the floor', async () => {
     assert.equal(cellPx < 40, true, `the scaled cell is ${cellPx} px`)
     const floor = HIT_FLOOR_PX / cellPx
-    assert.equal(floor > CORNER_RADIUS && floor < CORNER_RADIUS_MAX, true, `a floor of ${floor} cells lies between the base radius and the cap`)
+    assert.equal(floor > CORNER_RADIUS && floor < CORNER_RADIUS_MAX, true, `a floor of ${floor} cells lies between the base radius ${CORNER_RADIUS} and the cap ${CORNER_RADIUS_MAX}`)
     // SudokuPad reads the pointer in whole pixels of the unscaled page, so on this grid it is off by up to 0.03 cells: the point is well inside the floor and well past the base radius.
     const inside = (CORNER_RADIUS + floor) / 2
     const [x, y] = await nearCorner(3, 4, -inside, 0)
     await p.mouse.click(x, y)
     assert.deepEqual(await settle(() => penValuesAt(p, 2, 3), ['u']), ['u'], `${inside} cells above a corner is a corner mark`)
+    await p.mouse.click(x, y, { button: 'right' })
+    assert.deepEqual(await settle(() => penValuesAt(p, 2, 3), []), [], 'a right click at the same point erases the corner mark')
     const outside = CORNER_RADIUS_MAX + 0.05
     const [ox, oy] = await nearCorner(6, 4, -outside, 0)
     await p.mouse.click(ox, oy)
-    assert.deepEqual(await settle(() => penValuesAt(p, 5, 3), ['3']), ['3'], `${outside} cells above a corner, past the cap, is the edge mark`)
+    assert.deepEqual(await settle(() => penValuesAt(p, 5, 3), ['3']), ['3'], `${outside} cells above a corner, past the floor, is the edge mark`)
     // the line along row 0.5 is hit 0.22 cells off (past the base 0.2, within the 0.24 cap), and not 0.27 off
-    assert.equal(LINE_HIT_RADIUS < 0.22 && LINE_HIT_RADIUS_MAX > 0.22 && LINE_HIT_RADIUS_MAX < 0.27, true)
+    assert.equal(LINE_HIT_RADIUS < 0.22 && LINE_HIT_RADIUS_MAX > 0.22 && LINE_HIT_RADIUS_MAX < 0.27, true, `the test's 0.22 and 0.27 straddle the line cap ${LINE_HIT_RADIUS_MAX} above the base ${LINE_HIT_RADIUS}`)
     const [fx, fy] = await gridPoint(p, [0.5 + 0.27, 3])
     await p.mouse.click(fx, fy, { button: 'right' })
     assert.equal((await penEntries(p)).filter((e) => !e.includes(':u') && !e.includes(':3')).length, 3, 'a right click 0.27 cells off leaves the line')

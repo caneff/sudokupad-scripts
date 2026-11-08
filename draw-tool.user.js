@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.36.2
+// @version      0.36.3
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.36.2'
+  const VERSION = '0.36.3'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -1828,8 +1828,8 @@
   // (widening to the right) and the one drawn as a fade (faint to solid); a panel with no fade slider leaves `fadeSlider` out.
   function panelCss ({ panel, colorButton, controlButtons, tray, sliders, sliderRow, wedgeSlider, fadeSlider }) {
     const rows = [[1, 2, 3, COLOR_ROWS], [7, 8, 9, 1]]
-    const pressable = [`${panel} ${colorButton}`, ...controlButtons.split(', ')]
-    const pressed = pressable.map((selector) => `${selector}:active`).join(', ')
+    const pressable = `${panel} ${colorButton}, ${controlButtons}`
+    const pressed = `:is(${pressable}):active`
     return [
       `${panel} { display: grid !important; grid-template-columns: repeat(${PANEL_COLUMNS}, ${PANEL_CELL_REM}rem); grid-template-rows: repeat(${COLOR_ROWS}, ${COLOR_CELL_REM}rem) ${rem(CONTROLS_GAP_REM + PANEL_CELL_REM)}rem 1fr; height: ${PANEL_HEIGHT_REM}rem !important; padding: 0 !important; box-sizing: border-box; justify-items: center; align-items: center; position: relative; }`,
       `${panel} > .button-row { display: contents !important; }`,
@@ -1843,9 +1843,9 @@
       // SudokuPad's Keypad Flipped swaps the first and third rows of colors with a transform on each `.button-row`, which has no box here, so the rows are swapped by grid row.
       ...rows.flatMap(([a, b, c, row]) => [a, b, c].map((key) => `.setting-flipkeypad ${panel} button[data-key="${key}"] { grid-row: ${row} / span 1; }`)),
       `.${sliders} { grid-row: ${SLIDERS_ROW}; grid-column: 1 / ${PANEL_COLUMNS + 1}; justify-self: stretch; align-self: stretch; position: relative; z-index: 1; box-sizing: border-box; margin: ${PANEL_BUTTON_MARGIN_REM}rem ${PANEL_BUTTON_MARGIN_REM}rem ${TRAY_PADDING_REM}rem; }`,
-      `${pressable.join(', ')} { transition: transform ${PRESS_MS}ms ease-out; }`,
+      `${pressable} { transition: transform ${PRESS_MS}ms ease-out; }`,
       `${pressed} { transform: scale(${PRESS_SCALE}); }`,
-      `@media (prefers-reduced-motion: reduce) { ${pressable.join(', ')} { transition: none; } ${pressed} { transform: none; } }`,
+      `@media (prefers-reduced-motion: reduce) { ${pressable} { transition: none; } ${pressed} { transform: none; } }`,
       ...(sliderRow ? sliderRules(sliders, sliderRow, wedgeSlider, fadeSlider) : [])
     ]
   }

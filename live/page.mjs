@@ -1,6 +1,7 @@
 // Shared by the live checks: opening SudokuPad's puzzle page and getting it past Start Puzzle, with a script
 // injected at any of the three times a userscript can load. Not a check itself, so `live/**/*.live.mjs` skips it.
 
+import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { LOAD_MS, puzzleUrl, routeSudokuPad, START } from './cache.mjs'
 import { settle } from './settle.mjs'
@@ -93,21 +94,26 @@ export async function startPuzzle (p, { beforeStart, injection } = {}) {
 // by a CSS scale, so a mark's width on screen is its stroke width times this.
 export const scaleOf = (transform) => transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
 
-// The scale a panel button settles at while the real mouse holds it down (1 when it never shrinks), then lets go away from the button. A press held 1000 ms on a color button
-// opens edit mode, so the read ends well before that.
-export async function scaleWhilePressed (page, selector) {
+// How long a held button gets to show its press before the read gives up: far inside the 1000 ms hold that opens edit mode on a color button.
+const PRESS_READ_MS = 500
+
+// The scale a panel button has while the real mouse holds it down, read until it is `expected` or PRESS_READ_MS passes; the mouse then lets go away from the button.
+export async function scaleWhilePressed (page, selector, expected) {
   const box = await page.locator(selector).boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
   try {
-    return await settle(() => page.evaluate((s) => {
-      const { transform } = window.getComputedStyle(document.querySelector(s))
-      return transform === 'none' ? 1 : parseFloat(/matrix\(([\d.]+)/.exec(transform)[1])
-    }, selector), 0.97)
+    return await settle(async () => scaleOf(await page.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector)), expected, PRESS_READ_MS, PRESS_READ_MS)
   } finally {
     await page.mouse.move(2, 2)
     await page.mouse.up()
   }
+}
+
+// The panel button's press state: held, it is at `expected` (0.97, or 1 under reduced motion), and let go it is full size again.
+export async function assertPressState (page, selector, expected) {
+  assert.equal(await scaleWhilePressed(page, selector, expected), expected, `${selector} held`)
+  assert.equal(await settle(async () => scaleOf(await page.evaluate((s) => window.getComputedStyle(document.querySelector(s)).transform, selector)), 1), 1, `${selector} let go`)
 }
 
 // The width a stroke draws at on screen, from its computed `strokeWidth` and `transform`, rounded to 4 places.
