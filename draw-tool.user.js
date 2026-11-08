@@ -3689,8 +3689,6 @@
         inFrame('hover', showHover)
       }, { capture: true })
       onWindow(textTool, 'mouseup', endResize, { capture: true })
-      // SudokuPad's tool gets no release over its controls, where a note may now be dropped.
-      onWindow(textTool, 'mouseup', (event) => { if (drag && overControl(event)) endDrag() }, { capture: true })
       for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
       onWindow(textTool, 'keyup', releaseKey, { capture: true })
     })
