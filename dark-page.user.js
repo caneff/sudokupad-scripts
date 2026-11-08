@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.7
+// @version      0.6.0
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
 // @match        https://crackingthecryptic.com/*
 // @match        https://*.crackingthecryptic.com/*
 // @grant        none
-// @run-at       document-idle
+// @run-at       document-start
 // @updateURL    https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js
 // @downloadURL  https://raw.githubusercontent.com/caneff/sudokupad-scripts/main/dark-page.user.js
 // ==/UserScript==
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.7'
+  const VERSION = '0.6.0'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -37,6 +37,13 @@
 
   // Throws when storage cannot be read: the startup read runs under the savedColor feature, the dialog's under settings.
   const readSaved = (store) => savedColor(store.getData(DATA_KEY))
+
+  // Framework keeps its saved data in localStorage under `<Framework.LocalDataPrefix>_<name>` (`makeDataKey`). At
+  // document-start Framework does not exist yet, so the first paint reads that key itself; the live check
+  // `the key the early read uses is Framework's own` fails if SudokuPad renames the prefix.
+  const LOCAL_DATA_KEY = `svencodes_${DATA_KEY}`
+  // Throws when storage is blocked; the caller keeps the default then, and the read through Framework at DOMContentLoaded reports it.
+  const earlyColor = (storage) => savedColor(storage.getItem(LOCAL_DATA_KEY))
 
   const READERS = { [DATA_KEY]: (data) => savedColor(data) ?? undefined }
 
@@ -610,21 +617,34 @@
   const { savedColor: savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, savedColor, buildCss, BOARD, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
+    module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, savedColor, earlyColor, LOCAL_DATA_KEY, buildCss, BOARD, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
   }
   if (typeof document === 'undefined') return
 
-  // Read before the first paint so a saved color never shows the default first; Framework.getData
-  // works as soon as Framework exists, before the app is ready, and so does the probe, as each internal
-  // here is Framework's own. A page that cannot read it (a frame with storage blocked) still gets the
-  // default darkening, which needs no Framework.
-  if (typeof Framework !== 'undefined') guard.probe({ roots: { Framework }, store: Framework })
-  let pageColor = (typeof Framework === 'undefined' ? null : savedPageColor.run(() => readSaved(Framework), () => null)) || DEFAULT_COLOR
+  // The page color goes in at document-start, before the first paint, so the page is never SudokuPad's white first. The
+  // board's `#svgrenderer` is in the page's own HTML, so `BOARD` matches as soon as the parser reaches it. Framework does not
+  // exist yet, so the saved color is read from localStorage (`earlyColor`); a page that cannot be read gets the default.
+  let pageColor = DEFAULT_COLOR
+  try {
+    pageColor = earlyColor(window.localStorage) || DEFAULT_COLOR
+  } catch (e) {
+    // Best effort: `start` reads the color through Framework, which reports a blocked storage itself.
+  }
 
   const style = document.createElement('style')
   style.id = STYLE_ID
   style.textContent = buildCss(pageColor)
-  document.head.appendChild(style)
+  // At document-start `document.head`, and in some injectors `document.documentElement` too, does not exist yet; the
+  // style goes in the moment the parser creates the element, which is before the first paint.
+  const attach = () => (document.head || document.documentElement).appendChild(style)
+  if (document.documentElement) attach()
+  else {
+    new window.MutationObserver((records, observer) => {
+      if (!document.documentElement) return
+      observer.disconnect()
+      attach()
+    }).observe(document, { childList: true })
+  }
 
   function saveColor (color) {
     // The default is kept as nothing saved, so it follows any later change of the default.
@@ -678,10 +698,22 @@
     })
   }
 
-  // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the
-  // default color.
-  if (typeof Framework === 'undefined') return
-  settingsEntry.run(() => Framework.getApp().then(() => {
-    settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
-  }))
+  // At DOMContentLoaded Framework exists (before the app is ready), so the saved color is read through it, as the one
+  // authority; `getData` works then. A page that cannot read it keeps the color already painted.
+  function start () {
+    if (typeof Framework !== 'undefined') guard.probe({ roots: { Framework }, store: Framework })
+    const saved = typeof Framework === 'undefined' ? null : savedPageColor.run(() => readSaved(Framework), () => null)
+    if (saved && saved !== pageColor) {
+      pageColor = saved
+      style.textContent = buildCss(pageColor)
+    }
+    // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the
+    // default color.
+    if (typeof Framework === 'undefined') return
+    settingsEntry.run(() => Framework.getApp().then(() => {
+      settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
+    }))
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start)
+  else start()
 })()

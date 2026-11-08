@@ -13,7 +13,7 @@ import { headerVersion, openSettings } from '../settings.mjs'
 import { readUntil, SETTLE_MS, settle, stable } from '../settle.mjs'
 
 const script = readFileSync(new URL('../../dark-page.user.js', import.meta.url), 'utf8')
-const { BOARD, BOARD_ID, STYLE_ID } = createRequire(import.meta.url)('../../dark-page.user.js')
+const { BOARD, BOARD_ID, STYLE_ID, LOCAL_DATA_KEY } = createRequire(import.meta.url)('../../dark-page.user.js')
 const DATA_KEY = 'DarkPage_color'
 
 const settingsEntry = (group) => group.locator('button, [role=button]').filter({ hasText: /^\s*Dark Page\s*$/ })
@@ -406,6 +406,60 @@ describe('injected after Start Puzzle', { concurrency: false }, () => {
 
   it('no uncaught page errors', () => {
     assert.deepEqual(errors, [])
+  })
+})
+
+// `@run-at document-start`: the script runs before any of the page's own, so the page is never SudokuPad's white. A frame
+// sampler, installed before the script, records the body's color at every frame the board exists in; a white one is the
+// flash. (A frame between the body and the board, while the parser waits on SudokuPad's blocking scripts, is outside
+// `BOARD` by design and is not sampled: docs/research/dark-page/load-flash.md.) Framework does not exist yet, so the saved color is read from localStorage.
+describe('at document-start', { concurrency: false }, () => {
+  const samples = async (saved) => {
+    const { context, p, errors } = await openPage(browser, {
+      // Two init scripts run in order at document start, before the page's own: the sampler, then the script. At that point
+      // `document.documentElement` does not exist yet, as in an injector that runs the script first.
+      seed: async (page) => {
+        await page.addInitScript(([key, color]) => {
+          if (color) window.localStorage.setItem(key, color)
+          const frames = (window.__frames = [])
+          const tick = () => {
+            if (document.getElementById('svgrenderer')) frames.push(window.getComputedStyle(document.body).backgroundColor)
+            if (frames.length < 600) window.requestAnimationFrame(tick)
+          }
+          window.requestAnimationFrame(tick)
+        }, [LOCAL_DATA_KEY, saved])
+        await page.addInitScript({ content: script })
+      }
+    })
+    try {
+      await p.locator(STYLE).waitFor({ state: 'attached' })
+      await startPuzzle(p)
+      const frames = await p.evaluate(() => window.__frames)
+      return { frames, errors, key: await p.evaluate(() => Framework.makeDataKey('DarkPage_color')), color: await p.evaluate(() => window.getComputedStyle(document.body).backgroundColor) }
+    } finally {
+      await context.close()
+    }
+  }
+
+  it('paints the default black from the first frame with a board, never white', async () => {
+    const { frames, errors, color } = await samples(null)
+    assert.ok(frames.length > 0, 'the sampler saw a frame with a board')
+    assert.deepEqual([...new Set(frames)], [BLACK])
+    assert.equal(color, BLACK)
+    assert.deepEqual(errors, [])
+  })
+
+  it('paints the saved color from the first frame with a board, never white or black', async () => {
+    const { frames, errors, color } = await samples('#336699')
+    assert.ok(frames.length > 0, 'the sampler saw a frame with a board')
+    assert.deepEqual([...new Set(frames)], ['rgb(51, 102, 153)'])
+    assert.equal(color, 'rgb(51, 102, 153)')
+    assert.deepEqual(errors, [])
+  })
+
+  it('the key the early read uses is Framework\'s own', async () => {
+    const { key } = await samples(null)
+    assert.equal(key, LOCAL_DATA_KEY)
   })
 })
 
