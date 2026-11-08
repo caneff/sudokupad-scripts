@@ -50,15 +50,9 @@ test('every picture the site loads is in a script folder of docs/research/ or in
   }
 })
 
-// Chris's ruling on #359: this script is for him only, so it is not on the site.
-const NOT_ON_SITE = 'no-tab-letters.user.js'
-
-test(`every *.user.js in the repo root except ${NOT_ON_SITE} has an install link on the homepage, and ${NOT_ON_SITE} has none anywhere on the site`, () => {
-  const scripts = rootScripts()
-  assert.ok(scripts.includes(NOT_ON_SITE), `${NOT_ON_SITE} is gone, so the exception is stale`)
+test('every *.user.js in the repo root has an install link on the homepage (Chris: no script is left off the site)', () => {
   const links = scriptLinks(read(HOME))
-  for (const s of scripts.filter(f => f !== NOT_ON_SITE)) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
-  for (const name of PAGES) assert.doesNotMatch(read(name), /no-tab-letters|No Tab Letters/i, `site/${name} names No Tab Letters`)
+  for (const s of rootScripts()) assert.ok(links.includes(RAW + s), `${s} has no install link on site/${HOME}`)
 })
 
 for (const name of PAGES) {
@@ -430,7 +424,7 @@ test(`${CBD} shows the settings dialog as one annotated picture whose alt text n
 
 test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and where the button is`, () => {
   assert.deepEqual(section(CBD, 'Good to know'), [
-    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color.',
+    'A digit or center mark change and its color change are one undo step. Undo, redo and replays never color, but undoing or redoing a mode change that colored or cleared cells moves the button to the mode it had then.',
     "With SudokuPad's Multi-color setting off, a cell holds one color, so a group's color replaces any other color the cell had.",
     'The button sits in the bottom row with Undo, Redo, Check and Select. That row holds five buttons, and any more, from this script or another, wrap onto a second row under it.'
   ])
@@ -448,15 +442,15 @@ test(`${HOME} describes Text Anywhere in a short summary ending in a Details lin
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes anywhere Click the board, or beside it, to type. Enter starts a new line; a double-click edits a note.',
-    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets.',
-    'Long notes A long note wraps and scrolls; drag a corner to resize it.',
-    'Readable over digits A white outline round the letters, and an optional box behind the note.',
+    'Typed notes anywhere Click the board or beside it to type; double-click to edit.',
+    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets or - [ ] checklist items. Typing ->, != or sum gives → ≠ Σ.',
+    'Long notes Wraps and scrolls; drag a corner to resize.',
+    'Readable over digits A white outline round the letters, and an optional box behind them.',
     'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
     'Select and move Click a note or drag a box round several; drag to move (snaps to grid and notes), arrow keys nudge.',
     'Erase Right-click a note, or press Delete.',
     'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
-    'Settings Color presets, halo, box color and box border picked from samples, and Copy and Paste to another browser.'
+    'Settings Color presets, halo, box color and border by sample; Copy and Paste to another browser.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
