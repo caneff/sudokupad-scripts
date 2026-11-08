@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.25.0
+// @version      0.25.2
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.25.0'
+  const VERSION = '0.25.2'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -1161,6 +1161,12 @@
   function setDialogStatus (dialog, message) {
     dialog.querySelector(STATUS_SELECTOR).textContent = message
   }
+  // What `keys` hold now, as a function that puts them back; a key that held nothing (null, or undefined when the script's store is off) is removed again. The stored values are held by reference, so a script's save must replace a value and never edit one in place.
+  function snapshotStore (store, keys) {
+    const before = keys.map((key) => [key, store.getData(key)])
+    return () => before.forEach(([key, value]) => (value == null ? store.removeData(key) : store.setData(key, value)))
+  }
+
   // A thrown value that is not an Error has no message, so it is shown as itself.
   const errorText = (error) => error?.message ?? String(error)
 
@@ -1257,19 +1263,30 @@
 
   // Escape needs no handler here: SudokuPad's own dialog closes on it.
   // Returns the body container for the script to fill and wire, or null when SudokuPad showed no dialog (it ignores showDialog while another dialog is open).
-  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, extraButtons = [] }, { doc = document, win = window } = {}) {
+  function showSettingsDialog (framework, { prefix, name, version, bodyId, styleId, css, centerOverBoard = true, changed, save, snapshot, extraButtons = [] }, { doc = document, win = window } = {}) {
     addStyleOnce(`settings-dialog-buttons-${bodyId}`, buttonRowCss(bodyId), doc)
     if (css) addStyleOnce(styleId, css, doc)
     const close = () => closeDialogKeepingGrid(framework, win)
     // After a failed save the script's `changed()` may already read false, so a retry saves again whatever it says.
     let failed = false
+    // `snapshot()` runs before `save` and returns the function that puts back everything the save can change, so a save that fails half-way leaves nothing stored.
     const saveAndClose = () => {
+      let restore = null
       try {
-        if (failed || changed()) save()
+        if (failed || changed()) {
+          restore = snapshot ? snapshot() : null
+          save()
+        }
       } catch (error) {
         failed = true
+        let message = `Not saved: ${errorText(error)}`
+        try {
+          if (restore) restore()
+        } catch (restoreError) {
+          message += `; the earlier values could not be put back: ${errorText(restoreError)}`
+        }
         // The dialog stays open so the failure is read and the choices are kept.
-        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), `Not saved: ${errorText(error)}`)
+        setDialogStatus(doc.getElementById(bodyId).closest('.dialog'), message)
         return
       }
       close()
@@ -1823,7 +1840,7 @@
   // (`app.puzzle.cells` is an empty array until then), and the methods on each cell, which the cell coloring's own `run` covers.
   const FEATURES = {
     // Without these the script starts from its preloads and keeps nothing: the mode steps in memory until the page reloads, and the editor is off too.
-    saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function' } },
+    saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
     cells: {
       label: 'cell coloring',
       needs: {
@@ -1899,7 +1916,7 @@
   const readData = (key) => storage.run(() => Framework.getData(key), () => null)
   const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
   // What the shared store reads and writes through: the saved settings feature's guarded calls, never Framework itself.
-  const savedData = { getData: readData, setData: writeData }
+  const savedData = { getData: readData, setData: writeData, removeData: (key) => storage.run(() => Framework.removeData(key)) }
   // What the settings entry and the editor are handed in place of Framework: the editor's close runs under the editor when a button is pressed.
   const dialogs = {
     addSetting: (setting) => Framework.addSetting(setting),
@@ -2400,6 +2417,20 @@
     setMode(app, next, groupKeys([...oldGroups, ...groups]))
   }
 
+  // The profiles and the mode as stored and as shown, as a function that puts them back after a Save that failed half-way. Cells a failed Save already colored or cleared stay as they are, an undo step of their own.
+  function snapshotSave () {
+    const restoreStored = snapshotStore(savedData, [PROFILES_KEY, MODE_KEY])
+    const was = mode
+    return () => {
+      try {
+        restoreStored()
+      } finally {
+        mode = was
+        redraw()
+      }
+    }
+  }
+
   function openDialog (app) {
     let savedState = loadState()
     const unreadable = hasUnreadable(savedData, PROFILES_KEY)
@@ -2412,7 +2443,8 @@
       styleId: STYLE_ID,
       css: STYLE_CSS,
       changed: () => draft.mode !== mode || JSON.stringify(draft.state) !== JSON.stringify(savedState),
-      save: () => editor.run(() => saveDialog(app, savedState, draft.state, draft.mode))
+      snapshot: snapshotSave,
+      save: () => saveDialog(app, savedState, draft.state, draft.mode)
     })
     if (!box) return
     const draw = () => {

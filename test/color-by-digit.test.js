@@ -941,6 +941,7 @@ test('entry point: wires the settings entry, the button, refreshControls, and a 
     getApp: () => Promise.resolve(app),
     getData: () => null,
     setData: (key, value) => calls.push(['save', key, value]),
+    removeData () {},
     addControlButton: () => calls.push(['button']),
     addSetting: () => calls.push(['setting']),
     showDialog: () => {},
@@ -974,7 +975,7 @@ test('entry point: a Framework without getApp turns off the features that need a
   const calls = []
   global.document = pageDocument()
   global.window = pageWindow()
-  global.Framework = { getData: () => null, setData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
+  global.Framework = { getData: () => null, setData () {}, removeData () {}, addSetting: () => calls.push('setting'), showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }
   try {
     require(path)
     await new Promise((resolve) => setImmediate(resolve))
@@ -1061,6 +1062,7 @@ async function withScript (app, fn, stored = {}) {
     getApp: () => Promise.resolve(app),
     getData: (key) => app.stored[key] ?? null,
     setData: (key, value) => { app.stored[key] = value },
+    removeData: (key) => { delete app.stored[key] },
     addControlButton: (spec) => { app.buttonTitle = spec.title },
     addSetting: () => {},
     showDialog: () => {},
@@ -1881,7 +1883,7 @@ test('shownChips: Both with unsynced profiles lists its chips in ascending digit
 // A SudokuPad with every internal Color by Digit needs.
 const completeRoots = () => {
   const app = { act () {}, select () {}, deselect () {}, on () {}, refreshControls () {}, puzzle: { cells: [], selectedCells: [], undoStack: [], redoStack: [], addEventListener () {} } }
-  return { Framework: { getApp () {}, getData () {}, setData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
+  return { Framework: { getApp () {}, getData () {}, setData () {}, removeData () {}, addControlButton () {}, addSetting () {}, showDialog () {}, closeDialog () {}, app: { tools: { colour: {} } } }, app }
 }
 const withoutPath = (roots, internal) => {
   const [root, ...keys] = internal.split('.')
@@ -1900,7 +1902,7 @@ test('without one internal, only the features that need it are lacking', () => {
     ['app.puzzle.cells', ['cells', 'loading']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.undoStack', ['cells']], ['app.puzzle.redoStack', ['cells']], ['app.puzzle.addEventListener', ['loading']],
     ['app.refreshControls', ['button']], ['Framework.addControlButton', ['button']],
     ['Framework.getApp', ['cells', 'button', 'loading']],
-    ['Framework.getData', ['saved', 'editor']], ['Framework.setData', ['saved', 'editor']],
+    ['Framework.getData', ['saved', 'editor']], ['Framework.setData', ['saved', 'editor']], ['Framework.removeData', ['saved']],
     ['Framework.addSetting', ['editor']], ['Framework.showDialog', ['editor']], ['Framework.closeDialog', ['editor']], ['Framework.app.tools.colour', ['editor']]
   ]
   for (const [internal, features] of cases) {
