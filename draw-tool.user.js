@@ -365,20 +365,21 @@
   }
 
   const BULLET_MARK = /^[-*] /
-  // Optional `- ` or `* `, then `[ ]`, `[]`, `[x]` or `[X]`, then a space or the end of the line, so an empty item still matches once `closedText` has dropped its trailing space.
+  // The end of the line ends the match too, so an empty item still matches once `closedText` has dropped its trailing space.
   const CHECK_MARK = /^([-*] )?\[([ xX]?)\](?: |$)/
+  const isTicked = (state) => /x/i.test(state)
   // A bullet line's first run is the bullet itself, `{ text: '•', bullet: true }`. A checklist line takes the bullet's place with `{ text: '☐' | '☑', bullet: true, checked }`.
   function parseBlock (line) {
     const check = CHECK_MARK.exec(line)
     if (check) {
-      const checked = check[2] !== '' && check[2] !== ' '
+      const checked = isTicked(check[2])
       return [{ text: checked ? '☑' : '☐', bullet: true, checked }, ...parseLine(line.slice(check[0].length))]
     }
     return BULLET_MARK.test(line) ? [{ text: '•', bullet: true }, ...parseLine(line.slice(2))] : parseLine(line)
   }
 
   function toggledCheck (text, index) {
-    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, dash = '', state) => `${dash}[${state === '' || state === ' ' ? 'x' : ' '}]${mark.endsWith(' ') ? ' ' : ''}`) : line).join('\n')
+    return text.split('\n').map((line, i) => i === index ? line.replace(CHECK_MARK, (mark, dash = '', state) => `${dash}[${isTicked(state) ? ' ' : 'x'}]${mark.endsWith(' ') ? ' ' : ''}`) : line).join('\n')
   }
 
   // Symbols typed as ASCII. `sum` is a word of its own, so "summary" stays.
