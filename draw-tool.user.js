@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.27.8
+// @version      0.29.1
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.27.8'
+  const VERSION = '0.29.1'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -226,6 +226,8 @@
   const OK_LABEL = 'OK'
   const DRAWING_PREFIX = 'DrawTool_drawing_'
   const INDEX_KEY = 'DrawTool_index'
+  // The notes a Restart cleared, kept until Undo straight after it brings them back.
+  const RESTARTED_PREFIX = 'DrawTool_restarted_'
   const KEPT_PUZZLES = 50
   // How far, in board units, an erase may pass from a text's box and still erase it.
   const ERASE_TOLERANCE = 4
@@ -934,22 +936,39 @@
   }
 
   const drawingKey = (key) => DRAWING_PREFIX + key
+  const restartedKey = (key) => RESTARTED_PREFIX + key
 
-  // `store` has Framework's getData, setData and removeData. The drawing is written before the index, and the dropped
-  // puzzles' drawings are removed last, so a write that throws (a full localStorage) loses no drawing already saved.
-  // An index that cannot be read throws before anything is written.
+  // A puzzle dropped from the index loses its drawing and the notes its Restart kept.
+  function forgetPuzzle (store, key) {
+    store.removeData(drawingKey(key))
+    store.removeData(restartedKey(key))
+  }
+
+  // `store` has Framework's getData, setData and removeData. Writes `value` under `dataKey` and makes puzzle `key` the newest in `index`. The value is written
+  // before the index, and the dropped puzzles' data is removed last, so a write that throws (a full localStorage) loses nothing already saved.
+  function writeIndexed (store, index, key, dataKey, value, write = (k, v) => store.setData(k, v)) {
+    const touched = touchIndex(index, key)
+    write(dataKey, value)
+    store.setData(INDEX_KEY, touched.index)
+    for (const dropped of touched.dropped) forgetPuzzle(store, dropped)
+  }
+
+  // A puzzle is in the index while it has a drawing or notes its Restart kept. An index that cannot be read throws before anything is written.
   function saveDrawingTo (store, key, items, kept = []) {
     const drawing = items.concat(kept)
     const index = readIndex(store.getData(INDEX_KEY))
-    if (drawing.length === 0) {
-      store.removeData(drawingKey(key))
-      store.setData(INDEX_KEY, index.filter((k) => k !== key))
+    if (drawing.length > 0) {
+      writeIndexed(store, index, key, drawingKey(key), drawing, (k, v) => save(store, k, v))
       return
     }
-    const touched = touchIndex(index, key)
-    save(store, drawingKey(key), drawing)
-    store.setData(INDEX_KEY, touched.index)
-    for (const dropped of touched.dropped) store.removeData(drawingKey(dropped))
+    store.removeData(drawingKey(key))
+    if (store.getData(restartedKey(key)) == null) store.setData(INDEX_KEY, index.filter((k) => k !== key))
+  }
+
+  // Keeps the notes a Restart cleared, in place of any kept before; with none cleared, nothing is kept.
+  function keepRestartedTo (store, key, notes) {
+    if (notes.length > 0) writeIndexed(store, readIndex(store.getData(INDEX_KEY)), key, restartedKey(key), notes)
+    else store.removeData(restartedKey(key))
   }
 
   // SudokuPad gives the tools the keys Z X C V B N M by their place in getToolNames(). Leaving Text Anywhere out of the
@@ -1398,11 +1417,26 @@
         Framework.closeDialog()
       }
     },
+    // Undo straight after a Restart brings back the notes it cleared (docs/research/sudokupad-custom-tool.md § Saving the drawing).
+    undoRestart: { label: 'Undo after Restart', needs: { 'Framework.app.puzzle': 'object', 'Framework.app.puzzle.undoStack': 'array', 'app.puzzle.on': 'function' } },
     // The Darker page presets of the settings dialog read SudokuPad's color palette.
     presets: { label: 'color presets', needs: { 'Framework.app.tools.colour': 'object' } }
   }
+  // The script times the repeat itself: SudokuPad's App.handleKeydown drops every keydown with `event.repeat` before any tool sees it.
+  const NUDGE_PX = 1
+  const NUDGE_SHIFT_PX = 10
+  const NUDGE_MAX_PX = 8
+  const NUDGE_SHIFT_MAX_PX = 40
+  const NUDGE_REPEAT_MS = 300
+  const NUDGE_RAMP_MS = 1500
+  const NUDGE_TICK_MS = 50
+  function nudgeStep (heldMs, shift) {
+    if (heldMs < NUDGE_REPEAT_MS) return 0
+    const [from, to] = shift ? [NUDGE_SHIFT_PX, NUDGE_SHIFT_MAX_PX] : [NUDGE_PX, NUDGE_MAX_PX]
+    return Math.round(from + (to - from) * Math.min(1, (heldMs - NUDGE_REPEAT_MS) / NUDGE_RAMP_MS))
+  }
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
+    module.exports = { nudgeStep, NUDGE_PX, NUDGE_SHIFT_PX, NUDGE_REPEAT_MS, NUDGE_RAMP_MS, NUDGE_MAX_PX, NUDGE_SHIFT_MAX_PX, VERSION, lackingInternals, FEATURES, READERS, TOOL_NAME, toolNamesFor, readDrawing, loadDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, keepRestartedTo, DRAWING_PREFIX, RESTARTED_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, MIN_OPACITY, MAX_OPACITY, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, itemOpacity, readOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, noteScreenBox, resizedItem, autoSized, CORNERS, reachablePoint, DRAWN_SIZE, BOX_WIDTH_EM, BOX_LINES, LINE_HEIGHT, MIN_BOX_EM, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, presetOptions, presetColors, copiedSettings, pastedSettings, pasteReport, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, BACKGROUND_KEY, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, BOX_YELLOW, readBox, boxChoice, boxFill, FRAME_COLOR, readFrame, frameShadow, copiedPenColors, editedColor, colorsCss, HOLD_TO_EDIT_MS }
   }
   if (typeof document === 'undefined') return
 
@@ -1410,7 +1444,7 @@
   if (typeof Framework === 'undefined') return
 
   const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, features: FEATURES })
-  const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets } = guard.features
+  const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets, undoRestart } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
   const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
@@ -2398,6 +2432,7 @@
 
   function select (indices) {
     selected = [...new Set(indices)].sort((a, b) => a - b)
+    if (selected.length === 0) stopHold()
     redraw()
   }
 
@@ -2420,7 +2455,7 @@
 
   const UNSAVABLE_MESSAGE = 'This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.'
 
-  function saveNotes () {
+  function writeDrawing () {
     if (loadedKey === null) return
     reportKept()
     if (!savable) {
@@ -2436,6 +2471,14 @@
       }
     }
   }
+
+  // Saves an edit to the notes. Any edit after a Restart ends what Undo can bring back.
+  function saveNotes () {
+    forgetRestarted()
+    writeDrawing()
+  }
+
+  const forgetRestarted = () => { if (loadedKey !== null && !storage.off) Framework.removeData(restartedKey(loadedKey)) }
 
   function changeSelected (change) {
     for (const i of selected) drawing[i] = change(drawing[i])
@@ -2573,6 +2616,7 @@
 
   // An erase in progress, or a drag, ends as a release ends it; a press that never moved opens no text box. A nudge not yet saved is saved too.
   function endGesture () {
+    stopHold()
     flushFrame()
     if (erasing) endErase()
     if (drag) endDrag()
@@ -2667,8 +2711,6 @@
 
   const moveKeepsReachable = (d, [px, py], map) => movedBy(d.move, [px - d.points[0][0], py - d.points[0][1]], map).every(({ point }) => reachable(point))
 
-  const NUDGE_PX = 1
-  const NUDGE_SHIFT_PX = 10
   const ARROWS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
   // Whether a nudge has moved notes that are not saved yet; the release of the key saves it.
   let nudged = false
@@ -2687,6 +2729,42 @@
     if (!nudged) return
     nudged = false
     saveNotes()
+  }
+
+  const heldArrows = new Set()
+  let holdStart = 0
+  let holdShift = false
+  let holdTimer = null
+
+  function stopHold () {
+    clearInterval(holdTimer)
+    holdTimer = null
+    heldArrows.clear()
+  }
+
+  // Held arrows move together, so two make a diagonal.
+  function repeatNudge () {
+    if (selected.length === 0) return stopHold()
+    const step = nudgeStep(Date.now() - holdStart, holdShift)
+    if (step === 0) return
+    const direction = [...heldArrows].reduce(([x, y], key) => [x + ARROWS[key][0], y + ARROWS[key][1]], [0, 0])
+    nudgeSelected(direction, step)
+  }
+
+  function pressArrow (key, shift) {
+    nudgeSelected(ARROWS[key], shift ? NUDGE_SHIFT_PX : NUDGE_PX)
+    if (heldArrows.size === 0) {
+      holdStart = Date.now()
+      holdTimer = setInterval(repeatNudge, NUDGE_TICK_MS)
+    }
+    heldArrows.add(key)
+  }
+
+  function releaseKey (event) {
+    heldArrows.delete(event.key)
+    if (heldArrows.size > 0) return
+    stopHold()
+    saveNudge()
   }
 
   function endMove (d) {
@@ -2714,11 +2792,13 @@
   }
 
   // Saved notes the script cannot read are the browser's data and not SudokuPad's, so they are left as they are and never turn the saved data off.
+  // SudokuPad keeps what its Undo brings back after a Restart in memory only, so a load ends it for the notes too.
   function showSavedDrawing () {
     cancelInput()
     drawing = []
     savable = true
     loadedKey = currentPuzzleKey()
+    forgetRestarted()
     if (!storage.off) {
       const { items, kept, unreadable } = loadDrawing(Framework, loadedKey)
       drawing = items
@@ -2731,10 +2811,53 @@
   }
 
   // The saved strokes and shapes of an earlier version, and the entries that failed their check, are left as they are.
-  function emptyDrawing () {
+  function clearNotes () {
     drawing = drawing.filter((item) => item.kind !== TEXT_KIND)
     cancelInput()
     savable = true
+  }
+
+  function emptyDrawing () {
+    clearNotes()
+    saveNotes()
+    redraw()
+  }
+
+  // Restart keeps the notes before it saves them cleared, so the Undo that brings back what SudokuPad's Restart cleared brings them back too.
+  function restartDrawing () {
+    try {
+      if (loadedKey !== null && !storage.off && !undoRestart.off) keepRestartedTo(Framework, loadedKey, drawing.filter((item) => item.kind === TEXT_KIND))
+    } catch (err) {
+      report(`Text Anywhere could not keep this puzzle's notes for Undo: ${err.message}`)
+    }
+    clearNotes()
+    writeDrawing()
+    redraw()
+  }
+
+  // SudokuPad's Undo brings back what Restart cleared when the undo stack is empty: the first Undo after a Restart, past any selection made since. Its puzzle
+  // triggers `act` after each action, so whether the stack was empty before an Undo is read off the last action, a reset or a load.
+  const undoStackEmpty = () => Framework.app.puzzle.undoStack.length === 0
+  let undoWasEmpty = false
+
+  function followUndo (_, action) {
+    if (action?.type === 'undo' && undoWasEmpty) restoreRestarted()
+    undoWasEmpty = undoStackEmpty()
+  }
+
+  function restoreRestarted () {
+    if (loadedKey === null || storage.off) return
+    const key = restartedKey(loadedKey)
+    let notes
+    try {
+      notes = readDrawing(Framework.getData(key)).items
+    } catch (err) {
+      report(`Text Anywhere cannot read the notes Restart cleared, so Undo does not bring them back: ${err.message}`)
+      return
+    }
+    if (notes.length === 0) return
+    cancelInput()
+    drawing = drawing.concat(notes)
     saveNotes()
     redraw()
   }
@@ -2862,16 +2985,18 @@
     // With notes selected, Escape ends the selection, Delete or Backspace (a Mac's delete key) deletes them and an arrow key nudges them, and none reaches the cells.
     handleKeydown (event) {
       if (Framework.app.tool !== TOOL_NAME) return false
+      holdShift = event.shiftKey
       if (event.key === 'Shift') return true
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
-      else if (ARROWS[event.key]) nudgeSelected(ARROWS[event.key], event.shiftKey ? NUDGE_SHIFT_PX : NUDGE_PX)
+      else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
       else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
       else return false
       return true
     },
     // SudokuPad calls every tool's handleKeyup too. An arrow released with Shift still held would otherwise switch to Corner (its tempKey), which leaves this tool and ends the selection.
     handleKeyup (event) {
+      holdShift = event.shiftKey
       return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])
     }
   }
@@ -2915,13 +3040,17 @@
       onWindow(textTool, 'mousemove', resizeMove, { capture: true })
       onWindow(textTool, 'mouseup', endResize, { capture: true })
       for (const type of ['keydown', 'keypress', 'keyup']) onWindow(textTool, type, keepBoxKeys, { capture: true })
-      onWindow(textTool, 'keyup', saveNudge, { capture: true })
+      onWindow(textTool, 'keyup', releaseKey, { capture: true })
     })
     settingsUi.run(() => addSettingsEntry(dialogs, { name: 'drawtool', content: 'Text Anywhere', open: under(settingsUi, openDialog) }))
     boardNotes.run(() => {
       app.puzzle.on('loaded', under(boardNotes, showSavedDrawing))
-      app.on('restarted', under(boardNotes, emptyDrawing))
+      app.on('restarted', under(boardNotes, restartDrawing))
       if (app.puzzle.currentPuzzle) showSavedDrawing()
+    })
+    undoRestart.run(() => {
+      app.puzzle.on('act', under(undoRestart, followUndo))
+      for (const event of ['reset', 'progressloaded']) app.puzzle.on(event, under(undoRestart, () => { undoWasEmpty = undoStackEmpty() }))
     })
   }
   if (typeof Framework.getApp === 'function') Framework.getApp().then(start)

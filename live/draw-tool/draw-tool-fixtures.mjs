@@ -38,6 +38,7 @@ export const PICKER = '.draw-tool-picker input'
 export const DIALOG = '.dialog'
 export const DRAWING_PREFIX = 'DrawTool_drawing_'
 export const INDEX_KEY = 'DrawTool_index'
+export const RESTARTED_PREFIX = 'DrawTool_restarted_'
 export const COLOR_KEY = 'DrawTool_color'
 export const WIDTH_KEY = 'DrawTool_width'
 export const COLORS_KEY = 'DrawTool_colors'
@@ -135,11 +136,11 @@ export const topmostAtNotes = (p) => p.evaluate((selector) => [...document.query
 export const frames = (p) => p.evaluate(() => new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve))))
 export const texts = (p) => p.evaluate((selector) => [...document.querySelectorAll(selector)].map((t) => t.textContent), TEXTS)
 
-// Removes every saved drawing and the index.
-export const forgetDrawings = (p) => p.evaluate(([prefix, index]) => {
-  Object.keys(window.localStorage).filter((k) => k.includes(prefix)).forEach((k) => window.localStorage.removeItem(k))
+// Removes every saved drawing, every set of notes a Restart kept, and the index.
+export const forgetDrawings = (p) => p.evaluate(([prefixes, index]) => {
+  Object.keys(window.localStorage).filter((k) => prefixes.some((prefix) => k.includes(prefix))).forEach((k) => window.localStorage.removeItem(k))
   Framework.removeData(index)
-}, [DRAWING_PREFIX, INDEX_KEY])
+}, [[DRAWING_PREFIX, RESTARTED_PREFIX], INDEX_KEY])
 
 export async function boot (p) {
   await startPuzzle(p)
