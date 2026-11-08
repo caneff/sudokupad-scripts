@@ -1745,6 +1745,8 @@
   let layerFont = ''
   let lastLayout = ''
 
+  // The key of the puzzle these notes were loaded for, so a save lands there even when the page's puzzle has changed since. Null before the first load, when there are no notes to save and a save does nothing.
+  let loadedKey = null
   const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)
   const selectedNotes = () => selected.map((i) => drawing[i])
 
@@ -2107,12 +2109,13 @@
   }
 
   function save () {
+    if (loadedKey === null) return
     if (!savable) {
       report('This puzzle\'s saved notes cannot be read, so Text Anywhere leaves them as they are and does not save notes on this puzzle. Clear all or Restart replaces them.')
       return
     }
     try {
-      saveDrawingTo(Framework, currentPuzzleKey(), drawing)
+      saveDrawingTo(Framework, loadedKey, drawing)
     } catch (err) {
       report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
     }
@@ -2396,8 +2399,9 @@
 
   function showSavedDrawing () {
     cancelInput()
+    loadedKey = currentPuzzleKey()
     try {
-      drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
+      drawing = readDrawing(Framework.getData(drawingKey(loadedKey)))
       savable = true
     } catch (err) {
       console.warn(`draw-tool: ${err.message}. It is left as it is, and this puzzle's notes are not saved.`)
