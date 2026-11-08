@@ -28,9 +28,12 @@ export async function openScriptDialog (p, entryText, editorSel) {
   await p.locator('.dialog button, .dialog [role=button]').filter({ hasText: entryText }).first().click()
   const editor = p.locator(editorSel)
   await editor.waitFor({ state: 'visible' })
-  await editor.evaluate((el) => Promise.all([el.closest('.dialog'), el.closest('.dialog-overlay')]
-    .flatMap((e) => e.getAnimations()).map((a) => a.finished)))
+  await animationsDone(editor)
 }
+
+// Waits for the animations on the dialog around `locator`'s element and on its overlay to end.
+export const animationsDone = (locator) => locator.evaluate((el) => Promise.all([el.closest('.dialog'), el.closest('.dialog-overlay')]
+  .flatMap((e) => e.getAnimations()).map((a) => a.finished)))
 
 // The open dialog's button whose whole label is `text`.
 export const dialogButton = (p, text) => p.locator('.dialog button').filter({ hasText: new RegExp('^\\s*' + text + '\\s*$') }).first()

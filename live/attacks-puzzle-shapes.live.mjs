@@ -6,18 +6,22 @@ import { after, afterEach, before, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
 import { openPage } from './page.mjs'
-import { DRAW_BUTTON, TEXT_BOX, tool } from './draw-tool/draw-tool-fixtures.mjs'
-import { cellCentre, gridPoint, mouseDrag, openPenTool, penEntries } from './pen.mjs'
-import { boardOf, CLASSIC_GIVENS, installAll, openPuzzleId, puzzleData, puzzleIdFor, seedOddEvenCells } from './puzzles.mjs'
-import { clickUntil, readUntil, settle, SETTLE_MS } from './settle.mjs'
+import { TEXTS } from './draw-tool/draw-tool-fixtures.mjs'
+import { cellCentre, mouseDrag, openPenTool, penEntries } from './pen.mjs'
+import { boardOf, CLASSIC_GIVENS, clickCell, installAll, openPuzzleId, placeNote, puzzleData, puzzleIdFor, seedOddEvenCells, useTool } from './puzzles.mjs'
+import { readUntil, settle } from './settle.mjs'
 
-const RULES = 'Normal sudoku rules apply. ' + 'Digits in a region may not repeat, and neither may digits in a row or a column of the grid. '.repeat(3)
+// Long enough that the pane overflows at SudokuPad's own font in every shape here, so only Auto Rules Resizer makes it fit.
+const RULES = 'Normal sudoku rules apply. ' + 'Digits in a region may not repeat, and neither may digits in a row or a column of the grid. '.repeat(6)
 const NOTE_GUIDE_X = '#draw-tool-layer .draw-tool-snap-guide[data-axis="x"]'
 const NOTE_OUTLINE = '#draw-tool-layer .draw-tool-selection'
-const NOTE_TEXTS = '#draw-tool-layer .draw-tool-text:not(.draw-tool-textbox)'
 // The selection outline's line is 2 px wide, 2 px outside the note's box: its middle is 3 px out.
 const OUTLINE_MIDDLE_PX = 3
 const NEAR_PX = 0.6
+// Color by Digit's groups hold the digits 0 to 9 only, the keys SudokuPad's keypad has even on a 16x16, so the givens 12 and 16 are in no group.
+// Odd digits take one Color by Digit color and even digits another (`seedOddEvenCells`).
+const ODD = 1
+const EVEN = 2
 
 let browser
 before(async () => { browser = await chromium.launch() })
@@ -37,15 +41,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     }
   })
 
-  const open = async (data) => {
-    const id = await puzzleIdFor(p, data)
-    await openPuzzleId(p, id)
-  }
-  const useTool = async (button) => {
-    const name = button.replace('#control-', '')
-    assert.equal(await clickUntil(() => p.click(button), () => tool(p), name, SETTLE_MS), name)
-  }
-  const clickCell = async (row, col) => { const [x, y] = await cellCentre(p, row, col); await p.mouse.click(x, y) }
+  const open = async (data) => openPuzzleId(p, await puzzleIdFor(p, data))
   const gridSize = () => p.evaluate(() => [Framework.app.puzzle.rows, Framework.app.puzzle.cols])
   // The page x of the grid's column line `k`.
   const lineX = async (k) => {
@@ -59,7 +55,7 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     return { x: first.x, y: first.y, width: last.right - first.x, height: last.bottom - first.y }
   })
 
-  // A pen line along the last row from its first cell to its last, an edge mark on the last cell's right edge, and the pen entries inside the board.
+  // A pen line along the last row from its first cell to its last, an edge mark on the last cell's right edge, and the pen strokes on the board.
   const penMarks = async (rows, cols) => {
     const before = (await penEntries(p)).length
     await openPenTool(p)
@@ -80,13 +76,8 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
 
   // A note '15' in the middle of the grid, dragged slowly until its outline is 2 px right of the last inner column line: the outline lies on the line with its guide.
   const snapsToLastColumnLine = async (rows, cols) => {
-    await useTool(DRAW_BUTTON)
-    await p.mouse.click(...await gridPoint(p, [Math.min(2.5, rows - 0.5), Math.max(0.5, cols - 2.5)]))
-    await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
-    await p.keyboard.type('15')
-    await p.keyboard.press('Escape')
-    await p.locator(NOTE_TEXTS, { hasText: '15' }).waitFor()
-    const note = await p.locator(NOTE_TEXTS, { hasText: '15' }).boundingBox()
+    await placeNote(p, '15', [Math.min(2.5, rows - 0.5), Math.max(0.5, cols - 2.5)])
+    const note = await p.locator(TEXTS, { hasText: '15' }).boundingBox()
     const line = await lineX(cols - 1)
     const [px, py] = [note.x + note.width / 2, note.y + note.height / 2]
     await p.mouse.move(px, py)
@@ -100,34 +91,40 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     assert.equal(Math.abs(guide.x + guide.width / 2 - line) < NEAR_PX, true, `the guide at ${guide.x} is on the column line ${line}`)
   }
 
-  // Color by Digit's Odd/Even profile in Cell mode colors the givens: digits in one group share a color and a digit in the other does not. Then an entered digit takes its digit's color.
-  const colorsByDigit = async (digitCells) => {
+  // Color by Digit's Odd/Even profile in Cell mode colors the givens: the cells of one group share a color and the groups differ.
+  // Then a digit entered at `enter` takes the color of its digit's group.
+  const colorsByDigit = async ({ odd, even, enter, digit }) => {
     const colorOf = ([row, col]) => p.evaluate(([r, c]) => Framework.app.puzzle.cells.find((x) => x.row === r && x.col === c).colours.join(), [row, col])
-    const same = await Promise.all(digitCells.same.map(colorOf))
-    assert.equal(new Set(same).size, 1, `cells with one digit share a color: ${same}`)
-    assert.notEqual(same[0], '', 'the digit has a color')
-    assert.notEqual(await colorOf(digitCells.other), same[0], 'another digit has another color')
-    await useTool('#control-normal')
-    await clickCell(...digitCells.enter)
-    await p.keyboard.press(digitCells.digit)
-    assert.equal(await settle(() => colorOf(digitCells.enter), same[0]), same[0], 'an entered digit takes its digit\'s color')
+    const groups = []
+    for (const group of [odd, even]) {
+      const colors = await Promise.all(group.map(colorOf))
+      assert.equal(new Set(colors).size, 1, `cells of one group share a color: ${colors}`)
+      assert.notEqual(colors[0], '', 'the group has a color')
+      groups.push(colors[0])
+    }
+    assert.notEqual(groups[ODD - 1], groups[EVEN - 1], 'the two groups have two colors')
+    await useTool(p, '#control-normal')
+    await clickCell(p, ...enter)
+    await p.keyboard.press(digit)
+    assert.equal(await settle(() => colorOf(enter), groups[ODD - 1]), groups[ODD - 1], 'an entered odd digit takes the odd color')
   }
 
   // The rules text fits its pane without being cut off.
   const rulesFit = async () => {
     const read = () => p.evaluate(() => { const e = document.querySelector('.puzzle-rules'); return { fits: e.scrollHeight <= e.clientHeight + 1, shown: e.textContent.includes('Normal sudoku rules apply') } })
-    const rules = await readUntil(read, (r) => r.shown)
-    assert.equal(rules.fits, true, 'the rules fit their pane')
+    assert.deepEqual(await settle(read, { fits: true, shown: true }), { fits: true, shown: true }, 'the rules show and fit their pane')
   }
 
+  const shape = (id, rows, cols, boxRows, boxCols, givens) => puzzleData({ id, rows, cols, boxRows, boxCols, givens, metadata: { title: id, rules: RULES } })
   const SHAPES = [
-    ['4x4', puzzleData({ id: 'attack-4x4', rows: 4, cols: 4, boxRows: 2, boxCols: 2, givens: [[0, 0, 1], [1, 2, 1], [2, 1, 2], [3, 3, 3]], metadata: { title: '4x4', rules: RULES } }), { same: [[0, 0], [1, 2]], other: [2, 1], enter: [3, 0], digit: '1' }],
-    ['16x16', puzzleData({ id: 'attack-16x16', rows: 16, cols: 16, boxRows: 4, boxCols: 4, givens: [[0, 0, 1], [5, 5, 1], [2, 3, 2], [9, 9, 12], [15, 15, 16]], metadata: { title: '16x16', rules: RULES } }), { same: [[0, 0], [5, 5]], other: [2, 3], enter: [7, 7], digit: '1' }],
-    ['rectangular 6 by 8', puzzleData({ id: 'attack-rect', rows: 6, cols: 8, boxRows: 2, boxCols: 4, givens: [[0, 0, 1], [3, 5, 1], [1, 2, 2], [5, 7, 3]], metadata: { title: 'rect', rules: RULES } }), { same: [[0, 0], [3, 5]], other: [1, 2], enter: [4, 1], digit: '1' }]
+    ['4x4', shape('attack-4x4', 4, 4, 2, 2, [[0, 0, 1], [3, 3, 3], [2, 1, 2], [1, 2, 4]]), { odd: [[0, 0], [3, 3]], even: [[2, 1], [1, 2]], enter: [3, 0], digit: '1' }],
+    ['16x16', shape('attack-16x16', 16, 16, 4, 4, [[0, 0, 1], [5, 5, 3], [2, 3, 2], [6, 6, 4], [9, 9, 12], [15, 15, 16]]), { odd: [[0, 0], [5, 5]], even: [[2, 3], [6, 6]], enter: [7, 7], digit: '1' }],
+    ['rectangular 6 by 8', shape('attack-rect', 6, 8, 2, 4, [[0, 0, 1], [3, 5, 3], [1, 2, 2], [5, 7, 4]]), { odd: [[0, 0], [3, 5]], even: [[1, 2], [5, 7]], enter: [4, 1], digit: '1' }]
   ]
+  const THE_SHAPES = 'pen marks, Text Anywhere snapping, Color by Digit groups and the rules fit'
 
   for (const [name, data, digits] of SHAPES) {
-    it(`attack 67: a ${name} grid: pen marks, Text Anywhere snapping, Color by Digit groups and the rules fit`, async () => {
+    it(`attack 67: a ${name} grid: ${THE_SHAPES}`, async () => {
       await open(data)
       const [rows, cols] = await gridSize()
       assert.deepEqual([rows, cols], [data.cells.length, data.cells[0].length])
@@ -138,20 +135,19 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
     })
   }
 
-  it('attack 67: a puzzle with clues outside the grid: pen marks, Text Anywhere snapping, Color by Digit groups and the rules fit', async () => {
+  it(`attack 67: a puzzle with clues outside the grid: ${THE_SHAPES}`, async () => {
     const clue = (r, c, text) => ({ center: [r, c], width: 0.8, height: 0.8, text, fontSize: 16, color: '#000000' })
-    const data = puzzleData({
+    await open(puzzleData({
       id: 'attack-outside',
       givens: CLASSIC_GIVENS,
       metadata: { title: 'outside clues', rules: RULES },
       overlays: [clue(-0.5, 0.5, '12'), clue(-0.5, 4.5, '3'), clue(4.5, -0.5, '7'), clue(4.5, 9.5, '8'), clue(9.5, 4.5, '21')]
-    })
-    await open(data)
+    }))
     const view = await p.evaluate(() => document.querySelector('#svgrenderer').getAttribute('viewBox').split(' ').map(Number))
     assert.equal(view[0] < 0 && view[1] < 0, true, `the board's view reaches the clues outside the grid: ${view}`)
     await penMarks(9, 9)
     await snapsToLastColumnLine(9, 9)
-    await colorsByDigit({ same: [[0, 0], [1, 5]], other: [1, 0], enter: [0, 2], digit: '5' })
+    await colorsByDigit({ odd: [[0, 0], [0, 1], [1, 5]], even: [[1, 0], [4, 0], [4, 3]], enter: [0, 2], digit: '5' })
     await rulesFit()
   })
 
@@ -164,18 +160,15 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       await openFog()
       const givens = await fogged()
       assert.equal(givens.some((g) => g.hidden), true, 'the fog hides some givens')
-      assert.deepEqual(givens.filter((g) => !g.hidden).every((g) => FOG_LIT.some(([r, c]) => r === g.row && c === g.col)), true, 'only lit cells show their clues')
+      const shownOutsideLight = givens.filter((g) => !g.hidden && !FOG_LIT.some(([r, c]) => r === g.row && c === g.col))
+      assert.deepEqual(shownOutsideLight, [], 'only lit cells show their clues')
       await penMarks(9, 9)
-      await useTool(DRAW_BUTTON)
-      await p.mouse.click(...await gridPoint(p, [8.2, 2.25]))
-      await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
-      await p.keyboard.type('15')
-      await p.keyboard.press('Escape')
-      await useTool('#control-normal')
-      await clickCell(0, 2)
+      await placeNote(p, '15')
+      await useTool(p, '#control-normal')
+      await clickCell(p, 0, 2)
       await p.keyboard.press('4')
-      await useTool('#control-colour')
-      await clickCell(4, 4)
+      await useTool(p, '#control-colour')
+      await clickCell(p, 4, 4)
       await p.keyboard.press('3')
       const board = await readUntil(() => boardOf(p), (b) => b.notes.length === 1 && b.entered.length === 1 && b.colours.some((c) => c.startsWith('4,4:')))
       assert.deepEqual([board.notes, board.entered], [['15'], ['0,2:4']])
@@ -183,12 +176,14 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
 
     it('attack 68: a fog-of-war puzzle: no script colors a clue the fog hides', { todo: '#633' }, async () => {
       await openFog()
+      const givens = await fogged()
+      assert.equal(givens.some((g) => g.hidden), true, 'the fog hides some givens')
       // A fogged given's color would show which cells share a digit group.
-      const colored = (await fogged()).filter((g) => g.hidden && g.colours > 0).map((g) => [g.row, g.col])
+      const colored = givens.filter((g) => g.hidden && g.colours > 0).map((g) => [g.row, g.col])
       assert.deepEqual(colored, [], 'no hidden given has a color')
     })
 
-    it('attack 68: a puzzle with a background image: the image stays under the board while every script draws, colors and notes', async () => {
+    it('attack 68: a puzzle with a background image: the image stays under the board while every script draws and notes', async () => {
       const image = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="#88c"/></svg>').toString('base64')
       await open(puzzleData({ id: 'attack-bg', givens: CLASSIC_GIVENS, metadata: { title: 'background', rules: RULES, bgimage: image, bgimageopacity: '0.5' } }))
       // The image's box on the page against the board's: it must reach every edge of the board, whatever size the board is drawn at.
@@ -198,13 +193,9 @@ describe('attacks on puzzle shapes with every script installed', { concurrency: 
       }
       assert.deepEqual(await readUntil(underBoard, (r) => r.count === 1), { count: 1, covers: true }, 'the image is under the board')
       await penMarks(9, 9)
-      await useTool(DRAW_BUTTON)
-      await p.mouse.click(...await gridPoint(p, [8.2, 2.25]))
-      await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
-      await p.keyboard.type('15')
-      await p.keyboard.press('Escape')
-      await useTool('#control-normal')
-      await clickCell(0, 2)
+      await placeNote(p, '15')
+      await useTool(p, '#control-normal')
+      await clickCell(p, 0, 2)
       await p.keyboard.press('4')
       const board = await readUntil(() => boardOf(p), (b) => b.notes.length === 1 && b.entered.length === 1)
       assert.deepEqual(board.notes, ['15'])
