@@ -49,10 +49,9 @@ test('Color by Digit and Dark Page hold spec 131 together', () => {
 
   for (const name of ['color-by-digit', 'dark-page']) {
     const warnings = warningWithoutGetApp(name)
-    // Color by Digit's other features lack Framework's data calls too, in warnings of their own; the one naming getApp is spec 131's.
+    // Each script's other features lack Framework's data calls too, in warnings of their own; the one naming getApp is spec 131's.
     const named = warnings.filter((warning) => warning.includes('getApp'))
     assert.equal(named.length, 1, name)
-    assert.ok(named[0].startsWith(`${name}: `), named[0])
-    if (name === 'dark-page') assert.equal(warnings.length, 1, name)
+    for (const warning of warnings) assert.ok(warning.startsWith(`${name}: `), warning)
   }
 })

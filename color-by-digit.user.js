@@ -1564,8 +1564,7 @@
         'app.deselect': 'function',
         'app.on': 'function',
         'app.puzzle.cells': 'array',
-        'app.puzzle.selectedCells': 'array',
-        'app.puzzle.addEventListener': 'function'
+        'app.puzzle.selectedCells': 'array'
       }
     },
     button: {
@@ -1595,10 +1594,16 @@
         if (circles) circles.remove()
         document.querySelectorAll(`[${DIGIT_ATTR}]`).forEach((el) => el.removeAttribute(DIGIT_ATTR))
       }
+    },
+    // The mode button's icon, the digit shades and the cell colors wait for the puzzle's progress, which resets the board, to load.
+    // Without it they are drawn at once, before the puzzle's own palette is in force.
+    loading: {
+      label: 'redraw after the puzzle loads',
+      needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function' }
     }
   }
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
-  const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors } = guard.features
+  const { saved: storage, cells: coloring, button: modeButton, editor, digits: digitColors, loading } = guard.features
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, READERS, withModeFromAuto, buttonLabel, parseColor, darkenColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, copiedSettings, pastedSettings, pasteReport, installButton, lackingInternals, FEATURES, BOTTOM_ROW_CSS, iconHtml, nextMode, startingMode, planClear, colorSteps, planColoring, planCellColors, planSwitch, groupKeys, isEntryAction, entrySignature, changedIndices, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, allowedMode, dropIndex, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, renderPulldowns, renderProfiles, renderMenu, renderChips, shownChips, STYLE_CSS, PRELOADS, MAX_PROFILES, MAX_NAME_LENGTH }
   }
@@ -1692,10 +1697,10 @@
   const BUTTON = '#control-colorbydigit'
   const ARROW = `${BUTTON} [data-role="menu"]`
   // Loading progress resets the board, so a pass before it would be wiped.
-  // With the puzzle's cells out of reach there is nothing to wait for, so `fn` runs at once.
+  // With the wait off there is nothing to wait for, so `fn` runs at once.
   function whenProgressLoaded (app, fn) {
-    if (coloring.run(() => allCells(app).length > 0, () => true)) fn()
-    else coloring.run(() => app.puzzle.addEventListener('progressloaded', fn, { once: true }), fn)
+    if (loading.run(() => allCells(app).length > 0, () => true)) fn()
+    else loading.run(() => app.puzzle.addEventListener('progressloaded', fn, { once: true }), fn)
   }
 
   const DIGIT_STYLE_ID = 'color-by-digit-digits'

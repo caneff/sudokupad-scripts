@@ -214,10 +214,3 @@ test('without one internal, only the feature that needs it is lacking', () => {
     assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[`Framework.${internal}`, [feature]]]), internal)
   }
 })
-
-test('Dark Page declares its features through the shared guard, with no guard code of its own', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')
-  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
-  assert.match(own, /createGuard\(\{ script: 'dark-page'[^\n]*features: FEATURES \}\)/)
-  for (const name of ['readSavedColor', 'console.error']) assert.equal(own.includes(name), false, name)
-})

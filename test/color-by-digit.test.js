@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { startOnStandInPage, failEachListener } = require('./specs/broken-sudokupad.js')
 const { lackingInternals, FEATURES, copiedSettings, pastedSettings, READERS, withModeFromAuto, installButton, BOTTOM_ROW_CSS, buttonLabel, colorSteps, planColoring, planCellColors, groupKeys, isEntryAction, entrySignature, changedIndices, nextMode, startingMode, planClear, readCentreMarks, toPlanCell, setDigitColor, strokeKey, paintDigit, canonicalGroups, startingBrush, rowAfterKey, normalizeGroups, stateFromStored, withAddedPreloads, copyProfile, renameProfile, deleteProfile, moveProfile, indexAfterDelete, indexAfterMove, setActive, setProfileGroups, activeGroups, digitGroups, isSynced, usesDigitColors, setSync, setDigitActive, setUseDigitColors, digitChoice, chooseDigit, renderPulldowns, allowedMode, dropIndex, planSwitch, iconHtml, renderChips, shownChips, renderProfiles, renderMenu, isVisibleColor, layoutPages, layoutColors, initialPage, renderEditor, swatchWithKey, STYLE_CSS, PRELOADS, darkenColor, parseColor, buildDigitCss, digitOfText, circleFor, inkMiddle, CIRCLE_CSS, DIGIT_ATTR, MAX_PROFILES, MAX_NAME_LENGTH, VERSION } = require('../color-by-digit.user.js')
 const readPaste = (text) => pastedSettings(text, READERS, withModeFromAuto)
 
@@ -953,7 +954,7 @@ test('entry point: a Framework without getApp turns off the features that need a
   try {
     require(path)
     await new Promise((resolve) => setImmediate(resolve))
-    assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button skipped because SudokuPad has no Framework.getApp'])
+    assert.deepEqual(warnings, ['color-by-digit: cell coloring, mode button, redraw after the puzzle loads skipped because SudokuPad has no Framework.getApp'])
     assert.deepEqual(calls, ['setting'])
   } finally {
     console.warn = warn
@@ -1835,9 +1836,9 @@ test('Color by Digit declares each SudokuPad internal it calls, and a complete S
 test('without one internal, only the features that need it are lacking', () => {
   const cases = [
     ['app.act', ['cells']], ['app.select', ['cells']], ['app.deselect', ['cells']], ['app.on', ['cells']],
-    ['app.puzzle.cells', ['cells']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.addEventListener', ['cells']],
+    ['app.puzzle.cells', ['cells', 'loading']], ['app.puzzle.selectedCells', ['cells']], ['app.puzzle.addEventListener', ['loading']],
     ['app.refreshControls', ['button']], ['Framework.addControlButton', ['button']],
-    ['Framework.getApp', ['cells', 'button']],
+    ['Framework.getApp', ['cells', 'button', 'loading']],
     ['Framework.getData', ['saved', 'editor']], ['Framework.setData', ['saved', 'editor']],
     ['Framework.addSetting', ['editor']], ['Framework.showDialog', ['editor']], ['Framework.closeDialog', ['editor']], ['Framework.app.tools.colour', ['editor']]
   ]
@@ -1846,16 +1847,18 @@ test('without one internal, only the features that need it are lacking', () => {
   }
 })
 
-test('Color by Digit declares its features through the shared guard, with no guard code of its own', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'color-by-digit.user.js'), 'utf8')
-  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
-  assert.match(own, /createGuard\(\{ script: 'color-by-digit'[^\n]*features: FEATURES \}\)/)
-  for (const text of ['has no getApp, so', 'nothing was changed']) assert.equal(own.includes(text), false, text)
+const SCRIPT = path.join(__dirname, '..', 'color-by-digit.user.js')
+
+test('a document listener of the mode button whose own code throws turns the button off, and the throw stays in the script', () => {
+  const runs = failEachListener(SCRIPT, FEATURES, 'document')
+  assert.equal(runs.length, 6, runs.map(({ where }) => where).join(', '))
+  for (const { where, escaped, warnings } of runs) {
+    assert.deepEqual(escaped.map(({ error }) => String(error)), [], where)
+    assert.match(warnings.join('\n'), /^color-by-digit: mode button skipped because SudokuPad changed: Error: the listener read event\./, where)
+  }
 })
 
-test('every call into SudokuPad sits under a feature: no bare app or Framework call outside the guard\'s run, wrap and startup', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'color-by-digit.user.js'), 'utf8')
-  const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
-  const calls = own.split('\n').flatMap((line, i) => (/\bFramework\.(getData|setData)\(/.test(line) && !/(storage\.run|\(\) => Framework\.)/.test(line) ? [`${i + 1}: ${line.trim()}`] : []))
-  assert.deepEqual(calls, [])
+test('with cell coloring off, the icon and the digit shades still wait for the puzzle to load', () => {
+  const { added } = startOnStandInPage(SCRIPT, FEATURES, { missing: ['app.act'] })
+  assert.ok(added.some(({ where }) => where === 'Framework.app.puzzle.addEventListener()'), added.map(({ where }) => where).join(', '))
 })

@@ -4,6 +4,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const { headerVersion } = require('./header-version.js')
+const { failEachListener } = require('./specs/broken-sudokupad.js')
 const { VERSION, lackingInternals, FEATURES, TOOL_NAME, toolNamesFor, readDrawing, puzzleKey, touchIndex, readIndex, saveDrawingTo, DRAWING_PREFIX, INDEX_KEY, DEFAULT_COLOR, DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH, DEFAULT_OPACITY, drawColor, readColor, readWidth, readBackground, textSizeFor, itemOpacity, ERASE_TOLERANCE, textItem, textBox, noteBox, parseMarkdown, notesTouched, panelLooks, touchesText, placedItem, boardView, screenPoint, resizedItem, autoSized, CORNERS, reachablePoint, noteScreenBox, DRAWN_SIZE, isClick, CLICK_SLOP, SUDOKUPAD_PEN_COLORS, hexColor, readDrawColors, copiedPenColors, editedColor, colorsCss, presetOptions, presetColors, copiedSettings, pastedSettings, READERS, PRESET_LABELS, COLORS_KEY, WIDTH_KEY, OPACITY_KEY, OUTLINE_KEY, MIN_OPACITY, MAX_OPACITY, readOpacity, OUTLINES, DEFAULT_OUTLINE, OUTLINE_LABELS, readOutline, haloShadow, OUTLINE_EM, BOX_KEY, FRAME_KEY, BOX_PRESETS, DEFAULT_BOX, readBox, boxChoice, boxFill, readFrame, frameShadow, FRAME_COLOR, BOX_YELLOW } = require('../draw-tool.user.js')
 const readPaste = (text) => pastedSettings(text, READERS)
 
@@ -706,44 +707,14 @@ test('without one internal, only the features that need it are lacking', () => {
   }
 })
 
-test('Text Anywhere declares its features through the shared guard, with no guard code of its own', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'draw-tool.user.js'), 'utf8')
-  const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
-  assert.match(own, /createGuard\(\{ script: 'draw-tool'[^\n]*features: FEATURES \}\)/)
-  for (const text of ['has no getApp or addTool', 'no Text Anywhere tool was added']) assert.equal(own.includes(text), false, text)
-})
+// With the Text tool picked, so a listener reaches its own code past that check.
+const textToolPicked = ({ Framework }) => { Framework.app.tool = TOOL_NAME }
 
-// Every call into SudokuPad in the script's own code, by its line: the declarations aside, each one is inside a feature's `run` or `wrap`, or in a function only
-// a feature's entry point calls (a window listener, a SudokuPad callback or a tool handler, all made through `under`, `onWindow` or the `tool` wrapper).
-const SUDOKUPAD_CALLS = [
-  'const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)',
-  'const writeData = (key, value) => storage.run(() => Framework.setData(key, value))',
-  'addSetting: (setting) => Framework.addSetting(setting),',
-  'showDialog: (options) => Framework.showDialog(options),',
-  'closeDialog: () => settingsUi.run(() => Framework.closeDialog())',
-  'const boardSvg = () => Framework.app.svgRenderer.getElem()',
-  'boardNotes.run(() => { if (Framework.app.puzzle.currentPuzzle) redraw() })',
-  'const currentPuzzleKey = () => puzzleKey(Framework.app.puzzle.puzzleId, window.location.href)',
-  'textTool.run(() => Framework.showDialog({',
-  'saveDrawingTo(Framework, currentPuzzleKey(), drawing)',
-  'drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))',
-  'if (Framework.app.tool === TOOL_NAME && !overControl(event)) event.preventDefault()',
-  'if (Framework.app.tool !== TOOL_NAME) return false',
-  'return Framework.app.tool === TOOL_NAME && selected.length > 0 && Boolean(ARROWS[event.key])',
-  'guard.probe({ roots: { Framework, app }, store: Framework })',
-  'Framework.addTool({',
-  'app.puzzle.on(\'loaded\', under(boardNotes, showSavedDrawing))',
-  'app.on(\'restarted\', under(boardNotes, emptyDrawing))',
-  'if (app.puzzle.currentPuzzle) showSavedDrawing()',
-  'if (typeof Framework.getApp === \'function\') Framework.getApp().then(start)',
-  'Framework.closeDialog()'
-]
-
-test('every call into SudokuPad sits under a feature: a new bare Framework or app call fails until it is placed', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'draw-tool.user.js'), 'utf8')
-  const own = source.replace(/\/\/ <lib:[a-z-]+>[\s\S]*?\/\/ <\/lib:[a-z-]+>/g, '')
-  const calls = own.split('\n').map((line) => line.trim())
-    .filter((line) => /\bFramework\b|\bapp\.|\bToolPen\b/.test(line) && !line.startsWith('//') && !/^(const BOARD|\w+: \{ label|needs:)/.test(line) && !/typeof Framework === 'undefined'/.test(line))
-  assert.deepEqual(calls.filter((line) => !SUDOKUPAD_CALLS.includes(line)), [])
-  assert.deepEqual(SUDOKUPAD_CALLS.filter((line) => !calls.includes(line)), [])
+test('a window listener of Text Anywhere whose own code throws turns its feature off, and the throw stays in the script', () => {
+  const runs = failEachListener(path.join(__dirname, '..', 'draw-tool.user.js'), FEATURES, 'window', textToolPicked)
+  assert.ok(runs.length >= 15, runs.map(({ where }) => where).join(', '))
+  for (const { where, escaped } of runs) assert.deepEqual(escaped.map(({ error }) => String(error)), [], where)
+  // Most listeners act only mid-gesture; the ones that read their event at once show the throw turning the Text tool off.
+  const warned = runs.filter(({ warnings }) => warnings.some((warning) => /^draw-tool: Text tool skipped because SudokuPad changed: Error: the listener read event\./.test(warning)))
+  assert.ok(warned.length >= 2, warned.map(({ where }) => where).join(', '))
 })

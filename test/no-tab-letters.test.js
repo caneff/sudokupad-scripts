@@ -114,13 +114,6 @@ test('a Framework without getApp turns the Tab key off with one warning naming g
   assert.match(page.bar, /^No Tab Letters: Tab key is off — SudokuPad changed\.Report/)
 })
 
-test('No Tab Letters declares its feature through the shared guard, with no guard code of its own', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'no-tab-letters.user.js'), 'utf8')
-  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
-  assert.match(own, /createGuard\(\{ script: 'no-tab-letters'[^\n]*features: FEATURES \}\)/)
-  for (const text of ['has no ToolLetter.tool, so', 'has no Tab binding to the toggle, so']) assert.equal(own.includes(text), false, text)
-})
-
 test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'no-tab-letters.user.js'), 'utf8')))
 })

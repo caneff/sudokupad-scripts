@@ -55,9 +55,11 @@ test('Pen Tool Extras holds spec 130 together', () => {
     assert.equal(typeof extras[helper], 'function', helper)
   }
 
-  // Missing SudokuPad pieces are named: a page with nothing holds back every step with a requirement.
+  // Missing SudokuPad pieces are named: a page with nothing holds back every feature with a requirement, its seven install steps among them.
   const lacking = [...extras.lackingInternals(extras.FEATURES, {}).values()].flat().sort()
-  assert.deepEqual(lacking, ['arrowLines', 'colors', 'dragHint', 'lineErase', 'marks', 'pages', 'penPanel'])
+  const required = Object.keys(extras.FEATURES).filter((name) => Object.keys(extras.FEATURES[name].needs).length > 0).sort()
+  assert.deepEqual(lacking, required)
+  for (const step of ['arrowLines', 'colors', 'dragHint', 'lineErase', 'marks', 'pages', 'penPanel']) assert.ok(lacking.includes(step), step)
 
   // Saved mark settings under the old names load under the new ones, keeping their values.
   const marks = extras.normalizeMarkSettings({ dot: false, cornerDot: false })

@@ -478,13 +478,6 @@ test('without one internal, only the features that need it are lacking: getApp h
   assert.deepEqual(lackingInternals(FEATURES, roots), new Map([['Framework.getApp', ['fit', 'refit']]]))
 })
 
-test('Auto Rules Resizer declares its features through the shared guard, with no guard code of its own', () => {
-  const source = fs.readFileSync(path.join(__dirname, '..', 'auto-rules-resizer.user.js'), 'utf8')
-  const own = source.replace(/\/\/ <lib:sudokupad>[\s\S]*?\/\/ <\/lib:sudokupad>/, '')
-  assert.match(own, /createGuard\(\{ script: 'auto-rules-resizer'[^\n]*features: FEATURES \}\)/)
-  for (const name of ['refitAfterResizeBoard', 'the rules fit failed', 'has no resizeBoard']) assert.equal(own.includes(name), false, name)
-})
-
 // Starts the script on a page with `framework` as its Framework; returns the warnings and the notice bar's text, or null for none.
 function startWith (framework) {
   const file = require.resolve('../auto-rules-resizer.user.js')

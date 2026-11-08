@@ -1320,6 +1320,8 @@
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
 
+  const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, features: FEATURES })
+  const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets } = guard.features
   // The saved data is read and written only here: with no getData, setData or removeData nothing is read, so the defaults show, and nothing is kept.
   const readData = (key) => storage.run(() => Framework.getData(key), () => undefined)
   const writeData = (key, value) => storage.run(() => Framework.setData(key, value))
@@ -1537,9 +1539,6 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:panel>
-  // Made here, after the panel module's PANEL_COLOR: the features run only from startup on.
-  const guard = createGuard({ script: 'draw-tool', name: 'Text Anywhere', version: VERSION, color: PANEL_COLOR, features: FEATURES })
-  const { saved: storage, notes: boardNotes, tool: textTool, settings: settingsUi, presets } = guard.features
   const COLOR_LABEL_REM = 1.7
   // The column of each control in its row: Clear all, the Background button and the settings gear.
   const CONTROL_COLUMNS = { [CLEAR_CLASS]: 1, [BACKGROUND_CLASS]: 2, [SETTINGS_CLASS]: 3 }
@@ -1724,14 +1723,14 @@
     let pages = []
     let paletteNote = ''
     // A palette of a shape the script does not know is the dialog's own note, and does not turn the presets off.
-    presets.run(() => {
+    if (!presets.off) {
       try {
         pages = palettePages()
       } catch (error) {
         console.warn(`draw-tool: ${error.message}`)
         paletteNote = error.message
       }
-    })
+    }
     const edits = () => ({ colors: colorsEdited, outline: draftOutline !== outline, box: draftBox !== boxColor, frame: draftFrame !== frame })
     const box = settingsUi.run(() => showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
@@ -2327,13 +2326,13 @@
       return
     }
     // A write the browser refuses (a full localStorage) is reported, and is not a SudokuPad change that turns the saved data off.
-    storage.run(() => {
+    if (!storage.off) {
       try {
         saveDrawingTo(Framework, currentPuzzleKey(), drawing)
       } catch (err) {
         report(`Text Anywhere could not save this puzzle's notes: ${err.message}`)
       }
-    })
+    }
   }
 
   function changeSelected (change) {
@@ -2617,7 +2616,7 @@
     cancelInput()
     drawing = []
     savable = true
-    storage.run(() => {
+    if (!storage.off) {
       try {
         drawing = readDrawing(Framework.getData(drawingKey(currentPuzzleKey())))
       } catch (err) {
@@ -2625,7 +2624,7 @@
         drawing = []
         savable = false
       }
-    })
+    }
     redraw()
   }
 
