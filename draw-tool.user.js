@@ -2775,7 +2775,7 @@
     const reach = SELECTION_OFFSET_PX + SELECTION_OUTLINE_PX / 2
     const lines = (axis) => Array.from({ length: GRID_CELLS + 1 }, (_, k) => map.toScreen(axis === 0 ? [k * CELL_UNITS, 0] : [0, k * CELL_UNITS])[axis])
     const box = noteScreenBox(item, map, outline)
-    const others = drawing.filter((_, i) => !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, outline))
+    const others = drawing.filter((other, i) => other.kind === TEXT_KIND && !d.move.some(({ index }) => index === i)).map((other) => noteScreenBox(other, map, outline))
     const snaps = [['left', 'right'], ['top', 'bottom']].map(([near, far], axis) => snapAxis(box[near] + raw[axis], box[far] + raw[axis], {
       lines: lines(axis), reach, others: others.map((other) => ({ lo: other[near], hi: other[far] }))
     }))
