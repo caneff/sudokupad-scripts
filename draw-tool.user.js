@@ -226,14 +226,10 @@
   const DONE_OPACITY = 0.6
   // A note being moved is drawn at this share of its own opacity, so the board shows through.
   const MOVING_OPACITY = 0.6
-  // The hover outline and the handles fade in over this long, and a note deleted by the right button or the trash button fades out over FADE_OUT_MS; each with Material's
-  // decelerate curve to enter and accelerate curve to exit, and only when the solver has not asked for reduced motion.
+  // The hover outline and the handles fade in over this long, on Material's decelerate curve, and only when the solver has not asked for reduced motion.
   const FADE_IN_MS = 80
-  const FADE_OUT_MS = 120
   const FADE_IN_EASE = 'cubic-bezier(0, 0, 0, 1)'
-  const FADE_OUT_EASE = 'cubic-bezier(0.3, 0, 1, 1)'
   const MOTION_OK = '(prefers-reduced-motion: no-preference)'
-  const FADING_CLASS = 'draw-tool-fading'
   // An open note with no text yet shows a faint box.
   const EMPTY_CLASS = 'draw-tool-empty'
   // A handle is made with this class and loses it a frame later, which is what starts its fade in.
@@ -1947,14 +1943,11 @@
     // The outline is there and clear until the pointer comes, so its color is what fades in.
     `${IDLE_NOTE} { outline: 1px solid transparent; outline-offset: 2px; }`,
     `${IDLE_NOTE}:is(:hover, .${HOVERED_CLASS}) { ${hoverLook(35, 4)} }`,
-    `.${TEXT_CLASS}.${FADING_CLASS} { pointer-events: none !important; }`,
     `.${TEXT_BOX_CLASS}.${EMPTY_CLASS} { min-width: 1em; outline: 1px solid color-mix(in srgb, currentColor 30%, transparent); }`,
     `html.${HELD_CURSOR_CLASS}, html.${HELD_CURSOR_CLASS} * { cursor: var(${HELD_CURSOR_VAR}) !important; }`,
     `@media ${MOTION_OK} {`,
     `  ${IDLE_NOTE}:is(:hover, .${HOVERED_CLASS}) { transition: outline-color ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
     `  .${HANDLE_CLASS} { transition: opacity ${FADE_IN_MS}ms ${FADE_IN_EASE}; }`,
-    // Important, since the pointer is still over the note when it starts to fade, and the hover rule's own transition would win.
-    `  .${TEXT_CLASS}.${FADING_CLASS} { transition: opacity ${FADE_OUT_MS}ms ${FADE_OUT_EASE} !important; }`,
     '}',
     `.${HANDLE_CLASS}.${ENTERING_CLASS} { opacity: 0; }`,
     `.${CHECK_CLASS} { display: inline-block; box-sizing: border-box; width: 0.8em; height: 0.8em; border: 2px solid currentColor; border-radius: 3px; vertical-align: -0.05em; position: relative; }`,
@@ -2448,22 +2441,17 @@
     shownNotes.set(element, { ...shown, item, text: item.text, look })
   }
 
-  const skipFading = (node) => {
-    while (node?.classList.contains(FADING_CLASS)) node = node.nextSibling
-    return node
-  }
-
   // Puts each group's notes in drawing order, moving only the elements out of place. The elements it put back in the page.
   function orderNotes (notes) {
     const kept = new Set(notes.map(({ element }) => element))
-    for (const group of [groups.board, groups.screen]) for (const child of [...group.children]) if (!kept.has(child) && !child.classList.contains(FADING_CLASS)) child.remove()
+    for (const group of [groups.board, groups.screen]) for (const child of [...group.children]) if (!kept.has(child)) child.remove()
     const inserted = []
     for (const group of [groups.board, groups.screen]) {
-      let next = skipFading(group.firstChild)
+      let next = group.firstChild
       for (const { element, item } of notes) {
         if ((item.fixed ? groups.screen : groups.board) !== group) continue
         if (element === next) {
-          next = skipFading(next.nextSibling)
+          next = next.nextSibling
           continue
         }
         group.insertBefore(element, next)
@@ -2853,19 +2841,8 @@
     redraw()
   }
 
-  // A deleted note's element stays for the fade out, takes no pointer and is skipped by every redraw until it leaves the page; with reduced motion it leaves with the redraw.
-  function fadeOut (items) {
-    if (!window.matchMedia(MOTION_OK).matches) return
-    for (const element of items.map((item) => item[NOTE_ELEMENT]).filter(Boolean)) {
-      element.classList.add(FADING_CLASS)
-      element.classList.remove(SELECTED_CLASS)
-      element.style.opacity = '0'
-      setTimeout(() => element.remove(), FADE_OUT_MS)
-    }
-  }
-
-  // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went. The ones that went fade out unless `fade` is false.
-  function keepItems (keep, fade = true) {
+  // Keeps the items `keep` passes, and those of them that were selected stay selected. Whether any item went.
+  function keepItems (keep) {
     const kept = []
     const stillSelected = []
     drawing.forEach((item, i) => {
@@ -2874,16 +2851,14 @@
       kept.push(item)
     })
     const removed = kept.length !== drawing.length
-    if (fade) fadeOut(drawing.filter((item) => !kept.includes(item)))
     drawing = kept
     selected = stillSelected
     return removed
   }
 
-  // Deletes the selected notes, which fade out unless `fade` is false.
-  function deleteSelected (fade = true) {
+  function deleteSelected () {
     const gone = selected
-    keepItems((_, i) => !gone.includes(i), fade)
+    keepItems((_, i) => !gone.includes(i))
     saveNotes()
     redraw()
   }
@@ -3629,7 +3604,7 @@
       if (selected.length === 0) return false
       if (event.key === 'Escape') select([])
       else if (ARROWS[event.key]) pressArrow(event.key, event.shiftKey)
-      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected(false)
+      else if (event.key === 'Delete' || event.key === 'Backspace') deleteSelected()
       else return false
       return true
     },
