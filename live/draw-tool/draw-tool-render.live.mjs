@@ -260,7 +260,7 @@ describe('Text Anywhere renders less', { concurrency: false }, () => {
     await p.mouse.down({ button: 'right' })
     // Through n29's middle (r8c3) and back, all in one task.
     const target = [...await steps([8.5, 1.5], [-1, 1], 2), ...await steps([7.5, 2.5], [1, -1], 2)]
-    const look = await movesInOneTask(target, 2, () => [...document.querySelectorAll('#draw-tool-layer .draw-tool-text')].some((n) => n.textContent === 'n29'))
+    const look = await movesInOneTask(target, 2, () => [...document.querySelectorAll('#draw-tool-layer .draw-tool-text:not(.draw-tool-fading)')].some((n) => n.textContent === 'n29'))
     await p.mouse.up({ button: 'right' })
     assert.deepEqual(look, { straightAfter: true, afterFrame: false })
     assert.equal(await p.locator(TEXT_BOX).count(), 0)

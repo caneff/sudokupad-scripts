@@ -37,6 +37,8 @@ describe('Text Anywhere\'s Transparency fades the whole note', { concurrency: fa
 
   before(async () => {
     ;({ context, p } = await openPage(browser, { contextOptions: { viewport: { width: 1200, height: 900 } } }))
+    // The handles' fade in has its own live check; here they are read as soon as they appear.
+    await p.emulateMedia({ reducedMotion: 'reduce' })
     await draw.boot(p)
     await draw.forgetDrawings(p)
     await p.evaluate((key) => Framework.setData(key, true), FRAME_KEY)
