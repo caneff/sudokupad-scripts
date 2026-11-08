@@ -23,14 +23,14 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s nudge and bullets', { concurrency: false }, () => {
+describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
   let context, p, errors
 
   const saved = () => draw.saved(p)
   const savedAt = async (text) => (await saved()).find((item) => item.text === text).at
   const cursor = () => p.evaluate(() => Framework.app.puzzle.selectedCells.map((c) => [c.row, c.col]))
   const noteBox = (text) => p.locator(TEXTS).filter({ hasText: new RegExp(`^${text}$`) }).boundingBox()
-  // SudokuPad's cell cursor is set under the digit tool, then Text Annotation is picked again with nothing selected.
+  // SudokuPad's cell cursor is set under the digit tool, then Text Anywhere is picked again with nothing selected.
   const putCursorAt = async (at) => {
     await p.click(draw.DIGIT_BUTTON)
     await p.mouse.click(...await gridPoint(p, at))
@@ -79,7 +79,7 @@ describe('Text Annotation\'s nudge and bullets', { concurrency: false }, () => {
     } finally {
       await p.keyboard.up('Shift')
     }
-    assert.equal(await draw.tool(p), 'draw', 'the tool is still Text Annotation')
+    assert.equal(await draw.tool(p), 'draw', 'the tool is still Text Anywhere')
     assert.deepEqual(await cursor(), cellsBefore, 'the cell cursor did not move')
     const scale = await p.evaluate(() => Framework.app.svgRenderer.getElem().getScreenCTM().a)
     const want = atBefore[0] + 21 / scale

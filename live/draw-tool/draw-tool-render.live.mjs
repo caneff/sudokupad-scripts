@@ -40,7 +40,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation renders less', { concurrency: false }, () => {
+describe('Text Anywhere renders less', { concurrency: false }, () => {
   let context, p, errors
 
   const read = (fn, arg) => p.evaluate(fn, arg)
@@ -140,7 +140,7 @@ describe('Text Annotation renders less', { concurrency: false }, () => {
     assert.ok(Math.max(...busy) < FRAME_MS, `each frame's work under ${FRAME_MS} ms: ${summary(busy)}`)
   })
 
-  it('with another tool current, a mouse move over the notes measures no note and shows no hover; with Text Annotation current it does show', async (t) => {
+  it('with another tool current, a mouse move over the notes measures no note and shows no hover; with Text Anywhere current it does show', async (t) => {
     await p.click(draw.DIGIT_BUTTON)
     await read(() => {
       window.__noteMeasures = 0

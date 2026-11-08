@@ -1,4 +1,4 @@
-// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Text Annotation), opened from disk: Next and Previous step
+// Live check of site/slides.js on the homepage and on each details page with a slideshow (Color by Digit, Pen Tool Extras, Text Anywhere), opened from disk: Next and Previous step
 // the slideshow's picture, caption and counter, and both ends wrap. Each details page's slides also fill their frame to its inset and are never shown wider than their own width, at 1280x720 and 1600x900. The page's raw.githubusercontent.com
 // pictures are served from this checkout, since a branch is not on main yet.
 import { after, before, describe, it } from 'node:test'
@@ -12,7 +12,7 @@ const ROOT = new URL('../', import.meta.url)
 const SHOWS = [
   {
     heading: 'Color by Digit',
-    row: 1,
+    row: 3,
     details: 'color-by-digit.html',
     slides: 10,
     first: ['color-by-digit-slide-1-start.png', 'Start'],
@@ -22,7 +22,7 @@ const SHOWS = [
   },
   {
     heading: 'Pen Tool Extras',
-    row: 2,
+    row: 1,
     details: 'pen-tool-extras.html',
     slides: 14,
     first: ['pen-tool-extras-slide-1-line.png', 'Draw a line'],
@@ -31,14 +31,14 @@ const SHOWS = [
     beforeLast: ['pen-tool-extras-slide-13-erase.png', 'Right-click a line to delete it']
   },
   {
-    heading: 'Text Annotation',
-    row: 3,
+    heading: 'Text Anywhere',
+    row: 2,
     details: 'draw-tool.html',
-    slides: 9,
+    slides: 5,
     first: ['draw-tool-slide-1-type.png', 'Left click to type a note'],
-    second: ['draw-tool-slide-2-size.png', 'Size slider: drag to set a text size'],
-    last: ['draw-tool-slide-8-erased.png', 'The note is gone'],
-    beforeLast: ['draw-tool-slide-7-erase.png', 'Erase: right-click a note']
+    second: ['draw-tool-slide-3-background.png', 'Background: a box behind the next note'],
+    last: ['draw-tool-slide-7-erase.png', 'Erase: right-click a note'],
+    beforeLast: ['draw-tool-slide-9-long.png', 'Long notes wrap and scroll; drag any corner to resize']
   }
 ]
 

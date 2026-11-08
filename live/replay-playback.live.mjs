@@ -61,7 +61,7 @@ describe('the replay tool plays a solve back with every script installed', { con
   }
 
   // The board as a solver sees it: every cell's digit, marks, colors (as Color by Digit and the color tool set them), the
-  // pen elements as drawn, and the Text Annotation notes.
+  // pen elements as drawn, and the Text Anywhere notes.
   const board = async () => ({
     cells: await read(() => Framework.app.puzzle.cells.map((c) => [c.row, c.col, c.propGet('normal'), c.propGet('corner'), c.propGet('centre'), [...(c.colours || [])], c.given])),
     actions: await read(() => Framework.app.puzzle.replayStack.length),
@@ -73,7 +73,7 @@ describe('the replay tool plays a solve back with every script installed', { con
   before(async () => { ;({ context, p, errors } = await openSolver(SCRIPT_FILES)) })
   after(async () => { await context.close() })
 
-  it('setup: a short solve of digits, marks, colors, pen lines and a Text Annotation note', async () => {
+  it('setup: a short solve of digits, marks, colors, pen lines and a Text Anywhere note', async () => {
     // digits, which Color by Digit colors in Cell mode
     await useTool('#control-normal')
     for (const [r, c, d] of [[0, 2, '4'], [0, 3, '6'], [1, 1, '7']]) {
@@ -103,7 +103,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     const count = (await penStrings(p)).length
     await p.mouse.click(x + half - 2, y)
     assert.equal(await settle(async () => (await penStrings(p)).length > count, true), true, 'an edge mark appeared')
-    // Text Annotation: a note
+    // Text Anywhere: a note
     await useTool(DRAW_BUTTON)
     await p.mouse.click(...await gridPoint(p, [6.2, 6.25]))
     await p.locator(TEXT_BOX).waitFor({ state: 'attached' })
@@ -114,7 +114,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     solved = await board()
   })
 
-  it('the solve holds what the test compares: digits, marks, colors, seven pen entries and one Text Annotation note', () => {
+  it('the solve holds what the test compares: digits, marks, colors, seven pen entries and one Text Anywhere note', () => {
     const cell = (r, c) => solved.cells.find((x) => x[0] === r && x[1] === c)
     assert.deepEqual([cell(0, 2)[2], cell(0, 3)[2], cell(1, 1)[2]], ['4', '6', '7'])
     assert.deepEqual(cell(2, 0)[3], ['1', '2'])
@@ -138,7 +138,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     assert.deepEqual(rewound, { entered: 0, marks: 0, pen: [] }, 'no entered digit, mark or pen entry while the tool shows the start')
   })
 
-  it('Play runs to the end, and the board then equals the board before: digits, marks, colors, pen lines, and the Text Annotation notes', async () => {
+  it('Play runs to the end, and the board then equals the board before: digits, marks, colors, pen lines, and the Text Anywhere notes', async () => {
     // Armed before the click: at speed 10 the whole solve plays in about a second.
     const playing = p.locator('body.replay-playing').waitFor({ state: 'attached' })
     await p.click(PLAY_BUTTON)
@@ -152,7 +152,7 @@ describe('the replay tool plays a solve back with every script installed', { con
     // Color by Digit only adds a color that is missing, so a coloring of its own during playback ends on the same colors;
     // the replay's action count shows it, since it would add actions.
     assert.equal(played.actions, solved.actions, 'playback adds no action beyond what the replay holds')
-    assert.deepEqual(played.draw, solved.draw, 'the Text Annotation notes are not part of the replay, and playback leaves it')
+    assert.deepEqual(played.draw, solved.draw, 'the Text Anywhere notes are not part of the replay, and playback leaves it')
   })
 
   it('no page error', () => { assert.deepEqual(errors, []) })
@@ -196,7 +196,7 @@ describe('the replay tool\'s button and key with Draw installed', { concurrency:
     assert.equal(await clickUntil(() => p.click(DRAW_BUTTON), () => tool(p), 'draw', SETTLE_MS), 'draw')
   })
 
-  it('the replay button comes before Text Annotation\'s among the tool buttons on screen, as it does without it', async () => {
+  it('the replay button comes before Text Anywhere\'s among the tool buttons on screen, as it does without it', async () => {
     const [withIds, withoutIds] = [await buttonIds(withDraw.p), await buttonIds(without.p)]
     assert.equal(withIds.indexOf('control-replay') < withIds.indexOf('control-draw'), true, withIds.join())
     assert.deepEqual(withIds.filter((id) => id !== 'control-draw'), withoutIds)

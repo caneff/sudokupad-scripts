@@ -102,7 +102,7 @@ for (const name of PAGES) {
 // Each details page: its script's install file and the homepage heading whose entry links to it.
 const DETAIL_PAGES = [
   { page: DETAILS, script: 'pen-tool-extras', name: 'Pen Tool Extras' },
-  { page: DRAW, script: 'draw-tool', name: 'Text Annotation' },
+  { page: DRAW, script: 'draw-tool', name: 'Text Anywhere' },
   { page: CBD, script: 'color-by-digit', name: 'Color by Digit' }
 ]
 
@@ -201,7 +201,7 @@ test(`${HOME} describes Pen Tool Extras by what it adds, not by its sliders`, ()
 
 // One row per script, in this order; Details only where a details page exists; a script whose file name is not its shown name gives the file name third.
 const ROWS = [
-  ['Color by Digit', CBD], ['Pen Tool Extras', DETAILS], ['Text Annotation', DRAW, 'draw-tool'], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
+  ['Pen Tool Extras', DETAILS], ['Text Anywhere', DRAW, 'draw-tool'], ['Color by Digit', CBD], ['Dark Page', undefined], ['Auto Rules Resizer', undefined]
 ]
 const rowsOf = html => html.split('<section class="row">').slice(1)
 
@@ -223,7 +223,7 @@ test("the shared Install button's text size and icon size are set in style.css",
 })
 
 test(`${HOME}'s other rows show one picture and no pager`, () => {
-  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Annotation</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
+  for (const row of rowsOf(read(HOME)).filter(r => !r.includes('<h2>Text Anywhere</h2>') && !r.includes('<h2>Pen Tool Extras</h2>') && !r.includes('<h2>Color by Digit</h2>'))) {
     assert.equal(imgs(row).length, 1)
     assert.doesNotMatch(row, /slide-caption|slideshow/)
   }
@@ -240,14 +240,13 @@ const PEN_SLIDES = [
   ['11-outline-off', 'White outlines off'], ['12-outline-on', 'White outlines on'], ['13-erase', 'Right-click a line to delete it'], ['14-erased', 'The whole line is gone']
 ]
 const DRAW_SLIDES = [
-  ['1-type', 'Left click to type a note'], ['2-size', 'Size slider: drag to set a text size'], ['3-background', 'Background: a box behind the next note'],
-  ['4-colors', 'Your own colors: hold a color button'], ['5-move', 'Move: drag a note, on or off the grid'],
-  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note'], ['8-erased', 'The note is gone']
+  ['1-type', 'Left click to type a note'], ['3-background', 'Background: a box behind the next note'],
+  ['6-select', 'Select: drag a box round notes, then change them together'], ['9-long', 'Long notes wrap and scroll; drag any corner to resize'], ['7-erase', 'Erase: right-click a note']
 ]
 const SHOWS = [
   { heading: 'Color by Digit', page: CBD, prefix: 'color-by-digit/color-by-digit-slide-', slides: CBD_SLIDES },
   { heading: 'Pen Tool Extras', page: DETAILS, prefix: 'pen-tool-extras/pen-tool-extras-slide-', slides: PEN_SLIDES },
-  { heading: 'Text Annotation', page: DRAW, prefix: 'draw-tool/draw-tool-slide-', slides: DRAW_SLIDES }
+  { heading: 'Text Anywhere', page: DRAW, prefix: 'draw-tool/draw-tool-slide-', slides: DRAW_SLIDES }
 ]
 
 // A slideshow's own markup, from a homepage row or a details page (where it ends at "What it adds").
@@ -321,7 +320,7 @@ test(`${HOME} names no Digit Color script and links no digit-color file`, () => 
   assert.doesNotMatch(page, /Digit Color|digit-color/)
 })
 
-// Checks shared by the Text Annotation and Color by Digit details pages: the header's @description, the intro, no picture in the feature grid, and a screenshot script per picture.
+// Checks shared by the Text Anywhere and Color by Digit details pages: the header's @description, the intro, no picture in the feature grid, and a screenshot script per picture.
 const SCRIPT_INTRO = /<\/p>\s*<p(?: class="lede")?>(Adds (?:a button )?to <a href="https:\/\/sudokupad\.app">SudokuPad<\/a>[\s\S]*?)<\/p>/
 const shared = ({ page, script, name, summary, intro, homePicture }) => {
   test(`${script}.user.js's @description is the homepage summary`, () => {
@@ -444,32 +443,27 @@ test(`${CBD} good to know gives the undo behavior, the Multi-color caveat and wh
   ])
 })
 
-// Text Annotation's entry and details page.
-const DRAW_SUMMARY = 'Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
-const DRAW_LEAD_INS = ['Typed notes', 'Long notes', 'Bold, italic and strikethrough', 'Bulleted lists', 'Readable over digits', 'Colors of its own', 'Size and transparency', 'Background', 'Select', 'Move', 'Erasing', 'Settings', 'Stays on the cells', 'Kept for each puzzle']
+// Text Anywhere's entry and details page.
+const DRAW_SUMMARY = 'Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.'
+const DRAW_LEAD_INS = ['Typed notes anywhere', 'Formatting', 'Long notes', 'Readable over digits', 'Colors, size and transparency', 'Select and move', 'Erase', 'Kept per puzzle', 'Settings']
 
-test(`${HOME} describes Text Annotation in a short summary ending in a Details link`, () => {
-  const m = read(HOME).match(/<h2>Text Annotation<\/h2>\s*<p>([\s\S]*?)<\/p>/)
-  assert.ok(m, `site/${HOME} has no Text Annotation description`)
+test(`${HOME} describes Text Anywhere in a short summary ending in a Details link`, () => {
+  const m = read(HOME).match(/<h2>Text Anywhere<\/h2>\s*<p>([\s\S]*?)<\/p>/)
+  assert.ok(m, `site/${HOME} has no Text Anywhere description`)
   assert.equal(m[1], DRAW_SUMMARY)
 })
 
 test(`${DRAW} lists what the script adds as a grid of short items, one per feature`, () => {
   assert.deepEqual(section(DRAW, 'What it adds'), [
-    'Typed notes Click the board to type, such as a cage sum, or anywhere beside it that is not one of SudokuPad\'s controls. Enter starts a new line. Escape or a click elsewhere finishes the note, and a double-click on a note changes it. While a note is open, the color buttons and the Size and Transparency sliders change that note, and it stays open. On a note you are still writing, the change is also the next note\'s color, size or transparency; on one you reopened, it changes only that note.',
-    'Long notes A long line wraps, and a note stops growing at 8 lines and scrolls: turn the wheel over it, and a thin scroll bar shows while the pointer is on it. Select a note, or open it to type, and a small square shows on each of its four corners: drag any of them to make the note\'s box wider, narrower, taller or shorter, with the opposite corner staying where it is. The note keeps that size, and a double-click on a square sets it back to auto size. With several notes selected, no squares show.',
-    'Bold, italic and strikethrough Write **bold**, *italic* (or _italic_) and ~~strikethrough~~ in a note, and nest them, such as **bold *and italic***. The markers show while you type and are hidden once the note is finished; a marker with no partner shows as typed.',
-    'Bulleted lists A line that starts with - or * (a dash or star, then a space) shows as a bulleted line once the note is finished, with a hanging indent, and bold, italic and strikethrough work inside it. While you type, the - shows as typed.',
-    'Readable over digits Each note has a halo, a round outline of its letters in the page color, so it reads over digits, pencil marks and colored cells. The Outline choice in the settings makes it Off, Thinner or Thicker, which is the default, for every note.',
-    "Colors of its own Nine colors that belong to Text Annotation, not to SudokuPad's pen. Pick one with a click or the digit keys 1 to 9.",
-    'Size and transparency The Size slider sets how large the next note is, from small to large, and the Transparency slider how faint, down to 20%. A note keeps the look it was typed with until you select it and move a slider.',
-    'Background Turn it on and the next note gets a box behind it (page-colored unless the settings choose another color), so it reads over the digits. Turning it on or off never changes the notes already there, except one you are editing or the ones selected.',
-    'Select Click a note to select it, Shift+click to add or remove one, or drag a box round several from empty space. The colors, the Size and Transparency sliders and Background then change the selected notes, and Escape or a click on empty space ends the selection.',
-    'Move Drag a note to move it, on the board or off it. Drag one of the selected notes and they all move. With notes selected and no note open, the arrow keys nudge them 1 pixel a press on the screen, and Shift+arrow 10, without moving SudokuPad\'s cell cursor; with nothing selected the arrow keys work as they always do.',
-    'Erasing Right-click a note to erase it. Delete or Backspace, or the trash button in the panel, deletes the selected notes; with none selected the trash button erases every note.',
-    "Settings Color presets, a color picker for each of the nine colors, the color of the box behind notes (Page, White, Sticky yellow, Tint of each note's own color, or a Custom color) for every note that has one, the Outline round the letters (Off, Thinner or Thicker) for every note, a Frame checkbox that draws a thin light gray line round each box, and Copy and Paste to move them all to another browser.",
-    'Stays on the cells A note on the board stays on its cells when the board resizes, and one beside it stays where you put it on the screen, unless the window or the controls would cover it or push it past the window\'s edge, when it moves to the nearest free spot and stays there. Both stay visible when you switch back to entering digits.',
-    'Kept for each puzzle A reload keeps the notes, for the last 50 puzzles you made notes on.'
+    'Typed notes anywhere Click the board, or beside it, to type. Enter starts a new line; a double-click edits a note.',
+    'Formatting **bold**, *italic*, ~~strikethrough~~, and lines starting - become bullets.',
+    'Long notes A long note wraps and scrolls; drag a corner to resize it.',
+    'Readable over digits A white outline round the letters, and an optional box behind the note.',
+    'Colors, size and transparency Nine colors of its own (keys 1-9), and Size and Transparency sliders.',
+    'Select and move Click a note or drag a box round several; drag to move, arrow keys to nudge.',
+    'Erase Right-click a note, or press Delete.',
+    'Kept per puzzle Notes survive a reload, for your last 50 puzzles.',
+    'Settings Color presets, the box color, the outline, a frame round boxes, and Copy and Paste to another browser.'
   ])
   const grid = read(DRAW).match(/<ul class="features">([\s\S]*?)<\/ul>/)
   assert.ok(grid, `site/${DRAW} has no <ul class="features">`)
@@ -477,15 +471,15 @@ test(`${DRAW} lists what the script adds as a grid of short items, one per featu
 })
 
 test(`${DRAW} has the slideshow between the install link and "What it adds", then the panel`, () => {
-  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The Text Annotation panel</h2>', '<h2>Good to know</h2>'])
+  assertSectionsInOrder(DRAW, ['<p class="lede">', 'class="install"', '<div class="slideshow">', '<h2>What it adds</h2>', '<h2>The Text Anywhere panel</h2>', '<h2>Good to know</h2>'])
 })
 
-test(`${DRAW} shows the Text Annotation panel as an intro and one annotated picture whose alt text names every label`, () => {
-  const m = read(DRAW).match(/<h2>The Text Annotation panel<\/h2>([\s\S]*?)<h2>/)
-  assert.ok(m, `site/${DRAW} has no <h2>The Text Annotation panel</h2>`)
+test(`${DRAW} shows the Text Anywhere panel as an intro and one annotated picture whose alt text names every label`, () => {
+  const m = read(DRAW).match(/<h2>The Text Anywhere panel<\/h2>([\s\S]*?)<h2>/)
+  assert.ok(m, `site/${DRAW} has no <h2>The Text Anywhere panel</h2>`)
   const found = imgs(m[1])
-  assert.equal(found.length, 1, 'the Text Annotation panel section is not one picture')
-  assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the Text Annotation panel section is the intro and the picture only')
+  assert.equal(found.length, 1, 'the Text Anywhere panel section is not one picture')
+  assert.doesNotMatch(m[1], /<ol\b|<li\b/, 'the Text Anywhere panel section is the intro and the picture only')
   assert.ok(withoutTag(found[0]).includes(`src="${RAW}docs/research/draw-tool/draw-tool-panel-annotated.png"`))
   const alt = altOf(found[0])
   for (const label of ['Color buttons', 'Background', 'Clear all', 'Settings', 'Size', 'Transparency']) {
@@ -494,15 +488,21 @@ test(`${DRAW} shows the Text Annotation panel as an intro and one annotated pict
   assert.match(alt, /press 1 to 9/)
 })
 
+const DRAW_WORD_LIMIT = 320
+test(`${DRAW} stays short: its text is under ${DRAW_WORD_LIMIT} words`, () => {
+  const words = plain(read(DRAW).replace(/<(script|footer)[\s\S]*?<\/\1>/g, '')).split(' ').length
+  assert.ok(words < DRAW_WORD_LIMIT, `site/${DRAW} has ${words} words`)
+})
+
 test(`${DRAW} good to know says the notes stay in this browser, and what clears them`, () => {
   assert.deepEqual(section(DRAW, 'Good to know'), ['The notes are kept in this browser only, so another browser or device does not show them.', 'Restart clears the notes. If the notes cannot be saved, a message says so.'])
 })
 
 // A script in docs/research/ takes a picture when its header names the picture's file.
 
-test('the README has a Text Annotation row with a Details link, and the Settings sentence is kept', () => {
+test('the README has a Text Anywhere row with a Details link, and the Settings sentence is kept', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-  assert.match(readme, /^\| Text Annotation \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
+  assert.match(readme, /^\| Text Anywhere \| .*\[Details\]\(https:\/\/caneff\.github\.io\/sudokupad-scripts\/draw-tool\.html\).*\[Install\]\(https:\/\/raw\.githubusercontent\.com\/caneff\/sudokupad-scripts\/main\/draw-tool\.user\.js\)/m)
   assert.match(readme, /Each script except No Tab Letters adds an entry to SudokuPad's settings/)
 })
 
@@ -517,9 +517,9 @@ test('the README has a Color by Digit row with the short summary and a Details l
 shared({
   page: DRAW,
   script: 'draw-tool',
-  name: 'Text Annotation',
+  name: 'Text Anywhere',
   summary: DRAW_SUMMARY,
-  intro: 'Adds to SudokuPad a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own.',
+  intro: 'Adds to SudokuPad a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own.',
   homePicture: 'draw-tool-slide-1-type.png'
 })
 
