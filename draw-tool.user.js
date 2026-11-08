@@ -3075,7 +3075,7 @@
     else if (ended.start === -1) selectInRectangle(ended, click)
   }
 
-  // Escape mid-drag puts the notes back where they were at the press. The press stays the tool's until its release, which then does nothing.
+  // Cancelling a drag puts the notes back where they were at the press. The press stays the tool's until its release, which then does nothing.
   function cancelDrag () {
     const d = drag
     if (d.rectangle) d.rectangle.remove()
