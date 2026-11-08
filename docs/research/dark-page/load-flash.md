@@ -1,6 +1,6 @@
 # Dark Page: the white flash before the dark page applies on load
 
-Probed 2026-11-08 against `dark-page.user.js` 0.5.7 (before) and 0.6.0 (after), SudokuPad 0.611.0, Tampermonkey 5.5.1 in
+Probed 2026-11-08 against `dark-page.user.js` 0.5.7 (before) and 0.6.0 and then 0.7.0 (the fix, after #552 took 0.6.0), SudokuPad 0.611.0, Tampermonkey 5.5.1 in
 Playwright's Chromium 156 (new headless, 1280x720). Ticket #544. The probe is `load-flash-probe.mjs` (run from the repo root),
 the reader `load-flash-report.py`; they install the script through `live/tampermonkey/` (the `npm run test:tampermonkey`
 infrastructure) and load the puzzle in `live/puzzle-url.txt`. The frames the probe writes (`.scratch/load-flash-frames/`) are not kept; the reader needs Pillow.
@@ -40,7 +40,7 @@ infrastructure) and load the puzzle in `live/puzzle-url.txt`. The frames the pro
   with a `JSON.parse` that falls back to the raw string (`framework.js?v=0.611.0`: `F.LocalDataPrefix = 'svencodes'`,
   `F.makeDataKey`, `F.getData`). A color is stored as the raw `#rrggbb` string.
 
-## The fix (0.6.0), and it is small
+## The fix (0.7.0), and it is small
 
 - `@run-at document-start`.
 - The style goes in at once, with the color from `localStorage` (`earlyColor`) or the default black. When no
@@ -55,9 +55,9 @@ infrastructure) and load the puzzle in `live/puzzle-url.txt`. The frames the pro
   `Framework.makeDataKey('DarkPage_color')` is the key the early read uses and a `Framework.setData` color is the plain string
   (so a renamed prefix fails the daily watch); that the settings entry still appears (`start` ran); and that what `Framework`
   reads at DOMContentLoaded, a color or nothing, replaces the early one.
-- `npm run test:tampermonkey` was run on 0.6.0 (the header changed): 14 of 14 passed, the update over main's copy included.
+- `npm run test:tampermonkey` was run on 0.7.0 (the header changed): 14 of 14 passed, the update over main's copy included.
 
-## Findings, after (0.6.0, `@run-at document-start`)
+## Findings, after (the fix, `@run-at document-start`)
 
 | Run | First paint | Colors of the page after frame 0 |
 | --- | --- | --- |
