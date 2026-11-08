@@ -2,7 +2,7 @@
 // The notes are what a solver writes: formulas (A=B+5, X+Y=2Z) and short deductions, mostly in the margin beside the grid or above it, as solvers do, and on the board only where the slide needs it (a note on a cell's edge, in a box), never one digit and never centered in a cell (the script checks both).
 //   draw-tool-slide-1-type.png        a three-line note typed with Enter in the margin beside rows 1 and 2
 //   draw-tool-slide-3-background.png  the Background button on: a formula in a page-colored box over the grid lines, beside one made with it off
-//   draw-tool-slide-6-select.png      three margin notes selected by a drag on empty space, the dragged box dashed, and recolored together from the panel
+//   draw-tool-slide-6-select.png      three margin notes selected by a drag on empty space, the dragged box solid purple, and recolored together from the panel
 //   draw-tool-slide-7-erase.png       the pointer on a note with a red ring round it, where a right click erases it (the click follows the shot and must erase the note)
 //   draw-tool-slide-9-long.png        a four-line note open for typing, made two lines tall with its bottom right handle of four, so it scrolls to its last two lines, its scroll bar visible
 // Every note is typed with real clicks and keys. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
@@ -11,7 +11,7 @@
 // Not part of any test.
 import { chromium } from 'playwright'
 import { openDrawPage } from './draw-tool-screenshot-page.mjs'
-import { slideTo, valueOf } from '../../../live/draw-tool/draw-tool-fixtures.mjs'
+import { saved, slideTo, valueOf } from '../../../live/draw-tool/draw-tool-fixtures.mjs'
 
 const out = (name) => new URL(`./draw-tool-slide-${name}.png`, import.meta.url).pathname
 const DRAG_STEPS = 10
@@ -25,7 +25,6 @@ const ORANGE = 3
 const RED = 4
 const BLUE = 6
 const NOTES = '#draw-tool-layer .draw-tool-text'
-const DRAWING_PREFIX = 'DrawTool_drawing_'
 
 // A red ring round the point (x, y), where a press lands.
 const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d]) => {
@@ -34,15 +33,12 @@ const addRing = (p, [x, y], size = 34) => p.evaluate(([px, py, d]) => {
   document.body.appendChild(ring)
 }, [x, y, size])
 
-// A gray dashed box over the page box `{ x, y, width, height }`: where a note was, or where a drag went.
-const addDashedBox = (p, box) => p.evaluate(({ x, y, width, height }) => {
+// A solid purple box with a faint fill over the page box `{ x, y, width, height }`: where a drag went, as the script draws it.
+const addDragBox = (p, box) => p.evaluate(({ x, y, width, height }) => {
   const el = document.createElement('div')
-  el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${width}px;height:${height}px;box-sizing:border-box;border:2px dashed #666;pointer-events:none;z-index:99998`
+  el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:${width}px;height:${height}px;box-sizing:border-box;border:1px solid #6a1b9a;background:rgb(106 27 154 / .06);pointer-events:none;z-index:99998`
   document.body.appendChild(el)
 }, box)
-
-// The notes Text Annotation saved for the puzzle on the page.
-const storedNotes = (p) => p.evaluate((prefix) => Framework.getData(prefix + (Framework.app.puzzle.puzzleId || window.location.href)), DRAWING_PREFIX)
 
 // Headless Chromium hides every scroll bar unless told not to, and slide 9 shows one.
 const browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] })
@@ -145,7 +141,7 @@ const ABOVE_COL_8 = [-0.55, 7.3]
   await s.shoot('3-background')
 }
 
-// 6: three orange margin notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn dashed gray where it was.
+// 6: three orange margin notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn solid purple where it was.
 {
   const s = await scene()
   await s.pick(ORANGE, 26)
@@ -160,10 +156,10 @@ const ABOVE_COL_8 = [-0.55, 7.3]
   await s.p.mouse.up()
   if ((await s.p.locator('#draw-tool-layer .draw-tool-selected').count()) !== 3) throw new Error('the drag did not select the three notes')
   await s.p.click(`.controls-input button[data-key="${BLUE}"]`)
-  const stored = await storedNotes(s.p)
+  const stored = await saved(s.p)
   if (!stored.every((item) => item.color === BLUE)) throw new Error(`the notes were not recolored: ${JSON.stringify(stored)}`)
   const [[x1, y1], [x2, y2]] = [s.at(FROM), s.at(TO)]
-  await addDashedBox(s.p, { x: x1, y: y1, width: x2 - x1, height: y2 - y1 })
+  await addDragBox(s.p, { x: x1, y: y1, width: x2 - x1, height: y2 - y1 })
   await s.p.mouse.move(0, 0)
   await s.shoot('6-select')
 }

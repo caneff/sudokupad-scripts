@@ -150,7 +150,7 @@
       },
       {
         "picture": "draw-tool-slide-6-select.png",
-        "alt": "Three blue notes in the margin, A=B+5 and X+Y=2Z above the grid and r1: 4,6 in c7-9 beside row 1, each with a dashed purple outline, selected by a dashed drag box and recolored from orange to blue together",
+        "alt": "Three blue notes in the margin, A=B+5 and X+Y=2Z above the grid and r1: 4,6 in c7-9 beside row 1, each with a solid purple outline, selected by a solid purple drag box and recolored from orange to blue together",
         "caption": "Select: drag a box round notes, then change them together"
       },
       {
@@ -160,7 +160,7 @@
       },
       {
         "picture": "draw-tool-slide-7-erase.png",
-        "alt": "A red ring on a green note above the grid reading A=B+5, where a right click lands",
+        "alt": "A red ring on a green note above the grid reading A=B+5, which shows a faint purple outline under the pointer, where a right click lands",
         "caption": "Erase: right-click a note"
       }
     ]
