@@ -156,6 +156,30 @@ describe('The first Undo after a Restart', { concurrency: false }, () => {
   })
 })
 
+describe('Redo after the Undos that took back a Restart', { concurrency: false }, () => {
+  it('Restart, Undo, Undo, Redo leaves the mode on Cell with the givens colored, as a plain Restart does', async () => {
+    const { context, p } = await openSession(browser, script)
+    try {
+      await p.evaluate(() => { const a = Framework.app; a.deselect(); a.select(a.grid.getCell(0, 2)); a.act({ type: 'value', arg: '4' }); a.deselect() })
+      await pressTo(p, 'Cell')
+      await p.evaluate(() => Framework.app.restartPuzzle())
+      const givens = await settle(() => givensColoredOn(p), 30)
+      assert.equal(givens > 0, true)
+      await p.click('#control-undo')
+      assert.equal(await settle(() => p.evaluate(() => Framework.app.preRestartSavedProgress === undefined), true), true)
+      await p.click('#control-undo')
+      assert.equal(await settle(() => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null), '4'), '4')
+      await p.click('#control-redo')
+      assert.equal(await settle(() => p.evaluate(() => Framework.app.puzzle.redoStack.length), 0), 0, 'the Redo put back the last step')
+      assert.equal(await settle(() => p.evaluate(() => Framework.app.grid.getCell(0, 2).propGet('normal') ?? null), null), null, 'the Restart is back')
+      assert.equal(await labelOn(p), 'Cell')
+      assert.equal(await settle(() => givensColoredOn(p), givens), givens)
+    } finally {
+      await context.close()
+    }
+  })
+})
+
 describe('The first Undo after a Restart, saved', { concurrency: false }, () => {
   // Color by Digit colors again when the page loads, so the saved actions are read by a page without the script: SudokuPad's color tool toggles, and a coloring saved twice reads as none.
   it('saves the givens colored once: a reload without the script shows them colored', async () => {
