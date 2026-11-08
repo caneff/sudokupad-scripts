@@ -139,6 +139,20 @@ describe('Text Anywhere\'s saved notes', { concurrency: false }, () => {
     assert.deepEqual(await settle(texts, ['15', '20']), ['15', '20'])
   })
 
+  it('the notes Undo brings back after Restart are selected, with the outline round each', async () => {
+    await draw.forgetDrawings(p)
+    await reload()
+    await pickDraw()
+    await typeText([2.5, 2.5], '15')
+    await typeText([5.5, 4.5], '20')
+    await restartFromDialog()
+    assert.deepEqual(await settle(texts, []), [])
+    await undo()
+    assert.deepEqual(await settle(texts, ['15', '20']), ['15', '20'])
+    assert.deepEqual(await p.locator(`${draw.TEXTS}.draw-tool-selected`).allTextContents(), ['15', '20'])
+    assert.equal(await p.locator('#draw-tool-layer .draw-tool-selection').count(), 2, 'an outline for each')
+  })
+
   // SudokuPad's first Undo after a Restart loads the history back, ending in the Restart's clears; the second undoes them.
   it('with a digit entered, the first Undo after Restart brings the notes back and the second the digit', async () => {
     await enterDigit('5')
