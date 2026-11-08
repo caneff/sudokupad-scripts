@@ -911,7 +911,7 @@
   }
 
   const PURPLE = '#6a1b9a'
-  const OFF_WORD_GREY = '#b3acbf'
+  const OFF_WORD_GREY = '#8a8299'
 
   // A translucent white box behind the word, so it reads on Dark Page's dark button. On the normal page's #eee button it barely shows.
   const WORD_BACKGROUND = 'rgba(255,255,255,.9)'

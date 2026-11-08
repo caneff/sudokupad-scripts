@@ -1744,7 +1744,7 @@ test('iconHtml draws the run of cells in the mode\'s look with the mode word, an
     const word = /<span data-role="mode" style="([^"]*)">([^<]*)<\/span>/.exec(html)
     assert.equal(word[2], mode.toUpperCase())
     assert.match(word[1], /pointer-events:none/)
-    assert.match(word[1], mode === 'off' ? /color:#b3acbf/ : /color:#6a1b9a/)
+    assert.match(word[1], mode === 'off' ? /color:#8a8299/ : /color:#6a1b9a/)
     // A translucent white rounded box behind every word, and no text-shadow, so it reads on Dark Page's dark button.
     assert.match(word[1], /background:rgba\(255,255,255,\.9\)/)
     assert.match(word[1], /border-radius:3px/)
