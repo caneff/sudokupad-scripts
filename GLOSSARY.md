@@ -211,8 +211,8 @@
   read is never copied over: each color it lacks shows SudokuPad's own pen color. A hold of a second on a
   color button puts a color picker over each button, and a picked color recolors every note already made in that number,
   since a note saves the number. The digit keys 1 to 9 pick one. A color button shows "Aa" in its color.
-- **text** (a note) — a short string typed onto the notes, in a note color, with its own size and opacity (the **Size slider** and **Transparency slider** set them; a saved note keeps its own), centred on the
-  point clicked. It is typed in place, in the **text box**: the note's own element, open for typing, which a click anywhere
+- **text** (a note) — a short string typed onto the notes, in a note color, with its own size and opacity (the **Size slider** and **Transparency slider** set them; a saved note keeps its own), starting at the
+  point clicked: its stored point is the top left of its text. It is typed in place, in the **text box**: the note's own element, open for typing, which a click anywhere
   on the page but SudokuPad's controls (the control panel, the top bar, the menu and an open dialog) opens while nothing is
   **selected**, and a double-click on a text reopens. A text put on the board is pinned to its cells (stored in board units under `at`); one put off the board is
   fixed on the screen (stored in screen pixels under `fixed`, which no version before 0.18.0 reads). When the window or SudokuPad's layout puts a fixed text's box under the control panel or top bar, or

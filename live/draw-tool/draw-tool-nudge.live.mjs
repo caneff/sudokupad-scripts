@@ -206,7 +206,7 @@ describe('Text Anywhere\'s nudge and bullets', { concurrency: false }, () => {
     assert.deepEqual(await lines(), want)
     await reload()
     assert.deepEqual(await settle(lines, [want]), want)
-    await p.mouse.dblclick(...await gridPoint(p, BULLETS_AT))
+    await draw.reopen(p, await gridPoint(p, BULLETS_AT))
     assert.equal(await p.locator(draw.TEXT_BOX).textContent(), BULLET_TEXT, 'the open note shows the raw markers')
     await draw.finishNote(p)
     assert.deepEqual(errors, [])

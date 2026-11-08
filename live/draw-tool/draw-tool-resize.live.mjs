@@ -96,9 +96,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
   })
 
   it('dragging the handle sets the box with its top left kept, the text wraps and scrolls to fit, and the note keeps the focus', async () => {
-    await p.mouse.dblclick(...await gridPoint(p, NOTE_AT))
-    // The double-click selects the word under it, as in any editable text.
-    await p.keyboard.press('Control+End')
+    await draw.reopen(p, await gridPoint(p, NOTE_AT))
     const before = await box(TEXT_BOX)
     const [width, height] = [before.em * 5, before.em * 1.5]
     await dragHandle(before.left + width - before.right, before.top + height - before.bottom)
@@ -259,7 +257,7 @@ describe('Text Anywhere\'s resize handles', { concurrency: false }, () => {
   })
 
   it('a press away from the open note finishes it, and its handles go with it', async () => {
-    await p.mouse.dblclick(...await gridPoint(p, [NOTE_AT[0] + 1, NOTE_AT[1] + 1]))
+    await draw.reopen(p, await gridPoint(p, [NOTE_AT[0] + 1, NOTE_AT[1] + 1]))
     assert.equal(await handleCount(), 4)
     await p.mouse.click(...await gridPoint(p, EMPTY_AT))
     assert.equal(await handleCount(), 0)
