@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Anywhere
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.37.2
+// @version      0.37.3
 // @description  Adds a Text Anywhere tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.37.2'
+  const VERSION = '0.37.3'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -3072,9 +3072,23 @@
   // capture phase, before any of them. A press on a control that works on the open note (isPanelControl) leaves it open.
   function finishTextOnPress (event) {
     if (!editing || editing.element.contains(event.target) || handles.some(({ element }) => element === event.target) || isPanelControl(event.target)) return
-    // A left press on another note goes on to select it, and to drag it.
-    pressFinishedText = !(event.button === PRIMARY_BUTTON && pressedNote(event))
+    // A left press on another note, or on the open note's edge, goes on to select it, and to drag it.
+    const left = event.button === PRIMARY_BUTTON
+    const onOther = left && pressedNote(event)
+    const onEdge = left && onOpenEdge(eventPoint(event))
     finishText()
+    pressFinishedText = !(onOther || (onEdge && pressedNote(event)))
+  }
+
+  // The band round the open note, outside its box and within HIT_MARGIN_PX of it: a press there moves the note, as one inside selects its text.
+  const onOpenEdge = (point) => Boolean(editing) && inBox(point, grownBox(editing.box, HIT_MARGIN_PX)) && !inBox(point, editing.box)
+
+  // The move cursor over the open note's edge, which lies outside its element and so cannot carry a cursor of its own.
+  let edgeCursor = false
+  function showEdgeCursor (point) {
+    const over = Boolean(point) && !drag && !resizing && onOpenEdge(point)
+    if (over !== edgeCursor) holdCursor(over ? 'move' : null)
+    edgeCursor = over
   }
 
   // A press on a panel button keeps the focus in the open note, so its caret stays. A slider takes the focus, and the note gets it back when the
@@ -3701,6 +3715,7 @@
       onWindow(textTool, 'mousemove', (event) => {
         showChrome()
         hoverPoint = overControl(event) ? null : eventPoint(event)
+        showEdgeCursor(handles.some(({ element }) => element === event.target) ? null : hoverPoint)
         inFrame('hover', showHover)
       }, { capture: true })
       onWindow(textTool, 'mouseout', (event) => {
