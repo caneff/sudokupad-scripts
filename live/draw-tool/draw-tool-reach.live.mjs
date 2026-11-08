@@ -8,7 +8,7 @@ import * as draw from './draw-tool-fixtures.mjs'
 import { openPage } from '../page.mjs'
 import { settle, stable } from '../settle.mjs'
 
-const { TEXTS } = draw
+const { TEXT_BOX, TEXTS } = draw
 const WIDE = { width: 1600, height: 900 }
 const NARROW = { width: 1000, height: 900 }
 const HOME = { width: 1200, height: 900 }
@@ -68,11 +68,32 @@ describe('Text Anywhere\'s fixed note after the window changes', { concurrency: 
     assert.equal(await settle(async () => overPanel(await boxes()), true), true, 'the panel covers the note')
     await stable(async () => (await boxes()).note.x)
     await atHome()
+    await p.mouse.dblclick(...draw.middleOf((await boxes()).note))
+    assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click on the note over the panel opens it')
+    await draw.finishNote(p)
+    await atHome()
     await reload()
     assert.equal(overPanel(await boxes()), true, 'still under the panel over a reload')
     await atHome()
     await resizeTo(HOME)
     await atHome()
+  })
+
+  it('put under the top bar, the note stays at its own point and takes a double-click', async () => {
+    await resizeTo(HOME)
+    const bar = await read(() => document.querySelector('.topbar').getBoundingClientRect().toJSON())
+    const under = [Math.round(bar.x + bar.width / 2), Math.round(bar.y + bar.height / 2 - 10)]
+    await draw.plantDrawing(p, [{ ...NOTE, fixed: under }])
+    await reload()
+    assert.deepEqual(await settle(draw.texts.bind(null, p), ['fixed']), ['fixed'])
+    const note = (await boxes()).note
+    assert.equal(note.top < bar.bottom && note.bottom > bar.top, true, `the note ${JSON.stringify(note)} is under the top bar`)
+    await stable(async () => (await boxes()).note.x)
+    assert.deepEqual((await boxes()).point.map(Math.round), under, 'drawn at its own point')
+    await p.mouse.dblclick(...draw.middleOf((await boxes()).note))
+    assert.equal(await p.locator(TEXT_BOX).textContent(), 'fixed', 'a double-click on the note over the top bar opens it')
+    await draw.finishNote(p)
+    assert.deepEqual((await saved())[0].fixed, under, 'stored at its own point')
   })
 
   it('narrowed until its point is past the edge, the note is drawn wholly inside the window and stays stored at its own point, and is back there when the window grows again', async () => {

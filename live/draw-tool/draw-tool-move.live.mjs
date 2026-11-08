@@ -131,6 +131,13 @@ describe('Text Anywhere\'s moving', { concurrency: false }, () => {
       assert.equal(after.reachable, true, `dragged to ${to}, the note is at ${after.point}`)
       if (to === overKeypad) {
         assert.equal(held.point.every((v, i) => Math.abs(v - to[i]) <= 3) && after.point.every((v, i) => Math.abs(v - to[i]) <= 3), true, `dragged onto the controls at ${to}, held at ${held.point} and dropped at ${after.point}`)
+        // A note dropped on the controls takes a press again: another drag moves it.
+        await p.mouse.move(...after.point)
+        await p.mouse.down()
+        await p.mouse.move(after.point[0] - 40, after.point[1] - 40, { steps: 8 })
+        await p.mouse.up()
+        const again = await reachable()
+        assert.equal(again.point.every((v, i) => Math.abs(v - (after.point[i] - 40)) <= 3), true, `pressed on the controls at ${after.point} and dragged 40 px up and left, the note is at ${again.point}`)
       }
     }
   })

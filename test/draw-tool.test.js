@@ -808,10 +808,8 @@ test('once a note is drawn its box is the size drawn, not the guess from its cha
 // A 1000x900 window.
 const WINDOW = { left: 0, top: 0, right: 1000, bottom: 900 }
 
-test('a note whose box is inside the window stays where it is, on the controls or off them', () => {
+test('a note whose box is inside the window stays where it is', () => {
   assert.deepEqual(reachablePoint([500, 400], [100, 40], WINDOW), [500, 400])
-  assert.deepEqual(reachablePoint([850, 400], [100, 40], WINDOW), [850, 400], 'on a panel down the right side from x=800')
-  assert.deepEqual(reachablePoint([900, 120], [100, 40], WINDOW), [900, 120], 'on that panel\'s corner')
 })
 
 test('a note whose box is past the window\'s edge is moved to the nearest point, a pixel in, that holds the whole box inside', () => {
