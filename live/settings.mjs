@@ -41,7 +41,7 @@ export async function closeDialogWith (p, text, editorSel) {
   await p.locator(editorSel).waitFor({ state: 'detached' })
 }
 
-const EXTRAS_EDITOR = '#pen-tool-extras-editor'
+export const EXTRAS_EDITOR = '#pen-tool-extras-editor'
 export const openExtrasEditor = (p) => openScriptDialog(p, 'Pen Tool Extras', EXTRAS_EDITOR)
 export const closeExtrasEditorWith = (p, text) => closeDialogWith(p, text, EXTRAS_EDITOR)
 
