@@ -23,7 +23,7 @@ after(async () => { await browser?.close() })
 describe('Text Annotation\'s Transparency fades the whole note', { concurrency: false }, () => {
   let context, p
 
-  // Each note's computed opacity, and its color's alpha, by text.
+  // Each note's computed opacity, color, box fill and frame, by text.
   const noteOpacities = () => p.evaluate((selector) => Object.fromEntries([...document.querySelectorAll(selector)].map((e) => {
     const style = window.getComputedStyle(e)
     return [e.textContent, { opacity: style.opacity, color: style.color, fill: style.backgroundColor, shadow: style.boxShadow }]
@@ -84,7 +84,18 @@ describe('Text Annotation\'s Transparency fades the whole note', { concurrency: 
     assert.equal(await drawnOpacity(SELECTION), 1)
   })
 
+  it('the dashed outline of a faded note open for typing stays solid too', async () => {
+    await p.keyboard.press('Escape')
+    await p.mouse.dblclick(...await gridPoint(p, [1.5, 1.5]))
+    await p.locator(draw.TEXT_BOX).waitFor()
+    assert.equal(await p.locator(SELECTION).count(), 1, 'one outline round the open note')
+    assert.equal(await drawnOpacity(SELECTION), 1)
+    await p.keyboard.press('Escape')
+    assert.equal(await p.locator(SELECTION).count(), 0)
+  })
+
   it('selecting a second faded note outlines both, and ending the selection takes every outline off', async () => {
+    await p.mouse.click(...await gridPoint(p, [1.5, 1.5]))
     await p.keyboard.down('Shift')
     try {
       await p.mouse.click(...await gridPoint(p, [1.5, 4.5]))

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Text Annotation
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.26.4
+// @version      0.26.5
 // @description  Adds a Text Annotation tool for typed notes on the board or beside it, such as cage sums, in colors of its own. Each puzzle keeps its own notes.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict'
 
-  const VERSION = '0.26.4'
+  const VERSION = '0.26.5'
   const TOOL_NAME = 'draw'
   const LAYER_ID = 'draw-tool-layer'
   const MIN_WIDTH = 1
@@ -201,7 +201,7 @@
   // drawn above them.
   const BOARD_NOTES_CLASS = 'draw-tool-board'
   const SCREEN_NOTES_CLASS = 'draw-tool-screen'
-  // One screen pixel in the units of a note's group, so a selected note's outline is as thin on the board as off it.
+  // One screen pixel in the units of a note's group, so a note's frame is as thin on the board as off it.
   const PIXEL_VAR = '--draw-tool-px'
   // A note whose text runs past its box, which shows its scroll bar while the pointer is over it.
   const SCROLLS_CLASS = 'draw-tool-scrolls'
@@ -209,6 +209,7 @@
   const ACTIVE_CLASS = 'draw-tool-active'
   const HANDLE_CLASS = 'draw-tool-resize'
   const SELECTION_CLASS = 'draw-tool-selection'
+  const OPEN_OUTLINE_CLASS = 'draw-tool-open-outline'
   const HANDLE_PX = 10
   const RECTANGLE_CLASS = 'draw-tool-selection-rectangle'
   const TRAY_CLASS = 'draw-tool-tray'
@@ -1316,9 +1317,10 @@
     `:is(.${BOARD_NOTES_CLASS}, .${SCREEN_NOTES_CLASS}) { position: absolute; left: 0; top: 0; transform-origin: 0 0; }`,
     // The outline is a box of its own in the layer, since a note's opacity would fade an outline drawn on the note itself.
     `.${SELECTION_CLASS} { position: absolute; box-sizing: border-box; pointer-events: none; outline: 2px dashed ${PANEL_COLOR}; outline-offset: 2px; }`,
+    `.${SELECTION_CLASS}.${OPEN_OUTLINE_CLASS} { outline-width: 1px; outline-offset: 1px; }`,
     `.${RECTANGLE_CLASS} { position: absolute; box-sizing: border-box; border: 1px dashed ${PANEL_COLOR}; background: color-mix(in srgb, ${PANEL_COLOR} 8%, transparent); }`,
     `.${HANDLE_CLASS} { position: absolute; box-sizing: border-box; width: ${HANDLE_PX}px; height: ${HANDLE_PX}px; background: ${PANEL_COLOR}; border: 2px solid #fff; border-radius: 2px; pointer-events: auto; }`,
-    `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; outline: 1px dashed currentColor; outline-offset: 1px; cursor: text; }`,
+    `.${TEXT_BOX_CLASS} { pointer-events: auto; min-width: 0.3em; cursor: text; }`,
     // The tool bar is a grid and stock buttons have order 0, so Text Annotation's stays last whenever another is added.
     `.controls-tool #control-${TOOL_NAME} { order: 1; }`
   ].join('\n')
@@ -1804,7 +1806,7 @@
     })
   }
 
-  // The open note's element, the handles and the selection rectangle sit in the layer beside the two groups, where a redraw leaves them, so the note
+  // The open note's element, its outline, the selection outlines, the handles and the selection rectangle sit in the layer beside the two groups, where a redraw leaves them, so the note
   // keeps the focus. Each note keeps its element, and only what changed is written: a board change is one write to the board group.
   function renderDrawing () {
     const layer = drawingLayer()
@@ -1865,6 +1867,7 @@
     const { left, top, right, bottom } = element.getBoundingClientRect()
     editing.box = { left, top, right, bottom }
     showHandles(editing.box)
+    showSelection(map)
   }
 
   // The point of a screen box that corner `corner` of CORNERS names, or of the opposite corner with `opposite`.
@@ -1873,15 +1876,22 @@
   // The screen box of the one selected note, or null when no note or several are selected.
   const selectedBox = (map) => selected.length === 1 ? noteScreenBox(drawing[selected[0]], map, outline) : null
 
-  // An outline for each selected note, moved by `offset` screen pixels while the selection is dragged; none while a note is open.
+  // Puts `element` over screen box `box`, moved by `offset`.
+  function placeOver (element, { left, top, right, bottom }, offset = [0, 0]) {
+    Object.assign(element.style, { left: `${roundToTenth(left + offset[0])}px`, top: `${roundToTenth(top + offset[1])}px`, width: `${roundToTenth(right - left)}px`, height: `${roundToTenth(bottom - top)}px` })
+  }
+
+  // An outline for each selected note, moved by `offset` screen pixels while the selection is dragged, or for the open note, in its color, in place of the selection.
   function showSelection (map, offset = [0, 0]) {
-    const boxes = editing ? [] : selected.map((index) => noteScreenBox(drawing[index], map, outline))
+    const outlines = editing ? [{ box: editing.box, color: itemColor(editing.item.color) }] : selected.map((index) => ({ box: noteScreenBox(drawing[index], map, outline) }))
     const layer = drawingLayer()
     const shown = [...layer.querySelectorAll(`.${SELECTION_CLASS}`)]
-    for (const element of shown.slice(boxes.length)) element.remove()
-    boxes.forEach((box, i) => {
+    for (const element of shown.slice(outlines.length)) element.remove()
+    outlines.forEach(({ box, color }, i) => {
       const element = shown[i] ?? layer.appendChild(Object.assign(document.createElement('div'), { className: SELECTION_CLASS }))
-      Object.assign(element.style, { left: `${roundToTenth(box.left + offset[0])}px`, top: `${roundToTenth(box.top + offset[1])}px`, width: `${roundToTenth(box.right - box.left)}px`, height: `${roundToTenth(box.bottom - box.top)}px` })
+      element.classList.toggle(OPEN_OUTLINE_CLASS, Boolean(color))
+      element.style.outlineColor = color ?? ''
+      placeOver(element, box, offset)
     })
   }
 
@@ -2226,7 +2236,7 @@
       drawingLayer().appendChild(d.rectangle)
     }
     const box = rectangleBox(d)
-    for (const side of ['left', 'top', 'width', 'height']) d.rectangle.style[side] = `${roundToTenth(box[side])}px`
+    placeOver(d.rectangle, { left: box.left, top: box.top, right: box.left + box.width, bottom: box.top + box.height })
   }
 
   function selectInRectangle (d) {
