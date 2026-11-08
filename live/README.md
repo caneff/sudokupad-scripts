@@ -95,7 +95,7 @@ npm run test:fuzz -- [--seed <n>] [--minutes <m>] [--runs <k>] [--path <printed 
 - **A page is never reused between lists**: Restart empties the board but leaves the earlier digits behind Undo (`docs/research/ui-fuzz-tools.md`).
 - **The tests**: `actions.test.mjs`, `signals.test.mjs` and `engine.test.mjs` are unit tests on a fake page (`fake-target.mjs`) and run in `npm test`: a
   seed gives the same actions, every kind is generated and runs, and a planted page error is caught, shrunk to one step and replayed.
-  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 6 minutes, nearly all of it shrinking) is the live test: short fixed-seed runs pass on both
+  `npm run test:fuzz:smoke` (`fuzz.smoke.mjs`, about 2 minutes) is the live test: short fixed-seed runs pass on both
   puzzles, and a page error planted on Escape during a drag (`--plant-escape-error` plants the same one by hand) is caught, shrunk to the one
   interrupted step and replayed from the command it prints.
 
