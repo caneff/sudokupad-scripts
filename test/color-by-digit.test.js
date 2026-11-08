@@ -1978,7 +1978,7 @@ test('reduceDraft reload: pasted settings replace the draft, selecting their act
   assert.deepEqual({ state: draft.state, mode: draft.mode, selected: draft.selected, keptName: draft.keptName, brush: draft.brush, page: draft.page }, { state: pasted, mode: 'off', selected: 0, keptName: 'X', brush: 'a5', page: 0 })
 })
 
-// Polish (#538): focus, hover and press states, hit areas, the grab cursor and the dialog's keyboard.
+// The dialog's focus, hover and press states, hit areas, grab cursor and keyboard.
 const RING = '#6a1b9a'
 const cssRules = (css) => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => [m[1].split(',').map((x) => x.trim()), m[2].replace(/\s+/g, ' ').trim()])
 const rulesFor = (css, selector) => cssRules(css).filter(([selectors]) => selectors.includes(selector)).map(([, d]) => d).join(' ')
@@ -2005,12 +2005,12 @@ test('Clear all, the digit keys and the swatches lighten to #f3e5f5 or ring on h
   }
 })
 
-test('the mode button looks pressed from pointerdown: a class with a 10% darker layer, and a 24 px hit area on the menu arrow', () => {
+test('the mode button\'s pressed class has a 10% darker layer, and the menu arrow has a 24 px ::after hit area', () => {
   assert.match(rulesFor(BUTTON_CSS, '#control-colorbydigit.cbd-pressed'), /inset 0 0 0 100vmax rgb\(0 0 0 \/ \.1\)/)
   assert.match(rulesFor(BUTTON_CSS, '#control-colorbydigit [data-role="menu"]::after'), /position: absolute; inset: -5px/)
 })
 
-test('the delete button and the drag handle are at least 24 px, and a drag shows the grabbing cursor', () => {
+test('the delete button and the drag handle are at least 24 px, and the dragging class forces the grabbing cursor', () => {
   for (const part of ['[data-act="delete"]', '[data-role="handle"]']) {
     assert.match(rulesFor(STYLE_CSS, `#color-by-digit-editor ${part}`), /min-width: 24px; min-height: 24px/, part)
   }

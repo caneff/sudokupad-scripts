@@ -1,4 +1,4 @@
-// Live check of Color by Digit's polish (#538) on sudokupad.app in headless Chromium: the keyboard focus ring, the hover and
+// Live check of Color by Digit's focus, hover and press states, hit areas, cursor and keys on sudokupad.app in headless Chromium: the keyboard focus ring, the hover and
 // press states, the mode button pressed from pointerdown, the 24 px hit areas, the grabbing cursor and the dialog's keys.
 // Desktop sizes only. How it looks is judged by sight in the PR.
 /* global document, window, getComputedStyle */
@@ -6,7 +6,7 @@ import { after, before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
-import { ARROW, BUTTON, EDITOR, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState } from './color-by-digit-fixtures.mjs'
+import { ARROW, BUTTON, EDITOR, center, MENU, MODE_STORAGE_KEY, PROFILES_STORAGE_KEY, SEED, buttonPoint, openSession, paintedKeys, savedProfiles, savedState } from './color-by-digit-fixtures.mjs'
 import { closeDialogWith, dialogButton, openScriptDialog } from '../settings.mjs'
 import { settle } from '../settle.mjs'
 
@@ -34,7 +34,6 @@ const keyboardFocus = async (p, locator) => {
   await p.keyboard.press('Shift')
   await locator.focus()
 }
-const center = async (locator) => { const b = await locator.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }
 const activeSlot = (p, containerSelector) => p.evaluate((selector) => [...document.querySelectorAll(selector)].indexOf(document.activeElement), containerSelector)
 
 describe('the dialog', { concurrency: false }, () => {
@@ -64,9 +63,13 @@ describe('the dialog', { concurrency: false }, () => {
     }
   })
 
-  it('C1: no ring shows on a mouse click on a digit key', async () => {
-    await p.locator(DIGIT(3)).click()
-    assert.equal((await styleOf(p.locator(DIGIT(3)), ['outlineStyle'])).outlineStyle, 'none')
+  it('C1: a title icon focused by a mouse click shows no ring, since :focus-visible is for the keyboard', async () => {
+    // The dialog's own controls take no focus from the mouse, so the icon, which does, is the one that tells :focus-visible from :focus.
+    const icon = p.locator('[data-act="copy-settings"]')
+    await icon.click()
+    assert.deepEqual(await icon.evaluate((el) => ({ focused: document.activeElement === el, outline: getComputedStyle(el).outlineStyle })), { focused: true, outline: 'none' })
+    await keyboardFocus(p, icon)
+    assert.equal((await styleOf(icon, ['outlineColor'])).outlineColor, RING)
   })
 
   it('C1: the pressed swatch shows its ring as an ::after beside its own black outline', async () => {
@@ -81,6 +84,8 @@ describe('the dialog', { concurrency: false }, () => {
       await target.hover()
       assert.equal((await styleOf(target, ['backgroundColor'])).backgroundColor, HOVER)
     }
+    // Odd/Even paints every digit, so Clear all leaves the keys unpainted.
+    await p.getByRole('button', { name: 'Clear all' }).click()
     const unpainted = p.locator(`${EDITOR} button[data-act=digit][data-key=""]`).first()
     await unpainted.hover()
     assert.equal((await styleOf(unpainted, ['backgroundColor'])).backgroundColor, HOVER)
@@ -143,7 +148,7 @@ describe('the dialog', { concurrency: false }, () => {
     assert.equal(await at(), first)
   })
 
-  it('C9: the arrow keys move the focus along the digit grid, 0 sits under 7, and the empty slots are skipped', async () => {
+  it('C9: the arrow keys move the focus along the digit grid and 0 sits under 7', async () => {
     const focused = () => p.evaluate(() => document.activeElement.dataset.digit)
     await keyboardFocus(p, p.locator(DIGIT(7)))
     await p.keyboard.press('ArrowDown')
@@ -170,6 +175,20 @@ describe('the dialog', { concurrency: false }, () => {
     await p.keyboard.press('4')
     const toggled = painted === brush ? '' : brush
     assert.equal(await settle(async () => (await paintedKeys(p))['4'], toggled), toggled)
+  })
+
+  it('C11: a held digit key paints once, not on every repeat', async () => {
+    const brush = await p.locator(`${SWATCH}[aria-pressed=true]`).getAttribute('data-key')
+    const was = (await paintedKeys(p))['6']
+    await keyboardFocus(p, p.locator(DIGIT(7)))
+    await p.keyboard.down('6')
+    await p.keyboard.down('6')
+    await p.keyboard.down('6')
+    await p.keyboard.up('6')
+    const once = was === brush ? '' : brush
+    assert.equal(await settle(async () => (await paintedKeys(p))['6'], once), once)
+    await p.keyboard.press('6')
+    assert.equal(await settle(async () => (await paintedKeys(p))['6'], was), was)
   })
 
   it('C11: typing a digit in the name field paints nothing', async () => {

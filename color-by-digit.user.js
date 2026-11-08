@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Color by Digit
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.23.2
+// @version      0.23.3
 // @description  Colors cells, or the digits and marks in them, by digit, with colors you give to groups of digits, and keeps the colors in step as you solve.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.23.2'
+  const VERSION = '0.23.3'
   // The groups saved before profiles existed. Read when no profiles are saved; never written or removed.
   const LEGACY_GROUPS_KEY = 'ColorByDigit_groups'
   // The profiles: { profiles: [{ name, groups }], active: index, digitActive?: index, useDigitColors?: false }.
@@ -910,8 +910,11 @@
       `font:${on ? 700 : 400} 9px/1 sans-serif;letter-spacing:.04em;white-space:nowrap;color:${on ? PURPLE : OFF_WORD_GREY}">${MODE_NAMES[mode].toUpperCase()}</span>`
   }
 
+  // WCAG 2.2 SC 2.5.8: a target is at least this many px each way.
+  const MIN_TARGET_PX = 24
+  const ARROW_BOX_PX = 14
   const ARROW_BOX_HTML = '<span data-role="menu" role="button" aria-haspopup="menu" aria-label="Color by digit profiles" title="Profiles" ' +
-    'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:14px;height:14px;' +
+    'style="pointer-events:auto;position:absolute;right:-4px;bottom:-4px;box-sizing:border-box;width:' + ARROW_BOX_PX + 'px;height:' + ARROW_BOX_PX + 'px;' +
     `border:1.5px solid ${PURPLE};border-radius:3px;background:#fff;color:${PURPLE};font:700 7px/11px sans-serif;text-align:center">&#9660;</span>`
 
   const UNREADABLE_FILL = '#ccc'
@@ -1129,6 +1132,7 @@
   const TITLE_MUTED = '#777'
   const FOCUS_RING = '#6a1b9a'
   const CONTROL_HOVER = '#f3e5f5'
+  const SAVE_FILL = '#6b3fa0'
   // An inset layer darkens whatever fill the control has.
   const PRESS_LAYER = 'box-shadow: inset 0 0 0 100vmax rgb(0 0 0 / .1)'
   const STATUS_ATTRIBUTE = 'data-role="settings-status"'
@@ -1220,9 +1224,9 @@
     return [
       `${row} { display: flex !important; flex-direction: row !important; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; border-top: 1px solid #e3dff0; padding: 14px 4px 2px; margin-top: 8px; box-sizing: border-box; width: 100%; }`,
       `${row} button { background: #f1eff5 !important; color: #333 !important; border: 1px solid #cfc9db !important; border-radius: 8px !important; font-size: 1rem !important; padding: 0 22px !important; height: 38px !important; line-height: 36px !important; margin: 0 !important; width: auto !important; min-width: 0 !important; flex: none; cursor: pointer; }`,
-      `${row} button[data-role="save"] { background: #6b3fa0 !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
+      `${row} button[data-role="save"] { background: ${SAVE_FILL} !important; color: #fff !important; border: 1px solid #5a3489 !important; font-weight: 600; }`,
       `${row} button:hover { background: ${CONTROL_HOVER} !important; }`,
-      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: #6b3fa0 !important; }`,
+      `${row} button[data-role="save"]:hover { background: ${CONTROL_HOVER} !important; color: ${SAVE_FILL} !important; }`,
       `${row} button:active { ${PRESS_LAYER} !important; }`,
       `${row} button:focus-visible { outline: 2px solid ${FOCUS_RING}; outline-offset: 2px; }`
     ].join('\n')
@@ -1426,11 +1430,11 @@
     [`${EDITOR} [data-role="swatch"][aria-pressed="true"]:focus-visible::after`, `content: ''; position: absolute; inset: -7px; border: 2px solid ${FOCUS_RING}; border-radius: 9px; pointer-events: none`],
     [`${EDITOR} .cbd-button:hover`, `background: ${CONTROL_HOVER}`],
     [`${EDITOR} [data-act="digit"]:not([style]):hover`, `background: ${CONTROL_HOVER}`],
-    [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${FOCUS_RING}`],
-    [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${FOCUS_RING}`],
+    [`${EDITOR} [data-act="digit"]:hover`, `box-shadow: inset 0 0 0 2px ${PURPLE}`],
+    [`${EDITOR} [data-role="swatch"]:not([data-empty]):hover`, `box-shadow: 0 0 0 2px ${PURPLE}`],
     [`${EDITOR} .cbd-button:active, ${EDITOR} [data-act="digit"]:active, ${EDITOR} [data-role="swatch"]:not([data-empty]):active`, PRESS_LAYER],
     // At least 24 px each way (WCAG 2.2 SC 2.5.8).
-    [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, 'display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; box-sizing: border-box'],
+    [`${EDITOR} [data-act="delete"], ${EDITOR} [data-role="handle"]`, `display: inline-flex; align-items: center; justify-content: center; min-width: ${MIN_TARGET_PX}px; min-height: ${MIN_TARGET_PX}px; box-sizing: border-box`],
     // The handle holds the pointer capture, so its cursor shows wherever the pointer goes; every element has its own, so it is forced.
     [`${EDITOR}.cbd-dragging *`, 'cursor: grabbing !important']
   ].map(([selector, declarations]) => `${selector} {\n  ${declarations.split('; ').join(';\n  ')};\n}`).join('\n') + '\n' + colorBlockCss(CLASS_PREFIX, EDITOR)
@@ -1835,7 +1839,8 @@
       needs: { 'Framework.getApp': 'function', 'app.puzzle.cells': 'array', 'app.puzzle.addEventListener': 'function' }
     }
   }
-  const BUTTON_SELECTOR = '#control-colorbydigit'
+  const BUTTON = '#control-colorbydigit'
+  const ARROW = `${BUTTON} [data-role="menu"]`
   const PRESSED_CLASS = 'cbd-pressed'
   const DRAGGING_CLASS = 'cbd-dragging'
   // The digit grid and the swatch grid; a slot that is no button is an empty cell of the layout.
@@ -1844,8 +1849,8 @@
   // The pressed look is a class, set on pointerdown: the button's `mousedown` is cancelled, and an engine may then drop `:active`.
   // The arrow's ::after widens its 14 px box to 24 px, outward over the button's corner (WCAG 2.2 SC 2.5.8).
   const BUTTON_CSS = [
-    `${BUTTON_SELECTOR}.${PRESSED_CLASS} { ${PRESS_LAYER} !important; }`,
-    `${BUTTON_SELECTOR} [data-role="menu"]::after { content: ''; position: absolute; inset: -5px; }`
+    `${BUTTON}.${PRESSED_CLASS} { ${PRESS_LAYER} !important; }`,
+    `${ARROW}::after { content: ''; position: absolute; inset: -${(MIN_TARGET_PX - ARROW_BOX_PX) / 2}px; }`
   ].join('\n')
   const BUTTON_STYLE_ID = 'color-by-digit-button'
   const guard = createGuard({ script: 'color-by-digit', name: 'Color by Digit', version: VERSION, features: FEATURES })
@@ -1942,8 +1947,6 @@
 
   let mode = 'off'
 
-  const BUTTON = BUTTON_SELECTOR
-  const ARROW = `${BUTTON} [data-role="menu"]`
   // Loading progress resets the board, so a pass before it would be wiped.
   // With the wait off there is nothing to wait for, so `fn` runs at once.
   function whenProgressLoaded (app, fn) {
@@ -2380,6 +2383,8 @@
       } else if (/^[0-9]$/.test(event.key)) {
         event.preventDefault()
         event.stopPropagation()
+        // A held key repeats, and each repeat would toggle the paint again.
+        if (event.repeat) return
         edit({ type: 'key-paint', digit: event.key })
         draw()
         focusDigitKey(event.key)
