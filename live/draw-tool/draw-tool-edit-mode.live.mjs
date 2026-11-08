@@ -15,7 +15,7 @@ before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
 for (const viewport of [{ width: 1280, height: 720 }, { width: 1600, height: 900 }]) {
-  describe(`Text Annotation's edit mode at ${viewport.width}x${viewport.height}`, { concurrency: false }, () => {
+  describe(`Text Anywhere's edit mode at ${viewport.width}x${viewport.height}`, { concurrency: false }, () => {
     let context, p
 
     before(async () => {

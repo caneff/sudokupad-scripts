@@ -21,7 +21,7 @@ const read = (p, fn, arg) => p.evaluate(fn, arg)
 const savedColors = (p) => read(p, (key) => Framework.getData(key) ?? null, COLORS_KEY)
 const dialogColors = (p) => p.locator(`${EDITOR} input[type=color]`).evaluateAll((inputs) => Object.fromEntries(inputs.map((i) => [i.dataset.key, i.value])))
 
-describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
+describe('Text Anywhere\'s settings dialog', { concurrency: false }, () => {
   let context, p, errors
   before(async () => {
     ;({ context, p, errors } = await open())
@@ -30,8 +30,8 @@ describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
   after(async () => { await context.close() })
 
   it('the Experimental settings entry opens it, with the version from the script header beside the heading', async () => {
-    await openScriptDialog(p, 'Text Annotation', EDITOR)
-    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Text Annotation')
+    await openScriptDialog(p, 'Text Anywhere', EDITOR)
+    assert.equal((await p.locator('.dialog b').first().textContent()).trim(), 'Text Anywhere')
     assert.equal((await p.locator('.dialog small').textContent()).trim(), `v${headerVersion(script)}`)
     assert.equal(await p.locator(`${EDITOR} input[type=color]`).count(), 9)
     await closeDialogWith(p, 'Cancel', EDITOR)
@@ -132,7 +132,7 @@ describe('Text Annotation\'s settings dialog', { concurrency: false }, () => {
     }
   })
 
-  it('saved colors that cannot be read are left as they are when Text Annotation is first made current, a bad color showing SudokuPad\'s', async () => {
+  it('saved colors that cannot be read are left as they are when Text Anywhere is first made current, a bad color showing SudokuPad\'s', async () => {
     const bad = { 1: 'red', 4: '#123456' }
     const other = await open()
     try {

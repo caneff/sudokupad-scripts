@@ -11,7 +11,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation, injected after Start Puzzle', { concurrency: false }, () => {
+describe('Text Anywhere, injected after Start Puzzle', { concurrency: false }, () => {
   let context, p, errors
 
   const tool = () => toolOf(p)
@@ -26,10 +26,10 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
   })
   after(async () => { await context.close() })
 
-  it('the Text Annotation button sits among the tool buttons, and picking it makes it the current tool', async () => {
+  it('the Text Anywhere button sits among the tool buttons, and picking it makes it the current tool', async () => {
     assert.equal(await p.locator(`.controls-tool ${DRAW_BUTTON}`).count(), 1)
     assert.equal(await p.locator(DRAW_BUTTON).textContent(), 'Text')
-    assert.equal(await p.locator(DRAW_BUTTON).getAttribute('title'), 'Text Annotation')
+    assert.equal(await p.locator(DRAW_BUTTON).getAttribute('title'), 'Text Anywhere')
     assert.equal(await pickDraw(), 'draw')
   })
 
@@ -76,7 +76,7 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
     assert.equal(await selected(), 0, 'no cell selected')
   })
 
-  it('Shift held with a drag stays in Text Annotation and selects no cell', async () => {
+  it('Shift held with a drag stays in Text Anywhere and selects no cell', async () => {
     await p.keyboard.down('Shift')
     await mouseDrag(p, [[7.5, 1.5], [7.5, 4]])
     await p.keyboard.up('Shift')
@@ -106,7 +106,7 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
     assert.deepEqual(await texts(p), ['15'], 'no note was made')
   })
 
-  it('the note takes the pointer only while Text Annotation is current, and shows the board\'s cursor', async () => {
+  it('the note takes the pointer only while Text Anywhere is current, and shows the board\'s cursor', async () => {
     const underNoteMiddle = () => p.evaluate((selector) => {
       const note = document.querySelector(selector)
       const { x, y, width, height } = note.getBoundingClientRect()
@@ -127,7 +127,7 @@ describe('Text Annotation, injected after Start Puzzle', { concurrency: false },
 })
 
 // Test Markup is SudokuPad's own Experimental freehand drawing, on a fabric.js canvas over the page while M is held.
-describe('Text Annotation with SudokuPad\'s Test Markup turned on', { concurrency: false }, () => {
+describe('Text Anywhere with SudokuPad\'s Test Markup turned on', { concurrency: false }, () => {
   let context, p, errors
 
   const markupDrawing = () => p.evaluate(() => Framework.features.markup.fabcan.isDrawingMode)
@@ -154,7 +154,7 @@ describe('Text Annotation with SudokuPad\'s Test Markup turned on', { concurrenc
     assert.deepEqual(await texts(p), [])
   })
 
-  it('holding M with Text Annotation current draws with Test Markup, not a note, and its release ends it', async () => {
+  it('holding M with Text Anywhere current draws with Test Markup, not a note, and its release ends it', async () => {
     await p.keyboard.down('m')
     assert.equal(await settle(markupDrawing, true), true)
     await mouseDrag(p, [[5.5, 1.5], [6, 3], [5.5, 4.5]])

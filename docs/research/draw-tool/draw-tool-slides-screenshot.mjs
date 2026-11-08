@@ -1,13 +1,9 @@
-// Takes the nine slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
+// Takes the five slides of Text Annotation's slideshow on site/index.html, each the board patch beside the Text Annotation panel, from the real draw-tool.user.js on the recorded puzzle, with no caption drawn in.
 // The notes are what a solver writes: short remarks beside the grid, in the margin above it, or small on a cell's corner or edge, never one digit and never centered in a cell (the script checks both).
 //   draw-tool-slide-1-type.png        a remark typed beside row 2, with markdown
-//   draw-tool-slide-2-size.png        the Size slider dragged up between two notes: a small note beside the grid and a large one above it
 //   draw-tool-slide-3-background.png  the Background button on: a note in a page-colored box over the digits, beside one made with it off
-//   draw-tool-slide-4-colors.png      a hold on a color button: a picker over each color, one recolored, and the note in it recolored too
-//   draw-tool-slide-5-move.png        a note dragged off the grid to above it, its old place dashed, a ring on the point it is held by
 //   draw-tool-slide-6-select.png      three notes selected by a drag on empty space, the dragged box dashed, and recolored together from the panel
-//   draw-tool-slide-7-erase.png       the pointer on a note with a red ring round it, where a right click erases it
-//   draw-tool-slide-8-erased.png      the same board after the right click: the note gone
+//   draw-tool-slide-7-erase.png       the pointer on a note with a red ring round it, where a right click erases it (the click follows the shot and must erase the note)
 //   draw-tool-slide-9-long.png        a two-line note open for typing, made smaller with its bottom right handle of four, its text wrapped and scrolled, the scroll bar under the pointer
 // Every note is typed with real clicks and keys. It fails when a step does not land; each slide is written as soon as it is taken, so a failed run leaves the earlier slides replaced.
 // Run from the repo root with Playwright's Chromium installed:
@@ -22,8 +18,6 @@ const DRAG_STEPS = 10
 // The picture's size, and its top left in cells from the grid's top left: it takes in the margin above the grid and the room beside it, down to the panel's bottom.
 const CLIP_SIZE = [1000, 625]
 const CLIP_CORNER = [2.3, -0.95]
-// SudokuPad's own number: how long the script holds a color button before it shows the pickers, plus slack.
-const HOLD_MS = 1300
 const GREEN = 1
 const ORANGE = 3
 const RED = 4
@@ -127,17 +121,6 @@ const BESIDE_ROW_2 = [1.3, 11.2]
   await s.shoot('1-type')
 }
 
-// 2: the Size slider dragged up between two notes: a small one beside row 2, a large one in the margin above the grid.
-{
-  const s = await scene()
-  await s.pick(BLUE, 20)
-  await s.note(BESIDE_ROW_2, 'r2: 3 must be in c7-9')
-  await s.pickSize(32)
-  await s.note([-0.5, 5.6], '*X-wing* on 6')
-  await s.p.mouse.move(0, 0)
-  await s.shoot('2-size')
-}
-
 // 3: one note made with Background off, one with it on, both over digits and on cell edges.
 {
   const s = await scene()
@@ -149,47 +132,6 @@ const BESIDE_ROW_2 = [1.3, 11.2]
   if ((await s.p.locator('#draw-tool-layer .draw-tool-text-bg').count()) !== 1) throw new Error('only the second note should have a box')
   await s.p.mouse.move(0, 0)
   await s.shoot('3-background')
-}
-
-// 4: a note in color 3, then a hold on a color button puts a picker over each color, and color 3 is changed in its picker.
-{
-  const s = await scene()
-  await s.pick(ORANGE, 26)
-  await s.note([2.5, 5.0], '**not** 5 (box 6)')
-  await s.p.mouse.move(...await s.p.locator('.controls-input button[data-key="2"]').evaluate((b) => { const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2] }))
-  await s.p.mouse.down()
-  await s.p.waitForTimeout(HOLD_MS)
-  await s.p.mouse.up()
-  const pickers = '.draw-tool-picker input[type=color]'
-  if ((await s.p.locator(pickers).count()) !== 9) throw new Error('the hold did not show nine pickers')
-  await s.p.locator(`.draw-tool-picker input[data-key="${ORANGE}"]`).fill('#0d8f8f')
-  await s.p.mouse.move(0, 0)
-  const note = await s.p.locator(NOTES).first().evaluate((el) => getComputedStyle(el).color)
-  if (note !== 'rgb(13, 143, 143)') throw new Error(`the note did not take the new color: ${note}`)
-  await s.shoot('4-colors')
-}
-
-// 5: a note dragged by its middle off the grid, into the margin above it; the old place is a dashed gray box and a ring marks where the pointer holds it.
-{
-  const s = await scene()
-  await s.pick(ORANGE, 26)
-  const FROM = [5.2, 6.4]
-  const TO = [-0.55, 7.4]
-  await s.note(FROM, 'cage = 17')
-  const text = s.p.locator(NOTES)
-  const placed = await text.boundingBox()
-  await s.p.mouse.move(...s.at(FROM))
-  await s.p.mouse.down()
-  await s.p.mouse.move(...s.at(TO), { steps: DRAG_STEPS })
-  await s.p.mouse.up()
-  const moved = await text.boundingBox()
-  if ((await text.count()) !== 1 || Math.abs(moved.y - placed.y) < 10) throw new Error('the drag did not leave one moved note')
-  const stored = await storedNotes(s.p)
-  if (!stored[0].fixed) throw new Error(`the note was not stored off the board: ${JSON.stringify(stored)}`)
-  await addDashedBox(s.p, { x: placed.x - 4, y: placed.y - 3, width: placed.width + 8, height: placed.height + 6 })
-  await addRing(s.p, s.at(TO), 60)
-  await s.p.mouse.move(0, 0)
-  await s.shoot('5-move')
 }
 
 // 6: three orange notes selected by a drag that starts on empty space, then recolored blue with one click on a color button; the dragged box is drawn dashed gray where it was.
@@ -233,10 +175,7 @@ const BESIDE_ROW_2 = [1.3, 11.2]
   await s.shoot('7-erase', { keepOpen: true })
   await s.p.mouse.click(x, y, { button: 'right' })
   if ((await s.items()) !== 0) throw new Error('the right click did not erase the note')
-  // 8: the ring and the pointer taken off, the note gone.
-  await s.p.evaluate(() => { for (const el of document.querySelectorAll('body > div[style*="z-index:9999"]')) el.remove() })
-  await s.p.mouse.move(0, 0)
-  await s.shoot('8-erased')
+  await s.p.close()
 }
 
 // 9: a two-line note with a background box, open for typing, dragged smaller by its bottom right corner handle, with a handle on each of its four corners, so its text wraps and scrolls; a ring marks the dragged handle and the pointer rests on the note.

@@ -21,7 +21,7 @@ let browser
 before(async () => { browser = await chromium.launch() })
 after(async () => { await browser?.close() })
 
-describe('Text Annotation\'s Outline setting', { concurrency: false }, () => {
+describe('Text Anywhere\'s Outline setting', { concurrency: false }, () => {
   let context, p, errors
 
   const stored = (page, name) => page.evaluate((k) => Framework.getData(k) ?? null, name)
