@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Dark Page
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.5.4
+// @version      0.5.5
 // @description  Makes the page black around the puzzle, or another color chosen in a settings dialog, with dark control buttons on a dark page. Puzzle colors stay as intended, unlike SudokuPad's dark mode.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.5.4'
+  const VERSION = '0.5.5'
   const STYLE_ID = 'dark-page-style'
   const BOARD_ID = 'svgrenderer'
   // The page color and every other rule apply only while a board is on the page; a page with none keeps its own colors.
@@ -369,6 +369,8 @@
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
+  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
+  const NOTICE_COLOR = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
@@ -415,23 +417,35 @@
   }
 
   const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
-  const noticeBarCss = (color) => `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${color}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
   // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
-  function createGuard ({ script, name, version, color, features }) {
-    const off = []
+  function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
 
     const dismissKey = `${script}-notice`
-    // A store with no getData or setData (a SudokuPad that changed) cannot remember a dismissal, so it holds for this page load only.
+    // A dismissal is saved only under a SudokuPad version read from the page: one saved with none would match every later version that
+    // also has none. A store with no getData or setData (a SudokuPad that changed), or one that throws (a frame with storage blocked),
+    // cannot save one either. Without a save, a dismissal holds for this page load only.
     const dismissedHere = []
+    let storeFailed = false
+    const savesDismissals = () => !storeFailed && page.sudokupad !== null && typeof page.store.getData === 'function' && typeof page.store.setData === 'function'
+    function useStore (fn) {
+      try {
+        return fn()
+      } catch (error) {
+        storeFailed = true
+        console.warn(`${script}: a dismissal of the notice bar cannot be saved, so it holds for this page load only:`, error)
+        return null
+      }
+    }
     const dismissed = () => {
-      const saved = typeof page.store.getData === 'function' ? page.store.getData(dismissKey) : null
+      const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
@@ -452,7 +466,7 @@
       }
       bar = doc.createElement('div')
       bar.setAttribute('data-script', script)
-      bar.style.cssText = noticeBarCss(color)
+      bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
       text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
       const link = doc.createElement('a')
@@ -469,7 +483,7 @@
       dismiss.style.cssText = NOTICE_DISMISS_CSS
       dismiss.addEventListener('click', () => {
         dismissedHere.push(...shown.map((reason) => reason.name))
-        if (typeof page.store.setData === 'function') page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() })
+        if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
         showNotice()
       })
       bar.append(text, link, dismiss)
@@ -483,7 +497,6 @@
         skip (why, installed = true) {
           if (feature.off) return
           feature.off = true
-          off.push(label)
           reasons.push({ name: featureName, label, why })
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
@@ -550,15 +563,17 @@
       showNotice()
     }
 
-    return { features: guarded, off, probe }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
+  // The saved color is read before the first paint, with no need of the app; the settings entry is added once `Framework.getApp` says the app is ready.
   const FEATURES = {
     savedColor: { label: 'saved color', needs: { 'Framework.getData': 'function' } },
     settings: {
       label: 'settings entry',
       needs: {
+        'Framework.getApp': 'function',
         'Framework.addSetting': 'function',
         'Framework.showDialog': 'function',
         'Framework.closeDialog': 'function',
@@ -567,8 +582,8 @@
       }
     }
   }
-  const guard = createGuard({ script: 'dark-page', name: 'Dark Page', version: VERSION, color: '#4a148c', features: FEATURES })
-  const steps = guard.features
+  const guard = createGuard({ script: 'dark-page', name: 'Dark Page', version: VERSION, features: FEATURES })
+  const { savedColor: savedPageColor, settings: settingsEntry } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, READERS, DATA_KEY, copiedSettings, pastedSettings, pasteReport, DEFAULT_COLOR, readSaved, textColorFor, savedColor, buildCss, BOARD, BOARD_ID, STYLE_ID, lackingInternals, FEATURES }
@@ -576,10 +591,11 @@
   if (typeof document === 'undefined') return
 
   // Read before the first paint so a saved color never shows the default first; Framework.getData
-  // works as soon as Framework exists, before the app is ready. A page that cannot read it (a frame
-  // with storage blocked) still gets the default darkening, which needs no Framework.
-  if (typeof Framework !== 'undefined') lackingInternals(FEATURES, { Framework }).forEach((names, missing) => names.forEach((name) => steps[name].skip(missing, false)))
-  let pageColor = (typeof Framework === 'undefined' ? null : steps.savedColor.run(() => readSaved(Framework), () => null)) || DEFAULT_COLOR
+  // works as soon as Framework exists, before the app is ready, and so does the probe, as each internal
+  // here is Framework's own. A page that cannot read it (a frame with storage blocked) still gets the
+  // default darkening, which needs no Framework.
+  if (typeof Framework !== 'undefined') guard.probe({ roots: { Framework }, store: Framework })
+  let pageColor = (typeof Framework === 'undefined' ? null : savedPageColor.run(() => readSaved(Framework), () => null)) || DEFAULT_COLOR
 
   const style = document.createElement('style')
   style.id = STYLE_ID
@@ -596,16 +612,24 @@
 
   const CLASS_PREFIX = 'dark-page-'
   const DIALOG_ID = 'dark-page-dialog'
+  // What the settings entry and dialog are handed in place of Framework: the dialog's close runs under the settings entry when a button is pressed.
+  const dialogs = {
+    addSetting: (setting) => Framework.addSetting(setting),
+    showDialog: (options) => Framework.showDialog(options),
+    closeDialog: () => settingsEntry.run(() => Framework.closeDialog())
+  }
+  // A copy or paste with its feature off says so in the dialog's status line.
+  const offNow = (feature) => () => { throw new Error(`the ${FEATURES[feature].label} is off`) }
 
   function openDialog () {
     let picked = pageColor
-    const body = showSettingsDialog(Framework, {
+    const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Dark Page',
       version: VERSION,
       bodyId: DIALOG_ID,
       changed: () => picked !== pageColor,
-      save: () => steps.settings.run(() => saveColor(picked))
+      save: () => settingsEntry.run(() => saveColor(picked))
     })
     if (!body) return
     body.innerHTML = '<div style="margin:6px 0;display:flex;align-items:center;gap:8px">' +
@@ -615,12 +639,13 @@
     const reset = document.getElementById('dark-page-reset')
     // `input` fires while the picker moves.
     input.addEventListener('input', () => { picked = input.value.toLowerCase() })
-    wireCopyPaste(body.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
+    const copied = () => savedPageColor.run(() => copiedSettings(Framework), offNow('savedColor'))
+    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS }, (values) => settingsEntry.run(() => {
       if (!(DATA_KEY in values)) return
       picked = values[DATA_KEY]
       input.value = picked
       saveColor(picked)
-    })
+    }, offNow('settings')))
     reset.addEventListener('click', (event) => {
       event.preventDefault()
       event.stopPropagation()
@@ -632,12 +657,7 @@
   // The match also covers other crackingthecryptic.com pages, which have no Framework and keep the
   // default color.
   if (typeof Framework === 'undefined') return
-  if (!Framework.getApp) {
-    console.warn('dark-page: SudokuPad\'s Framework has no getApp, so the settings entry was skipped')
-    return
-  }
-  Framework.getApp().then(() => {
-    guard.probe({ roots: { Framework }, store: Framework })
-    steps.settings.run(() => addSettingsEntry(Framework, { name: 'darkpage', content: 'Dark Page', open: () => steps.settings.run(openDialog) }))
-  })
+  settingsEntry.run(() => Framework.getApp().then(() => {
+    settingsEntry.run(() => addSettingsEntry(dialogs, { name: 'darkpage', content: 'Dark Page', open: () => settingsEntry.run(openDialog) }))
+  }))
 })()

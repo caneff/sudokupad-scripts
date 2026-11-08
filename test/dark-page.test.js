@@ -118,13 +118,25 @@ test('VERSION is the @version in the script header', () => {
   assert.equal(VERSION, headerVersion(fs.readFileSync(path.join(__dirname, '..', 'dark-page.user.js'), 'utf8')))
 })
 
-// Starts the script on a page that has a document with a head, with `framework` as the page's Framework, or none.
+// Starts the script on a page that has a document with a head and a body, with `framework` as the page's Framework, or none.
+// `appended` is what went in the head; `bar` is the text of the notice bar, or null for none.
 function startOnBoard (framework) {
   const file = require.resolve('../dark-page.user.js')
   const appended = []
-  const element = () => ({})
+  const inBody = []
+  const element = () => {
+    const el = { style: {}, children: [], textContent: '', attributes: {}, setAttribute (name, value) { el.attributes[name] = value }, addEventListener () {}, append (...kids) { el.children.push(...kids) }, remove () { el.removed = true } }
+    return el
+  }
+  const textOf = (el) => el.textContent + el.children.map(textOf).join('')
   const saved = { document: global.document, window: global.window, Framework: global.Framework }
-  global.document = { createElement: element, head: { appendChild: (el) => appended.push(el) } }
+  global.document = {
+    createElement: element,
+    head: { appendChild: (el) => appended.push(el) },
+    body: { append: (el) => inBody.push(el) },
+    documentElement: { outerHTML: '<script src="/script.js?v=0.611.0"></script>' },
+    getElementById: () => null
+  }
   global.window = {}
   delete global.Framework
   if (framework) global.Framework = framework
@@ -142,7 +154,8 @@ function startOnBoard (framework) {
     }
     delete require.cache[file]
   }
-  return { warnings, style: appended.find((el) => el.id === 'dark-page-style'), appended }
+  const [bar] = inBody.flatMap((host) => host.children).filter((el) => el.attributes['data-script'] === 'dark-page' && !el.removed)
+  return { warnings, style: appended.find((el) => el.id === 'dark-page-style'), appended, bar: bar ? textOf(bar) : null }
 }
 
 function assertDarkens ({ style, appended }) {
@@ -150,16 +163,24 @@ function assertDarkens ({ style, appended }) {
   assert.deepEqual(appended, [style], 'the stylesheet is all the script puts on the page')
 }
 
-test('a Framework without getApp warns that the settings entry was skipped, and the page still darkens', () => {
-  const page = startOnBoard({})
-  assert.equal(page.warnings.length, 1)
-  assert.match(page.warnings[0], /^dark-page: .*getApp/)
+test('a Framework without getApp turns the settings entry off with one warning and the bar, and the page still darkens', () => {
+  const page = startOnBoard({ getData: () => null })
+  assert.deepEqual(page.warnings, ['dark-page: settings entry skipped because SudokuPad has no Framework.getApp'])
+  assert.match(page.bar, /^Dark Page: settings entry is off — SudokuPad changed\.Report/)
+  assertDarkens(page)
+})
+
+test('a Framework whose getData throws (a frame with storage blocked) turns the saved color off, and the page darkens in the default', () => {
+  const page = startOnBoard({ getData () { throw new Error('storage blocked') } })
+  assert.deepEqual(page.warnings.filter((warning) => warning.includes('saved color')), ['dark-page: saved color skipped because SudokuPad changed: Error: storage blocked'])
+  assert.match(page.bar, /^Dark Page: settings entry, saved color are off/)
   assertDarkens(page)
 })
 
 test('a page with no Framework at all darkens without a warning', () => {
   const page = startOnBoard()
   assert.deepEqual(page.warnings, [])
+  assert.equal(page.bar, null)
   assertDarkens(page)
 })
 
@@ -180,14 +201,14 @@ test('pastedSettings: text with none of this script\'s keys pastes and skips not
 })
 
 // A SudokuPad with every internal Dark Page needs.
-const completeFramework = () => ({ Framework: { getData () {}, addSetting () {}, showDialog () {}, closeDialog () {}, setData () {}, removeData () {} } })
+const completeFramework = () => ({ Framework: { getApp () {}, getData () {}, addSetting () {}, showDialog () {}, closeDialog () {}, setData () {}, removeData () {} } })
 
 test('Dark Page declares each SudokuPad internal it calls, and a complete SudokuPad lacks none', () => {
   assert.deepEqual(lackingInternals(FEATURES, completeFramework()), new Map())
 })
 
 test('without one internal, only the feature that needs it is lacking', () => {
-  for (const [internal, feature] of [['getData', 'savedColor'], ['addSetting', 'settings'], ['showDialog', 'settings'], ['closeDialog', 'settings'], ['setData', 'settings'], ['removeData', 'settings']]) {
+  for (const [internal, feature] of [['getData', 'savedColor'], ['getApp', 'settings'], ['addSetting', 'settings'], ['showDialog', 'settings'], ['closeDialog', 'settings'], ['setData', 'settings'], ['removeData', 'settings']]) {
     const roots = completeFramework()
     delete roots.Framework[internal]
     assert.deepEqual(lackingInternals(FEATURES, roots), new Map([[`Framework.${internal}`, [feature]]]), internal)

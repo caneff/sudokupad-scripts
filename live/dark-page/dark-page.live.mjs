@@ -523,8 +523,8 @@ describe('a page with no puzzle', () => {
 })
 
 // A SudokuPad internal missing before the script loads turns off that feature alone: the console names it once, the bar at the bottom of
-// the page names it with a Report link, and the page is still dark. The snippet runs ahead of the script's own startup check and puts the
-// internal back after it.
+// the page names it with a Report link, and the page is still dark. Dark Page checks its internals as it loads, so the snippet takes the
+// internal away just before the script, and puts it back once the app is ready, after that check.
 describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => {
   let context, p, errors
   const warned = []
@@ -537,7 +537,7 @@ describe('SudokuPad has no Framework.addSetting', { concurrency: false }, () => 
     }))
     await startPuzzle(p)
     const breaks = 'const original = Framework.addSetting; Framework.addSetting = undefined; Framework.getApp().then(() => { Framework.addSetting = original })'
-    await p.addScriptTag({ content: `;Framework.getApp().then(() => { ${breaks} });\n${script}` })
+    await p.addScriptTag({ content: `;{ ${breaks} }\n${script}` })
     await p.locator(STYLE).waitFor({ state: 'attached' })
   })
   after(async () => { await context.close() })

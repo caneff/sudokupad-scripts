@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Pen Tool Extras
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      1.27.8
+// @version      1.27.9
 // @description  Adds to SudokuPad's pen tool: customizable pen colors, dashed and arrow lines, and marks on cell edges and grid corners. Turn the pen tool on in SudokuPad's settings first.
 // @homepageURL  https://caneff.github.io/sudokupad-scripts/pen-tool-extras.html
 // @match        https://sudokupad.app/*
@@ -19,9 +19,9 @@
 (function () {
   'use strict'
 
-  // 1. Core: the settings table, the install step guard, the style writer and shared constants
+  // 1. Core: the settings table, the install steps, the style writer and shared constants
   // The script cannot read its own header (GM_info is absent without Tampermonkey), so @version is repeated here.
-  const VERSION = '1.27.8'
+  const VERSION = '1.27.9'
   const STYLE_ID = 'pen-tool-extras-style'
   const GRID_SELECTOR = '#svgrenderer'
   const PEN_LAYER = '#cell-pen'
@@ -59,6 +59,8 @@
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
+  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
+  const NOTICE_COLOR = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
@@ -105,23 +107,35 @@
   }
 
   const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
-  const noticeBarCss = (color) => `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${color}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
   // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
-  function createGuard ({ script, name, version, color, features }) {
-    const off = []
+  function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
 
     const dismissKey = `${script}-notice`
-    // A store with no getData or setData (a SudokuPad that changed) cannot remember a dismissal, so it holds for this page load only.
+    // A dismissal is saved only under a SudokuPad version read from the page: one saved with none would match every later version that
+    // also has none. A store with no getData or setData (a SudokuPad that changed), or one that throws (a frame with storage blocked),
+    // cannot save one either. Without a save, a dismissal holds for this page load only.
     const dismissedHere = []
+    let storeFailed = false
+    const savesDismissals = () => !storeFailed && page.sudokupad !== null && typeof page.store.getData === 'function' && typeof page.store.setData === 'function'
+    function useStore (fn) {
+      try {
+        return fn()
+      } catch (error) {
+        storeFailed = true
+        console.warn(`${script}: a dismissal of the notice bar cannot be saved, so it holds for this page load only:`, error)
+        return null
+      }
+    }
     const dismissed = () => {
-      const saved = typeof page.store.getData === 'function' ? page.store.getData(dismissKey) : null
+      const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
@@ -142,7 +156,7 @@
       }
       bar = doc.createElement('div')
       bar.setAttribute('data-script', script)
-      bar.style.cssText = noticeBarCss(color)
+      bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
       text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
       const link = doc.createElement('a')
@@ -159,7 +173,7 @@
       dismiss.style.cssText = NOTICE_DISMISS_CSS
       dismiss.addEventListener('click', () => {
         dismissedHere.push(...shown.map((reason) => reason.name))
-        if (typeof page.store.setData === 'function') page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() })
+        if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
         showNotice()
       })
       bar.append(text, link, dismiss)
@@ -173,7 +187,6 @@
         skip (why, installed = true) {
           if (feature.off) return
           feature.off = true
-          off.push(label)
           reasons.push({ name: featureName, label, why })
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
@@ -240,7 +253,7 @@
       showNotice()
     }
 
-    return { features: guarded, off, probe }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
@@ -370,13 +383,19 @@
   }
   const GRID_SIZE = { 'Framework.app.grid.getCell': 'function', 'Framework.app.grid.rows': 'integer', 'Framework.app.grid.cols': 'integer' }
   const CELLS = { 'Framework.app.puzzle.cells': 'array' }
-  // Each install step, with the SudokuPad internals it cannot work without.
+  // Each install step starts once `Framework.getApp` says the app is ready, so without it every one is off.
+  const APP = { 'Framework.getApp': 'function' }
+  // Each install step and the saved data and settings dialog, with the SudokuPad internals each cannot work without.
   const FEATURES = {
-    colors: { label: 'colors', needs: { 'Framework.app.tools.colour': 'object' } },
+    // Without these the settings and pen colors start from their defaults and nothing is kept.
+    saved: { label: 'saved settings', needs: { 'Framework.getData': 'function', 'Framework.setData': 'function', 'Framework.removeData': 'function' } },
+    // The dialog opens from SudokuPad's settings and from the pen panel's settings button.
+    settings: { label: 'settings dialog', needs: { 'Framework.addSetting': 'function', 'Framework.showDialog': 'function', 'Framework.closeDialog': 'function' } },
+    colors: { label: 'colors', needs: { ...APP, 'Framework.app.tools.colour': 'object' } },
     // With pen pages off the pad cannot turn back from page 2 or 3, so it and the pen go back to page 1.
     pages: {
       label: 'pen pages',
-      needs: { 'ToolPen.tool.setSelectedColor': 'function', 'ToolPen.tool.handleToolEnter': 'function', 'ToolPen.tool.handleToolExit': 'function' },
+      needs: { ...APP, 'ToolPen.tool.setSelectedColor': 'function', 'ToolPen.tool.handleToolEnter': 'function', 'ToolPen.tool.handleToolExit': 'function' },
       onSkip () {
         setPadPage(0)
         putStockPenBack()
@@ -385,12 +404,13 @@
     },
     arrowLines: {
       label: 'arrow lines',
-      needs: { 'Framework.app.svgRenderer.renderPen': 'function', 'Framework.app.svgRenderer.renderPart': 'function', ...PEN_ACTIONS, ...CELLS }
+      needs: { ...APP, 'Framework.app.svgRenderer.renderPen': 'function', 'Framework.app.svgRenderer.renderPart': 'function', ...PEN_ACTIONS, ...CELLS }
     },
-    dragHint: { label: 'drag highlight', needs: { 'ToolPen.tool.drawLineHint': 'function' } },
+    dragHint: { label: 'drag highlight', needs: { ...APP, 'ToolPen.tool.drawLineHint': 'function' } },
     marks: {
       label: 'marks',
       needs: {
+        ...APP,
         ...PEN_ACTIONS,
         'ToolPen.tool.getInputRc': 'function',
         ...GRID_SIZE,
@@ -403,7 +423,7 @@
     // `lineMode` is not on the tool on every page load, so the pulldown the sliders sit beside is what is watched (checkPanelRow).
     penPanel: {
       label: 'pen panel',
-      needs: { 'ToolPen.tool': 'object' },
+      needs: { ...APP, 'ToolPen.tool': 'object' },
       onSkip () {
         applyStyle()
         syncPenPanel()
@@ -411,7 +431,7 @@
     },
     lineErase: {
       label: 'line erase',
-      needs: { ...PEN_ACTIONS, 'ToolPen.tool.getInputRc': 'function', 'Framework.app.xyToRCExact': 'function', ...GRID_SIZE, ...CELLS }
+      needs: { ...APP, ...PEN_ACTIONS, 'ToolPen.tool.getInputRc': 'function', 'Framework.app.xyToRCExact': 'function', ...GRID_SIZE, ...CELLS }
     }
   }
   const inForce = settingDefaults()
@@ -459,7 +479,7 @@
 
   // The effects run with every new value in place, and the style is written once.
   function saveSettings (draft) {
-    const changed = saveChangedSettings(Framework, draft, inForce)
+    const changed = saveChangedSettings(savedData, draft, inForce)
     if (!changed.length) return
     effectsOf(changed).forEach((effect) => effect())
     applyStyle()
@@ -959,7 +979,7 @@
   }
 
   function saveColors (set, pickedPreset) {
-    Framework.setData(COLORS_KEY, storedPenColors(set))
+    savedData.setData(COLORS_KEY, storedPenColors(set))
     adoptColors(set, pickedPreset)
   }
 
@@ -1086,7 +1106,7 @@
       const pen = pageAfterSave(selectedPen(), inForce.lineStyles)
       if (pen === selectedPen()) return
       if (ToolPen.tool.active) ToolPen.tool.setSelectedColor(pen)
-      else Framework.setData(PEN_KEY, pen)
+      else savedData.setData(PEN_KEY, pen)
     })
     syncPenPanel()
   }
@@ -1163,14 +1183,14 @@
       if (page === -1) return stock(color)
       setPadPage(page)
       stock(pen)
-      Framework.setData('ToolPen_color', penNumber(pen))
-      Framework.setData(PEN_KEY, pen)
+      savedData.setData('ToolPen_color', penNumber(pen))
+      savedData.setData(PEN_KEY, pen)
       syncPenPanel()
     })
     // SudokuPad's own enter selects the saved color number through the wrapper above, which saves it as the
     // pen, so the saved pen is read first.
     steps.pages.wrap(tool, 'handleToolEnter', function (stock) {
-      const saved = pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY)))
+      const saved = pageAfterSavedPen(normalizePen(savedData.getData(PEN_KEY)))
       stock()
       restoreSelectedPen(saved)
     })
@@ -1198,7 +1218,7 @@
       if (event.deltaY === 0 || !hasPageToTurnTo() || !event.target.closest(`.${PAGE_BUTTON}`)) return
       turnPage(event.deltaY < 0 ? -1 : 1)
     }))
-    if (tool.active) restoreSelectedPen(pageAfterSavedPen(normalizePen(Framework.getData(PEN_KEY))))
+    if (tool.active) restoreSelectedPen(pageAfterSavedPen(normalizePen(savedData.getData(PEN_KEY))))
   }
 
   // 4. Dashed lines
@@ -2039,9 +2059,21 @@
   }
   /* eslint-enable no-unused-vars */
   // </lib:panel>
-  // Made here, after PANEL_COLOR: the install steps run only from startup on.
-  const guard = createGuard({ script: 'pen-tool-extras', name: 'Pen Tool Extras', version: VERSION, color: PANEL_COLOR, features: FEATURES })
+  const guard = createGuard({ script: 'pen-tool-extras', name: 'Pen Tool Extras', version: VERSION, features: FEATURES })
   const steps = guard.features
+  // The saved data is read and written only here: with the saved settings off nothing is read, so the defaults show, and nothing is kept.
+  const savedData = {
+    getData: (key) => steps.saved.run(() => Framework.getData(key), () => null),
+    setData: (key, value) => steps.saved.run(() => Framework.setData(key, value)),
+    removeData: (key) => steps.saved.run(() => Framework.removeData(key))
+  }
+  // What the settings entry and dialog are handed in place of Framework: the dialog's close runs under the settings dialog when a button is pressed.
+  const dialogs = {
+    addSetting: (setting) => Framework.addSetting(setting),
+    showDialog: (options) => Framework.showDialog(options),
+    closeDialog: () => steps.settings.run(() => Framework.closeDialog())
+  }
+  const openSettings = () => steps.settings.run(openDialog)
   const MODE_BUTTON = 'pen-tool-extras-mode'
   const SETTINGS_BUTTON = 'pen-tool-extras-settings'
   const SETTINGS_LABEL = 'Pen Tool Extras settings'
@@ -2109,7 +2141,7 @@
   // The saved mode: SudokuPad's pen tool holds its default until it first opens and reads the saved mode then, and with the pulldown hidden only the panel's button changes it.
   // It does not depend on the page support in `installPenPages`.
   function currentLineMode () {
-    return normalizeLineMode(Framework.getData(LINE_MODE_KEY))
+    return normalizeLineMode(savedData.getData(LINE_MODE_KEY))
   }
 
   // The button is rewritten only when the mode it shows changed, so the page's mutation watcher does not loop on it.
@@ -2128,7 +2160,7 @@
   // Saved where SudokuPad saves it, so its hidden pulldown, when the pen tool is on, shows it too.
   function applyLineMode (lineMode) {
     ToolPen.tool.lineMode = lineMode
-    Framework.setData(LINE_MODE_KEY, lineMode)
+    savedData.setData(LINE_MODE_KEY, lineMode)
     const select = document.querySelector(`${LINE_MODE_BOX} select`)
     if (select) select.value = lineMode
     syncPenPanel()
@@ -2193,7 +2225,7 @@
     // SudokuPad cancels the touch events on its panel buttons, which keeps the browser from sending the click after a tap, so a tap acts at `touchstart`. The click a
     // browser may still send after that tap must not act a second time.
     let tappedAt = -Infinity
-    const actions = [[MODE_BUTTON, () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))], [SETTINGS_BUTTON, openDialog]]
+    const actions = [[MODE_BUTTON, () => steps.penPanel.run(() => applyLineMode(nextLineMode(currentLineMode())))], [SETTINGS_BUTTON, openSettings]]
     window.addEventListener('touchstart', (event) => {
       const action = actions.find(([name]) => event.target.closest(`.${name}`))
       if (!action) return
@@ -2394,7 +2426,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       draft = { ...settingDefaults(), marks: draft.marks }
       if (!pickPreset(availablePresets()[0])) pickPreset(SUDOKUPAD_PRESET)
     }
-    box = showSettingsDialog(Framework, {
+    box = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Pen Tool Extras',
       version: VERSION,
@@ -2409,7 +2441,9 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     })
     if (!box) return
     draw()
-    wireCopyPaste(box.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
+    // A copy with the saved settings off says so in the dialog's status line, rather than copy the defaults as if they were saved.
+    const copied = () => steps.saved.run(() => copiedSettings(Framework), () => { throw new Error(`the ${FEATURES.saved.label} are off`) })
+    wireCopyPaste(box.closest('.dialog'), { copied, readers: READERS }, (values) => {
       const pasted = SETTING_NAMES.filter((name) => SETTINGS[name].key in values)
       const next = { ...inForce, ...Object.fromEntries(pasted.map((name) => [name, values[SETTINGS[name].key]])) }
       saveSettings(next)
@@ -2637,18 +2671,14 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { VERSION, READERS, copiedSettings, pastedSettings, pasteReport, SETTINGS, draftWithBox, slider, flag, flags, isPlainObject, isHexColor, inRange, settingDefaults, readSettings, changedSettings, saveSetting, saveChangedSettings, effectsOf, editedColors, readPenColors, storedPenColors, startupPenColors, PRESET_LABELS, parseColor, darkenColor, buildCss, buildThicknessCss, buildOpacityCss, buildOutlineCss, renderOutlineFilter, OUTLINE_FILTER_ID, OUTLINE_WIDTH, ARROW_SPACING, enabledPages, stepEnabledPage, pageAfterSave, MARK_VALUES, MARKS_LAYER_ID, PEN_PAGES, LINE_VALUES, directionCharOf, arrowLineWayOf, ARROW_LINE, lineSegment, splitLineActs, linePoints, lineIdentityOf, segmentNear, connectedLine, eraseActs, LINE_HIT_RADIUS, arrowLine, penPageOf, penNumber, penCharOn, normalizePen, wrapIndex, normalizeLineMode, LINE_MODES, buildPagesCss, pageSwatch, PAGE_BUTTON_ANGLE, renderPageIcon, renderPanelSliders, renderLineModeButton, renderSettingsButton, nextLineMode, PANEL_CSS, renderEditor, DIALOG_CSS, lackingInternals, FEATURES, markGrowthScale, DASH, normalizeMarkSettings, stepType, edgeMidpoint, addedMark, arrowLineOf, isEdgeActs, penValuesOf, planActs, lineSegmentsOf, planClick, planCornerClick, cornerAt, cornerStorage, cornerPoint, shapePath, EDGE_CYCLE, CORNER_RADIUS, CORNER_VALUES, SUDOKUPAD_PEN_COLORS, THICKNESS, OPACITY, FULL_WIDTH_VALUES, GREY_CHROMA, HOLD_TO_EDIT_MS }
   }
-  // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` is one this script cannot hook, which is reported.
+  // A page with no Framework is not SudokuPad (the match covers other pages of crackingthecryptic.com); a Framework without `getApp` holds every install step off, which the probe reports.
   if (typeof Framework === 'undefined') return
-  if (!Framework.getApp) {
-    console.warn('pen-tool-extras: SudokuPad\'s Framework has no getApp, so nothing was changed')
-    return
-  }
 
-  Framework.getApp().then(async () => {
+  const start = async () => {
     const app = Framework.app
-    // Read before the panel is built, which the first sync does with the pen tool already on.
-    Object.assign(inForce, readSettings(Framework))
     guard.probe({ roots: { Framework, ToolPen: typeof ToolPen !== 'undefined' ? ToolPen : undefined }, store: Framework })
+    // Read before the panel is built, which the first sync does with the pen tool already on.
+    Object.assign(inForce, readSettings(savedData))
     // Read before any step runs, so only the startup check can have turned the colors step off.
     const hasColorTool = !steps.colors.off
     trackButton()
@@ -2663,14 +2693,14 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
     installOverlayPressSwallow()
     effectsOf(SETTING_NAMES).forEach((effect) => effect())
     applyStyle()
-    addSettingsEntry(Framework, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openDialog })
-    const start = startupPenColors(Framework.getData(COLORS_KEY), hasColorTool)
-    if (start.load) return adoptColors(start.load)
-    if (start.save) return saveColors(start.save)
+    steps.settings.run(() => addSettingsEntry(dialogs, { name: 'pentoolextras', content: 'Pen Tool Extras', open: openSettings }))
+    const colorsAtStart = startupPenColors(savedData.getData(COLORS_KEY), hasColorTool)
+    if (colorsAtStart.load) return adoptColors(colorsAtStart.load)
+    if (colorsAtStart.save) return saveColors(colorsAtStart.save)
     // The install save, once: page 1 darkened.
     const tool = await waitForColorTool()
     // A save made in the dialog while waiting outranks it.
-    if (readPenColors(Framework.getData(COLORS_KEY))) return
+    if (readPenColors(savedData.getData(COLORS_KEY))) return
     // Tried even with the colors step off since startup (edit mode failing to install): only a failure to read page 1 itself leaves nothing saved, reported as the step's.
     let derived = null
     try {
@@ -2679,5 +2709,7 @@ ${EDITOR} .pen-tool-extras-divider { margin-left: 0; }
       steps.colors.skip(error)
     }
     if (derived) saveColors(derived)
-  })
+  }
+  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
+  else start()
 })()

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SudokuPad Auto Rules Resizer
 // @namespace    https://github.com/caneff/sudokupad-scripts
-// @version      0.3.9
+// @version      0.3.10
 // @description  Fits SudokuPad's rules to the screen in landscape: the rules pane keeps SudokuPad's width and takes the largest font at which all the rules fit in the height, widening only when they would still scroll, never smaller than SudokuPad's own. f+ and f- on the pane change the font a pixel at a time, and two drag corners resize the pane. A Rules Resizer entry in SudokuPad's settings caps the automatic width and height.
 // @match        https://sudokupad.app/*
 // @match        https://*.sudokupad.app/*
@@ -17,7 +17,7 @@
   'use strict'
 
   // GM_info is absent without Tampermonkey, so the script cannot read @version; keep this equal to it.
-  const VERSION = '0.3.9'
+  const VERSION = '0.3.10'
   const MAX_WIDTH_KEY = 'AutoRulesResizer_maxWidth'
   const MAX_HEIGHT_KEY = 'AutoRulesResizer_maxHeight'
   const EDGE_PX = 8 // the gap the pane keeps to the window's right edge
@@ -478,6 +478,8 @@
   // A script's features, each with the SudokuPad internals it needs: one that lacks an internal, or whose own code throws, turns off
   // alone, and a bar at the bottom of the page says so once per SudokuPad version.
   const NOTICE_HOST_ID = 'sudokupad-scripts-notices'
+  // Every script's bar is the one purple, Pen Tool Extras' and the site's --accent.
+  const NOTICE_COLOR = '#6a1b9a'
   const REPORT_URL = 'https://github.com/caneff/sudokupad-scripts/issues/new'
   // The page's assets carry SudokuPad's version as `?v=` (docs/research/sudokupad-version-signal.md); live/cache.mjs reads it the same way.
   const PAGE_VERSION = /\?v=(\d+(?:\.\d+)+)/
@@ -524,23 +526,35 @@
   }
 
   const NOTICE_HOST_CSS = 'position: fixed; left: 50%; bottom: 8px; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; gap: 4px; align-items: center;'
-  const noticeBarCss = (color) => `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${color}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
+  const NOTICE_BAR_CSS = `display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 14px; border-radius: 6px; background: ${NOTICE_COLOR}; color: #fff; font: 14px/1.3 sans-serif; box-shadow: 0 2px 6px rgba(0, 0, 0, .3);`
   const NOTICE_LINK_CSS = 'color: #fff; font-weight: bold; text-decoration: underline;'
   const NOTICE_DISMISS_CSS = 'background: none; border: none; color: #fff; font-size: 18px; line-height: 1; padding: 0 4px; cursor: pointer;'
 
   // `features` maps a name to `{ label, needs, onSkip }`: `label` is what the bar and the console call it, `needs` maps each internal's
   // path to its kind (a key of INTERNAL_KINDS), and `onSkip` undoes what the feature left on the page. `probe` runs once SudokuPad's app
   // exists; `store` is SudokuPad's Framework, whose saved data remembers a dismissal under `<script>-notice`.
-  function createGuard ({ script, name, version, color, features }) {
-    const off = []
+  function createGuard ({ script, name, version, features }) {
     const reasons = []
     let page = null
 
     const dismissKey = `${script}-notice`
-    // A store with no getData or setData (a SudokuPad that changed) cannot remember a dismissal, so it holds for this page load only.
+    // A dismissal is saved only under a SudokuPad version read from the page: one saved with none would match every later version that
+    // also has none. A store with no getData or setData (a SudokuPad that changed), or one that throws (a frame with storage blocked),
+    // cannot save one either. Without a save, a dismissal holds for this page load only.
     const dismissedHere = []
+    let storeFailed = false
+    const savesDismissals = () => !storeFailed && page.sudokupad !== null && typeof page.store.getData === 'function' && typeof page.store.setData === 'function'
+    function useStore (fn) {
+      try {
+        return fn()
+      } catch (error) {
+        storeFailed = true
+        console.warn(`${script}: a dismissal of the notice bar cannot be saved, so it holds for this page load only:`, error)
+        return null
+      }
+    }
     const dismissed = () => {
-      const saved = typeof page.store.getData === 'function' ? page.store.getData(dismissKey) : null
+      const saved = savesDismissals() ? useStore(() => page.store.getData(dismissKey)) : null
       return [...(saved && saved.version === page.sudokupad && Array.isArray(saved.features) ? saved.features : []), ...dismissedHere]
     }
 
@@ -561,7 +575,7 @@
       }
       bar = doc.createElement('div')
       bar.setAttribute('data-script', script)
-      bar.style.cssText = noticeBarCss(color)
+      bar.style.cssText = NOTICE_BAR_CSS
       const text = doc.createElement('span')
       text.textContent = `${name}: ${shown.map((reason) => reason.label).join(', ')} ${shown.length === 1 ? 'is' : 'are'} off — SudokuPad changed.`
       const link = doc.createElement('a')
@@ -578,7 +592,7 @@
       dismiss.style.cssText = NOTICE_DISMISS_CSS
       dismiss.addEventListener('click', () => {
         dismissedHere.push(...shown.map((reason) => reason.name))
-        if (typeof page.store.setData === 'function') page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() })
+        if (savesDismissals()) useStore(() => page.store.setData(dismissKey, { version: page.sudokupad, features: dismissed() }))
         showNotice()
       })
       bar.append(text, link, dismiss)
@@ -592,7 +606,6 @@
         skip (why, installed = true) {
           if (feature.off) return
           feature.off = true
-          off.push(label)
           reasons.push({ name: featureName, label, why })
           if (installed) {
             console.warn(`${script}: ${label} skipped because SudokuPad changed:`, why)
@@ -659,15 +672,16 @@
       showNotice()
     }
 
-    return { features: guarded, off, probe }
+    return { features: guarded, get off () { return reasons.map((reason) => reason.label) }, probe }
   }
   /* eslint-enable no-unused-vars */
   // </lib:sudokupad>
   // The fit reads the puzzle's id; SudokuPad calls resizeBoard on every layout; the limits dialog and their saved values are SudokuPad's settings entry, dialog and storage.
+  // The fit and the refit start once `Framework.getApp` says the app is ready, so without it they are off and the settings start alone.
   const FEATURES = {
     fit: {
       label: 'rules fit',
-      needs: { 'Framework.app.puzzle': 'object' },
+      needs: { 'Framework.getApp': 'function', 'Framework.app.puzzle': 'object' },
       onSkip () {
         const rules = rulesPane()
         const controls = controlsColumn()
@@ -676,7 +690,7 @@
         showControls(false)
       }
     },
-    refit: { label: 'rules refit', needs: { 'Framework.app.resizeBoard': 'function' } },
+    refit: { label: 'rules refit', needs: { 'Framework.getApp': 'function', 'Framework.app.resizeBoard': 'function' } },
     settings: {
       label: 'max size settings',
       needs: {
@@ -689,8 +703,8 @@
       }
     }
   }
-  const guard = createGuard({ script: 'auto-rules-resizer', name: 'Auto Rules Resizer', version: VERSION, color: '#00695c', features: FEATURES })
-  const steps = guard.features
+  const guard = createGuard({ script: 'auto-rules-resizer', name: 'Auto Rules Resizer', version: VERSION, features: FEATURES })
+  const { fit: rulesFit, refit: rulesRefit, settings: maxSizeSettings } = guard.features
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -731,10 +745,6 @@
 
   // The match also covers other crackingthecryptic.com pages, which have no Framework.
   if (typeof Framework === 'undefined') return
-  if (!Framework.getApp) {
-    console.warn('auto-rules-resizer: SudokuPad\'s Framework has no getApp, so nothing was changed')
-    return
-  }
 
   const ID = 'auto-rules-resizer'
   const FONT_BAR_ID = `${ID}-font`
@@ -829,7 +839,7 @@
   }
 
   function fitPage () {
-    steps.fit.run(() => {
+    rulesFit.run(() => {
       const rules = rulesPane()
       const controls = controlsColumn()
       if (!rules || !controls) return
@@ -862,6 +872,14 @@
 
   const CLASS_PREFIX = 'rules-resizer-'
   const DIALOG_ID = 'rules-resizer-dialog'
+  // What the settings entry and dialog are handed in place of Framework: the dialog's close runs under the settings when a button is pressed.
+  const dialogs = {
+    addSetting: (setting) => Framework.addSetting(setting),
+    showDialog: (options) => Framework.showDialog(options),
+    closeDialog: () => maxSizeSettings.run(() => Framework.closeDialog())
+  }
+  // A copy or paste with the settings off says so in the dialog's status line.
+  const settingsOff = () => { throw new Error(`the ${FEATURES.settings.label} are off`) }
 
   function openDialog () {
     const row = (id, label, value) => `<label for="${id}">${label}</label>` +
@@ -871,7 +889,7 @@
       maxWidth: limitFromBox(document.getElementById(MAX_WIDTH_INPUT_ID).value, limits.maxWidth),
       maxHeight: limitFromBox(document.getElementById(MAX_HEIGHT_INPUT_ID).value, limits.maxHeight)
     })
-    const body = showSettingsDialog(Framework, {
+    const body = showSettingsDialog(dialogs, {
       prefix: CLASS_PREFIX,
       name: 'Rules Resizer',
       version: VERSION,
@@ -880,7 +898,7 @@
         const typed = typedLimits()
         return typed.maxWidth !== limits.maxWidth || typed.maxHeight !== limits.maxHeight
       },
-      save: () => steps.settings.run(() => {
+      save: () => maxSizeSettings.run(() => {
         limits = typedLimits()
         saveLimits(Framework, limits)
         fitPage()
@@ -892,43 +910,50 @@
       '</div><div style="opacity:.7;max-width:22em">Empty means no limit. The limits cap only the automatic fit; a corner drag can go past them.</div>'
     const widthInput = document.getElementById(MAX_WIDTH_INPUT_ID)
     const heightInput = document.getElementById(MAX_HEIGHT_INPUT_ID)
-    wireCopyPaste(body.closest('.dialog'), { copied: () => copiedSettings(Framework), readers: READERS }, (values) => {
+    const copied = () => maxSizeSettings.run(() => copiedSettings(Framework), settingsOff)
+    wireCopyPaste(body.closest('.dialog'), { copied, readers: READERS }, (values) => maxSizeSettings.run(() => {
       limits = { maxWidth: MAX_WIDTH_KEY in values ? values[MAX_WIDTH_KEY] : limits.maxWidth, maxHeight: MAX_HEIGHT_KEY in values ? values[MAX_HEIGHT_KEY] : limits.maxHeight }
       saveLimits(Framework, limits)
       if (MAX_WIDTH_KEY in values) widthInput.value = limits.maxWidth ?? ''
       if (MAX_HEIGHT_KEY in values) heightInput.value = limits.maxHeight ?? ''
       fitPage()
+    }, settingsOff))
+  }
+
+  // The drag reads the puzzle's id, so it is the fit's.
+  function dragRules (corner, dx, dy) {
+    rulesFit.run(() => {
+      const rules = rulesPane()
+      if (!rules) return
+      const paneSize = rules.getBoundingClientRect()
+      const natural = rules.offsetWidth
+      const scale = natural > 0 ? paneSize.width / natural : 1
+      const minSize = { width: RULES_MIN.width * scale, height: RULES_MIN.height * scale }
+      const box = draggedBox(dragKey())
+      Object.assign(box, dragRulesBox(box, corner, dx, dy, paneSize, minSize))
+      fitPage()
     })
   }
 
-  function dragRules (corner, dx, dy) {
-    const rules = rulesPane()
-    if (!rules) return
-    const paneSize = rules.getBoundingClientRect()
-    const natural = rules.offsetWidth
-    const scale = natural > 0 ? paneSize.width / natural : 1
-    const minSize = { width: RULES_MIN.width * scale, height: RULES_MIN.height * scale }
-    const box = draggedBox(dragKey())
-    Object.assign(box, dragRulesBox(box, corner, dx, dy, paneSize, minSize))
-    fitPage()
-  }
-
-  Framework.getApp().then((app) => {
+  // Without getApp there is no app: the fit and the refit are off, and the settings start without it.
+  const start = (app) => {
     guard.probe({ roots: { Framework }, store: Framework })
-    steps.settings.run(() => {
+    maxSizeSettings.run(() => {
       limits = readLimits(Framework)
-      addSettingsEntry(Framework, { name: 'rulesresizer', content: 'Rules Resizer', open: () => steps.settings.run(openDialog) })
+      addSettingsEntry(dialogs, { name: 'rulesresizer', content: 'Rules Resizer', open: () => maxSizeSettings.run(openDialog) })
     })
     addStyle()
     addFontBar()
     for (const corner of CORNERS) addCorner(corner)
     // SudokuPad calls resizeBoard on every layout: a new puzzle, a resize, a turn of the device.
-    steps.refit.run(() => steps.refit.wrap(app, 'resizeBoard', (stock, ...args) => {
+    rulesRefit.run(() => rulesRefit.wrap(app, 'resizeBoard', (stock, ...args) => {
       const out = stock(...args)
       fitPage()
       return out
     }))
     window.addEventListener('resize', makeTrailing(fitPage, RESIZE_MS))
     fitPage()
-  })
+  }
+  if (typeof Framework.getApp === 'function') Framework.getApp().then(start)
+  else start(undefined)
 })()

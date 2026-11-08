@@ -1967,9 +1967,10 @@ test('lineSegmentsOf lists the line values of every cell with their color, and l
   assert.deepEqual(lineSegmentsOf(cells), [{ value: line, row: 1, col: 2, color: 'x' }])
 })
 
-// The requirement table: which SudokuPad internal each install step cannot work without.
+// The requirement table: which SudokuPad internal each feature (an install step, the saved settings, the settings dialog) cannot work without.
+const FRAMEWORK_FNS = ['getApp', 'getData', 'setData', 'removeData', 'addSetting', 'showDialog', 'closeDialog']
 const TOOL_FNS = ['actStart', 'actAdd', 'actSend', 'clickCell', 'getInputRc', 'setSelectedColor', 'handleToolEnter', 'handleToolExit', 'drawLineHint']
-// SudokuPad's roots with every internal the steps need.
+// SudokuPad's roots with every internal the features need.
 const completeSudokuPad = () => {
   class Renderer {
     static CellSize = 64
@@ -1987,7 +1988,9 @@ const completeSudokuPad = () => {
     puzzle: { cells: [] },
     xyToRCExact: () => {}
   }
-  return { Framework: { app }, ToolPen: { tool } }
+  const framework = { app }
+  for (const name of FRAMEWORK_FNS) framework[name] = () => {}
+  return { Framework: framework, ToolPen: { tool } }
 }
 
 test('a complete SudokuPad lacks nothing', () => {
@@ -2011,7 +2014,10 @@ const LACKING_ALONE = [
   ['Framework.app.svgRenderer.renderPen', (s) => { delete Object.getPrototypeOf(s.Framework.app.svgRenderer).renderPen }, ['arrowLines', 'marks']],
   ['Framework.app.svgRenderer.renderPart', (s) => { delete s.Framework.app.svgRenderer.renderPart }, ['arrowLines']],
   ['Framework.app.xyToRCExact', (s) => { delete s.Framework.app.xyToRCExact }, ['lineErase']],
-  ['Framework.app.tools.colour', (s) => { delete s.Framework.app.tools.colour }, ['colors']]
+  ['Framework.app.tools.colour', (s) => { delete s.Framework.app.tools.colour }, ['colors']],
+  ['Framework.getApp', (s) => { delete s.Framework.getApp }, ['colors', 'pages', 'arrowLines', 'dragHint', 'marks', 'penPanel', 'lineErase']],
+  ...['getData', 'setData', 'removeData'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['saved']]),
+  ...['addSetting', 'showDialog', 'closeDialog'].map((name) => [`Framework.${name}`, (s) => { delete s.Framework[name] }, ['settings']])
 ]
 for (const [internal, remove, featureNames] of LACKING_ALONE) {
   test(`without ${internal}, exactly ${featureNames.join(', ')} are lacking`, () => {
@@ -2021,9 +2027,8 @@ for (const [internal, remove, featureNames] of LACKING_ALONE) {
   })
 }
 
-test('every step with a requirement is lacking under some internal removed alone', () => {
-  // penPanel needs ToolPen.tool (the next test).
-  const own = Object.keys(FEATURES).filter((name) => name !== 'penPanel')
+test('every feature is lacking under some internal removed alone', () => {
+  const own = Object.keys(FEATURES)
   assert.deepEqual([...new Set(LACKING_ALONE.flatMap(([, , names]) => names))].sort(), own.sort())
 })
 
@@ -2045,7 +2050,7 @@ test('Pen Tool Extras declares its install steps through the shared guard, with 
   for (const name of ['createStep', 'lackingInternals (', 'STEP_LABELS', 'checkSteps', 'console.warn(`pen-tool-extras: ${']) assert.equal(own.includes(name), false, name)
 })
 
-// The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp is a SudokuPad the script cannot hook, which it reports.
+// The startup guard: a page with no Framework is not SudokuPad and stays silent; a Framework without getApp holds every install step off, which the probe reports.
 function loadWithFramework (framework) {
   const file = require.resolve('../pen-tool-extras.user.js')
   const warnings = []
@@ -2063,8 +2068,43 @@ function loadWithFramework (framework) {
   return warnings
 }
 
-test('a Framework with no getApp is reported once, naming the script', () => {
-  assert.deepEqual(loadWithFramework({}), ['pen-tool-extras: SudokuPad\'s Framework has no getApp, so nothing was changed'])
+// Runs `fn` on a page with a document and a window that take every call the startup makes and find none of SudokuPad's own elements.
+function withPage (fn) {
+  const element = () => new Proxy({ style: {}, classList: { add () {}, remove () {}, toggle () {}, contains: () => false }, dataset: {} }, {
+    get: (target, key) => key in target ? target[key] : (key === 'then' ? undefined : () => element())
+  })
+  const saved = { document: global.document, window: global.window }
+  global.document = {
+    createElement: element,
+    createElementNS: element,
+    head: element(),
+    body: element(),
+    documentElement: { outerHTML: '' },
+    getElementById: () => null,
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener () {}
+  }
+  global.window = { addEventListener () {}, MutationObserver: class { observe () {} }, getComputedStyle: () => ({}) }
+  try {
+    return fn()
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete global[name]
+      else global[name] = value
+    }
+  }
+}
+
+test('a Framework with no getApp turns every install step off in one warning naming getApp, and leaves the saved settings and the settings dialog on', () => {
+  const { Framework: framework } = completeSudokuPad()
+  delete framework.getApp
+  const entries = []
+  framework.addSetting = (setting) => entries.push(setting.name)
+  const steps = ['colors', 'pen pages', 'arrow lines', 'drag highlight', 'marks', 'pen panel', 'line erase']
+  const warnings = withPage(() => loadWithFramework(framework))
+  assert.deepEqual(warnings, [`pen-tool-extras: ${steps.join(', ')} skipped because SudokuPad has no Framework.getApp`])
+  assert.deepEqual(entries, ['pentoolextras'])
 })
 
 test('a page with no Framework is left alone without a word', () => {
