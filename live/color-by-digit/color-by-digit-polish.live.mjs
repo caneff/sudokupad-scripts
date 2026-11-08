@@ -181,7 +181,7 @@ describe('the dialog', { concurrency: false }, () => {
     const brush = await p.locator(`${SWATCH}[aria-pressed=true]`).getAttribute('data-key')
     const was = (await paintedKeys(p))['6']
     await keyboardFocus(p, p.locator(DIGIT(7)))
-    await p.keyboard.down('6')
+    // A second keydown with the key still held is an auto-repeat; two toggles would leave the key as it was.
     await p.keyboard.down('6')
     await p.keyboard.down('6')
     await p.keyboard.up('6')
